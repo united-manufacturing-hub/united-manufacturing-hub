@@ -759,6 +759,67 @@ var _ = Describe("Engine", func() {
 			"a caller's later edit to their own table must not detach the engine from its windows")
 	})
 
+	// The engine must own the instruments it stores at every depth, not only at
+	// the top: buildSignalState recurses into refinements, so the copy has to
+	// happen there too. The positive control runs the same table unedited,
+	// which shows the refinement's window reads its sample back at all. Only
+	// then does the failing half rename the REFINEMENT's instrument through the
+	// caller's own table.
+	It("keeps a refinement's window reachable when the caller edits their own table after NewEngine returns", func() {
+		type snap struct{ v float64 }
+
+		arm := func(name string) Instrument[snap] {
+			return Instrument[snap]{
+				Measurement: Measurement[snap]{
+					Name:      name,
+					Extract:   func(s snap) Reading { return Known(s.v) },
+					Reduction: Last,
+					Span:      60 * time.Second,
+				},
+				Marks: Marks{
+					Unit:     "u",
+					Fire:     Mark{At: 100, Inclusive: true},
+					Worst:    200,
+					Clear:    Mark{At: 0, Inclusive: false},
+					Polarity: HigherIsWorse,
+				},
+			}
+		}
+
+		mk := func() Table[snap] {
+			parent := Signal[snap]{
+				Name:        "P",
+				DemoteSpan:  60 * time.Second,
+				Instruments: []Instrument[snap]{arm("pi")},
+			}
+			parent.Refinements = []Signal[snap]{{
+				Name:        "C",
+				DemoteSpan:  60 * time.Second,
+				Instruments: []Instrument[snap]{arm("ci")},
+			}}
+
+			return Table[snap]{Signals: []Signal[snap]{parent}, Interval: time.Second}
+		}
+
+		control, err := NewEngine(mk())
+		Expect(err).ToNot(HaveOccurred())
+		control.Observe(snap{v: 7.0}, NewEnvironment(), time.Unix(10_000_000, 0))
+		controlValue, controlState := control.Reduction("P/C", "ci").Get()
+		Expect(controlState).To(Equal(StateValue), "unedited, the refinement's window holds the tick's sample")
+		Expect(controlValue).To(Equal(7.0))
+
+		tbl := mk()
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+		tbl.Signals[0].Refinements[0].Instruments[0].Name = "renamed"
+		e.Observe(snap{v: 7.0}, NewEnvironment(), time.Unix(10_000_001, 0))
+
+		value, state := e.Reduction("P/C", "ci").Get()
+		Expect(state).To(Equal(StateValue),
+			"a caller's later edit to their own table must not detach a REFINEMENT from its window either")
+		Expect(value).To(Equal(7.0), "the refinement reduces the sample this tick observed")
+	})
+
 	// Fired must remember WHICH instrument crossed the fire mark, not which
 	// instrument is the live winner on any later tick: the latch stamps Marks and
 	// Value at the fire transition and never refreshes them, and Instrument must be
