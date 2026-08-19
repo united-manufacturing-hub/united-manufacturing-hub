@@ -52,11 +52,13 @@ var _ = Describe("Engine.Select on a signal the engine was not built from", func
 			Name:       "declared",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[outSnap]{{
-				Name:      "mean",
-				Extract:   extract,
-				Reduction: Mean,
-				Span:      3 * time.Second,
-				Marks:     marks,
+				Measurement: Measurement[outSnap]{
+					Name:      "mean",
+					Extract:   extract,
+					Reduction: Mean,
+					Span:      3 * time.Second,
+				},
+				Marks: marks,
 			}},
 		}
 
@@ -95,11 +97,13 @@ var _ = Describe("Engine.Select on a signal the engine was not built from", func
 			Name:       "never-declared",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[outSnap]{{
-				Name:      "mean",
-				Extract:   extract,
-				Reduction: Mean,
-				Span:      3 * time.Second,
-				Marks:     marks,
+				Measurement: Measurement[outSnap]{
+					Name:      "mean",
+					Extract:   extract,
+					Reduction: Mean,
+					Span:      3 * time.Second,
+				},
+				Marks: marks,
 			}},
 		}
 		Expect(foreign.Capable(env)).To(HaveLen(1),
@@ -127,9 +131,9 @@ var _ = Describe("Engine.Select on a signal the engine was not built from", func
 			Name:       "never-declared",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[outSnap]{
-				{Name: "a", Extract: extract, Reduction: Mean, Span: 3 * time.Second, Marks: marks},
-				{Name: "b", Extract: extract, Reduction: Mean, Span: 3 * time.Second, Marks: marks},
-				{Name: "c", Extract: extract, Reduction: Mean, Span: 3 * time.Second, Marks: marks},
+				{Measurement: Measurement[outSnap]{Name: "a", Extract: extract, Reduction: Mean, Span: 3 * time.Second}, Marks: marks},
+				{Measurement: Measurement[outSnap]{Name: "b", Extract: extract, Reduction: Mean, Span: 3 * time.Second}, Marks: marks},
+				{Measurement: Measurement[outSnap]{Name: "c", Extract: extract, Reduction: Mean, Span: 3 * time.Second}, Marks: marks},
 			},
 		}
 		Expect(foreign.Capable(env)).To(HaveLen(3),

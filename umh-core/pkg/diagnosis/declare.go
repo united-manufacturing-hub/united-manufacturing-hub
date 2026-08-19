@@ -45,20 +45,18 @@ func (e Environment) Has(c Capability) bool {
 	return e.caps[c]
 }
 
-// Instrument is one way of measuring a signal: what to read, over how long a
-// window, under which reduction, against which thresholds.
-type Instrument[S any] struct {
+// Measurement is one way of measuring a signal: what to read, over how long a
+// window, under which reduction.
+type Measurement[S any] struct {
+	Name string
 	// Extract reads the value from a snapshot, the numerator under DeltaRatio.
 	Extract func(S) Reading
 	// Against reads the DENOMINATOR of a ratio: DeltaRatio divides the delta of
 	// Extract's counter by the delta of this one. Nil for a single series.
 	Against   func(S) Reading
-	Name      string
-	Requires  []Capability
+	Span      time.Duration
 	Reduction Reduction
-	// Marks are the thresholds this instrument's number is judged against.
-	Marks Marks
-	Span  time.Duration
+	Requires  []Capability
 	// Boolean says the series is zero or one and nothing between.
 	Boolean bool
 	// Counter says both series are monotone counters, so a backwards step means
@@ -67,14 +65,22 @@ type Instrument[S any] struct {
 	Counter bool
 }
 
+// Instrument is one way of measuring a signal: a measurement plus the marks its
+// number is judged against.
+type Instrument[S any] struct {
+	Measurement[S]
+	// Marks are the thresholds this instrument's number is judged against.
+	Marks Marks
+}
+
 // Read applies both extractors to one snapshot, so both counters of a delta
 // ratio come off the same instant. With no Against it hands back an absence.
-func (i Instrument[S]) Read(s S) (value, against Reading) {
-	if i.Against == nil {
-		return i.Extract(s), Unknown()
+func (m Measurement[S]) Read(s S) (value, against Reading) {
+	if m.Against == nil {
+		return m.Extract(s), Unknown()
 	}
 
-	return i.Extract(s), i.Against(s)
+	return m.Extract(s), m.Against(s)
 }
 
 // Signal is a QUESTION about the resource, such as whether the CPU is saturated.

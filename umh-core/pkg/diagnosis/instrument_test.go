@@ -32,8 +32,10 @@ var _ = Describe("Instrument", func() {
 
 	It("should read both counters of a delta ratio off one snapshot by construction", func() {
 		withAgainst := Instrument[snap]{
-			Extract: func(s snap) Reading { return Known(s.value) },
-			Against: func(s snap) Reading { return Known(s.against) },
+			Measurement: Measurement[snap]{
+				Extract: func(s snap) Reading { return Known(s.value) },
+				Against: func(s snap) Reading { return Known(s.against) },
+			},
 		}
 
 		value, against := withAgainst.Read(snap{value: 3, against: 40})
@@ -48,7 +50,9 @@ var _ = Describe("Instrument", func() {
 
 	It("should read an absence denominator when the instrument has no Against", func() {
 		noAgainst := Instrument[snap]{
-			Extract: func(s snap) Reading { return Known(s.value) },
+			Measurement: Measurement[snap]{
+				Extract: func(s snap) Reading { return Known(s.value) },
+			},
 		}
 
 		value, against := noAgainst.Read(snap{value: 5})
@@ -61,7 +65,9 @@ var _ = Describe("Instrument", func() {
 
 	It("should carry its own fire and clear marks, so one signal can hold several mark pairs in different units", func() {
 		ratio := Instrument[snap]{
-			Name: "B-ratio",
+			Measurement: Measurement[snap]{
+				Name: "B-ratio",
+			},
 			Marks: Marks{
 				Unit:     "ratio",
 				Fire:     Mark{At: 0.9, Inclusive: true},
@@ -70,7 +76,9 @@ var _ = Describe("Instrument", func() {
 			},
 		}
 		cores := Instrument[snap]{
-			Name: "B-cores",
+			Measurement: Measurement[snap]{
+				Name: "B-cores",
+			},
 			Marks: Marks{
 				Unit:     "cores",
 				Fire:     Mark{At: 2, Inclusive: true},
@@ -89,9 +97,9 @@ var _ = Describe("Instrument", func() {
 		signal := Signal[snap]{
 			Name: "A",
 			Instruments: []Instrument[snap]{
-				{Name: "A-free", Extract: func(s snap) Reading { return Known(s.value) }},
-				{Name: "A-1", Requires: []Capability{"source-1"}, Extract: func(s snap) Reading { return Known(s.value) }},
-				{Name: "A-2", Requires: []Capability{"source-2"}, Extract: func(s snap) Reading { return Known(s.value) }},
+				{Measurement: Measurement[snap]{Name: "A-free", Extract: func(s snap) Reading { return Known(s.value) }}},
+				{Measurement: Measurement[snap]{Name: "A-1", Requires: []Capability{"source-1"}, Extract: func(s snap) Reading { return Known(s.value) }}},
+				{Measurement: Measurement[snap]{Name: "A-2", Requires: []Capability{"source-2"}, Extract: func(s snap) Reading { return Known(s.value) }}},
 			},
 		}
 
@@ -105,8 +113,8 @@ var _ = Describe("Instrument", func() {
 		signal := Signal[snap]{
 			Name: "A",
 			Instruments: []Instrument[snap]{
-				{Name: "A-1", Requires: []Capability{"source-1"}, Extract: func(s snap) Reading { return Known(s.value) }},
-				{Name: "A-free", Extract: func(s snap) Reading { return Known(s.value) }},
+				{Measurement: Measurement[snap]{Name: "A-1", Requires: []Capability{"source-1"}, Extract: func(s snap) Reading { return Known(s.value) }}},
+				{Measurement: Measurement[snap]{Name: "A-free", Extract: func(s snap) Reading { return Known(s.value) }}},
 			},
 		}
 
@@ -119,8 +127,8 @@ var _ = Describe("Instrument", func() {
 		signal := Signal[snap]{
 			Name: "A",
 			Instruments: []Instrument[snap]{
-				{Name: "A-p95", Requires: []Capability{"source-1"}, Extract: func(s snap) Reading { return Known(s.value) }},
-				{Name: "A-mean", Requires: []Capability{"source-1"}, Extract: func(s snap) Reading { return Known(s.value) }},
+				{Measurement: Measurement[snap]{Name: "A-p95", Requires: []Capability{"source-1"}, Extract: func(s snap) Reading { return Known(s.value) }}},
+				{Measurement: Measurement[snap]{Name: "A-mean", Requires: []Capability{"source-1"}, Extract: func(s snap) Reading { return Known(s.value) }}},
 			},
 		}
 
