@@ -57,45 +57,59 @@ const (
 	maxScrapeBody = 4 << 20 // 4 MiB
 )
 
-// benthosMonitorDeps holds the HTTP client used to scrape the benthos monitor's
-// endpoints and the throughput window that accumulates counter samples across
-// polls. Poll receives a pointer to the deps, so the same *http.Client is
-// shared across polls.
+// benthosMonitorDeps holds one worker's scrape state. Poll receives a pointer to
+// the deps, so the same *http.Client is shared across polls.
 type benthosMonitorDeps struct {
+	// client scrapes the benthos monitor's endpoints.
 	client *http.Client
+
+	// window accumulates counter samples across polls.
 	window throughputWindow
 }
 
-// ComponentThroughput carries the rate for one direction of the benthos
-// pipeline. MessagesPerSecond is the by-time rate the worker computes; LastCount
-// is the newest counter value seen.
+// ComponentThroughput carries the rate for one direction of the benthos pipeline.
 type ComponentThroughput struct {
+	// MessagesPerSecond is the by-time rate the worker computes; see tickSeconds
+	// for the conversion to FSMv1's MessagesPerTick.
 	MessagesPerSecond float64
-	LastCount         int
+
+	// LastCount is the newest counter value seen.
+	LastCount int
 }
 
-// BenthosMonitorStatus is the result of one scrape of the benthos monitor: the
-// time it happened, the /metrics counters, /ping liveness, /ready readiness, the
-// /version string, and the per-direction throughput computed over windowSpan.
-//
-// BenthosMetrics is the per-path struct the fsmv1 parser produces, carried
-// whole. Narrowing it to scalars breaks the four connection-counter reads that
-// decide whether a bridge is connected; those reads, their access path and their
-// two consumers are named in
-// TestMapObservedDeliversParsedConnectionCountersToBridgeHealth.
+// BenthosMonitorStatus is the result of one scrape of the benthos monitor.
 type BenthosMonitorStatus struct {
-	ScrapedAt      time.Time
+	// ScrapedAt is when the scrape happened.
+	ScrapedAt time.Time
+
+	// BenthosMetrics is the per-path struct the fsmv1 parser produces, carried
+	// whole. Narrowing it to scalars breaks the four connection-counter reads that
+	// decide whether a bridge is connected; those reads, their access path and their
+	// two consumers are named in
+	// TestMapObservedDeliversParsedConnectionCountersToBridgeHealth.
 	BenthosMetrics benthosmonitorservice.Metrics
-	Input          ComponentThroughput
-	Output         ComponentThroughput
+
+	// Input is the input-direction throughput computed over windowSpan.
+	Input ComponentThroughput
+
+	// Output is the output-direction throughput computed over windowSpan.
+	Output ComponentThroughput
+
 	// IsActive is true when input traffic was observed in the window: Poll sets it
 	// from Input.MessagesPerSecond > 0, input-only and with no hysteresis. FSMv1
 	// computed the same rule from a tick delta (s.IsActive =
 	// s.Input.MessagesPerTick > 0).
-	IsActive  bool
+	IsActive bool
+
+	// PingAlive is whether /ping answered.
 	PingAlive bool
-	Ready     bool
-	Version   string
+
+	// Ready is whether /ready reported every connection up. Poll's /ready branch
+	// states how that is read off the response.
+	Ready bool
+
+	// Version is the version string /version reported.
+	Version string
 }
 
 // Poll scrapes the configured benthos monitor's /ping, /ready, /version, and
