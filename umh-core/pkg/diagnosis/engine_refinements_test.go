@@ -23,13 +23,15 @@ import (
 
 // A refinement is a signal that narrows the answer of the signal it hangs
 // under. It is sampled every tick and judged every tick, whichever way its
-// parent went; only whether the parent REPORTS it turns on the parent having
-// fired. Most specs here read the reporting side on a tick where the parent HAS
-// fired: which refinements nest under it, and that a refinement is nested
-// rather than returned beside its parent. One reads the other side, where the
-// parent is silent and its fired refinement is reported nowhere. One hands the
-// returned set to Rank, which orders top-level signals only. The last three
-// read the order the refinements under one signal come back in.
+// parent went; only whether the parent reports its VERDICT turns on the parent
+// having fired. Most specs here read the reporting side on a tick where the
+// parent HAS fired: which refinements nest under it, and that a refinement is
+// nested rather than returned beside its parent. One reads the other side, where
+// the parent is silent and its fired refinement is reported nowhere. One hands
+// the returned set to Rank, which orders top-level signals only. Three read the
+// order the refinements under one signal come back in. The last reads Observe's
+// other return value, the readiness rows, which every signal gets at every depth
+// whichever way it or its parent went.
 var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	type snap struct {
@@ -384,6 +386,53 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		Expect(fired[0].Refinements[0].Refinements).To(HaveLen(2), "both of its own refinements fired too")
 		Expect(names(fired[0].Refinements[0].Refinements)).To(Equal([]string{"MoreUrgent", "LessUrgent"}),
 			"two levels down the tiers still decide, though these were also declared less urgent first")
+	})
+
+	// Every spec above reads the fired set. This one reads the other return
+	// value, the readiness rows, which say what each signal's own instruments
+	// could tell the engine this tick whether or not it fired. A refinement is
+	// judged every tick, so it has an availability of its own, and a row of its
+	// own is the only way a caller sees it.
+	It("returns one readiness row per signal at every depth, depth-first, named by path and carrying that signal's own availability", func() {
+		// The grandchild's instrument requires nothing, so it is capable in the
+		// same empty environment that leaves its parent with no instrument at
+		// all. That is what separates a row resolved per signal from a row
+		// handed down the tree.
+		grandchild := refinement("G", 1, Last, func(s snap) float64 { return s.third })
+
+		// C is the one signal here this environment cannot satisfy: its
+		// instrument requires a capability the empty environment does not have,
+		// so C resolves to NoInstrument while P above it and G below it both
+		// read their sample.
+		child := refinement("C", 1, Last, func(s snap) float64 { return s.first }, grandchild)
+		child.Instruments[0].Requires = []Capability{"psi"}
+
+		// A second top-level signal, declared after P, is what makes the
+		// depth-first claim testable: it must come after P's whole subtree and
+		// not between P and the subtree, which is where a breadth-first walk
+		// would put it.
+		e, err := NewEngine(Table[snap]{
+			Signals:  []Signal[snap]{parentOver(child), topLevel("Q", 1, func(s snap) float64 { return s.second })},
+			Interval: time.Second,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		_, readiness := e.Observe(snap{parent: 1.0, first: 1.0, second: 1.0, third: 1.0}, NewEnvironment(), base)
+
+		rows := make([]string, len(readiness))
+		for i, r := range readiness {
+			rows[i] = r.Signal
+		}
+
+		Expect(rows).To(Equal([]string{"P", "P/C", "P/C/G", "Q"}),
+			"depth-first, a parent immediately before its own children, each row named by its path: two parents may each declare a refinement named X, so a bare name would not say which one this is")
+
+		Expect(readiness[0].Availability).To(Equal(Ready), "P reads its sample")
+		Expect(readiness[1].Availability).To(Equal(NoInstrument),
+			"C's own instrument is unsatisfied here, so its row says so rather than repeating the Ready of the parent it hangs under")
+		Expect(readiness[2].Availability).To(Equal(Ready),
+			"G reads its sample through an instrument of its own, so an unreadable parent does not make it unreadable")
+		Expect(readiness[3].Availability).To(Equal(Ready), "Q reads its sample")
 	})
 
 })
