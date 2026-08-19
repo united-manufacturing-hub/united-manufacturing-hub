@@ -435,4 +435,109 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		Expect(readiness[3].Availability).To(Equal(Ready), "Q reads its sample")
 	})
 
+	// The two specs above read the fire mark, which decides whether a refinement
+	// ENTERS a parent's report. The two below read the other end, the two ways a
+	// refinement LEAVES it: its own clear mark, and its own demote clock. Both
+	// keep the parent firing throughout, so the parent's report is the only thing
+	// the child can be missing from.
+
+	// The clear arm needs Coverage.Full(), which on the ten-second window this
+	// fixture builds takes eleven ticks at the table's one-second interval: t0
+	// through t10 span exactly ten seconds. Dropping the child earlier would be a
+	// release granted on a window that had not filled, which is a different rule.
+	It("drops a refinement, and the refinement under it, on the tick the refinement crosses its own clear mark", func() {
+		grandchild := refinement("G", 1, Last, func(s snap) float64 { return s.second })
+		e := engineOver(parentOver(refinement("C", 1, Last, func(s snap) float64 { return s.first }, grandchild)))
+
+		var warm []Fired
+		for i := 0; i <= 10; i++ {
+			warm, _ = e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
+		}
+
+		Expect(names(warm)).To(Equal([]string{"P"}))
+		Expect(names(warm[0].Refinements)).To(Equal([]string{"C"}), "the child fired on its first sample and is held")
+		Expect(names(warm[0].Refinements[0].Refinements)).To(Equal([]string{"G"}), "and so is the grandchild under it")
+
+		// 0.3 is past the child's own 0.4 clear mark. Nothing else moves: the
+		// parent still reads 1.0, and the grandchild still reads the 0.7 that is
+		// past its own fire mark and nowhere near its own clear mark.
+		released, _ := e.Observe(snap{parent: 1.0, first: 0.3, second: 0.7}, NewEnvironment(), base.Add(11*time.Second))
+
+		Expect(names(released)).To(Equal([]string{"P"}),
+			"the parent is untouched: its own value never left its own marks")
+		Expect(released[0].Refinements).To(BeEmpty(),
+			"the child released on its own clear mark, and the grandchild leaves with it: a refinement of an unreported refinement is reported nowhere")
+
+		// What the grandchild lost was its route to the report, not its verdict.
+		// Latch re-arms one Coverage span after a release, so the child cannot
+		// fire again before t21 however far past its fire mark it reads. When it
+		// does, the grandchild reappears under it carrying the Since it stamped on
+		// the first tick of all, which a grandchild that had released could not.
+		var refired []Fired
+		for i := 12; i <= 21; i++ {
+			refired, _ = e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
+		}
+
+		Expect(refired[0].Refinements).To(HaveLen(1))
+		Expect(refired[0].Refinements[0].Since).To(Equal(base.Add(21*time.Second)),
+			"the child fired fresh, one window span after the release above")
+		Expect(refired[0].Refinements[0].Refinements).To(HaveLen(1))
+		Expect(refired[0].Refinements[0].Refinements[0].Since).To(Equal(base),
+			"the grandchild held the verdict it stamped on tick 0 through the ten ticks it was reported nowhere")
+	})
+
+	// A refinement holds a verdict on stale evidence for its OWN DemoteSpan. The
+	// child here declares five seconds against the parent's sixty, so a build
+	// reading the parent's span would still be reporting the child on every tick
+	// this spec looks at.
+	//
+	// The tick numbers come from the span and the table interval and nothing
+	// else. Latch.ReleaseAfter releases once now is no longer before the last
+	// trusted update plus the span, so five seconds at a one-second interval
+	// releases on tick 5: the child fires and is last trusted on tick 0, holds
+	// through ticks 1 to 4, and is gone on tick 5.
+	It("releases a refinement on its own demote span, not its parent's, when its instrument goes absent", func() {
+		child := refinement("C", 1, Last, func(s snap) float64 { return s.first })
+		child.DemoteSpan = 5 * time.Second
+
+		// The instrument stops reading rather than reading a low value, so what
+		// removes the child below is the demote clock and not the clear mark the
+		// spec above covers.
+		absent := false
+		child.Instruments[0].Extract = func(s snap) Reading {
+			if absent {
+				return Unknown()
+			}
+
+			return Known(s.first)
+		}
+
+		e := engineOver(parentOver(child))
+
+		fired, _ := e.Observe(snap{parent: 1.0, first: 0.7}, NewEnvironment(), base)
+
+		Expect(names(fired)).To(Equal([]string{"P"}))
+		Expect(names(fired[0].Refinements)).To(Equal([]string{"C"}), "tick 0 is the child's last trusted update")
+
+		absent = true
+
+		// Ticks 1 to 4. The window keeps the point it stored on tick 0 but stores
+		// nothing on these, so it reduces untrusted and no tick moves the child's
+		// clock forward.
+		var held []Fired
+		for i := 1; i <= 4; i++ {
+			held, _ = e.Observe(snap{parent: 1.0}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
+		}
+
+		Expect(names(held[0].Refinements)).To(Equal([]string{"C"}),
+			"one tick short of its own five-second span the child still reports what it latched")
+
+		gone, _ := e.Observe(snap{parent: 1.0}, NewEnvironment(), base.Add(5*time.Second))
+
+		Expect(names(gone)).To(Equal([]string{"P"}),
+			"the parent is sixty seconds from its own release and still firing, so the child's departure is the child's own clock")
+		Expect(gone[0].Refinements).To(BeEmpty(),
+			"five seconds after its last trusted update the child releases")
+	})
+
 })
