@@ -89,6 +89,10 @@ func (m Measurement[S]) Read(s S) (value, against Reading) {
 type Signal[S any] struct {
 	Name        string
 	Instruments []Instrument[S]
+	// Refinements are signals asked only when this one fires, narrowing its
+	// answer: each is structurally a signal with the same instruments and
+	// marks, but it is never asked unless the parent fires.
+	Refinements []Signal[S]
 	// DemoteSpan is how long a signal may go unread before its window empties:
 	// stale detection, so an old number cannot stand forever.
 	DemoteSpan time.Duration

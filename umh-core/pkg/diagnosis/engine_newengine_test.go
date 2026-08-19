@@ -457,4 +457,38 @@ var _ = Describe("NewEngine", func() {
 			Expect(Fired{Marks: m, Value: m.Fire.At}.Severity()).To(Equal(0.0), m.Unit)
 		}
 	})
+
+	It("rejects a refinement under its parent's path, so the error names A/A1 not the bare child", func() {
+		ref := validSignal("A1")
+		ref.DemoteSpan = 0
+		parent := validSignal("A")
+		parent.Refinements = []Signal[snap]{ref}
+		_, err := NewEngine(validTable([]Signal[snap]{parent}))
+		if err == nil {
+			Fail("expected NewEngine to reject a refinement whose demote span is zero")
+		}
+		Expect(err.Error()).To(ContainSubstring("A/A1"),
+			"the error names the parent and the child, not the bare child")
+	})
+
+	It("refuses two sibling refinements with the same name under one parent", func() {
+		parent := validSignal("A")
+		parent.Refinements = []Signal[snap]{validSignal("A1"), validSignal("A1")}
+		_, err := NewEngine(validTable([]Signal[snap]{parent}))
+		if err == nil {
+			Fail("expected NewEngine to reject duplicate sibling refinement names")
+		}
+		Expect(err.Error()).To(ContainSubstring("A"))
+		Expect(err.Error()).To(ContainSubstring("A1"))
+	})
+
+	It("accepts the same refinement name under different parents, because uniqueness is among siblings only", func() {
+		a := validSignal("A")
+		a.Refinements = []Signal[snap]{validSignal("X")}
+		b := validSignal("B")
+		b.Refinements = []Signal[snap]{validSignal("X")}
+		_, err := NewEngine(validTable([]Signal[snap]{a, b}))
+		Expect(err).ToNot(HaveOccurred(),
+			"a refinement name is unique among its parent's refinements, not across the tree")
+	})
 })
