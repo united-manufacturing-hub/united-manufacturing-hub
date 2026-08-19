@@ -90,9 +90,11 @@ type Signal[S any] struct {
 	// the first instrument that can supply a number is the one used.
 	Instruments []Instrument[S]
 	// Refinements are signals that narrow this one's answer, with their own
-	// instruments and marks. A refinement is sampled every tick, whether or not
-	// this signal fired, so its window fills independently of when this signal
-	// fires.
+	// instruments and marks. A refinement is sampled AND judged every tick,
+	// whether or not this signal fired, so its window fills and its verdict is
+	// reached independently of when this signal fires. Only the report waits on
+	// this signal: a refinement appears in Fired.Refinements under a signal that
+	// fired, and never as a verdict of its own.
 	Refinements []Signal[S]
 	// DemoteSpan is how long a signal may go unread before its window empties:
 	// stale detection, so an old number cannot stand forever.

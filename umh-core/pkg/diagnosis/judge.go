@@ -68,7 +68,8 @@ type Identity struct {
 	// Attribution is who the caller blames, an opaque number in the caller's
 	// vocabulary. It is payload for the consumer; Rank never reads it.
 	Attribution int
-	// Index is the signal's position in Table.Signals.
+	// Index is the signal's position among its siblings: in Table.Signals for a
+	// top-level signal, in the parent's Refinements for a refinement.
 	Index int
 }
 
@@ -86,6 +87,11 @@ type Fired struct {
 	// Instrument is the instrument that fired, stamped on the fire transition and
 	// never refreshed; a later live winner does not overwrite it.
 	Instrument string
+	// Refinements are the signals hanging under this one that have fired
+	// themselves, each judged against its own marks. A refinement is judged
+	// every tick, whether or not this signal fired, but it is reported only
+	// here, under a signal that did fire.
+	Refinements []Fired
 }
 
 // Latch holds one signal's fired-or-not verdict, one per signal and never one per
