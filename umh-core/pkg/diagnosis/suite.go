@@ -49,7 +49,7 @@ type Scenario struct {
 	Case   Case
 }
 
-// Suite generates one Scenario per (signal, case) over t.Signals, never t.Tracks.
+// Suite generates one Scenario per (signal, case) over t.Signals, never t.Measurements.
 func Suite[S any](t Table[S]) []Scenario {
 	cases := []Case{CaseLive, CaseBriefOutage, CaseLongOutage, CaseUnsupported, CasePostOutageDip, CaseBelowFloor}
 

@@ -105,7 +105,7 @@ var _ = Describe("Suite", func() {
 		return NoInstrument
 	}
 
-	It("generates one scenario per (signal, case): 6 x len(signals), never over tracks", func() {
+	It("generates one scenario per (signal, case): 6 x len(signals), never over measurements", func() {
 		cases := []Case{CaseLive, CaseBriefOutage, CaseLongOutage, CaseUnsupported, CasePostOutageDip, CaseBelowFloor}
 
 		tbl := table()
@@ -124,13 +124,13 @@ var _ = Describe("Suite", func() {
 			}
 		}
 
-		// A table that also declares tracks still emits 6 x len(signals): a
-		// track has no availability to assert, so no scenario may name one.
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Reduction: Mean, Span: 60 * time.Second}}
+		// A table that also declares measurements still emits 6 x len(signals): a
+		// measurement has no availability to assert, so no scenario may name one.
+		tbl.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Reduction: Mean, Span: 60 * time.Second}}
 		Expect(Suite(tbl)).To(HaveLen(6 * len(tbl.Signals)))
 
-		// A table with only tracks emits zero scenarios.
-		Expect(Suite(Table[snap]{Tracks: tbl.Tracks, Interval: time.Second})).To(BeEmpty())
+		// A table with only measurements emits zero scenarios.
+		Expect(Suite(Table[snap]{Measurements: tbl.Measurements, Interval: time.Second})).To(BeEmpty())
 	})
 
 	It("refuses a table whose instrument cannot reach its reduction's minimum within its span at the interval", func() {
@@ -152,10 +152,10 @@ var _ = Describe("Suite", func() {
 		Expect(err).ToNot(HaveOccurred(), "a p95 over 60s at 1s holds 61 entries against a minimum of 20")
 	})
 
-	It("refuses a track whose span cannot hold its reduction's minimum at the interval", func() {
+	It("refuses a measurement whose span cannot hold its reduction's minimum at the interval", func() {
 		tbl := Table[snap]{
-			Tracks:   []Track[snap]{{Name: "T", Extract: extract, Reduction: P99, Span: 60 * time.Second}},
-			Interval: time.Second,
+			Measurements: []Measurement[snap]{{Name: "T", Extract: extract, Reduction: P99, Span: 60 * time.Second}},
+			Interval:     time.Second,
 		}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())

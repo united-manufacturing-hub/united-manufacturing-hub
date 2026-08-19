@@ -239,11 +239,11 @@ var _ = Describe("Engine", func() {
 		Expect(v).To(Equal(4.0), "under a last-value reduction the newest entry is the answer")
 	})
 
-	It("should fold every declared track on every tick and reduce it back by name, without selecting, judging or firing anything", func() {
+	It("should fold every declared measurement on every tick and reduce it back by name, without selecting, judging or firing anything", func() {
 		type tsnap struct{ v float64 }
 		// The signal is quiet (fire mark far above any value), so the fired set is
-		// empty and any fired/readiness contribution from the TRACK is plainly
-		// absent.
+		// empty and any fired/readiness contribution from the MEASUREMENT is
+		// plainly absent.
 		sig := Signal[tsnap]{
 			Name:       "S",
 			DemoteSpan: 60 * time.Second,
@@ -264,9 +264,9 @@ var _ = Describe("Engine", func() {
 				},
 			}},
 		}
-		track := Track[tsnap]{Name: "T", Extract: func(s tsnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
+		measurement := Measurement[tsnap]{Name: "T", Extract: func(s tsnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
 
-		tbl := Table[tsnap]{Signals: []Signal[tsnap]{sig}, Tracks: []Track[tsnap]{track}, Interval: time.Second}
+		tbl := Table[tsnap]{Signals: []Signal[tsnap]{sig}, Measurements: []Measurement[tsnap]{measurement}, Interval: time.Second}
 		env := NewEnvironment("c")
 		e, err := NewEngine(tbl)
 		Expect(err).ToNot(HaveOccurred())
@@ -275,26 +275,26 @@ var _ = Describe("Engine", func() {
 		e.Observe(tsnap{v: 1.0}, env, base)
 		_, readiness := e.Observe(tsnap{v: 3.0}, env, base.Add(time.Second))
 
-		v, st := e.Track("T").Get()
-		Expect(st).To(Equal(StateValue), "a track that has met its floor is trustworthy")
-		Expect(v).To(Equal(2.0), "the track folds the mean of its two ticks (1,3)")
+		v, st := e.Measurement("T").Get()
+		Expect(st).To(Equal(StateValue), "a measurement that has met its floor is trustworthy")
+		Expect(v).To(Equal(2.0), "the measurement folds the mean of its two ticks (1,3)")
 
-		// A track is neither selected, judged nor fired: exactly one readiness row
+		// A measurement is neither selected, judged nor fired: exactly one readiness row
 		// (the signal), and the signal stays quiet (below its fire mark).
-		Expect(readiness).To(HaveLen(1), "a track adds no readiness row of its own")
+		Expect(readiness).To(HaveLen(1), "a measurement adds no readiness row of its own")
 		Expect(readiness[0].Signal).To(Equal("S"))
 
-		_, absent := e.Track("nope").Get()
-		Expect(absent).To(Equal(StateAbsent), "an unnamed track reduces to absence")
+		_, absent := e.Measurement("nope").Get()
+		Expect(absent).To(Equal(StateAbsent), "an unnamed measurement reduces to absence")
 	})
 
-	It("should reduce a track whose extractor never reads to an absence, not to a zero the caller would publish as a measurement", func() {
+	It("should reduce a measurement whose extractor never reads to an absence, not to a zero the caller would publish as a measurement", func() {
 		type usnap struct{ v float64 }
-		// Two tracks over the same ticks: one reads, one never does. The reading
+		// Two measurements over the same ticks: one reads, one never does. The reading
 		// one is the positive control, so an absence on the silent one is a fact
-		// about its extractor and not about a track that was never folded.
-		reads := Track[usnap]{Name: "reads", Extract: func(s usnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
-		silent := Track[usnap]{Name: "silent", Extract: func(usnap) Reading { return Unknown() }, Span: 60 * time.Second, Reduction: Mean}
+		// about its extractor and not about a measurement that was never folded.
+		reads := Measurement[usnap]{Name: "reads", Extract: func(s usnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
+		silent := Measurement[usnap]{Name: "silent", Extract: func(usnap) Reading { return Unknown() }, Span: 60 * time.Second, Reduction: Mean}
 
 		sig := Signal[usnap]{
 			Name: "S", DemoteSpan: 60 * time.Second,
@@ -305,7 +305,7 @@ var _ = Describe("Engine", func() {
 				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Worst: 200, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
-		e, err := NewEngine(Table[usnap]{Signals: []Signal[usnap]{sig}, Tracks: []Track[usnap]{reads, silent}, Interval: time.Second})
+		e, err := NewEngine(Table[usnap]{Signals: []Signal[usnap]{sig}, Measurements: []Measurement[usnap]{reads, silent}, Interval: time.Second})
 		Expect(err).ToNot(HaveOccurred())
 
 		base := time.Unix(4_000_000, 0)
@@ -313,12 +313,12 @@ var _ = Describe("Engine", func() {
 		e.Observe(usnap{v: 2.0}, env, base)
 		e.Observe(usnap{v: 4.0}, env, base.Add(time.Second))
 
-		v, st := e.Track("reads").Get()
-		Expect(st).To(Equal(StateValue), "the reading track met its floor of two samples over these two ticks")
-		Expect(v).To(Equal(3.0), "the reading track folds the mean of its two ticks (2,4)")
+		v, st := e.Measurement("reads").Get()
+		Expect(st).To(Equal(StateValue), "the reading measurement met its floor of two samples over these two ticks")
+		Expect(v).To(Equal(3.0), "the reading measurement folds the mean of its two ticks (2,4)")
 
-		sv, sst := e.Track("silent").Get()
-		Expect(sst).To(Equal(StateAbsent), "a track whose extractor answered Unknown on every tick stored nothing, so it has no number to reduce")
+		sv, sst := e.Measurement("silent").Get()
+		Expect(sst).To(Equal(StateAbsent), "a measurement whose extractor answered Unknown on every tick stored nothing, so it has no number to reduce")
 		Expect(sv).To(Equal(0.0), "the absence carries the zero value, which Get hands back only alongside StateAbsent")
 	})
 
