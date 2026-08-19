@@ -109,23 +109,26 @@ var _ = Describe("Ranking", func() {
 		Expect(indexes(sorted)).To(Equal([]int{0, 3}))
 	})
 
-	It("should not rank by Attribution, leaving it payload rather than a fifth sort key", func() {
-		// Two verdicts identical in every sort key (Tier, severity, Index),
-		// differing only in who the caller blames. If Rank read Attribution,
-		// the attribution ordering would force one outcome no matter the append
-		// order. Preserving BOTH declaration orders proves Attribution is not
-		// consulted: a consumer reads blame off the fired set, the caller's
-		// vocabulary uninterpreted by the machine pass. The two runs agree with
-		// their own input order, so they differ from each other, which is
-		// exactly what a fifth sort key would forbid.
-		low := rises(1, 0, 0.5, 0.5, 1.0)  // severity 0
-		high := rises(1, 0, 0.5, 0.5, 1.0) // severity 0, identical to low except Attribution
-		low.Attribution = 2
-		high.Attribution = 7
-		Expect(Rank([]Fired{low, high})).To(Equal([]Fired{low, high}),
-			"with Attribution not a key, the first declaration order is preserved")
-		Expect(Rank([]Fired{high, low})).To(Equal([]Fired{high, low}),
-			"with Attribution not a key, the reversed declaration order is also preserved")
+	It("should not consult Attribution at or before Index, leaving it payload rather than a sort key", func() {
+		// Two verdicts equal in Tier and severity, so the comparator falls
+		// through to Index, its last key. Attribution runs opposite to Index:
+		// the entry with the lower Index carries the higher Attribution. Index
+		// is unique per signal, so the Index comparison answers strictly and
+		// the expected sequence does not depend on what sort.Slice does with
+		// entries it treats as equal. A comparator reading Attribution at or
+		// before Index returns the pair the other way round. A read after Index
+		// cannot change any outcome, because Index already totally orders two
+		// distinct entries. So this covers every position where Attribution
+		// could matter: blame stays payload the caller reads off the fired set,
+		// uninterpreted by the machine pass.
+		early := rises(1, 0, 0.5, 0.5, 1.0) // severity 0, Index 0
+		late := rises(1, 1, 0.5, 0.5, 1.0)  // severity 0, Index 1
+		early.Attribution = 7
+		late.Attribution = 2
+		Expect(indexes(Rank([]Fired{early, late}))).To(Equal([]int{0, 1}),
+			"Index decides the order, not the higher Attribution sitting on the lower Index")
+		Expect(indexes(Rank([]Fired{late, early}))).To(Equal([]int{0, 1}),
+			"the reversed input order gives the same sequence, still decided by Index")
 	})
 
 	It("should return a total order, so ranking the same set twice in different append orders gives the same sequence", func() {
