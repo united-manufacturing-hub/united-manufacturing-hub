@@ -464,6 +464,24 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		_, _, err := a.Execute()
 		elapsed := time.Since(start)
 
+		// ConsumeOutboundMessages appends to msgs on its own goroutine, so a reply
+		// the action sent just before Execute returned may not have arrived yet.
+		// Wait until it stops appending before snapshotting. Without this a spec
+		// asserting a reply is PRESENT flakes under load, and, worse, a spec
+		// asserting a reply is ABSENT passes vacuously.
+		prev := -1
+
+		Eventually(func() bool {
+			mu.Lock()
+			n := len(msgs)
+			mu.Unlock()
+
+			settled := n == prev
+			prev = n
+
+			return settled
+		}, "3s", "50ms").Should(BeTrue(), "the reply consumer never stopped appending")
+
 		mu.Lock()
 		defer mu.Unlock()
 
