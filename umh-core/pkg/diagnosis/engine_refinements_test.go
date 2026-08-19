@@ -29,9 +29,11 @@ import (
 // nested rather than returned beside its parent. One reads the other side, where
 // the parent is silent and its fired refinement is reported nowhere. One hands
 // the returned set to Rank, which orders top-level signals only. Three read the
-// order the refinements under one signal come back in. The last reads Observe's
+// order the refinements under one signal come back in. One reads Observe's
 // other return value, the readiness rows, which every signal gets at every depth
-// whichever way it or its parent went.
+// whichever way it or its parent went. Two read how a refinement LEAVES a
+// parent's report once it is in: on its own clear mark, and on its own demote
+// clock.
 var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	type snap struct {
@@ -257,7 +259,9 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		// Tier 0 is more urgent than either top-level signal, and Index 0 (its
 		// position among its siblings) is the value that wins the last tie-break,
 		// so no single field carries the fixture. Attribution differs from the
-		// parents' too, though Rank never reads it.
+		// parents' too: Rank never reads it, but the caller it routes blame to
+		// does, and the last assertion in this spec is the only one holding it to
+		// reaching a nested Fired.
 		child := refinement("C", 0, Last, func(s snap) float64 { return s.first })
 		child.Attribution = 7
 
@@ -292,6 +296,8 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 			"the nested entry keeps the urgent tier it was declared with; it is unranked, not demoted")
 		Expect(ranked[1].Refinements[0].Index).To(Equal(0),
 			"and the index that wins the last tie-break, so the absence above is not the refinement sorting last")
+		Expect(ranked[1].Refinements[0].Attribution).To(Equal(7),
+			"and the Attribution it was declared with, the field the consumer routes blame on, carried down to the nested verdict rather than the parent's")
 	})
 
 	// Rank orders the top-level set. The three specs below are about the order
@@ -435,11 +441,12 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		Expect(readiness[3].Availability).To(Equal(Ready), "Q reads its sample")
 	})
 
-	// The two specs above read the fire mark, which decides whether a refinement
-	// ENTERS a parent's report. The two below read the other end, the two ways a
-	// refinement LEAVES it: its own clear mark, and its own demote clock. Both
-	// keep the parent firing throughout, so the parent's report is the only thing
-	// the child can be missing from.
+	// A refinement ENTERS a parent's report on its own fire mark, which the spec
+	// "reports only the refinement past its own fire mark, naming it" reads. It
+	// LEAVES on one of two others: its own clear mark, and its own demote clock.
+	// The two specs named for those follow. Both keep the parent firing
+	// throughout, so the parent's report is the only thing the child can be
+	// missing from.
 
 	// The clear arm needs Coverage.Full(), which on the ten-second window this
 	// fixture builds takes eleven ticks at the table's one-second interval: t0

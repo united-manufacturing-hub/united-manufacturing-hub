@@ -77,6 +77,8 @@ var _ = Describe("NewEngine", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("A"))
 		Expect(err.Error()).To(ContainSubstring("I1"))
+		Expect(err.Error()).To(ContainSubstring("window span"),
+			"an instrument sizes a window, and the measurement spec below reads the other wording; the pair is why validateMeasurement takes the noun as a parameter")
 	})
 
 	It("refuses a HigherIsWorse mark pair whose clear mark is not below its fire mark", func() {
@@ -261,6 +263,9 @@ var _ = Describe("NewEngine", func() {
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
+		Expect(err.Error()).To(ContainSubstring("span"))
+		Expect(err.Error()).ToNot(ContainSubstring("window span"),
+			"a table measurement hangs under no signal, so there is no signal's window to name and the error says the shorter word")
 	})
 
 	It("refuses a measurement whose reduction minimum sample count is below one", func() {
