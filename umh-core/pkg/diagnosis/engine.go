@@ -204,6 +204,11 @@ func buildSignalState[S any](path string, s Signal[S], index int) signalState[S]
 		st.refinements = append(st.refinements, buildSignalState(path+"/"+r.Name, r, i))
 	}
 
+	// st.refinements is the engine's own copy of the tree, and one tree wants
+	// one owner. The stored Signal's own list of children would point into the
+	// caller's arrays, uncopied and so unowned.
+	st.signal.Refinements = nil
+
 	return st
 }
 
