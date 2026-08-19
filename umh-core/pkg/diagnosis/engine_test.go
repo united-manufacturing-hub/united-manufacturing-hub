@@ -819,6 +819,133 @@ var _ = Describe("Engine", func() {
 			"a caller's later edit to their own table must not detach a REFINEMENT from its window either")
 		Expect(value).To(Equal(7.0), "the refinement reduces the sample this tick observed")
 	})
+	// Owning the Instruments slice is not enough: copying the structs leaves
+	// every instrument's Requires header pointing into the caller's own array,
+	// so a later edit there rewrites what the engine's instrument asks the
+	// environment for. Capable drops an instrument whose capability the
+	// environment lacks, which is the whole signal here, so the edit would show
+	// up as NoInstrument. The positive control runs the same table unedited in
+	// the same environment, which shows the instrument is reachable at all.
+	It("keeps an instrument capable when the caller edits their own Requires after NewEngine returns", func() {
+		type snap struct{ v float64 }
+
+		mk := func() Table[snap] {
+			sig := Signal[snap]{
+				Name:       "s",
+				DemoteSpan: 60 * time.Second,
+				Instruments: []Instrument[snap]{{
+					Measurement: Measurement[snap]{
+						Name:      "i",
+						Requires:  []Capability{"declared"},
+						Extract:   func(s snap) Reading { return Known(s.v) },
+						Reduction: Last,
+						Span:      60 * time.Second,
+					},
+					Marks: Marks{
+						Unit:     "u",
+						Fire:     Mark{At: 100, Inclusive: true},
+						Worst:    200,
+						Clear:    Mark{At: 0, Inclusive: false},
+						Polarity: HigherIsWorse,
+					},
+				}},
+			}
+
+			return Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
+		}
+
+		// The environment holds the capability the table declares and nothing
+		// else, so an instrument asking for any other one is dropped.
+		env := NewEnvironment("declared")
+
+		control, err := NewEngine(mk())
+		Expect(err).ToNot(HaveOccurred())
+		_, controlReadiness := control.Observe(snap{v: 7.0}, env, time.Unix(10_000_000, 0))
+		Expect(controlReadiness[0].Availability).To(Equal(Ready),
+			"unedited, the environment satisfies the instrument and its window reduces this tick's sample")
+
+		tbl := mk()
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+		tbl.Signals[0].Instruments[0].Requires[0] = "undeclared"
+		_, readiness := e.Observe(snap{v: 7.0}, env, time.Unix(10_000_001, 0))
+		Expect(readiness[0].Availability).To(Equal(Ready),
+			"a caller's later edit to their own capability list must not make the engine's instrument incapable")
+	})
+
+	// The capability list has to be copied at every depth, for the same reason
+	// the Instruments slice does: buildSignalState recurses into refinements, so
+	// a refinement's instrument holds its own header into the caller's array.
+	// The positive control runs the same table unedited, which shows the
+	// refinement's instrument is capable at all. Only then does the failing half
+	// rewrite the REFINEMENT's capability through the caller's own table.
+	It("keeps a refinement's instrument capable when the caller edits their own Requires after NewEngine returns", func() {
+		type snap struct{ v float64 }
+
+		arm := func(name string) Instrument[snap] {
+			return Instrument[snap]{
+				Measurement: Measurement[snap]{
+					Name:      name,
+					Requires:  []Capability{"declared"},
+					Extract:   func(s snap) Reading { return Known(s.v) },
+					Reduction: Last,
+					Span:      60 * time.Second,
+				},
+				Marks: Marks{
+					Unit:     "u",
+					Fire:     Mark{At: 100, Inclusive: true},
+					Worst:    200,
+					Clear:    Mark{At: 0, Inclusive: false},
+					Polarity: HigherIsWorse,
+				},
+			}
+		}
+
+		mk := func() Table[snap] {
+			parent := Signal[snap]{
+				Name:        "P",
+				DemoteSpan:  60 * time.Second,
+				Instruments: []Instrument[snap]{arm("pi")},
+			}
+			parent.Refinements = []Signal[snap]{{
+				Name:        "C",
+				DemoteSpan:  60 * time.Second,
+				Instruments: []Instrument[snap]{arm("ci")},
+			}}
+
+			return Table[snap]{Signals: []Signal[snap]{parent}, Interval: time.Second}
+		}
+
+		// Readiness carries one row per signal at every depth, keyed by path, so
+		// the refinement is read as "P/C" rather than by position.
+		availabilityOf := func(rows []Readiness, path string) Availability {
+			for _, r := range rows {
+				if r.Signal == path {
+					return r.Availability
+				}
+			}
+
+			Fail("readiness carries no row for " + path)
+
+			return NoInstrument
+		}
+
+		env := NewEnvironment("declared")
+
+		control, err := NewEngine(mk())
+		Expect(err).ToNot(HaveOccurred())
+		_, controlReadiness := control.Observe(snap{v: 7.0}, env, time.Unix(10_000_000, 0))
+		Expect(availabilityOf(controlReadiness, "P/C")).To(Equal(Ready),
+			"unedited, the environment satisfies the refinement's instrument and its window reduces this tick's sample")
+
+		tbl := mk()
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+		tbl.Signals[0].Refinements[0].Instruments[0].Requires[0] = "undeclared"
+		_, readiness := e.Observe(snap{v: 7.0}, env, time.Unix(10_000_001, 0))
+		Expect(availabilityOf(readiness, "P/C")).To(Equal(Ready),
+			"a caller's later edit must not make a REFINEMENT's instrument incapable either")
+	})
 
 	// Fired must remember WHICH instrument crossed the fire mark, not which
 	// instrument is the live winner on any later tick: the latch stamps Marks and
