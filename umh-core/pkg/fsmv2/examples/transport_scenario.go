@@ -86,24 +86,25 @@ drainLoop:
 
 // TransportRunConfig configures a transport scenario run with a mock relay server.
 type TransportRunConfig struct {
-	Logger                  deps.FSMLogger             // If nil, creates a no-op logger
+	Logger                  deps.FSMLogger            // If nil, creates a no-op logger
 	MockServer              *testutil.MockRelayServer // If nil, creates and manages internally; caller closes if provided
 	AuthToken               string                    // Defaults to "test-auth-token"
-	InitialPullMessages     []*types.UMHMessage   // Messages queued for transport to pull
-	InitialOutboundMessages []*types.UMHMessage   // Messages queued for worker to push
+	InitialPullMessages     []*types.UMHMessage       // Messages queued for transport to pull
+	InitialOutboundMessages []*types.UMHMessage       // Messages queued for worker to push
 	Duration                time.Duration             // 0 = run until context cancelled; negative = error
 	TickInterval            time.Duration             // Defaults to 100ms
 }
 
 // TransportRunResult contains observable results after scenario completion (populated after Done closes).
 type TransportRunResult struct {
-	Error             error                   // Non-nil if scenario setup failed
-	Done              <-chan struct{}         // Closes when scenario completes
-	Shutdown          func()                  // Triggers graceful shutdown
-	ReceivedMessages  []*types.UMHMessage // Messages pulled from HTTP (nil for HTTP-only tests)
-	PushedMessages    []*types.UMHMessage // Messages pushed to HTTP
-	ConsecutiveErrors int                     // Final consecutive error count from mock server
-	AuthCallCount     int                     // Auth endpoint calls (>1 indicates re-auth)
+	Error             error                         // Non-nil if scenario setup failed
+	Done              <-chan struct{}               // Closes when scenario completes
+	Shutdown          func()                        // Triggers graceful shutdown
+	ChannelProvider   *TransportTestChannelProvider // Queues onto the worker's outbound channel; unlike the fields below, valid immediately
+	ReceivedMessages  []*types.UMHMessage           // Messages pulled from HTTP (nil for HTTP-only tests)
+	PushedMessages    []*types.UMHMessage           // Messages pushed to HTTP
+	ConsecutiveErrors int                           // Final consecutive error count from mock server
+	AuthCallCount     int                           // Auth endpoint calls (>1 indicates re-auth)
 }
 
 // RunTransportScenario runs the FSMv2 transport worker via ApplicationSupervisor with a mock relay server.
@@ -186,7 +187,6 @@ children:
         relayURL: "%s"
         instanceUUID: "test-instance-uuid"
         authToken: "%s"
-        timeout: "5s"
 `, serverURL, authToken)
 
 	testScenario := Scenario{
@@ -233,9 +233,10 @@ children:
 	}
 
 	result := &TransportRunResult{
-		Done:     done,
-		Shutdown: runResult.Shutdown,
-		Error:    nil,
+		Done:            done,
+		Shutdown:        runResult.Shutdown,
+		Error:           nil,
+		ChannelProvider: channelProvider,
 	}
 
 	go func() {
