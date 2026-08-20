@@ -14,6 +14,7 @@
 
 ### Fixes
 
+- When the connection to the Management Console degrades after repeated failures, the log now names the upstream cause — the HTTP status and a snippet of the response — instead of only the error count. Previously the cause was recorded internally but never reached the log, so a connection that kept failing and recovering showed repeated degradation with no reason given
 - Renaming a bridge whose deployment then fails no longer leaves it impossible to edit or save. A failed deployment now undoes the rename along with the rest of the configuration, while Save Anyway keeps the new name as before
 - The historian output no longer discards tags whose virtual path merely starts with the OPC UA diagnostics prefix, such as `Root.Objects.ServerRoom`; only the `Root.Objects.Server` subtree itself is skipped
 
