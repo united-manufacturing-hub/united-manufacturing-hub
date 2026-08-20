@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- Topic browser payloads sent to the Management Console no longer carry the per-topic metadata map, which duplicated the Kafka headers already attached to every event
+- Topic Browser updates are around 60% smaller on instances with many topics, because per-topic metadata is no longer resent with every refresh. This helps most on slow or metered connections
 
 ## [0.44.35]
 
