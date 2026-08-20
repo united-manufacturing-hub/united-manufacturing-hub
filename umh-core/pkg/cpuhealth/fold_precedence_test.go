@@ -48,9 +48,9 @@ func orderedEngine(cores, quota float64, limitFirst bool) *diagnosis.Engine[Samp
 		sigs = append(sigs, saturationSignal(cores), limitSaturationSignal(quota))
 	}
 	engine, err := diagnosis.NewEngine(diagnosis.Table[Sample]{
-		Signals:  sigs,
-		Tracks:   base.Tracks,
-		Interval: base.Interval,
+		Signals:      sigs,
+		Measurements: base.Measurements,
+		Interval:     base.Interval,
 	})
 	Expect(err).NotTo(HaveOccurred())
 	return engine

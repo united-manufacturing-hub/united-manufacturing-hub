@@ -90,8 +90,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, _ := Decide(engine, smp, env)
 			if i == 100 {
-				hbm, _ := engine.Track(trackHostBusy).Get()
-				oum, _ := engine.Track(trackUsageCores).Get()
+				hbm, _ := engine.Measurement(trackHostBusy).Get()
+				oum, _ := engine.Measurement(trackUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.8, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.95, 1e-9))
 				Expect(2*oum).To(BeNumerically(">", hbm), "2 x 1.95 = 3.90 > 3.80")
@@ -124,8 +124,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			verdict, sig := Decide(engine2, smp, env2)
 			if i == 5 {
 				Expect(sig.HostFullFired).To(BeTrue(), "host-headroom 4 - 3.2 - 1.0 = -0.2 fires")
-				hbm, _ := engine2.Track(trackHostBusy).Get()
-				oum, _ := engine2.Track(trackUsageCores).Get()
+				hbm, _ := engine2.Measurement(trackHostBusy).Get()
+				oum, _ := engine2.Measurement(trackUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.2, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.6, 1e-9))
 				Expect(hbm).To(BeNumerically("~", 2*oum, 1e-9), "3.2 == 2 x 1.6 exactly")
@@ -156,8 +156,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, _ := Decide(engine, smp, env)
 			if i == 5 {
-				hbm, _ := engine.Track(trackHostBusy).Get()
-				oum, _ := engine.Track(trackUsageCores).Get()
+				hbm, _ := engine.Measurement(trackHostBusy).Get()
+				oum, _ := engine.Measurement(trackUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 1.0, 1e-9))
 				Expect(oum).To(BeNumerically("~", 0.2, 1e-9))
 				Expect(hbm).To(BeNumerically(">", 2*oum), "the split itself says host")
@@ -195,7 +195,7 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, sig := Decide(engine, smp, env)
 			if i == 5 {
-				_, hbState := engine.Track(trackHostBusy).Get()
+				_, hbState := engine.Measurement(trackHostBusy).Get()
 				Expect(hbState).NotTo(Equal(diagnosis.StateValue), "the host-busy mean cannot run with no host stats")
 				Expect(sig.NoHostStatsSaturationFired).To(BeTrue())
 				Expect(verdict.Causes).To(HaveLen(1))

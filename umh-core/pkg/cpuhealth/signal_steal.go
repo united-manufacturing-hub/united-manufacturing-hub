@@ -39,25 +39,28 @@ func stealSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            sigSteal,
 		Tier:            tierStarvation,
-		External:        true, // Rank's third tie-break; not what sets attribution
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{
 			{
-				Name:      instStealP95,
-				Requires:  []diagnosis.Capability{HasVirtualization},
-				Extract:   func(s Sample) diagnosis.Reading { return s.Steal },
-				Span:      60 * time.Second,
-				Reduction: diagnosis.P95, // the reduction declares its own minimum: 20
-				Marks:     stealMarks,
+				Measurement: diagnosis.Measurement[Sample]{
+					Name:      instStealP95,
+					Requires:  []diagnosis.Capability{HasVirtualization},
+					Extract:   func(s Sample) diagnosis.Reading { return s.Steal },
+					Span:      60 * time.Second,
+					Reduction: diagnosis.P95, // the reduction declares its own minimum: 20
+				},
+				Marks: stealMarks,
 			},
 			{
-				Name:      instStealMean,
-				Requires:  []diagnosis.Capability{HasVirtualization},
-				Extract:   func(s Sample) diagnosis.Reading { return s.Steal },
-				Span:      60 * time.Second,
-				Reduction: diagnosis.Mean, // minimum 2
-				Marks:     stealMarks,     // shares the p95 bar by design; see signal_steal_test.go.
+				Measurement: diagnosis.Measurement[Sample]{
+					Name:      instStealMean,
+					Requires:  []diagnosis.Capability{HasVirtualization},
+					Extract:   func(s Sample) diagnosis.Reading { return s.Steal },
+					Span:      60 * time.Second,
+					Reduction: diagnosis.Mean, // minimum 2
+				},
+				Marks: stealMarks, // shares the p95 bar by design; see signal_steal_test.go.
 				//
 				// Counter stays false, on both steal arms. A steal fraction that
 				// falls has fallen. Declare it a counter and the window restarts
