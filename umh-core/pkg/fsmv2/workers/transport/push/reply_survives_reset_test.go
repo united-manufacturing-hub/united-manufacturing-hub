@@ -15,8 +15,6 @@
 package push_test
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -25,7 +23,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/action"
@@ -133,24 +133,26 @@ func (p *writableChannelProvider) GetInboundStats(_ string) (int, int) {
 	return cap(p.inbound), len(p.inbound)
 }
 
-// opaqueContent builds a message body shaped like production's: JSON, gzipped,
-// base64-encoded. Nothing about the result is readable, which is the point.
+// opaqueContent builds a message body the way production builds one: JSON,
+// zstd-compressed, base64-encoded (pkg/communicator/pkg/encoding uses
+// klauspost/compress/zstd behind base64). Nothing about the result is readable,
+// which is the point -- a change that satisfies these specs has to work on
+// content it cannot inspect.
 func opaqueContent(messageType, payload string) string {
 	raw, err := json.Marshal(map[string]string{"messageType": messageType, "payload": payload})
 	Expect(err).NotTo(HaveOccurred())
 
-	var buf bytes.Buffer
-
-	zw := gzip.NewWriter(&buf)
-	_, err = zw.Write(raw)
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	Expect(err).NotTo(HaveOccurred())
-	Expect(zw.Close()).To(Succeed())
 
-	return base64.StdEncoding.EncodeToString(buf.Bytes())
+	defer enc.Close()
+
+	return base64.StdEncoding.EncodeToString(enc.EncodeAll(raw, nil))
 }
 
 var _ = Describe("An undelivered action reply across a transport reset", func() {
-	// Production Content is base64 of gzipped JSON (encoding.EncodeMessageFromUMHInstanceToUser),
+	// Production Content is base64 of zstd-compressed JSON (see
+	// encoding.EncodeMessageFromUMHInstanceToUser),
 	// so these fixtures are too. An earlier version used readable strings, which
 	// let a "fix" that classifies messages by a plaintext prefix pass here while
 	// being a no-op in production. Opaque fixtures close that off: any change that
