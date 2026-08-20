@@ -176,6 +176,11 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	return e, nil
 }
 
+// pathSeparator joins a refinement's name onto its parent's path.
+// validateSignal refuses it inside any name, so no two signals can compose
+// the same path and share a window.
+const pathSeparator = "/"
+
 // buildSignalState pairs one signal with the latch that judges it, then recurses
 // into its refinements under the same paths buildWindows keyed their windows
 // under. index is the signal's position among its siblings, which Identity.Index
@@ -207,7 +212,7 @@ func buildSignalState[S any](path string, s Signal[S], index int) signalState[S]
 	}
 
 	for i, r := range s.Refinements {
-		st.refinements = append(st.refinements, buildSignalState(path+"/"+r.Name, r, i))
+		st.refinements = append(st.refinements, buildSignalState(path+pathSeparator+r.Name, r, i))
 	}
 
 	return st
@@ -227,7 +232,7 @@ func buildWindows[S any](e *Engine[S], path string, s Signal[S]) error {
 	}
 
 	for _, r := range s.Refinements {
-		if err := buildWindows(e, path+"/"+r.Name, r); err != nil {
+		if err := buildWindows(e, path+pathSeparator+r.Name, r); err != nil {
 			return err
 		}
 	}
@@ -319,8 +324,8 @@ func validateSignal[S any](path string, s Signal[S], interval time.Duration) err
 	// "A/X" against the refinement X of a signal A, and the two would silently
 	// share one window. Refusing the separator in every segment makes that
 	// collision unreachable.
-	if strings.Contains(s.Name, "/") {
-		return fmt.Errorf("signal %q: a name may not contain %q", path, "/")
+	if strings.Contains(s.Name, pathSeparator) {
+		return fmt.Errorf("signal %q: a name may not contain %q", path, pathSeparator)
 	}
 
 	if len(s.Instruments) == 0 {
@@ -389,7 +394,7 @@ func validateSignal[S any](path string, s Signal[S], interval time.Duration) err
 
 		seen[r.Name] = true
 
-		if err := validateSignal(path+"/"+r.Name, r, interval); err != nil {
+		if err := validateSignal(path+pathSeparator+r.Name, r, interval); err != nil {
 			return err
 		}
 	}
