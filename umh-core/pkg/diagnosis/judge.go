@@ -65,11 +65,9 @@ type Identity struct {
 	// as X, and NOT the "A/X" path a Readiness row is named by: a Fired sits
 	// under the parent it narrows, which already says whose refinement it is.
 	Signal string
-	// Tier is the rank class the caller gave the signal, lower meaning more
-	// urgent.
+	// Tier is Signal.Tier as declared.
 	Tier int
-	// Attribution is who the caller blames, an opaque number in the caller's
-	// vocabulary. It is payload for the consumer; Rank never reads it.
+	// Attribution is Signal.Attribution as declared. Rank never reads it.
 	Attribution int
 	// Index is the signal's position among its siblings: in Table.Signals for a
 	// top-level signal, in the parent's Refinements for a refinement.
@@ -91,15 +89,18 @@ type Fired struct {
 	// Value is the number that fired, untransformed by polarity.
 	Value float64
 	// Refinements are the signals hanging under this one that have fired, each
-	// judged against its own marks. firedTree sorts them lowest Tier first, ties
-	// going to the order the table declared them in, at this and every deeper
-	// level, so index 0 is the most urgent narrowing of this signal.
+	// judged against its own marks and ordered lowest Tier first, ties going to
+	// declaration order, at every depth. Index 0 is the most urgent narrowing of
+	// this signal.
 	Refinements []Fired
 }
 
 // Latch holds one signal's fired-or-not verdict, one per signal and never one per
 // instrument: only the instrument picked for this tick reaches Update. It is not
 // synchronized, so only the loop driving Update may call Fired.
+//
+// An episode is one fired span: from the tick the signal crosses its fire mark
+// to the tick it releases.
 type Latch struct {
 	since       time.Time
 	lastUpdate  time.Time
@@ -155,21 +156,21 @@ func crossedClear(v float64, m Marks) bool {
 // answered in spare cores and in a usage fraction cannot have the cores episode
 // released by a fraction that happens to sit past a cores threshold.
 //
-// The gate is the pair, not the instrument, because arms that share a pair are by
-// construction answering one question in one unit and differ only in how they
-// reduce it — a p95 and the mean fallback behind it. Selection moves between
+// The gate is the pair, not the instrument, because instruments that share a pair
+// are by construction answering one question in one unit and differ only in how
+// they reduce it — a p95 and the mean fallback behind it. Selection moves between
 // those on the tick the p95 reaches its minimum sample count, on every start, and
 // their values are interchangeable for judging recovery. Gating on the instrument
-// name instead strands such an episode fired: the arm that fired it is never
-// selected again, so nothing can ever release it.
+// name instead strands such an episode fired: the instrument that fired it is
+// never selected again, so nothing can ever release it.
 //
 // instrument names the instrument the reduction came from. It is stamped beside
 // the marks and value when the latch fires, and never refreshed afterwards, so a
 // Fired names the instrument that fired, not whichever one a later tick selected.
 // It is attribution only; the clear arm does not read it.
 //
-// An arm measuring a genuinely different quantity can act on an episode it did
-// not fire, but only when its own number is decisive. The block inside Update
+// An instrument measuring a genuinely different quantity can act on an episode it
+// did not fire, but only when its own number is decisive. The block inside Update
 // says which readings release, which hold, and which move the blame.
 func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now time.Time) {
 	if r.state != StateValue {
@@ -178,33 +179,15 @@ func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now ti
 
 	l.lastUpdate = now
 
-	// A signal can be answered by more than one measurement, and they are not
-	// always comparable: spare cores on the host is a different number from our
-	// own usage, on a different scale. So only the measurement that made us
-	// degraded is allowed to clear it.
+	// The instrument that fired has stopped answering, so judge on the marks of
+	// one that still does. since is not re-stamped: the condition never stopped,
+	// only what can measure it changed. latch_measurement_switch_test.go works
+	// the three cases through.
 	//
-	// The edge case is a measurement that fires and then goes absent. Without this
-	// block we would keep waiting for a number nobody can read, and the signal
-	// would stay degraded forever. Instead we switch to a measurement we can still
-	// read, and judge against its marks from here on.
-	//
-	// Say we went degraded because the host had 0.2 cores spare, and host stats
-	// stop being readable. Our own usage is then judged on its own marks:
-	//
-	//	40%   below the 60% clear mark    healthy: nothing we can read says otherwise
-	//	65%   inside the 60 to 70% band   stay degraded: the band is where we hold
-	//	85%   past the 70% fire mark      stay degraded, and the reason becomes usage
-	//
-	// since is not re-stamped, because the condition never stopped. Only what we
-	// can measure changed.
-	//
-	// A one-tick gap in the old measurement does reach this block, because a window
-	// goes untrusted on the first reading it misses rather than when it drains.
-	// The middle row is what makes that harmless: a live number that says neither
-	// degraded nor healthy leaves the episode exactly as it was, marks and blame
-	// included. So a gap can only change the verdict when the number we can still
-	// read is itself decisive. And once released, crossedFire below will not fire
-	// again until a span has passed.
+	// A one-tick gap reaches this block too, because a window goes untrusted on
+	// the first reading it misses rather than when it drains. That is harmless
+	// because a live number reading neither past its clear nor past its fire
+	// leaves the episode exactly as it was, marks and blame included.
 	if l.fired && m != l.marks {
 		if crossedClear(r.v, m) && c.Full() {
 			l.release(now)
@@ -314,8 +297,8 @@ func (f Fired) Severity() float64 {
 	return clamp01((worse(f.Value, m) - fire) / (worse(m.Worst, m) - fire))
 }
 
-// Rank orders the signals that fired. It never reorders a signal's refinements.
-// Those arrive already sorted, from firedTree.
+// Rank orders the signals that fired, and only the top level: a signal's
+// refinements arrive in Fired.Refinements already ordered.
 //
 // The order is tier ascending (a lower tier outranks a higher one), then
 // severity descending, then the signal's table index, so the caller can show

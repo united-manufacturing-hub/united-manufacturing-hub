@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This file is the engine. A caller declares a Table; NewEngine reads it once
-// and builds one SlidingWindow per (signal, instrument) pair, one SlidingWindow per measurement and
-// one Latch per signal, refinements included, refusing a malformed table. Observe
-// then appends the snapshot to every window, resolves what each signal's windows
-// can collectively say, an Availability, and drives that signal's latch with it.
+// This file is the engine. A caller declares a Table; NewEngine builds the
+// windows and latches it declares, and Observe runs one tick against them:
+// append the snapshot to every window, resolve what each signal's windows can
+// collectively say, an Availability, and drive that signal's latch with it.
 //
 // The environment is not checked while building: NewEngine takes no Environment
 // and builds a window for every instrument, capable or not. Signal.Capable runs
@@ -84,8 +83,10 @@ type Readiness struct {
 	Availability Availability
 }
 
-// key indexes the engine's window map by (path, instrument) pair, where a
-// refinement's path is its parent's path plus its own name, e.g. "A/X".
+// key indexes the engine's window map by (path, instrument) pair. A top-level
+// signal's path is its bare name; a refinement's is its parent's path, the
+// pathSeparator, and its own name, e.g. "A/X". This is where that rule is
+// stated; the sites that compose or consume a path point here.
 type key struct{ Path, Instrument string }
 
 // signalState is one signal narrowed to what the engine judges it by, the latch
@@ -97,8 +98,7 @@ type signalState[S any] struct {
 	instruments []Instrument[S]
 	// refinements is the same pairing one level down, in declared order.
 	refinements []signalState[S]
-	// path is what this signal's windows are keyed under: its bare name for a
-	// top-level signal, its parent's path plus its own name for a refinement.
+	// path is what this signal's windows are keyed under; see key.
 	path string
 	// latch is the single latch that judges this signal. Every node in the tree
 	// has its own, at every depth.
@@ -127,7 +127,7 @@ type measurementState[S any] struct {
 // It is not synchronized: the goroutine that calls Observe owns it, and a reader
 // calling Select, Reduction or Measurement from another races on points and latches.
 type Engine[S any] struct {
-	// windows is keyed by path: "A/X" for a refinement X under A. Select keys on
+	// windows is keyed by key. Select keys on
 	// a bare name instead, so a caller passing a refinement reads some other
 	// signal's window or none at all. That is what makes resolve's nil arm
 	// reachable, and Select's doc carries the restriction it leaves on a caller.
@@ -318,12 +318,10 @@ func validate[S any](t Table[S]) error {
 // tree the row lives rather than the bare refinement. Instrument and refinement names are
 // unique among their siblings only.
 func validateSignal[S any](path string, s Signal[S], interval time.Duration) error {
-	// A refinement's path is its parent's path plus "/" plus its own name, and
-	// that path keys its windows. A name holding the separator could therefore
-	// compose a path equal to another signal's, e.g. a top-level signal named
-	// "A/X" against the refinement X of a signal A, and the two would silently
-	// share one window. Refusing the separator in every segment makes that
-	// collision unreachable.
+	// A name holding the separator could compose a path equal to another
+	// signal's, e.g. a top-level signal named "A/X" against the refinement X of
+	// a signal A, and the two would silently share one window. Refusing it in
+	// every segment makes that collision unreachable.
 	if strings.Contains(s.Name, pathSeparator) {
 		return fmt.Errorf("signal %q: a name may not contain %q", path, pathSeparator)
 	}
@@ -511,8 +509,8 @@ func (e *Engine[S]) resolve(path string, capable []Instrument[S]) (Instrument[S]
 
 // observeWindows appends the snapshot to every window in a signal's tree,
 // refinements included, keyed by path. It reads no latch, so the recursion into
-// refinements is unconditional. Signal.Refinements states the contract that
-// follows for a caller.
+// refinements is unconditional; Signal.Refinements states what that gives a
+// caller.
 func observeWindows[S any](e *Engine[S], st *signalState[S], sample S, at time.Time) {
 	for _, inst := range st.instruments {
 		w := e.windows[key{Path: st.path, Instrument: inst.Name}]
@@ -530,11 +528,9 @@ func observeWindows[S any](e *Engine[S], st *signalState[S], sample S, at time.T
 }
 
 // judge drives one signal's latch from its own windows, then does the same for
-// each of its refinements, whichever way this signal went. A refinement is
-// judged every tick for the same reason its window is filled every tick: a
-// verdict reached only while the parent happened to be firing would be decided
-// on however much history the refinement had at that instant. Only REPORTING a
-// refinement waits on the parent, which firedTree does.
+// each of its refinements, whichever way this signal went; Signal.Refinements
+// states why. Only REPORTING a refinement waits on the parent, which firedTree
+// does.
 //
 // It appends one Readiness row per signal it drives, carrying the Availability
 // that signal's latch was driven with: this signal's row first, then its
@@ -571,9 +567,8 @@ func (e *Engine[S]) judge(st *signalState[S], env Environment, at time.Time, int
 // field of a nested entry comes off that refinement's own latch, so its Since is
 // the tick IT fired, not the tick its parent did.
 //
-// The nested entries come back lowest Tier first, then in the order the table
-// declared them. That ordering runs in every frame of the recursion, so a
-// refinement's own refinements are ordered among themselves the same way.
+// It sorts the nested entries into the order Fired.Refinements states, in every
+// frame of the recursion.
 func firedTree[S any](st *signalState[S]) (Fired, bool) {
 	f, ok := st.latch.Fired()
 	if !ok {
@@ -618,12 +613,6 @@ func firedTree[S any](st *signalState[S]) (Fired, bool) {
 // and its stale entries count as current when it is next selected. No held latch
 // is left unbounded: AllAbsent on a signal setting ReleaseOnAbsent calls
 // Latch.Reset, and every other branch short of Ready runs the demote clock.
-//
-// A refinement is judged on the same terms every tick, whether or not the signal
-// it hangs under fired, and it has a Readiness row of its own either way. What
-// the parent decides is only whether the refinement's VERDICT is reported: a
-// fired signal carries the refinements whose own latch is fired in
-// Fired.Refinements, and a refinement never appears in the fired set itself.
 //
 // # One tick
 //

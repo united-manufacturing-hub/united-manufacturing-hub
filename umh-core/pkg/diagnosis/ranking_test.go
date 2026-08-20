@@ -120,7 +120,7 @@ var _ = Describe("Ranking", func() {
 		// cannot change any outcome, because Index already totally orders two
 		// distinct entries. So this covers every position where Attribution
 		// could matter: blame stays payload the caller reads off the fired set,
-		// uninterpreted by the machine pass.
+		// uninterpreted by this package.
 		early := rises(1, 0, 0.5, 0.5, 1.0) // severity 0, Index 0
 		late := rises(1, 1, 0.5, 0.5, 1.0)  // severity 0, Index 1
 		early.Attribution = 7
