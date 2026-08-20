@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.35]
+
 ### Improvements
 
 - A message dropped for a missing `timestamp_ms` says how to supply one, noting that the tag processor sets the field automatically and that any other processing has to carry it in the payload
