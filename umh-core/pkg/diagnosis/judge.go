@@ -173,16 +173,58 @@ func crossedClear(v float64, m Marks) bool {
 // Fired names the instrument that fired, not whichever one a later tick selected.
 // It is attribution only; the clear arm does not read it.
 //
-// Arms measuring genuinely different quantities are the remaining gap: while a
-// foreign pair keeps answering Ready, no tick can release the episode and every
-// tick refreshes lastUpdate, so the Signal.DemoteSpan fallback in Engine.Observe
-// never runs either. Such an episode holds until its own arm answers again.
+// An arm measuring a genuinely different quantity can act on an episode it did
+// not fire, but only when its own number is decisive. The block inside Update
+// says which readings release, which hold, and which move the blame.
 func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now time.Time) {
 	if r.state != StateValue {
 		return
 	}
 
 	l.lastUpdate = now
+
+	// A signal can be answered by more than one measurement, and they are not
+	// always comparable: spare cores on the host is a different number from our
+	// own usage, on a different scale. So only the measurement that made us
+	// degraded is allowed to clear it.
+	//
+	// The edge case is a measurement that fires and then goes absent. Without this
+	// block we would keep waiting for a number nobody can read, and the signal
+	// would stay degraded forever. Instead we switch to a measurement we can still
+	// read, and judge against its marks from here on.
+	//
+	// Say we went degraded because the host had 0.2 cores spare, and host stats
+	// stop being readable. Our own usage is then judged on its own marks:
+	//
+	//	40%   below the 60% clear mark    healthy: nothing we can read says otherwise
+	//	65%   inside the 60 to 70% band   stay degraded: the band is where we hold
+	//	85%   past the 70% fire mark      stay degraded, and the reason becomes usage
+	//
+	// since is not re-stamped, because the condition never stopped. Only what we
+	// can measure changed.
+	//
+	// A one-tick gap in the old measurement does reach this block, because a window
+	// goes untrusted on the first reading it misses rather than when it drains.
+	// The middle row is what makes that harmless: a live number that says neither
+	// degraded nor healthy leaves the episode exactly as it was, marks and blame
+	// included. So a gap can only change the verdict when the number we can still
+	// read is itself decisive. And once released, crossedFire below will not fire
+	// again until a span has passed.
+	if l.fired && m != l.marks {
+		if crossedClear(r.v, m) && c.Full() {
+			l.release(now)
+
+			return
+		}
+
+		if crossedFire(r.v, m) {
+			l.marks = m
+			l.value = r.v
+			l.instrument = instrument
+		}
+
+		return
+	}
 
 	if l.fired && m == l.marks && crossedClear(r.v, l.marks) && c.Full() {
 		l.release(now)
