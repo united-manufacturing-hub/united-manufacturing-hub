@@ -46,6 +46,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		if snap.Status.LastErrorDetail != "" {
 			reason += "; last: " + snap.Status.LastErrorDetail
 		}
+
 		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, reason, nil)
 	}
 

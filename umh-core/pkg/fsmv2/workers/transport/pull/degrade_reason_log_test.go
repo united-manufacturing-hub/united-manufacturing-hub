@@ -48,23 +48,18 @@ const nginx502Body = "<html><head><title>502 Bad Gateway</title></head><body><ce
 
 var _ = Describe("ENG-5023: the upstream 502 reaches the logged Running->Degraded record", func() {
 	It("captures the upstream nginx body on the state_transition record, Execute returns nil, nothing at Warn+", func() {
-		// (1) A real upstream that answers every pull with a recognisable nginx 502 page.
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write([]byte(nginx502Body))
 		}))
 		defer server.Close()
 
-		// Capturing logger WITHOUT the production samplers: NewUnsampledFSMLogger,
-		// not NewFSMLogger (1s/5/100) nor the zap-level sampler (10s/3/100), both of
-		// which can drop a record before an observer core sees it.
 		buf := new(bytes.Buffer)
 		logger := newUnsampledJSONLogger(buf)
 
 		transportpkg.SetChannelProvider(newTestChannelProvider())
 		defer transportpkg.ClearChannelProvider()
 
-		// (2) Real HTTPTransport against the live server, real PullDependencies.
 		realHTTP := httptransport.NewHTTPTransport(server.URL, 5*time.Second)
 		parentIdentity := deps.Identity{ID: "log-detail-parent", WorkerType: "transport"}
 		parentDeps := transportpkg.NewTransportDependencies(realHTTP, deps.NewBaseDependencies(logger, nil, parentIdentity))
@@ -73,23 +68,15 @@ var _ = Describe("ENG-5023: the upstream 502 reaches the logged Running->Degrade
 		pullDeps, err := pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, pullIdentity))
 		Expect(err).NotTo(HaveOccurred())
 
-		// (3) Drive the real action against the real 502 until the consecutive-error
-		// threshold (errorDegradedThreshold = 3) is crossed.
 		act := &action.PullAction{JWTToken: "log-detail-token"}
 		for range 3 {
 			err := act.Execute(context.Background(), pullDeps)
-			// (b) ENG-4450 invariant: a 502 is ErrorTypeServerError, IsTransient()==true,
-			// so Execute must return nil — this fix must not re-introduce the Sentry noise.
 			Expect(err).NotTo(HaveOccurred())
 		}
 		Expect(pullDeps.GetConsecutiveErrors()).To(BeNumerically(">=", 3))
 		Expect(pullDeps.GetLastStatusCode()).To(Equal(http.StatusBadGateway))
 		Expect(pullDeps.GetLastErrorDetail()).To(ContainSubstring("nginx/1.27.5"))
 
-		// (4) Run the supervisor far enough that Running -> Degraded is reconciled
-		// and the state_transition record is emitted. The fix's only observable
-		// effect lives on that logged reason; asserting a Next() return value would
-		// reproduce the exact failure #2626 slipped past.
 		store := storage.NewTriangularStore(memory.NewInMemoryStore(), logger)
 		sup := supervisor.NewSupervisor[fsmv2.Observation[snapshot.PullStatus], *fsmv2.WrappedDesiredState[snapshot.PullDesiredState]](supervisor.Config{
 			WorkerType: "pull",
@@ -105,10 +92,6 @@ var _ = Describe("ENG-5023: the upstream 502 reaches the logged Running->Degrade
 
 		ctx := context.Background()
 
-		// Wait for the Running -> Degraded transition itself. The transition fires
-		// whether or not the cause is appended, so waiting on it (rather than on the
-		// '; last: ' marker) makes the RED failure land on the missing body below
-		// instead of timing out.
 		Eventually(func() bool {
 			_ = sup.TestTick(ctx)
 
@@ -116,23 +99,15 @@ var _ = Describe("ENG-5023: the upstream 502 reaches the logged Running->Degrade
 		}, "5s", "50ms").Should(BeTrue(),
 			"a state_transition record from Running to Degraded must be captured")
 
-		// (a) The whole feature: the logged edge carries the upstream response body
-		// AND the '; last: ' marker — read off captured log output, never a return value.
 		degradeReason := capturedDegradeTransitionReason(buf)
 		Expect(degradeReason).To(ContainSubstring("; last: "))
 		Expect(degradeReason).To(ContainSubstring("HTTP 502 (server_error)"))
 		Expect(degradeReason).To(ContainSubstring("nginx/1.27.5"))
 
-		// (c) Nothing from the state-transition path is at Warn or above. Scoped BY
-		// MESSAGE: RecordTypedError legitimately emits SentryWarn("persistent_pull_failure")
-		// once the failure-rate tracker crosses 90% over ~600 samples.
 		Expect(stateTransitionLevelsAtOrAboveWarn(buf)).To(BeEmpty())
 	})
 })
 
-// newUnsampledJSONLogger builds a JSON FSMLogger that captures every record
-// without the production message-based samplers (see spec Verification Strategy:
-// use deps.NewUnsampledFSMLogger, not NewFSMLogger/NewJSONFSMLogger).
 func newUnsampledJSONLogger(buf *bytes.Buffer) deps.FSMLogger {
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "ts",
@@ -148,7 +123,6 @@ func newUnsampledJSONLogger(buf *bytes.Buffer) deps.FSMLogger {
 	return deps.NewUnsampledFSMLogger(zap.New(core).Sugar())
 }
 
-// capturedLogRecords parses every JSON line written to buf into a map.
 func capturedLogRecords(buf *bytes.Buffer) []map[string]any {
 	var records []map[string]any
 
@@ -169,9 +143,6 @@ func capturedLogRecords(buf *bytes.Buffer) []map[string]any {
 	return records
 }
 
-// capturedDegradeTransitionReason returns the "reason" field of the captured
-// 'state_transition' record that moves the worker from Running to Degraded, or
-// "" if no such record has been captured yet.
 func capturedDegradeTransitionReason(buf *bytes.Buffer) string {
 	for _, rec := range capturedLogRecords(buf) {
 		if msg, _ := rec["msg"].(string); msg != "state_transition" {
@@ -180,6 +151,7 @@ func capturedDegradeTransitionReason(buf *bytes.Buffer) string {
 
 		from, _ := rec["from_state"].(string)
 		to, _ := rec["to_state"].(string)
+
 		if from != "Running" || to != "Degraded" {
 			continue
 		}
@@ -192,8 +164,6 @@ func capturedDegradeTransitionReason(buf *bytes.Buffer) string {
 	return ""
 }
 
-// stateTransitionLevelsAtOrAboveWarn returns the level of every captured record
-// with message 'state_transition' that sits at or above zapcore.WarnLevel.
 func stateTransitionLevelsAtOrAboveWarn(buf *bytes.Buffer) []string {
 	var levels []string
 
