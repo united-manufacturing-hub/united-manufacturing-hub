@@ -90,15 +90,10 @@ type Fired struct {
 	// Instrument is the instrument that fired, stamped on the fire transition and
 	// never refreshed; a later live winner does not overwrite it.
 	Instrument string
-	// Refinements are the signals hanging under this one that have fired
-	// themselves, each judged against its own marks. A refinement is judged
-	// every tick, whether or not this signal fired, but it is reported only
-	// here, under a signal that did fire.
-	//
-	// They come lowest Tier first, ties going to the one the table declared
-	// first, at this and every deeper level: the entry at index 0 is the most
-	// urgent narrowing of this signal, with no sorting left to the caller. Rank
-	// does not reach in here; it orders the top-level set only.
+	// Refinements are the signals hanging under this one that have fired, each
+	// judged against its own marks. firedTree sorts them lowest Tier first, ties
+	// going to the order the table declared them in, at this and every deeper
+	// level, so index 0 is the most urgent narrowing of this signal.
 	Refinements []Fired
 }
 
@@ -319,10 +314,12 @@ func (f Fired) Severity() float64 {
 	return clamp01((worse(f.Value, m) - fire) / (worse(m.Worst, m) - fire))
 }
 
-// Rank orders the signals that fired so the caller can show the main reason
-// first: tier ascending (a lower tier outranks a higher one), then severity
-// descending, then the signal's table index. It sorts in place and returns the
-// same slice.
+// Rank orders the signals that fired. It never reorders a signal's refinements.
+// Those arrive already sorted, from firedTree.
+//
+// The order is tier ascending (a lower tier outranks a higher one), then
+// severity descending, then the signal's table index, so the caller can show
+// the main reason first. It sorts in place and returns the same slice.
 func Rank(fired []Fired) []Fired {
 	sort.Slice(fired, func(i, j int) bool {
 		a, b := fired[i], fired[j]
