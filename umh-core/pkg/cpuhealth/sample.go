@@ -142,19 +142,25 @@ type Sampler interface {
 // DeriveEnvironment reads three facts off Sample — whether the host is
 // Virtualized, whether Quota names a POSITIVE number, and whether the kernel
 // has ever reported PSI — and builds the Environment the engine selects
-// instruments with.
+// instruments with. A fourth capability, HasLimitedVisibility, is derived from
+// the last two rather than read off a fifth fact.
 func DeriveEnvironment(s Sample) diagnosis.Environment {
-	caps := make([]diagnosis.Capability, 0, 3)
+	caps := make([]diagnosis.Capability, 0, 4)
 	if s.Virtualized {
 		caps = append(caps, HasVirtualization)
 	}
 	// A present but non-positive quota is a read that succeeded and found no
 	// limit, so HasLimit needs the value, not just the presence.
-	if q, ok := s.Quota.Get(); ok && q > 0 {
+	q, ok := s.Quota.Get()
+	hasLimit := ok && q > 0
+	if hasLimit {
 		caps = append(caps, HasLimit)
 	}
 	if s.PsiAvailable {
 		caps = append(caps, HasPressureStats)
+	}
+	if !hasLimit && !s.PsiAvailable {
+		caps = append(caps, HasLimitedVisibility)
 	}
 	return diagnosis.NewEnvironment(caps...)
 }

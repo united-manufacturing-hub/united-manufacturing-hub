@@ -42,6 +42,12 @@ const (
 	// PsiAvailable). The pressure instrument Requires it, so selection resolves
 	// a host whose kernel never reported PSI to NoInstrument, never AllAbsent.
 	HasPressureStats diagnosis.Capability = "cpuhealth.HasPressureStats"
+	// HasLimitedVisibility means neither HasLimit nor HasPressureStats holds:
+	// no quota to judge our own budget against, and no PSI to read the harm
+	// off. It is the same condition Details.LimitedVisibility reports, named
+	// the same, and it is the gate on the usage-fraction instrument — see
+	// hostCpuFullSignal for why that arm needs it.
+	HasLimitedVisibility diagnosis.Capability = "cpuhealth.HasLimitedVisibility"
 )
 
 // NewLinuxSampler returns a Sampler reading via fs from base.

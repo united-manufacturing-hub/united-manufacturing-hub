@@ -478,14 +478,13 @@ var _ = Describe("block reasons", func() {
 		}
 	})
 
-	It("should name the same capacity cause on both customer-facing surfaces when a container at its limit cannot read host stats", func() {
-		// 4 cores, a 3.5-core quota, 3.5 cores used, /proc/stat unreadable.
-		// usage-fraction reduces to 3.5/4 = 0.875, above its 0.70 fire mark;
-		// limit-headroom reduces to 3.5 - 3.5 - 0.35 = -0.35, below zero. Both
-		// latches hold on the same tick, and the absent host reading is what
-		// keeps host-headroom out of it. The container's own limit is the
-		// measured ceiling, so it is the cause both surfaces speak with.
-		engine, err := NewEngine(4, 3.5)
+	It("should name the same capacity cause on both customer-facing surfaces when a full machine meets a container at its limit", func() {
+		// 4 cores, a 2.0-core quota, host busy 3.8, our usage 1.95, /proc/stat
+		// readable. host-headroom reduces to 4 - 3.8 - 1.0 = -0.8 and
+		// limit-headroom to 2 - 1.95 - 0.2 = -0.15, so both latches hold on the
+		// same tick. The machine's own reading is the measured one, so it is
+		// the cause both surfaces speak with.
+		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
 
@@ -496,9 +495,9 @@ var _ = Describe("block reasons", func() {
 			smp := Sample{
 				Timestamp:   base.Add(time.Duration(i) * time.Second),
 				CpuScope:    ScopeHost,
-				Quota:       diagnosis.Known(3.5),
-				HostBusy:    diagnosis.Unknown(),
-				UsageCores:  diagnosis.Known(3.5),
+				Quota:       diagnosis.Known(2.0),
+				HostBusy:    diagnosis.Known(3.8),
+				UsageCores:  diagnosis.Known(1.95),
 				LogicalCpus: diagnosis.Known(4),
 				HostCpus:    diagnosis.Known(4),
 			}
@@ -509,26 +508,29 @@ var _ = Describe("block reasons", func() {
 		// them to one kind is what let two different situations render the same
 		// paragraph, so the split is asserted here before anything is rendered.
 		Expect(kindsOf(verdict.Causes)).To(ConsistOf(CauseKindHostCpuFull, CauseKindContainerLimitFull))
-		Expect(causeOfKind(verdict.Causes, CauseKindHostCpuFull).Instrument).To(Equal(instUsageFraction),
-			"an unreadable host cannot be measured by host-headroom")
+		Expect(causeOfKind(verdict.Causes, CauseKindHostCpuFull).Instrument).To(Equal(instHostHeadroom),
+			"a readable /proc/stat is measured by host-headroom")
 		Expect(causeOfKind(verdict.Causes, CauseKindContainerLimitFull).Instrument).To(Equal(instLimitHeadroom))
 
 		// Recover the cause each surface spoke with, without naming a sentence:
-		// re-render that surface from each candidate cause alone and match
-		// against what the surface actually printed for the real tick. Both
-		// sides read the same constants, so editing a literal moves them
-		// together and cannot silence a disagreement.
+		// re-render that surface for each candidate cause and match against what
+		// the surface actually printed for the real tick. Both sides read the
+		// same constants, so editing a literal moves them together and cannot
+		// silence a disagreement.
+		//
+		// The third candidate is the machine measured by the estimate from our
+		// own usage instead. No box can produce it beside a limit, which is what
+		// makes it a clean distractor: it must not match either surface.
 		candidates := []Cause{
-			{Kind: CauseKindHostCpuFull, Instrument: instHostHeadroom},
-			causeOfKind(verdict.Causes, CauseKindContainerLimitFull),
 			causeOfKind(verdict.Causes, CauseKindHostCpuFull),
+			causeOfKind(verdict.Causes, CauseKindContainerLimitFull),
+			{Kind: CauseKindHostCpuFull, Instrument: instUsageFraction},
 		}
 		name := func(c Cause) string { return string(c.Kind) + "/" + c.Instrument }
-		spokeWith := func(surface string, render func([]Cause) string) string {
-			printed := render(verdict.Causes)
+		spokeWith := func(surface string, printed string, render func(Cause) string) string {
 			var matched []string
 			for _, candidate := range candidates {
-				if render([]Cause{candidate}) == printed {
+				if render(candidate) == printed {
 					matched = append(matched, name(candidate))
 				}
 			}
@@ -539,17 +541,22 @@ var _ = Describe("block reasons", func() {
 			return matched[0]
 		}
 
-		details := spokeWith("the technical details", func(causes []Cause) string {
-			return causeDetails(speakingCause(causes), causes, sig)
-		})
-		block := spokeWith("the bridge-refusal reason", func(causes []Cause) string {
-			return BlockReason(causes, sig)
-		})
+		// The two surfaces are probed differently because they differ in what a
+		// single cause can produce. causeDetails blends the pair into one
+		// sentence, so it is handed the real cause list every time and only the
+		// speaker varies. BlockReason has no blended line, so a candidate on its
+		// own renders exactly what it would have said.
+		details := spokeWith("the technical details",
+			causeDetails(speakingCause(verdict.Causes), verdict.Causes, sig),
+			func(speaker Cause) string { return causeDetails(speaker, verdict.Causes, sig) })
+		block := spokeWith("the bridge-refusal reason",
+			BlockReason(verdict.Causes, sig),
+			func(speaker Cause) string { return BlockReason([]Cause{speaker}, sig) })
 
 		Expect(details).To(Equal(block),
 			"the two surfaces disagree on one tick: the technical details blame %s while the bridge refusal blames %s, so a customer is given two contradictory remedies",
 			details, block)
-		Expect(details).To(Equal(name(candidates[1])),
-			"the container's own limit is the measured ceiling, so it is the cause both surfaces speak with")
+		Expect(details).To(Equal(name(candidates[0])),
+			"the machine's own reading is the measured one, so it is the cause both surfaces speak with")
 	})
 })

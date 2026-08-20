@@ -66,7 +66,8 @@
 //	                reserve. Answers only where the sample covers the
 //	                whole machine.
 //	usage-fraction  How much of the CPUs we may run on we are using.
-//	                Answers when host-headroom cannot.
+//	                Answers only where there is no CPU limit and no
+//	                pressure statistics, so nothing better can answer.
 //
 // # Who is to blame
 //

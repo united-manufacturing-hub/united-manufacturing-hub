@@ -90,6 +90,11 @@ func RunSuite(cores, quota float64) []diagnosis.Outcome {
 // capability the CPU table's instruments require, so the suite exercises the
 // whole table rather than the part this box happens to support.
 //
+// No real box reaches this set. HasLimitedVisibility means neither HasLimit nor
+// HasPressureStats holds, and all three are granted here, because the suite's
+// subject is the readability path of every row rather than any one box's
+// capabilities.
+//
 // It is a named function rather than a literal inside RunSuite so the spec that
 // checks it against the table's Requires reads the SAME value the suite runs
 // on. A capability missing here does not fail loudly: the signal that requires
@@ -97,5 +102,5 @@ func RunSuite(cores, quota float64) []diagnosis.Outcome {
 // asserted scenario count does not move, because outcomes are emitted per
 // signal x case whatever they conclude.
 func suiteEnvironment() diagnosis.Environment {
-	return diagnosis.NewEnvironment(HasLimit, HasVirtualization, HasPressureStats)
+	return diagnosis.NewEnvironment(HasLimit, HasVirtualization, HasPressureStats, HasLimitedVisibility)
 }

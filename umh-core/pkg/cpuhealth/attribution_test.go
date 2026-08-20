@@ -177,13 +177,13 @@ var _ = Describe("attribution consults its evidence", func() {
 	It("should report unknown attribution when the host-container split cannot be computed", func() {
 		// Host stats absent: the host-busy track has nothing to fold, so the
 		// split cannot run, and the host-cpu-full signal answers through the
-		// usage-fraction fallback (3.0 / 4 = 0.75 fires). The quota is large
-		// enough that the container's own limit (8.0 - 3.0 - 0.8 = 4.2 headroom)
-		// does not fire, so host-cpu-full is the only cause. The machine-full
-		// question has no host evidence, so attribution is unknown.
-		engine, err := NewEngine(4, 8.0)
+		// usage-fraction fallback (3.0 / 4 = 0.75 fires). No quota and no PSI,
+		// which is the only box usage-fraction is allowed to answer on, so
+		// host-cpu-full is the only cause. The machine-full question has no
+		// host evidence, so attribution is unknown.
+		engine, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimitedVisibility)
 		base := time.Now()
 
 		for i := 0; i <= 5; i++ {
@@ -227,8 +227,9 @@ type shareRun struct {
 	scope Scope
 }
 
-// newShareRun builds a run on a box with no quota, so the only signal that can
-// fire is host-cpu-full and the only thing that can narrow it is a share.
+// newShareRun builds a run on a box with no quota and no PSI, so the only
+// signal that can fire is host-cpu-full, the only thing that can narrow it is a
+// share, and usage-fraction is allowed to answer where host-headroom cannot.
 func newShareRun(cores float64, scope Scope) *shareRun {
 	verdicts, err := NewEngine(cores, 0)
 	Expect(err).NotTo(HaveOccurred())
@@ -238,7 +239,7 @@ func newShareRun(cores float64, scope Scope) *shareRun {
 	return &shareRun{
 		verdicts: verdicts,
 		tree:     tree,
-		env:      diagnosis.NewEnvironment(),
+		env:      diagnosis.NewEnvironment(HasLimitedVisibility),
 		at:       time.Now(),
 		scope:    scope,
 	}

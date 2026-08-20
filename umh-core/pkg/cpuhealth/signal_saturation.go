@@ -95,6 +95,16 @@ func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 			{
 				Measurement: diagnosis.Measurement[Sample]{
 					Name: instUsageFraction,
+					// Evidence of last resort. Our own usage over the CPUs we may
+					// run on reserves 30% of them, where host-headroom reserves one
+					// core of the machine, so the two arms disagree about what full
+					// means and the gap widens with the core count. HasLimitedVisibility
+					// is the box where nothing better exists: no PSI to read the
+					// harm off, and no quota to judge our own budget against. Where
+					// either does exist, an unreadable /proc/stat leaves this signal
+					// with nothing to read at all, and pressure or throttling and
+					// container-limit-full carry the box instead.
+					Requires: []diagnosis.Capability{HasLimitedVisibility},
 					Extract: func(s Sample) diagnosis.Reading {
 						// Same defense-in-depth for the division below: unreachable
 						// through production while the append gate holds, but must

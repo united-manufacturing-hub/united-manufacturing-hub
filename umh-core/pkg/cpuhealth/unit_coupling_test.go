@@ -98,14 +98,13 @@ var _ = Describe("the host-cpu-full arms are told apart by a display string", fu
 		Expect(declaredUnit(sigHostCpuFull, instUsageFraction)).NotTo(BeEmpty(),
 			"the usage-fraction arm must be in the table for this spec to mean anything")
 
-		// Host stats unreadable, so host-cpu-full can only answer through
-		// usage-fraction: 3.0/4 = 0.75 fires. The quota is large enough that the
-		// container's own limit (8.0 - 3.0 - 0.8 = 4.2 headroom) does NOT fire,
-		// so host-cpu-full is the only cause, and the instrument it names picks
-		// the reduction the cause value is read from.
-		engine, err := NewEngine(4, 8.0)
+		// Host stats unreadable on a box with no quota and no PSI, which is the
+		// one place usage-fraction may answer: 3.0/4 = 0.75 fires. No other
+		// signal can fire there, so host-cpu-full is the only cause, and the
+		// instrument it names picks the reduction the cause value is read from.
+		engine, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasLimit)
+		env := diagnosis.NewEnvironment(HasLimitedVisibility)
 		base := time.Now()
 
 		for i := 0; i <= 5; i++ {
