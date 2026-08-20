@@ -51,7 +51,7 @@ func runCPUHealthScenario(ctx context.Context) string {
 	// Happy path: a readable cgroup. cpu.stat is primary; cpu.max names a
 	// 2-quota limit; /proc/stat and the cpuset make the host and affinity
 	// signals readable too.
-	healthyS := cpuhealth.NewCgroupSampler(cpuMockFS(false), cpuScenarioBase)
+	healthyS := cpuhealth.NewLinuxSampler(cpuMockFS(false), cpuScenarioBase)
 	healthyD := fsmv2cpu.NewDepsWithSampler(
 		deps.Identity{ID: "cpu", WorkerType: fsmv2cpu.WorkerType},
 		deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, deps.Identity{ID: "cpu", WorkerType: fsmv2cpu.WorkerType}),
@@ -72,7 +72,7 @@ func runCPUHealthScenario(ctx context.Context) string {
 
 	// Unhappy path: cpu.stat unreadable. This is a whole-sample failure — the
 	// worker reports could-not-measure, never a healthy zero.
-	failingS := cpuhealth.NewCgroupSampler(cpuMockFS(true), cpuScenarioBase)
+	failingS := cpuhealth.NewLinuxSampler(cpuMockFS(true), cpuScenarioBase)
 	failingD := fsmv2cpu.NewDepsWithSampler(
 		deps.Identity{ID: "cpu", WorkerType: fsmv2cpu.WorkerType},
 		deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, deps.Identity{ID: "cpu", WorkerType: fsmv2cpu.WorkerType}),
