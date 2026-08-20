@@ -312,6 +312,16 @@ var _ = Describe("degraded copy", func() {
 		Expect(causeHeadline(CauseKind("future-kind"))).To(Equal("CPU degraded"))
 	})
 
+	It("should state the steal figure as a plain share of the last minute, claiming no peak", func() {
+		// A steal cause can carry the mean of the last minute, not only the
+		// percentile: causeOf reports whichever arm the episode fired on, and
+		// the mean is the arm that fires in the first twenty seconds. "At peak"
+		// would be a claim about a percentile, so the sentence makes none.
+		// Asserted whole, because the wording is customer-visible copy.
+		msg := ComposeMessage(degradedVerdict(CauseKindSteal, instStealMean, 0.18), degradedSig())
+		Expect(msg).To(Equal("CPU taken by the server\nTechnical Details: Other virtual machines on the same physical server took 18% of the CPU this instance needed over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server."))
+	})
+
 	It("should render the curated detail paragraph for each fired cause, dominant first", func() {
 		verdict := Verdict{State: StateDegraded, Attribution: AttributionHost, Causes: []Cause{
 			{Kind: CauseKindPressure, Value: 0.40},

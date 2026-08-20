@@ -15,10 +15,11 @@
 // The handover at twenty samples. The twentieth sample always
 // arrives on a virtualized box, so the swap from the mean arm to the p95 arm
 // happens on every start. The p95 is the second-highest of twenty ascending
-// entries, and that one fact gives all three specs their numbers. These specs
-// bind the engine's per-signal latch to the CPU table's two steal arms
-// sharing one mark pair: the swap must move the instrument, not the latch, and
-// must judge on the p95's own value from the tick it becomes usable.
+// entries, and that one fact gives these specs their numbers. They bind the
+// engine's per-signal latch to the CPU table's two steal arms sharing one mark
+// pair: the swap must move the instrument, not the latch, and must judge on the
+// p95's own value from the tick it becomes usable. What the swap must NOT move
+// is the arm a held episode reports, which the last spec here pins.
 package cpuhealth
 
 import (
@@ -108,6 +109,39 @@ var _ = Describe("the handover at twenty samples", func() {
 				Expect(v).To(Equal(0.90), "the handover must publish the p95's value, not the mean's")
 			}
 		}
+	})
+
+	It("should keep reporting the mean's number for an episode the mean fired, after the p95 window has matured", func() {
+		// The same spike burst, driven through Decide so the Cause is what is
+		// asserted. The mean fires at tick 3 and the episode never releases, so
+		// the latch's stamped arm stays steal-mean: both arms share one mark
+		// pair, and Latch.Update re-stamps only where the incoming pair differs
+		// from the held one.
+		//
+		// The spec above asserts that selection publishes the p95's 0.90 from
+		// tick 19. This one asserts the Cause is 0.18 on that same tick, and
+		// the two agree: selection names the live winner, the Cause names the
+		// arm the episode fired on.
+		engine, err := NewEngine(4, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
+
+		base := time.Now()
+		var verdict Verdict
+		for i := 0; i < 20; i++ {
+			verdict, _ = Decide(engine, Sample{
+				Timestamp:   base.Add(time.Duration(i) * time.Second),
+				CpuScope:    ScopeHost,
+				Virtualized: true,
+				Steal:       diagnosis.Known(spikeBurst(i)),
+			}, env)
+		}
+
+		Expect(verdict.Causes).To(HaveLen(1))
+		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSteal))
+		Expect(verdict.Causes[0].Instrument).To(Equal(instStealMean), "the arm that fired at tick 3, never re-stamped")
+		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 3.6/20, 1e-9),
+			"the mean of the twenty samples; a build that preferred the matured p95 reports 0.90 here")
 	})
 
 	It("should not fire steal at the handover on a window whose mean sits below the mark", func() {

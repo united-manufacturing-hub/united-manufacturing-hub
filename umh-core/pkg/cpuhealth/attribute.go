@@ -30,40 +30,37 @@ import (
 // deepens). The unit comes from the mark pair that judged the instrument, and
 // the instrument's own name rides along so the message layer can tell two ways
 // of measuring one signal apart without asking the engine again.
+//
+// Which instrument to read is Fired.Instrument and nothing else, for every
+// signal. A signal answered two ways therefore reports the arm its episode
+// fired on, even after the other arm's window has matured and selection has
+// moved to it. Steal is where that is visible: the mean fires within seconds of
+// a start, the percentile takes twenty samples, and both arms share one mark
+// pair, so nothing re-stamps the latch and the episode reports the mean until
+// it releases.
 func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
+	// Rank does not flatten refinements, so every Fired reaching here is a
+	// top-level signal, whose window path is its own name.
+	v, _ := engine.Reduction(f.Identity.Signal, f.Instrument).Get()
+	cause := Cause{Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
+
+	// One arm per signal and no default arm: a signal named nowhere below
+	// names no kind, rather than borrowing the kind of whichever arm happens to
+	// sit last.
 	switch f.Identity.Signal {
 	case sigThrottling:
-		v, _ := engine.Reduction(sigThrottling, instThrottleRatio).Get()
-		return Cause{Kind: CauseKindThrottling, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
+		cause.Kind = CauseKindThrottling
 	case sigPressure:
-		v, _ := engine.Reduction(sigPressure, instPressureAvg60).Get()
-		return Cause{Kind: CauseKindPressure, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
+		cause.Kind = CauseKindPressure
 	case sigSteal:
-		// The p95 is used whenever its window can supply a value, so
-		// the cause value follows the same rule: p95 when it is
-		// StateValue, the mean before that.
-		v, st := engine.Reduction(sigSteal, instStealP95).Get()
-		if st != diagnosis.StateValue {
-			v, _ = engine.Reduction(sigSteal, instStealMean).Get()
-		}
-		return Cause{Kind: CauseKindSteal, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
+		cause.Kind = CauseKindSteal
 	case sigHostCpuFull:
-		if f.Instrument == instUsageFraction {
-			v, _ := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
-			return Cause{Kind: CauseKindHostCpuFull, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
-		}
-		v, _ := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
-		return Cause{Kind: CauseKindHostCpuFull, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
+		cause.Kind = CauseKindHostCpuFull
 	case sigContainerLimitFull:
-		v, _ := engine.Reduction(sigContainerLimitFull, instLimitHeadroom).Get()
-		return Cause{Kind: CauseKindContainerLimitFull, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
-	default:
-		// A signal with no case above names no kind, rather than borrowing the
-		// kind of whichever case happened to sit last. Its value is the one
-		// stamped at the fire tick, because no case here says which reduction
-		// to read instead.
-		return Cause{Instrument: f.Instrument, Value: f.Value, Unit: Unit(f.Marks.Unit)}
+		cause.Kind = CauseKindContainerLimitFull
 	}
+
+	return cause
 }
 
 // declaredBlame reads the blame the table declared for one fired signal. A
