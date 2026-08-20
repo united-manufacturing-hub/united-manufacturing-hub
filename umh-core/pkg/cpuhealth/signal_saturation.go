@@ -46,29 +46,31 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{
 			{
-				Name: instHostHeadroom,
-				// cores − hostBusy − 1.0. This arm exists only on a box whose
-				// core count was readable, so cores > 0 here; the scope guard stays
-				// because off a host-scoped sample the count means something else
-				// and there is no headroom to read.
-				Extract: func(s Sample) diagnosis.Reading {
-					// Unreachable in production: cpuTable declares no saturation signal when
-					// cores <= 0, pinned by host_headroom_guard_test.go. The guard stays so
-					// the subtraction below can never run on a non-positive count.
-					if cores <= 0 {
-						return diagnosis.Unknown()
-					}
-					if s.CpuScope != ScopeHost {
-						return diagnosis.Unknown()
-					}
-					hb, ok := s.HostBusy.Get()
-					if !ok {
-						return diagnosis.Unknown()
-					}
-					return diagnosis.Known(cores - hb - 1.0)
+				Measurement: diagnosis.Measurement[Sample]{
+					Name: instHostHeadroom,
+					// cores − hostBusy − 1.0. This arm exists only on a box whose
+					// core count was readable, so cores > 0 here; the scope guard stays
+					// because off a host-scoped sample the count means something else
+					// and there is no headroom to read.
+					Extract: func(s Sample) diagnosis.Reading {
+						// Unreachable in production: cpuTable declares no saturation signal when
+						// cores <= 0, pinned by host_headroom_guard_test.go. The guard stays so
+						// the subtraction below can never run on a non-positive count.
+						if cores <= 0 {
+							return diagnosis.Unknown()
+						}
+						if s.CpuScope != ScopeHost {
+							return diagnosis.Unknown()
+						}
+						hb, ok := s.HostBusy.Get()
+						if !ok {
+							return diagnosis.Unknown()
+						}
+						return diagnosis.Known(cores - hb - 1.0)
+					},
+					Span:      60 * time.Second,
+					Reduction: diagnosis.Mean,
 				},
-				Span:      60 * time.Second,
-				Reduction: diagnosis.Mean,
 				// Marks are the two thresholds that turn a number into a yes or no: the
 				// value at which this instrument starts saying yes, and the value at which
 				// it goes back to saying no. They differ on purpose, so a reading sitting
@@ -88,23 +90,25 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 				},
 			},
 			{
-				Name: instUsageFraction,
-				Extract: func(s Sample) diagnosis.Reading {
-					// Same defense-in-depth for the division below: unreachable
-					// through production while the append gate holds, but must
-					// never divide by a non-positive count if that gate is
-					// re-removed — so the arm withholds here too.
-					if cores <= 0 {
-						return diagnosis.Unknown()
-					}
-					u, ok := s.UsageCores.Get()
-					if !ok {
-						return diagnosis.Unknown()
-					}
-					return diagnosis.Known(u / cores)
+				Measurement: diagnosis.Measurement[Sample]{
+					Name: instUsageFraction,
+					Extract: func(s Sample) diagnosis.Reading {
+						// Same defense-in-depth for the division below: unreachable
+						// through production while the append gate holds, but must
+						// never divide by a non-positive count if that gate is
+						// re-removed — so the arm withholds here too.
+						if cores <= 0 {
+							return diagnosis.Unknown()
+						}
+						u, ok := s.UsageCores.Get()
+						if !ok {
+							return diagnosis.Unknown()
+						}
+						return diagnosis.Known(u / cores)
+					},
+					Span:      60 * time.Second,
+					Reduction: diagnosis.Mean,
 				},
-				Span:      60 * time.Second,
-				Reduction: diagnosis.Mean,
 				Marks: diagnosis.Marks{
 					// 0.70 fires AT the mark: exactly 70% of the machine busy is
 					// a full machine, not a 69%-and-waiting one.
@@ -132,20 +136,22 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
-			Name:     instLimitHeadroom,
-			Requires: []diagnosis.Capability{HasLimit},
-			// quota − usage − 0.10 × quota, in cores. The usage term is the
-			// SAMPLER's rate, never the cumulative counter beside it:
-			// nothing can subtract a counter from a quota.
-			Extract: func(s Sample) diagnosis.Reading {
-				u, ok := s.UsageCores.Get()
-				if !ok {
-					return diagnosis.Unknown()
-				}
-				return diagnosis.Known(quota - u - 0.10*quota)
+			Measurement: diagnosis.Measurement[Sample]{
+				Name:     instLimitHeadroom,
+				Requires: []diagnosis.Capability{HasLimit},
+				// quota − usage − 0.10 × quota, in cores. The usage term is the
+				// SAMPLER's rate, never the cumulative counter beside it:
+				// nothing can subtract a counter from a quota.
+				Extract: func(s Sample) diagnosis.Reading {
+					u, ok := s.UsageCores.Get()
+					if !ok {
+						return diagnosis.Unknown()
+					}
+					return diagnosis.Known(quota - u - 0.10*quota)
+				},
+				Span:      60 * time.Second,
+				Reduction: diagnosis.Mean,
 			},
-			Span:      60 * time.Second,
-			Reduction: diagnosis.Mean,
 			Marks: diagnosis.Marks{
 				Fire:     diagnosis.Mark{At: 0},
 				Clear:    diagnosis.Mark{At: 0.05 * quota},

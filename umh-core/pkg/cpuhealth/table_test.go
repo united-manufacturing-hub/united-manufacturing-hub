@@ -85,19 +85,13 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		}
 
 		// Starvation outranks saturation: the three starvation signals carry
-		// tier 0, the two saturation signals tier 1. External is true on steal
-		// alone — Rank's third tie-break and nothing else.
+		// tier 0, the two saturation signals tier 1.
 		for _, idx := range []int{0, 1, 2} {
 			Expect(t.Signals[idx].Tier).To(Equal(0), "%s must be a starvation signal", t.Signals[idx].Name)
 		}
 		for _, idx := range []int{3, 4} {
 			Expect(t.Signals[idx].Tier).To(Equal(1), "%s must be a saturation signal", t.Signals[idx].Name)
 		}
-		for _, idx := range []int{0, 1, 3, 4} {
-			Expect(t.Signals[idx].External).To(BeFalse(), "%s must not be external", t.Signals[idx].Name)
-		}
-		Expect(t.Signals[2].External).To(BeTrue(), "steal is the only external signal")
-
 		// The interval the caller ticks at.
 		Expect(t.Interval).To(Equal(time.Second))
 
@@ -214,17 +208,17 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 
 		// Both tracks, the folds no instrument produces: host-busy and
 		// usage-cores, each a 60s mean on every box.
-		Expect(t.Tracks).To(HaveLen(2))
-		Expect(t.Tracks[0].Name).To(Equal("host-busy"))
-		Expect(t.Tracks[0].Reduction.Name).To(Equal("mean"))
-		Expect(t.Tracks[0].Reduction.Min).To(Equal(2))
-		Expect(t.Tracks[0].Span).To(Equal(60 * time.Second))
-		Expect(t.Tracks[0].Extract(Sample{HostBusy: diagnosis.Known(0.3)})).To(Equal(diagnosis.Known(0.3)))
-		Expect(t.Tracks[1].Name).To(Equal("usage-cores"))
-		Expect(t.Tracks[1].Reduction.Name).To(Equal("mean"))
-		Expect(t.Tracks[1].Reduction.Min).To(Equal(2))
-		Expect(t.Tracks[1].Span).To(Equal(60 * time.Second))
-		Expect(t.Tracks[1].Extract(Sample{UsageCores: diagnosis.Known(0.7)})).To(Equal(diagnosis.Known(0.7)))
+		Expect(t.Measurements).To(HaveLen(2))
+		Expect(t.Measurements[0].Name).To(Equal("host-busy"))
+		Expect(t.Measurements[0].Reduction.Name).To(Equal("mean"))
+		Expect(t.Measurements[0].Reduction.Min).To(Equal(2))
+		Expect(t.Measurements[0].Span).To(Equal(60 * time.Second))
+		Expect(t.Measurements[0].Extract(Sample{HostBusy: diagnosis.Known(0.3)})).To(Equal(diagnosis.Known(0.3)))
+		Expect(t.Measurements[1].Name).To(Equal("usage-cores"))
+		Expect(t.Measurements[1].Reduction.Name).To(Equal("mean"))
+		Expect(t.Measurements[1].Reduction.Min).To(Equal(2))
+		Expect(t.Measurements[1].Span).To(Equal(60 * time.Second))
+		Expect(t.Measurements[1].Extract(Sample{UsageCores: diagnosis.Known(0.7)})).To(Equal(diagnosis.Known(0.7)))
 
 		// No positive quota: the limit row is omitted entirely, the first four
 		// signals keep their identity and their order, throttling still declares
@@ -452,12 +446,12 @@ func signalNames(t diagnosis.Table[Sample]) []string {
 func tableFingerprint(t diagnosis.Table[Sample]) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "interval=%s\n", t.Interval)
-	for _, tr := range t.Tracks {
+	for _, tr := range t.Measurements {
 		fmt.Fprintf(&b, "track %s red=%s/%d span=%s\n", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span)
 	}
 	for _, s := range t.Signals {
-		fmt.Fprintf(&b, "signal %s tier=%d external=%t releaseOnAbsent=%t demote=%s\n",
-			s.Name, s.Tier, s.External, s.ReleaseOnAbsent, s.DemoteSpan)
+		fmt.Fprintf(&b, "signal %s tier=%d releaseOnAbsent=%t demote=%s\n",
+			s.Name, s.Tier, s.ReleaseOnAbsent, s.DemoteSpan)
 		for _, inst := range s.Instruments {
 			fmt.Fprintf(&b, "  inst %s requires=%v red=%s/%d span=%s counter=%t boolean=%t hasAgainst=%t marks=%+v\n",
 				inst.Name, inst.Requires, inst.Reduction.Name, inst.Reduction.Min, inst.Span,

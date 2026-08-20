@@ -71,8 +71,8 @@ type attributionSplit struct {
 // An untrusted mean disqualifies the comparison: one sample of host busy
 // against one of ours is an attribution made on a single instant.
 func readAttributionSplit(engine *diagnosis.Engine[Sample]) attributionSplit {
-	hostMean, hostState := engine.Track(trackHostBusy).Get()
-	ourMean, ourState := engine.Track(trackUsageCores).Get()
+	hostMean, hostState := engine.Measurement(trackHostBusy).Get()
+	ourMean, ourState := engine.Measurement(trackUsageCores).Get()
 
 	split := attributionSplit{
 		HostBusyMean: hostMean, HostBusyState: hostState,

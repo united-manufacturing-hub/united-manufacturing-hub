@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // The CPU table builder: the function that assembles the five signals and two
-// tracks table.go's entry points hand to diagnosis.NewEngine.
+// measurements table.go's entry points hand to diagnosis.NewEngine.
 
 package cpuhealth
 
@@ -24,7 +24,7 @@ import (
 )
 
 // cpuTable declares five signals — throttling, pressure, steal, saturation and
-// limit-saturation — and two tracks, host-busy and usage-cores.
+// limit-saturation — and two measurements, host-busy and usage-cores.
 //
 // cpuTable is the CPU declaration, built by a function because two marks and
 // one capacity are denominated in quantities that vary per box: the quota and
@@ -39,14 +39,14 @@ import (
 func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	t := diagnosis.Table[Sample]{
 		Interval: time.Second,
-		// A track is an instrument that never fires. It is there to report an extra
-		// number, not to judge one. It cannot be an instrument, because an instrument
+		// A measurement is an instrument without marks: it reports an extra number
+		// rather than judging one. It cannot be an instrument, because an instrument
 		// has to define what good and bad look like — NewEngine requires a fire mark,
 		// a clear mark and a worst value on every one.
 		//
 		// These two are read only by readAttributionSplit. It compares them, and
 		// attributeFor uses the result to blame the host or leave the blame unknown.
-		Tracks: []diagnosis.Track[Sample]{
+		Measurements: []diagnosis.Measurement[Sample]{
 			{
 				// host-headroom's window holds cores − hostBusy − reserve AND is
 				// Unknown() off ScopeHost, so inverting it loses the term on

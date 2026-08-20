@@ -104,12 +104,14 @@ func badReadSignal() diagnosis.Signal[Sample] {
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
-			Name: "bad-read-inst",
-			Extract: func(s Sample) diagnosis.Reading {
-				return diagnosis.Known(0) // absent treated as a real zero: the defect
+			Measurement: diagnosis.Measurement[Sample]{
+				Name: "bad-read-inst",
+				Extract: func(s Sample) diagnosis.Reading {
+					return diagnosis.Known(0) // absent treated as a real zero: the defect
+				},
+				Span:      60 * time.Second,
+				Reduction: diagnosis.Mean,
 			},
-			Span:      60 * time.Second,
-			Reduction: diagnosis.Mean,
 			Marks: diagnosis.Marks{
 				Fire:     diagnosis.Mark{At: 0.5},
 				Clear:    diagnosis.Mark{At: 0.4},
