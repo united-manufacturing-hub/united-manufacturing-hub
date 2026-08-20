@@ -27,7 +27,8 @@ import (
 // derive everything from those two and must never see a readability fact.
 // Their unexported fields are reachable from inside the package;
 // reduced_access_test.go proves they are not from outside, and
-// latch_spec6_test.go pins the shape of Reduced, Coverage and Update.
+// latch_signature_test.go checks the two signatures that keep a readability
+// fact out: the fields of Coverage, and the parameters of Update.
 var _ = Describe("Latch", func() {
 	const latchSpan = 60 * time.Second
 

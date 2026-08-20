@@ -40,7 +40,7 @@ var _ = Describe("Latch signature", func() {
 		// the fields carry no fact about whether THIS tick's read succeeded.
 		ct := reflect.TypeOf(Coverage{})
 		Expect(ct.NumField()).To(Equal(2),
-			"Coverage must carry exactly two durations — a readability field smuggled in here is F1 rebuilt")
+			"Coverage must carry exactly two durations: a third field is a route by which a readability fact could reach the latch")
 		for i := range ct.NumField() {
 			Expect(ct.Field(i).Type).To(Equal(reflect.TypeOf(time.Duration(0))),
 				"every Coverage field must be a time.Duration, never a bool or a Reading")

@@ -436,9 +436,6 @@ var _ = Describe("NewEngine", func() {
 	// accepts the endpoints are exact, whatever the unit or direction. Rising
 	// ratio: (4.0 - 2.0) / (4.0 - 2.0) = 1. Falling headroom, worse() negating
 	// every term: (1.0 - 0.0) / (1.0 - 0.0) = 1 at the value -1.0 against fire 0.0.
-	// Under the earlier design the falling denominator was fire - (-worst), which
-	// put severity 1 at a value the quantity could not reach and scored a signal
-	// at its worst near zero.
 	It("scores exactly 0.0 at the fire mark and exactly 1.0 at the worst value, under both polarities", func() {
 		rising := Marks{Unit: "ratio", Fire: Mark{At: 2.0, Inclusive: true}, Clear: Mark{At: 1.0, Inclusive: true}, Polarity: HigherIsWorse, Worst: 4.0}
 		falling := Marks{Unit: "cores", Fire: Mark{At: 0.0, Inclusive: true}, Clear: Mark{At: 0.5, Inclusive: true}, Polarity: LowerIsWorse, Worst: -1.0}
