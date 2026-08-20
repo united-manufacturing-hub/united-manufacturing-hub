@@ -92,19 +92,30 @@ type key struct{ Path, Instrument string }
 // because "one latch per signal" is now the type rather than two slices agreeing
 // about their length and their order.
 type signalState[S any] struct {
-	signal Signal[S]
-	// path is what this signal's windows are keyed under: its bare name at the
-	// top level, its parent's path plus its own name for a refinement.
-	path string
-	// latch is the single latch that judges this signal. Every node in the tree
-	// has its own, at every depth.
-	latch Latch
+	// instruments are this signal's own, deep-copied out of the caller's table.
+	instruments []Instrument[S]
 	// refinements is the same pairing one level down, one entry per refinement
 	// this signal declares, in declared order. A refinement is a signal in every
 	// respect the engine judges by: its own instruments, its own marks, its own
 	// latch, so judge and observeWindows recurse into it with no child branch.
 	// Observe's own loop does not recurse: it runs over the top level only.
 	refinements []signalState[S]
+	// path is what this signal's windows are keyed under: its bare name at the
+	// top level, its parent's path plus its own name for a refinement.
+	path string
+	// latch is the single latch that judges this signal. Every node in the tree
+	// has its own, at every depth.
+	latch Latch
+	// demoteSpan and releaseOnAbsent are Signal.DemoteSpan and
+	// Signal.ReleaseOnAbsent: what judge drives the latch with on a tick that
+	// reaches no capable window holding a trustworthy number.
+	demoteSpan      time.Duration
+	releaseOnAbsent bool
+}
+
+// capable applies Signal.Capable to the instruments this state holds.
+func (st *signalState[S]) capable(env Environment) []Instrument[S] {
+	return Signal[S]{Instruments: st.instruments}.Capable(env)
 }
 
 // measurementState is one measurement and the single window it reduces through,
@@ -180,37 +191,33 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 // carries.
 func buildSignalState[S any](path string, s Signal[S], index int) signalState[S] {
 	// The caller keeps the table they passed, so the engine must own the
-	// instruments it stores: a copy of the Signal would still share the
-	// Instruments backing array, and a later edit to the caller's own table
-	// would rename the engine's instruments while the windows above stay
-	// keyed by the names as they were at construction. Deep-copy the
-	// instruments and, one level down, each instrument's capability list,
-	// which is a second slice header into the same table.
-	s.Instruments = append([]Instrument[S](nil), s.Instruments...)
-	for j := range s.Instruments {
-		s.Instruments[j].Requires = append([]Capability(nil), s.Instruments[j].Requires...)
+	// instruments it stores: the caller's slice header points into their own
+	// array, and a later edit there would rename the engine's instruments while
+	// the windows above stay keyed by the names as they were at construction.
+	// Deep-copy the instruments and, one level down, each instrument's
+	// capability list, which is a second slice header into the same table.
+	instruments := append([]Instrument[S](nil), s.Instruments...)
+	for j := range instruments {
+		instruments[j].Requires = append([]Capability(nil), instruments[j].Requires...)
 	}
 
 	st := signalState[S]{
-		signal: s,
-		path:   path,
+		instruments: instruments,
+		path:        path,
 		latch: Latch{identity: Identity{
 			Signal:      s.Name,
 			Tier:        s.Tier,
 			Attribution: s.Attribution,
 			Index:       index,
 		}},
-		refinements: make([]signalState[S], 0, len(s.Refinements)),
+		refinements:     make([]signalState[S], 0, len(s.Refinements)),
+		demoteSpan:      s.DemoteSpan,
+		releaseOnAbsent: s.ReleaseOnAbsent,
 	}
 
 	for i, r := range s.Refinements {
 		st.refinements = append(st.refinements, buildSignalState(path+"/"+r.Name, r, i))
 	}
-
-	// st.refinements is the engine's own copy of the tree, and one tree wants
-	// one owner. The stored Signal's own list of children would point into the
-	// caller's arrays, uncopied and so unowned.
-	st.signal.Refinements = nil
 
 	return st
 }
@@ -455,7 +462,7 @@ func validateMeasurement[S any](row string, spanNoun string, m Measurement[S], i
 // so a window reduced without a preceding Observe reports entries left over from
 // an earlier tick as trusted.
 func (e *Engine[S]) Select(s Signal[S], env Environment) (Instrument[S], Reduced, Coverage, Availability) {
-	return e.resolve(s.Name, s, s.Capable(env))
+	return e.resolve(s.Name, s.Capable(env))
 }
 
 // resolve applies the readiness gate to a signal's already-capable instruments:
@@ -466,7 +473,7 @@ func (e *Engine[S]) Select(s Signal[S], env Environment) (Instrument[S], Reduced
 //
 // path names the windows to read, so a refinement resolves against its own,
 // "A/X" rather than the "X" a top-level signal of that name holds.
-func (e *Engine[S]) resolve(path string, s Signal[S], capable []Instrument[S]) (Instrument[S], Reduced, Coverage, Availability) {
+func (e *Engine[S]) resolve(path string, capable []Instrument[S]) (Instrument[S], Reduced, Coverage, Availability) {
 	if len(capable) == 0 {
 		return Instrument[S]{}, Reduced{}, Coverage{}, NoInstrument
 	}
@@ -511,7 +518,7 @@ func (e *Engine[S]) resolve(path string, s Signal[S], capable []Instrument[S]) (
 // refinements is unconditional. Signal.Refinements states the contract that
 // follows for a caller.
 func observeWindows[S any](e *Engine[S], st *signalState[S], sample S, at time.Time) {
-	for _, inst := range st.signal.Instruments {
+	for _, inst := range st.instruments {
 		w := e.windows[key{Path: st.path, Instrument: inst.Name}]
 		if w == nil { // NewEngine builds a window for every pair; never nil here
 			continue
@@ -538,22 +545,20 @@ func observeWindows[S any](e *Engine[S], st *signalState[S], sample S, at time.T
 // refinements' as the recursion reaches them, so a parent's row comes
 // immediately before the rows of the subtree under it.
 func (e *Engine[S]) judge(st *signalState[S], env Environment, at time.Time, into []Readiness) []Readiness {
-	s := st.signal
-
-	inst, reduced, cov, avail := e.resolve(st.path, s, s.Capable(env))
+	inst, reduced, cov, avail := e.resolve(st.path, st.capable(env))
 	l := &st.latch
 
 	switch avail {
 	case Ready:
 		l.Update(inst.Name, reduced, cov, inst.Marks, at)
 	case AllAbsent:
-		if s.ReleaseOnAbsent {
+		if st.releaseOnAbsent {
 			l.Reset()
 		} else {
-			l.ReleaseAfter(s.DemoteSpan, at)
+			l.ReleaseAfter(st.demoteSpan, at)
 		}
 	default: // NoInstrument, NoneReady: hold, then release on the demote clock.
-		l.ReleaseAfter(s.DemoteSpan, at)
+		l.ReleaseAfter(st.demoteSpan, at)
 	}
 
 	into = append(into, Readiness{Signal: st.path, Availability: avail})
