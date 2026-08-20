@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -314,6 +315,48 @@ var _ = Describe("MockRelayServer", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 			_ = resp.Body.Close()
+		})
+	})
+
+	Describe("Bandwidth Limitation", func() {
+		It("holds a larger push body measurably longer than a smaller one at the same rate", func() {
+			server.SimulateBandwidthLimitation(1_000_000) // 1 MB/s
+
+			push := func(contentSize int) time.Duration {
+				msg := &types.UMHMessage{
+					InstanceUUID: "test-instance-123",
+					Content:      strings.Repeat("x", contentSize),
+					Email:        "test@example.com",
+				}
+				payload := struct {
+					UMHMessages []*types.UMHMessage `json:"UMHMessages"`
+				}{
+					UMHMessages: []*types.UMHMessage{msg},
+				}
+				body, err := json.Marshal(payload)
+				Expect(err).NotTo(HaveOccurred())
+
+				req, err := http.NewRequest(http.MethodPost, server.URL()+"/v2/instance/push", bytes.NewReader(body))
+				Expect(err).NotTo(HaveOccurred())
+				req.Header.Set("Content-Type", "application/json")
+				req.AddCookie(&http.Cookie{Name: "token", Value: "test-jwt-token"})
+
+				client := &http.Client{}
+
+				start := time.Now()
+				resp, err := client.Do(req)
+				elapsed := time.Since(start)
+				Expect(err).NotTo(HaveOccurred())
+				defer func() { _ = resp.Body.Close() }()
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+				return elapsed
+			}
+
+			smallElapsed := push(10)
+			largeElapsed := push(300_000)
+
+			Expect(largeElapsed - smallElapsed).To(BeNumerically(">", 200*time.Millisecond))
 		})
 	})
 
