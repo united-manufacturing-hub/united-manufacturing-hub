@@ -105,6 +105,7 @@ type TransportRunResult struct {
 	PushedMessages    []*types.UMHMessage           // Messages pushed to HTTP
 	ConsecutiveErrors int                           // Final consecutive error count from mock server
 	AuthCallCount     int                           // Auth endpoint calls (>1 indicates re-auth)
+	ShutdownClean     bool                          // Whether the supervisor drained cleanly; read after Done closes
 }
 
 // RunTransportScenario runs the FSMv2 transport worker via ApplicationSupervisor with a mock relay server.
@@ -264,6 +265,7 @@ children:
 
 		result.PushedMessages = mockServer.GetPushedMessages()
 		result.AuthCallCount = mockServer.AuthCallCount()
+		result.ShutdownClean = runResult.ShutdownClean
 
 		if channelProvider != nil {
 			transportWorker.ClearChannelProvider()
