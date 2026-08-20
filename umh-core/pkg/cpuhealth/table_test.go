@@ -65,13 +65,14 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		t := cpuTable(4, 2.0)
 
 		// Five signals, in Rank's last tie-break order, with limit-saturation
-		// the fifth and last row.
+		// the fifth and last row. Steal is declared first so it stays ahead of
+		// throttling and pressure when all three tie on tier and severity.
 		Expect(t.Signals).To(HaveLen(5))
 		names := make([]string, 0, len(t.Signals))
 		for _, s := range t.Signals {
 			names = append(names, s.Name)
 		}
-		Expect(names).To(Equal([]string{"throttling", "pressure", "steal", "saturation", "limit-saturation"}))
+		Expect(names).To(Equal([]string{"steal", "throttling", "pressure", "saturation", "limit-saturation"}))
 
 		// Every signal declares the same cadence facts: 60s demote span, 60s
 		// instrument span, release-on-absent true. CPU cannot witness the flag,
@@ -95,7 +96,7 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		// The interval the caller ticks at.
 		Expect(t.Interval).To(Equal(time.Second))
 
-		throttling := t.Signals[0]
+		throttling := t.Signals[1]
 		Expect(throttling.Instruments).To(HaveLen(1))
 		throttleInst := throttling.Instruments[0]
 		Expect(throttleInst.Name).To(Equal("throttle-ratio"))
@@ -113,7 +114,7 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		Expect(throttleInst.Extract(Sample{NrThrottled: diagnosis.Known(7)})).To(Equal(diagnosis.Known(7)))
 		Expect(throttleInst.Against(Sample{NrPeriods: diagnosis.Known(100)})).To(Equal(diagnosis.Known(100)))
 
-		pressure := t.Signals[1]
+		pressure := t.Signals[2]
 		Expect(pressure.Instruments).To(HaveLen(1))
 		pressureInst := pressure.Instruments[0]
 		Expect(pressureInst.Name).To(Equal("pressure-avg60"))
@@ -129,7 +130,7 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		// The two steal arms answer one question. The p95 is the primary arm and
 		// its minimum is the reduction's own twenty; the mean stands in for it at
 		// two samples and shares the SAME mark pair — no second threshold.
-		steal := t.Signals[2]
+		steal := t.Signals[0]
 		Expect(steal.Instruments).To(HaveLen(2))
 		stealP95 := steal.Instruments[0]
 		Expect(stealP95.Name).To(Equal("steal-p95"))
@@ -230,7 +231,8 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		for i := 0; i < 4; i++ {
 			Expect(noLimit.Signals[i].Name).To(Equal(t.Signals[i].Name))
 		}
-		Expect(noLimit.Signals[0].Instruments[0].Requires).To(ConsistOf(HasLimit))
+		Expect(noLimit.Signals[1].Name).To(Equal("throttling"))
+		Expect(noLimit.Signals[1].Instruments[0].Requires).To(ConsistOf(HasLimit))
 		_, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred(), "a no-limit box must still construct an engine")
 		_, err = NewEngine(4, 2.0)
@@ -370,7 +372,7 @@ var _ = Describe("Table — the exported route to the CPU declaration", func() {
 		// The no-quota arm, which the fingerprint comparison alone would not
 		// pin: both sides could omit the same wrong row and still match.
 		noLimit := signalNames(Table(4, 0))
-		Expect(noLimit).To(Equal([]string{"throttling", "pressure", "steal", "saturation"}))
+		Expect(noLimit).To(Equal([]string{"steal", "throttling", "pressure", "saturation"}))
 		Expect(noLimit).NotTo(ContainElement("limit-saturation"), "a box with no positive quota declares no limit row")
 	})
 
