@@ -58,9 +58,34 @@ func (p *TransportTestChannelProvider) GetInboundChan() <-chan *types.UMHMessage
 	return p.inbound
 }
 
-// QueueOutbound queues a message for the worker to push.
+// QueueOutbound queues a message for the worker to push, blocking if the channel
+// is full.
 func (p *TransportTestChannelProvider) QueueOutbound(msg *types.UMHMessage) {
 	p.outbound <- msg
+}
+
+// TryQueueOutbound queues a message and reports whether there was room, without
+// blocking. This is what the production subscriber does
+// (pkg/communicator/pkg/subscriber/subscribers.go), so a scenario that models the
+// once-per-second status producer must use this and count the false results
+// rather than block on QueueOutbound.
+func (p *TransportTestChannelProvider) TryQueueOutbound(msg *types.UMHMessage) bool {
+	select {
+	case p.outbound <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+// OutboundLen returns the number of messages waiting on the outbound channel.
+func (p *TransportTestChannelProvider) OutboundLen() int {
+	return len(p.outbound)
+}
+
+// OutboundCap returns the capacity of the outbound channel.
+func (p *TransportTestChannelProvider) OutboundCap() int {
+	return cap(p.outbound)
 }
 
 // DrainInbound reads all available messages from the inbound channel (non-blocking).
@@ -86,24 +111,32 @@ drainLoop:
 
 // TransportRunConfig configures a transport scenario run with a mock relay server.
 type TransportRunConfig struct {
-	Logger                  deps.FSMLogger             // If nil, creates a no-op logger
+	Logger                  deps.FSMLogger            // If nil, creates a no-op logger
 	MockServer              *testutil.MockRelayServer // If nil, creates and manages internally; caller closes if provided
 	AuthToken               string                    // Defaults to "test-auth-token"
-	InitialPullMessages     []*types.UMHMessage   // Messages queued for transport to pull
-	InitialOutboundMessages []*types.UMHMessage   // Messages queued for worker to push
+	InitialPullMessages     []*types.UMHMessage       // Messages queued for transport to pull
+	InitialOutboundMessages []*types.UMHMessage       // Messages queued for worker to push
 	Duration                time.Duration             // 0 = run until context cancelled; negative = error
 	TickInterval            time.Duration             // Defaults to 100ms
+	// HTTPTimeout caps each individual HTTP request. Defaults to 5s. Production
+	// uses 10s. Lower it to make a stalled endpoint fail sooner than the 30s
+	// per-action budget, raise it to let one request outlive that budget.
+	HTTPTimeout time.Duration
+	// ChannelProvider replaces the internally created one. Supply it when the test
+	// needs to keep writing to the outbound channel while the scenario runs -- the
+	// internal provider is not returned, so it cannot be reached mid-run.
+	ChannelProvider *TransportTestChannelProvider
 }
 
 // TransportRunResult contains observable results after scenario completion (populated after Done closes).
 type TransportRunResult struct {
-	Error             error                   // Non-nil if scenario setup failed
-	Done              <-chan struct{}         // Closes when scenario completes
-	Shutdown          func()                  // Triggers graceful shutdown
+	Error             error               // Non-nil if scenario setup failed
+	Done              <-chan struct{}     // Closes when scenario completes
+	Shutdown          func()              // Triggers graceful shutdown
 	ReceivedMessages  []*types.UMHMessage // Messages pulled from HTTP (nil for HTTP-only tests)
 	PushedMessages    []*types.UMHMessage // Messages pushed to HTTP
-	ConsecutiveErrors int                     // Final consecutive error count from mock server
-	AuthCallCount     int                     // Auth endpoint calls (>1 indicates re-auth)
+	ConsecutiveErrors int                 // Final consecutive error count from mock server
+	AuthCallCount     int                 // Auth endpoint calls (>1 indicates re-auth)
 }
 
 // RunTransportScenario runs the FSMv2 transport worker via ApplicationSupervisor with a mock relay server.
@@ -165,7 +198,11 @@ func RunTransportScenario(ctx context.Context, cfg TransportRunConfig) *Transpor
 		bufferSize = len(cfg.InitialOutboundMessages)
 	}
 
-	channelProvider := NewTransportTestChannelProvider(bufferSize)
+	channelProvider := cfg.ChannelProvider
+	if channelProvider == nil {
+		channelProvider = NewTransportTestChannelProvider(bufferSize)
+	}
+
 	transportWorker.SetChannelProvider(channelProvider)
 
 	for _, msg := range cfg.InitialOutboundMessages {
@@ -177,6 +214,11 @@ func RunTransportScenario(ctx context.Context, cfg TransportRunConfig) *Transpor
 		authToken = "test-auth-token"
 	}
 
+	httpTimeout := cfg.HTTPTimeout
+	if httpTimeout <= 0 {
+		httpTimeout = 5 * time.Second
+	}
+
 	scenarioConfig := fmt.Sprintf(`
 children:
   - name: "transport-1"
@@ -186,8 +228,8 @@ children:
         relayURL: "%s"
         instanceUUID: "test-instance-uuid"
         authToken: "%s"
-        timeout: "5s"
-`, serverURL, authToken)
+        timeout: "%s"
+`, serverURL, authToken, httpTimeout)
 
 	testScenario := Scenario{
 		Name:        "transport-test",

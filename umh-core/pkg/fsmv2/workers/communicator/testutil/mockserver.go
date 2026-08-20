@@ -37,9 +37,32 @@ type MockRelayServer struct {
 	pushedMsgs        []*types.UMHMessage
 	connectionHeaders []string
 	authCalls         int
+	pushCalls         int
 	nextError         int
 	slowDelay         time.Duration
-	mu                sync.Mutex
+	// pathFaults holds faults that persist until cleared, keyed by request path.
+	// SimulateServerError and SimulateSlowResponse are one-shot and shared by every
+	// path, so neither can hold one endpoint slow while another stays healthy.
+	pathFaults map[string]PathFault
+	// closing is closed by Close, releasing any request parked by a Hang fault.
+	// httptest.Server.Close waits for outstanding handlers, so a Hang that only
+	// watched the request context would deadlock teardown.
+	closing   chan struct{}
+	closeOnce sync.Once
+	mu        sync.Mutex
+}
+
+// PathFault describes what one endpoint does to every request until the fault is
+// cleared. A zero PathFault is no fault.
+type PathFault struct {
+	// Delay is how long to hold the request before answering.
+	Delay time.Duration
+	// StatusCode, when non-zero, is returned instead of handling the request.
+	// It is applied after Delay.
+	StatusCode int
+	// Hang answers nothing and holds the connection until the fault is cleared or
+	// the client gives up. Delay and StatusCode are ignored when it is set.
+	Hang bool
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.
@@ -52,6 +75,8 @@ func NewMockRelayServer() *MockRelayServer {
 		// Bug #6 fix: Default backend UUID - different from any placeholder UUID
 		backendUUID: "backend-real-uuid-12345678",
 		backendName: "Mock Instance Name",
+		pathFaults:  make(map[string]PathFault),
+		closing:     make(chan struct{}),
 	}
 
 	m.server = httptest.NewServer(http.HandlerFunc(m.handler))
@@ -73,6 +98,10 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 	// Track Connection header for Bug #3 validation
 	m.mu.Lock()
 	m.connectionHeaders = append(m.connectionHeaders, r.Header.Get("Connection"))
+
+	if r.URL.Path == "/v2/instance/push" {
+		m.pushCalls++
+	}
 	m.mu.Unlock()
 
 	// Check for injected errors (except for login endpoint)
@@ -99,6 +128,34 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 
 		if slowDelay > 0 {
 			time.Sleep(slowDelay)
+		}
+	}
+
+	if fault, ok := m.pathFault(r.URL.Path); ok {
+		if fault.Hang {
+			// Hold until the client's own timeout fires or the server closes.
+			select {
+			case <-r.Context().Done():
+			case <-m.closing:
+			}
+
+			return
+		}
+
+		if fault.Delay > 0 {
+			select {
+			case <-time.After(fault.Delay):
+			case <-r.Context().Done():
+				return
+			case <-m.closing:
+				return
+			}
+		}
+
+		if fault.StatusCode != 0 {
+			w.WriteHeader(fault.StatusCode)
+
+			return
 		}
 	}
 
@@ -217,6 +274,10 @@ func (m *MockRelayServer) URL() string {
 
 // Close shuts down the mock server.
 func (m *MockRelayServer) Close() {
+	// Release parked Hang requests first. server.Close waits for outstanding
+	// handlers, so closing in the other order deadlocks.
+	m.closeOnce.Do(func() { close(m.closing) })
+
 	m.server.Close()
 }
 
@@ -278,6 +339,44 @@ func (m *MockRelayServer) SimulateSlowResponse(delay time.Duration) {
 	defer m.mu.Unlock()
 
 	m.slowDelay = delay
+}
+
+// SetPathFault makes every request to path behave as fault describes, until
+// ClearPathFault or another SetPathFault replaces it. Login is not exempt, so a
+// fault on /v2/instance/login also breaks authentication.
+func (m *MockRelayServer) SetPathFault(path string, fault PathFault) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.pathFaults[path] = fault
+}
+
+// ClearPathFault removes the fault on path, if any.
+func (m *MockRelayServer) ClearPathFault(path string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.pathFaults, path)
+}
+
+// pathFault reports the fault registered for path.
+func (m *MockRelayServer) pathFault(path string) (PathFault, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	fault, ok := m.pathFaults[path]
+
+	return fault, ok
+}
+
+// PushCallCount returns how many push requests reached the server, including any
+// the faults above turned away. GetPushedMessages only counts requests that were
+// handled, so the two differ whenever a fault is set.
+func (m *MockRelayServer) PushCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.pushCalls
 }
 
 // GetReceivedConnectionHeaders returns all Connection headers received from requests.
