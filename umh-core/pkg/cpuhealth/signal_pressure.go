@@ -28,7 +28,11 @@ import (
 // tick 0.
 func pressureSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name:            sigPressure,
+		Name: sigPressure,
+		// Stalled time names no side: our tasks can wait because the machine is
+		// busy, or because we asked for more CPU than we may use, and the
+		// pressure number alone does not separate those.
+		Attribution:     blameUnknown,
 		Tier:            tierStarvation,
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,

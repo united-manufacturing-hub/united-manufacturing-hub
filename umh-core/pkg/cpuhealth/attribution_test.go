@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Attribution consults its evidence. A verdict field is not
-// asserted without the evidence for it. The host/container split reads both 60s
-// means back from the engine's tracks and is STRICTLY greater (hbm > 2 x oum);
-// an internal cause (throttling, the container's own limit budget) attributes
-// container, never host; and when the split cannot run on untrusted means it is
-// unknown. The saturation family folds to one cause before ranking.
+// Attribution consults its evidence. A verdict field is not asserted without
+// the evidence for it. A full machine is narrowed to a side by our share of
+// the machine's busy time, over the same 60 seconds as everything else; an
+// internal cause (throttling, the container's own limit budget) attributes
+// container whatever that share says; and where the share cannot be measured,
+// or sits in the band the two refinements leave between them, it is unknown.
+// The saturation family folds to one cause before ranking.
 package cpuhealth
 
 import (
@@ -67,9 +68,10 @@ var _ = Describe("attribution consults its evidence", func() {
 	})
 
 	It("should not attribute a full machine to the host when our own sustained usage exceeds the host's non-container share", func() {
-		// The same scenario at ticks 100+: our usage mean 1.95, the host's
-		// non-container share 3.80 - 1.95 = 1.85, which is NOT greater than our
-		// 1.95 — the split says it is not the host's fault, so the load is ours.
+		// The same scenario at ticks 100+: our usage 1.95 against a machine busy
+		// 3.80, a share of 0.5132. That is past container-share's 0.51 fire
+		// mark, so we account for most of what the machine is doing and the load
+		// is ours.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
@@ -93,17 +95,17 @@ var _ = Describe("attribution consults its evidence", func() {
 				oum, _ := engine.Measurement(trackUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.8, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.95, 1e-9))
-				Expect(2*oum).To(BeNumerically(">", hbm), "2 x 1.95 = 3.90 > 3.80")
+				Expect(oum/hbm).To(BeNumerically(">", 0.51), "1.95 / 3.80 = 0.5132, past container-share's fire mark")
 				Expect(verdict.Attribution).To(Equal(AttributionContainer), "a machine full on our own load is the container's, not the host's")
 			}
 		}
 
-		// The equality boundary: the comparison is STRICTLY greater, matching
-		// the split's own HostDominates check, so hostBusyMean == 2 x ourUsageMean
-		// is container, not host. The difference is measure-zero and the recording
-		// cannot see it, so a spec that asserts only the two recorded rows
-		// leaves it to whoever types the operator. Drive hbm 3.2 against oum
-		// 1.6 (host-headroom -0.2 fires, 3.2 == 2 x 1.6) and require container.
+		// The middle of the band: a share of exactly one half crosses neither
+		// refinement's fire mark, so nothing narrows the full machine to a side
+		// and the saturation signal's own blame answers, which is nobody. Drive
+		// hbm 3.2 against oum 1.6 (host-headroom -0.2 fires, and 1.6 / 3.2 is
+		// 0.5000) and require unknown. The latches start unfired here, so there
+		// is no earlier answer for the band to hold.
 		engine2, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env2 := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
@@ -127,8 +129,8 @@ var _ = Describe("attribution consults its evidence", func() {
 				oum, _ := engine2.Measurement(trackUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.2, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.6, 1e-9))
-				Expect(hbm).To(BeNumerically("~", 2*oum, 1e-9), "3.2 == 2 x 1.6 exactly")
-				Expect(verdict.Attribution).To(Equal(AttributionContainer), "exact equality is container, not host — the comparison is strict")
+				Expect(oum/hbm).To(BeNumerically("~", 0.5, 1e-9), "1.6 / 3.2 is 0.5000 exactly")
+				Expect(verdict.Attribution).To(Equal(AttributionUnknown), "a share inside the band fires neither refinement, so nothing narrows the blame")
 			}
 		}
 	})
@@ -203,5 +205,149 @@ var _ = Describe("attribution consults its evidence", func() {
 				Expect(verdict.Attribution).To(Equal(AttributionUnknown), "a split that cannot run attributes unknown")
 			}
 		}
+	})
+})
+
+// shareRun drives two engines over one sequence of samples: one through Decide,
+// which is what a caller sees, and one through Engine.Observe, which is the
+// only way to read the refinements nested under a fired signal. Decide's own
+// state change IS that Observe call, so the two engines see the same history.
+type shareRun struct {
+	verdicts *diagnosis.Engine[Sample]
+	tree     *diagnosis.Engine[Sample]
+	at       time.Time
+	env      diagnosis.Environment
+	// seen holds one entry per tick: the refinements fired under saturation on
+	// that tick, so a spec can assert over a whole run rather than its end.
+	seen  [][]string
+	scope Scope
+}
+
+// newShareRun builds a run on a box with no quota, so the only signal that can
+// fire is saturation and the only thing that can narrow it is a share.
+func newShareRun(cores float64, scope Scope) *shareRun {
+	verdicts, err := NewEngine(cores, 0)
+	Expect(err).NotTo(HaveOccurred())
+	tree, err := NewEngine(cores, 0)
+	Expect(err).NotTo(HaveOccurred())
+
+	return &shareRun{
+		verdicts: verdicts,
+		tree:     tree,
+		env:      diagnosis.NewEnvironment(),
+		at:       time.Now(),
+		scope:    scope,
+	}
+}
+
+// advance runs n one-second ticks at a fixed machine busy time and usage, and
+// returns the last tick's verdict with the refinements fired on that tick. Sixty
+// ticks flush a 60-second window, so a phase longer than that ends on the new
+// share and not on a mean still carrying the old one.
+func (r *shareRun) advance(n int, hostBusy, usage float64) (Verdict, []string) {
+	var verdict Verdict
+
+	for i := 0; i < n; i++ {
+		smp := Sample{
+			Timestamp:  r.at,
+			CpuScope:   r.scope,
+			HostBusy:   diagnosis.Known(hostBusy),
+			UsageCores: diagnosis.Known(usage),
+		}
+		verdict, _ = Decide(r.verdicts, smp, r.env)
+		fired, _ := r.tree.Observe(smp, r.env, r.at)
+		r.seen = append(r.seen, firedShares(fired))
+		r.at = r.at.Add(time.Second)
+	}
+
+	return verdict, r.seen[len(r.seen)-1]
+}
+
+// firedShares names the refinements fired under the saturation signal, and nil
+// when saturation itself did not fire.
+func firedShares(fired []diagnosis.Fired) []string {
+	for _, f := range fired {
+		if f.Identity.Signal != sigSaturation {
+			continue
+		}
+
+		out := make([]string, 0, len(f.Refinements))
+		for _, ref := range f.Refinements {
+			out = append(out, ref.Identity.Signal)
+		}
+
+		return out
+	}
+
+	return nil
+}
+
+var _ = Describe("the share that narrows a full machine to a side", func() {
+	It("should withhold the share on a container pinned to a subset of the CPUs", func() {
+		// Machine busy 10.0 against our 3.0 is a share of 0.30, well past
+		// host-share's 0.49 fire mark. On a pinned container that 0.30 is an
+		// artifact: the busy time covers all eight-or-more CPUs of the machine
+		// while our usage covers only the ones we may run on. Four cores and
+		// usage 3.0 puts usage-fraction at 0.75, so saturation still fires and
+		// the tick still needs a blame.
+		pinned := newShareRun(4, ScopeAffinity)
+		verdict, refinements := pinned.advance(6, 10.0, 3.0)
+		Expect(verdict.Causes).To(HaveLen(1), "usage-fraction 3.0 / 4 = 0.75 fires saturation")
+		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSaturation))
+		Expect(refinements).To(BeEmpty(), "the share is not a number on a pinned container")
+		Expect(verdict.Attribution).To(Equal(AttributionUnknown), "with nothing narrowing it, the saturation signal's own blame answers")
+
+		// The control: the same two numbers on a host-scoped sample, where the
+		// share means what it says.
+		whole := newShareRun(4, ScopeHost)
+		verdict, refinements = whole.advance(6, 10.0, 3.0)
+		Expect(refinements).To(Equal([]string{refHostShare}))
+		Expect(verdict.Attribution).To(Equal(AttributionHost))
+	})
+
+	It("should hold the side already blamed while the share sits between the two fire marks", func() {
+		// Machine busy 3.5 on a four-core box leaves host-headroom at
+		// 4 - 3.5 - 1.0 = -0.5, so saturation is fired throughout and only the
+		// share moves. Ninety ticks per phase is a full 60-second window and
+		// then some, so each phase ends on its own share.
+		run := newShareRun(4, ScopeHost)
+
+		verdict, refinements := run.advance(90, 3.5, 1.40) // share 0.40
+		Expect(refinements).To(Equal([]string{refHostShare}), "0.40 is past host-share's 0.49 fire mark")
+		Expect(verdict.Attribution).To(Equal(AttributionHost))
+
+		verdict, refinements = run.advance(90, 3.5, 1.75) // share 0.50
+		Expect(refinements).To(Equal([]string{refHostShare}), "0.50 is short of host-share's 0.505 clear mark, so it holds")
+		Expect(verdict.Attribution).To(Equal(AttributionHost))
+
+		verdict, refinements = run.advance(90, 3.5, 2.10) // share 0.60
+		Expect(refinements).To(Equal([]string{refContainerShare}), "0.60 clears host-share and fires container-share")
+		Expect(verdict.Attribution).To(Equal(AttributionContainer))
+
+		verdict, refinements = run.advance(90, 3.5, 1.75) // share 0.50 again
+		Expect(refinements).To(Equal([]string{refContainerShare}), "the same 0.50 now holds the container, which is the whole point of the band")
+		Expect(verdict.Attribution).To(Equal(AttributionContainer))
+	})
+
+	It("should never fire both shares on one tick, over a run that crosses the band in both directions", func() {
+		// Four phases of ninety ticks each, alternating a share of 0.30 and one
+		// of 0.60, so the band is crossed upward twice and downward once. A
+		// refinement may not fire again until a whole window has passed since it
+		// released, which is why each phase is longer than the window.
+		run := newShareRun(4, ScopeHost)
+		for _, usage := range []float64{1.05, 2.10, 1.05, 2.10} {
+			run.advance(90, 3.5, usage)
+		}
+
+		both := make(map[string]bool)
+		for tick, refinements := range run.seen {
+			Expect(len(refinements)).To(BeNumerically("<=", 1),
+				"tick %d fired %v: the two bands do not overlap, so firing either one clears the other", tick, refinements)
+			for _, name := range refinements {
+				both[name] = true
+			}
+		}
+		Expect(both).To(HaveKey(refHostShare), "the run must reach a share that blames the host, or the sweep asserts nothing")
+		Expect(both).To(HaveKey(refContainerShare), "the run must reach a share that blames the container, or the sweep asserts nothing")
 	})
 })

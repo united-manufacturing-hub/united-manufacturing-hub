@@ -69,8 +69,9 @@
 //
 // # Who is to blame
 //
-// A degraded verdict carries an Attribution, derived from the dominant cause —
-// the one ranked first.
+// A degraded verdict carries an Attribution. It is declared in the table
+// beside the signal that ranked first, or beside the refinement narrowing it,
+// and nothing after the verdict recomputes it.
 //
 // Steal is the host by definition: a hypervisor took the CPU. Throttling is
 // the container by definition: the limit is ours. Pressure is unknown — tasks
@@ -78,12 +79,14 @@
 // we may use, and the pressure number alone does not separate those.
 // Limit-saturation is the container, because it is our own limit.
 //
-// Saturation depends on which way it was measured. Answered by host-headroom,
-// the machine's busy time is compared against our own usage: the host when the
-// rest of the box accounts for most of the busy time, the container when we
-// account for most of it. That comparison needs both numbers trusted, and
-// where either is not, the attribution is unknown. Answered by usage-fraction
-// it is unknown as well, because there is no host evidence to compare against.
+// Saturation says nothing by itself about whose load filled the machine, so
+// two refinements narrow it: host-share when the rest of the box accounts for
+// most of the busy time, container-share when we account for most of it. Both
+// read our usage over the machine's busy time, and a share in the narrow band
+// around one half fires neither, which leaves the side already blamed in
+// place. That number needs the machine's busy time and our own usage over the
+// same CPUs, so a box whose /proc/stat is unreadable and a container pinned to
+// a subset of the CPUs both come out unknown.
 //
 // # Sample and Reading
 //

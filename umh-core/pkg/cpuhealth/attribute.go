@@ -58,43 +58,28 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 	}
 }
 
-// attributeFor derives the attribution from the dominant cause. Throttling is
-// the kernel capping this container against its own quota, so it is a container
-// cause whatever the host is doing. Pressure names no side: it counts stalled
-// time without saying whose load caused the stall.
-//
-// The saturation kind is ambiguous — it is the one cause kept for the whole
-// family — so Decide resolves it with the survivor's arm. The limit arm is this
-// container spending its own budget. The no-host-stats fallback has no host
-// reading to compare against. Host-full is the only arm the split can settle,
-// and it needs two trusted 60s means to settle it.
-func attributeFor(dominant Cause, survivor *diagnosis.Fired, split attributionSplit) Attribution {
-	switch dominant.Kind {
-	case CauseKindSteal, CauseKindHostContention:
+// declaredBlame reads the blame the table declared for one fired signal. A
+// refinement narrows the signal it hangs under, so a fired refinement answers
+// in its parent's place. Refinements arrive most urgent first, which makes
+// index 0 the narrowing that applies.
+func declaredBlame(f diagnosis.Fired) int {
+	if len(f.Refinements) > 0 {
+		return f.Refinements[0].Attribution
+	}
+
+	return f.Identity.Attribution
+}
+
+// attributionOf names a blame value. A number no row declared is unknown: the
+// alternative is an empty Attribution, which reads as a value rather than as
+// the absence of one.
+func attributionOf(blame int) Attribution {
+	switch blame {
+	case blameHost:
 		return AttributionHost
-	case CauseKindThrottling:
+	case blameContainer:
 		return AttributionContainer
-	case CauseKindPressure:
-		return AttributionUnknown
-	case CauseKindSaturation:
-		if survivor == nil {
-			return AttributionUnknown
-		}
-		switch saturationArmOf(*survivor) {
-		case hostFullArm:
-			if split.HostBusyState != diagnosis.StateValue || split.OurUsageState != diagnosis.StateValue {
-				return AttributionUnknown
-			}
-			// HostDominates compares strictly greater — hostBusyMean >
-			// 2*ourUsageMean — so a host share exactly double our own is ours.
-			if split.HostDominates {
-				return AttributionHost
-			}
-			return AttributionContainer
-		case limitArm:
-			return AttributionContainer
-		}
+	default:
 		return AttributionUnknown
 	}
-	return AttributionUnknown
 }

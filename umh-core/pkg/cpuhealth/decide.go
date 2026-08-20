@@ -15,7 +15,8 @@
 // Decide, the judgement entry point. Each stage takes the previous stage's
 // output — Observe, then chooseSaturationCause, then buildVerdict and
 // detailsFor off the same choice — so no verdict field is asserted without
-// the evidence for it; attributeFor derives the attribution.
+// the evidence for it. The attribution is read off the fired signal that
+// ranked first, where the table declared it.
 
 package cpuhealth
 
@@ -30,7 +31,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
 	split := readAttributionSplit(engine)
 	chosen := chooseSaturationCause(fired, env.Has(HasLimit))
-	verdict := buildVerdict(engine, chosen, split)
+	verdict := buildVerdict(engine, chosen)
 	details := detailsFor(engine, s, env, readiness, chosen, split)
 	return verdict, details
 }
@@ -129,9 +130,11 @@ func chooseSaturationCause(fired []diagnosis.Fired, hasLimit bool) saturationCho
 // Exactly one rule decides State: degraded when at least one signal fired
 // this tick, healthy when none did — no severity floor, no second condition.
 // It owns no Details fields — it returns the Verdict only. Rank is the only
-// thing that orders Verdict.Causes; attribution derives from the dominant
-// (ranked-first) cause.
-func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice, split attributionSplit) Verdict {
+// thing that orders Verdict.Causes, and the attribution is the blame the table
+// declared for the signal Rank put first, or for the refinement narrowing it.
+// The Fired that ranked first is kept for that read; the Cause built from it
+// carries no blame.
+func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice) Verdict {
 	ranked := diagnosis.Rank(chosen.Fired)
 	causes := make([]Cause, len(ranked))
 	for i, f := range ranked {
@@ -142,7 +145,7 @@ func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice, spl
 		verdict.State = StateHealthy
 	} else {
 		verdict.State = StateDegraded
-		verdict.Attribution = attributeFor(causes[0], chosen.Winner, split)
+		verdict.Attribution = attributionOf(declaredBlame(ranked[0]))
 	}
 	return verdict
 }

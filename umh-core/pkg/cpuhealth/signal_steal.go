@@ -37,8 +37,11 @@ var stealMarks = diagnosis.Marks{
 // after a start instead of twenty.
 func stealSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name:            sigSteal,
-		Tier:            tierStarvation,
+		Name: sigSteal,
+		Tier: tierStarvation,
+		// A hypervisor took the CPU, so the cause is outside this box by
+		// definition and no measurement can move the blame.
+		Attribution:     blameHost,
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{

@@ -34,8 +34,11 @@ var throttleMarks = diagnosis.Marks{
 // for why.
 func throttlingSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name:            sigThrottling,
-		Tier:            tierStarvation,
+		Name: sigThrottling,
+		Tier: tierStarvation,
+		// The kernel is cutting us off at OUR OWN quota, so the cause is inside
+		// this container by definition, whatever the host is doing.
+		Attribution:     blameContainer,
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{

@@ -14,9 +14,9 @@
 
 // The saturation family answers whether the machine — or our own limit — is
 // full. It covers the host-full, usage-fraction, and limit arms of one
-// question, plus the helpers chooseSaturationCause uses to order and flag
-// them; the arms stay together because saturationRank and saturationFlags
-// describe both signals.
+// question, the two refinements that narrow a full machine to a side, and the
+// helpers chooseSaturationCause uses to order and flag the arms; the arms stay
+// together because saturationRank and saturationFlags describe both signals.
 
 package cpuhealth
 
@@ -38,12 +38,17 @@ import (
 //
 // Both instruments sit under one signal so they share one latch: the machine
 // has not stopped being full because the measurement changed hands.
+//
+// A full machine says nothing about whose load filled it, so the signal itself
+// blames nobody and the two refinements under it narrow that.
 func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            sigSaturation,
 		Tier:            tierSaturation,
+		Attribution:     blameUnknown,
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
+		Refinements:     shareRefinements(),
 		Instruments: []diagnosis.Instrument[Sample]{
 			{
 				Measurement: diagnosis.Measurement[Sample]{
@@ -123,6 +128,89 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 	}
 }
 
+// containerShare is our own usage over the machine's busy time: the fraction of
+// everything running on this box that is us. Both refinements below read this
+// one number and differ only in which side of it they blame.
+//
+// It withholds off ScopeHost for the reason host-headroom does. The machine's
+// busy time covers every CPU, while a pinned container's usage covers only the
+// CPUs it may run on, so the fraction is small for a reason that is not fault.
+func containerShare(s Sample) diagnosis.Reading {
+	if s.CpuScope != ScopeHost {
+		return diagnosis.Unknown()
+	}
+
+	busy, ok := s.HostBusy.Get()
+	if !ok || busy <= 0 {
+		return diagnosis.Unknown()
+	}
+
+	usage, ok := s.UsageCores.Get()
+	if !ok {
+		return diagnosis.Unknown()
+	}
+
+	return diagnosis.Known(usage / busy)
+}
+
+// shareRefinements narrow a full machine to a side. host-share says the rest of
+// the box accounts for most of the busy time; container-share says we do.
+//
+// Their bands do not overlap, and both can therefore never be fired at once:
+// firing either one is exactly the condition that clears the other. Between
+// 0.49 and 0.51 neither mark is crossed, so whichever fired last holds, and a
+// share drifting across the middle does not swap the blame back and forth.
+func shareRefinements() []diagnosis.Signal[Sample] {
+	return []diagnosis.Signal[Sample]{
+		{
+			Name:            refHostShare,
+			Tier:            tierSaturation,
+			Attribution:     blameHost,
+			DemoteSpan:      60 * time.Second,
+			ReleaseOnAbsent: true,
+			Instruments: []diagnosis.Instrument[Sample]{{
+				Measurement: diagnosis.Measurement[Sample]{
+					Name:      refHostShare,
+					Extract:   containerShare,
+					Span:      60 * time.Second,
+					Reduction: diagnosis.Mean,
+				},
+				Marks: diagnosis.Marks{
+					Fire:     diagnosis.Mark{At: 0.49},
+					Clear:    diagnosis.Mark{At: 0.505},
+					Polarity: diagnosis.LowerIsWorse,
+					Unit:     "fraction",
+					// Severity 1 where none of the machine's busy time is ours.
+					Worst: 0.0,
+				},
+			}},
+		},
+		{
+			Name:            refContainerShare,
+			Tier:            tierSaturation,
+			Attribution:     blameContainer,
+			DemoteSpan:      60 * time.Second,
+			ReleaseOnAbsent: true,
+			Instruments: []diagnosis.Instrument[Sample]{{
+				Measurement: diagnosis.Measurement[Sample]{
+					Name:      refContainerShare,
+					Extract:   containerShare,
+					Span:      60 * time.Second,
+					Reduction: diagnosis.Mean,
+				},
+				Marks: diagnosis.Marks{
+					Fire:     diagnosis.Mark{At: 0.51},
+					Clear:    diagnosis.Mark{At: 0.495},
+					Polarity: diagnosis.HigherIsWorse,
+					Unit:     "fraction",
+					// Severity 1 where all of the machine's busy time is ours.
+					Worst: 1.0,
+				},
+			}},
+		},
+	}
+}
+
 // limitSaturationSignal is "are we out of our own budget?" It is the row whose
 // marks are denominated in the quota, and it is the reason quota is a float64:
 // it is the only place in the design where a Reading would have had to reach
@@ -131,8 +219,11 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 // is a pair NewEngine rejects.
 func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name:            sigLimitSaturation,
-		Tier:            tierSaturation,
+		Name: sigLimitSaturation,
+		Tier: tierSaturation,
+		// Spending OUR OWN budget is inside this container by definition, so
+		// this row needs no refinement to place the blame.
+		Attribution:     blameContainer,
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{

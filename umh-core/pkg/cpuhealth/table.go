@@ -46,6 +46,11 @@ const (
 
 	trackHostBusy   = "host-busy"
 	trackUsageCores = "usage-cores"
+
+	// The two refinements of saturation. Each names its single instrument the
+	// same as itself: a refinement is one narrowing, read one way.
+	refHostShare      = "host-share"
+	refContainerShare = "container-share"
 )
 
 // The tiers. Every signal declares one. Starvation means something outside

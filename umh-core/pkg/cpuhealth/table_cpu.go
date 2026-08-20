@@ -44,8 +44,8 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 		// has to define what good and bad look like — NewEngine requires a fire mark,
 		// a clear mark and a worst value on every one.
 		//
-		// These two are read only by readAttributionSplit. It compares them, and
-		// attributeFor uses the result to blame the host or leave the blame unknown.
+		// These two are read only by readAttributionSplit, which hands their 60s
+		// means to Details for the wire.
 		Measurements: []diagnosis.Measurement[Sample]{
 			{
 				// host-headroom's window holds cores − hostBusy − reserve AND is
