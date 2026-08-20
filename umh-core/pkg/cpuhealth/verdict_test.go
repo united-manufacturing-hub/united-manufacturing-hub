@@ -90,6 +90,51 @@ var _ = Describe("verdict assembly", func() {
 		}
 	})
 
+	It("should put steal first when a same-tier peer ties it on severity", func() {
+		// Severity is the last key Rank can decide on before the declaration
+		// index, and clamp01 makes it a tie whenever two signals both sit at or
+		// past their worst value — the common case under real load. Pressure is
+		// the peer here because its reduction is Last, so one tick at 1.0 puts
+		// it exactly at worst with no counter arithmetic in the way.
+		//
+		// With both severities pinned at 1.0, the only thing left that can put
+		// steal ahead of pressure is steal's position in cpuTable's signal
+		// list. Move stealSignal() back below pressureSignal() and this spec
+		// reports pressure as the headline cause.
+		engine, err := NewEngine(4, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
+		base := time.Now()
+
+		// Five ticks, which clears steal's mean arm's two-sample minimum. Its
+		// p95 arm needs twenty and stays absent, so the mean is what steal is
+		// judged on.
+		var verdict Verdict
+		for i := 0; i < 5; i++ {
+			verdict, _ = Decide(engine, Sample{
+				Timestamp:   base.Add(time.Duration(i) * time.Second),
+				CpuScope:    ScopeHost,
+				Virtualized: true,
+				Pressure:    diagnosis.Known(1.0),
+				Steal:       diagnosis.Known(1.0),
+				HostBusy:    diagnosis.Known(0.5),
+				UsageCores:  diagnosis.Known(0.2),
+				NrPeriods:   diagnosis.Known(0),
+				NrThrottled: diagnosis.Known(0),
+			}, env)
+		}
+
+		Expect(verdict.Causes).To(HaveLen(2))
+		// Both causes sit at their shared worst value of 1.0. Without this the
+		// spec would still pass on a fixture that had drifted into a severity
+		// difference, and would then be asserting the severity key again rather
+		// than the index key.
+		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 1.0, 1e-9))
+		Expect(verdict.Causes[1].Value).To(BeNumerically("~", 1.0, 1e-9))
+		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSteal), "a severity tie must fall to the declaration index, where steal leads")
+		Expect(verdict.Causes[1].Kind).To(Equal(CauseKindPressure))
+	})
+
 	It("should return healthy with no causes when nothing is fired, rather than degraded with an empty list", func() {
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
