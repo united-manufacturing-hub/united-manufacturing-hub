@@ -72,15 +72,15 @@ type Fired struct {
 	// Since is stamped on the fire transition and never refreshed; a restart
 	// loses it, so it dates this process's observation, not the condition.
 	Since time.Time
+	// Instrument is the instrument that fired, stamped on the fire transition and
+	// never refreshed; a later live winner does not overwrite it.
+	Instrument string
 	Identity
 	// Marks is the pair Value fired against, stamped with it: Severity scores the
 	// one against the other, so a later instrument's pair would not measure it.
 	Marks Marks
 	// Value is the number that fired, untransformed by polarity.
 	Value float64
-	// Instrument is the instrument that fired, stamped on the fire transition and
-	// never refreshed; a later live winner does not overwrite it.
-	Instrument string
 }
 
 // Latch holds one signal's fired-or-not verdict, one per signal and never one per
@@ -90,10 +90,10 @@ type Latch struct {
 	since       time.Time
 	lastUpdate  time.Time
 	lastRelease time.Time
+	instrument  string
 	identity    Identity
 	marks       Marks
 	value       float64
-	instrument  string
 	fired       bool
 }
 
