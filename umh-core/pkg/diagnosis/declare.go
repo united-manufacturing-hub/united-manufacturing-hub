@@ -45,8 +45,10 @@ func (e Environment) Has(c Capability) bool {
 	return e.caps[c]
 }
 
-// Measurement is one way of measuring a signal: what to read, over how long a
-// window, under which reduction.
+// Measurement is a number sampled over time: what to read, over how long a
+// window, under which reduction. It carries no thresholds, so nothing about a
+// measurement can answer a signal. Its number is judged only where an
+// Instrument pairs it with marks.
 type Measurement[S any] struct {
 	Name string
 	// Extract reads the value from a snapshot, the numerator under DeltaRatio.
@@ -65,7 +67,7 @@ type Measurement[S any] struct {
 	Counter bool
 }
 
-// Instrument is one way of measuring a signal: a measurement plus the marks its
+// Instrument is one way of answering a signal: a measurement plus the marks its
 // number is judged against.
 type Instrument[S any] struct {
 	Measurement[S]
@@ -89,12 +91,10 @@ type Signal[S any] struct {
 	// Instruments each answer the signal differently. The order is significant:
 	// the first instrument that can supply a number is the one used.
 	Instruments []Instrument[S]
-	// Refinements are signals that narrow this one's answer, with their own
-	// instruments and marks. A refinement is sampled AND judged every tick,
-	// whether or not this signal fired, so its window fills and its verdict is
-	// reached independently of when this signal fires. Only the report waits on
-	// this signal: a refinement appears in Fired.Refinements under a signal that
-	// fired, and never as a verdict of its own.
+	// Refinements are signals declared under this one, narrowing its answer with
+	// their own instruments and marks. A refinement appears in Fired.Refinements
+	// under a parent that fired, and never as a verdict of its own. The
+	// Refinements section of the package doc works through an example.
 	Refinements []Signal[S]
 	// DemoteSpan is how long a signal may go unread before its window empties:
 	// stale detection, so an old number cannot stand forever.
