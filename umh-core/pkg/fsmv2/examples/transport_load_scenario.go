@@ -162,7 +162,10 @@ func RunTransportLoadScenario(ctx context.Context, cfg TransportRunConfig, load 
 		}()
 	}
 
-	go stopLoad(result, cancelLoad, &streams, cleanup)
+	loadStopped := make(chan struct{})
+	result.LoadStopped = loadStopped
+
+	go stopLoad(result, cancelLoad, &streams, cleanup, loadStopped)
 
 	return result
 }
@@ -172,16 +175,24 @@ func RunTransportLoadScenario(ctx context.Context, cfg TransportRunConfig, load 
 // After the run ends nothing reads the outbound channel any more, so a stream
 // parked on a full queue would never return. Draining the channel until every
 // stream has stopped releases them, which is what leaves no goroutine behind.
-func stopLoad(result *TransportRunResult, cancelLoad context.CancelFunc, streams *sync.WaitGroup, cleanup func()) {
+func stopLoad(
+	result *TransportRunResult,
+	cancelLoad context.CancelFunc,
+	streams *sync.WaitGroup,
+	cleanup func(),
+	stopped chan<- struct{},
+) {
+	defer close(stopped)
+
 	<-result.Done
 
 	cancelLoad()
 
-	stopped := make(chan struct{})
+	drained := make(chan struct{})
 
 	go func() {
 		streams.Wait()
-		close(stopped)
+		close(drained)
 	}()
 
 	_, outbound := result.ChannelProvider.GetChannels("")
@@ -189,7 +200,7 @@ func stopLoad(result *TransportRunResult, cancelLoad context.CancelFunc, streams
 	for {
 		select {
 		case <-outbound:
-		case <-stopped:
+		case <-drained:
 			cleanup()
 
 			return

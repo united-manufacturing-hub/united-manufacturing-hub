@@ -106,6 +106,11 @@ type TransportRunResult struct {
 	ConsecutiveErrors int                           // Final consecutive error count from mock server
 	AuthCallCount     int                           // Auth endpoint calls (>1 indicates re-auth)
 	ShutdownClean     bool                          // Whether the supervisor drained cleanly; read after Done closes
+	// LoadStopped closes once a scenario that offers its own load has stopped
+	// offering it and released what it created. Nil for scenarios that offer no
+	// load, which is every scenario that does not set it. Done closing is not
+	// enough to wait on: teardown outlives the run.
+	LoadStopped <-chan struct{}
 }
 
 // RunTransportScenario runs the FSMv2 transport worker via ApplicationSupervisor with a mock relay server.
