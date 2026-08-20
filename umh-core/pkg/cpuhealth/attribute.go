@@ -46,7 +46,7 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 		}
 		return Cause{Kind: CauseKindSteal, Value: v, Unit: Unit(f.Marks.Unit)}
 	case sigSaturation:
-		if f.Marks.Unit == "fraction" {
+		if f.Instrument == instUsageFraction {
 			v, _ := engine.Reduction(sigSaturation, instUsageFraction).Get()
 			return Cause{Kind: CauseKindSaturation, Value: v, Unit: Unit(f.Marks.Unit)}
 		}

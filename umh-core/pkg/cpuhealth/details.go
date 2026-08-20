@@ -70,9 +70,8 @@ type Details struct {
 	LimitedVisibility bool
 
 	// The saturation family. chooseSaturationCause sets all five below.
-	// Fired.Identity carries the signal name only, so Decide recovers the
-	// instrument from Fired.Marks.Unit: "cores" is host-headroom, "fraction"
-	// is usage-fraction.
+	// Fired.Identity carries the signal name only, so Decide reads which
+	// instrument fired from Fired.Instrument.
 	SaturationFired bool // the OR of the four arms below; true whenever any of them fired — what causeDetails and BlockReason dispatch on
 	// LimitSaturationFired is true when the limit arm fired: the container's
 	// 60s usage has consumed its 10% reserve (usage >= 0.90 x quota).

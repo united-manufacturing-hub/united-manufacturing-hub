@@ -172,21 +172,27 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 // saturationArmOf identifies which arm of the saturation family a fired signal
 // came from, so chooseSaturationCause and the latch flags can agree without
 // Decide knowing the arms. The signal name alone cannot name the arm:
-// sigSaturation carries two instruments, and Marks.Unit is the only thing that
-// tells them apart — "cores" is host-headroom, "fraction" is usage-fraction.
-// Marks reads the FROZEN mark, so it names the instrument that actually
-// fired; the live per-tick winner would disagree with Marks from tick 3
-// onward, which is why this frozen word is the arm's source of truth and not
-// the tick's selected instrument.
+// sigSaturation carries two instruments, and Fired.Instrument is what tells
+// them apart.
+//
+// Fired.Instrument is stamped when the latch fires, and it changes only when
+// the blame moves to another instrument, which moves the marks with it. The
+// engine can select a different instrument on any later tick, and that live
+// winner is not what fired; the stamped name is, so it is what the arm is read
+// from.
 func saturationArmOf(f diagnosis.Fired) saturationArm {
 	switch f.Identity.Signal {
 	case sigLimitSaturation:
 		return limitArm
 	case sigSaturation:
-		if f.Marks.Unit == "fraction" {
+		switch f.Instrument {
+		case instUsageFraction:
 			return noHostStatsArm
+		case instHostHeadroom:
+			return hostFullArm
+		default:
+			return noSaturationArm
 		}
-		return hostFullArm
 	default:
 		return noSaturationArm
 	}
