@@ -56,7 +56,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	// A top-level signal reads its newest sample, so it fires on the tick its own
 	// value crosses 0.5 and needs no warm-up: every spec below can put the firing
-	// tick wherever it wants the child observed. Name, tier and the field it
+	// tick wherever it wants the refinement observed. Name, tier and the field it
 	// reads are the caller's, so two of them can sit in one table and rank
 	// against each other.
 	topLevel := func(name string, tier int, read func(snap) float64, refinements ...Signal[snap]) Signal[snap] {
@@ -112,16 +112,17 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		return e
 	}
 
-	// The child's window is filled on each of the parent's ten silent ticks, a
-	// 1.0 every time, so the child reaches Mean's minimum of two samples and
-	// fires on tick 1 — nine ticks before its parent fires at all. Since is what
-	// proves that: a child sampled or judged only while its parent fires would
-	// hold the single 0.0 of tick 10, sit below Mean's minimum, and never fire.
+	// The refinement's window is filled on each of the parent's ten silent
+	// ticks, a 1.0 every time, so the refinement reaches Mean's minimum of two
+	// samples and fires on tick 1 — nine ticks before its parent fires at all.
+	// Since is what proves that: a refinement sampled or judged only while its
+	// parent fires would hold the single 0.0 of tick 10, sit below Mean's
+	// minimum, and never fire.
 	//
 	// Two choices in the fixture are load-bearing. Mean over a minimum of two is
 	// what makes a cold window unable to answer; Last would answer off one
 	// sample. And the 0.0 at tick 10 is what a build reducing the window at
-	// REPORT time would report, 10/11 rather than the 1.0 the child latched.
+	// REPORT time would report, 10/11 rather than the 1.0 the refinement latched.
 	It("reports a fired parent's refinement nested under it, warm over ten ticks, not as a top-level entry beside it", func() {
 		e := engineOver(parentOver(refinement("C", 0, Mean, func(s snap) float64 { return s.first })))
 
@@ -129,20 +130,20 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 			e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
 		}
 
-		// The parent crosses its fire mark (0.0 -> 1.0) while the child's newest
-		// sample drops below the child's own (1.0 -> 0.0). The child's mean over
-		// the warm window, 10/11, stays past its 0.4 clear mark, so the child is
-		// still held.
+		// The parent crosses its fire mark (0.0 -> 1.0) while the refinement's
+		// newest sample drops below the refinement's own (1.0 -> 0.0). Its mean
+		// over the warm window, 10/11, stays past its 0.4 clear mark, so the
+		// refinement is still held.
 		fired, _ := e.Observe(snap{parent: 1.0, first: 0.0}, NewEnvironment(), base.Add(10*time.Second))
 
-		Expect(fired).To(HaveLen(1), "only the fired parent appears at the top level; the refinement nests under it")
+		Expect(fired).To(HaveLen(1), "only the fired parent is a top-level entry; the refinement nests under it")
 		Expect(fired[0].Identity.Signal).To(Equal("P"))
 		Expect(fired[0].Refinements).To(HaveLen(1), "the fired parent reports the refinement its own latch holds")
 		Expect(fired[0].Refinements[0].Identity.Signal).To(Equal("C"), "the nested entry names the refinement")
 		Expect(fired[0].Refinements[0].Since).To(Equal(base.Add(time.Second)),
-			"the child fired on tick 1, off a window warmed while the parent was silent")
+			"the refinement fired on tick 1, off a window warmed while the parent was silent")
 		Expect(fired[0].Refinements[0].Value).To(Equal(1.0),
-			"the value is the mean the child fired on, not the window's 10/11 at report time")
+			"the value is the mean the refinement fired on, not the window's 10/11 at report time")
 	})
 
 	It("reports only the refinement past its own fire mark, naming it", func() {
@@ -152,7 +153,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		))
 
 		// One tick is enough: Last needs a single sample, so the parent and both
-		// children reduce to a trustworthy value on the first tick. The parent
+		// refinements reduce to a trustworthy value on the first tick. The parent
 		// and C1 cross their marks; C2 sits below its own.
 		fired, _ := e.Observe(snap{parent: 1.0, first: 1.0, second: 0.0}, NewEnvironment(), base)
 
@@ -180,10 +181,10 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		Expect(reported[0].Refinements).To(HaveLen(1), "two samples are enough for the refinement to be judged")
 		Expect(reported[0].Refinements[0].Identity.Signal).To(Equal("C"))
 
-		// One sample is below Mean's minimum of two, so the child's window holds
-		// nothing trustworthy to judge. That sample sits past the child's fire
-		// mark, so a build that reported the window without asking whether it was
-		// ready would report the child here too.
+		// One sample is below Mean's minimum of two, so the refinement's window
+		// holds nothing trustworthy to judge. That sample sits past the
+		// refinement's fire mark, so a build that reported the window without
+		// asking whether it was ready would report the refinement here too.
 		cold := engineOver(declaration())
 		fired, _ := cold.Observe(snap{parent: 1.0, first: 1.0}, NewEnvironment(), base)
 
@@ -215,29 +216,30 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	It("reports nothing at all while the parent is silent, though its refinement has fired and stays warm", func() {
 		e := engineOver(parentOver(refinement("C", 0, Mean, func(s snap) float64 { return s.first })))
 
-		// Tick 0 leaves the child below Mean's minimum of two. Tick 1 reaches it
-		// at a mean of 1.0, past the child's 0.6 fire mark, so the child fires
-		// here and this is the Since the later ticks must still carry.
+		// Tick 0 leaves the refinement below Mean's minimum of two. Tick 1
+		// reaches it at a mean of 1.0, past the refinement's 0.6 fire mark, so
+		// the refinement fires here and this is the Since the later ticks must
+		// still carry.
 		e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base)
 		e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base.Add(time.Second))
 
-		// The tick after the child fired. The parent is still at 0.0, below its
-		// own 0.5 fire mark.
+		// The tick after the refinement fired. The parent is still at 0.0, below
+		// its own 0.5 fire mark.
 		silent, _ := e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base.Add(2*time.Second))
 
 		Expect(silent).To(BeEmpty(),
 			"a fired refinement under a silent parent is reported nowhere: not nested, and not as a top-level entry of its own")
 
-		// Suppression is about reporting only, so the child's window keeps taking
-		// samples across the silent ticks and stays trustworthy.
+		// Suppression is about reporting only, so the refinement's window keeps
+		// taking samples across the silent ticks and stays trustworthy.
 		value, state := e.Reduction("P/C", "I").Get()
 		Expect(state).To(Equal(StateValue), "the refinement's window is still warm while the parent is silent")
 		Expect(value).To(Equal(1.0), "and still reduces to the mean it fired on")
 
-		// Nothing about the child changes on this tick; only the parent crosses
-		// its mark. The child appearing now, with the Since it stamped on tick 1,
-		// is what shows its latch held across the two silent ticks rather than
-		// firing fresh here.
+		// Nothing about the refinement changes on this tick; only the parent
+		// crosses its mark. The refinement appearing now, with the Since it
+		// stamped on tick 1, is what shows its latch held across the two silent
+		// ticks rather than firing fresh here.
 		fired, _ := e.Observe(snap{parent: 1.0, first: 1.0}, NewEnvironment(), base.Add(3*time.Second))
 
 		Expect(fired).To(HaveLen(1))
@@ -245,7 +247,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		Expect(fired[0].Refinements).To(HaveLen(1))
 		Expect(fired[0].Refinements[0].Identity.Signal).To(Equal("C"))
 		Expect(fired[0].Refinements[0].Since).To(Equal(base.Add(time.Second)),
-			"the child fired on tick 1 and held: the empty slice above was suppression, not a child that had not fired")
+			"the refinement fired on tick 1 and held: the empty slice above was suppression, not a refinement that had not fired")
 	})
 	// Rank is asked a question about the top-level set: which of the signals the
 	// caller can act on comes first. A refinement's urgency is meaningful under
@@ -262,8 +264,8 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		// parents' too: Rank never reads it, but the caller it routes blame to
 		// does, and the last assertion in this spec is the only one holding it to
 		// reaching a nested Fired.
-		child := refinement("C", 0, Last, func(s snap) float64 { return s.first })
-		child.Attribution = 7
+		ref := refinement("C", 0, Last, func(s snap) float64 { return s.first })
+		ref.Attribution = 7
 
 		// Both fire on their first sample, both at tier 1, so only severity
 		// separates them: Severe reads 1.0 against a fire mark of 0.5 and a worst
@@ -271,7 +273,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		// under Mild, the one that must stay second, so a comparator reaching into
 		// a nested tier to break the tier tie would hoist Mild and be caught.
 		severe := topLevel("Severe", 1, func(s snap) float64 { return s.parent })
-		mild := topLevel("Mild", 1, func(s snap) float64 { return s.second }, child)
+		mild := topLevel("Mild", 1, func(s snap) float64 { return s.second }, ref)
 
 		e, err := NewEngine(Table[snap]{Signals: []Signal[snap]{severe, mild}, Interval: time.Second})
 		Expect(err).ToNot(HaveOccurred())
@@ -378,17 +380,17 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	})
 
 	It("orders the refinements of a refinement by the same rule, so every level is ordered and not just the first", func() {
-		child := refinement("C", 0, Last, func(s snap) float64 { return s.first },
+		ref := refinement("C", 0, Last, func(s snap) float64 { return s.first },
 			refinement("LessUrgent", 2, Last, func(s snap) float64 { return s.second }),
 			refinement("MoreUrgent", 1, Last, func(s snap) float64 { return s.third }),
 		)
 
-		e := engineOver(parentOver(child))
+		e := engineOver(parentOver(ref))
 
 		fired, _ := e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7, third: 0.7}, NewEnvironment(), base)
 
 		Expect(fired).To(HaveLen(1))
-		Expect(fired[0].Refinements).To(HaveLen(1), "the child fired and nests under the parent")
+		Expect(fired[0].Refinements).To(HaveLen(1), "the refinement fired and nests under the parent")
 		Expect(fired[0].Refinements[0].Refinements).To(HaveLen(2), "both of its own refinements fired too")
 		Expect(names(fired[0].Refinements[0].Refinements)).To(Equal([]string{"MoreUrgent", "LessUrgent"}),
 			"two levels down the tiers still decide, though these were also declared less urgent first")
@@ -400,25 +402,25 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	// judged every tick, so it has an availability of its own, and a row of its
 	// own is the only way a caller sees it.
 	It("returns one readiness row per signal at every depth, depth-first, named by path and carrying that signal's own availability", func() {
-		// The grandchild's instrument requires nothing, so it is capable in the
-		// same empty environment that leaves its parent with no instrument at
-		// all. That is what separates a row resolved per signal from a row
-		// handed down the tree.
-		grandchild := refinement("G", 1, Last, func(s snap) float64 { return s.third })
+		// G's instrument requires nothing, so it is capable in the same empty
+		// environment that leaves C above it with no instrument at all. That is
+		// what separates a row resolved per signal from a row handed down the
+		// tree.
+		nested := refinement("G", 1, Last, func(s snap) float64 { return s.third })
 
 		// C is the one signal here this environment cannot satisfy: its
 		// instrument requires a capability the empty environment does not have,
 		// so C resolves to NoInstrument while P above it and G below it both
 		// read their sample.
-		child := refinement("C", 1, Last, func(s snap) float64 { return s.first }, grandchild)
-		child.Instruments[0].Requires = []Capability{"psi"}
+		ref := refinement("C", 1, Last, func(s snap) float64 { return s.first }, nested)
+		ref.Instruments[0].Requires = []Capability{"psi"}
 
 		// A second top-level signal, declared after P, is what makes the
 		// depth-first claim testable: it must come after P's whole subtree and
 		// not between P and the subtree, which is where a breadth-first walk
 		// would put it.
 		e, err := NewEngine(Table[snap]{
-			Signals:  []Signal[snap]{parentOver(child), topLevel("Q", 1, func(s snap) float64 { return s.second })},
+			Signals:  []Signal[snap]{parentOver(ref), topLevel("Q", 1, func(s snap) float64 { return s.second })},
 			Interval: time.Second,
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -431,7 +433,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		}
 
 		Expect(rows).To(Equal([]string{"P", "P/C", "P/C/G", "Q"}),
-			"depth-first, a parent immediately before its own children, each row named by its path: two parents may each declare a refinement named X, so a bare name would not say which one this is")
+			"depth-first, a parent immediately before its own refinements, each row named by its path: two parents may each declare a refinement named X, so a bare name would not say which one this is")
 
 		Expect(readiness[0].Availability).To(Equal(Ready), "P reads its sample")
 		Expect(readiness[1].Availability).To(Equal(NoInstrument),
@@ -445,16 +447,17 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	// "reports only the refinement past its own fire mark, naming it" reads. It
 	// LEAVES on one of two others: its own clear mark, and its own demote clock.
 	// The two specs named for those follow. Both keep the parent firing
-	// throughout, so the parent's report is the only thing the child can be
+	// throughout, so the parent's report is the only thing the refinement can be
 	// missing from.
 
 	// The clear arm needs Coverage.Full(), which on the ten-second window this
 	// fixture builds takes eleven ticks at the table's one-second interval: t0
-	// through t10 span exactly ten seconds. Dropping the child earlier would be a
-	// release granted on a window that had not filled, which is a different rule.
+	// through t10 span exactly ten seconds. Dropping the refinement earlier
+	// would be a release granted on a window that had not filled, which is a
+	// different rule.
 	It("drops a refinement, and the refinement under it, on the tick the refinement crosses its own clear mark", func() {
-		grandchild := refinement("G", 1, Last, func(s snap) float64 { return s.second })
-		e := engineOver(parentOver(refinement("C", 1, Last, func(s snap) float64 { return s.first }, grandchild)))
+		nested := refinement("G", 1, Last, func(s snap) float64 { return s.second })
+		e := engineOver(parentOver(refinement("C", 1, Last, func(s snap) float64 { return s.first }, nested)))
 
 		var warm []Fired
 		for i := 0; i <= 10; i++ {
@@ -462,24 +465,24 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		}
 
 		Expect(names(warm)).To(Equal([]string{"P"}))
-		Expect(names(warm[0].Refinements)).To(Equal([]string{"C"}), "the child fired on its first sample and is held")
-		Expect(names(warm[0].Refinements[0].Refinements)).To(Equal([]string{"G"}), "and so is the grandchild under it")
+		Expect(names(warm[0].Refinements)).To(Equal([]string{"C"}), "C fired on its first sample and is held")
+		Expect(names(warm[0].Refinements[0].Refinements)).To(Equal([]string{"G"}), "and so is G, the refinement nested under C")
 
-		// 0.3 is past the child's own 0.4 clear mark. Nothing else moves: the
-		// parent still reads 1.0, and the grandchild still reads the 0.7 that is
-		// past its own fire mark and nowhere near its own clear mark.
+		// 0.3 is past C's own 0.4 clear mark. Nothing else moves: the parent
+		// still reads 1.0, and G still reads the 0.7 that is past its own fire
+		// mark and nowhere near its own clear mark.
 		released, _ := e.Observe(snap{parent: 1.0, first: 0.3, second: 0.7}, NewEnvironment(), base.Add(11*time.Second))
 
 		Expect(names(released)).To(Equal([]string{"P"}),
 			"the parent is untouched: its own value never left its own marks")
 		Expect(released[0].Refinements).To(BeEmpty(),
-			"the child released on its own clear mark, and the grandchild leaves with it: a refinement of an unreported refinement is reported nowhere")
+			"C released on its own clear mark, and G leaves with it: a refinement of an unreported refinement is reported nowhere")
 
-		// What the grandchild lost was its route to the report, not its verdict.
-		// Latch re-arms one Coverage span after a release, so the child cannot
-		// fire again before t21 however far past its fire mark it reads. When it
-		// does, the grandchild reappears under it carrying the Since it stamped on
-		// the first tick of all, which a grandchild that had released could not.
+		// What G lost was its route to the report, not its verdict. Latch re-arms
+		// one Coverage span after a release, so C cannot fire again before t21
+		// however far past its fire mark it reads. When it does, G reappears
+		// under it carrying the Since it stamped on the first tick of all, which
+		// it could not do had it released too.
 		var refired []Fired
 		for i := 12; i <= 21; i++ {
 			refired, _ = e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
@@ -487,31 +490,31 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 		Expect(refired[0].Refinements).To(HaveLen(1))
 		Expect(refired[0].Refinements[0].Since).To(Equal(base.Add(21*time.Second)),
-			"the child fired fresh, one window span after the release above")
+			"C fired fresh, one window span after the release above")
 		Expect(refired[0].Refinements[0].Refinements).To(HaveLen(1))
 		Expect(refired[0].Refinements[0].Refinements[0].Since).To(Equal(base),
-			"the grandchild held the verdict it stamped on tick 0 through the ten ticks it was reported nowhere")
+			"G held the verdict it stamped on tick 0 through the ten ticks it was reported nowhere")
 	})
 
 	// A refinement holds a verdict on stale evidence for its OWN DemoteSpan. The
-	// child here declares five seconds against the parent's sixty, so a build
-	// reading the parent's span would still be reporting the child on every tick
+	// refinement here declares five seconds against the parent's sixty, so a
+	// build reading the parent's span would still be reporting it on every tick
 	// this spec looks at.
 	//
 	// The tick numbers come from the span and the table interval and nothing
 	// else. Latch.ReleaseAfter releases once now is no longer before the last
 	// trusted update plus the span, so five seconds at a one-second interval
-	// releases on tick 5: the child fires and is last trusted on tick 0, holds
-	// through ticks 1 to 4, and is gone on tick 5.
+	// releases on tick 5: the refinement fires and is last trusted on tick 0,
+	// holds through ticks 1 to 4, and is gone on tick 5.
 	It("releases a refinement on its own demote span, not its parent's, when its instrument goes absent", func() {
-		child := refinement("C", 1, Last, func(s snap) float64 { return s.first })
-		child.DemoteSpan = 5 * time.Second
+		ref := refinement("C", 1, Last, func(s snap) float64 { return s.first })
+		ref.DemoteSpan = 5 * time.Second
 
 		// The instrument stops reading rather than reading a low value, so what
-		// removes the child below is the demote clock and not the clear mark the
-		// spec above covers.
+		// removes the refinement below is the demote clock and not the clear mark
+		// the spec above covers.
 		absent := false
-		child.Instruments[0].Extract = func(s snap) Reading {
+		ref.Instruments[0].Extract = func(s snap) Reading {
 			if absent {
 				return Unknown()
 			}
@@ -519,32 +522,32 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 			return Known(s.first)
 		}
 
-		e := engineOver(parentOver(child))
+		e := engineOver(parentOver(ref))
 
 		fired, _ := e.Observe(snap{parent: 1.0, first: 0.7}, NewEnvironment(), base)
 
 		Expect(names(fired)).To(Equal([]string{"P"}))
-		Expect(names(fired[0].Refinements)).To(Equal([]string{"C"}), "tick 0 is the child's last trusted update")
+		Expect(names(fired[0].Refinements)).To(Equal([]string{"C"}), "tick 0 is the refinement's last trusted update")
 
 		absent = true
 
 		// Ticks 1 to 4. The window keeps the point it stored on tick 0 but stores
-		// nothing on these, so it reduces untrusted and no tick moves the child's
-		// clock forward.
+		// nothing on these, so it reduces untrusted and no tick moves the
+		// refinement's clock forward.
 		var held []Fired
 		for i := 1; i <= 4; i++ {
 			held, _ = e.Observe(snap{parent: 1.0}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
 		}
 
 		Expect(names(held[0].Refinements)).To(Equal([]string{"C"}),
-			"one tick short of its own five-second span the child still reports what it latched")
+			"one tick short of its own five-second span the refinement still reports what it latched")
 
 		gone, _ := e.Observe(snap{parent: 1.0}, NewEnvironment(), base.Add(5*time.Second))
 
 		Expect(names(gone)).To(Equal([]string{"P"}),
-			"the parent is sixty seconds from its own release and still firing, so the child's departure is the child's own clock")
+			"the parent is sixty seconds from its own release and still firing, so the refinement leaves on a clock of its own")
 		Expect(gone[0].Refinements).To(BeEmpty(),
-			"five seconds after its last trusted update the child releases")
+			"five seconds after its last trusted update the refinement releases")
 	})
 
 })
