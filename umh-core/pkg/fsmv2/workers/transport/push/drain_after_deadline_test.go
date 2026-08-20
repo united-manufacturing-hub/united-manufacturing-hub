@@ -121,10 +121,14 @@ var _ = Describe("The outbound channel after a tick that hit its deadline", func
 	// live. It must pass before and after the guard is fixed; if it fails, the
 	// spec below says nothing about the deadline.
 	It("has room again when the tick still had time left", func() {
+		before := len(provider.outbound) + pushDeps.PendingMessageCount()
+
 		Expect(act.Execute(pushCtx, pushDeps)).To(Succeed())
 
 		Expect(len(provider.outbound)).To(BeNumerically("<", cap(provider.outbound)),
 			"a failing tick with time left must relieve the channel")
+		Expect(len(provider.outbound)+pushDeps.PendingMessageCount()).To(Equal(before),
+			"and it must relieve it by MOVING messages, not by discarding them")
 	})
 
 	It("has room again when the tick ran out of time", func() {
@@ -133,6 +137,8 @@ var _ = Describe("The outbound channel after a tick that hit its deadline", func
 		// timeout_ms 30000.
 		trans.onPush = cancelPush
 
+		before := len(provider.outbound) + pushDeps.PendingMessageCount()
+
 		err := act.Execute(pushCtx, pushDeps)
 		Expect(err).To(MatchError(context.Canceled),
 			"the tick must report that it ran out of time")
@@ -140,5 +146,10 @@ var _ = Describe("The outbound channel after a tick that hit its deadline", func
 		Expect(len(provider.outbound)).To(BeNumerically("<", cap(provider.outbound)),
 			"the outbound channel stayed full after a tick that hit its deadline; "+
 				"every producer is now blocked or dropping, and the next tick starts equally stuck")
+
+		// Without this, an implementation that empties the channel by throwing its
+		// contents away satisfies the assertion above. Measured: it does.
+		Expect(len(provider.outbound)+pushDeps.PendingMessageCount()).To(Equal(before),
+			"relief must come from moving messages into the retry list, not from dropping them")
 	})
 })

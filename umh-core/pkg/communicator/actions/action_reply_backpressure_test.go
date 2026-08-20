@@ -58,6 +58,22 @@ var _ = Describe("Action reply enqueue under backpressure", func() {
 		instanceUUID = uuid.New()
 	})
 
+	// queuedReply reports whether the channel holds a generated reply, as opposed
+	// to the filler this spec used to occupy the capacity. The filler carries no
+	// Content; a real reply always carries encrypted Content.
+	queuedReply := func(outbound chan *models.UMHMessage) bool {
+		for {
+			select {
+			case msg := <-outbound:
+				if msg != nil && msg.Content != "" {
+					return true
+				}
+			default:
+				return false
+			}
+		}
+	}
+
 	// sendAsync calls SendActionReply on its own goroutine and reports how the
 	// call ended. A nil result means the call had not returned within the
 	// budget. The goroutine is intentionally left running: a blocked channel
@@ -120,6 +136,20 @@ var _ = Describe("Action reply enqueue under backpressure", func() {
 		Expect(result).NotTo(BeNil(),
 			"SendActionReply parked the goroutine on a full outbound channel; "+
 				"an action cannot report its own result, and the browser blames the instance")
+
+		// Returning is necessary but not sufficient. An implementation that
+		// silently discards the reply and returns true also returns, and it leaves
+		// the user with exactly the same failure while removing the Sentry report.
+		// Measured: such an implementation passes the assertion above on its own.
+		//
+		// So: reporting success is only allowed if the reply is actually queued.
+		// This says nothing about which of drop-with-error, bounded-wait or a
+		// priority lane is the right design -- all three satisfy it. It only
+		// forbids claiming success for a reply that went nowhere.
+		if *result {
+			Expect(queuedReply(outbound)).To(BeTrue(),
+				"SendActionReply reported success for a reply it never queued")
+		}
 	})
 
 	It("returns on a full channel even when no consumer ever drains it", func() {

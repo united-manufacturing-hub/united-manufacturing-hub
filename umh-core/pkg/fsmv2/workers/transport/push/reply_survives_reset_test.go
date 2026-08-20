@@ -15,7 +15,11 @@
 package push_test
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -129,11 +133,30 @@ func (p *writableChannelProvider) GetInboundStats(_ string) (int, int) {
 	return cap(p.inbound), len(p.inbound)
 }
 
+// opaqueContent builds a message body shaped like production's: JSON, gzipped,
+// base64-encoded. Nothing about the result is readable, which is the point.
+func opaqueContent(messageType, payload string) string {
+	raw, err := json.Marshal(map[string]string{"messageType": messageType, "payload": payload})
+	Expect(err).NotTo(HaveOccurred())
+
+	var buf bytes.Buffer
+
+	zw := gzip.NewWriter(&buf)
+	_, err = zw.Write(raw)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(zw.Close()).To(Succeed())
+
+	return base64.StdEncoding.EncodeToString(buf.Bytes())
+}
+
 var _ = Describe("An undelivered action reply across a transport reset", func() {
-	const (
-		replyContent  = "action-reply:get-protocolconverter"
-		statusContent = "status-snapshot"
-	)
+	// Production Content is base64 of gzipped JSON (encoding.EncodeMessageFromUMHInstanceToUser),
+	// so these fixtures are too. An earlier version used readable strings, which
+	// let a "fix" that classifies messages by a plaintext prefix pass here while
+	// being a no-op in production. Opaque fixtures close that off: any change that
+	// satisfies these specs has to work on content it cannot read.
+	replyContent := opaqueContent("ActionReply", "get-protocolconverter")
+	statusContent := opaqueContent("Status", "snapshot")
 
 	var (
 		provider   *writableChannelProvider
