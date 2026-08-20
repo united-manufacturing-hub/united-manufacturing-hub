@@ -60,7 +60,7 @@ var _ = Describe("Engine.Observe over one degradation episode", func() {
 	names := func(fired []Fired) []string {
 		out := make([]string, len(fired))
 		for i, f := range fired {
-			out[i] = f.Identity.Signal
+			out[i] = f.Signal
 		}
 
 		return out
