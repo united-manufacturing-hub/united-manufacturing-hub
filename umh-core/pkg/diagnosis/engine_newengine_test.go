@@ -192,15 +192,15 @@ var _ = Describe("NewEngine", func() {
 
 			sig := validSignal("A")
 			sig.Instruments[0].Reduction = reduction // I1 spans 60s
-			byTrack := validTable([]Signal[snap]{validSignal("A")})
-			byTrack.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: reduction}}
+			byMeasurement := validTable([]Signal[snap]{validSignal("A")})
+			byMeasurement.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: reduction}}
 
 			for _, row := range []struct {
 				name string
 				tbl  Table[snap]
 			}{
 				{name: "instrument", tbl: validTable([]Signal[snap]{sig})},
-				{name: "measurement", tbl: byTrack},
+				{name: "measurement", tbl: byMeasurement},
 			} {
 				_, err := NewEngine(row.tbl)
 				if count <= 61 {
@@ -455,7 +455,7 @@ var _ = Describe("NewEngine", func() {
 		}
 	})
 
-	It("rejects a refinement under its parent's path, so the error names A/A1 not the bare child", func() {
+	It("rejects a refinement under its parent's path, so the error names A/A1 and not the bare A1", func() {
 		ref := validSignal("A1")
 		ref.DemoteSpan = 0
 		parent := validSignal("A")
@@ -463,7 +463,7 @@ var _ = Describe("NewEngine", func() {
 		_, err := NewEngine(validTable([]Signal[snap]{parent}))
 		Expect(err).To(HaveOccurred(), "NewEngine must reject a refinement whose demote span is zero")
 		Expect(err.Error()).To(ContainSubstring("A/A1"),
-			"the error names the parent and the child, not the bare child")
+			"the error names the parent and the refinement, not the refinement alone")
 	})
 
 	It("refuses two sibling refinements with the same name under one parent", func() {
@@ -499,7 +499,7 @@ var _ = Describe("NewEngine", func() {
 		Expect(err.Error()).To(ContainSubstring(`may not contain "/"`))
 	})
 
-	It("refuses a refinement whose name holds the path separator, so the rule reaches below the top level", func() {
+	It("refuses a refinement whose name holds the path separator, so the rule reaches every depth and not just top-level signals", func() {
 		parent := validSignal("A")
 		parent.Refinements = []Signal[snap]{validSignal("B/C")}
 		_, err := NewEngine(validTable([]Signal[snap]{parent}))

@@ -240,7 +240,7 @@ var _ = Describe("Engine.Observe over one degradation episode", func() {
 
 		Expect(names(fired)).To(Equal([]string{"Q", "P"}), "the fired set comes back in table order")
 		Expect(names(Rank(fired))).To(Equal([]string{"P", "Q"}),
-			"Rank orders the top level on tier, P at 1 ahead of Q at 2, and has no refinement to sort: C at tier 0 would come first")
+			"Rank orders the top-level set on tier, P at 1 ahead of Q at 2, and has no refinement to sort: C at tier 0 would come first")
 
 		// Phase 5, hysteresis, ticks 14 to 21. C's own value moves to 0.45, which
 		// is past neither of C's marks — below the 0.60 it fires at, above the
