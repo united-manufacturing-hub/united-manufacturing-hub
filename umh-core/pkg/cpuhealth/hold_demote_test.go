@@ -64,11 +64,11 @@ var _ = Describe("hold and demote", func() {
 			fired, _ := engine.Observe(hostSample(base, i, 3.5, i <= 4), env, base.Add(time.Duration(i)*time.Second))
 			names := firedSignalNames(fired)
 			if i == 1 {
-				Expect(names).To(ContainElement("saturation"), "headroom -0.5 must fire host-full at two samples")
+				Expect(names).To(ContainElement("host-cpu-full"), "headroom -0.5 must fire host-full at two samples")
 			}
 			if i >= 5 && i < 40 {
-				Expect(names).To(ContainElement("saturation"), "a stale input must hold the fired latch, tick %d", i)
-				v, st := engine.Reduction(sigSaturation, instHostHeadroom).Get()
+				Expect(names).To(ContainElement("host-cpu-full"), "a stale input must hold the fired latch, tick %d", i)
+				v, st := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
 				Expect(st).To(Equal(diagnosis.StateUntrusted), "a stale window is untrusted, not cleared, tick %d", i)
 				Expect(v).To(BeNumerically("~", -0.5, 1e-9), "the window must freeze on its last real value, tick %d", i)
 			}
@@ -77,7 +77,7 @@ var _ = Describe("hold and demote", func() {
 
 	It("should release a held latch when its window reports absent, rather than on the first readable tick", func() {
 		// The hold is bounded by the demote span: once the stale window ages past
-		// it, the signal reports AllAbsent and the latch RELEASES. BOTH saturation
+		// it, the signal reports AllAbsent and the latch RELEASES. BOTH host-cpu-full
 		// arms must go absent for the signal to report AllAbsent — if usage-fraction
 		// stayed ready it would clear the latch on its own clear arm instead, which
 		// is the fallback-clear route, not this one. The first readable tick after
@@ -108,11 +108,11 @@ var _ = Describe("hold and demote", func() {
 			fired, _ := engine.Observe(smp, env, smp.Timestamp)
 			names := firedSignalNames(fired)
 			if i >= 5 && i < 64 {
-				Expect(names).To(ContainElement("saturation"), "the fired latch must hold through the outage, tick %d", i)
+				Expect(names).To(ContainElement("host-cpu-full"), "the fired latch must hold through the outage, tick %d", i)
 			}
 			if i == 65 {
-				Expect(names).NotTo(ContainElement("saturation"), "the held latch must release once the window reports absent")
-				_, st := engine.Reduction(sigSaturation, instHostHeadroom).Get()
+				Expect(names).NotTo(ContainElement("host-cpu-full"), "the held latch must release once the window reports absent")
+				_, st := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
 				Expect(st).To(Equal(diagnosis.StateAbsent), "the emptied window is absent, not untrusted")
 			}
 		}
@@ -121,7 +121,7 @@ var _ = Describe("hold and demote", func() {
 		// (well below the fire mark): the latch must NOT re-fire on it.
 		smp := hostSample(base, 71, 0.5, true)
 		fired, _ := engine.Observe(smp, env, smp.Timestamp)
-		Expect(firedSignalNames(fired)).NotTo(ContainElement("saturation"), "a sub-mark first readable tick must not re-fire the released latch")
+		Expect(firedSignalNames(fired)).NotTo(ContainElement("host-cpu-full"), "a sub-mark first readable tick must not re-fire the released latch")
 	})
 
 	It("should not store a failed read as a real zero", func() {

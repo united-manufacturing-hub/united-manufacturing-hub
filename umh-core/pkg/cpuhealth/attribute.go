@@ -21,9 +21,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// causeOf maps one chosen Fired to a Cause. The saturation family always maps
-// to CauseKindSaturation. The value is the CURRENT reduction of the arm that
-// produced the latch, read back through Engine.Reduction — not Fired.Value,
+// causeOf maps one chosen Fired to a Cause. Each signal names its own cause
+// kind. The value is the CURRENT reduction of the arm that produced the latch,
+// read back through Engine.Reduction — not Fired.Value,
 // which is stamped at the firing tick and stays constant while the latch holds;
 // the recording's cause values are the current windowed number, which moves
 // while the latch is held (the throttling ratio decays, the settled headroom
@@ -45,16 +45,22 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 			v, _ = engine.Reduction(sigSteal, instStealMean).Get()
 		}
 		return Cause{Kind: CauseKindSteal, Value: v, Unit: Unit(f.Marks.Unit)}
-	case sigSaturation:
+	case sigHostCpuFull:
 		if f.Instrument == instUsageFraction {
-			v, _ := engine.Reduction(sigSaturation, instUsageFraction).Get()
-			return Cause{Kind: CauseKindSaturation, Value: v, Unit: Unit(f.Marks.Unit)}
+			v, _ := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
+			return Cause{Kind: CauseKindHostCpuFull, Value: v, Unit: Unit(f.Marks.Unit)}
 		}
-		v, _ := engine.Reduction(sigSaturation, instHostHeadroom).Get()
-		return Cause{Kind: CauseKindSaturation, Value: v, Unit: Unit(f.Marks.Unit)}
-	default: // sigLimitSaturation
-		v, _ := engine.Reduction(sigLimitSaturation, instLimitHeadroom).Get()
-		return Cause{Kind: CauseKindSaturation, Value: v, Unit: Unit(f.Marks.Unit)}
+		v, _ := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
+		return Cause{Kind: CauseKindHostCpuFull, Value: v, Unit: Unit(f.Marks.Unit)}
+	case sigContainerLimitFull:
+		v, _ := engine.Reduction(sigContainerLimitFull, instLimitHeadroom).Get()
+		return Cause{Kind: CauseKindContainerLimitFull, Value: v, Unit: Unit(f.Marks.Unit)}
+	default:
+		// A signal with no case above names no kind, rather than borrowing the
+		// kind of whichever case happened to sit last. Its value is the one
+		// stamped at the fire tick, because naming no kind also names no
+		// instrument to read a current reduction from.
+		return Cause{Value: f.Value, Unit: Unit(f.Marks.Unit)}
 	}
 }
 

@@ -32,7 +32,7 @@ import (
 var _ = Describe("bind the generated suite to the real CPU table", func() {
 	It("should generate the six-scenario suite from the CPU signal table itself, not from a fixture", func() {
 		// 30 scenarios on a box with a positive quota, 24 on one without:
-		// 6 x 5 and 6 x 4, because cpuTable omits limit-saturation entirely at
+		// 6 x 5 and 6 x 4, because cpuTable omits container-limit-full entirely at
 		// quota 0. A suite built from a fixture cannot tell the two apart, and
 		// one that generated scenarios for the tracks would read 42 and 36.
 		out30 := RunSuite(4, 2.0)
@@ -48,8 +48,8 @@ var _ = Describe("bind the generated suite to the real CPU table", func() {
 		Expect(liveThrottle).To(Equal(diagnosis.Ready), "throttle-ratio with a rising denominator must reach Ready on live")
 		unsupportedThrottle := outcome(out30, "throttling", diagnosis.CaseUnsupported)
 		Expect(unsupportedThrottle).To(Equal(diagnosis.NoInstrument), "throttling requires HasLimit, absent in the unsupported case")
-		unsupportedSaturation := outcome(out30, "saturation", diagnosis.CaseUnsupported)
-		Expect(unsupportedSaturation).To(Equal(diagnosis.Ready), "saturation requires nothing, so it stays Ready unsupported")
+		unsupportedHostCpuFull := outcome(out30, "host-cpu-full", diagnosis.CaseUnsupported)
+		Expect(unsupportedHostCpuFull).To(Equal(diagnosis.Ready), "host-cpu-full requires nothing, so it stays Ready unsupported")
 		longThrottle := outcome(out30, "throttling", diagnosis.CaseLongOutage)
 		Expect(longThrottle).To(Equal(diagnosis.AllAbsent), "a long outage demotes and empties the throttle window")
 	})

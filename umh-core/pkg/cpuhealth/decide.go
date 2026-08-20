@@ -64,7 +64,7 @@ func chooseSaturationCause(fired []diagnosis.Fired, hasLimit bool) saturationCho
 	for i := range fired {
 		f := &fired[i]
 		switch f.Identity.Signal {
-		case sigSaturation, sigLimitSaturation:
+		case sigHostCpuFull, sigContainerLimitFull:
 			latched.SaturationFired = true
 			saturationFlags(*f, &latched, hasLimit)
 			// Keep the highest-ranked member of the saturation family.
@@ -141,7 +141,7 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 	// own reduction — the number the latch was judged on, not the usage track
 	// divided by anything, so a mid-run core-count change cannot split them. It
 	// is filled on every tick, not only when the no-host-stats arm fires.
-	d.AvgUsageFraction, _ = engine.Reduction(sigSaturation, instUsageFraction).Get()
+	d.AvgUsageFraction, _ = engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
 
 	// The dead-zone annotation. The dead zone is quota nil or non-positive AND
 	// PSI absent, and it is an annotation on a healthy verdict, never a state.
@@ -159,7 +159,7 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 	d.ThrottleRatio, _ = engine.Reduction(sigThrottling, instThrottleRatio).Get()
 	d.PressureAvg60, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
 	d.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()
-	d.HostHeadroomCores, _ = engine.Reduction(sigSaturation, instHostHeadroom).Get()
+	d.HostHeadroomCores, _ = engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
 
 	// The two measurement tracks, each a plain 60-second average declared in
 	// table_cpu.go. The state says whether the window reduced to a value, and

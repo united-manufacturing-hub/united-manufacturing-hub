@@ -34,7 +34,7 @@ import (
 
 var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 	It("should leave verdict healthy, no causes, PressureApplies false, LimitedVisibility true, and the advisory present", func() {
-		// A dead-zone box: cores=4 so the saturation instrument IS present, but
+		// A dead-zone box: cores=4 so the host-cpu-full instrument IS present, but
 		// Quota present 0 (no positive quota -> no HasLimit) and PsiAvailable
 		// false (no HasPressureStats). Virtualized false keeps it bare metal so
 		// no steal instrument is offered. Every reading is benign and

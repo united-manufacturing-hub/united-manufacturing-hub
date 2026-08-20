@@ -52,10 +52,15 @@ const (
 type CauseKind string
 
 const (
-	CauseKindSaturation CauseKind = "saturation"
-	CauseKindThrottling CauseKind = "throttling"
-	CauseKindPressure   CauseKind = "pressure"
-	CauseKindSteal      CauseKind = "steal"
+	// CauseKindHostCpuFull and CauseKindContainerLimitFull are the same
+	// measurement — capacity less usage less a reserve, in cores — against two
+	// ceilings. The host's cores are one ceiling and the container's own CPU
+	// limit is the other, and the remedy differs by which one was reached.
+	CauseKindHostCpuFull        CauseKind = "host-cpu-full"
+	CauseKindContainerLimitFull CauseKind = "container-limit-full"
+	CauseKindThrottling         CauseKind = "throttling"
+	CauseKindPressure           CauseKind = "pressure"
+	CauseKindSteal              CauseKind = "steal"
 	// CauseKindHostContention is declared but no signal produces it.
 	CauseKindHostContention CauseKind = "host-contention"
 )

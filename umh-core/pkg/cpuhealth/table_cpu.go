@@ -23,19 +23,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// cpuTable declares five signals — steal, throttling, pressure, saturation and
-// limit-saturation — and two measurements, host-busy and usage-cores.
+// cpuTable declares five signals — steal, throttling, pressure, host-cpu-full
+// and container-limit-full — and two measurements, host-busy and usage-cores.
 //
 // cpuTable is the CPU declaration, built by a function because two marks and
 // one capacity are denominated in quantities that vary per box: the quota and
 // the logical CPU count.
 //
-// cpuTable omits the limit-saturation signal entirely when quota is not
-// positive, and the saturation signal entirely when the core count was never
+// cpuTable omits the container-limit-full signal entirely when quota is not
+// positive, and the host-cpu-full signal entirely when the core count was never
 // readable (cores <= 0) — appending each conditionally is the only
 // arrangement that constructs, since leaving either row in place and
-// unreached through Requires is not enough (see limitSaturationSignal and
-// saturationSignal for why each row's own Marks force the omission).
+// unreached through Requires is not enough (see containerLimitFullSignal and
+// hostCpuFullSignal for why each row's own Marks force the omission).
 func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	t := diagnosis.Table[Sample]{
 		Interval: time.Second,
@@ -59,7 +59,7 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 			},
 			{
 				// limit-headroom's window holds quota − usage − 0.10 × quota and
-				// does not exist at all when cpuTable omits limit-saturation,
+				// does not exist at all when cpuTable omits container-limit-full,
 				// which is every box with no positive quota.
 				Name:      trackUsageCores,
 				Extract:   func(s Sample) diagnosis.Reading { return s.UsageCores },
@@ -74,10 +74,10 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 			// that tie is the common case. Steal is the one a reader needs first:
 			// it says the contention is not ours.
 			stealSignal(),
-			// Requires: HasLimit, the same gate limitSaturationSignal has below —
+			// Requires: HasLimit, the same gate containerLimitFullSignal has below —
 			// but throttling's marks (0.05/0.03) are fixed ratios that don't scale
 			// with the quota, so it can sit here unconditionally instead of
-			// needing the conditional append limitSaturationSignal gets.
+			// needing the conditional append containerLimitFullSignal gets.
 			throttlingSignal(),
 			pressureSignal(),
 		},
@@ -85,11 +85,11 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	// Only when the core count was readable. cores <= 0 means both /proc/cpuinfo
 	// and the cpuset failed, so there is no capacity to be full against.
 	if cores > 0 {
-		t.Signals = append(t.Signals, saturationSignal(cores))
+		t.Signals = append(t.Signals, hostCpuFullSignal(cores))
 	}
 	// Only when a positive quota exists; with no limit there is nothing to saturate.
 	if quota > 0 {
-		t.Signals = append(t.Signals, limitSaturationSignal(quota))
+		t.Signals = append(t.Signals, containerLimitFullSignal(quota))
 	}
 	return t
 }

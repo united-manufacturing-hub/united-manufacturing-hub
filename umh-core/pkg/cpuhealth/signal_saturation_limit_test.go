@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Limit-mode saturation. limit-headroom extracts quota - usage - 0.10 x
-// quota and is reduced as a Mean over the 60s window, so a per-sample headroom
-// folds to the windowed one by linearity. The fire mark is headroom < 0
+// The container-limit-full signal. limit-headroom extracts quota - usage -
+// 0.10 x quota and is reduced as a Mean over the 60s window, so a per-sample
+// headroom folds to the windowed one by linearity. The fire mark is headroom < 0
 // (usage above 0.90 x quota); the clear mark is headroom > 0.05 x quota (usage
-// below 0.85 x quota). The worked case saturation/limit/fire steps usage from
+// below 0.85 x quota). The worked case container-limit-full/fire steps usage from
 // 0.2 to 1.95 at tick 40: the windowed mean crosses zero at tick 95
 // (value -0.0066) and settles at -0.15 only at tick 100 once the window is
 // entirely post-step. Assert the value as well as the state, from the right
@@ -32,8 +32,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("limit-mode saturation", func() {
-	It("should fire limit-mode saturation when the container's sustained usage enters the quota reserve band", func() {
+var _ = Describe("the container-limit-full signal", func() {
+	It("should fire container-limit-full when the container's sustained usage enters the quota reserve band", func() {
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
@@ -62,8 +62,8 @@ var _ = Describe("limit-mode saturation", func() {
 			if i == 94 {
 				// The windowed mean is still positive: 6 pre-step samples at 1.6
 				// headroom outweigh the 55 post-step ones at -0.15. Not fired.
-				Expect(firedNames).NotTo(ContainElement("limit-saturation"), "the mean must not cross zero at tick 94")
-				_, st := engine.Reduction("limit-saturation", "limit-headroom").Get()
+				Expect(firedNames).NotTo(ContainElement("container-limit-full"), "the mean must not cross zero at tick 94")
+				_, st := engine.Reduction("container-limit-full", "limit-headroom").Get()
 				Expect(st).To(Equal(diagnosis.StateValue))
 			}
 			if i == 95 {
@@ -71,16 +71,16 @@ var _ = Describe("limit-mode saturation", func() {
 				// 1.6) and 56 post-step ones (-0.15) over ticks 35..95, mean
 				// (8 - 8.4)/61 = -0.0066. The latch fires on THIS value, not the
 				// settled -0.15.
-				Expect(firedNames).To(ContainElement("limit-saturation"), "the windowed mean crosses zero at tick 95")
-				v, st := engine.Reduction("limit-saturation", "limit-headroom").Get()
+				Expect(firedNames).To(ContainElement("container-limit-full"), "the windowed mean crosses zero at tick 95")
+				v, st := engine.Reduction("container-limit-full", "limit-headroom").Get()
 				Expect(st).To(Equal(diagnosis.StateValue))
 				Expect(v).To(BeNumerically("~", -0.0066, 1e-4), "the firing value is the windowed mean at the crossing tick")
 			}
 			if i == 100 {
 				// Settled: the window is entirely post-step (ticks 40..100), so
 				// the mean is 2 - 1.95 - 0.2 = -0.15 exactly.
-				Expect(firedNames).To(ContainElement("limit-saturation"), "the latch stays fired once inside the reserve band")
-				v, st := engine.Reduction("limit-saturation", "limit-headroom").Get()
+				Expect(firedNames).To(ContainElement("container-limit-full"), "the latch stays fired once inside the reserve band")
+				v, st := engine.Reduction("container-limit-full", "limit-headroom").Get()
 				Expect(st).To(Equal(diagnosis.StateValue))
 				Expect(v).To(BeNumerically("~", -0.15, 1e-9), "the settled value is 2 - 1.95 - 0.2 = -0.15")
 			}

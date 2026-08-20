@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The fallback metric set. When host stats are absent, the saturation
+// The fallback metric set. When host stats are absent, the host-cpu-full
 // signal falls back to usage-fraction: host-headroom's window empties past the
 // demote span, selection walks to usage-fraction and JUDGES on it, and the
 // number it judged on reaches Details as AvgUsageFraction. The
@@ -35,7 +35,7 @@ var _ = Describe("the fallback metric set", func() {
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
 		base := time.Now()
-		sat := signalNamed(cpuTable(4, 2.0), "saturation")
+		sat := signalNamed(cpuTable(4, 2.0), "host-cpu-full")
 
 		for i := 0; i < 130; i++ {
 			hbKnown := i < 60
@@ -57,7 +57,7 @@ var _ = Describe("the fallback metric set", func() {
 				// Sixty readable ticks filled host-headroom; sixty absent ones
 				// emptied it. Selection walks to usage-fraction, which stayed
 				// ready on our own usage the whole way.
-				_, hhst := engine.Reduction(sigSaturation, instHostHeadroom).Get()
+				_, hhst := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
 				Expect(hhst).To(Equal(diagnosis.StateAbsent), "the host window must be absent, not untrusted")
 				sel, red, _, avail := engine.Select(sat, env)
 				Expect(avail).To(Equal(diagnosis.Ready))
@@ -72,9 +72,9 @@ var _ = Describe("the fallback metric set", func() {
 		}
 
 		// The fallback JUDGES, not merely selects: on a no-limit box where the
-		// usage fraction is 0.75 (above the 0.70 fire mark), the saturation
+		// usage fraction is 0.75 (above the 0.70 fire mark), the host-cpu-full
 		// latch fires on the fallback and the verdict is degraded with one
-		// saturation cause carrying the fraction.
+		// host-cpu-full cause carrying the fraction.
 		engine2, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())
 		env2 := diagnosis.NewEnvironment()
@@ -98,7 +98,7 @@ var _ = Describe("the fallback metric set", func() {
 			if i == 129 {
 				Expect(verdict.State).To(Equal(StateDegraded), "the fallback must judge, not merely answer")
 				Expect(verdict.Causes).To(HaveLen(1))
-				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSaturation))
+				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 				Expect(verdict.Causes[0].Value).To(BeNumerically("~", 0.75, 1e-9))
 				Expect(verdict.Causes[0].Unit).To(Equal(Unit("fraction")))
 			}

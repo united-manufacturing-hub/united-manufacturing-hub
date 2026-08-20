@@ -47,19 +47,20 @@
 // fires. Each question's thresholds are declared beside it in a signal_*.go
 // file; this doc names none of them.
 //
-//	steal             Something outside this box is taking CPU we were
-//	                  scheduled to get. Asked only on a virtualized host.
-//	pressure          Our own tasks were ready to run and did not get a
-//	                  CPU. Asked only where the kernel reports pressure
-//	                  statistics.
-//	throttling        The kernel is cutting us off at our own CPU limit.
-//	                  Asked only where a CPU limit is set.
-//	saturation        There is not enough CPU left on the machine.
-//	                  Declared only where the core count was readable.
-//	limit-saturation  Our own usage has come close to our own limit.
-//	                  Declared only where a positive quota exists.
+//	steal                 Something outside this box is taking CPU we were
+//	                      scheduled to get. Asked only on a virtualized host.
+//	pressure              Our own tasks were ready to run and did not get a
+//	                      CPU. Asked only where the kernel reports pressure
+//	                      statistics.
+//	throttling            The kernel is cutting us off at our own CPU limit.
+//	                      Asked only where a CPU limit is set.
+//	host-cpu-full         There is not enough CPU left on the machine.
+//	                      Declared only where the core count was readable.
+//	container-limit-full  Our own usage has come close to our own limit.
+//	                      Declared only where a positive quota exists.
 //
-// Saturation is measured two ways, and the first that can answer does:
+// The host-cpu-full signal is measured two ways, and the first that can
+// answer does:
 //
 //	host-headroom   How many cores are free on the machine, less a
 //	                reserve. Answers only where the sample covers the
@@ -77,16 +78,16 @@
 // the container by definition: the limit is ours. Pressure is unknown — tasks
 // can wait because the machine is busy, or because we asked for more CPU than
 // we may use, and the pressure number alone does not separate those.
-// Limit-saturation is the container, because it is our own limit.
+// Container-limit-full is the container, because it is our own limit.
 //
-// Saturation says nothing by itself about whose load filled the machine, so
-// two refinements narrow it: host-share when the rest of the box accounts for
-// most of the busy time, container-share when we account for most of it. Both
-// read our usage over the machine's busy time, and a share in the narrow band
-// around one half fires neither, which leaves the side already blamed in
-// place. That number needs the machine's busy time and our own usage over the
-// same CPUs, so a box whose /proc/stat is unreadable and a container pinned to
-// a subset of the CPUs both come out unknown.
+// The host-cpu-full signal says nothing by itself about whose load filled the
+// machine, so two refinements narrow it: host-share when the rest of the box
+// accounts for most of the busy time, container-share when we account for most
+// of it. Both read our usage over the machine's busy time, and a share in the
+// narrow band around one half fires neither, which leaves the side already
+// blamed in place. That number needs the machine's busy time and our own usage
+// over the same CPUs, so a box whose /proc/stat is unreadable and a container
+// pinned to a subset of the CPUs both come out unknown.
 //
 // # Sample and Reading
 //

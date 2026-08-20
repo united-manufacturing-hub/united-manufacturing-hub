@@ -43,18 +43,18 @@ var _ = Describe("severity scale of the headroom arms", func() {
 	It("should reach severity 1 where each headroom arm's quantity bottoms out, so the arms rank against the ratio arms", func() {
 		t := Table(cores, quota)
 
-		saturation := t.Signals[3]
-		hostHeadroom := saturation.Instruments[0].Marks
-		Expect(saturation.Instruments[0].Name).To(Equal("host-headroom"))
-		usageFraction := saturation.Instruments[1].Marks
-		Expect(saturation.Instruments[1].Name).To(Equal("usage-fraction"))
+		hostCpuFull := t.Signals[3]
+		hostHeadroom := hostCpuFull.Instruments[0].Marks
+		Expect(hostCpuFull.Instruments[0].Name).To(Equal("host-headroom"))
+		usageFraction := hostCpuFull.Instruments[1].Marks
+		Expect(hostCpuFull.Instruments[1].Name).To(Equal("usage-fraction"))
 
-		limitSaturation := t.Signals[4]
-		limitHeadroom := limitSaturation.Instruments[0].Marks
-		Expect(limitSaturation.Instruments[0].Name).To(Equal("limit-headroom"))
+		containerLimitFull := t.Signals[4]
+		limitHeadroom := containerLimitFull.Instruments[0].Marks
+		Expect(containerLimitFull.Instruments[0].Name).To(Equal("limit-headroom"))
 
 		// Both arms live in the tier the ordering broke in.
-		Expect(saturation.Tier).To(Equal(limitSaturation.Tier))
+		Expect(hostCpuFull.Tier).To(Equal(containerLimitFull.Tier))
 
 		// host-headroom is cores − hostBusy − cpuReserveCores, and hostBusy
 		// cannot exceed cores, so the floor is −cpuReserveCores.

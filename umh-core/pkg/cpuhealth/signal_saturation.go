@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// saturationSignal asks "is the machine full?".
+// hostCpuFullSignal asks "is the machine full?".
 //
 // A signal is one question. An instrument is one way to measure the answer,
 // and a signal can hold more than one: whichever instrument has a usable
@@ -41,9 +41,9 @@ import (
 //
 // A full machine says nothing about whose load filled it, so the signal itself
 // blames nobody and the two refinements under it narrow that.
-func saturationSignal(cores float64) diagnosis.Signal[Sample] {
+func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name:            sigSaturation,
+		Name:            sigHostCpuFull,
 		Tier:            tierSaturation,
 		Attribution:     blameUnknown,
 		DemoteSpan:      60 * time.Second,
@@ -58,7 +58,7 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 					// because off a host-scoped sample the count means something else
 					// and there is no headroom to read.
 					Extract: func(s Sample) diagnosis.Reading {
-						// Unreachable in production: cpuTable declares no saturation signal when
+						// Unreachable in production: cpuTable declares no host-cpu-full signal when
 						// cores <= 0, pinned by host_headroom_guard_test.go. The guard stays so
 						// the subtraction below can never run on a non-positive count.
 						if cores <= 0 {
@@ -211,15 +211,15 @@ func shareRefinements() []diagnosis.Signal[Sample] {
 	}
 }
 
-// limitSaturationSignal is "are we out of our own budget?" It is the row whose
+// containerLimitFullSignal is "are we out of our own budget?" It is the row whose
 // marks are denominated in the quota, and it is the reason quota is a float64:
 // it is the only place in the design where a Reading would have had to reach
 // Marks.Worst, which is a float64, so it cannot. cpuTable omits it entirely
 // when quota is not positive, because Fire{At: 0} against Clear{At: 0.05 × 0}
 // is a pair NewEngine rejects.
-func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
+func containerLimitFullSignal(quota float64) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name: sigLimitSaturation,
+		Name: sigContainerLimitFull,
 		Tier: tierSaturation,
 		// Spending OUR OWN budget is inside this container by definition, so
 		// this row needs no refinement to place the blame.
@@ -263,7 +263,7 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 // saturationArmOf identifies which arm of the saturation family a fired signal
 // came from, so chooseSaturationCause and the latch flags can agree without
 // Decide knowing the arms. The signal name alone cannot name the arm:
-// sigSaturation carries two instruments, and Fired.Instrument is what tells
+// sigHostCpuFull carries two instruments, and Fired.Instrument is what tells
 // them apart.
 //
 // Fired.Instrument is stamped when the latch fires, and it changes only when
@@ -273,9 +273,9 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 // from.
 func saturationArmOf(f diagnosis.Fired) saturationArm {
 	switch f.Identity.Signal {
-	case sigLimitSaturation:
+	case sigContainerLimitFull:
 		return limitArm
-	case sigSaturation:
+	case sigHostCpuFull:
 		switch f.Instrument {
 		case instUsageFraction:
 			return noHostStatsArm

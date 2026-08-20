@@ -30,11 +30,11 @@ import (
 // typo that reads as a permanent absence — a constant makes it a compile error
 // instead.
 const (
-	sigSaturation      = "saturation"
-	sigLimitSaturation = "limit-saturation"
-	sigThrottling      = "throttling"
-	sigSteal           = "steal"
-	sigPressure        = "pressure"
+	sigHostCpuFull        = "host-cpu-full"
+	sigContainerLimitFull = "container-limit-full"
+	sigThrottling         = "throttling"
+	sigSteal              = "steal"
+	sigPressure           = "pressure"
 
 	instHostHeadroom  = "host-headroom"
 	instUsageFraction = "usage-fraction"
@@ -47,17 +47,17 @@ const (
 	trackHostBusy   = "host-busy"
 	trackUsageCores = "usage-cores"
 
-	// The two refinements of saturation. Each names its single instrument the
-	// same as itself: a refinement is one narrowing, read one way.
+	// The two refinements of host-cpu-full. Each names its single instrument
+	// the same as itself: a refinement is one narrowing, read one way.
 	refHostShare      = "host-share"
 	refContainerShare = "container-share"
 )
 
 // The tiers. Every signal declares one. Starvation means something outside
 // this container is taking CPU away from it: the throttling, pressure and
-// steal signals. Saturation means the CPU is being used up: the saturation
-// and limit-saturation signals. Starvation outranks saturation regardless of
-// severity, because "you are being throttled" is actionable and "you are
+// steal signals. Saturation means the CPU is being used up: the host-cpu-full
+// and container-limit-full signals. Starvation outranks saturation regardless
+// of severity, because "you are being throttled" is actionable and "you are
 // busy" is not. The words are CPU's; diagnosis only ever sees the number.
 const (
 	tierStarvation = 0

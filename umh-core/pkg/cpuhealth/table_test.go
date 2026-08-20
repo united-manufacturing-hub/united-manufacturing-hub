@@ -15,7 +15,7 @@
 // The CPU table, throttle and steal. cpuTable builds the whole
 // declaration — five signals, seven instruments, both tracks — as a function,
 // not a package-level variable, because two marks and two capacities are
-// denominated in the quota. A no-quota table omits limit-saturation entirely,
+// denominated in the quota. A no-quota table omits container-limit-full entirely,
 // since Fire{At:0}/Clear{At:0.05×0} is a pair NewEngine refuses. Throttle fires
 // above a 0.05 sixty-second ratio and clears below 0.03; steal is judged on the
 // p95 once the ring holds twenty entries and on the mean before that; the p95
@@ -50,7 +50,7 @@ func signalNamed(t diagnosis.Table[Sample], name string) diagnosis.Signal[Sample
 // hasSignal reports whether the table declares a signal with the given name,
 // without failing when it does not. It is the absence-asserting counterpart to
 // signalNamed: the contract is that a box with no readable core count
-// carries no saturation row at all, not a row that is merely never filled.
+// carries no host-cpu-full row at all, not a row that is merely never filled.
 func hasSignal(t diagnosis.Table[Sample], name string) bool {
 	for _, s := range t.Signals {
 		if s.Name == name {
@@ -61,10 +61,10 @@ func hasSignal(t diagnosis.Table[Sample], name string) bool {
 }
 
 var _ = Describe("the CPU table, throttle and steal", func() {
-	It("declares every CPU signal in one table built by cpuTable, and omits limit-saturation when there is no positive quota", func() {
+	It("declares every CPU signal in one table built by cpuTable, and omits container-limit-full when there is no positive quota", func() {
 		t := cpuTable(4, 2.0)
 
-		// Five signals, in Rank's last tie-break order, with limit-saturation
+		// Five signals, in Rank's last tie-break order, with container-limit-full
 		// the fifth and last row. Steal is declared first so it stays ahead of
 		// throttling and pressure when all three tie on tier and severity.
 		Expect(t.Signals).To(HaveLen(5))
@@ -72,7 +72,7 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		for _, s := range t.Signals {
 			names = append(names, s.Name)
 		}
-		Expect(names).To(Equal([]string{"steal", "throttling", "pressure", "saturation", "limit-saturation"}))
+		Expect(names).To(Equal([]string{"steal", "throttling", "pressure", "host-cpu-full", "container-limit-full"}))
 
 		// Every signal declares the same cadence facts: 60s demote span, 60s
 		// instrument span, release-on-absent true. CPU cannot witness the flag,
@@ -154,13 +154,13 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 			Expect(inst.Extract(Sample{Steal: diagnosis.Known(0.9)})).To(Equal(diagnosis.Known(0.9)))
 		}
 
-		// The saturation signal holds the machine-full question twice: host
+		// The host-cpu-full signal holds the machine-full question twice: host
 		// headroom from /proc/stat, and usage fraction from our own usage as the
 		// fallback when /proc/stat is unreadable. host-headroom is listed first
 		// so selection prefers it whenever its window can supply a value.
-		saturation := t.Signals[3]
-		Expect(saturation.Instruments).To(HaveLen(2))
-		hostHeadroom := saturation.Instruments[0]
+		hostCpuFull := t.Signals[3]
+		Expect(hostCpuFull.Instruments).To(HaveLen(2))
+		hostHeadroom := hostCpuFull.Instruments[0]
 		Expect(hostHeadroom.Name).To(Equal("host-headroom"))
 		Expect(hostHeadroom.Reduction.Name).To(Equal("mean"))
 		Expect(hostHeadroom.Reduction.Min).To(Equal(2))
@@ -176,7 +176,7 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		Expect(hostHeadroom.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Known(2.5)))
 		Expect(hostHeadroom.Extract(Sample{CpuScope: ScopeAffinity, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Unknown()))
 		Expect(hostHeadroom.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Unknown()})).To(Equal(diagnosis.Unknown()))
-		usageFraction := saturation.Instruments[1]
+		usageFraction := hostCpuFull.Instruments[1]
 		Expect(usageFraction.Name).To(Equal("usage-fraction"))
 		Expect(usageFraction.Reduction.Name).To(Equal("mean"))
 		Expect(usageFraction.Reduction.Min).To(Equal(2))
@@ -192,9 +192,9 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 
 		// The limit arm only exists when the quota is positive, and its clear
 		// mark and capacity are denominated in that quota.
-		limitSaturation := t.Signals[4]
-		Expect(limitSaturation.Instruments).To(HaveLen(1))
-		limitHeadroom := limitSaturation.Instruments[0]
+		containerLimitFull := t.Signals[4]
+		Expect(containerLimitFull.Instruments).To(HaveLen(1))
+		limitHeadroom := containerLimitFull.Instruments[0]
 		Expect(limitHeadroom.Name).To(Equal("limit-headroom"))
 		Expect(limitHeadroom.Requires).To(ConsistOf(HasLimit))
 		Expect(limitHeadroom.Reduction.Name).To(Equal("mean"))
@@ -334,22 +334,22 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		}
 	})
 
-	It("should not declare a saturation signal on a box whose core count was never readable", func() {
+	It("should not declare a host-cpu-full signal on a box whose core count was never readable", func() {
 		// A never-readable core count is not a "capable but never fillable"
-		// machine — it is a machine that has not declared saturation at all.
+		// machine — it is a machine that has not declared host-cpu-full at all.
 		// The readable core count is a construction-time fact, so nothing
 		// per-tick adds the capability back. The row must be absent, not
 		// present-but-withholding: no signal, no instruments, no window.
 		t := cpuTable(0, 2.0)
-		Expect(hasSignal(t, sigSaturation)).To(BeFalse(),
-			"a box with no readable core count must declare no saturation signal")
+		Expect(hasSignal(t, sigHostCpuFull)).To(BeFalse(),
+			"a box with no readable core count must declare no host-cpu-full signal")
 	})
 
-	It("withholds both saturation arms when the core count is not positive", func() {
-		// The belt-and-braces guard: even a direct call to saturationSignal with
+	It("withholds both host-cpu-full arms when the core count is not positive", func() {
+		// The belt-and-braces guard: even a direct call to hostCpuFullSignal with
 		// a non-positive count must not divide by it — both Extract arms return
-		// Unknown, never a Known(+Inf) that would latch a permanent saturation.
-		sig := saturationSignal(0)
+		// Unknown, never a Known(+Inf) that would latch a permanent full machine.
+		sig := hostCpuFullSignal(0)
 		Expect(sig.Instruments).To(HaveLen(2))
 		host := sig.Instruments[0]
 		Expect(host.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Unknown()))
@@ -365,34 +365,34 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 // keyed no windows under, and every Availability would read NoInstrument
 // forever.
 var _ = Describe("Table — the exported route to the CPU declaration", func() {
-	It("declares what cpuTable declares, and omits limit-saturation when there is no positive quota", func() {
+	It("declares what cpuTable declares, and omits container-limit-full when there is no positive quota", func() {
 		Expect(tableFingerprint(Table(4, 2.0))).To(Equal(tableFingerprint(cpuTable(4, 2.0))),
 			"Table must answer from cpuTable, not a parallel declaration")
 
 		// The no-quota arm, which the fingerprint comparison alone would not
 		// pin: both sides could omit the same wrong row and still match.
 		noLimit := signalNames(Table(4, 0))
-		Expect(noLimit).To(Equal([]string{"steal", "throttling", "pressure", "saturation"}))
-		Expect(noLimit).NotTo(ContainElement("limit-saturation"), "a box with no positive quota declares no limit row")
+		Expect(noLimit).To(Equal([]string{"steal", "throttling", "pressure", "host-cpu-full"}))
+		Expect(noLimit).NotTo(ContainElement("container-limit-full"), "a box with no positive quota declares no limit row")
 	})
 
-	It("omits the saturation signals through the exact route a worker polls", func() {
+	It("omits the two capacity signals through the exact route a worker polls", func() {
 		// A worker polls Table, not cpuTable, so the cores<=0 omission has to hold
 		// at the exported boundary too: the engine NewEngine builds comes from
 		// this same call, and a signal Table advertised while the engine keyed no
 		// window under it would read NoInstrument forever. Table(0, 2.0) must drop
-		// saturation; Table(0, 0) must drop both saturation rows.
+		// host-cpu-full; Table(0, 0) must drop both capacity rows.
 		noCores := signalNames(Table(0, 2.0))
-		Expect(noCores).NotTo(ContainElement("saturation"),
-			"a cores<=0 box must declare no saturation signal through Table")
-		Expect(noCores).To(ContainElement("limit-saturation"),
+		Expect(noCores).NotTo(ContainElement("host-cpu-full"),
+			"a cores<=0 box must declare no host-cpu-full signal through Table")
+		Expect(noCores).To(ContainElement("container-limit-full"),
 			"a positive quota keeps the limit row even when the core count was never readable")
 
 		noCoresNoLimit := signalNames(Table(0, 0))
-		Expect(noCoresNoLimit).NotTo(ContainElement("saturation"),
-			"a cores<=0 no-quota box must declare no saturation signal through Table")
-		Expect(noCoresNoLimit).NotTo(ContainElement("limit-saturation"),
-			"a cores<=0 no-quota box must declare no limit-saturation signal through Table")
+		Expect(noCoresNoLimit).NotTo(ContainElement("host-cpu-full"),
+			"a cores<=0 no-quota box must declare no host-cpu-full signal through Table")
+		Expect(noCoresNoLimit).NotTo(ContainElement("container-limit-full"),
+			"a cores<=0 no-quota box must declare no container-limit-full signal through Table")
 	})
 
 	It("returns a table the real engine accepts on a box with no quota", func() {

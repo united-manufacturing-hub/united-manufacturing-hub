@@ -37,15 +37,15 @@ func orderedEngine(cores, quota float64, limitFirst bool) *diagnosis.Engine[Samp
 	base := cpuTable(cores, quota)
 	sigs := make([]diagnosis.Signal[Sample], 0, len(base.Signals))
 	for _, s := range base.Signals {
-		if s.Name == sigSaturation || s.Name == sigLimitSaturation {
+		if s.Name == sigHostCpuFull || s.Name == sigContainerLimitFull {
 			continue
 		}
 		sigs = append(sigs, s)
 	}
 	if limitFirst {
-		sigs = append(sigs, limitSaturationSignal(quota), saturationSignal(cores))
+		sigs = append(sigs, containerLimitFullSignal(quota), hostCpuFullSignal(cores))
 	} else {
-		sigs = append(sigs, saturationSignal(cores), limitSaturationSignal(quota))
+		sigs = append(sigs, hostCpuFullSignal(cores), containerLimitFullSignal(quota))
 	}
 	engine, err := diagnosis.NewEngine(diagnosis.Table[Sample]{
 		Signals:      sigs,
@@ -63,9 +63,9 @@ var _ = Describe("the saturation fold's precedence", func() {
 		// quota 2.0 - 3.0 - 0.2 = -1.2 fires the limit arm on the SAME tick.
 		// The decided precedence (Jeremy, 2026-08-14) is host-full, limit,
 		// no-host-stats, so the limit arm must survive the fold.
-		Expect(declaredUnit(sigSaturation, instUsageFraction)).NotTo(BeEmpty(),
+		Expect(declaredUnit(sigHostCpuFull, instUsageFraction)).NotTo(BeEmpty(),
 			"the usage-fraction arm must be in the table for this spec to mean anything")
-		Expect(declaredUnit(sigLimitSaturation, instLimitHeadroom)).NotTo(BeEmpty(),
+		Expect(declaredUnit(sigContainerLimitFull, instLimitHeadroom)).NotTo(BeEmpty(),
 			"the limit arm must be in the table for this spec to mean anything")
 
 		for _, limitFirst := range []bool{false, true} {
@@ -96,14 +96,14 @@ var _ = Describe("the saturation fold's precedence", func() {
 					"usage-fraction 3.0/4 = 0.75 fires the fallback latch (limit row first: %v)", limitFirst)
 				Expect(sig.HostFullFired).To(BeFalse(),
 					"an unreadable /proc/stat keeps the host-full arm out of it")
-				fraction, _ := engine.Reduction(sigSaturation, instUsageFraction).Get()
+				fraction, _ := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
 				Expect(fraction).To(BeNumerically(">=", 0.70),
 					"the fallback latch judged on a fired fraction (limit row first: %v)", limitFirst)
 
 				// The assertion: the limit arm survives the fold, whatever the
 				// row order, so the cause value is limit-headroom's number, not
 				// the usage fraction.
-				limitHeadroom, _ := engine.Reduction(sigLimitSaturation, instLimitHeadroom).Get()
+				limitHeadroom, _ := engine.Reduction(sigContainerLimitFull, instLimitHeadroom).Get()
 				Expect(verdict.Causes[0].Value).To(BeNumerically("~", limitHeadroom, 1e-9),
 					"the survivor's cause value is the limit-headroom reduction, not the usage fraction (limit row first: %v)", limitFirst)
 				Expect(verdict.Causes[0].Unit).To(Equal(Unit("cores")),

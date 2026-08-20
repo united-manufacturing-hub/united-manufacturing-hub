@@ -31,8 +31,8 @@ import (
 )
 
 var _ = Describe("attribution consults its evidence", func() {
-	It("should fire host-full as its own check that stacks on limit saturation, because a limit is a ceiling and not a reservation", func() {
-		// saturation/host-full-AND-limit: quota 2.0, 4 cores, usage 0.2 -> 1.95
+	It("should fire host-full as its own check that stacks on container-limit-full, because a limit is a ceiling and not a reservation", func() {
+		// host-cpu-full/host-full-AND-limit: quota 2.0, 4 cores, usage 0.2 -> 1.95
 		// and host busy 0.1 -> 3.8 at tick 40. Both arms over their marks, one
 		// cause: the host arm's 4 - 3.8 - 1.0 = -0.8, while the limit arm sits
 		// at 2 - 1.95 - 0.2 = -0.15. The fold keeps the host arm, so the value
@@ -60,7 +60,7 @@ var _ = Describe("attribution consults its evidence", func() {
 				Expect(sig.LimitSaturationFired).To(BeTrue(), "the own-budget arm must fire on top of it")
 				Expect(verdict.State).To(Equal(StateDegraded))
 				Expect(verdict.Causes).To(HaveLen(1), "the two saturation arms fold to exactly one cause")
-				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSaturation))
+				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 				Expect(verdict.Causes[0].Value).To(BeNumerically("~", -0.8, 1e-9), "the folded value is the host arm's 4 - 3.8 - 1.0")
 				Expect(verdict.Causes[0].Unit).To(Equal(Unit("cores")))
 			}
@@ -102,7 +102,7 @@ var _ = Describe("attribution consults its evidence", func() {
 
 		// The middle of the band: a share of exactly one half crosses neither
 		// refinement's fire mark, so nothing narrows the full machine to a side
-		// and the saturation signal's own blame answers, which is nobody. Drive
+		// and the host-cpu-full signal's own blame answers, which is nobody. Drive
 		// hbm 3.2 against oum 1.6 (host-headroom -0.2 fires, and 1.6 / 3.2 is
 		// 0.5000) and require unknown. The latches start unfired here, so there
 		// is no earlier answer for the band to hold.
@@ -171,11 +171,11 @@ var _ = Describe("attribution consults its evidence", func() {
 
 	It("should report unknown attribution when the host-container split cannot be computed", func() {
 		// Host stats absent: the host-busy track has nothing to fold, so the
-		// split cannot run, and the saturation signal answers through the
+		// split cannot run, and the host-cpu-full signal answers through the
 		// usage-fraction fallback (3.0 / 4 = 0.75 fires). The quota is large
 		// enough that the limit arm (8.0 - 3.0 - 0.8 = 4.2 headroom) does not
 		// fire, so the fallback is the fold's only member. The dominant cause is
-		// saturation, but the machine-full question has no host evidence, so
+		// host-cpu-full, but the machine-full question has no host evidence, so
 		// attribution is unknown.
 		engine, err := NewEngine(4, 8.0)
 		Expect(err).NotTo(HaveOccurred())
@@ -200,7 +200,7 @@ var _ = Describe("attribution consults its evidence", func() {
 				Expect(hbState).NotTo(Equal(diagnosis.StateValue), "the host-busy mean cannot run with no host stats")
 				Expect(sig.NoHostStatsSaturationFired).To(BeTrue())
 				Expect(verdict.Causes).To(HaveLen(1))
-				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSaturation))
+				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 				Expect(verdict.Causes[0].Unit).To(Equal(Unit("fraction")))
 				Expect(verdict.Attribution).To(Equal(AttributionUnknown), "a split that cannot run attributes unknown")
 			}
@@ -217,14 +217,14 @@ type shareRun struct {
 	tree     *diagnosis.Engine[Sample]
 	at       time.Time
 	env      diagnosis.Environment
-	// seen holds one entry per tick: the refinements fired under saturation on
+	// seen holds one entry per tick: the refinements fired under host-cpu-full on
 	// that tick, so a spec can assert over a whole run rather than its end.
 	seen  [][]string
 	scope Scope
 }
 
 // newShareRun builds a run on a box with no quota, so the only signal that can
-// fire is saturation and the only thing that can narrow it is a share.
+// fire is host-cpu-full and the only thing that can narrow it is a share.
 func newShareRun(cores float64, scope Scope) *shareRun {
 	verdicts, err := NewEngine(cores, 0)
 	Expect(err).NotTo(HaveOccurred())
@@ -263,11 +263,11 @@ func (r *shareRun) advance(n int, hostBusy, usage float64) (Verdict, []string) {
 	return verdict, r.seen[len(r.seen)-1]
 }
 
-// firedShares names the refinements fired under the saturation signal, and nil
-// when saturation itself did not fire.
+// firedShares names the refinements fired under the host-cpu-full signal, and
+// nil when that signal itself did not fire.
 func firedShares(fired []diagnosis.Fired) []string {
 	for _, f := range fired {
-		if f.Identity.Signal != sigSaturation {
+		if f.Identity.Signal != sigHostCpuFull {
 			continue
 		}
 
@@ -288,14 +288,14 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 		// host-share's 0.49 fire mark. On a pinned container that 0.30 is an
 		// artifact: the busy time covers all eight-or-more CPUs of the machine
 		// while our usage covers only the ones we may run on. Four cores and
-		// usage 3.0 puts usage-fraction at 0.75, so saturation still fires and
+		// usage 3.0 puts usage-fraction at 0.75, so host-cpu-full still fires and
 		// the tick still needs a blame.
 		pinned := newShareRun(4, ScopeAffinity)
 		verdict, refinements := pinned.advance(6, 10.0, 3.0)
-		Expect(verdict.Causes).To(HaveLen(1), "usage-fraction 3.0 / 4 = 0.75 fires saturation")
-		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSaturation))
+		Expect(verdict.Causes).To(HaveLen(1), "usage-fraction 3.0 / 4 = 0.75 fires host-cpu-full")
+		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 		Expect(refinements).To(BeEmpty(), "the share is not a number on a pinned container")
-		Expect(verdict.Attribution).To(Equal(AttributionUnknown), "with nothing narrowing it, the saturation signal's own blame answers")
+		Expect(verdict.Attribution).To(Equal(AttributionUnknown), "with nothing narrowing it, the host-cpu-full signal's own blame answers")
 
 		// The control: the same two numbers on a host-scoped sample, where the
 		// share means what it says.
@@ -307,7 +307,7 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 
 	It("should hold the side already blamed while the share sits between the two fire marks", func() {
 		// Machine busy 3.5 on a four-core box leaves host-headroom at
-		// 4 - 3.5 - 1.0 = -0.5, so saturation is fired throughout and only the
+		// 4 - 3.5 - 1.0 = -0.5, so host-cpu-full is fired throughout and only the
 		// share moves. Ninety ticks per phase is a full 60-second window and
 		// then some, so each phase ends on its own share.
 		run := newShareRun(4, ScopeHost)

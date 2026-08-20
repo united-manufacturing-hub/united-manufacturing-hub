@@ -13,7 +13,8 @@
 // limitations under the License.
 
 // Marks.Unit is display text everywhere else — the word a number is printed
-// with. Here it is load-bearing: the saturation signal holds two instruments,
+// with. Here it is load-bearing: the host-cpu-full signal holds two
+// instruments,
 // and the only thing that tells them apart downstream is that word.
 
 package cpuhealth
@@ -51,18 +52,18 @@ func declaredUnit(signal, instrument string) string {
 func coupling(instrument, outcome string) string {
 	return fmt.Sprintf(
 		"%s\n\n"+
-			"The saturation signal carries two instruments and diagnosis.Identity has no field\n"+
+			"The host-cpu-full signal carries two instruments and diagnosis.Identity has no field\n"+
 			"naming which one fired, so this package recovers the arm by matching Marks.Unit —\n"+
 			"a display label — against a literal spelled out in table.go and attribute.go.\n"+
 			"The table currently declares Unit %q for the %s arm. If that word was just renamed\n"+
 			"on one side, rename it on the other: the two sides are one decision, and only one\n"+
 			"of them is the word a customer reads.",
-		outcome, declaredUnit(sigSaturation, instrument), instrument)
+		outcome, declaredUnit(sigHostCpuFull, instrument), instrument)
 }
 
-var _ = Describe("the saturation arms are told apart by a display string", func() {
+var _ = Describe("the host-cpu-full arms are told apart by a display string", func() {
 	It("should still blame the host for a full machine after the host-headroom arm's unit is read back from the table", func() {
-		Expect(declaredUnit(sigSaturation, instHostHeadroom)).NotTo(BeEmpty(),
+		Expect(declaredUnit(sigHostCpuFull, instHostHeadroom)).NotTo(BeEmpty(),
 			"the host-headroom arm must be in the table for this spec to mean anything")
 
 		// 4 cores, no quota: host-headroom is 4 - 3.5 - 1.0 = -0.5 and fires,
@@ -87,17 +88,17 @@ var _ = Describe("the saturation arms are told apart by a display string", func(
 			}
 			Expect(sig.SaturationFired).To(BeTrue(), "host-headroom 4 - 3.5 - 1.0 = -0.5 fires")
 			Expect(verdict.Causes).To(HaveLen(1))
-			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSaturation))
+			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 			Expect(verdict.Attribution).To(Equal(AttributionHost),
 				coupling(instHostHeadroom, "Attribution changed: a full machine the split blames on the host now reports an unknown cause."))
 		}
 	})
 
 	It("should still route a machine with no host stats to the fallback arm after that arm's unit is read back from the table", func() {
-		Expect(declaredUnit(sigSaturation, instUsageFraction)).NotTo(BeEmpty(),
+		Expect(declaredUnit(sigHostCpuFull, instUsageFraction)).NotTo(BeEmpty(),
 			"the usage-fraction arm must be in the table for this spec to mean anything")
 
-		// Host stats unreadable, so saturation can only answer through
+		// Host stats unreadable, so host-cpu-full can only answer through
 		// usage-fraction: 3.0/4 = 0.75 fires. The quota is large enough that the
 		// limit arm (8.0 - 3.0 - 0.8 = 4.2 headroom) does NOT fire, so the
 		// fallback is the fold's only member, and the table's arm mapping picks
@@ -122,11 +123,11 @@ var _ = Describe("the saturation arms are told apart by a display string", func(
 				continue
 			}
 			Expect(verdict.Causes).To(HaveLen(1))
-			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSaturation))
+			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 			Expect(sig.NoHostStatsSaturationFired).To(BeTrue(),
-				coupling(instUsageFraction, "The fold misrouted: saturation answered through the fallback arm, but the verdict was built as if the host-headroom arm had fired."))
+				coupling(instUsageFraction, "The fold misrouted: host-cpu-full answered through the fallback arm, but the verdict was built as if the host-headroom arm had fired."))
 
-			fraction, _ := engine.Reduction(sigSaturation, instUsageFraction).Get()
+			fraction, _ := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
 			Expect(verdict.Causes[0].Value).To(BeNumerically("~", fraction, 1e-9),
 				coupling(instUsageFraction, "The customer is shown the wrong number: the cause value came from an instrument other than the one that fired."))
 		}

@@ -170,7 +170,7 @@ func causeHeadline(kind CauseKind) string {
 		return headlinePressure
 	case CauseKindSteal:
 		return headlineSteal
-	case CauseKindSaturation:
+	case CauseKindHostCpuFull, CauseKindContainerLimitFull:
 		return headlineSaturation
 	default:
 		return headlineGeneric
@@ -193,7 +193,7 @@ func causeDetails(c Cause, signals Details) string {
 		return fmt.Sprintf(detailPressure, pctOf(c.Value))
 	case CauseKindSteal:
 		return fmt.Sprintf(detailSteal, pctOf(c.Value))
-	case CauseKindSaturation:
+	case CauseKindHostCpuFull, CauseKindContainerLimitFull:
 		switch {
 		case signals.HostFullFired && signals.LimitSaturationFired:
 			limitStr := fmtCoresTotal(round1(signals.CapacityCores))
@@ -261,7 +261,7 @@ func BlockReason(dominantKind CauseKind, signals Details) string {
 		cause = blockPressure
 	case CauseKindSteal:
 		cause = blockSteal
-	case CauseKindSaturation:
+	case CauseKindHostCpuFull, CauseKindContainerLimitFull:
 		switch {
 		case signals.HostFullFired:
 			cause = blockHostFull

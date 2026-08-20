@@ -15,8 +15,8 @@
 // The wrong subtraction. host-headroom's Extract carries the scope
 // guard — Unknown unless CpuScope == ScopeHost — in the extractor, not in
 // Decide, so nothing enters the window, the reduction is StateAbsent, and the
-// saturation latch has nothing to judge. A box whose core count was never
-// readable declares no saturation row at all (see cpuTable). The three Details
+// host-cpu-full latch has nothing to judge. A box whose core count was never
+// readable declares no host-cpu-full row at all (see cpuTable). The three Details
 // fields carry the withholding to the message layer: HostHeadroomAvailable
 // (dispatched on the scope, not the window state) plus the two core counts.
 package cpuhealth
@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("the missing guard, and the wrong subtraction", func() {
 	// headroomSample builds a sample for the host-headroom guards, with every
-	// other signal parked below its mark so only saturation is exercised.
+	// other signal parked below its mark so only host-cpu-full is exercised.
 	headroomSample := func(base time.Time, i int, scope Scope, logical, host float64) Sample {
 		return Sample{
 			Timestamp:   base.Add(time.Duration(i) * time.Second),
@@ -48,14 +48,14 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		}
 	}
 
-	It("should declare no saturation signal on a box whose core count was never readable, and stay healthy", func() {
+	It("should declare no host-cpu-full signal on a box whose core count was never readable, and stay healthy", func() {
 		// The omission is the gate, so assert it directly: a cores<=0 box declares
-		// no saturation row at all. The message-field checks that used to sit in
+		// no host-cpu-full row at all. The message-field checks that used to sit in
 		// this loop are gone because they do not discriminate — engine.Reduction on
 		// a missing signal returns the same (0.0, StateAbsent) as a
 		// present-but-withholding row, so they passed under both designs.
-		Expect(hasSignal(cpuTable(0, 2.0), sigSaturation)).To(BeFalse(),
-			"a box with no readable core count must declare no saturation signal")
+		Expect(hasSignal(cpuTable(0, 2.0), sigHostCpuFull)).To(BeFalse(),
+			"a box with no readable core count must declare no host-cpu-full signal")
 
 		// Never-readable is not capability: the box still builds and reads healthy
 		// on every tick, because there is no window to fill and no latch to fire.
@@ -66,7 +66,7 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 
 		for i := 0; i < 5; i++ {
 			verdict, _ := Decide(engine, headroomSample(base, i, ScopeHost, 0, 8), env)
-			Expect(verdict.State).To(Equal(StateHealthy), "a box with no declared saturation signal must not fire the latch")
+			Expect(verdict.State).To(Equal(StateHealthy), "a box with no declared host-cpu-full signal must not fire the latch")
 		}
 	})
 
@@ -84,9 +84,9 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		for i := 0; i < 5; i++ {
 			smp := headroomSample(base, i, ScopeAffinity, 2, 8)
 			verdict, _ := Decide(engine, smp, env)
-			_, st := engine.Reduction(sigSaturation, instHostHeadroom).Get()
+			_, st := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
 			Expect(st).To(Equal(diagnosis.StateAbsent), "an affinity-scoped sample must append nothing to host-headroom")
-			Expect(verdict.State).To(Equal(StateHealthy), "the saturation latch must not fire on an invalid subtraction")
+			Expect(verdict.State).To(Equal(StateHealthy), "the host-cpu-full latch must not fire on an invalid subtraction")
 		}
 
 		engine2, err := NewEngine(4, 2.0)
@@ -94,7 +94,7 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		for i := 0; i < 5; i++ {
 			smp := headroomSample(base, i, ScopeUnknown, 2, 8)
 			verdict, _ := Decide(engine2, smp, env)
-			_, st := engine2.Reduction(sigSaturation, instHostHeadroom).Get()
+			_, st := engine2.Reduction(sigHostCpuFull, instHostHeadroom).Get()
 			Expect(st).To(Equal(diagnosis.StateAbsent), "an unestablished scope must withhold host headroom too")
 			Expect(verdict.State).To(Equal(StateHealthy))
 		}
@@ -125,7 +125,7 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		smp2.HostBusy = diagnosis.Unknown()
 		_, sig2 := Decide(engine2, smp2, env)
 		Expect(sig2.HostHeadroomAvailable).To(BeTrue(), "a host-scoped sample is available even when the busy read failed")
-		_, hhst := engine2.Reduction(sigSaturation, instHostHeadroom).Get()
+		_, hhst := engine2.Reduction(sigHostCpuFull, instHostHeadroom).Get()
 		Expect(hhst).To(Equal(diagnosis.StateAbsent), "the failed read leaves the window absent")
 	})
 })

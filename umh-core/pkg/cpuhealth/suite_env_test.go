@@ -31,7 +31,7 @@ var _ = Describe("the environment the generated suite runs in", func() {
 	It("should grant every capability the CPU table's instruments require", func() {
 		env := suiteEnvironment()
 
-		// Both shapes of the table: cpuTable omits limit-saturation entirely at
+		// Both shapes of the table: cpuTable omits container-limit-full entirely at
 		// quota 0, so the quota-0 table can carry a requirement the quota-2
 		// table does not, and vice versa.
 		for _, t := range []diagnosis.Table[Sample]{cpuTable(4, 2.0), cpuTable(4, 0)} {
