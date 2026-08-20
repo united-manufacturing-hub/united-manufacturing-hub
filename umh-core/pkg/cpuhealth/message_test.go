@@ -401,7 +401,7 @@ var _ = Describe("degraded copy", func() {
 		// math.MaxInt64, a 19-digit percentage. Reachable when the limit-mode
 		// quota-based signal fires from its own frozen quota while the sample's
 		// own Quota reads unknown/zero on the same tick and LogicalCpus is also
-		// unset, so fillDetails' fallback leaves CapacityCores at 0.
+		// unset, so detailsFor's fallback leaves CapacityCores at 0.
 		limitArm := degradedSig()
 		limitArm.CapacityCores = 0
 		limitArm.AvgUsageCores = 2.0

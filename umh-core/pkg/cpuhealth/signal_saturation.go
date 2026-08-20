@@ -166,8 +166,11 @@ func containerShare(s Sample) diagnosis.Reading {
 //
 // Their bands do not overlap, and both can therefore never be fired at once:
 // firing either one is exactly the condition that clears the other. Between
-// 0.49 and 0.51 neither mark is crossed, so whichever fired last holds, and a
-// share drifting across the middle does not swap the blame back and forth.
+// 0.495 and 0.505 no mark of either is crossed, so whichever fired last holds,
+// and a share drifting across the middle does not swap the blame back and
+// forth. Outside that pair of clear marks but inside the two fire marks — a
+// share of 0.506, say — the fired one releases and the other does not fire, so
+// the blame goes back to unknown rather than to the other side.
 func shareRefinements() []diagnosis.Signal[Sample] {
 	return []diagnosis.Signal[Sample]{
 		{

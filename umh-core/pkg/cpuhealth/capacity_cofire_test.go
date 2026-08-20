@@ -127,8 +127,8 @@ var _ = Describe("two capacity causes on one tick", func() {
 	})
 
 	It("should leave the machine out of it entirely when a container at its own limit cannot read host stats", func() {
-		// The box R6 creates. 4 cores, a 3.5-core quota, 3.5 cores used,
-		// /proc/stat unreadable. limit-headroom reduces to
+		// 4 cores, a 3.5-core quota, 3.5 cores used, /proc/stat unreadable.
+		// limit-headroom reduces to
 		// 3.5 - 3.5 - 0.35 = -0.35 and fires. The estimate from our own usage
 		// reduces to 3.5/4 = 0.875, past its 0.70 fire mark, and does not fire,
 		// because a box with a CPU limit has better evidence than an estimate.

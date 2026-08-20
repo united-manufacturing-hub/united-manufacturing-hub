@@ -21,7 +21,7 @@
 // busy box at 1.00 in the same tier, so the worst cause sorted last.
 //
 // The arms are read off the built table rather than reconstructed, so a capacity
-// changed in table.go is a capacity this measures.
+// changed in signal_saturation.go is a capacity this measures.
 package cpuhealth
 
 import (

@@ -53,8 +53,8 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 			pressureSignal(),
 		},
 	}
-	// Only when the core count was readable. cores <= 0 means both /proc/cpuinfo
-	// and the cpuset failed, so there is no capacity to be full against.
+	// Only when the core count was readable. cores <= 0 means the cgroup's
+	// cpuset could not be read, so there is no capacity to be full against.
 	if cores > 0 {
 		t.Signals = append(t.Signals, hostCpuFullSignal(cores))
 	}

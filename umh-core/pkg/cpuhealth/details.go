@@ -60,7 +60,8 @@ type Details struct {
 	LimitedVisibility bool
 
 	// The headroom arithmetic. Neither headroom is clamped: a full box yields
-	// a negative number, not a 0. detailsFor sets all four below.
+	// a negative number, not a 0. detailsFor sets every field below except
+	// HeadroomCores.
 	HostHeadroomCores      float64           // host-headroom's own 60s reduction, in cores: cores − hostBusy − reserve
 	HostBusyCoresAvailable bool              // the sample's own readability flag; a ==0 proxy cannot tell unreadable from idle
 	AvgHostBusyCores       float64           // the host-busy measurement's 60s mean

@@ -16,8 +16,9 @@
 // rules that pick which one.
 //
 // Every customer-visible string in this file is written down exactly once —
-// the constants below, plus the host-headroom sentence composeHealthy
-// formats inline. A second copy of a sentence is where drift starts.
+// the constants below, plus the host-headroom sentence composeHealthy formats
+// inline, and one deliberate duplicate the const block names. A second copy of
+// a sentence is where drift starts.
 
 package cpuhealth
 
@@ -61,9 +62,9 @@ func ComposeMessage(verdict Verdict, details Details) string {
 // arithmetic in the Technical Details headroom line is exact by construction
 // (never independently rounds Details.HeadroomCores). used/headroom/reserve
 // print with one decimal; total prints as an integer when whole. The
-// Technical Details dashboard lists only the applicable alert-rule budgets:
-// headroom always, then throttle/pressure/steal each only when its rule
-// applies.
+// Technical Details dashboard lists only the budgets it measured: headroom
+// always, then throttle/pressure/steal each only when this tick's reading of it
+// is usable.
 func composeHealthy(details Details) string {
 	// Zero-capacity guard: when CapacityCores is 0, do not compose the garbled
 	// "0.0 of 0 cores, -1.0 headroom" budget dashboard. Return a safe string
@@ -76,9 +77,10 @@ func composeHealthy(details Details) string {
 	// The healthy message reports only what it measured. Two measurement floors
 	// (one per mode) and one readability gate; when any withholds the usage
 	// figure the message has no headline sentence left, so render the single
-	// "CPU: starting up." line alone. It lasts one tick after each start and
-	// respawn, and it is not the zero-capacity case (a standing state) — they
-	// share a rendering path and nothing else.
+	// "CPU: starting up." line alone. It lasts two ticks after each start and
+	// respawn: the sampler derives no rate from its first read, and the mean
+	// over the rates after that needs two of them. It is not the zero-capacity
+	// case (a standing state) — they share a rendering path and nothing else.
 	if details.LimitApplies {
 		if !details.UsageRingActive {
 			return cpuStartingUp
@@ -201,7 +203,8 @@ func hasKind(causes []Cause, kind CauseKind) bool {
 }
 
 // machineWasRead reports whether the machine's free cores were read from
-// /proc/stat this tick, rather than estimated from this container's own usage.
+// /proc/stat, rather than estimated from this container's own usage. It reads
+// the arm the episode fired on, which a later handover does not move.
 func machineWasRead(causes []Cause) bool {
 	for _, c := range causes {
 		if c.Kind == CauseKindHostCpuFull && c.Instrument == instHostHeadroom {
@@ -484,9 +487,10 @@ const (
 	headlineSaturation = "CPU running near full"
 	headlineGeneric    = "CPU degraded"
 
-	// The degradation detail paragraphs. Throttling reads the
-	// ratio from Details; pressure and steal read Cause.Value (the raw PSI /
-	// steal figure never reaches Details).
+	// The degradation detail paragraphs. Throttling reads the ratio from
+	// Details; pressure and steal read Cause.Value, the reduction of the arm
+	// the episode fired on — which for steal can be the mean while
+	// Details.StealP95 always names the percentile.
 	detailThrottling = "This instance hit its CPU limit and was paused until the next cycle, in %d%% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it."
 	detailPressure   = "Tasks in this instance spent %d%% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it."
 	detailSteal      = "Other virtual machines on the same physical server took %d%% of the CPU this instance needed over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server."

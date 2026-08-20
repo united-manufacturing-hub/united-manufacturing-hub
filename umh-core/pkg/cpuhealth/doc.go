@@ -136,14 +136,20 @@
 // needs both of its terms measured over the same CPUs, so a box whose
 // /proc/stat is unreadable and a container pinned to a subset of the CPUs both
 // come out unknown. A share in the narrow band around one half crosses neither
-// fire threshold: a refinement that fired earlier stays fired and its answer
-// stands, and where neither has ever fired nothing narrows the full machine to
+// fire threshold, so nothing new is narrowed there; a refinement that fired
+// earlier holds its answer only while the share stays inside its own clear
+// threshold, which is nearer the middle still. Where neither has ever fired,
+// and where the one that did has released, nothing narrows the full machine to
 // a side and the blame is unknown.
 //
-// The advice moves with the blame. Only a machine filled from outside is
+// The advice moves with the blame: always in the refusal line, and in the
+// paragraph only where a limit is in force. A machine filled from outside is
 // answered with "reduce other software running on it"; a machine this instance
 // filled is answered with the load the reader controls, and an unattributed one
-// names nobody.
+// names nobody. Two cases opt out of that. Where this container is at its own
+// limit too, one blended paragraph and the line beside it both carry the
+// machine's remedy whatever the blame says. Where no limit is in force, the
+// paragraph names no side and only the refusal line still does.
 //
 // # Sample and Reading
 //

@@ -53,10 +53,13 @@ const (
 type CauseKind string
 
 const (
-	// CauseKindHostCpuFull and CauseKindContainerLimitFull are the same
-	// measurement — capacity less usage less a reserve, in cores — against two
-	// ceilings. The host's cores are one ceiling and the container's own CPU
-	// limit is the other, and the remedy differs by which one was reached.
+	// CauseKindHostCpuFull's host-headroom arm and CauseKindContainerLimitFull
+	// are the same measurement — capacity less the load on it less a reserve,
+	// in cores — against two ceilings. The host's cores are one ceiling and the
+	// container's own CPU limit is the other, and the remedy differs by which
+	// one was reached. The load subtracted differs with the ceiling: the
+	// machine's whole busy time against the host's cores, this container's own
+	// usage against its own limit.
 	CauseKindHostCpuFull        CauseKind = "host-cpu-full"
 	CauseKindContainerLimitFull CauseKind = "container-limit-full"
 	CauseKindThrottling         CauseKind = "throttling"
@@ -65,7 +68,9 @@ const (
 )
 
 // Unit is the unit a cause's value is denominated in, copied from the mark pair
-// that judged it so the message layer can render "cores" vs "ratio".
+// that judged it. No sentence interpolates it: the message layer picks its copy
+// from the cause's kind and instrument, and a Cause carries the unit so a
+// reader of one does not have to go back to the table for it.
 type Unit string
 
 // cpuReserveCores is the no-limit headroom reserve: one core set aside for
