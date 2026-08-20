@@ -60,7 +60,8 @@
 //	throttling            The kernel is cutting us off at our own CPU limit.
 //	                      Asked only where a CPU limit is set.
 //	host-cpu-full         There is not enough CPU left on the machine.
-//	                      Declared only where the core count was readable.
+//	                      Declared only where the count of CPUs this container
+//	                      may use was readable.
 //	container-limit-full  Our own usage has come close to our own limit.
 //	                      Declared only where a positive quota exists.
 //
@@ -77,9 +78,8 @@
 //
 //	host-headroom   How many cores are free on the machine, less a reserve:
 //	                capacity held back for the other software on the box, so
-//	                the question turns to yes while some cores are still
-//	                free. Answers only where the sample covers the whole
-//	                machine.
+//	                host-cpu-full fires while some cores are still free.
+//	                Answers only where the sample covers the whole machine.
 //	usage-fraction  How much of the CPUs we may run on we are using.
 //	                Answers only where there is no CPU limit and no
 //	                pressure statistics, so nothing better can answer.
@@ -92,17 +92,29 @@
 // instrument that does measure the machine cannot.
 //
 // The machine-wide numbers all come from /proc/stat: the busy time of every
-// CPU, the time a hypervisor took, and the machine's CPU count. Everything
-// else is read from the cgroup's own files. Where /proc/stat cannot be read,
-// steal and host-headroom have nothing to judge, so host-cpu-full is left to
-// usage-fraction and goes unanswered wherever that instrument is not allowed to
-// answer. Throttling, pressure and container-limit-full are unaffected.
+// CPU, the time a hypervisor took, and the machine's CPU count. That machine
+// count (Sample.HostCpus) is read every tick, no signal is judged against it,
+// and it is what decides whether the sample covers the whole machine. The count
+// the host-cpu-full row is declared on is a different one: the CPUs this
+// container may use (Sample.LogicalCpus), read from the cgroup's cpuset and
+// handed to Table as cores once, before the first tick, and the same count
+// host-headroom subtracts the busy time from. Everything else is read from the
+// cgroup's own files. Once the table is built, a /proc/stat that cannot be read
+// leaves steal and host-headroom with nothing to judge, so host-cpu-full is
+// left to usage-fraction and goes unanswered wherever that instrument is not
+// allowed to answer. The sampler reads the cpuset only on a tick whose
+// /proc/stat read succeeded, so a box that cannot read /proc/stat at all
+// supplies no such count and gets no host-cpu-full row. Throttling, pressure
+// and container-limit-full are unaffected.
 //
 // # Who is to blame
 //
 // A degraded verdict carries an Attribution. It is declared in the table
 // beside the signal that ranked first, or beside the refinement narrowing it,
-// and nothing after the verdict recomputes it.
+// and nothing after the verdict recomputes it. Ranking puts starvation —
+// something taking CPU away from us — ahead of saturation, the CPU merely being
+// used up, then orders by how far past its fire threshold a signal went, and
+// gives a tie to whichever the table declares first.
 //
 // Steal is the host by definition: a hypervisor took the CPU. Throttling is
 // the container by definition: the limit is ours. Pressure is unknown — tasks
@@ -116,7 +128,9 @@
 // of it. A refinement is an ordinary signal declared under a parent signal,
 // with its own instruments and thresholds, so any signal may carry them.
 // host-cpu-full is the only one that does; pressure declares none, and the
-// ambiguity above is left standing rather than narrowed.
+// ambiguity above is left standing rather than narrowed. A refinement is judged
+// every tick whether or not its parent has fired, but it is reported only while
+// the parent is fired, so a refinement can never degrade the verdict on its own.
 //
 // Both refinements read our usage over the machine's busy time. That number
 // needs both of its terms measured over the same CPUs, so a box whose
