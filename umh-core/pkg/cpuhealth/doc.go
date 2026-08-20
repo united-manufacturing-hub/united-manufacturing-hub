@@ -98,14 +98,18 @@
 // the host-cpu-full row is declared on is a different one: the CPUs this
 // container may use (Sample.LogicalCpus), read from the cgroup's cpuset and
 // handed to Table as cores once, before the first tick, and the same count
-// host-headroom subtracts the busy time from. Everything else is read from the
-// cgroup's own files. Once the table is built, a /proc/stat that cannot be read
-// leaves steal and host-headroom with nothing to judge, so host-cpu-full is
-// left to usage-fraction and goes unanswered wherever that instrument is not
-// allowed to answer. The sampler reads the cpuset only on a tick whose
-// /proc/stat read succeeded, so a box that cannot read /proc/stat at all
-// supplies no such count and gets no host-cpu-full row. Throttling, pressure
-// and container-limit-full are unaffected.
+// host-headroom subtracts the busy time from. Wherever host-headroom answers,
+// those two counts are the same number: the sample covers the whole machine
+// only where the container's count equals the machine's, and host-headroom
+// withholds off any other sample. That equality is what makes subtracting a
+// machine-wide busy time from a container-scoped count valid. Everything else
+// is read from the cgroup's own files. Once the table is built, a /proc/stat
+// that cannot be read leaves steal and host-headroom with nothing to judge, so
+// host-cpu-full is left to usage-fraction and goes unanswered wherever that
+// instrument is not allowed to answer. The sampler reads the cpuset only on a
+// tick whose /proc/stat read succeeded, so a box that cannot read /proc/stat
+// at all supplies no such count and gets no host-cpu-full row. Throttling,
+// pressure and container-limit-full are unaffected.
 //
 // # Who is to blame
 //
@@ -113,8 +117,13 @@
 // beside the signal that ranked first, or beside the refinement narrowing it,
 // and nothing after the verdict recomputes it. Ranking puts starvation —
 // something taking CPU away from us — ahead of saturation, the CPU merely being
-// used up, then orders by how far past its fire threshold a signal went, and
-// gives a tie to whichever the table declares first.
+// used up. Steal, pressure and throttling are starvation; host-cpu-full and
+// container-limit-full are saturation. Throttling belongs to starvation even
+// though the limit it enforces is our own, because the kernel actively
+// withholds the CPU rather than the CPU running out. Within a class, ranking
+// orders by how far past its fire threshold a signal went, on one common
+// scale, because the signals are measured in different units; a tie goes to
+// whichever the table declares first.
 //
 // Steal is the host by definition: a hypervisor took the CPU. Throttling is
 // the container by definition: the limit is ours. Pressure is unknown — tasks
@@ -142,14 +151,14 @@
 // and where the one that did has released, nothing narrows the full machine to
 // a side and the blame is unknown.
 //
-// The advice moves with the blame: always in the refusal line, and in the
-// paragraph only where a limit is in force. A machine filled from outside is
-// answered with "reduce other software running on it"; a machine this instance
-// filled is answered with the load the reader controls, and an unattributed one
-// names nobody. Two cases opt out of that. Where this container is at its own
-// limit too, one blended paragraph and the line beside it both carry the
-// machine's remedy whatever the blame says. Where no limit is in force, the
-// paragraph names no side and only the refusal line still does.
+// The advice moves with the blame: in the refusal line, and in the paragraph
+// only where a limit is in force. A machine filled from outside is answered
+// with "reduce other software running on it"; a machine this instance filled
+// is answered with the load the reader controls, and an unattributed one names
+// nobody. Two cases opt out of that. Where this container is at its own limit
+// too, one blended paragraph and the line beside it both carry the machine's
+// remedy whatever the blame says. Where no limit is in force, the paragraph
+// names no side and only the refusal line still does.
 //
 // # Sample and Reading
 //
