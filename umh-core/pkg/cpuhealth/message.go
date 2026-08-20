@@ -33,17 +33,22 @@ import (
 // Technical Details separator and the curated per-cause copy (dominant first,
 // joined by a blank line). A healthy verdict yields the budget dashboard from
 // composeHealthy.
+//
+// One paragraph per cause, except that the two capacity causes share one:
+// speaksForCapacity says which of the pair writes it.
 func ComposeMessage(verdict Verdict, signals Details) string {
 	if verdict.State != StateDegraded || len(verdict.Causes) == 0 {
 		return composeHealthy(signals)
 	}
 
-	dominant := verdict.Causes[0]
-	headline := causeHeadline(dominant.Kind)
+	headline := causeHeadline(verdict.Causes[0].Kind)
 
 	parts := make([]string, 0, len(verdict.Causes))
 	for _, c := range verdict.Causes {
-		parts = append(parts, causeDetails(c, signals))
+		if !speaksForCapacity(c, verdict.Causes) {
+			continue
+		}
+		parts = append(parts, causeDetails(c, verdict.Causes, signals))
 	}
 	details := strings.Join(parts, "\n\n")
 
@@ -177,15 +182,84 @@ func causeHeadline(kind CauseKind) string {
 	}
 }
 
+// isCapacityKind reports whether a cause kind is one of the two the capacity
+// signals produce: the machine is full, or this container is out of its own
+// CPU limit.
+func isCapacityKind(k CauseKind) bool {
+	return k == CauseKindHostCpuFull || k == CauseKindContainerLimitFull
+}
+
+// hasKind reports whether the ranked causes hold one of this kind.
+func hasKind(causes []Cause, kind CauseKind) bool {
+	for _, c := range causes {
+		if c.Kind == kind {
+			return true
+		}
+	}
+
+	return false
+}
+
+// machineWasRead reports whether the machine's free cores were read from
+// /proc/stat this tick, rather than estimated from this container's own usage.
+func machineWasRead(causes []Cause) bool {
+	for _, c := range causes {
+		if c.Kind == CauseKindHostCpuFull && c.Instrument == instHostHeadroom {
+			return true
+		}
+	}
+
+	return false
+}
+
+// speaksForCapacity reports whether this cause is the one the message speaks
+// with. Every non-capacity cause speaks for itself; the two capacity causes
+// share a single paragraph, because their remedies contradict each other and a
+// customer given both is told to buy CPU for a machine and also to raise a
+// limit that cannot help on it.
+//
+// Where /proc/stat answered, the machine's own reading speaks, and its
+// paragraph names the container's limit in a trailing clause. Where the only
+// reading of the machine is usage-fraction's estimate from our own usage, the
+// container's own limit is the measured ceiling and speaks instead.
+func speaksForCapacity(c Cause, causes []Cause) bool {
+	if !isCapacityKind(c.Kind) {
+		return true
+	}
+	if !hasKind(causes, CauseKindHostCpuFull) || !hasKind(causes, CauseKindContainerLimitFull) {
+		return true
+	}
+	if machineWasRead(causes) {
+		return c.Kind == CauseKindHostCpuFull
+	}
+
+	return c.Kind == CauseKindContainerLimitFull
+}
+
+// speakingCause returns the cause a single-sentence surface renders. It is the
+// dominant one, unless the dominant one is the capacity cause that stays quiet,
+// in which case it is its pair.
+func speakingCause(causes []Cause) Cause {
+	dominant := causes[0]
+	if speaksForCapacity(dominant, causes) {
+		return dominant
+	}
+	for _, c := range causes {
+		if isCapacityKind(c.Kind) && speaksForCapacity(c, causes) {
+			return c
+		}
+	}
+
+	return dominant
+}
+
 // causeDetails returns the curated Technical-Details copy for one cause,
 // interpolating the live number from the cause's Value or the derived Details.
-// The saturation switch reads the sub-latch flags directly. Its compound
-// host-full-and-limit case comes first and has no counterpart in BlockReason;
-// the four single-arm cases under it run in the precedence the two functions
-// share. The compound NoLimitHostFired-with-host-busy-unreadable case runs
-// before the default branch, so a readable no-limit full host falls to that
-// default.
-func causeDetails(c Cause, signals Details) string {
+// The two capacity kinds dispatch on the cause's own instrument, and a machine
+// read full asks the ranked causes one further question: whether the container
+// is also at its limit, which is the case whose two remedies have to be blended
+// into one sentence.
+func causeDetails(c Cause, causes []Cause, signals Details) string {
 	switch c.Kind {
 	case CauseKindThrottling:
 		return fmt.Sprintf(detailThrottling, pctOf(signals.ThrottleRatio))
@@ -193,90 +267,98 @@ func causeDetails(c Cause, signals Details) string {
 		return fmt.Sprintf(detailPressure, pctOf(c.Value))
 	case CauseKindSteal:
 		return fmt.Sprintf(detailSteal, pctOf(c.Value))
-	case CauseKindHostCpuFull, CauseKindContainerLimitFull:
-		switch {
-		case signals.HostFullFired && signals.LimitSaturationFired:
-			limitStr := fmtCoresTotal(round1(signals.CapacityCores))
-			return fmt.Sprintf(detailSatBothAtLimit, limitStr)
-		case signals.HostFullFired:
-			return detailSatHostFull
-		case signals.LimitSaturationFired:
-			// CapacityCores == 0 replaces the percentage sentence — never
-			// prefixes it — on this arm and on the no-limit default arm below.
-			// Its own clause still appends afterward, unaffected by which
-			// sentence came before it.
-			var detail string
-			if signals.CapacityCores == 0 {
-				detail = detailSatCapacityUnavailable
-			} else {
-				pct := pctOf(signals.AvgUsageCores / signals.CapacityCores)
-				detail = fmt.Sprintf(detailSatLimit, pct)
+	case CauseKindContainerLimitFull:
+		// CapacityCores == 0 replaces the percentage sentence — never
+		// prefixes it — here and on the machine arm's readable branch below.
+		// The host-unreadable clause still appends afterward, unaffected by
+		// which sentence came before it.
+		var detail string
+		if signals.CapacityCores == 0 {
+			detail = detailSatCapacityUnavailable
+		} else {
+			detail = fmt.Sprintf(detailSatLimit, pctOf(signals.AvgUsageCores/signals.CapacityCores))
+		}
+		if !signals.HostBusyCoresAvailable {
+			detail += detailSatHostUnavail
+		}
+
+		return detail
+	case CauseKindHostCpuFull:
+		switch c.Instrument {
+		case instUsageFraction:
+			// The estimate from our own usage. The no-PSI wording is the one
+			// that earns the pressure-stats advice.
+			if signals.PressureApplies {
+				return fmt.Sprintf(detailSatNoStatsPSI, pctOf(c.Value))
+			}
+
+			return fmt.Sprintf(detailSatNoStatsNoPSI, pctOf(c.Value))
+		case instHostHeadroom:
+			if hasKind(causes, CauseKindContainerLimitFull) {
+				return fmt.Sprintf(detailSatBothAtLimit, fmtCoresTotal(round1(signals.CapacityCores)))
+			}
+			if signals.LimitApplies {
+				return detailSatHostFull
 			}
 			if !signals.HostBusyCoresAvailable {
-				detail += detailSatHostUnavail
+				return detailSatNoLimitUnavail
 			}
-			return detail
-		case signals.NoHostStatsSaturationFired:
-			pct := pctOf(c.Value)
-			if signals.PressureApplies {
-				return fmt.Sprintf(detailSatNoStatsPSI, pct)
-			}
-			return fmt.Sprintf(detailSatNoStatsNoPSI, pct)
-		case signals.NoLimitHostFired && !signals.HostBusyCoresAvailable:
-			return detailSatNoLimitUnavail
-		default:
-			// Same 0-capacity fallback as the limit arm above.
 			var detail string
 			if signals.CapacityCores == 0 {
 				detail = detailSatCapacityUnavailable
 			} else {
-				pct := pctOf(signals.AvgHostBusyCores / signals.CapacityCores)
-				detail = fmt.Sprintf(detailSatNoLimitRead, pct)
+				detail = fmt.Sprintf(detailSatNoLimitRead, pctOf(signals.AvgHostBusyCores/signals.CapacityCores))
 			}
 			if signals.LimitedVisibility {
 				detail += detailSatNoLimitClause
 			}
+
 			return detail
 		}
-	default:
-		return detailGeneric
 	}
+
+	return detailGeneric
 }
 
 // BlockReason returns the per-cause bridge-refusal message shown when bridge
-// creation is refused because the instance's CPU is degraded. The dominant
-// cause kind selects the message; the saturation kind further dispatches on
-// which sub-latch arm was kept, in the precedence this function shares
-// with causeDetails: host-full, then limit, then no-host-stats, then
-// no-limit-host. The two are one tick's two customer-facing views and must stay
-// in step — the limit arm and the no-host-stats arm do co-fire, and an order
-// that differs between them hands one customer two contradictory remedies at
-// once. An unknown kind falls back to the generic degraded message.
-func BlockReason(dominantKind CauseKind, signals Details) string {
-	var cause string
-	switch dominantKind {
+// creation is refused because the instance's CPU is degraded. It speaks with
+// the cause the Technical Details speak with, both through speakingCause, so
+// the two surfaces cannot hand one customer two contradictory remedies at once.
+// An unknown kind falls back to the generic degraded message.
+func BlockReason(causes []Cause, signals Details) string {
+	if len(causes) == 0 {
+		return blockPrefix + blockGeneric
+	}
+
+	c := speakingCause(causes)
+
+	cause := blockGeneric
+	switch c.Kind {
 	case CauseKindThrottling:
 		cause = blockThrottling
 	case CauseKindPressure:
 		cause = blockPressure
 	case CauseKindSteal:
 		cause = blockSteal
-	case CauseKindHostCpuFull, CauseKindContainerLimitFull:
-		switch {
-		case signals.HostFullFired:
+	case CauseKindContainerLimitFull:
+		cause = blockLimitSaturation
+	case CauseKindHostCpuFull:
+		switch c.Instrument {
+		case instHostHeadroom:
+			// Two names for one wording, kept apart so ENG-5264 can split
+			// them: a full machine reads the same to a customer with a CPU
+			// limit and to one without.
 			cause = blockHostFull
-		case signals.LimitSaturationFired:
-			cause = blockLimitSaturation
-		case signals.NoHostStatsSaturationFired:
+			if !signals.LimitApplies {
+				cause = blockNoLimitHost
+			}
+		case instUsageFraction:
 			cause = blockNoHostStats
-		case signals.NoLimitHostFired:
-			cause = blockNoLimitHost
 		default:
 			cause = blockSaturationOther
 		}
-	default:
-		cause = blockGeneric
 	}
+
 	return blockPrefix + cause
 }
 
@@ -369,7 +451,7 @@ const (
 	detailPressure   = "Tasks in this instance spent %d%% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it."
 	detailSteal      = "Other virtual machines on the same physical server took CPU this instance needed, up to %d%% at peak over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server."
 
-	// The saturation-family paragraphs. detailSatHostUnavail and
+	// The capacity paragraphs. detailSatHostUnavail and
 	// detailSatNoLimitClause are clauses, not paragraphs: each has a leading
 	// space and is appended to the paragraph above it, never a replacement.
 	detailSatBothAtLimit    = "The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its %s-core limit.)"
@@ -394,8 +476,8 @@ const (
 	// Each block constant below carries only its own per-cause remainder.
 	blockPrefix = "Can't add another bridge: "
 
-	// The bridge-refusal (block) reasons, one per cause kind, saturation
-	// dispatched on the sub-latch arm in BlockReason's own order.
+	// The bridge-refusal (block) reasons, one per cause kind, the machine-full
+	// kind dispatched on the instrument that measured it.
 	// blockHostFull and blockNoLimitHost are byte-identical and the collision is
 	// deliberate: the remediation for a full machine is the same with or without
 	// a limit, and giving each arm its own wording is a behaviour change.

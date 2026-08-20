@@ -82,13 +82,13 @@ var _ = Describe("the host-cpu-full arms are told apart by a display string", fu
 				HostBusy:   diagnosis.Known(3.5),
 				UsageCores: diagnosis.Known(0.5),
 			}
-			verdict, sig := Decide(engine, smp, env)
+			verdict, _ := Decide(engine, smp, env)
 			if i < 5 {
 				continue
 			}
-			Expect(sig.SaturationFired).To(BeTrue(), "host-headroom 4 - 3.5 - 1.0 = -0.5 fires")
 			Expect(verdict.Causes).To(HaveLen(1))
 			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
+			Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom), "host-headroom 4 - 3.5 - 1.0 = -0.5 fires")
 			Expect(verdict.Attribution).To(Equal(AttributionHost),
 				coupling(instHostHeadroom, "Attribution changed: a full machine the split blames on the host now reports an unknown cause."))
 		}
@@ -100,10 +100,9 @@ var _ = Describe("the host-cpu-full arms are told apart by a display string", fu
 
 		// Host stats unreadable, so host-cpu-full can only answer through
 		// usage-fraction: 3.0/4 = 0.75 fires. The quota is large enough that the
-		// limit arm (8.0 - 3.0 - 0.8 = 4.2 headroom) does NOT fire, so the
-		// fallback is the fold's only member, and the table's arm mapping picks
-		// it by unit: that decision raises the signal bit and picks the reduction
-		// the cause value is read from.
+		// container's own limit (8.0 - 3.0 - 0.8 = 4.2 headroom) does NOT fire,
+		// so host-cpu-full is the only cause, and the instrument it names picks
+		// the reduction the cause value is read from.
 		engine, err := NewEngine(4, 8.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
@@ -118,14 +117,14 @@ var _ = Describe("the host-cpu-full arms are told apart by a display string", fu
 				NrPeriods:   diagnosis.Known(0),
 				NrThrottled: diagnosis.Known(0),
 			}
-			verdict, sig := Decide(engine, smp, env)
+			verdict, _ := Decide(engine, smp, env)
 			if i < 5 {
 				continue
 			}
 			Expect(verdict.Causes).To(HaveLen(1))
 			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
-			Expect(sig.NoHostStatsSaturationFired).To(BeTrue(),
-				coupling(instUsageFraction, "The fold misrouted: host-cpu-full answered through the fallback arm, but the verdict was built as if the host-headroom arm had fired."))
+			Expect(verdict.Causes[0].Instrument).To(Equal(instUsageFraction),
+				coupling(instUsageFraction, "The cause misnames its instrument: host-cpu-full answered through the fallback arm, but the verdict was built as if the host-headroom arm had fired."))
 
 			fraction, _ := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
 			Expect(verdict.Causes[0].Value).To(BeNumerically("~", fraction, 1e-9),

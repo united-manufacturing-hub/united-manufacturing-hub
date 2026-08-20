@@ -23,8 +23,8 @@ import (
 
 // Details carries the per-tick values and flags ComposeMessage and
 // BlockReason read to render a sentence a ranked cause list alone cannot
-// carry. Decide is its sole producer: chooseSaturationCause and detailsFor
-// write every field between them; buildVerdict returns only the Verdict. Flat, like
+// carry. detailsFor is its sole producer; buildVerdict returns only the
+// Verdict. Flat, like
 // Sample, because a single signal already spans three of the groups below —
 // throttle is ThrottleRatio, ThrottleFired, and ThrottleSignalReady — so
 // splitting by signal or by group would splinter the other.
@@ -41,7 +41,7 @@ type Details struct {
 	// Readings are declared for a future frontend projection and nothing fills
 	// them; AvgUsageFraction and AvgUsageCores are the two exceptions, filled
 	// every tick from their own signal's reduction.
-	AvgUsageFraction float64           // usage-fraction's own 60s reduction — the number the saturation latch was judged on, not the usage track divided by anything, so a mid-run core-count change cannot split them
+	AvgUsageFraction float64           // usage-fraction's own 60s reduction — the number the host-cpu-full latch was judged on, not the usage track divided by anything, so a mid-run core-count change cannot split them
 	P95UsageFraction diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	P99UsageFraction diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	AvgUsageCores    float64           // ABSOLUTE cores; limit-mode headroom and the wire's avgMCpu read this one value — the usage-cores track's 60s mean
@@ -53,9 +53,9 @@ type Details struct {
 	// leave one thin while the other fills.
 	HostBusyRingActive bool
 
-	// The latches. chooseSaturationCause sets ThrottleFired, PressureFired and
-	// StealFired in its default case: a fired signal outside the saturation
-	// family.
+	// The latches. detailsFor sets ThrottleFired, PressureFired and StealFired
+	// from the fired set. The two capacity signals have no flag here: their
+	// causes name the kind and the instrument.
 	ThrottleFired bool // true when the throttling signal fired this tick
 	PressureFired bool // true when the pressure signal fired this tick
 	StealFired    bool // true when the steal signal fired this tick
@@ -68,27 +68,6 @@ type Details struct {
 	// reason about, no PSI to fall back on) and stays false whenever a quota
 	// applies.
 	LimitedVisibility bool
-
-	// The saturation family. chooseSaturationCause sets all five below.
-	// Fired.Identity carries the signal name only, so Decide reads which
-	// instrument fired from Fired.Instrument.
-	SaturationFired bool // the OR of the four arms below; true whenever any of them fired — what causeDetails and BlockReason dispatch on
-	// LimitSaturationFired is true when the limit arm fired: the container's
-	// 60s usage has consumed its 10% reserve (usage >= 0.90 x quota).
-	LimitSaturationFired bool
-	// HostFullFired is true when the host-headroom arm fired AND a limit
-	// applies: the host is full down to its 1-core reserve (hostBusy >= cores
-	// − 1.0). It is the same instrument as NoLimitHostFired, reported under
-	// this name in limit mode.
-	HostFullFired bool
-	// NoHostStatsSaturationFired is true when the usage-fraction fallback
-	// fired: /proc/stat was unreadable, so the arm judged fullness from our
-	// own usage against the logical CPU count instead (usage/cores >= 0.70).
-	NoHostStatsSaturationFired bool
-	// NoLimitHostFired is true under the same condition as HostFullFired, but
-	// with no limit applying; the same instrument, reported under this name in
-	// no-limit mode instead.
-	NoLimitHostFired bool
 
 	// The headroom arithmetic. Neither headroom is clamped: a full box yields
 	// a negative number, not a 0. detailsFor sets all four below.
@@ -107,8 +86,8 @@ type Details struct {
 	PressureApplies bool // true when PSI is available on this box (the sample's own PsiAvailable)
 	StealApplies    bool // true under virtualization (env.Has(HasVirtualization))
 
-	// ---- past the first 31: append-only from here, in the order each field
-	// was added, not a fixed API. detailsFor fills all three below. ----
+	// ---- append-only from here, in the order each field was added, not a
+	// fixed API. detailsFor fills all three below. ----
 	//
 	// HostHeadroomAvailable is the SECOND field ending "Available" and it puts
 	// this struct AT the cap of two this package allows before a family of

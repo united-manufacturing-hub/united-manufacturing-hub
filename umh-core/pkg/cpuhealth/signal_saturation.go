@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The saturation family answers whether the machine — or our own limit — is
-// full. It covers the host-full, usage-fraction, and limit arms of one
-// question, the two refinements that narrow a full machine to a side, and the
-// helpers chooseSaturationCause uses to order and flag the arms; the arms stay
-// together because saturationRank and saturationFlags describe both signals.
+// The two capacity signals: is the machine full, and are we out of our own CPU
+// limit. Both are declared here, with the two instruments that measure the
+// machine and the two refinements that narrow a full machine to a side.
 
 package cpuhealth
 
@@ -257,63 +255,5 @@ func containerLimitFullSignal(quota float64) diagnosis.Signal[Sample] {
 				Worst: -0.10 * quota,
 			},
 		}},
-	}
-}
-
-// saturationArmOf identifies which arm of the saturation family a fired signal
-// came from, so chooseSaturationCause and the latch flags can agree without
-// Decide knowing the arms. The signal name alone cannot name the arm:
-// sigHostCpuFull carries two instruments, and Fired.Instrument is what tells
-// them apart.
-//
-// Fired.Instrument is stamped when the latch fires, and it changes only when
-// the blame moves to another instrument, which moves the marks with it. The
-// engine can select a different instrument on any later tick, and that live
-// winner is not what fired; the stamped name is, so it is what the arm is read
-// from.
-func saturationArmOf(f diagnosis.Fired) saturationArm {
-	switch f.Identity.Signal {
-	case sigContainerLimitFull:
-		return limitArm
-	case sigHostCpuFull:
-		switch f.Instrument {
-		case instUsageFraction:
-			return noHostStatsArm
-		case instHostHeadroom:
-			return hostFullArm
-		default:
-			return noSaturationArm
-		}
-	default:
-		return noSaturationArm
-	}
-}
-
-// saturationRank orders the saturation family for chooseSaturationCause:
-// host-full outranks the limit arm, the limit arm outranks the no-host-stats
-// fallback. The arm IS the rank — the constants in verdict.go are declared in
-// that order — so chooseSaturationCause compares one int and needs nothing
-// about the arms.
-func saturationRank(f diagnosis.Fired) int {
-	return int(saturationArmOf(f))
-}
-
-// saturationFlags raises the Details latch bits one fired saturation arm owns.
-// HostFullFired and NoLimitHostFired are ONE instrument (the host-headroom arm)
-// under two names, and the mode is what separates them: limit mode reports the
-// host-full fallback as HostFullFired, no-limit mode as NoLimitHostFired. The
-// limit arm and the no-host-stats fallback each own one bit.
-func saturationFlags(f diagnosis.Fired, sig *Details, hasLimit bool) {
-	switch saturationArmOf(f) {
-	case hostFullArm:
-		if hasLimit {
-			sig.HostFullFired = true
-		} else {
-			sig.NoLimitHostFired = true
-		}
-	case limitArm:
-		sig.LimitSaturationFired = true
-	case noHostStatsArm:
-		sig.NoHostStatsSaturationFired = true
 	}
 }

@@ -13,10 +13,9 @@
 // limitations under the License.
 
 // Decide, the judgement entry point. Each stage takes the previous stage's
-// output — Observe, then chooseSaturationCause, then buildVerdict and
-// detailsFor off the same choice — so no verdict field is asserted without
-// the evidence for it. The attribution is read off the fired signal that
-// ranked first, where the table declared it.
+// output — Observe, then buildVerdict and detailsFor off the same fired set —
+// so no verdict field is asserted without the evidence for it. The attribution
+// is read off the fired signal that ranked first, where the table declared it.
 
 package cpuhealth
 
@@ -29,79 +28,23 @@ import (
 // engine advances its windows as it reads them.
 func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment) (Verdict, Details) {
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
-	chosen := chooseSaturationCause(fired, env.Has(HasLimit))
-	verdict := buildVerdict(engine, chosen)
-	details := detailsFor(engine, s, env, readiness, chosen)
+	verdict := buildVerdict(engine, fired)
+	details := detailsFor(engine, s, env, readiness, fired)
 	return verdict, details
 }
 
-// saturationChoice is the result of picking one "the CPU is full" cause out of
-// several. A tick can produce several at once: the host has no headroom, this
-// container has spent its own quota, and the fallback used when the host is
-// unreadable. They describe one situation, so Decide keeps only the
-// highest-ranked one.
-type saturationChoice struct {
-	// Fired is every signal that fired this tick, with the surplus "CPU is
-	// full" causes removed — this is what Rank orders.
-	Fired []diagnosis.Fired
-	// Winner is the "CPU is full" cause that was kept, nil if none fired.
-	// Blame depends on which one it was.
-	Winner *diagnosis.Fired
-	// Latched holds the Details fields set here and nowhere else: the four
-	// family latches, and the four saturation arms saturationFlags sets.
-	Latched Details
-}
-
-// chooseSaturationCause picks the one "CPU is full" cause to report and
-// collects every other fired signal. The fired set arrives unranked and in
-// table order; this fixed precedence is the only rule Decide applies before
-// Rank, and the rank and latch flags are the table's.
-func chooseSaturationCause(fired []diagnosis.Fired, hasLimit bool) saturationChoice {
-	rest := make([]diagnosis.Fired, 0, len(fired))
-	var latched Details
-	var winner *diagnosis.Fired
-	best := 0 // below every saturation-arm rank, so the first member wins a tie
-	for i := range fired {
-		f := &fired[i]
-		switch f.Identity.Signal {
-		case sigHostCpuFull, sigContainerLimitFull:
-			latched.SaturationFired = true
-			saturationFlags(*f, &latched, hasLimit)
-			// Keep the highest-ranked member of the saturation family.
-			// Ties cannot occur (the latch is per signal); if one somehow did,
-			// the strictly-greater compare keeps the first member.
-			if rank := saturationRank(*f); rank > best {
-				best = rank
-				winner = f
-			}
-		default:
-			rest = append(rest, *f)
-			switch f.Identity.Signal {
-			case sigThrottling:
-				latched.ThrottleFired = true
-			case sigPressure:
-				latched.PressureFired = true
-			case sigSteal:
-				latched.StealFired = true
-			}
-		}
-	}
-	if winner != nil {
-		rest = append(rest, *winner)
-	}
-	return saturationChoice{Fired: rest, Winner: winner, Latched: latched}
-}
-
-// buildVerdict ranks what chooseSaturationCause left and builds the Verdict.
-// Exactly one rule decides State: degraded when at least one signal fired
-// this tick, healthy when none did — no severity floor, no second condition.
-// It owns no Details fields — it returns the Verdict only. Rank is the only
-// thing that orders Verdict.Causes, and the attribution is the blame the table
-// declared for the signal Rank put first, or for the refinement narrowing it.
-// The Fired that ranked first is kept for that read; the Cause built from it
-// carries no blame.
-func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice) Verdict {
-	ranked := diagnosis.Rank(chosen.Fired)
+// buildVerdict ranks the fired set and builds the Verdict. Nothing runs before
+// the ranking: every fired signal reaches it, and Rank is the only thing that
+// orders Verdict.Causes.
+//
+// Exactly one rule decides State: degraded when at least one signal fired this
+// tick, healthy when none did — no severity floor, no second condition. It owns
+// no Details fields — it returns the Verdict only. The attribution is the blame
+// the table declared for the signal Rank put first, or for the refinement
+// narrowing it. The Fired that ranked first is kept for that read; the Cause
+// built from it carries no blame.
+func buildVerdict(engine *diagnosis.Engine[Sample], fired []diagnosis.Fired) Verdict {
+	ranked := diagnosis.Rank(fired)
 	causes := make([]Cause, len(ranked))
 	for i, f := range ranked {
 		causes[i] = causeOf(engine, f)
@@ -116,10 +59,25 @@ func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice) Ver
 	return verdict
 }
 
-// detailsFor fills every Details field not already set by chooseSaturationCause
-// or buildVerdict, starting from the saturation choice's own latched fields.
-func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, chosen saturationChoice) Details {
-	d := chosen.Latched
+// detailsFor fills every Details field. buildVerdict returns the Verdict alone,
+// so this is the sole producer of the struct.
+func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, fired []diagnosis.Fired) Details {
+	var d Details
+
+	// The three starvation latches, for a reader of Details that wants to know
+	// a signal fired without walking the cause list. The two capacity signals
+	// have no counterpart here: their causes carry the kind and the instrument,
+	// which is everything a flag could have said.
+	for _, f := range fired {
+		switch f.Identity.Signal {
+		case sigThrottling:
+			d.ThrottleFired = true
+		case sigPressure:
+			d.PressureFired = true
+		case sigSteal:
+			d.StealFired = true
+		}
+	}
 
 	// The withheld-headroom facts belong on Details, not Verdict — three
 	// fields, none of the other 31 can stand in for them. HostHeadroomAvailable
@@ -140,7 +98,8 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 	// The average usage fraction is usage-fraction's
 	// own reduction — the number the latch was judged on, not the usage track
 	// divided by anything, so a mid-run core-count change cannot split them. It
-	// is filled on every tick, not only when the no-host-stats arm fires.
+	// is filled on every tick, not only when usage-fraction is the instrument
+	// that fired.
 	d.AvgUsageFraction, _ = engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
 
 	// The dead-zone annotation. The dead zone is quota nil or non-positive AND

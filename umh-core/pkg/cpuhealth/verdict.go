@@ -80,11 +80,18 @@ const cpuReserveCores = 1.0
 // limit mode. Decide stamps the product onto Details.ReserveCores the same way.
 const limitReserveFraction = 0.10
 
-// Cause is one entry in a degraded verdict, ordered by diagnosis.Rank.
+// Cause is one entry in a degraded verdict, ordered by diagnosis.Rank. It says
+// what kind of trouble it is, how much, in what unit, and what measured it, so
+// the message layer can choose a sentence from the cause alone.
 type Cause struct {
-	Kind  CauseKind
-	Value float64
-	Unit  Unit
+	Kind CauseKind
+	// Instrument names the instrument that produced this cause, copied from
+	// the latch that fired. A signal measured two ways needs it: host-cpu-full
+	// read from /proc/stat and host-cpu-full estimated from our own usage earn
+	// different sentences.
+	Instrument string
+	Value      float64
+	Unit       Unit
 }
 
 // Verdict is what Decide returns: the state, the attribution of the dominant
@@ -95,27 +102,3 @@ type Verdict struct {
 	Attribution Attribution
 	Causes      []Cause
 }
-
-// saturationArm identifies which instrument of the saturation family a chosen
-// cause came from. The constants below are declared in that precedence
-// order — no-host-stats, then limit, then host-full — so the arm value IS the
-// rank: a later constant outranks every constant declared before it. Do not
-// reorder them: doing so silently changes which arm chooseSaturationCause picks.
-type saturationArm int
-
-const (
-	// noSaturationArm is the unset value a non-saturation fired signal maps to.
-	noSaturationArm saturationArm = iota
-
-	// noHostStatsArm is the usage-fraction fallback: this instance's own usage
-	// stands in for the host reading when /proc/stat is unreadable.
-	noHostStatsArm
-
-	// limitArm is this instance's own CPU quota running out, independent of
-	// the host.
-	limitArm
-
-	// hostFullArm is the host itself reporting full, from host-headroom's own
-	// /proc/stat reading.
-	hostFullArm
-)

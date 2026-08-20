@@ -18,7 +18,6 @@
 // internal cause (throttling, the container's own limit budget) attributes
 // container whatever that share says; and where the share cannot be measured,
 // or sits in the band the two refinements leave between them, it is unknown.
-// The saturation family folds to one cause before ranking.
 package cpuhealth
 
 import (
@@ -32,11 +31,12 @@ import (
 
 var _ = Describe("attribution consults its evidence", func() {
 	It("should fire host-full as its own check that stacks on container-limit-full, because a limit is a ceiling and not a reservation", func() {
-		// host-cpu-full/host-full-AND-limit: quota 2.0, 4 cores, usage 0.2 -> 1.95
-		// and host busy 0.1 -> 3.8 at tick 40. Both arms over their marks, one
-		// cause: the host arm's 4 - 3.8 - 1.0 = -0.8, while the limit arm sits
-		// at 2 - 1.95 - 0.2 = -0.15. The fold keeps the host arm, so the value
-		// is -0.8 and the cause list holds exactly one saturation entry.
+		// host-cpu-full AND container-limit-full: quota 2.0, 4 cores, usage
+		// 0.2 -> 1.95 and host busy 0.1 -> 3.8 at tick 40. Both signals are over
+		// their marks, so both reach the verdict. The machine's headroom is
+		// 4 - 3.8 - 1.0 = -0.8 against a worst of -1.0, and the limit's is
+		// 2 - 1.95 - 0.2 = -0.15 against a worst of -0.2, so the machine is the
+		// more severe of the two and Rank puts it first.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
@@ -54,15 +54,15 @@ var _ = Describe("attribution consults its evidence", func() {
 				UsageCores:  diagnosis.Known(usage),
 				HostBusy:    diagnosis.Known(hb),
 			}
-			verdict, sig := Decide(engine, smp, env)
+			verdict, _ := Decide(engine, smp, env)
 			if i == 100 {
-				Expect(sig.HostFullFired).To(BeTrue(), "the machine-full arm must fire")
-				Expect(sig.LimitSaturationFired).To(BeTrue(), "the own-budget arm must fire on top of it")
 				Expect(verdict.State).To(Equal(StateDegraded))
-				Expect(verdict.Causes).To(HaveLen(1), "the two saturation arms fold to exactly one cause")
-				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
-				Expect(verdict.Causes[0].Value).To(BeNumerically("~", -0.8, 1e-9), "the folded value is the host arm's 4 - 3.8 - 1.0")
-				Expect(verdict.Causes[0].Unit).To(Equal(Unit("cores")))
+				Expect(kindsOf(verdict.Causes)).To(ConsistOf(CauseKindHostCpuFull, CauseKindContainerLimitFull),
+					"the machine-full and own-budget signals are two causes, not one")
+				machine := causeOfKind(verdict.Causes, CauseKindHostCpuFull)
+				Expect(machine.Instrument).To(Equal(instHostHeadroom), "the machine-full arm must fire")
+				Expect(machine.Value).To(BeNumerically("~", -0.8, 1e-9), "the machine's own headroom, 4 - 3.8 - 1.0")
+				Expect(machine.Unit).To(Equal(Unit("cores")))
 			}
 		}
 	})
@@ -72,9 +72,13 @@ var _ = Describe("attribution consults its evidence", func() {
 		// 3.80, a share of 0.5132. That is past container-share's 0.51 fire
 		// mark, so we account for most of what the machine is doing and the load
 		// is ours.
-		engine, err := NewEngine(4, 2.0)
+		//
+		// No quota, so container-limit-full is not in the table at all. It
+		// blames the container by declaration, and a verdict it can rank first
+		// would answer AttributionContainer whatever the refinements said.
+		engine, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
+		env := diagnosis.NewEnvironment(HasVirtualization)
 		base := time.Now()
 
 		for i := 0; i <= 100; i++ {
@@ -124,7 +128,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, sig := Decide(engine2, smp, env2)
 			if i == 5 {
-				Expect(sig.HostFullFired).To(BeTrue(), "host-headroom 4 - 3.2 - 1.0 = -0.2 fires")
+				Expect(sig.HostHeadroomCores).To(BeNumerically("~", -0.2, 1e-9), "host-headroom 4 - 3.2 - 1.0 = -0.2 fires")
+				Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom))
 				hbm, _ := engine2.Measurement(trackHostBusy).Get()
 				oum, _ := engine2.Measurement(trackUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.2, 1e-9))
@@ -173,10 +178,9 @@ var _ = Describe("attribution consults its evidence", func() {
 		// Host stats absent: the host-busy track has nothing to fold, so the
 		// split cannot run, and the host-cpu-full signal answers through the
 		// usage-fraction fallback (3.0 / 4 = 0.75 fires). The quota is large
-		// enough that the limit arm (8.0 - 3.0 - 0.8 = 4.2 headroom) does not
-		// fire, so the fallback is the fold's only member. The dominant cause is
-		// host-cpu-full, but the machine-full question has no host evidence, so
-		// attribution is unknown.
+		// enough that the container's own limit (8.0 - 3.0 - 0.8 = 4.2 headroom)
+		// does not fire, so host-cpu-full is the only cause. The machine-full
+		// question has no host evidence, so attribution is unknown.
 		engine, err := NewEngine(4, 8.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
@@ -194,13 +198,13 @@ var _ = Describe("attribution consults its evidence", func() {
 				NrThrottled: diagnosis.Known(0),
 				Steal:       diagnosis.Known(0),
 			}
-			verdict, sig := Decide(engine, smp, env)
+			verdict, _ := Decide(engine, smp, env)
 			if i == 5 {
 				_, hbState := engine.Measurement(trackHostBusy).Get()
 				Expect(hbState).NotTo(Equal(diagnosis.StateValue), "the host-busy mean cannot run with no host stats")
-				Expect(sig.NoHostStatsSaturationFired).To(BeTrue())
 				Expect(verdict.Causes).To(HaveLen(1))
 				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
+				Expect(verdict.Causes[0].Instrument).To(Equal(instUsageFraction))
 				Expect(verdict.Causes[0].Unit).To(Equal(Unit("fraction")))
 				Expect(verdict.Attribution).To(Equal(AttributionUnknown), "a split that cannot run attributes unknown")
 			}

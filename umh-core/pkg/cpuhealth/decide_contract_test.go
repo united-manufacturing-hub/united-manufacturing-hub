@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The whole-Details contract. Decide's stages hand 27 fields between two
-// helper functions without changing any exported signature, so no existing
-// test edits when those fields are wired to the wrong source: a mis-wire
-// still returns a Details of the right shape, just with a value read from
-// the wrong place. Every other test in this package asserts a handful of
-// fields relevant to its own scenario; this one asserts every field Decide
-// returns, for a fixed set of scenarios, against a struct literal with every
-// field named — so a reviewer can read what Decide promises without running
-// it, and a wrong wire anywhere in the 37 fields turns one line of this file
-// red.
+// The whole-Details contract. detailsFor fills every field without changing
+// any exported signature, so no existing test edits when a field is wired to
+// the wrong source: a mis-wire still returns a Details of the right shape,
+// just with a value read from the wrong place. Every other test in this
+// package asserts a handful of fields relevant to its own scenario; this one
+// asserts every field Decide returns, for a fixed set of scenarios, against a
+// struct literal with every field named — so a reviewer can read what Decide
+// promises without running it, and a wrong wire anywhere in the struct turns
+// one line of this file red.
 
 package cpuhealth
 
@@ -81,12 +80,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealFired:          false,
 			HostContentionFired: false,
 			LimitedVisibility:   false,
-
-			SaturationFired:            false,
-			LimitSaturationFired:       false,
-			HostFullFired:              false,
-			NoHostStatsSaturationFired: false,
-			NoLimitHostFired:           false,
 
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
@@ -156,12 +149,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostContentionFired: false,
 			LimitedVisibility:   false,
 
-			SaturationFired:            false,
-			LimitSaturationFired:       false,
-			HostFullFired:              false,
-			NoHostStatsSaturationFired: false,
-			NoLimitHostFired:           false,
-
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       0.5,
@@ -229,12 +216,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealFired:          false,
 			HostContentionFired: false,
 			LimitedVisibility:   false,
-
-			SaturationFired:            false,
-			LimitSaturationFired:       false,
-			HostFullFired:              false,
-			NoHostStatsSaturationFired: false,
-			NoLimitHostFired:           false,
 
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
@@ -304,12 +285,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostContentionFired: false,
 			LimitedVisibility:   false,
 
-			SaturationFired:            false,
-			LimitSaturationFired:       false,
-			HostFullFired:              false,
-			NoHostStatsSaturationFired: false,
-			NoLimitHostFired:           false,
-
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       0.5,
@@ -334,7 +309,8 @@ var _ = Describe("Decide's whole Details contract", func() {
 	It("should return this exact Details when host-full and the container's own limit both fire on the same tick", func() {
 		// Same drive as attribution_test.go's host-full-AND-limit scenario:
 		// quota 2.0, 4 cores, usage 0.2/hostBusy 0.1 until tick 40, then
-		// 1.95/3.8. Both saturation arms fire; the fold keeps the host arm.
+		// 1.95/3.8. Both capacity signals fire, and Details records neither:
+		// the two causes on the Verdict carry that.
 		// The Sample here carries no Quota/LogicalCpus/HostCpus (matching the
 		// reused scenario), so CapacityCores and LogicalCpus/HostCpus read as
 		// their zero value and LimitedVisibility reads true — Details fields
@@ -380,12 +356,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealFired:          false,
 			HostContentionFired: false,
 			LimitedVisibility:   true,
-
-			SaturationFired:            true,
-			LimitSaturationFired:       true,
-			HostFullFired:              true,
-			NoHostStatsSaturationFired: false,
-			NoLimitHostFired:           false,
 
 			HostHeadroomCores:      -0.7999999999999993,
 			HostBusyCoresAvailable: true,
@@ -451,12 +421,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostContentionFired: false,
 			LimitedVisibility:   true,
 
-			SaturationFired:            true,
-			LimitSaturationFired:       false,
-			HostFullFired:              false,
-			NoHostStatsSaturationFired: true,
-			NoLimitHostFired:           false,
-
 			HostHeadroomCores:      0,
 			HostBusyCoresAvailable: false,
 			AvgHostBusyCores:       0,
@@ -478,11 +442,11 @@ var _ = Describe("Decide's whole Details contract", func() {
 		}))
 	})
 
-	It("should return this exact Details in no-limit mode, when the host-headroom arm fires as NoLimitHostFired", func() {
+	It("should return this exact Details in no-limit mode, when the host-headroom instrument fires", func() {
 		// Same drive as unit_coupling_test.go's no-limit scenario: 4 cores, no
-		// quota, host busy 3.5 -> headroom 4 - 3.5 - 1.0 = -0.5 fires. With no
-		// HasLimit capability the same instrument reports under
-		// NoLimitHostFired rather than HostFullFired.
+		// quota, host busy 3.5 -> headroom 4 - 3.5 - 1.0 = -0.5 fires. Details
+		// carries no flag for it: the cause names the signal and the
+		// instrument, and LimitApplies below carries the mode.
 		engine, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment()
@@ -519,12 +483,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealFired:          false,
 			HostContentionFired: false,
 			LimitedVisibility:   true,
-
-			SaturationFired:            true,
-			LimitSaturationFired:       false,
-			HostFullFired:              false,
-			NoHostStatsSaturationFired: false,
-			NoLimitHostFired:           true,
 
 			HostHeadroomCores:      -0.5,
 			HostBusyCoresAvailable: true,
@@ -599,12 +557,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealFired:          false,
 			HostContentionFired: false,
 			LimitedVisibility:   false,
-
-			SaturationFired:            false,
-			LimitSaturationFired:       false,
-			HostFullFired:              false,
-			NoHostStatsSaturationFired: false,
-			NoLimitHostFired:           false,
 
 			HostHeadroomCores:      0,
 			HostBusyCoresAvailable: true,

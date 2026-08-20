@@ -21,21 +21,23 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// causeOf maps one chosen Fired to a Cause. Each signal names its own cause
-// kind. The value is the CURRENT reduction of the arm that produced the latch,
-// read back through Engine.Reduction — not Fired.Value,
+// causeOf maps one fired signal to a Cause. Each signal names its own cause
+// kind. The value is the CURRENT reduction of the instrument that produced the
+// latch, read back through Engine.Reduction — not Fired.Value,
 // which is stamped at the firing tick and stays constant while the latch holds;
 // the recording's cause values are the current windowed number, which moves
 // while the latch is held (the throttling ratio decays, the settled headroom
-// deepens). The unit comes from the mark pair that judged the arm.
+// deepens). The unit comes from the mark pair that judged the instrument, and
+// the instrument's own name rides along so the message layer can tell two ways
+// of measuring one signal apart without asking the engine again.
 func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 	switch f.Identity.Signal {
 	case sigThrottling:
 		v, _ := engine.Reduction(sigThrottling, instThrottleRatio).Get()
-		return Cause{Kind: CauseKindThrottling, Value: v, Unit: Unit(f.Marks.Unit)}
+		return Cause{Kind: CauseKindThrottling, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
 	case sigPressure:
 		v, _ := engine.Reduction(sigPressure, instPressureAvg60).Get()
-		return Cause{Kind: CauseKindPressure, Value: v, Unit: Unit(f.Marks.Unit)}
+		return Cause{Kind: CauseKindPressure, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
 	case sigSteal:
 		// The p95 is used whenever its window can supply a value, so
 		// the cause value follows the same rule: p95 when it is
@@ -44,23 +46,23 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 		if st != diagnosis.StateValue {
 			v, _ = engine.Reduction(sigSteal, instStealMean).Get()
 		}
-		return Cause{Kind: CauseKindSteal, Value: v, Unit: Unit(f.Marks.Unit)}
+		return Cause{Kind: CauseKindSteal, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
 	case sigHostCpuFull:
 		if f.Instrument == instUsageFraction {
 			v, _ := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
-			return Cause{Kind: CauseKindHostCpuFull, Value: v, Unit: Unit(f.Marks.Unit)}
+			return Cause{Kind: CauseKindHostCpuFull, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
 		}
 		v, _ := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
-		return Cause{Kind: CauseKindHostCpuFull, Value: v, Unit: Unit(f.Marks.Unit)}
+		return Cause{Kind: CauseKindHostCpuFull, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
 	case sigContainerLimitFull:
 		v, _ := engine.Reduction(sigContainerLimitFull, instLimitHeadroom).Get()
-		return Cause{Kind: CauseKindContainerLimitFull, Value: v, Unit: Unit(f.Marks.Unit)}
+		return Cause{Kind: CauseKindContainerLimitFull, Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
 	default:
 		// A signal with no case above names no kind, rather than borrowing the
 		// kind of whichever case happened to sit last. Its value is the one
-		// stamped at the fire tick, because naming no kind also names no
-		// instrument to read a current reduction from.
-		return Cause{Value: f.Value, Unit: Unit(f.Marks.Unit)}
+		// stamped at the fire tick, because no case here says which reduction
+		// to read instead.
+		return Cause{Instrument: f.Instrument, Value: f.Value, Unit: Unit(f.Marks.Unit)}
 	}
 }
 
