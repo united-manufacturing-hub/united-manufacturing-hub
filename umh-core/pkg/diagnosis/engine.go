@@ -45,8 +45,10 @@ import (
 type Availability int
 
 const (
-	// NoInstrument: this environment satisfies no instrument, so there is no
-	// capable window to take a maximum over. The latch runs its demote clock,
+	// NoInstrument: there is no capable window to take a maximum over, because
+	// this environment satisfies no instrument of the signal, or because no
+	// capable instrument has a window under the path read. The latch runs its
+	// demote clock,
 	// releasing once DemoteSpan has passed since the last trusted update.
 	NoInstrument Availability = iota
 	// AllAbsent: every capable window is empty. The latch resets at once if the
@@ -86,22 +88,17 @@ type Readiness struct {
 // refinement's path is its parent's path plus its own name, e.g. "A/X".
 type key struct{ Path, Instrument string }
 
-// signalState is one signal, the state the engine keeps for it, and the same
-// pairing for each of its refinements. 7e8301485 took these out of name-keyed
-// maps into slices held in the same order; pairing them finishes that move,
-// because "one latch per signal" is now the type rather than two slices agreeing
-// about their length and their order.
+// signalState is one signal narrowed to what the engine judges it by, the latch
+// that judges it, and the same pairing for each of its refinements. Pairing them
+// makes "one latch per signal" the type, rather than two slices agreeing about
+// their length and their order.
 type signalState[S any] struct {
 	// instruments are this signal's own, deep-copied out of the caller's table.
 	instruments []Instrument[S]
-	// refinements is the same pairing one level down, one entry per refinement
-	// this signal declares, in declared order. A refinement is a signal in every
-	// respect the engine judges by: its own instruments, its own marks, its own
-	// latch, so judge and observeWindows recurse into it with no child branch.
-	// Observe's own loop does not recurse: it runs over the top level only.
+	// refinements is the same pairing one level down, in declared order.
 	refinements []signalState[S]
-	// path is what this signal's windows are keyed under: its bare name at the
-	// top level, its parent's path plus its own name for a refinement.
+	// path is what this signal's windows are keyed under: its bare name for a
+	// top-level signal, its parent's path plus its own name for a refinement.
 	path string
 	// latch is the single latch that judges this signal. Every node in the tree
 	// has its own, at every depth.
@@ -119,8 +116,7 @@ func (st *signalState[S]) capable(env Environment) []Instrument[S] {
 }
 
 // measurementState is one measurement and the single window it reduces through,
-// paired for the same reason. Measurement no longer walks one slice while
-// indexing another.
+// paired for the same reason.
 type measurementState[S any] struct {
 	measurement Measurement[S]
 	window      SlidingWindow
@@ -131,16 +127,11 @@ type measurementState[S any] struct {
 // It is not synchronized: the goroutine that calls Observe owns it, and a reader
 // calling Select, Reduction or Measurement from another races on points and latches.
 type Engine[S any] struct {
-	// windows is keyed by path: "A/X" for a refinement X under A. Select looks
-	// up the bare name of the Signal handed to it, so a caller passing a
-	// refinement reads the key "X" rather than "A/X". That misses whenever no
-	// top-level signal is named X, which is what makes resolve's nil arm
-	// reachable. It does NOT miss when the table also declares a top-level X
-	// carrying an instrument the refinement names too: the lookup hits THAT
-	// signal's window, and the caller gets its number marked Ready. Select's
-	// doc carries the restriction this leaves on a caller. The two slices
-	// below are built by NewEngine and cannot miss, which is why they are
-	// pairs instead.
+	// windows is keyed by path: "A/X" for a refinement X under A. Select keys on
+	// a bare name instead, so a caller passing a refinement reads some other
+	// signal's window or none at all. That is what makes resolve's nil arm
+	// reachable, and Select's doc carries the restriction it leaves on a caller.
+	// The two slices below are built as pairs by NewEngine and cannot miss.
 	windows      map[key]*SlidingWindow
 	signals      []signalState[S]
 	measurements []measurementState[S]
@@ -169,13 +160,13 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		}
 	}
 
-	for _, tr := range t.Measurements {
-		w, err := NewSlidingWindow(tr.Span, tr.Span, tr.Reduction, false)
+	for _, m := range t.Measurements {
+		w, err := NewSlidingWindow(m.Span, m.Span, m.Reduction, false)
 		if err != nil {
 			return nil, err
 		}
 
-		e.measurements = append(e.measurements, measurementState[S]{measurement: tr, window: *w})
+		e.measurements = append(e.measurements, measurementState[S]{measurement: m, window: *w})
 	}
 
 	for i, s := range t.Signals {
@@ -318,8 +309,8 @@ func validate[S any](t Table[S]) error {
 }
 
 // validateSignal applies every rule a Signal is held to, then recurses into its
-// refinements under the child's path, so an error names where in the tree the
-// row lives rather than the bare child. Instrument and refinement names are
+// refinements under the refinement's own path, so an error names where in the
+// tree the row lives rather than the bare refinement. Instrument and refinement names are
 // unique among their siblings only.
 func validateSignal[S any](path string, s Signal[S], interval time.Duration) error {
 	// A refinement's path is its parent's path plus "/" plus its own name, and
@@ -411,8 +402,8 @@ func validateSignal[S any](path string, s Signal[S], interval time.Duration) err
 // Table.Measurements. row names the ownership for the error, e.g.
 // `signal "A" instrument "I1"`, and spanNoun is the word the loop uses for the
 // window's size, "window span" for an instrument as against "span" for a bare
-// table measurement. NewEngine's two specs for a zero span pin one wording
-// each, so the pair cannot collapse to a single noun unnoticed.
+// table measurement. NewEngine's two specs for a zero span each assert one of
+// the two wordings, so the pair cannot collapse to a single noun unnoticed.
 func validateMeasurement[S any](row string, spanNoun string, m Measurement[S], interval time.Duration) error {
 	if m.Extract == nil {
 		return fmt.Errorf("%s: nil extract", row)
@@ -537,7 +528,7 @@ func observeWindows[S any](e *Engine[S], st *signalState[S], sample S, at time.T
 // each of its refinements, whichever way this signal went. A refinement is
 // judged every tick for the same reason its window is filled every tick: a
 // verdict reached only while the parent happened to be firing would be decided
-// on however much history the child had at that instant. Only REPORTING a
+// on however much history the refinement had at that instant. Only REPORTING a
 // refinement waits on the parent, which firedTree does.
 //
 // It appends one Readiness row per signal it drives, carrying the Availability
