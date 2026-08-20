@@ -48,7 +48,7 @@ func ComposeMessage(verdict Verdict, signals Details) string {
 		if !speaksForCapacity(c, verdict.Causes) {
 			continue
 		}
-		parts = append(parts, causeDetails(c, verdict.Causes, signals))
+		parts = append(parts, causeDetails(c, verdict.Causes, verdict.Attribution, signals))
 	}
 	details := strings.Join(parts, "\n\n")
 
@@ -256,10 +256,11 @@ func speakingCause(causes []Cause) Cause {
 // causeDetails returns the curated Technical-Details copy for one cause,
 // interpolating the live number from the cause's Value or the derived Details.
 // The two capacity kinds dispatch on the cause's own instrument, and a machine
-// read full asks the ranked causes one further question: whether the container
-// is also at its limit, which is the case whose two remedies have to be blended
-// into one sentence.
-func causeDetails(c Cause, causes []Cause, signals Details) string {
+// read full asks two further questions: whether the container is also at its
+// limit, which is the case whose two remedies have to be blended into one
+// sentence, and failing that whose load filled the machine, which
+// fullMachineDetail answers.
+func causeDetails(c Cause, causes []Cause, attribution Attribution, signals Details) string {
 	switch c.Kind {
 	case CauseKindThrottling:
 		return fmt.Sprintf(detailThrottling, pctOf(signals.ThrottleRatio))
@@ -298,7 +299,7 @@ func causeDetails(c Cause, causes []Cause, signals Details) string {
 				return fmt.Sprintf(detailSatBothAtLimit, fmtCoresTotal(round1(signals.CapacityCores)))
 			}
 			if signals.LimitApplies {
-				return detailSatHostFull
+				return fullMachineDetail(attribution)
 			}
 			if !signals.HostBusyCoresAvailable {
 				return detailSatNoLimitUnavail
@@ -320,12 +321,49 @@ func causeDetails(c Cause, causes []Cause, signals Details) string {
 	return detailGeneric
 }
 
+// fullMachineDetail returns the machine-full paragraph for one attribution. The
+// three differ in their advice, not only in their wording: "reduce other
+// software running on it" sends the customer after somebody else's load, and it
+// is wrong when the load filling the machine is this instance's own.
+//
+// fullMachineBlock answers the same question for the refusal line, and the two
+// must move together.
+func fullMachineDetail(attribution Attribution) string {
+	switch attribution {
+	case AttributionHost:
+		return detailSatHostFull
+	case AttributionContainer:
+		return detailSatHostFullContainer
+	default:
+		return detailSatHostFullUnknown
+	}
+}
+
+// fullMachineBlock returns the machine-full refusal line for one attribution,
+// fullMachineDetail's pair.
+func fullMachineBlock(attribution Attribution, signals Details) string {
+	switch attribution {
+	case AttributionContainer:
+		return blockHostFullContainer
+	case AttributionHost:
+		if signals.LimitApplies {
+			return blockHostFull
+		}
+
+		return blockNoLimitHost
+	default:
+		return blockHostFullUnknown
+	}
+}
+
 // BlockReason returns the per-cause bridge-refusal message shown when bridge
 // creation is refused because the instance's CPU is degraded. It speaks with
 // the cause the Technical Details speak with, both through speakingCause, so
 // the two surfaces cannot hand one customer two contradictory remedies at once.
-// An unknown kind falls back to the generic degraded message.
-func BlockReason(causes []Cause, signals Details) string {
+// It reads the attribution for the same reason, and asks the ranked causes the
+// same blend question first. An unknown kind falls back to the generic degraded
+// message.
+func BlockReason(causes []Cause, attribution Attribution, signals Details) string {
 	if len(causes) == 0 {
 		return blockPrefix + blockGeneric
 	}
@@ -345,12 +383,14 @@ func BlockReason(causes []Cause, signals Details) string {
 	case CauseKindHostCpuFull:
 		switch c.Instrument {
 		case instHostHeadroom:
-			// Two names for one wording, kept apart so ENG-5264 can split
-			// them: a full machine reads the same to a customer with a CPU
-			// limit and to one without.
-			cause = blockHostFull
-			if !signals.LimitApplies {
-				cause = blockNoLimitHost
+			// The order causeDetails takes: a container also at its limit is
+			// answered there by one blended sentence, which carries the host
+			// remedy, so the refusal shown beside it carries the host remedy
+			// too.
+			if hasKind(causes, CauseKindContainerLimitFull) {
+				cause = blockHostFull
+			} else {
+				cause = fullMachineBlock(attribution, signals)
 			}
 		case instUsageFraction:
 			cause = blockNoHostStats
@@ -454,15 +494,23 @@ const (
 	// The capacity paragraphs. detailSatHostUnavail and
 	// detailSatNoLimitClause are clauses, not paragraphs: each has a leading
 	// space and is appended to the paragraph above it, never a replacement.
-	detailSatBothAtLimit    = "The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its %s-core limit.)"
-	detailSatHostFull       = "The machine is full. Add CPU to the machine, or reduce other software running on it."
-	detailSatNoStatsPSI     = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Consider adding CPU capacity."
-	detailSatNoStatsNoPSI   = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity."
-	detailSatLimit          = "CPU averaged %d%% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it."
-	detailSatHostUnavail    = " Host stats are unavailable, so host-side contention is not visible."
-	detailSatNoLimitUnavail = "CPU is degraded. Host CPU usage is not readable right now (host stats temporarily unavailable), so the host-busy percentage cannot be shown. Add CPU capacity, or reduce the load on it."
-	detailSatNoLimitRead    = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."
-	detailSatNoLimitClause  = " Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."
+	//
+	// The three detailSatHostFull* paragraphs are one arm read three ways, by
+	// whose load filled the machine. They state the same fact and differ in the
+	// remedy: only a machine filled from outside earns "reduce other software
+	// running on it", and the container reading leads with the load the reader
+	// controls.
+	detailSatBothAtLimit       = "The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its %s-core limit.)"
+	detailSatHostFull          = "The machine is full. Add CPU to the machine, or reduce other software running on it."
+	detailSatHostFullContainer = "The machine is full, and this instance is using most of it. Reduce the load on this instance, or add CPU to the machine."
+	detailSatHostFullUnknown   = "The machine is full. Add CPU to the machine, or reduce what is running on it."
+	detailSatNoStatsPSI        = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Consider adding CPU capacity."
+	detailSatNoStatsNoPSI      = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity."
+	detailSatLimit             = "CPU averaged %d%% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it."
+	detailSatHostUnavail       = " Host stats are unavailable, so host-side contention is not visible."
+	detailSatNoLimitUnavail    = "CPU is degraded. Host CPU usage is not readable right now (host stats temporarily unavailable), so the host-busy percentage cannot be shown. Add CPU capacity, or reduce the load on it."
+	detailSatNoLimitRead       = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."
+	detailSatNoLimitClause     = " Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."
 
 	// detailSatCapacityUnavailable is shared byte-for-byte between the limit
 	// arm and the no-limit arm deliberately: a customer cannot use a wrong
@@ -476,22 +524,23 @@ const (
 	// Each block constant below carries only its own per-cause remainder.
 	blockPrefix = "Can't add another bridge: "
 
-	// The bridge-refusal (block) reasons, one per cause kind, the machine-full
-	// kind dispatched on the instrument that measured it.
+	// The bridge-refusal (block) reasons, one per cause kind. The machine-full
+	// kind is dispatched on the instrument that measured it, and its
+	// host-headroom arm again on whose load filled the machine, so each line
+	// carries the remedy of the paragraph it is shown beside.
 	// blockHostFull and blockNoLimitHost are byte-identical and the collision is
-	// deliberate: the remediation for a full machine is the same with or without
-	// a limit, and giving each arm its own wording is a behaviour change.
-	// blockNoLimitHost does NOT distinguish "this instance itself filled the machine" from
-	// "other software on the host did": that finer attribution needs per-process
-	// (/proc/[pid]/stat) reads and is deferred to ENG-5264. Do not split its
-	// wording now — it would pre-empt ENG-5264's clean divorce.
-	blockThrottling      = "this instance is already hitting its CPU limit. Raise the limit or reduce load first."
-	blockPressure        = "tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."
-	blockSteal           = "the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."
-	blockHostFull        = "the machine is full. Add CPU to the machine, or reduce other software running on it, first."
-	blockLimitSaturation = "this instance is at its CPU limit. Raise the limit, or reduce the load, first."
-	blockNoHostStats     = "CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."
-	blockNoLimitHost     = "the machine is full. Add CPU to the machine, or reduce other software running on it, first."
-	blockSaturationOther = "CPU is running near full. Add CPU capacity, or set a CPU limit, first."
-	blockGeneric         = "CPU is degraded."
+	// deliberate: the remediation for a machine filled from outside is the same
+	// with or without a limit, and giving each arm its own wording is a
+	// behaviour change.
+	blockThrottling        = "this instance is already hitting its CPU limit. Raise the limit or reduce load first."
+	blockPressure          = "tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."
+	blockSteal             = "the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."
+	blockHostFull          = "the machine is full. Add CPU to the machine, or reduce other software running on it, first."
+	blockHostFullContainer = "the machine is full, and this instance is using most of it. Reduce the load on this instance, or add CPU to the machine, first."
+	blockHostFullUnknown   = "the machine is full. Add CPU to the machine, or reduce what is running on it, first."
+	blockLimitSaturation   = "this instance is at its CPU limit. Raise the limit, or reduce the load, first."
+	blockNoHostStats       = "CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."
+	blockNoLimitHost       = "the machine is full. Add CPU to the machine, or reduce other software running on it, first."
+	blockSaturationOther   = "CPU is running near full. Add CPU capacity, or set a CPU limit, first."
+	blockGeneric           = "CPU is degraded."
 )

@@ -426,28 +426,28 @@ func oneCause(kind CauseKind, instrument string) []Cause {
 
 var _ = Describe("block reasons", func() {
 	It("should render one block reason per cause kind, dispatching the machine-full kind on the instrument that measured it", func() {
-		Expect(BlockReason(oneCause(CauseKindThrottling, instThrottleRatio), degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
-		Expect(BlockReason(oneCause(CauseKindPressure, instPressureAvg60), degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
-		Expect(BlockReason(oneCause(CauseKindSteal, instStealP95), degradedSig())).To(Equal("Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."))
+		Expect(BlockReason(oneCause(CauseKindThrottling, instThrottleRatio), AttributionContainer, degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
+		Expect(BlockReason(oneCause(CauseKindPressure, instPressureAvg60), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
+		Expect(BlockReason(oneCause(CauseKindSteal, instStealP95), AttributionHost, degradedSig())).To(Equal("Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."))
 		// blockGeneric: the default kind arm.
-		Expect(BlockReason(oneCause(CauseKind("future-kind"), ""), degradedSig())).To(Equal("Can't add another bridge: CPU is degraded."))
+		Expect(BlockReason(oneCause(CauseKind("future-kind"), ""), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is degraded."))
 
 		noLimit := degradedSig()
 		noLimit.LimitApplies = false
 
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), degradedSig())).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
-		Expect(BlockReason(oneCause(CauseKindContainerLimitFull, instLimitHeadroom), degradedSig())).To(Equal("Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."))
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instUsageFraction), degradedSig())).To(Equal("Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."))
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), noLimit)).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), AttributionHost, degradedSig())).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
+		Expect(BlockReason(oneCause(CauseKindContainerLimitFull, instLimitHeadroom), AttributionContainer, degradedSig())).To(Equal("Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instUsageFraction), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), AttributionHost, noLimit)).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
 		// The machine-full default arm (entry 46), reachable only from a cause
 		// whose instrument is none of the two that can measure the machine.
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, ""), degradedSig())).To(Equal("Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, ""), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."))
 
 		// blockHostFull and blockNoLimitHost are byte-identical and the collision is intentional
 		// and must survive (the remediation for a full machine is the same with
 		// or without a limit).
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), degradedSig())).
-			To(Equal(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), noLimit)))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), AttributionHost, degradedSig())).
+			To(Equal(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), AttributionHost, noLimit)))
 	})
 
 	It("conformance: Decide names the host-headroom instrument on a full host in no-limit mode", func() {
@@ -479,11 +479,16 @@ var _ = Describe("block reasons", func() {
 	})
 
 	It("should name the same capacity cause on both customer-facing surfaces when a full machine meets a container at its limit", func() {
-		// 4 cores, a 2.0-core quota, host busy 3.8, our usage 1.95, /proc/stat
+		// 4 cores, a 2.0-core quota, host busy 3.8, our usage 1.85, /proc/stat
 		// readable. host-headroom reduces to 4 - 3.8 - 1.0 = -0.8 and
-		// limit-headroom to 2 - 1.95 - 0.2 = -0.15, so both latches hold on the
+		// limit-headroom to 2 - 1.85 - 0.2 = -0.05, so both latches hold on the
 		// same tick. The machine's own reading is the measured one, so it is
 		// the cause both surfaces speak with.
+		//
+		// 1.85 / 3.80 = 0.4868 blames the host, and the run needs that: each
+		// candidate below is rendered on its own, where the pair that blends
+		// the two remedies is not there to be found, so a candidate blamed on
+		// the container would render advice the real tick never printed.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
@@ -497,7 +502,7 @@ var _ = Describe("block reasons", func() {
 				CpuScope:    ScopeHost,
 				Quota:       diagnosis.Known(2.0),
 				HostBusy:    diagnosis.Known(3.8),
-				UsageCores:  diagnosis.Known(1.95),
+				UsageCores:  diagnosis.Known(1.85),
 				LogicalCpus: diagnosis.Known(4),
 				HostCpus:    diagnosis.Known(4),
 			}
@@ -547,11 +552,11 @@ var _ = Describe("block reasons", func() {
 		// speaker varies. BlockReason has no blended line, so a candidate on its
 		// own renders exactly what it would have said.
 		details := spokeWith("the technical details",
-			causeDetails(speakingCause(verdict.Causes), verdict.Causes, sig),
-			func(speaker Cause) string { return causeDetails(speaker, verdict.Causes, sig) })
+			causeDetails(speakingCause(verdict.Causes), verdict.Causes, verdict.Attribution, sig),
+			func(speaker Cause) string { return causeDetails(speaker, verdict.Causes, verdict.Attribution, sig) })
 		block := spokeWith("the bridge-refusal reason",
-			BlockReason(verdict.Causes, sig),
-			func(speaker Cause) string { return BlockReason([]Cause{speaker}, sig) })
+			BlockReason(verdict.Causes, verdict.Attribution, sig),
+			func(speaker Cause) string { return BlockReason([]Cause{speaker}, verdict.Attribution, sig) })
 
 		Expect(details).To(Equal(block),
 			"the two surfaces disagree on one tick: the technical details blame %s while the bridge refusal blames %s, so a customer is given two contradictory remedies",

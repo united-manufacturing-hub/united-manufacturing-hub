@@ -90,6 +90,11 @@
 // over the same CPUs, so a box whose /proc/stat is unreadable and a container
 // pinned to a subset of the CPUs both come out unknown.
 //
+// The advice moves with the blame. Only a machine filled from outside is
+// answered with "reduce other software running on it"; a machine this instance
+// filled is answered with the load the reader controls, and an unattributed one
+// names nobody.
+//
 // # Sample and Reading
 //
 // A Reading is one optional number: a value or an absence, no third state. A
