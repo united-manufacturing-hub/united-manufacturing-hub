@@ -95,8 +95,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, _ := Decide(engine, smp, env)
 			if i == 100 {
-				hbm, _ := engine.Measurement(trackHostBusy).Get()
-				oum, _ := engine.Measurement(trackUsageCores).Get()
+				hbm, _ := engine.Measurement(measHostBusy).Get()
+				oum, _ := engine.Measurement(measUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.8, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.95, 1e-9))
 				Expect(oum/hbm).To(BeNumerically(">", 0.51), "1.95 / 3.80 = 0.5132, past container-share's fire mark")
@@ -130,8 +130,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			if i == 5 {
 				Expect(sig.HostHeadroomCores).To(BeNumerically("~", -0.2, 1e-9), "host-headroom 4 - 3.2 - 1.0 = -0.2 fires")
 				Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom))
-				hbm, _ := engine2.Measurement(trackHostBusy).Get()
-				oum, _ := engine2.Measurement(trackUsageCores).Get()
+				hbm, _ := engine2.Measurement(measHostBusy).Get()
+				oum, _ := engine2.Measurement(measUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.2, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.6, 1e-9))
 				Expect(oum/hbm).To(BeNumerically("~", 0.5, 1e-9), "1.6 / 3.2 is 0.5000 exactly")
@@ -162,8 +162,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, _ := Decide(engine, smp, env)
 			if i == 5 {
-				hbm, _ := engine.Measurement(trackHostBusy).Get()
-				oum, _ := engine.Measurement(trackUsageCores).Get()
+				hbm, _ := engine.Measurement(measHostBusy).Get()
+				oum, _ := engine.Measurement(measUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 1.0, 1e-9))
 				Expect(oum).To(BeNumerically("~", 0.2, 1e-9))
 				Expect(hbm).To(BeNumerically(">", 2*oum), "the split itself says host")
@@ -200,7 +200,7 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, _ := Decide(engine, smp, env)
 			if i == 5 {
-				_, hbState := engine.Measurement(trackHostBusy).Get()
+				_, hbState := engine.Measurement(measHostBusy).Get()
 				Expect(hbState).NotTo(Equal(diagnosis.StateValue), "the host-busy mean cannot run with no host stats")
 				Expect(verdict.Causes).To(HaveLen(1))
 				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))

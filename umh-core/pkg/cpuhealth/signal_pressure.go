@@ -13,7 +13,10 @@
 // limitations under the License.
 
 // The pressure signal answers whether our tasks are waiting for a core, from
-// PSI's own 60-second average.
+// PSI's own 60-second average. PSI is the Linux kernel's pressure stall
+// information: the share of wall-clock time in which tasks were runnable and
+// waiting on a resource. The kernel defines it, and the avg60 field this
+// signal reads, at https://docs.kernel.org/accounting/psi.html.
 
 package cpuhealth
 

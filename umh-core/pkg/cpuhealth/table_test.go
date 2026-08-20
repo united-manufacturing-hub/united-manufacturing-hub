@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The CPU table, throttle and steal. cpuTable builds the whole
-// declaration — five signals, seven instruments, both tracks — as a function,
-// not a package-level variable, because two marks and two capacities are
-// denominated in the quota. A no-quota table omits container-limit-full entirely,
+// The CPU table, throttle and steal. cpuTable builds the whole declaration as a
+// function, not a package-level variable, because its rows are denominated in
+// the quota and the core count. A no-quota table omits container-limit-full entirely,
 // since Fire{At:0}/Clear{At:0.05×0} is a pair NewEngine refuses. Throttle fires
 // above a 0.05 sixty-second ratio and clears below 0.03; steal is judged on the
 // p95 once the ring holds twenty entries and on the mean before that; the p95
@@ -491,3 +490,43 @@ func firedSignalNames(fired []diagnosis.Fired) []string {
 	}
 	return out
 }
+
+var _ = Describe("the window names", func() {
+	It("answers StateAbsent, not an error, when a window is read under a name the table never declared — which is why every name in table.go is a constant and never a string literal", func() {
+		engine, err := NewEngine(4, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
+		base := time.Now()
+
+		for i := 0; i < 5; i++ {
+			Decide(engine, Sample{
+				Timestamp:   base.Add(time.Duration(i) * time.Second),
+				CpuScope:    ScopeHost,
+				Virtualized: true,
+				Pressure:    diagnosis.Known(0.1),
+				Steal:       diagnosis.Known(0),
+				HostBusy:    diagnosis.Known(0.5),
+				UsageCores:  diagnosis.Known(0.2),
+				NrPeriods:   diagnosis.Known(0),
+				NrThrottled: diagnosis.Known(0),
+			}, env)
+		}
+
+		// The control. Both read routes answer with a value under the declared
+		// name, so the absent reads below cannot be passing because the engine
+		// observed nothing.
+		_, declaredMeas := engine.Measurement(measHostBusy).Get()
+		Expect(declaredMeas).To(Equal(diagnosis.StateValue), "host-busy must reduce to a value under its declared name")
+		_, declaredInst := engine.Reduction(sigPressure, instPressureAvg60).Get()
+		Expect(declaredInst).To(Equal(diagnosis.StateValue), "pressure-avg60 must reduce to a value under its declared name")
+
+		// One character out, on each of the three names a read site can get
+		// wrong, and the engine reports absence rather than failing.
+		_, typoMeas := engine.Measurement("host_busy").Get()
+		Expect(typoMeas).To(Equal(diagnosis.StateAbsent), "a misspelled measurement name reads as absent, not as an error")
+		_, typoInst := engine.Reduction(sigPressure, "pressure-avg-60").Get()
+		Expect(typoInst).To(Equal(diagnosis.StateAbsent), "a misspelled instrument name reads as absent, not as an error")
+		_, typoSig := engine.Reduction("presure", instPressureAvg60).Get()
+		Expect(typoSig).To(Equal(diagnosis.StateAbsent), "a misspelled signal name reads as absent, not as an error")
+	})
+})

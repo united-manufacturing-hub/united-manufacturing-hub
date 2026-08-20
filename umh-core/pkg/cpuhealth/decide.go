@@ -120,12 +120,12 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 	d.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()
 	d.HostHeadroomCores, _ = engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
 
-	// The two measurement tracks, each a plain 60-second average declared in
+	// The two measurements, each a plain 60-second average declared in
 	// table_cpu.go. The state says whether the window reduced to a value, and
 	// the healthy headline gates on it so a thin window is not reported as a
 	// confident 0.
-	hostBusyMean, hostBusyState := engine.Measurement(trackHostBusy).Get()
-	usageMean, usageState := engine.Measurement(trackUsageCores).Get()
+	hostBusyMean, hostBusyState := engine.Measurement(measHostBusy).Get()
+	usageMean, usageState := engine.Measurement(measUsageCores).Get()
 	d.AvgUsageCores = usageMean
 	d.AvgHostBusyCores = hostBusyMean
 	d.UsageRingActive = usageState == diagnosis.StateValue

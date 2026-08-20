@@ -25,10 +25,7 @@ import (
 )
 
 // The signal names. Every window CPU reads back is named by one of these, in
-// the table that declares it and at the call site that reads it. An unnamed
-// pair reduces to StateAbsent forever, so a string literal at either end is a
-// typo that reads as a permanent absence — a constant makes it a compile error
-// instead.
+// the table that declares it and at the call site that reads it.
 const (
 	sigHostCpuFull        = "host-cpu-full"
 	sigContainerLimitFull = "container-limit-full"
@@ -44,8 +41,8 @@ const (
 	instStealMean     = "steal-mean"
 	instPressureAvg60 = "pressure-avg60"
 
-	trackHostBusy   = "host-busy"
-	trackUsageCores = "usage-cores"
+	measHostBusy   = "host-busy"
+	measUsageCores = "usage-cores"
 
 	// The two refinements of host-cpu-full. Each names its single instrument
 	// the same as itself: a refinement is one narrowing, read one way.

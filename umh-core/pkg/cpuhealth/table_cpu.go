@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The CPU table builder: the function that assembles the five signals and two
+// The CPU table builder: the function that assembles the signals and
 // measurements table.go's entry points hand to diagnosis.NewEngine.
 
 package cpuhealth
@@ -23,61 +23,32 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// cpuTable declares five signals — steal, throttling, pressure, host-cpu-full
-// and container-limit-full — and two measurements, host-busy and usage-cores.
+// cpuTable declares the CPU signals and measurements. Add a row here and the
+// engine picks it up.
 //
-// cpuTable is the CPU declaration, built by a function because two marks and
-// one capacity are denominated in quantities that vary per box: the quota and
-// the logical CPU count.
-//
-// cpuTable omits the container-limit-full signal entirely when quota is not
-// positive, and the host-cpu-full signal entirely when the core count was never
-// readable (cores <= 0) — appending each conditionally is the only
-// arrangement that constructs, since leaving either row in place and
-// unreached through Requires is not enough (see containerLimitFullSignal and
-// hostCpuFullSignal for why each row's own Marks force the omission).
+// It is a function rather than a value because the rows below are denominated
+// in quantities that vary per box: the quota and the logical CPU count.
 func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	t := diagnosis.Table[Sample]{
 		Interval: time.Second,
-		// A measurement is an instrument without marks: it reports an extra number
-		// rather than judging one. It cannot be an instrument, because an instrument
-		// has to define what good and bad look like — NewEngine requires a fire mark,
-		// a clear mark and a worst value on every one.
-		//
-		// These two are read only by detailsFor, which puts their 60s means and
-		// window states on Details for the wire and the healthy message.
+		// Read only by detailsFor, which puts each one's mean and window state
+		// on Details for the wire and the healthy message.
 		Measurements: []diagnosis.Measurement[Sample]{
 			{
-				// host-headroom's window holds cores − hostBusy − reserve AND is
-				// Unknown() off ScopeHost, so inverting it loses the term on
-				// exactly the affinity boxes whose host/container split is still
-				// valid.
-				Name:      trackHostBusy,
+				Name:      measHostBusy,
 				Extract:   func(s Sample) diagnosis.Reading { return s.HostBusy },
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean, // minimum 2 — Mean's own sample floor
 			},
 			{
-				// limit-headroom's window holds quota − usage − 0.10 × quota and
-				// does not exist at all when cpuTable omits container-limit-full,
-				// which is every box with no positive quota.
-				Name:      trackUsageCores,
+				Name:      measUsageCores,
 				Extract:   func(s Sample) diagnosis.Reading { return s.UsageCores },
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean,
 			},
 		},
 		Signals: []diagnosis.Signal[Sample]{
-			// Steal leads the three starvation signals because declaration
-			// position is Rank's last tie-break. Severity is clamped to 1, so two
-			// signals both at or past their worst value tie there, and under load
-			// that tie is the common case. Steal is the one a reader needs first:
-			// it says the contention is not ours.
 			stealSignal(),
-			// Requires: HasLimit, the same gate containerLimitFullSignal has below —
-			// but throttling's marks (0.05/0.03) are fixed ratios that don't scale
-			// with the quota, so it can sit here unconditionally instead of
-			// needing the conditional append containerLimitFullSignal gets.
 			throttlingSignal(),
 			pressureSignal(),
 		},
