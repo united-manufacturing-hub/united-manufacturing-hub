@@ -41,6 +41,50 @@
 //	message   ComposeMessage(verdict, signals) renders the customer-facing text;
 //	          BlockReason renders the line refusing a new bridge.
 //
+// # What it measures
+//
+// Five questions, asked each tick. The verdict is degraded when any of them
+// fires. Each question's thresholds are declared beside it in a signal_*.go
+// file; this doc names none of them.
+//
+//	steal             Something outside this box is taking CPU we were
+//	                  scheduled to get. Asked only on a virtualized host.
+//	pressure          Our own tasks were ready to run and did not get a
+//	                  CPU. Asked only where the kernel reports pressure
+//	                  statistics.
+//	throttling        The kernel is cutting us off at our own CPU limit.
+//	                  Asked only where a CPU limit is set.
+//	saturation        There is not enough CPU left on the machine.
+//	                  Declared only where the core count was readable.
+//	limit-saturation  Our own usage has come close to our own limit.
+//	                  Declared only where a positive quota exists.
+//
+// Saturation is measured two ways, and the first that can answer does:
+//
+//	host-headroom   How many cores are free on the machine, less a
+//	                reserve. Answers only where the sample covers the
+//	                whole machine.
+//	usage-fraction  How much of the CPUs we may run on we are using.
+//	                Answers when host-headroom cannot.
+//
+// # Who is to blame
+//
+// A degraded verdict carries an Attribution, derived from the dominant cause —
+// the one ranked first.
+//
+// Steal is the host by definition: a hypervisor took the CPU. Throttling is
+// the container by definition: the limit is ours. Pressure is unknown — tasks
+// can wait because the machine is busy, or because we asked for more CPU than
+// we may use, and the pressure number alone does not separate those.
+// Limit-saturation is the container, because it is our own limit.
+//
+// Saturation depends on which way it was measured. Answered by host-headroom,
+// the machine's busy time is compared against our own usage: the host when the
+// rest of the box accounts for most of the busy time, the container when we
+// account for most of it. That comparison needs both numbers trusted, and
+// where either is not, the attribution is unknown. Answered by usage-fraction
+// it is unknown as well, because there is no host evidence to compare against.
+//
 // # Sample and Reading
 //
 // A Reading is one optional number: a value or an absence, no third state. A
