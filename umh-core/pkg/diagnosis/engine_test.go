@@ -385,43 +385,43 @@ var _ = Describe("Engine", func() {
 	})
 
 	It("should return one readiness row per signal beside the fired set, carrying the same availability the latch arm acted on, for signals that fired and signals that could not be read alike", func() {
-		type s9 struct{ v float64 }
-		ext := func(s s9) Reading { return Known(s.v) }
+		type snap struct{ v float64 }
+		ext := func(s snap) Reading { return Known(s.v) }
 
-		fire := Signal[s9]{
+		fire := Signal[snap]{
 			Name: "F", DemoteSpan: 60 * time.Second,
-			Instruments: []Instrument[s9]{{
-				Measurement: Measurement[s9]{
+			Instruments: []Instrument[snap]{{
+				Measurement: Measurement[snap]{
 					Name: "I", Requires: []Capability{"c"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
 				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
-		quiet := Signal[s9]{
+		quiet := Signal[snap]{
 			Name: "Q", DemoteSpan: 60 * time.Second,
-			Instruments: []Instrument[s9]{{
-				Measurement: Measurement[s9]{
+			Instruments: []Instrument[snap]{{
+				Measurement: Measurement[snap]{
 					Name: "I", Requires: []Capability{"c"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
 				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Worst: 200, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
-		incapable := Signal[s9]{
+		incapable := Signal[snap]{
 			Name: "N", DemoteSpan: 60 * time.Second,
-			Instruments: []Instrument[s9]{{
-				Measurement: Measurement[s9]{
+			Instruments: []Instrument[snap]{{
+				Measurement: Measurement[snap]{
 					Name: "I", Requires: []Capability{"missing"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
 				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse},
 			}},
 		}
 
-		tbl := Table[s9]{Signals: []Signal[s9]{fire, quiet, incapable}, Interval: time.Second}
+		tbl := Table[snap]{Signals: []Signal[snap]{fire, quiet, incapable}, Interval: time.Second}
 		env := NewEnvironment("c")
 		e, err := NewEngine(tbl)
 		Expect(err).ToNot(HaveOccurred())
 
-		fired, readiness := e.Observe(s9{v: 3.0}, env, time.Unix(6_000_000, 0))
+		fired, readiness := e.Observe(snap{v: 3.0}, env, time.Unix(6_000_000, 0))
 
 		Expect(readiness).To(HaveLen(3), "one readiness row per signal, in table order")
 		Expect(readiness[0].Signal).To(Equal("F"))
@@ -437,19 +437,19 @@ var _ = Describe("Engine", func() {
 
 	It("should reset a fired latch the moment its window is AllAbsent when the signal declares release-on-absent, while a non-release signal holds until its own demote clock elapses", func() {
 		// Carries nothing: this spec switches readability through the closures
-		// below, not through the snapshot, so every Observe passes s6{}.
-		type s6 struct{}
+		// below, not through the snapshot, so every Observe passes snap{}.
+		type snap struct{}
 
 		// Readability-switched extractors: when a signal's switch is on, its
 		// window stores an over-fire value; when off, an absence on every tick.
 		onT, onF := true, true
-		mkElem := func(name string, on *bool, release bool) Signal[s6] {
-			return Signal[s6]{
+		mkElem := func(name string, on *bool, release bool) Signal[snap] {
+			return Signal[snap]{
 				Name: name, DemoteSpan: 60 * time.Second, ReleaseOnAbsent: release,
-				Instruments: []Instrument[s6]{{
-					Measurement: Measurement[s6]{
+				Instruments: []Instrument[snap]{{
+					Measurement: Measurement[snap]{
 						Name: "I", Requires: []Capability{"c"},
-						Extract: func(s s6) Reading {
+						Extract: func(s snap) Reading {
 							if !*on {
 								return Unknown()
 							}
@@ -463,13 +463,13 @@ var _ = Describe("Engine", func() {
 			}
 		}
 
-		tbl := Table[s6]{Signals: []Signal[s6]{mkElem("T", &onT, true), mkElem("F", &onF, false)}, Interval: time.Second}
+		tbl := Table[snap]{Signals: []Signal[snap]{mkElem("T", &onT, true), mkElem("F", &onF, false)}, Interval: time.Second}
 		env := NewEnvironment("c")
 		e, err := NewEngine(tbl)
 		Expect(err).ToNot(HaveOccurred())
 
 		base := time.Unix(7_000_000, 0)
-		e.Observe(s6{}, env, base) // both readable: both fire
+		e.Observe(snap{}, env, base) // both readable: both fire
 
 		// Give F one more trusted (Ready) tick just inside its demote boundary so
 		// its latch clock restarts from a recent update. The Reset arm and the
@@ -479,7 +479,7 @@ var _ = Describe("Engine", func() {
 		// make the arms observable, F's clock must still be running on the AllAbsent
 		// tick, which means F's window must not yet be empty.
 		onT = false
-		e.Observe(s6{}, env, base.Add(55*time.Second)) // F still readable -> Ready; T freezes, holds
+		e.Observe(snap{}, env, base.Add(55*time.Second)) // F still readable -> Ready; T freezes, holds
 
 		// Silence both and advance past T's demote boundary. T's window (fired at
 		// base, never re-updated) demotes -> AllAbsent -> Reset: released
@@ -488,7 +488,7 @@ var _ = Describe("Engine", func() {
 		// update, has NOT elapsed: F stays fired. T's Reset is what distinguishes
 		// the two on this tick.
 		onF = false
-		fired, readiness := e.Observe(s6{}, env, base.Add(61*time.Second))
+		fired, readiness := e.Observe(snap{}, env, base.Add(61*time.Second))
 
 		byName := make(map[string]bool, len(fired))
 		for _, f := range fired {
@@ -501,7 +501,7 @@ var _ = Describe("Engine", func() {
 		// Once F's own demote boundary passes (base+55s + 60s) F, too, releases on
 		// the clock, so the two converge with the clock alone.
 		onT, onF = false, false
-		firedAfter, _ := e.Observe(s6{}, env, base.Add(116*time.Second))
+		firedAfter, _ := e.Observe(snap{}, env, base.Add(116*time.Second))
 		Expect(firedAfter).To(BeEmpty(), "F releases once its own demote boundary passes")
 	})
 
