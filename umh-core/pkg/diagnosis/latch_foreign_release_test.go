@@ -13,16 +13,18 @@
 // limitations under the License.
 
 // These specs pin the SCALE a fired episode is released on. A latch fires against
-// one mark pair; the clear arm must only release it on a reduction measured
-// against that same pair.
+// one mark pair; a reduction measured against a DIFFERENT pair may act on that
+// episode only when its own number is decisive, past its own clear or past its
+// own fire. A foreign number with no verdict of its own leaves the episode
+// alone, even when it would read as a release on the pair that fired.
 //
 // The two shapes below are both real, and a fix that satisfies one while breaking
 // the other is the trap here:
 //
 //   - Different pairs. A signal answers one question two ways, in different units
 //     and opposite polarities (spare cores falling is bad; usage fraction rising
-//     is bad). The foreign arm's number must not release an episode it never
-//     measured.
+//     is bad). A foreign arm sitting in its own hold band must not release an
+//     episode it never measured.
 //   - One shared pair. A p95 and the mean fallback behind it share their pair and
 //     differ only in minimum sample count, so selection moves to the p95 the tick
 //     it reaches that minimum, on every start. Recovery must still release. Gating
@@ -73,11 +75,12 @@ var _ = Describe("Latch release is judged on the pair the episode fired under", 
 		Expect(f.Instrument).To(Equal("host-headroom"))
 
 		// The headroom arm is gone; a different instrument now measures a fraction.
-		// 0.55 sits inside the fraction arm's own HOLD band (between its clear 0.60
-		// and fire 0.70), so on its own marks it holds — but under the cores arm the
-		// same 0.55 is on the releasing side of a 0.5 clear. The episode was fired
+		// 0.65 sits inside the fraction arm's own HOLD band, between its clear of
+		// 0.60 and its fire of 0.70, so that arm has no verdict of its own to
+		// offer. Read against the CORES clear of 0.5 the same 0.65 looks like a
+		// release, and that is the mistake this spec catches: the episode was fired
 		// by the cores arm, so a fraction cannot be what declares its recovery.
-		l.Update("usage-fraction", Reduced{v: 0.55, state: StateValue}, full, usage, t0.Add(time.Second))
+		l.Update("usage-fraction", Reduced{v: 0.65, state: StateValue}, full, usage, t0.Add(time.Second))
 		f, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "a different instrument's value inside its own hold band does not release the fired episode")
 		Expect(f.Instrument).To(Equal("host-headroom"), "the held episode keeps the instrument that fired it")
@@ -145,6 +148,24 @@ var _ = Describe("Latch release is judged on the pair the episode fired under", 
 			"the p95 must hold selection at the end, or this spec never leaves the arm that fired and proves nothing")
 		Expect(last).To(BeEmpty(),
 			"a quiet signal must release even though the arm that fired it is no longer selected")
+	})
+
+	It("should release the episode when a different instrument crosses its OWN clear", func() {
+		t0 := time.Unix(1_000_000, 0)
+		l := NewLatch(Identity{Signal: "s"})
+
+		l.Update("host-headroom", Reduced{v: -0.2, state: StateValue}, full, headroom, t0)
+		_, fired := l.Fired()
+		Expect(fired).To(BeTrue(), "a value below the cores fire mark fires the latch")
+
+		// The half of the rule the hold above does not cover. 0.40 is past the
+		// fraction arm's own clear of 0.60, so unlike 0.65 that arm HAS a verdict,
+		// and it says healthy. Holding on regardless is the stuck-degraded bug: the
+		// cores arm cannot contradict it, because a foreign arm is only selected
+		// when the arm that fired has stopped answering.
+		l.Update("usage-fraction", Reduced{v: 0.40, state: StateValue}, full, usage, t0.Add(time.Second))
+		_, fired = l.Fired()
+		Expect(fired).To(BeFalse(), "an arm past its own clear ends an episode nothing else can still measure")
 	})
 
 	It("should still release on the instrument that fired the episode when its own clear is crossed", func() {
@@ -218,11 +239,11 @@ var _ = Describe("Latch release is judged on the pair the episode fired under", 
 		Expect(fired[0].Instrument).To(Equal("host-headroom"))
 
 		// The headroom arm's read fails this tick, so it reduces to untrusted and
-		// resolve hands over to the usage arm, whose 0.55 sits inside its own hold
-		// band. Full coverage is live; under the buggy release the fraction's 0.55
+		// resolve hands over to the usage arm, whose 0.65 sits inside its own hold
+		// band. Full coverage is live; under the buggy release the fraction's 0.65
 		// is read against the cores clear and releases the cores-fired episode.
 		headroomReadable = false
-		fired, readiness := e.Observe(cpuSnap{usage: 0.55}, env, base.Add(5*time.Second))
+		fired, readiness := e.Observe(cpuSnap{usage: 0.65}, env, base.Add(5*time.Second))
 		Expect(readiness).To(HaveLen(1))
 		Expect(readiness[0].Availability).To(Equal(Ready), "the usage arm now answers the question")
 		Expect(fired).To(HaveLen(1), "a change of winning instrument does not release the episode it fired")
