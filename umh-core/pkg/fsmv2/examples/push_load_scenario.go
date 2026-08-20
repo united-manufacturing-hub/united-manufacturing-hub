@@ -157,6 +157,12 @@ type PushLoadConfig struct {
 	// StallFor is how long a stalled push is held. Ignored unless StallEveryNth
 	// is set.
 	StallFor time.Duration
+	// PerMessageCost charges this much per message in a push, independent of
+	// message size. A batch of three at 3.85s exceeds a 10s request timeout, so
+	// this alone produces the observed sawtooth without any bandwidth assumption.
+	// Distinguishing it from a bytes-proportional cost needs a measurement of a
+	// multi-message batch, which does not exist.
+	PerMessageCost time.Duration
 }
 
 // withDefaults returns the config with every unset field filled in.
@@ -529,6 +535,7 @@ func RunPushLoadScenario(ctx context.Context, cfg RunConfig, load PushLoadConfig
 		StallEveryNth:  load.StallEveryNth,
 		StallBurst:     load.StallBurst,
 		StallFor:       load.StallFor,
+		PerMessage:     load.PerMessageCost,
 	}
 	if fault != (testutil.PathFault{}) {
 		mockServer.SetPathFault("/v2/instance/push", fault)
@@ -735,6 +742,7 @@ func pushLoadSummaryFields(
 		deps.Int("stall_every_nth", load.StallEveryNth),
 		deps.Int("stall_burst", load.StallBurst),
 		deps.String("stall_for", load.StallFor.String()),
+		deps.String("per_message_cost", load.PerMessageCost.String()),
 		deps.Duration("http_timeout", load.HTTPTimeout),
 		deps.Int("offered_bytes_per_second", load.Subscribers*load.PayloadBytes),
 	}

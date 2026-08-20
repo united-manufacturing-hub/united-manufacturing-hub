@@ -93,6 +93,18 @@ type PathFault struct {
 	// StallFor is how long a stalled request is held. Ignored unless
 	// StallEveryNth is set.
 	StallFor time.Duration
+	// PerMessage charges a cost per message in the request body, independent of
+	// how big those messages are. It is applied on the push path only, after the
+	// body is decoded, so it models server-side per-message work rather than
+	// anything about the link.
+	//
+	// It exists because "the cost scales with batch size" does NOT imply "the cost
+	// scales with bytes", and the two are indistinguishable in the only field
+	// measurement available: that was taken where every request carries exactly
+	// one message. Without this dial the other fault modes do not span the
+	// hypothesis space, and a fit would be attributed to bandwidth when a
+	// per-message cost explains it equally well.
+	PerMessage time.Duration
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.
@@ -311,6 +323,18 @@ func (m *MockRelayServer) handlePush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 
 		return
+	}
+
+	// Charged after decoding, because it is a per-message cost and the count is
+	// only known here.
+	if fault, ok := m.pathFault(r.URL.Path); ok && fault.PerMessage > 0 && len(payload.UMHMessages) > 0 {
+		select {
+		case <-time.After(time.Duration(len(payload.UMHMessages)) * fault.PerMessage):
+		case <-r.Context().Done():
+			return
+		case <-m.closing:
+			return
+		}
 	}
 
 	m.mu.Lock()

@@ -52,6 +52,7 @@ func main() {
 		stallEveryNth = flag.Int("stall-every-nth", 0, "push-load: stall every Nth push request; 0 disables")
 		stallBurst    = flag.Int("stall-burst", 1, "push-load: consecutive stalled pushes per period")
 		stallFor      = flag.Duration("stall-for", 0, "push-load: how long a stalled push is held")
+		perMessage    = flag.Duration("per-message-cost", 0, "push-load: server cost per message in a push, size-independent")
 		httpTimeout   = flag.Duration("http-timeout", 10*time.Second, "push-load: per-request timeout; production is 10s")
 	)
 
@@ -209,6 +210,7 @@ func main() {
 			QueueCapacity:           *queueCapacity,
 			StallEveryNth:           *stallEveryNth,
 			StallBurst:              *stallBurst,
+			PerMessageCost:          *perMessage,
 			StallFor:                *stallFor,
 			HTTPTimeout:             *httpTimeout,
 		},
