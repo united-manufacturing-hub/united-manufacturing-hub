@@ -787,6 +787,7 @@ const (
 	ErrDeployTimeout = "ERR_DEPLOY_TIMEOUT"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
+	ErrBridgeNotFound = "ERR_BRIDGE_NOT_FOUND"
 	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
 	// It is retryable because the write failure might be caused by temporary filesystem issues.
 	ErrRetryConfigWriteFailed = "ERR_RETRY_CONFIG_WRITE_FAILED"

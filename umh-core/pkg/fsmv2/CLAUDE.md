@@ -243,7 +243,17 @@ func (w *MyWorker) GetDependencies() *MyDependencies {
 | `CollectObservedState` | Always — worker-specific snapshot |
 | `DeriveDesiredState` | Custom children specs (application, communicator) or non-standard config parsing |
 | `GetInitialState` | Worker does NOT register via fsmv2.RegisterInitialState (e.g., push, pull) |
-| `GetDependenciesAny() any { return nil }` | No-deps worker. `WorkerBase[..., struct{}]` boxes `struct{}{}` into `any`, which is non-nil and silently skips framework metrics injection. The override returns a true nil to prevent that. |
+
+Never override `GetDependenciesAny`. **Framework telemetry is decided by the type you
+bind**: a `TDeps` embedding `*deps.BaseDependencies` receives framework metrics and
+action history, a `TDeps` of `struct{}` receives neither, whatever the accessor
+returns.
+
+Neither delivery path checks the bound value for nil. Both type-assert on it, and they
+assert on different method sets: the collector wants the `BaseDependencies` getters
+(`GetFrameworkState`, `GetActionHistory`, `MetricsRecorder`), while the supervisor
+wants `SetFrameworkState`. `struct{}{}` and `nil` satisfy neither, so overriding the
+accessor to return nil changes nothing.
 
 ## Worker Registration
 

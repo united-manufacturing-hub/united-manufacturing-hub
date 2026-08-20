@@ -24,15 +24,16 @@ import (
 )
 
 // simpleWorker runs a MonitorSpec's Poll on the framework's collection cadence.
-// It holds only the immutable MonitorSpec: the worker carries no mutable state,
-// so the same logic serves every simple worker type.
+// It holds the immutable MonitorSpec; per-instance mutable state lives in
+// WorkerBase's deps slot, never in the worker struct, so the same logic serves
+// every simple worker type.
 //
 // The framework-facing status is Status[TStatus]: the developer's poll result
-// wrapped with the health verdict. WorkerBase's deps sentinel is struct{}; the
-// MonitorSpec's own TDeps flows to Poll, not through WorkerBase.
+// wrapped with the health verdict. The bound deps are the author's own TDeps,
+// which is what Poll receives.
 type simpleWorker[TConfig, TStatus, TDeps any] struct {
 	spec MonitorSpec[TConfig, TStatus, TDeps]
-	fsmv2.WorkerBase[TConfig, Status[TStatus], struct{}]
+	fsmv2.WorkerBase[TConfig, Status[TStatus], TDeps]
 }
 
 // newSimpleWorker builds a simpleWorker from its MonitorSpec and framework deps.
@@ -47,9 +48,22 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 	}
 
 	w := &simpleWorker[TConfig, TStatus, TDeps]{spec: spec}
-	w.InitBase(id, logger, sr)
+
+	bd := w.InitBase(id, logger, sr)
+
+	if spec.NewDeps != nil {
+		w.BindDeps(spec.NewDeps(id, bd))
+	}
 
 	return w, nil
+}
+
+// pollDeps returns the value Poll receives. A spec with no NewDeps never binds,
+// and WorkerBase then hands back TDeps' zero value, which is what Poll expects.
+func (w *simpleWorker[TConfig, TStatus, TDeps]) pollDeps() TDeps {
+	d, _ := w.GetDependenciesAny().(TDeps)
+
+	return d
 }
 
 // reasonNoHealthCheck is the verdict reason for a good poll on a worker that
@@ -71,7 +85,7 @@ const reasonNoHealthCheck = "running (no health check)"
 func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 
-	status, err := w.spec.Poll(ctx, w.spec.Deps, cfg)
+	status, err := w.spec.Poll(ctx, w.pollDeps(), cfg)
 	if err != nil {
 		return fsmv2.NewObservation(Status[TStatus]{
 			// We can use status here as the result, even on error, to preserve
@@ -92,11 +106,4 @@ func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context
 		Degraded: verdict.Degraded,
 		Reason:   verdict.Reason,
 	}), nil
-}
-
-// GetDependenciesAny returns a true nil: simpleWorker has no per-instance
-// framework deps, and WorkerBase[..., struct{}] would otherwise box struct{}{}
-// into a non-nil any, silently skipping the collector's metrics injection.
-func (w *simpleWorker[TConfig, TStatus, TDeps]) GetDependenciesAny() any {
-	return nil
 }
