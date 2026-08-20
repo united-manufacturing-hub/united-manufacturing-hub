@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// cpuTable declares five signals — throttling, pressure, steal, saturation and
+// cpuTable declares five signals — steal, throttling, pressure, saturation and
 // limit-saturation — and two measurements, host-busy and usage-cores.
 //
 // cpuTable is the CPU declaration, built by a function because two marks and
@@ -68,13 +68,18 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 			},
 		},
 		Signals: []diagnosis.Signal[Sample]{
+			// Steal leads the three starvation signals because declaration
+			// position is Rank's last tie-break. Severity is clamped to 1, so two
+			// signals both at or past their worst value tie there, and under load
+			// that tie is the common case. Steal is the one a reader needs first:
+			// it says the contention is not ours.
+			stealSignal(),
 			// Requires: HasLimit, the same gate limitSaturationSignal has below —
 			// but throttling's marks (0.05/0.03) are fixed ratios that don't scale
 			// with the quota, so it can sit here unconditionally instead of
 			// needing the conditional append limitSaturationSignal gets.
 			throttlingSignal(),
 			pressureSignal(),
-			stealSignal(),
 		},
 	}
 	// Only when the core count was readable. cores <= 0 means both /proc/cpuinfo
