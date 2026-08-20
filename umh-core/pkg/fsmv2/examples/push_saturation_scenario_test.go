@@ -78,11 +78,20 @@ const (
 	// as make(chan *models.UMHMessage, 100).
 	outboundCapacity = 100
 
-	// How many messages each arm starts with on the channel. Below capacity on
-	// purpose: a full channel would refuse the producer's first offer before any
-	// console, healthy or not, had a chance to drain, and the control arm would
-	// record a drop that says nothing about backpressure.
-	preloadCount = 90
+	// How many messages each arm starts with on the channel: the channel's full
+	// capacity, deliberately.
+	//
+	// This was 90, chosen so the healthy arm would not record a startup drop. That
+	// was a mistake with a large consequence: at 90 every arm ended at 91/100 and
+	// refused nothing, so a file named push_saturation never saturated. It also
+	// changed which arms match, because state_running.go tests
+	// ConsecutiveErrors >= 3 BEFORE pending >= 100 — at 90 a never-succeeding
+	// console reaches 3 errors long before pending reaches 100, gets stuck in
+	// Degraded, and can never log another Running -> Degraded reason.
+	//
+	// The healthy arm's startup drop is real and is now expected rather than
+	// engineered away.
+	preloadCount = outboundCapacity
 
 	// The producer's rate, matching the subscriber's one status message per
 	// second per subscriber.
@@ -91,9 +100,12 @@ const (
 	pushPath = "/v2/instance/push"
 	pullPath = "/v2/instance/pull"
 
-	// The marker the customer's log carries and the one this scenario hunts.
-	// It comes from push/action/push.go:retryPending.
-	budgetExpiredMarker = "context canceled during retry"
+	// The budget-expiry error. This must be the DEADLINE text, not the
+	// "context canceled during retry" wrapper around it: retryPending wraps
+	// whatever ctx.Err() happens to be, so the wrapper also matches an ordinary
+	// shutdown. An earlier version of this file matched the wrapper and counted a
+	// teardown (duration_ms 1899, "context canceled") as a budget expiry.
+	budgetExpiredMarker = "context deadline exceeded"
 )
 
 // phase applies a console behaviour at a point during the run, so one arm can
@@ -209,33 +221,16 @@ type signature struct {
 	outboundCap      int
 }
 
-// matchesCustomerLog reports whether an arm produced the pattern the customer's
-// log shows, which is a conjunction and not a single marker.
-//
-// budgetExpired alone does NOT identify a cause: the burst-then-hang arm produces
-// it too, by a different route. What separates the two is where the push child
-// degraded from and whether it threw messages away as unparseable:
-//
-//   - the customer degraded on QUEUE DEPTH 176 times and on CONSECUTIVE ERRORS
-//     only 8 times, a ratio of 22 to 1. Depth is what trips when pushes are
-//     succeeding: there is no error count to trip on.
-//   - the customer logged dropping_poison_message ZERO times, so no route that
-//     works by dropping unclassifiable errors was active.
-func (s signature) matchesCustomerLog() bool {
-	return s.budgetExpired > 0 && s.degradedOnDepth > 0 && s.poisonDropped == 0
-}
-
 func (s signature) String() string {
 	return fmt.Sprintf(
 		"budgetExpired=%d otherPushFailed=%d poisonDropped=%d "+
 			"degradedOnDepth=%d degradedOnErrors=%d resets=%d pendingDropped=%d "+
 			"pullDropped=%d pushRequests=%d pushesHandled=%d "+
-			"status(accepted=%d dropped=%d) outbound=%d/%d match=%t",
+			"status(accepted=%d dropped=%d) outbound=%d/%d",
 		s.budgetExpired, s.otherPushFailed, s.poisonDropped,
 		s.degradedOnDepth, s.degradedOnErrors, s.resets, s.pendingDropped,
 		s.pullDropped, s.pushRequests, s.pushesHandled,
-		s.statusAccepted, s.statusDropped, s.maxOutboundLen, s.outboundCap,
-		s.matchesCustomerLog())
+		s.statusAccepted, s.statusDropped, s.maxOutboundLen, s.outboundCap)
 }
 
 // scanLog counts the signature markers in the JSON log the run emitted.
@@ -284,6 +279,14 @@ func scanLog(raw string) signature {
 		case "dropping_poison_message":
 			sig.poisonDropped++
 		case "state_transition":
+			// The pull child emits the same depth and error strings as the push
+			// child, so this must filter by worker. Without it, stalled-pull
+			// reports a degrade whose push side is identical to healthy.
+			worker, _ := m["worker"].(string)
+			if !strings.Contains(worker, "push-") {
+				continue
+			}
+
 			reason, _ := m["reason"].(string)
 
 			switch {
@@ -363,41 +366,45 @@ func runArm(httpTimeout time.Duration, phases []phase) signature {
 	return sig
 }
 
-var _ = Describe("Which console behaviour reproduces the push saturation signature", Serial, func() {
-	// Every arm is identical except for what the console does: same duration,
-	// same preload, same producer rate. A difference in outcome is therefore
-	// attributable to the console's behaviour and nothing else.
+var _ = Describe("How the push child behaves under five console behaviours", Serial, func() {
+	// RETRACTED CONCLUSION, kept as a warning rather than deleted.
 	//
-	// No arm asserts on resets. The customer saw 25 push_reset_cleared events
-	// over 87 minutes, roughly one every 3.5 minutes, and no arm here runs long
-	// enough to expect one. They are reported, not asserted.
+	// This file was written to identify a cause: it asserted that only a
+	// slowly-succeeding console produces a push-child queue-depth degrade, and
+	// therefore that the customer's log identified that console behaviour. That
+	// conclusion does not hold, for two independent reasons.
+	//
+	// First, the customer-log comparison behind it was invalid. All the
+	// depth-degrade lines belong to the push child and all the error-degrade lines
+	// belong to the PULL child, which logged separately. The push child logged no
+	// error-degrades at all, and state_degraded.go explains why: it leaves Degraded
+	// only at ConsecutiveErrors == 0, and the retry tracker has no decay, so once
+	// the push child errors it is stuck and can never log another
+	// Running -> Degraded reason. Its silence is structural, not informative.
+	//
+	// Second, the discrimination this file measured turned out to be a function of
+	// preloadCount rather than of the console. See the comment on that constant.
+	//
+	// So the arms below record what each console behaviour does. They no longer
+	// claim any of it identifies a cause. For the load result that does hold, see
+	// push_dose_response_test.go in this package.
 
 	fail502 := func(m *testutil.MockRelayServer) {
 		m.SetPathFault(pushPath, testutil.PathFault{StatusCode: 502})
 	}
 
-	// The control. A console that answers everything must match nothing. If this
-	// arm reports an expired budget or a degrade, the harness is manufacturing
-	// them and no other arm in this file means anything.
-	It("a console that always answers matches nothing", func() {
+	It("a console that always answers delivers everything", func() {
 		sig := runArm(20*time.Second, nil)
 
 		GinkgoWriter.Printf("ARM healthy: %s\n", sig)
 
 		Expect(sig.pushesHandled).To(BeNumerically(">=", preloadCount),
 			"the whole preload must get through, or the arm is not exercising the push path")
-		Expect(sig.budgetExpired).To(Equal(0))
-		Expect(sig.degradedOnDepth).To(Equal(0))
-		Expect(sig.statusDropped).To(Equal(0),
-			"nothing is dropped while the console drains the channel")
-		Expect(sig.matchesCustomerLog()).To(BeFalse())
+		Expect(sig.budgetExpired).To(Equal(0),
+			"nothing should run out of budget against a console that answers at once")
 	})
 
-	// The arm that matches. A failure burst loads the pending list, then the
-	// console recovers to slow-but-working. Phase 1 crawls that list one message
-	// per request, so the queue grows on depth while no errors accumulate, and
-	// the 30s budget dies inside a request.
-	It("a failure burst followed by a slow console matches the customer's log", func() {
+	It("a failure burst followed by a slow console runs out of budget", func() {
 		sig := runArm(20*time.Second, []phase{
 			{at: 0, apply: fail502},
 			{at: recoveryAt, apply: func(m *testutil.MockRelayServer) {
@@ -410,19 +417,11 @@ var _ = Describe("Which console behaviour reproduces the push saturation signatu
 		Expect(sig.pushesHandled).To(BeNumerically(">", 0),
 			"the recovery phase must actually deliver, or this is not a slow-success arm")
 		Expect(sig.budgetExpired).To(BeNumerically(">", 0),
-			"the retry loop must run out of budget")
-		Expect(sig.degradedOnDepth).To(BeNumerically(">", 0),
-			"a succeeding-but-slow console degrades on queue depth, since no errors accumulate")
-		Expect(sig.poisonDropped).To(Equal(0),
-			"nothing is unclassifiable here, so nothing is dropped as poison")
-		Expect(sig.matchesCustomerLog()).To(BeTrue())
+			"one message per request against a 4s console must exhaust the 30s budget")
 	})
 
-	// The reading the thread assumed. It DOES produce the customer's headline
-	// error, which is the point of running it: that marker alone identifies
-	// nothing. It is separable on the other two counts.
-	It("a console that never answers produces the same error but not the same log", func() {
-		sig := runArm(2*time.Second, []phase{
+	It("a console that never answers accepts nothing", func() {
+		sig := runArm(20*time.Second, []phase{
 			{at: 0, apply: fail502},
 			{at: recoveryAt, apply: func(m *testutil.MockRelayServer) {
 				m.SetPathFault(pushPath, testutil.PathFault{Hang: true})
@@ -431,33 +430,24 @@ var _ = Describe("Which console behaviour reproduces the push saturation signatu
 
 		GinkgoWriter.Printf("ARM burst-then-hang: %s\n", sig)
 
+		Expect(sig.pushRequests).To(BeNumerically(">", 0),
+			"the arm must reach the push endpoint")
 		Expect(sig.pushesHandled).To(Equal(0),
 			"a hanging console must accept nothing, or the fault did not apply")
-		Expect(sig.budgetExpired).To(BeNumerically(">", 0),
-			"a stalled console reaches the same error as the slow one, by a different route")
-		Expect(sig.matchesCustomerLog()).To(BeFalse(),
-			"it must still be separable from the customer's log on depth-degrades or poison drops")
 	})
 
-	// A console that fails fast throughout. Errors accumulate, so the child
-	// degrades on the error count rather than on queue depth.
-	It("a console returning 502 throughout does not match", func() {
+	It("a console returning 502 throughout accepts nothing", func() {
 		sig := runArm(20*time.Second, []phase{{at: 0, apply: fail502}})
 
 		GinkgoWriter.Printf("ARM 502-throughout: %s\n", sig)
 
-		Expect(sig.pushesHandled).To(Equal(0),
-			"a 502 must accept nothing, or the fault did not apply")
 		Expect(sig.pushRequests).To(BeNumerically(">", 0),
 			"the arm must reach the push endpoint")
-		Expect(sig.matchesCustomerLog()).To(BeFalse())
+		Expect(sig.pushesHandled).To(Equal(0),
+			"a 502 must accept nothing, or the fault did not apply")
 	})
 
-	// Does a broken pull produce the push signature? Push and pull share a
-	// transport and an HTTP client. The customer's log shows the pull side clean
-	// (pull_reset_cleared pending_dropped=0 on all 25 resets); if a stalled pull
-	// were sufficient, that observation would narrow nothing.
-	It("a stalled pull with a healthy push does not match", func() {
+	It("a stalled pull leaves the push side working", func() {
 		sig := runArm(20*time.Second, []phase{
 			{at: 0, apply: func(m *testutil.MockRelayServer) {
 				m.SetPathFault(pullPath, testutil.PathFault{Hang: true})
@@ -467,9 +457,8 @@ var _ = Describe("Which console behaviour reproduces the push saturation signatu
 		GinkgoWriter.Printf("ARM stalled-pull: %s\n", sig)
 
 		Expect(sig.pushesHandled).To(BeNumerically(">", 0),
-			"push must keep working while pull is stalled, or the arm proves nothing about push")
+			"push must keep working while pull is stalled")
 		Expect(sig.budgetExpired).To(Equal(0),
 			"a stalled pull must not spend the push child's budget")
-		Expect(sig.matchesCustomerLog()).To(BeFalse())
 	})
 })
