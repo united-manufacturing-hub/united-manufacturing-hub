@@ -126,7 +126,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	It("reports a fired parent's refinement nested under it, warm over ten ticks, not as a top-level entry beside it", func() {
 		e := engineOver(parentOver(refinement("C", 0, Mean, func(s snap) float64 { return s.first })))
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
 		}
 
@@ -460,7 +460,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		e := engineOver(parentOver(refinement("C", 1, Last, func(s snap) float64 { return s.first }, nested)))
 
 		var warm []Fired
-		for i := 0; i <= 10; i++ {
+		for i := range 11 {
 			warm, _ = e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
 		}
 
