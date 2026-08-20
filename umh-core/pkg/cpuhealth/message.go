@@ -36,9 +36,9 @@ import (
 //
 // One paragraph per cause, except that the two capacity causes share one:
 // speaksForCapacity says which of the pair writes it.
-func ComposeMessage(verdict Verdict, signals Details) string {
+func ComposeMessage(verdict Verdict, details Details) string {
 	if verdict.State != StateDegraded || len(verdict.Causes) == 0 {
-		return composeHealthy(signals)
+		return composeHealthy(details)
 	}
 
 	headline := causeHeadline(verdict.Causes[0].Kind)
@@ -48,11 +48,11 @@ func ComposeMessage(verdict Verdict, signals Details) string {
 		if !speaksForCapacity(c, verdict.Causes) {
 			continue
 		}
-		parts = append(parts, causeDetails(c, verdict.Causes, verdict.Attribution, signals))
+		parts = append(parts, causeDetails(c, verdict.Causes, verdict.Attribution, details))
 	}
-	details := strings.Join(parts, "\n\n")
+	body := strings.Join(parts, "\n\n")
 
-	return headline + technicalDetails + details
+	return headline + technicalDetails + body
 }
 
 // composeHealthy renders the two-layer healthy budget message. The displayed
@@ -64,12 +64,12 @@ func ComposeMessage(verdict Verdict, signals Details) string {
 // Technical Details dashboard lists only the applicable alert-rule budgets:
 // headroom always, then throttle/pressure/steal each only when its rule
 // applies.
-func composeHealthy(signals Details) string {
+func composeHealthy(details Details) string {
 	// Zero-capacity guard: when CapacityCores is 0, do not compose the garbled
 	// "0.0 of 0 cores, -1.0 headroom" budget dashboard. Return a safe string
 	// that conveys monitoring-unavailability; the State on the wire stays
 	// healthy per the binary contract. It is an early return, not a prefix.
-	if signals.CapacityCores == 0 {
+	if details.CapacityCores == 0 {
 		return cpuMonitoringUnavailable
 	}
 
@@ -79,12 +79,12 @@ func composeHealthy(signals Details) string {
 	// "CPU: starting up." line alone. It lasts one tick after each start and
 	// respawn, and it is not the zero-capacity case (a standing state) — they
 	// share a rendering path and nothing else.
-	if signals.LimitApplies {
-		if !signals.UsageRingActive {
+	if details.LimitApplies {
+		if !details.UsageRingActive {
 			return cpuStartingUp
 		}
 	} else {
-		if !signals.HostBusyRingActive || !signals.HostBusyCoresAvailable {
+		if !details.HostBusyRingActive || !details.HostBusyCoresAvailable {
 			return cpuStartingUp
 		}
 	}
@@ -92,13 +92,13 @@ func composeHealthy(signals Details) string {
 	// The display figures. ReserveCores is read from Details in both modes —
 	// Decide filled it from the verdict's own reserve — never from the constant.
 	var usedDisp, reserveDisp float64
-	if signals.LimitApplies {
-		usedDisp = round1(signals.AvgUsageCores)
+	if details.LimitApplies {
+		usedDisp = round1(details.AvgUsageCores)
 	} else {
-		usedDisp = round1(signals.AvgHostBusyCores)
+		usedDisp = round1(details.AvgHostBusyCores)
 	}
-	reserveDisp = round1(signals.ReserveCores)
-	totalDisp := round1(signals.CapacityCores)
+	reserveDisp = round1(details.ReserveCores)
+	totalDisp := round1(details.CapacityCores)
 	headroomDisp := round1(totalDisp - usedDisp - reserveDisp) // clears float residue, not an independent rounding
 
 	usedStr := fmtCores1(usedDisp)
@@ -113,7 +113,7 @@ func composeHealthy(signals Details) string {
 	totalTooSmallToPct := totalDisp <= 0
 
 	var headline string
-	if signals.LimitApplies && !totalTooSmallToPct {
+	if details.LimitApplies && !totalTooSmallToPct {
 		pctOfLimit := pctOf(usedDisp / totalDisp)
 		if headroomDisp < 0.05 {
 			headline = fmt.Sprintf(headlineLimitClose, usedStr, totalStr, pctOfLimit)
@@ -122,7 +122,7 @@ func composeHealthy(signals Details) string {
 		}
 	} else {
 		subject := subjectTheMachine
-		if signals.LimitApplies {
+		if details.LimitApplies {
 			subject = subjectThisInstance
 		}
 		if headroomDisp < 0.05 {
@@ -134,15 +134,15 @@ func composeHealthy(signals Details) string {
 
 	msg := headline
 
-	if signals.LimitedVisibility {
+	if details.LimitedVisibility {
 		msg += "\n" + limitedVisibilityNote
 	}
-	if !signals.HostHeadroomAvailable && signals.HostCpus > 0 {
+	if !details.HostHeadroomAvailable && details.HostCpus > 0 {
 		// The host-headroom sentence, with the two core counts substituted. The HostCpus >
 		// 0 half is the ScopeUnknown case: on an unknown machine count the
 		// bare float64 stays 0 and the sentence is withheld silently.
 		msg += "\n" + fmt.Sprintf("host headroom unavailable: this container is pinned to %s of %s CPUs",
-			fmtCoresTotal(signals.LogicalCpus), fmtCoresTotal(signals.HostCpus))
+			fmtCoresTotal(details.LogicalCpus), fmtCoresTotal(details.HostCpus))
 	}
 
 	// The budget body. Headroom is unconditional; each of throttle, pressure
@@ -150,20 +150,20 @@ func composeHealthy(signals Details) string {
 	// are the per-signal readiness trio, never the capability flags — a
 	// LimitApplies/PressureApplies/StealApplies build prints a confident 0% for a
 	// reading that never happened.
-	details := []string{
+	budget := []string{
 		fmt.Sprintf(headroomLine, headroomStr, totalStr, usedStr, reserveStr),
 	}
-	if signals.ThrottleSignalReady {
-		details = append(details, fmt.Sprintf(throttleLine, pctOf(signals.ThrottleRatio)))
+	if details.ThrottleSignalReady {
+		budget = append(budget, fmt.Sprintf(throttleLine, pctOf(details.ThrottleRatio)))
 	}
-	if signals.PressureSignalReady {
-		details = append(details, fmt.Sprintf(pressureLine, pctOf(signals.PressureAvg60)))
+	if details.PressureSignalReady {
+		budget = append(budget, fmt.Sprintf(pressureLine, pctOf(details.PressureAvg60)))
 	}
-	if signals.StealSignalReady {
-		details = append(details, fmt.Sprintf(stealLine, pctOf(signals.StealP95)))
+	if details.StealSignalReady {
+		budget = append(budget, fmt.Sprintf(stealLine, pctOf(details.StealP95)))
 	}
 
-	return msg + technicalDetails + strings.Join(details, " ")
+	return msg + technicalDetails + strings.Join(budget, " ")
 }
 
 // causeHeadline returns the one-line headline naming a cause kind.
@@ -260,10 +260,10 @@ func speakingCause(causes []Cause) Cause {
 // limit, which is the case whose two remedies have to be blended into one
 // sentence, and failing that whose load filled the machine, which
 // fullMachineDetail answers.
-func causeDetails(c Cause, causes []Cause, attribution Attribution, signals Details) string {
+func causeDetails(c Cause, causes []Cause, attribution Attribution, details Details) string {
 	switch c.Kind {
 	case CauseKindThrottling:
-		return fmt.Sprintf(detailThrottling, pctOf(signals.ThrottleRatio))
+		return fmt.Sprintf(detailThrottling, pctOf(details.ThrottleRatio))
 	case CauseKindPressure:
 		return fmt.Sprintf(detailPressure, pctOf(c.Value))
 	case CauseKindSteal:
@@ -274,12 +274,12 @@ func causeDetails(c Cause, causes []Cause, attribution Attribution, signals Deta
 		// The host-unreadable clause still appends afterward, unaffected by
 		// which sentence came before it.
 		var detail string
-		if signals.CapacityCores == 0 {
+		if details.CapacityCores == 0 {
 			detail = detailSatCapacityUnavailable
 		} else {
-			detail = fmt.Sprintf(detailSatLimit, pctOf(signals.AvgUsageCores/signals.CapacityCores))
+			detail = fmt.Sprintf(detailSatLimit, pctOf(details.AvgUsageCores/details.CapacityCores))
 		}
-		if !signals.HostBusyCoresAvailable {
+		if !details.HostBusyCoresAvailable {
 			detail += detailSatHostUnavail
 		}
 
@@ -289,28 +289,28 @@ func causeDetails(c Cause, causes []Cause, attribution Attribution, signals Deta
 		case instUsageFraction:
 			// The estimate from our own usage. The no-PSI wording is the one
 			// that earns the pressure-stats advice.
-			if signals.PressureApplies {
+			if details.PressureApplies {
 				return fmt.Sprintf(detailSatNoStatsPSI, pctOf(c.Value))
 			}
 
 			return fmt.Sprintf(detailSatNoStatsNoPSI, pctOf(c.Value))
 		case instHostHeadroom:
 			if hasKind(causes, CauseKindContainerLimitFull) {
-				return fmt.Sprintf(detailSatBothAtLimit, fmtCoresTotal(round1(signals.CapacityCores)))
+				return fmt.Sprintf(detailSatBothAtLimit, fmtCoresTotal(round1(details.CapacityCores)))
 			}
-			if signals.LimitApplies {
+			if details.LimitApplies {
 				return fullMachineDetail(attribution)
 			}
-			if !signals.HostBusyCoresAvailable {
+			if !details.HostBusyCoresAvailable {
 				return detailSatNoLimitUnavail
 			}
 			var detail string
-			if signals.CapacityCores == 0 {
+			if details.CapacityCores == 0 {
 				detail = detailSatCapacityUnavailable
 			} else {
-				detail = fmt.Sprintf(detailSatNoLimitRead, pctOf(signals.AvgHostBusyCores/signals.CapacityCores))
+				detail = fmt.Sprintf(detailSatNoLimitRead, pctOf(details.AvgHostBusyCores/details.CapacityCores))
 			}
-			if signals.LimitedVisibility {
+			if details.LimitedVisibility {
 				detail += detailSatNoLimitClause
 			}
 
@@ -341,12 +341,12 @@ func fullMachineDetail(attribution Attribution) string {
 
 // fullMachineBlock returns the machine-full refusal line for one attribution,
 // fullMachineDetail's pair.
-func fullMachineBlock(attribution Attribution, signals Details) string {
+func fullMachineBlock(attribution Attribution, details Details) string {
 	switch attribution {
 	case AttributionContainer:
 		return blockHostFullContainer
 	case AttributionHost:
-		if signals.LimitApplies {
+		if details.LimitApplies {
 			return blockHostFull
 		}
 
@@ -363,7 +363,7 @@ func fullMachineBlock(attribution Attribution, signals Details) string {
 // It reads the attribution for the same reason, and asks the ranked causes the
 // same blend question first. An unknown kind falls back to the generic degraded
 // message.
-func BlockReason(causes []Cause, attribution Attribution, signals Details) string {
+func BlockReason(causes []Cause, attribution Attribution, details Details) string {
 	if len(causes) == 0 {
 		return blockPrefix + blockGeneric
 	}
@@ -390,7 +390,7 @@ func BlockReason(causes []Cause, attribution Attribution, signals Details) strin
 			if hasKind(causes, CauseKindContainerLimitFull) {
 				cause = blockHostFull
 			} else {
-				cause = fullMachineBlock(attribution, signals)
+				cause = fullMachineBlock(attribution, details)
 			}
 		case instUsageFraction:
 			cause = blockNoHostStats

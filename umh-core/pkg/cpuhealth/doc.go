@@ -38,14 +38,19 @@
 //	          engine from that same table.
 //	verdict   Decide(engine, sample, env) calls Engine.Observe and returns a
 //	          Verdict and a Details. DeriveEnvironment(sample) builds the env.
-//	message   ComposeMessage(verdict, signals) renders the customer-facing text;
-//	          BlockReason renders the line refusing a new bridge.
+//	message   ComposeMessage(verdict, details) renders the customer-facing text;
+//	          BlockReason renders the line refusing a new bridge: a data
+//	          pipeline the customer adds to this instance, and one more
+//	          consumer of the CPU judged above.
 //
 // # What it measures
 //
 // Five questions, asked each tick. The verdict is degraded when any of them
-// fires. Each question's thresholds are declared beside it in a signal_*.go
-// file; this doc names none of them.
+// fires. A question fires when its number crosses the threshold declared
+// beside it, and stays fired until the number comes back past a second
+// threshold on the healthier side; pkg/diagnosis holds that state and drives
+// the crossings. Each question's thresholds live in its own signal_*.go file;
+// this doc names none of them.
 //
 //	steal                 Something outside this box is taking CPU we were
 //	                      scheduled to get. Asked only on a virtualized host.
@@ -59,15 +64,39 @@
 //	container-limit-full  Our own usage has come close to our own limit.
 //	                      Declared only where a positive quota exists.
 //
+// "Asked only" and "Declared only" are different restrictions. Asked only
+// means the row is in the table on every box and its instrument is gated on a
+// capability, so where the box lacks that capability the question is asked and
+// nothing answers it. Declared only means the table leaves the row out
+// altogether, so on such a box there is no question. "Answers only", in the
+// pair below, gates nothing: it picks which of one question's two instruments
+// supplies the number.
+//
 // The host-cpu-full signal is measured two ways, and the first that can
 // answer does:
 //
-//	host-headroom   How many cores are free on the machine, less a
-//	                reserve. Answers only where the sample covers the
-//	                whole machine.
+//	host-headroom   How many cores are free on the machine, less a reserve:
+//	                capacity held back for the other software on the box, so
+//	                the question turns to yes while some cores are still
+//	                free. Answers only where the sample covers the whole
+//	                machine.
 //	usage-fraction  How much of the CPUs we may run on we are using.
 //	                Answers only where there is no CPU limit and no
 //	                pressure statistics, so nothing better can answer.
+//
+// Only the first of those measures the machine. The second measures us, and
+// stands in for the machine: with no limit to overrun and no pressure
+// statistics to read the harm off, a container using most of the CPUs it may
+// run on is the last evidence left that the machine is filling up. It is a
+// stand-in and not the same quantity, which is why it answers only where the
+// instrument that does measure the machine cannot.
+//
+// The machine-wide numbers all come from /proc/stat: the busy time of every
+// CPU, the time a hypervisor took, and the machine's CPU count. Everything
+// else is read from the cgroup's own files. Where /proc/stat cannot be read,
+// steal and host-headroom have nothing to judge, so host-cpu-full is left to
+// usage-fraction and goes unanswered wherever that instrument is not allowed to
+// answer. Throttling, pressure and container-limit-full are unaffected.
 //
 // # Who is to blame
 //
@@ -84,11 +113,18 @@
 // The host-cpu-full signal says nothing by itself about whose load filled the
 // machine, so two refinements narrow it: host-share when the rest of the box
 // accounts for most of the busy time, container-share when we account for most
-// of it. Both read our usage over the machine's busy time, and a share in the
-// narrow band around one half fires neither, which leaves the side already
-// blamed in place. That number needs the machine's busy time and our own usage
-// over the same CPUs, so a box whose /proc/stat is unreadable and a container
-// pinned to a subset of the CPUs both come out unknown.
+// of it. A refinement is an ordinary signal declared under a parent signal,
+// with its own instruments and thresholds, so any signal may carry them.
+// host-cpu-full is the only one that does; pressure declares none, and the
+// ambiguity above is left standing rather than narrowed.
+//
+// Both refinements read our usage over the machine's busy time. That number
+// needs both of its terms measured over the same CPUs, so a box whose
+// /proc/stat is unreadable and a container pinned to a subset of the CPUs both
+// come out unknown. A share in the narrow band around one half crosses neither
+// fire threshold: a refinement that fired earlier stays fired and its answer
+// stands, and where neither has ever fired nothing narrows the full machine to
+// a side and the blame is unknown.
 //
 // The advice moves with the blame. Only a machine filled from outside is
 // answered with "reduce other software running on it"; a machine this instance
