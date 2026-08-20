@@ -42,6 +42,17 @@ func main() {
 		listFlag     = flag.Bool("list", false, "list available scenarios and exit")
 		traceFlag    = flag.Bool("trace", false, "enable trace logging")
 		dumpStore    = flag.Bool("dump-store", false, "dump store deltas and final state after scenario")
+
+		// The push-load scenario's settings. Every other scenario ignores them.
+		bandwidth     = flag.Int("bandwidth", 0, "push-load: bytes/second the push endpoint accepts, 0 means unlimited")
+		subscribers   = flag.Int("subscribers", 2, "push-load: streams, each offering one message per second")
+		payloadBytes  = flag.Int("payload-bytes", 1024, "push-load: bytes per status message")
+		topicCount    = flag.Int("topic-count", 0, "push-load: when non-zero, overrides --payload-bytes with a status message carrying this many topics")
+		queueCapacity = flag.Int("queue-capacity", 100, "push-load: outbound queue capacity; production is 100")
+		stallEveryNth = flag.Int("stall-every-nth", 0, "push-load: stall every Nth push request; 0 disables")
+		stallBurst    = flag.Int("stall-burst", 1, "push-load: consecutive stalled pushes per period")
+		stallFor      = flag.Duration("stall-for", 0, "push-load: how long a stalled push is held")
+		httpTimeout   = flag.Duration("http-timeout", 10*time.Second, "push-load: per-request timeout; production is 10s")
 	)
 
 	flag.Parse()
@@ -190,6 +201,17 @@ func main() {
 		Store:              store,
 		EnableTraceLogging: *traceFlag,
 		DumpStore:          *dumpStore,
+		PushLoad: examples.PushLoadConfig{
+			BandwidthBytesPerSecond: *bandwidth,
+			Subscribers:             *subscribers,
+			PayloadBytes:            *payloadBytes,
+			TopicCount:              *topicCount,
+			QueueCapacity:           *queueCapacity,
+			StallEveryNth:           *stallEveryNth,
+			StallBurst:              *stallBurst,
+			StallFor:                *stallFor,
+			HTTPTimeout:             *httpTimeout,
+		},
 	})
 	if err != nil {
 		if isCleanInterruptExit(err, ctx.Err()) {

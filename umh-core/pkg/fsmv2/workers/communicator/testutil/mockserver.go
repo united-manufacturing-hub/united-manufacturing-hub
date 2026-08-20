@@ -45,6 +45,8 @@ type MockRelayServer struct {
 	// SimulateServerError and SimulateSlowResponse are one-shot and shared by every
 	// path, so neither can hold one endpoint slow while another stays healthy.
 	pathFaults map[string]PathFault
+	// faultedRequests counts requests per path, for StallEveryNth.
+	faultedRequests map[string]int
 	// closing is closed by Close, releasing any request parked by a Hang fault.
 	// httptest.Server.Close waits for outstanding handlers, so a Hang that only
 	// watched the request context would deadlock teardown.
@@ -71,6 +73,26 @@ type PathFault struct {
 	// varies size while holding Delay constant can only ever report "size does
 	// not matter". Added with Delay, both apply.
 	BytesPerSecond int
+	// StallEveryNth is the period of the stall pattern: within each run of
+	// StallEveryNth requests to this path, the first StallBurst of them hang for
+	// StallFor and the rest are untouched. It models what a uniform Delay or
+	// BytesPerSecond cannot: a link whose median request is fast and whose tail
+	// is not.
+	//
+	// StallBurst exists because an isolated slow request leaves no trace in the
+	// agent. A transient failure is absorbed without an action_failed, and a
+	// child only degrades after three CONSECUTIVE errors, so scattered stalls
+	// produce no observable event at all however many there are. Burst length is
+	// therefore a separate dial from duty cycle, not a detail of it.
+	//
+	// It counts rather than randomises, so a run is reproducible. 0 disables it.
+	StallEveryNth int
+	// StallBurst is how many consecutive requests stall at the start of each
+	// period. Defaults to 1 when StallEveryNth is set and this is not.
+	StallBurst int
+	// StallFor is how long a stalled request is held. Ignored unless
+	// StallEveryNth is set.
+	StallFor time.Duration
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.
@@ -81,10 +103,11 @@ func NewMockRelayServer() *MockRelayServer {
 		connectionHeaders: make([]string, 0),
 		jwtToken:          "mock-jwt-token-" + time.Now().Format("20060102150405"),
 		// Bug #6 fix: Default backend UUID - different from any placeholder UUID
-		backendUUID: "backend-real-uuid-12345678",
-		backendName: "Mock Instance Name",
-		pathFaults:  make(map[string]PathFault),
-		closing:     make(chan struct{}),
+		backendUUID:     "backend-real-uuid-12345678",
+		backendName:     "Mock Instance Name",
+		pathFaults:      make(map[string]PathFault),
+		faultedRequests: make(map[string]int),
+		closing:         make(chan struct{}),
 	}
 
 	m.server = httptest.NewServer(http.HandlerFunc(m.handler))
@@ -151,6 +174,23 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		wait := fault.Delay
+
+		if fault.StallEveryNth > 0 && fault.StallFor > 0 {
+			m.mu.Lock()
+			m.faultedRequests[r.URL.Path]++
+			nth := m.faultedRequests[r.URL.Path]
+			m.mu.Unlock()
+
+			burst := fault.StallBurst
+			if burst <= 0 {
+				burst = 1
+			}
+
+			if nth%fault.StallEveryNth < burst {
+				wait += fault.StallFor
+			}
+		}
+
 		if fault.BytesPerSecond > 0 && r.ContentLength > 0 {
 			wait += time.Duration(float64(r.ContentLength) / float64(fault.BytesPerSecond) * float64(time.Second))
 		}

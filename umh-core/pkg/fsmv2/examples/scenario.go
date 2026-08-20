@@ -188,10 +188,9 @@ var Registry = map[string]Scenario{
 	"inheritance":  InheritanceScenario,
 	"communicator": CommunicatorScenarioEntry,
 
-	"push-healthy":    PushHealthyScenarioEntry,
-	"push-overloaded": PushOverloadedScenarioEntry,
-	"concurrent":      ConcurrentScenario,
-	"persistence":     PersistenceScenarioEntry,
+	"push-load":   PushLoadScenarioEntry,
+	"concurrent":  ConcurrentScenario,
+	"persistence": PersistenceScenarioEntry,
 }
 
 // CommunicatorScenarioEntry registers the communicator scenario for CLI access.
@@ -318,6 +317,11 @@ type RunConfig struct {
 	GracefulShutdownTimeout time.Duration
 	EnableTraceLogging      bool
 	DumpStore               bool // Dump store deltas and final state after completion
+	// PushLoad parameterises the push-load scenario: bandwidth, subscriber
+	// count, payload size, queue capacity and HTTP timeout. Every other
+	// scenario ignores it, and its zero value asks push-load for its defaults,
+	// so leaving it unset changes nothing anywhere.
+	PushLoad PushLoadConfig
 }
 
 // ListScenarios returns all registered scenario names and descriptions,
