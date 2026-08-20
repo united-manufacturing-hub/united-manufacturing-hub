@@ -138,9 +138,7 @@ var _ = Describe("NewEngine", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
 		tbl.Measurements = []Measurement[snap]{{Name: "M-against", Extract: extract, Span: 60 * time.Second, Reduction: Last, Against: against}}
 		_, err := NewEngine(tbl)
-		if err == nil {
-			Fail("expected NewEngine to reject a table-level measurement that sets Against")
-		}
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a table-level measurement that sets Against")
 		Expect(err.Error()).To(ContainSubstring("M-against"))
 		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
 	})
@@ -149,9 +147,7 @@ var _ = Describe("NewEngine", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
 		tbl.Measurements = []Measurement[snap]{{Name: "M-requires", Extract: extract, Span: 60 * time.Second, Reduction: Last, Requires: []Capability{"psi"}}}
 		_, err := NewEngine(tbl)
-		if err == nil {
-			Fail("expected NewEngine to reject a table-level measurement that sets Requires")
-		}
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a table-level measurement that sets Requires")
 		Expect(err.Error()).To(ContainSubstring("M-requires"))
 		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
 	})
@@ -160,9 +156,7 @@ var _ = Describe("NewEngine", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
 		tbl.Measurements = []Measurement[snap]{{Name: "M-boolean", Extract: extract, Span: 60 * time.Second, Reduction: Last, Boolean: true}}
 		_, err := NewEngine(tbl)
-		if err == nil {
-			Fail("expected NewEngine to reject a table-level measurement that sets Boolean")
-		}
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a table-level measurement that sets Boolean")
 		Expect(err.Error()).To(ContainSubstring("M-boolean"))
 		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
 	})
@@ -171,9 +165,7 @@ var _ = Describe("NewEngine", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
 		tbl.Measurements = []Measurement[snap]{{Name: "M-counter", Extract: extract, Span: 60 * time.Second, Reduction: Last, Counter: true}}
 		_, err := NewEngine(tbl)
-		if err == nil {
-			Fail("expected NewEngine to reject a table-level measurement that sets Counter")
-		}
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a table-level measurement that sets Counter")
 		Expect(err.Error()).To(ContainSubstring("M-counter"))
 		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
 	})
@@ -469,9 +461,7 @@ var _ = Describe("NewEngine", func() {
 		parent := validSignal("A")
 		parent.Refinements = []Signal[snap]{ref}
 		_, err := NewEngine(validTable([]Signal[snap]{parent}))
-		if err == nil {
-			Fail("expected NewEngine to reject a refinement whose demote span is zero")
-		}
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a refinement whose demote span is zero")
 		Expect(err.Error()).To(ContainSubstring("A/A1"),
 			"the error names the parent and the child, not the bare child")
 	})
@@ -480,9 +470,7 @@ var _ = Describe("NewEngine", func() {
 		parent := validSignal("A")
 		parent.Refinements = []Signal[snap]{validSignal("A1"), validSignal("A1")}
 		_, err := NewEngine(validTable([]Signal[snap]{parent}))
-		if err == nil {
-			Fail("expected NewEngine to reject duplicate sibling refinement names")
-		}
+		Expect(err).To(HaveOccurred(), "NewEngine must reject duplicate sibling refinement names")
 		Expect(err.Error()).To(ContainSubstring("A"))
 		Expect(err.Error()).To(ContainSubstring("A1"))
 	})
@@ -506,9 +494,7 @@ var _ = Describe("NewEngine", func() {
 	// name.
 	It("refuses a top-level signal whose name holds the path separator", func() {
 		_, err := NewEngine(validTable([]Signal[snap]{validSignal("A/X")}))
-		if err == nil {
-			Fail("expected NewEngine to reject a top-level signal named A/X")
-		}
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a top-level signal named A/X")
 		Expect(err.Error()).To(ContainSubstring("A/X"))
 		Expect(err.Error()).To(ContainSubstring(`may not contain "/"`))
 	})
@@ -517,9 +503,7 @@ var _ = Describe("NewEngine", func() {
 		parent := validSignal("A")
 		parent.Refinements = []Signal[snap]{validSignal("B/C")}
 		_, err := NewEngine(validTable([]Signal[snap]{parent}))
-		if err == nil {
-			Fail("expected NewEngine to reject a refinement named B/C")
-		}
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a refinement named B/C")
 		Expect(err.Error()).To(ContainSubstring("B/C"))
 		Expect(err.Error()).To(ContainSubstring(`may not contain "/"`))
 	})
