@@ -30,4 +30,23 @@
 //
 // Observe returns two things: what fired, and one readiness row per signal, so
 // a caller can tell "measured, and fine" from "could not measure at all".
+//
+// # Refinements
+//
+// A signal answers one question, and the answer is often not helpful on its
+// own. One might add a rule that the CPU degrades above 70%. But that is not
+// helpful: the question is WHAT degraded it.
+//
+// So there can be smaller rules that fire underneath, called refinements. If
+// the main CPU signal is degraded, and only then, the engine reports whether
+// any signal in the level below it gives more information. For example, a
+// caller could measure the container's CPU. A refinement checks whether the
+// container CPU is over x% of the CPU currently used; if it fires, the
+// caller's message goes from "CPU degraded" to "CPU degraded, because the
+// container is taking a lot of CPU".
+//
+// There can be another refinement beside it that checks whether the host is
+// over x%, instead of the container's workload, and then it is "CPU degraded,
+// but nothing in our container and it is other software running on the host".
+// If the container metric is not available, both refinements are absent.
 package diagnosis
