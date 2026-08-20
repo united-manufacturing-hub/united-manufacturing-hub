@@ -206,7 +206,7 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		Expect(limitHeadroom.Extract(Sample{UsageCores: diagnosis.Known(0.8)})).To(Equal(diagnosis.Known(1.0)))
 		Expect(limitHeadroom.Extract(Sample{UsageCores: diagnosis.Unknown()})).To(Equal(diagnosis.Unknown()))
 
-		// Both tracks, the folds no instrument produces: host-busy and
+		// The measurements, which sit under no instrument: host-busy and
 		// usage-cores, each a 60s mean on every box.
 		Expect(t.Measurements).To(HaveLen(2))
 		Expect(t.Measurements[0].Name).To(Equal("host-busy"))
@@ -448,7 +448,7 @@ func tableFingerprint(t diagnosis.Table[Sample]) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "interval=%s\n", t.Interval)
 	for _, tr := range t.Measurements {
-		fmt.Fprintf(&b, "track %s red=%s/%d span=%s\n", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span)
+		fmt.Fprintf(&b, "measurement %s red=%s/%d span=%s\n", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span)
 	}
 	for _, s := range t.Signals {
 		fmt.Fprintf(&b, "signal %s tier=%d releaseOnAbsent=%t demote=%s\n",

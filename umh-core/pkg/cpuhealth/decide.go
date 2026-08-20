@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Decide, the judgement entry point. Each stage takes the previous stage's
-// output — Observe, then buildVerdict and detailsFor off the same fired set —
-// so no verdict field is asserted without the evidence for it. The attribution
-// is read off the fired signal that ranked first, where the table declared it.
+// Decide, the judgement entry point. Observe runs first and buildVerdict ranks
+// the set it returned, so no verdict field is asserted without the evidence for
+// it. detailsFor reads this tick's numbers back out of the same engine. The
+// attribution is read off the fired signal that ranked first, where the table
+// declared it.
 
 package cpuhealth
 
@@ -29,7 +30,7 @@ import (
 func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment) (Verdict, Details) {
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
 	verdict := buildVerdict(engine, fired)
-	details := detailsFor(engine, s, env, readiness, fired)
+	details := detailsFor(engine, s, env, readiness)
 	return verdict, details
 }
 
@@ -61,32 +62,17 @@ func buildVerdict(engine *diagnosis.Engine[Sample], fired []diagnosis.Fired) Ver
 
 // detailsFor fills every Details field. buildVerdict returns the Verdict alone,
 // so this is the sole producer of the struct.
-func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, fired []diagnosis.Fired) Details {
+func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness) Details {
 	var d Details
 
-	// The three starvation latches, for a reader of Details that wants to know
-	// a signal fired without walking the cause list. The two capacity signals
-	// have no counterpart here: their causes carry the kind and the instrument,
-	// which is everything a flag could have said.
-	for _, f := range fired {
-		switch f.Identity.Signal {
-		case sigThrottling:
-			d.ThrottleFired = true
-		case sigPressure:
-			d.PressureFired = true
-		case sigSteal:
-			d.StealFired = true
-		}
-	}
-
-	// The withheld-headroom facts belong on Details, not Verdict — three
-	// fields, none of the other 31 can stand in for them. HostHeadroomAvailable
-	// is dispatched on the sample's scope, NOT on the window's state: an
-	// affinity box or an unestablished scope is a withholding ("we read it and
-	// it means something else"), while a plain /proc/stat read failure leaves
-	// the bit set and the window absent, so a read failure is not rendered as a
-	// withholding. The two counts are on Details so the "pinned to 2 of 8
-	// CPUs" sentence can name them without Decide doing any I/O.
+	// The withheld-headroom facts belong on Details, not Verdict — no other
+	// field on the struct can stand in for them. HostHeadroomAvailable is
+	// dispatched on the sample's scope, NOT on the window's state: an affinity
+	// box or an unestablished scope is a withholding ("we read it and it means
+	// something else"), while a plain /proc/stat read failure leaves the bit set
+	// and the window absent, so a read failure is not rendered as a withholding.
+	// The two counts are on Details so the "pinned to 2 of 8 CPUs" sentence can
+	// name them without Decide doing any I/O.
 	d.HostHeadroomAvailable = s.CpuScope == ScopeHost
 	if lc, ok := s.LogicalCpus.Get(); ok {
 		d.LogicalCpus = lc
@@ -95,26 +81,25 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 		d.HostCpus = hc
 	}
 
-	// The average usage fraction is usage-fraction's
-	// own reduction — the number the latch was judged on, not the usage track
-	// divided by anything, so a mid-run core-count change cannot split them. It
-	// is filled on every tick, not only when usage-fraction is the instrument
-	// that fired.
+	// The average usage fraction is usage-fraction's own reduction — the number
+	// the latch was judged on, not the usage-cores measurement divided by
+	// anything, so a mid-run core-count change cannot split them. It is filled
+	// on every tick, not only when usage-fraction is the instrument that
+	// fired.
 	d.AvgUsageFraction, _ = engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
 
-	// The dead-zone annotation. The dead zone is quota nil or non-positive AND
-	// PSI absent, and it is an annotation on a healthy verdict, never a state.
-	// LimitedVisibility is where ComposeMessage reads it.
+	// Limited visibility is quota nil or non-positive AND PSI absent. It is an
+	// annotation on a healthy verdict, never a state, and LimitedVisibility is
+	// where ComposeMessage reads it.
 	if q, ok := s.Quota.Get(); !ok || q <= 0 {
 		d.LimitedVisibility = !s.PsiAvailable
 	}
 
-	// The observable metrics, the two track floors and each
-	// signal's readiness are filled from the same pass, independent of latch
-	// state, so a signal sitting below its mark still reaches Details. This is
-	// the route a no-latch tick's numbers take: Observe returns fired latches
-	// only, so without these reads a confident 0 would be published on every
-	// healthy tick.
+	// The instrument readings come out of the same Observe pass that judged
+	// them, and they are read whatever the latch did, so a signal sitting below
+	// its mark still reaches Details. Observe returns fired latches only, so
+	// without these reads a confident 0 would be published on every healthy
+	// tick.
 	d.ThrottleRatio, _ = engine.Reduction(sigThrottling, instThrottleRatio).Get()
 	d.PressureAvg60, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
 	d.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()

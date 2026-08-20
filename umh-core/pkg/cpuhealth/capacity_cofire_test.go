@@ -71,9 +71,9 @@ var _ = Describe("two capacity causes on one tick", func() {
 		// list them. Severity decides it — -0.8 against a worst of -1.0 beats
 		// -0.15 against a worst of -0.2 — and Rank reaches declaration position
 		// only as its last tie-break.
-		Expect(declaredUnit(sigHostCpuFull, instHostHeadroom)).NotTo(BeEmpty(),
+		Expect(declaresArm(sigHostCpuFull, instHostHeadroom)).To(BeTrue(),
 			"the host-headroom arm must be in the table for this spec to mean anything")
-		Expect(declaredUnit(sigContainerLimitFull, instLimitHeadroom)).NotTo(BeEmpty(),
+		Expect(declaresArm(sigContainerLimitFull, instLimitHeadroom)).To(BeTrue(),
 			"the limit arm must be in the table for this spec to mean anything")
 
 		for _, limitFirst := range []bool{false, true} {

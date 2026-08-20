@@ -62,11 +62,9 @@ type usageBaseline struct {
 
 // usageRate derives this tick's instantaneous usage rate — the delta of usage
 // against the baseline this source owns, divided by the elapsed time since the
-// baseline — then updates the baseline for the next tick. ts is the
-// composer's single per-tick Timestamp, passed in rather than read via
-// time.Now(): this rate and the host source's own rates must be measured
-// against the same instant, or Decide's attribution would compare a
-// machine-wide mean against a cgroup mean taken at a different moment.
+// baseline — then updates the baseline for the next tick. ts is the composer's
+// single per-tick Timestamp and never time.Now(); Read in read.go says why both
+// sources have to divide by the same elapsed time.
 func (c *cgroupSource) usageRate(ts time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
 	if c.usageBase.have {

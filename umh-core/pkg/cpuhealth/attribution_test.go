@@ -21,12 +21,15 @@
 package cpuhealth
 
 import (
+	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 var _ = Describe("attribution consults its evidence", func() {
@@ -175,8 +178,8 @@ var _ = Describe("attribution consults its evidence", func() {
 	})
 
 	It("should report unknown attribution when the host-container split cannot be computed", func() {
-		// Host stats absent: the host-busy track has nothing to fold, so the
-		// split cannot run, and the host-cpu-full signal answers through the
+		// Host stats absent: the host-busy measurement has nothing to reduce, so
+		// the split cannot run, and the host-cpu-full signal answers through the
 		// usage-fraction fallback (3.0 / 4 = 0.75 fires). No quota and no PSI,
 		// which is the only box usage-fraction is allowed to answer on, so
 		// host-cpu-full is the only cause. The machine-full question has no
@@ -354,5 +357,69 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 		}
 		Expect(both).To(HaveKey(refHostShare), "the run must reach a share that blames the host, or the sweep asserts nothing")
 		Expect(both).To(HaveKey(refContainerShare), "the run must reach a share that blames the container, or the sweep asserts nothing")
+	})
+
+	It("should divide one interval's cgroup usage by the same interval's host busy time, so the share does not depend on when either was read", func() {
+		// The share is a quotient of two rates the sampler derives separately:
+		// cgroupSource.usageRate from cpu.stat's usage_usec, hostSource.hostRates
+		// from /proc/stat's busy jiffies. Both divide by an elapsed time, and the
+		// elapsed time cancels out of the quotient only while it is the same
+		// number on both sides. linuxSampler.Read stamps one Timestamp and hands
+		// it to both, which is what makes it the same number. A source reading
+		// its own clock would leave two divisors that differ by the work done
+		// between the two calls, inside a fraction meant to describe one
+		// interval.
+		//
+		// Over the two reads below usage rises by 3.0 core-seconds and the host's
+		// busy time by 400 jiffies, which USER_HZ 100 makes 4.0 core-seconds. The
+		// share is 3.0 / 4.0 whatever the wall-clock gap between the reads was.
+		const cgroupBase = "/sys/fs/cgroup"
+		usages := []string{"5000000", "8000000"}
+		procStats := []string{
+			"cpu  100 0 100 5000 0 0 0 0 0 0\ncpu0 0 0 0 0 0 0 0 0 0 0\ncpu1 0 0 0 0 0 0 0 0 0 0\n",
+			"cpu  300 0 300 5000 0 0 0 0 0 0\ncpu0 0 0 0 0 0 0 0 0 0 0\ncpu1 0 0 0 0 0 0 0 0 0 0\n",
+		}
+		read := 0
+
+		fs := filesystem.NewMockFileSystem()
+		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
+			switch path {
+			case cgroupBase + "/cpu.stat":
+				return []byte("usage_usec " + usages[read] + "\nuser_usec 0\nsystem_usec 0\nnr_periods 0\nnr_throttled 0\n"), nil
+			case "/proc/stat":
+				return []byte(procStats[read]), nil
+			case cgroupBase + "/cpuset.cpus.effective":
+				// Two CPUs allowed against the two per-CPU lines above, so the
+				// sample is host-scoped and containerShare will answer at all.
+				return []byte("0-1"), nil
+			default:
+				return nil, errors.New("unreadable")
+			}
+		}
+		sampler := NewLinuxSampler(fs, cgroupBase)
+
+		ctx := context.Background()
+		first, err := sampler.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		read = 1
+		second, err := sampler.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(second.Timestamp.After(first.Timestamp)).To(BeTrue(),
+			"the two reads must span a positive interval, or neither rate is published and this spec asserts nothing")
+		Expect(second.CpuScope).To(Equal(ScopeHost),
+			"containerShare withholds off ScopeHost, so a non-host sample would make this spec vacuous")
+		usageRate, ok := second.UsageCores.Get()
+		Expect(ok).To(BeTrue(), "the second read must publish a usage rate")
+		busyRate, ok := second.HostBusy.Get()
+		Expect(ok).To(BeTrue(), "the second read must publish a host-busy rate")
+		Expect(busyRate).To(BeNumerically(">", 0))
+		Expect(usageRate/busyRate).To(BeNumerically("~", 0.75, 1e-12),
+			"the two rates were derived over different intervals, so their quotient carries the ratio of two elapsed times")
+
+		share, ok := containerShare(second).Get()
+		Expect(ok).To(BeTrue(), "a host-scoped sample with both rates present must yield a share")
+		Expect(share).To(BeNumerically("~", 0.75, 1e-12),
+			"3.0 core-seconds of cgroup usage against 4.0 core-seconds of host busy time is 0.75, whatever the interval was")
 	})
 })

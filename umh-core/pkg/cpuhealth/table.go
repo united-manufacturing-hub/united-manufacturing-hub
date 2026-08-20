@@ -44,18 +44,18 @@ const (
 	measHostBusy   = "host-busy"
 	measUsageCores = "usage-cores"
 
-	// The two refinements of host-cpu-full. Each names its single instrument
-	// the same as itself: a refinement is one narrowing, read one way.
+	// The refinements of host-cpu-full. Each names its single instrument the
+	// same as itself: a refinement is one narrowing, read one way.
 	refHostShare      = "host-share"
 	refContainerShare = "container-share"
 )
 
-// The tiers. Every signal declares one. Starvation means something outside
-// this container is taking CPU away from it: the throttling, pressure and
-// steal signals. Saturation means the CPU is being used up: the host-cpu-full
-// and container-limit-full signals. Starvation outranks saturation regardless
-// of severity, because "you are being throttled" is actionable and "you are
-// busy" is not. The words are CPU's; diagnosis only ever sees the number.
+// The tiers. Starvation means something outside this container is taking CPU
+// away from it; saturation means the CPU is being used up. Every signal picks
+// one where it is declared, in its own signal_*.go file. Starvation outranks
+// saturation regardless of severity, because "you are being throttled" is
+// actionable and "you are busy" is not. The words are CPU's; diagnosis only
+// ever sees the number.
 const (
 	tierStarvation = 0
 	tierSaturation = 1

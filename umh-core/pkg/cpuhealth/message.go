@@ -73,7 +73,7 @@ func composeHealthy(signals Details) string {
 		return cpuMonitoringUnavailable
 	}
 
-	// The healthy message reports only what it measured. Two track floors
+	// The healthy message reports only what it measured. Two measurement floors
 	// (one per mode) and one readability gate; when any withholds the usage
 	// figure the message has no headline sentence left, so render the single
 	// "CPU: starting up." line alone. It lasts one tick after each start and
@@ -445,8 +445,8 @@ const (
 	// Rendered alone when CapacityCores is 0; an early return, never a prefix.
 	cpuMonitoringUnavailable = "CPU monitoring unavailable: cgroup read failed. Defaulting to healthy."
 
-	// The limited-visibility advisory, an annotation on a healthy verdict in
-	// the dead-zone, never a state.
+	// The limited-visibility advisory: an annotation on a healthy verdict,
+	// never a state.
 	limitedVisibilityNote = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
 
 	// The headline subjects in no-limit mode ("The machine") and limit mode

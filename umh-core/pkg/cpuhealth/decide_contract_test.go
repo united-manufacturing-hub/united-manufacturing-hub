@@ -75,11 +75,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 
 			HostBusyRingActive: true,
 
-			ThrottleFired:       false,
-			PressureFired:       false,
-			StealFired:          false,
-			HostContentionFired: false,
-			LimitedVisibility:   false,
+			LimitedVisibility: false,
 
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
@@ -143,11 +139,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 
 			HostBusyRingActive: true,
 
-			ThrottleFired:       true,
-			PressureFired:       false,
-			StealFired:          false,
-			HostContentionFired: false,
-			LimitedVisibility:   false,
+			LimitedVisibility: false,
 
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
@@ -211,11 +203,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 
 			HostBusyRingActive: true,
 
-			ThrottleFired:       false,
-			PressureFired:       true,
-			StealFired:          false,
-			HostContentionFired: false,
-			LimitedVisibility:   false,
+			LimitedVisibility: false,
 
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
@@ -279,11 +267,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 
 			HostBusyRingActive: true,
 
-			ThrottleFired:       false,
-			PressureFired:       false,
-			StealFired:          true,
-			HostContentionFired: false,
-			LimitedVisibility:   false,
+			LimitedVisibility: false,
 
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
@@ -351,11 +335,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 
 			HostBusyRingActive: true,
 
-			ThrottleFired:       false,
-			PressureFired:       false,
-			StealFired:          false,
-			HostContentionFired: false,
-			LimitedVisibility:   true,
+			LimitedVisibility: true,
 
 			HostHeadroomCores:      -0.7999999999999993,
 			HostBusyCoresAvailable: true,
@@ -415,11 +395,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 
 			HostBusyRingActive: false,
 
-			ThrottleFired:       false,
-			PressureFired:       false,
-			StealFired:          false,
-			HostContentionFired: false,
-			LimitedVisibility:   true,
+			LimitedVisibility: true,
 
 			HostHeadroomCores:      0,
 			HostBusyCoresAvailable: false,
@@ -478,11 +454,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 
 			HostBusyRingActive: true,
 
-			ThrottleFired:       false,
-			PressureFired:       false,
-			StealFired:          false,
-			HostContentionFired: false,
-			LimitedVisibility:   true,
+			LimitedVisibility: true,
 
 			HostHeadroomCores:      -0.5,
 			HostBusyCoresAvailable: true,
@@ -506,7 +478,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 	})
 
 	It("should return this exact Details on a cold first tick, before any window has enough samples to answer", func() {
-		// One sample, nothing warmed up: the usage and host-busy tracks both
+		// One sample, nothing warmed up: the usage and host-busy measurements both
 		// need a second sample before their Mean floor is met, so
 		// UsageRingActive and HostBusyRingActive read false. CpuScope is
 		// ScopeUnknown — the scope a sampler reports before its cpuset read
@@ -552,11 +524,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 
 			HostBusyRingActive: false,
 
-			ThrottleFired:       false,
-			PressureFired:       false,
-			StealFired:          false,
-			HostContentionFired: false,
-			LimitedVisibility:   false,
+			LimitedVisibility: false,
 
 			HostHeadroomCores:      0,
 			HostBusyCoresAvailable: true,

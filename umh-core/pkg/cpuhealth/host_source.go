@@ -46,10 +46,10 @@ type hostSource struct {
 
 	hostBase hostBaseline
 
-	// virtualized is the sticky virtualisation fact, resolved on the first
-	// successful /proc/cpuinfo read and re-published without re-reading. An
-	// unreadable cpuinfo resolves false but is not cached, so a later readable
-	// one is still considered.
+	// virtualized is the sticky virtualisation fact: resolved on the first read
+	// that can settle it either way, then re-published without re-reading.
+	// virtResolved is what says it has been settled, so a read that could not
+	// settle it leaves both false and the next tick tries again.
 	virtualized  bool
 	virtResolved bool
 }
@@ -72,11 +72,9 @@ type hostBaseline struct {
 
 // hostRates derives this tick's HostBusy rate and Steal fraction from busy,
 // steal and denom against the baseline this source owns, then updates the
-// baseline for the next tick. ts is the composer's single per-tick Timestamp,
-// passed in rather than read via time.Now(): this rate and the cgroup
-// source's usage rate must be measured against the same instant, or Decide's
-// attribution would compare a machine-wide mean against a cgroup mean taken
-// at a different moment.
+// baseline for the next tick. ts is the composer's single per-tick Timestamp
+// and never time.Now(); Read in read.go says why both sources have to divide
+// by the same elapsed time.
 func (h *hostSource) hostRates(ts time.Time, busy, steal, denom float64) (hostBusy, stealFrac diagnosis.Reading) {
 	hostBusy = diagnosis.Unknown()
 	stealFrac = diagnosis.Unknown()
@@ -101,20 +99,16 @@ func (h *hostSource) hostRates(ts time.Time, busy, steal, denom float64) (hostBu
 	return hostBusy, stealFrac
 }
 
-// readHost reads the first aggregate "cpu " line of /proc/stat and yields the
-// raw busy, steal and denominator jiffy totals. busy counts user, nice, system,
-// irq and softirq jiffies (idle, iowait, steal, guest and guest_nice excluded).
-// The steal denominator is the sum of fields 0..7 only, since the kernel folds
-// guest and guest_nice into user and nice. Both totals are kept raw so the
-// caller can derive interval deltas. machine is the number of per-CPU (cpu0,
-// cpu1, …) lines in the same file, the machine's CPU count. The trailing space
-// in "cpu " keeps the aggregate line from matching cpu0/cpu1.
+// readHost yields /proc/stat's busy, steal and denominator jiffy totals, plus
+// machine, the machine's CPU count. The totals stay raw: this function divides
+// by nothing, so the caller can take interval deltas off them.
 func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine float64, ok bool) {
 	data, err := h.fs.ReadFile(ctx, "/proc/stat")
 	if err != nil {
 		return 0, 0, 0, 0, false
 	}
 	for _, line := range strings.Split(string(data), "\n") {
+		// One per-CPU line per CPU, so counting them counts the machine's CPUs.
 		// A per-CPU line is "cpu" followed by a digit; the aggregate "cpu " line
 		// (space, not digit) is not one of them.
 		if len(line) > 3 && strings.HasPrefix(line, "cpu") && line[3] >= '0' && line[3] <= '9' {
@@ -122,6 +116,8 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine 
 		}
 	}
 	for _, line := range strings.Split(string(data), "\n") {
+		// The trailing space is what selects the aggregate line: "cpu0" does not
+		// match it.
 		if !strings.HasPrefix(line, "cpu ") {
 			continue
 		}
@@ -137,27 +133,28 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine 
 			}
 			vals[i] = v
 		}
+		// Busy is user, nice, system, irq and softirq. Idle and iowait are not
+		// busy, and steal is time this machine did not get at all.
 		busy := vals[1] + vals[2] + vals[3] + vals[6] + vals[7]
+		// The steal denominator runs from user through steal. The kernel already
+		// counts guest inside user and guest_nice inside nice, so adding those
+		// two fields would count the same time twice.
 		denom := vals[1] + vals[2] + vals[3] + vals[4] + vals[5] + vals[6] + vals[7] + vals[8]
 		return busy, vals[8], denom, machine, true
 	}
 	return 0, 0, 0, machine, false
 }
 
-// readVirtualized returns the sticky virtualisation fact. A "hypervisor" flag
-// in /proc/cpuinfo's flags line proves an x86 guest and caches true; a positive
-// token match on either DMI source — product_name, or sys_vendor for the cloud
-// hypervisors product_name never names — also caches true. The fact is cached
-// false only when a decisive source was read: on x86 (flags line present) a
-// readable product_name is authoritative, and on any platform a readable
-// product_name together with a readable sys_vendor (both naming no hypervisor)
-// is a conclusive bare-metal identity. It stays open for the next tick —
-// never a permanent Virtualized=false — when no DMI source was readable, or on
-// a platform without a flags line when sys_vendor is still unresolved.
+// readVirtualized resolves the sticky virtualisation fact this source owns.
+// /proc/cpuinfo answers for an x86 guest; DMI answers for an ARM64 one, whose
+// cpuinfo has no flags line to carry the answer. It caches false only off a
+// source that was readable and could have proved a guest.
 func (h *hostSource) readVirtualized(ctx context.Context) bool {
 	if h.virtResolved {
 		return h.virtualized
 	}
+	// The x86 route. The "hypervisor" flag is the guest's own evidence, so a
+	// match settles the fact without reading DMI at all.
 	data, err := h.fs.ReadFile(ctx, "/proc/cpuinfo")
 	if err == nil && cpuinfoHasHypervisorFlag(data) {
 		h.virtualized = true

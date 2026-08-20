@@ -24,9 +24,8 @@ import (
 // Details carries the per-tick values and flags ComposeMessage and
 // BlockReason read to render a sentence a ranked cause list alone cannot
 // carry. detailsFor is its sole producer; buildVerdict returns only the
-// Verdict. Flat, like
-// Sample, because a single signal already spans three of the groups below —
-// throttle is ThrottleRatio, ThrottleFired, and ThrottleSignalReady — so
+// Verdict. Flat, like Sample, because one signal already spans more than one
+// of the groups below — throttle is ThrottleRatio and ThrottleSignalReady — so
 // splitting by signal or by group would splinter the other.
 type Details struct {
 	// The metrics. ThrottleRatio, PressureAvg60 and StealP95 are filled every
@@ -41,31 +40,22 @@ type Details struct {
 	// Readings are declared for a future frontend projection and nothing fills
 	// them; AvgUsageFraction and AvgUsageCores are the two exceptions, filled
 	// every tick from their own signal's reduction.
-	AvgUsageFraction float64           // usage-fraction's own 60s reduction — the number the host-cpu-full latch was judged on, not the usage track divided by anything, so a mid-run core-count change cannot split them
+	AvgUsageFraction float64           // usage-fraction's own 60s reduction — the number the host-cpu-full latch was judged on, not the usage-cores measurement divided by anything, so a mid-run core-count change cannot split them
 	P95UsageFraction diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	P99UsageFraction diagnosis.Reading // declared for a future frontend projection; nothing fills it
-	AvgUsageCores    float64           // ABSOLUTE cores; limit-mode headroom and the wire's avgMCpu read this one value — the usage-cores track's 60s mean
+	AvgUsageCores    float64           // ABSOLUTE cores; limit-mode headroom and the wire's avgMCpu read this one value — the usage-cores measurement's 60s mean
 	P95UsageCores    diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	P99UsageCores    diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	UsageRingActive  bool              // usage-cores reduced to StateValue — the healthy headline's LIMIT-mode floor gate
 	// HostBusyRingActive: host-busy reduced to StateValue — the healthy
-	// headline's NO-LIMIT floor gate. Two tracks, two floors: an outage can
-	// leave one thin while the other fills.
+	// headline's NO-LIMIT floor gate. Two measurements, two floors: an outage
+	// can leave one thin while the other fills.
 	HostBusyRingActive bool
 
-	// The latches. detailsFor sets ThrottleFired, PressureFired and StealFired
-	// from the fired set. The two capacity signals have no flag here: their
-	// causes name the kind and the instrument.
-	ThrottleFired bool // true when the throttling signal fired this tick
-	PressureFired bool // true when the pressure signal fired this tick
-	StealFired    bool // true when the steal signal fired this tick
-	// HostContentionFired is reserved: no signal sets it, so it reads false —
-	// Details' zero value — on every tick.
-	HostContentionFired bool
-	// LimitedVisibility is the dead-zone annotation, never a State.
+	// LimitedVisibility is an annotation on a healthy verdict, never a State.
 	// detailsFor sets it only when quota is absent or non-positive, to
-	// !PsiAvailable — so it reads true exactly in the dead zone (no quota to
-	// reason about, no PSI to fall back on) and stays false whenever a quota
+	// !PsiAvailable — so it reads true exactly where there is no quota to
+	// reason about and no PSI to fall back on, and false whenever a quota
 	// applies.
 	LimitedVisibility bool
 
@@ -73,7 +63,7 @@ type Details struct {
 	// a negative number, not a 0. detailsFor sets all four below.
 	HostHeadroomCores      float64           // host-headroom's own 60s reduction, in cores: cores − hostBusy − reserve
 	HostBusyCoresAvailable bool              // the sample's own readability flag; a ==0 proxy cannot tell unreadable from idle
-	AvgHostBusyCores       float64           // the host-busy track's 60s mean
+	AvgHostBusyCores       float64           // the host-busy measurement's 60s mean
 	HeadroomCores          diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	CapacityCores          float64           // the quota when set and positive, else LogicalCpus
 	ReserveCores           float64           // the reserve subtracted from CapacityCores: limitReserveFraction x quota when limited, else the fixed cpuReserveCores

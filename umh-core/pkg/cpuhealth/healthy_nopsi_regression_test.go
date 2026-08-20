@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The guard. A healthy no-PSI box sits in the dead zone (no positive
+// The guard. A healthy no-PSI box has limited visibility (no positive
 // quota AND no PSI), so its customer-visible output must be byte-identical
 // however the answerability mechanisms (LimitedVisibility, PressureApplies) evolve:
 // verdict healthy, no causes, PressureApplies false, LimitedVisibility true, and the
@@ -34,8 +34,8 @@ import (
 
 var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 	It("should leave verdict healthy, no causes, PressureApplies false, LimitedVisibility true, and the advisory present", func() {
-		// A dead-zone box: cores=4 so the host-cpu-full instrument IS present, but
-		// Quota present 0 (no positive quota -> no HasLimit) and PsiAvailable
+		// A limited-visibility box: cores=4 so the host-cpu-full instrument IS
+		// present, but Quota present 0 (no positive quota -> no HasLimit) and PsiAvailable
 		// false (no HasPressureStats). Virtualized false keeps it bare metal so
 		// no steal instrument is offered. Every reading is benign and
 		// host-scoped, so nothing fires and the box stays healthy.
@@ -68,15 +68,15 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 		msg := ComposeMessage(verdict, sig)
 
 		// The full invariant, asserted together on the genuinely no-PSI chain.
-		Expect(verdict.State).To(Equal(StateHealthy), "a benign dead-zone box stays healthy")
+		Expect(verdict.State).To(Equal(StateHealthy), "a benign limited-visibility box stays healthy")
 		Expect(verdict.Causes).To(BeEmpty(), "no cause may fire on a healthy box")
 		Expect(sig.PressureApplies).To(BeFalse(), "a no-PSI host must not claim PSI applies")
-		Expect(sig.LimitedVisibility).To(BeTrue(), "the dead zone (no limit AND no PSI) must set LimitedVisibility")
+		Expect(sig.LimitedVisibility).To(BeTrue(), "no limit AND no PSI must set LimitedVisibility")
 		// The healthy dashboard rendered, not the below-floor "CPU: starting up."
 		// single-liner — proving the real chain produced the full message.
 		Expect(msg).To(ContainSubstring("CPU healthy."))
 		Expect(msg).To(ContainSubstring(limitedVisibilityNote),
-			"the limited-visibility advisory must reach the customer on a dead-zone box")
+			"the limited-visibility advisory must reach the customer on a limited-visibility box")
 	})
 })
 
@@ -86,7 +86,7 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 // the point: it isolates the HasPressureStats Requires gate as the thing
 // holding the pressure signal back, on a reading that would otherwise fire.
 // PressureApplies and LimitedVisibility cannot stand in for this: both are set
-// straight from PsiAvailable in fillDetails, never through the engine's
+// straight from PsiAvailable in detailsFor, never through the engine's
 // capability selection, so they pass unchanged whether the gate is present or
 // not. Only a produced cause routes through the gate. Without this spec, a
 // future PsiAvailable regression that keeps handing out readings — for

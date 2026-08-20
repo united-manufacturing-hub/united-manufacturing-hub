@@ -15,9 +15,9 @@
 // Verdict assembly. Decide derives Verdict.Attribution from the
 // dominant cause, orders Verdict.Causes through diagnosis.Rank (no local sort),
 // returns healthy with no causes when nothing is fired, and fills the
-// observable metrics, the two track floors and each signal's readiness from the
-// same pass even when no latch has fired — and leaves the fields it does not
-// fill reporting absent rather than a measured zero.
+// observable metrics, both measurement floors and each signal's readiness from
+// the same pass even when no latch has fired — and leaves the fields it does
+// not fill reporting absent rather than a measured zero.
 package cpuhealth
 
 import (
@@ -160,7 +160,7 @@ var _ = Describe("verdict assembly", func() {
 		}
 	})
 
-	It("should fill the observable metrics, the two track floors and each signal's readiness from the same pass, even when no latch has fired", func() {
+	It("should fill the observable metrics, both measurement floors and each signal's readiness from the same pass, even when no latch has fired", func() {
 		// Drive throttle-ratio to a steady 0.02, below its 0.05 fire mark, for a
 		// full window: nothing fires and the verdict is healthy, yet
 		// Details.ThrottleRatio reaches Details as 0.02 — not a confident 0
@@ -196,7 +196,7 @@ var _ = Describe("verdict assembly", func() {
 				Expect(sig.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9))
 				Expect(sig.AvgHostBusyCores).To(BeNumerically("~", 0.5, 1e-9))
 
-				// The two track floors.
+				// The two measurement floors.
 				Expect(sig.UsageRingActive).To(BeTrue())
 				Expect(sig.HostBusyRingActive).To(BeTrue())
 

@@ -18,7 +18,8 @@
 package cpuhealth
 
 // State is the customer-visible health state of the CPU verdict. Two values and
-// no third: the dead zone is an annotation on a healthy verdict, never a state.
+// no third: limited visibility is an annotation on a healthy verdict, never a
+// state.
 type State string
 
 const (
@@ -61,8 +62,6 @@ const (
 	CauseKindThrottling         CauseKind = "throttling"
 	CauseKindPressure           CauseKind = "pressure"
 	CauseKindSteal              CauseKind = "steal"
-	// CauseKindHostContention is declared but no signal produces it.
-	CauseKindHostContention CauseKind = "host-contention"
 )
 
 // Unit is the unit a cause's value is denominated in, copied from the mark pair

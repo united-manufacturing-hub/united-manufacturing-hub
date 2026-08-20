@@ -34,7 +34,7 @@ var _ = Describe("bind the generated suite to the real CPU table", func() {
 		// 30 scenarios on a box with a positive quota, 24 on one without:
 		// 6 x 5 and 6 x 4, because cpuTable omits container-limit-full entirely at
 		// quota 0. A suite built from a fixture cannot tell the two apart, and
-		// one that generated scenarios for the tracks would read 42 and 36.
+		// one that generated scenarios for the measurements would read 42 and 36.
 		out30 := RunSuite(4, 2.0)
 		Expect(out30).To(HaveLen(30), "6 x 5 signals with a quota")
 		out24 := RunSuite(4, 0)

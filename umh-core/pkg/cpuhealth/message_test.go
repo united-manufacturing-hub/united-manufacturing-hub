@@ -102,7 +102,7 @@ var _ = Describe("the healthy headline", func() {
 		Expect(composeHealthy(above)).To(ContainSubstring("and can use 1.8 more before it is marked degraded."))
 	})
 
-	It("should put the limited-visibility advisory between the headline and the technical details when the dead-zone annotation is set", func() {
+	It("should put the limited-visibility advisory between the headline and the technical details when limited visibility is set", func() {
 		sig := healthySig()
 		sig.LimitedVisibility = true
 		msg := composeHealthy(sig)
@@ -156,7 +156,8 @@ var _ = Describe("the healthy headline", func() {
 			HostBusy:    diagnosis.Known(1.0),
 			LogicalCpus: diagnosis.Known(8),
 			HostCpus:    diagnosis.Known(8),
-			// PsiAvailable false => dead zone; supply pressure to keep it healthy.
+			// PsiAvailable false => limited visibility; supply pressure to keep
+			// it healthy.
 			Pressure: diagnosis.Known(0.0),
 		}
 		_, sig := Decide(engine, smp, env)
@@ -214,7 +215,7 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 		Expect(msg).NotTo(ContainSubstring("CPU healthy."))
 		Expect(msg).NotTo(ContainSubstring("Technical Details:"))
 
-		// The floors are per track, not one flag: a limit-mode headline uses
+		// The floors are per measurement, not one flag: a limit-mode headline uses
 		// the container's usage-cores, so a thin host-busy window must NOT
 		// withhold it.
 		limitOK := healthySig()

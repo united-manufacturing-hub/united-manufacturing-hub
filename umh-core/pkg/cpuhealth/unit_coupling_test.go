@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Marks.Unit is display text everywhere else — the word a number is printed
-// with. Here it is load-bearing: the host-cpu-full signal holds two
-// instruments,
-// and the only thing that tells them apart downstream is that word.
+// The host-cpu-full signal answers one question through two instruments, its
+// two arms, and a verdict has to say which arm answered. diagnosis.Identity
+// names only the signal, so causeOf recovers the arm from Fired.Instrument and
+// reads the cause's value back from that arm's own reduction. The two specs
+// below drive each arm through Decide and check what the verdict then says.
 
 package cpuhealth
 
@@ -29,41 +30,40 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// declaredUnit reads back the unit one instrument declares in the table that
-// production builds its engine from. Nothing here writes a unit down: the value
-// is quoted into the failure message so a reader sees which word the two sides
-// disagreed about, never compared against one.
-func declaredUnit(signal, instrument string) string {
+// declaresArm reports whether the table production builds its engine from hangs
+// one instrument under one signal. Nothing here writes the table down; the
+// specs read it back so neither can pass against an arm the table dropped.
+func declaresArm(signal, instrument string) bool {
 	for _, s := range Table(4, 2.0).Signals {
 		if s.Name != signal {
 			continue
 		}
 		for _, in := range s.Instruments {
 			if in.Name == instrument {
-				return in.Marks.Unit
+				return true
 			}
 		}
 	}
-	return ""
+	return false
 }
 
 // coupling renders the failure message the two specs share. It names the
-// mechanism rather than the mismatch, because the string is the mechanism.
+// mechanism the outcome hangs on, because a reader who sees only the mismatch
+// cannot tell which of the two sides moved.
 func coupling(instrument, outcome string) string {
 	return fmt.Sprintf(
 		"%s\n\n"+
-			"The host-cpu-full signal carries two instruments and diagnosis.Identity has no field\n"+
-			"naming which one fired, so this package recovers the arm by matching Marks.Unit —\n"+
-			"a display label — against a literal spelled out in table.go and attribute.go.\n"+
-			"The table currently declares Unit %q for the %s arm. If that word was just renamed\n"+
-			"on one side, rename it on the other: the two sides are one decision, and only one\n"+
-			"of them is the word a customer reads.",
-		outcome, declaredUnit(sigHostCpuFull, instrument), instrument)
+			"This spec drove the %s arm of host-cpu-full. diagnosis.Identity names only the\n"+
+			"signal, so causeOf reads the arm that fired out of Fired.Instrument and takes the\n"+
+			"cause's value from that arm's reduction. The blame comes from whichever share\n"+
+			"refinement fired, never from the arm. Read causeOf in attribute.go and\n"+
+			"shareRefinements in signal_saturation.go before changing what this expects.",
+		outcome, instrument)
 }
 
-var _ = Describe("the host-cpu-full arms are told apart by a display string", func() {
-	It("should still blame the host for a full machine after the host-headroom arm's unit is read back from the table", func() {
-		Expect(declaredUnit(sigHostCpuFull, instHostHeadroom)).NotTo(BeEmpty(),
+var _ = Describe("the host-cpu-full arms are told apart in the verdict", func() {
+	It("should blame the host for a full machine the host-headroom arm found", func() {
+		Expect(declaresArm(sigHostCpuFull, instHostHeadroom)).To(BeTrue(),
 			"the host-headroom arm must be in the table for this spec to mean anything")
 
 		// 4 cores, no quota: host-headroom is 4 - 3.5 - 1.0 = -0.5 and fires,
@@ -94,8 +94,8 @@ var _ = Describe("the host-cpu-full arms are told apart by a display string", fu
 		}
 	})
 
-	It("should still route a machine with no host stats to the fallback arm after that arm's unit is read back from the table", func() {
-		Expect(declaredUnit(sigHostCpuFull, instUsageFraction)).NotTo(BeEmpty(),
+	It("should name the fallback arm in the cause when a machine has no host stats", func() {
+		Expect(declaresArm(sigHostCpuFull, instUsageFraction)).To(BeTrue(),
 			"the usage-fraction arm must be in the table for this spec to mean anything")
 
 		// Host stats unreadable on a box with no quota and no PSI, which is the

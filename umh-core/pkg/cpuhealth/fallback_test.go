@@ -19,9 +19,9 @@
 // as AvgUsageFraction. "Nothing better" is HasLimitedVisibility — no CPU limit
 // and no PSI — which is the same condition Details.LimitedVisibility reports.
 // Where PSI or a limit does exist, the estimate is not capable at all, so an
-// unreadable /proc/stat leaves the signal with nothing to read. The dead zone — quota nil or
-// non-positive AND PSI absent — is an annotation on a healthy verdict, carried
-// by Details.LimitedVisibility, never a state.
+// unreadable /proc/stat leaves the signal with nothing to read. Limited
+// visibility — quota nil or non-positive AND PSI absent — is an annotation on a
+// healthy verdict, carried by Details.LimitedVisibility, never a state.
 package cpuhealth
 
 import (
@@ -72,8 +72,8 @@ var _ = Describe("the fallback metric set", func() {
 				v, st := red.Get()
 				Expect(st).To(Equal(diagnosis.StateValue))
 				Expect(v).To(BeNumerically("~", 0.1, 1e-9))
-				// The metric is usage-fraction's OWN reduction — not the usage
-				// track divided by anything.
+				// The metric is usage-fraction's OWN reduction — not the
+				// usage-cores measurement divided by anything.
 				Expect(sig.AvgUsageFraction).To(BeNumerically("~", 0.1, 1e-9))
 			}
 		}
@@ -112,10 +112,10 @@ var _ = Describe("the fallback metric set", func() {
 		}
 	})
 
-	It("should annotate the dead zone rather than treating it as a state", func() {
-		// The dead zone: no quota AND no PSI. Verdict.State has two values and
-		// neither is it, so the annotation lives on Details and the verdict is
-		// healthy. Nothing here fires.
+	It("should annotate limited visibility rather than treating it as a state", func() {
+		// Limited visibility: no quota AND no PSI. Verdict.State has two values
+		// and neither is it, so the annotation lives on Details and the verdict
+		// is healthy. Nothing here fires.
 		engine, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment()
@@ -137,11 +137,11 @@ var _ = Describe("the fallback metric set", func() {
 			verdict, sig := Decide(engine, smp, env)
 			Expect(verdict.State).To(Equal(StateHealthy))
 			if i == 4 {
-				Expect(sig.LimitedVisibility).To(BeTrue(), "no quota and no PSI is the dead zone")
+				Expect(sig.LimitedVisibility).To(BeTrue(), "no quota and no PSI is limited visibility")
 			}
 		}
 
-		// A positive quota is NOT the dead zone even without PSI.
+		// A positive quota is NOT limited visibility even without PSI.
 		engine2, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env2 := diagnosis.NewEnvironment(HasLimit)
@@ -160,7 +160,7 @@ var _ = Describe("the fallback metric set", func() {
 			}
 			_, sig := Decide(engine2, smp, env2)
 			if i == 4 {
-				Expect(sig.LimitedVisibility).To(BeFalse(), "a positive quota lifts the dead zone even without PSI")
+				Expect(sig.LimitedVisibility).To(BeFalse(), "a positive quota lifts limited visibility even without PSI")
 			}
 		}
 	})
