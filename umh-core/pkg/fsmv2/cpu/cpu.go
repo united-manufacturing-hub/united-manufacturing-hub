@@ -154,7 +154,7 @@ type CPUDeps struct {
 // construction yields a healthy first verdict from a permanently thinned
 // table, which is why the startup read error is logged.
 func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	return NewDepsWithSampler(id, bd, cpuhealth.NewCgroupSampler(filesystem.NewDefaultService(), "/sys/fs/cgroup"))
+	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(filesystem.NewDefaultService(), "/sys/fs/cgroup"))
 }
 
 // NewDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
