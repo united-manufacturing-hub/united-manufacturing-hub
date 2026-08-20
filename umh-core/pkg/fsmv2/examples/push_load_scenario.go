@@ -69,13 +69,18 @@ const (
 	// which is the case this scenario is usually pointed at, so the floor
 	// matters more than the slope here.
 	//
-	// bytesPerTopic is a single-point estimate from one instance at 4,330
-	// topics, obtained by dividing a byte rate by an assumed 10s resend period.
-	// No slope was fitted, and other sources in that note range from 207 to 783
-	// bytes per topic. So --topic-count gives an order of magnitude, not a
-	// threshold, and a topic count must not be quoted as a limit.
+	// bytesPerTopic is MEASURED: a 120-to-8,000-topic sweep through the real
+	// encoder puts the marginal wire cost flat at 180-195 bytes per topic, so the
+	// relationship is linear across the whole range and 190 is the midpoint.
+	//
+	// It replaces a derived figure of 345 that was wrong for a specific reason
+	// worth keeping: that derivation divided a byte rate by a resend period while
+	// assuming ONE subscriber, and the instance it came from had two. Halving for
+	// the second subscriber gives ~172, which the independent sweep above then
+	// corroborated. A derivation that assumes a fan-out is a derivation that can
+	// be out by exactly that fan-out.
 	statusFloorBytes = 8900
-	bytesPerTopic    = 345
+	bytesPerTopic    = 190
 
 	// Defaults for a run that names no settings. --bandwidth has no default: zero
 	// means unlimited, which is a setting rather than a missing one.
