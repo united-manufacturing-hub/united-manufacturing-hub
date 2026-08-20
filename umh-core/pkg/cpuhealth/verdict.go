@@ -26,15 +26,16 @@ const (
 	StateDegraded State = "degraded"
 )
 
-// Attribution names the dominant cause class when degraded. Two members
-// today: unknown is the complement of host. ENG-5264 widens this to
-// host, workload, software and unknown; until it lands, a cause inside
-// this container reads unknown rather than naming what caused it.
+// Attribution names the dominant cause class when degraded. Three members:
+// host for contention outside this container, container for a cause inside it,
+// and unknown when the evidence does not place the cause on either side.
+// ENG-5264 widens this to host, workload, software and unknown.
 type Attribution string
 
 const (
-	AttributionUnknown Attribution = "unknown"
-	AttributionHost    Attribution = "host"
+	AttributionUnknown   Attribution = "unknown"
+	AttributionHost      Attribution = "host"
+	AttributionContainer Attribution = "container"
 )
 
 // CauseKind enumerates the reason classes that can degrade CPU health.

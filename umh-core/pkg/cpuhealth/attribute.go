@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Turning a fired signal into the cause a customer is shown, and attributing it.
-// Attribution in verdict.go names the classes and says why there are only two.
+// Attribution in verdict.go names the classes.
 
 package cpuhealth
 
@@ -58,25 +58,41 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 	}
 }
 
-// attributeFor derives the attribution from the dominant cause. The saturation
-// kind is ambiguous — it is the one cause kept for the whole family — so
-// Decide resolves it with the survivor's arm: host-full attributes by the
-// split, the limit arm and the no-host-stats fallback are internal (the split
-// cannot run for them).
-func attributeFor(dominant Cause, survivor *diagnosis.Fired, splitHost bool) Attribution {
+// attributeFor derives the attribution from the dominant cause. Throttling is
+// the kernel capping this container against its own quota, so it is a container
+// cause whatever the host is doing. Pressure names no side: it counts stalled
+// time without saying whose load caused the stall.
+//
+// The saturation kind is ambiguous — it is the one cause kept for the whole
+// family — so Decide resolves it with the survivor's arm. The limit arm is this
+// container spending its own budget. The no-host-stats fallback has no host
+// reading to compare against. Host-full is the only arm the split can settle,
+// and it needs two trusted 60s means to settle it.
+func attributeFor(dominant Cause, survivor *diagnosis.Fired, split attributionSplit) Attribution {
 	switch dominant.Kind {
 	case CauseKindSteal, CauseKindHostContention:
 		return AttributionHost
-	case CauseKindThrottling, CauseKindPressure:
+	case CauseKindThrottling:
+		return AttributionContainer
+	case CauseKindPressure:
 		return AttributionUnknown
 	case CauseKindSaturation:
-		// host-full is the survivor from the "saturation" signal whose unit is
-		// "cores"; the limit arm and the no-host-stats fallback are internal.
-		hostFull := survivor != nil && survivor.Identity.Signal == sigSaturation && survivor.Marks.Unit == "cores"
-		// splitHost compares strictly greater — hostBusyMean > 2*ourUsageMean —
-		// so a host share exactly double our own is not attributed to the host.
-		if hostFull && splitHost {
-			return AttributionHost
+		if survivor == nil {
+			return AttributionUnknown
+		}
+		switch saturationArmOf(*survivor) {
+		case hostFullArm:
+			if split.HostBusyState != diagnosis.StateValue || split.OurUsageState != diagnosis.StateValue {
+				return AttributionUnknown
+			}
+			// HostDominates compares strictly greater — hostBusyMean >
+			// 2*ourUsageMean — so a host share exactly double our own is ours.
+			if split.HostDominates {
+				return AttributionHost
+			}
+			return AttributionContainer
+		case limitArm:
+			return AttributionContainer
 		}
 		return AttributionUnknown
 	}

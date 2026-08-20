@@ -142,7 +142,7 @@ func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice, spl
 		verdict.State = StateHealthy
 	} else {
 		verdict.State = StateDegraded
-		verdict.Attribution = attributeFor(causes[0], chosen.Winner, split.HostDominates)
+		verdict.Attribution = attributeFor(causes[0], chosen.Winner, split)
 	}
 	return verdict
 }

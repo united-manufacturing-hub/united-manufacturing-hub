@@ -15,9 +15,9 @@
 // Attribution consults its evidence. A verdict field is not
 // asserted without the evidence for it. The host/container split reads both 60s
 // means back from the engine's tracks and is STRICTLY greater (hbm > 2 x oum);
-// an internal cause (throttling, pressure, the container's own limit budget)
-// attributes unknown, never host; and when the split cannot run on untrusted
-// means it is unknown. The saturation family folds to one cause before ranking.
+// an internal cause (throttling, the container's own limit budget) attributes
+// container, never host; and when the split cannot run on untrusted means it is
+// unknown. The saturation family folds to one cause before ranking.
 package cpuhealth
 
 import (
@@ -69,8 +69,7 @@ var _ = Describe("attribution consults its evidence", func() {
 	It("should not attribute a full machine to the host when our own sustained usage exceeds the host's non-container share", func() {
 		// The same scenario at ticks 100+: our usage mean 1.95, the host's
 		// non-container share 3.80 - 1.95 = 1.85, which is NOT greater than our
-		// 1.95 — the split says it is not the host's fault. Today it says host;
-		// the rebuilt attribution makes it unknown.
+		// 1.95 — the split says it is not the host's fault, so the load is ours.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
@@ -95,16 +94,16 @@ var _ = Describe("attribution consults its evidence", func() {
 				Expect(hbm).To(BeNumerically("~", 3.8, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.95, 1e-9))
 				Expect(2*oum).To(BeNumerically(">", hbm), "2 x 1.95 = 3.90 > 3.80")
-				Expect(verdict.Attribution).To(Equal(AttributionUnknown), "a machine full on our own load is not the host's fault")
+				Expect(verdict.Attribution).To(Equal(AttributionContainer), "a machine full on our own load is the container's, not the host's")
 			}
 		}
 
 		// The equality boundary: the comparison is STRICTLY greater, matching
-		// Decide's own splitHost check, so hostBusyMean == 2 x ourUsageMean is
-		// unknown, not host. The difference is measure-zero and the recording
+		// the split's own HostDominates check, so hostBusyMean == 2 x ourUsageMean
+		// is container, not host. The difference is measure-zero and the recording
 		// cannot see it, so a spec that asserts only the two recorded rows
 		// leaves it to whoever types the operator. Drive hbm 3.2 against oum
-		// 1.6 (host-headroom -0.2 fires, 3.2 == 2 x 1.6) and require unknown.
+		// 1.6 (host-headroom -0.2 fires, 3.2 == 2 x 1.6) and require container.
 		engine2, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env2 := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
@@ -129,16 +128,16 @@ var _ = Describe("attribution consults its evidence", func() {
 				Expect(hbm).To(BeNumerically("~", 3.2, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.6, 1e-9))
 				Expect(hbm).To(BeNumerically("~", 2*oum, 1e-9), "3.2 == 2 x 1.6 exactly")
-				Expect(verdict.Attribution).To(Equal(AttributionUnknown), "exact equality is unknown, not host — the comparison is strict")
+				Expect(verdict.Attribution).To(Equal(AttributionContainer), "exact equality is container, not host — the comparison is strict")
 			}
 		}
 	})
 
-	It("should attribute an internal cause as unknown, never as host, whatever the split says", func() {
+	It("should attribute an internal cause as container, never as host, whatever the split says", func() {
 		// The throttling scenarios: host busy 1.00, our usage 0.20 -> the split
 		// says host (1.00 > 2 x 0.20 = 0.40). The dominant cause is throttling,
 		// which is internal — the kernel capping US against OUR OWN quota — so
-		// attribution is unknown, never host.
+		// attribution is container, never host.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
@@ -163,7 +162,7 @@ var _ = Describe("attribution consults its evidence", func() {
 				Expect(hbm).To(BeNumerically(">", 2*oum), "the split itself says host")
 				Expect(verdict.Causes).To(HaveLen(1))
 				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindThrottling))
-				Expect(verdict.Attribution).To(Equal(AttributionUnknown), "an internal cause is unknown whatever the split says")
+				Expect(verdict.Attribution).To(Equal(AttributionContainer), "an internal cause is the container's whatever the split says")
 			}
 		}
 	})
