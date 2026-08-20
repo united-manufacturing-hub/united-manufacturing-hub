@@ -44,7 +44,7 @@ type Details struct {
 	AvgUsageFraction float64           // usage-fraction's own 60s reduction — the number the saturation latch was judged on, not the usage track divided by anything, so a mid-run core-count change cannot split them
 	P95UsageFraction diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	P99UsageFraction diagnosis.Reading // declared for a future frontend projection; nothing fills it
-	AvgUsageCores    float64           // ABSOLUTE cores; limit-mode headroom and the wire's avgMCpu read this one value — the usage-cores track's 60s mean, the same read Decide shares with its attribution split
+	AvgUsageCores    float64           // ABSOLUTE cores; limit-mode headroom and the wire's avgMCpu read this one value — the usage-cores track's 60s mean
 	P95UsageCores    diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	P99UsageCores    diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	UsageRingActive  bool              // usage-cores reduced to StateValue — the healthy headline's LIMIT-mode floor gate
@@ -94,7 +94,7 @@ type Details struct {
 	// a negative number, not a 0. detailsFor sets all four below.
 	HostHeadroomCores      float64           // host-headroom's own 60s reduction, in cores: cores − hostBusy − reserve
 	HostBusyCoresAvailable bool              // the sample's own readability flag; a ==0 proxy cannot tell unreadable from idle
-	AvgHostBusyCores       float64           // the host-busy track's 60s mean, the same read Decide shares with its attribution split
+	AvgHostBusyCores       float64           // the host-busy track's 60s mean
 	HeadroomCores          diagnosis.Reading // declared for a future frontend projection; nothing fills it
 	CapacityCores          float64           // the quota when set and positive, else LogicalCpus
 	ReserveCores           float64           // the reserve subtracted from CapacityCores: limitReserveFraction x quota when limited, else the fixed cpuReserveCores

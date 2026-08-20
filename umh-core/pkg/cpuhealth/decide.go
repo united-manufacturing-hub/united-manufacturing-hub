@@ -29,10 +29,9 @@ import (
 // engine advances its windows as it reads them.
 func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment) (Verdict, Details) {
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
-	split := readAttributionSplit(engine)
 	chosen := chooseSaturationCause(fired, env.Has(HasLimit))
 	verdict := buildVerdict(engine, chosen)
-	details := detailsFor(engine, s, env, readiness, chosen, split)
+	details := detailsFor(engine, s, env, readiness, chosen)
 	return verdict, details
 }
 
@@ -51,39 +50,6 @@ type saturationChoice struct {
 	// Latched holds the Details fields set here and nowhere else: the four
 	// family latches, and the four saturation arms saturationFlags sets.
 	Latched Details
-}
-
-// attributionSplit is the host-versus-container comparison, read once per tick.
-type attributionSplit struct {
-	HostBusyMean  float64
-	HostBusyState diagnosis.State
-	OurUsageMean  float64
-	OurUsageState diagnosis.State
-	HostDominates bool // host's 60s mean is more than double ours, on two trusted means
-}
-
-// readAttributionSplit reads both 60s means and decides whether the host
-// dominates.
-//
-// The two tracks are plain 60-second averages, declared in table_cpu.go
-// where they say why they exist. This comparison is the only thing that
-// reads them.
-//
-// An untrusted mean disqualifies the comparison: one sample of host busy
-// against one of ours is an attribution made on a single instant.
-func readAttributionSplit(engine *diagnosis.Engine[Sample]) attributionSplit {
-	hostMean, hostState := engine.Measurement(trackHostBusy).Get()
-	ourMean, ourState := engine.Measurement(trackUsageCores).Get()
-
-	split := attributionSplit{
-		HostBusyMean: hostMean, HostBusyState: hostState,
-		OurUsageMean: ourMean, OurUsageState: ourState,
-	}
-	if hostState != diagnosis.StateValue || ourState != diagnosis.StateValue {
-		return split // no trusted pair, so no attribution
-	}
-	split.HostDominates = hostMean > 2*ourMean
-	return split
 }
 
 // chooseSaturationCause picks the one "CPU is full" cause to report and
@@ -152,10 +118,7 @@ func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice) Ver
 
 // detailsFor fills every Details field not already set by chooseSaturationCause
 // or buildVerdict, starting from the saturation choice's own latched fields.
-// The host and usage track means and states are the same read
-// readAttributionSplit already took, shared here through split rather than
-// re-derived.
-func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, chosen saturationChoice, split attributionSplit) Details {
+func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, chosen saturationChoice) Details {
 	d := chosen.Latched
 
 	// The withheld-headroom facts belong on Details, not Verdict — three
@@ -197,10 +160,17 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 	d.PressureAvg60, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
 	d.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()
 	d.HostHeadroomCores, _ = engine.Reduction(sigSaturation, instHostHeadroom).Get()
-	d.AvgUsageCores = split.OurUsageMean
-	d.AvgHostBusyCores = split.HostBusyMean
-	d.UsageRingActive = split.OurUsageState == diagnosis.StateValue
-	d.HostBusyRingActive = split.HostBusyState == diagnosis.StateValue
+
+	// The two measurement tracks, each a plain 60-second average declared in
+	// table_cpu.go. The state says whether the window reduced to a value, and
+	// the healthy headline gates on it so a thin window is not reported as a
+	// confident 0.
+	hostBusyMean, hostBusyState := engine.Measurement(trackHostBusy).Get()
+	usageMean, usageState := engine.Measurement(trackUsageCores).Get()
+	d.AvgUsageCores = usageMean
+	d.AvgHostBusyCores = hostBusyMean
+	d.UsageRingActive = usageState == diagnosis.StateValue
+	d.HostBusyRingActive = hostBusyState == diagnosis.StateValue
 
 	// The headroom ceiling and reserve mirror exactly what the verdict used, so
 	// the message's headline and headroom line report the same number.
