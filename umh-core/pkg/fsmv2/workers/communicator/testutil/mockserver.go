@@ -44,6 +44,12 @@ type MockRelayServer struct {
 	// SimulateBandwidthLimitation, which describes what it does.
 	bandwidthBytesPerSecond int
 	mu                      sync.Mutex
+	// closing is closed once, at the start of Close, to release any request
+	// parked in the bandwidth hold below. Without it, Close waits out the
+	// full hold of every in-flight request, since nothing else cancels their
+	// contexts.
+	closing     chan struct{}
+	closingOnce sync.Once
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.
@@ -56,6 +62,7 @@ func NewMockRelayServer() *MockRelayServer {
 		// Bug #6 fix: Default backend UUID - different from any placeholder UUID
 		backendUUID: "backend-real-uuid-12345678",
 		backendName: "Mock Instance Name",
+		closing:     make(chan struct{}),
 	}
 
 	m.server = httptest.NewServer(http.HandlerFunc(m.handler))
@@ -96,6 +103,8 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-time.After(holdDuration):
 		case <-r.Context().Done():
+			return
+		case <-m.closing:
 			return
 		}
 	}
@@ -240,8 +249,13 @@ func (m *MockRelayServer) URL() string {
 	return m.server.URL
 }
 
-// Close shuts down the mock server.
+// Close shuts down the mock server. Safe to call more than once: it releases
+// any request parked in the bandwidth hold before waiting for handlers to
+// return, so a closing server never blocks on its own held requests.
 func (m *MockRelayServer) Close() {
+	m.closingOnce.Do(func() {
+		close(m.closing)
+	})
 	m.server.Close()
 }
 
