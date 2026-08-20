@@ -38,6 +38,7 @@ type MockRelayServer struct {
 	connectionHeaders []string
 	authCalls         int
 	pushCalls         int
+	pushedBytes       int64
 	nextError         int
 	slowDelay         time.Duration
 	// pathFaults holds faults that persist until cleared, keyed by request path.
@@ -63,6 +64,13 @@ type PathFault struct {
 	// Hang answers nothing and holds the connection until the fault is cleared or
 	// the client gives up. Delay and StatusCode are ignored when it is set.
 	Hang bool
+	// BytesPerSecond models a bandwidth limit rather than a latency: the request
+	// is held for ContentLength/BytesPerSecond before being handled, so a bigger
+	// body costs more time. Delay, which is fixed, cannot express that -- under a
+	// fixed delay message size has no effect on anything, so an experiment that
+	// varies size while holding Delay constant can only ever report "size does
+	// not matter". Added with Delay, both apply.
+	BytesPerSecond int
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.
@@ -142,9 +150,14 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if fault.Delay > 0 {
+		wait := fault.Delay
+		if fault.BytesPerSecond > 0 && r.ContentLength > 0 {
+			wait += time.Duration(float64(r.ContentLength) / float64(fault.BytesPerSecond) * float64(time.Second))
+		}
+
+		if wait > 0 {
 			select {
-			case <-time.After(fault.Delay):
+			case <-time.After(wait):
 			case <-r.Context().Done():
 				return
 			case <-m.closing:
@@ -262,6 +275,12 @@ func (m *MockRelayServer) handlePush(w http.ResponseWriter, r *http.Request) {
 
 	m.mu.Lock()
 	m.pushedMsgs = append(m.pushedMsgs, payload.UMHMessages...)
+
+	for _, msg := range payload.UMHMessages {
+		if msg != nil {
+			m.pushedBytes += int64(len(msg.Content))
+		}
+	}
 	m.mu.Unlock()
 
 	w.WriteHeader(http.StatusOK)
@@ -377,6 +396,16 @@ func (m *MockRelayServer) PushCallCount() int {
 	defer m.mu.Unlock()
 
 	return m.pushCalls
+}
+
+// PushedBytes returns the total Content bytes the server accepted on the push
+// endpoint. Compared against what a producer offered, it shows whether the
+// constraint under test actually bit.
+func (m *MockRelayServer) PushedBytes() int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.pushedBytes
 }
 
 // GetReceivedConnectionHeaders returns all Connection headers received from requests.
