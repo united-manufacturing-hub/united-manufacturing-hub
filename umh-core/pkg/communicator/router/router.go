@@ -15,6 +15,7 @@
 package router
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -159,15 +160,41 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 		return
 	}
 
-	var subscribePayload models.SubscribeMessagePayload
-	if messageContent.Payload != nil {
-		// Try direct type assertion first
-		if payload, ok := messageContent.Payload.(models.SubscribeMessagePayload); ok {
-			subscribePayload = payload
-		}
+	resubscribed, err := resubscribedFromPayload(messageContent.Payload)
+	if err != nil {
+		r.routerLogger.Warnf("Treating subscriber %s as new: %v", message.Email, err)
 	}
 
-	r.subHandler.AddOrRefreshSubscriber(message.Email, subscribePayload.Resubscribed)
+	r.subHandler.AddOrRefreshSubscriber(message.Email, resubscribed)
+}
+
+// resubscribedFromPayload reads the resubscribed flag from a subscribe payload.
+//
+// The payload arrives JSON-decoded, so it is a map and not the struct. Asserting it
+// straight to the struct always fails, and the zero value it leaves behind reports
+// every refresh as a new subscriber, which costs a full topic-cache bundle each time.
+// A false return is the safe error case: an unnecessary bundle is wasteful, while a
+// wrong true leaves a genuinely new subscriber with no cache at all.
+func resubscribedFromPayload(payload any) (bool, error) {
+	if payload == nil {
+		return false, nil
+	}
+
+	if typed, ok := payload.(models.SubscribeMessagePayload); ok {
+		return typed.Resubscribed, nil
+	}
+
+	payloadMap, ok := payload.(map[string]interface{})
+	if !ok {
+		return false, fmt.Errorf("subscribe payload is %T, not a decoded object", payload)
+	}
+
+	var subscribePayload models.SubscribeMessagePayload
+	if err := maptostruct.MapToStruct(payloadMap, &subscribePayload); err != nil {
+		return false, fmt.Errorf("failed to convert payload into SubscribeMessagePayload: %w", err)
+	}
+
+	return subscribePayload.Resubscribed, nil
 }
 
 func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {
