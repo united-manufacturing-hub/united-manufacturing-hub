@@ -35,8 +35,27 @@ const cgroupBase = "/sys/fs/cgroup"
 // out here rather than derived from Cases, because a spec that reads the list
 // it is checking cannot notice a case going missing. Deleting or reordering an
 // entry in Cases fails against this list.
+//
+// The order is a reading arc rather than an accident, so a new case belongs
+// where the arc puts it and not at the end: a healthy machine first, then one
+// too young to have measured anything, then the capacity story with its
+// attribution pair, then pressure, then the CPU-limit cases, then steal, and
+// last the two machines whose files cannot be read. The read failures close the
+// set because they are where a reader stops expecting a verdict at all.
 var caseNames = []string{
+	"quiet-box",
+	"starting-up",
+	"host-full-not-us",
+	"host-full-because-us",
+	"plain-host-no-psi",
 	"pressure-at-sixty",
+	"at-the-baseline",
+	"throttled",
+	"limit-full",
+	"machine-and-limit-full",
+	"noisy-neighbour",
+	"cannot-measure",
+	"no-host-stats",
 }
 
 var _ = Describe("the named machine situations", func() {
@@ -53,21 +72,46 @@ var _ = Describe("the named machine situations", func() {
 					cpuhealth.NewLinuxSamplerWithClock(box.FS(), cgroupBase, box.Clock()),
 				)
 
+				// What a read of THIS machine has to produce. A case stating
+				// a PollError describes a machine whose sample cannot be read
+				// at all, so the demand is the error and the empty status; on
+				// every other case it is a successful read.
+				expectRead := func(status CPUStatus, err error) {
+					if c.PollError != "" {
+						Expect(err).To(MatchError(ContainSubstring(c.PollError)))
+						Expect(status).To(Equal(CPUStatus{}),
+							"a read that failed reports nothing, never a healthy zero")
+
+						return
+					}
+					Expect(err).NotTo(HaveOccurred(), "every read of a servable box must succeed")
+				}
+
 				status, err := Poll(context.Background(), d, CPUConfig{})
-				Expect(err).NotTo(HaveOccurred(), "the first read of a servable box must succeed")
+				expectRead(status, err)
 
 				for i := 0; i < c.Ticks; i++ {
 					box.Tick(time.Second)
 					status, err = Poll(context.Background(), d, CPUConfig{})
-					Expect(err).NotTo(HaveOccurred(), "every read of a servable box must succeed")
+					expectRead(status, err)
+				}
+
+				// The answer fields are the whole assertion for a machine that
+				// could be read. One that could not has already been asserted
+				// on above, and has no status to compare against.
+				if c.PollError != "" {
+					return
 				}
 
 				// All five the case states, exactly. The verdict alone would
 				// pass on a machine judged degraded for the wrong reason,
 				// because the reason is only visible in the message and in
 				// which signals answered. CPUStatus also carries Polls, which
-				// no case states: it is always Ticks + 1, so asserting it would
-				// only restate the loop above.
+				// no case states. On a read that succeeds it is Ticks + 1, so
+				// asserting it would only restate the loop above. On a read
+				// that fails it is 0, because Poll returns before the counter
+				// moves. One rule does not cover both, so the field is left
+				// unasserted rather than given two.
 				Expect(status.Verdict).To(Equal(c.Verdict))
 				Expect(status.Message).To(Equal(c.Message))
 				Expect(status.SignalsCapable).To(Equal(c.SignalsCapable))
