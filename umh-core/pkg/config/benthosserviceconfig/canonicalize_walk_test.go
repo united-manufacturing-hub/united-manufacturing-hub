@@ -309,6 +309,66 @@ var _ = Describe("canonicalize fast path", func() {
 		})
 	})
 
+	// checkString screens the first character with HasPrefix("\n"), but yaml's
+	// block-scalar emitter treats U+2028 and U+2029 as line breaks too and swallows
+	// a leading one the same way it swallows a leading newline. This table asserts
+	// the SAFETY contract from canonicalize_walk.go directly rather than naming the
+	// characters the walk is expected to decline: accepting is optional, agreeing is
+	// not. A fix may either decline the value or reproduce the round-trip exactly,
+	// and this spec passes for both.
+	//
+	// The safe members of the class are listed alongside the unsafe ones on purpose:
+	// they pin the boundary, so a fix that declines every string containing any
+	// separator shows up as over-refusal instead of passing quietly.
+	Describe("the SAFETY contract over yaml line-break characters", func() {
+		// A leading break puts the block-scalar header on the same line as a "- ",
+		// and yaml cannot re-parse what it just wrote. canonicalizeMap answers a
+		// round-trip error by returning the whole section unchanged, so there is no
+		// per-value result to agree with: the only way the walk reproduces that is
+		// to decline and let the fallback hit the same error. Asserting it here
+		// keeps the sequence positions from passing merely because the round-trip
+		// blew up before it could disagree with anything.
+		expectWalkAgreesWhenItAccepts := func(value string) {
+			for _, pos := range valuePositions {
+				in := pos.wrap(value)
+
+				slow, err := yamlRoundTrip(in)
+				if err != nil {
+					_, ok := fastNormalize(in)
+					Expect(ok).To(BeFalse(),
+						"%s: the round-trip fails on %q, so canonicalizeMap keeps the section "+
+							"as it is; the walk accepted it and returns something else",
+						pos.name, value)
+
+					continue
+				}
+
+				fast, ok := fastNormalize(in)
+				if !ok {
+					continue
+				}
+
+				Expect(fast).To(Equal(slow),
+					"%s: the walk accepted %q and returned a value the round-trip does not produce",
+					pos.name, value)
+			}
+		}
+
+		DescribeTable("never accepts a value it cannot reproduce",
+			expectWalkAgreesWhenItAccepts,
+			Entry("multiline string with a leading U+2028 LINE SEPARATOR", "\u2028p\nq\n"),
+			Entry("multiline string with a leading U+2029 PARAGRAPH SEPARATOR", "\u2029p\nq\n"),
+			Entry("bare U+2028 string", "\u2028"),
+			Entry("bare U+2029 string", "\u2029"),
+			Entry("multiline string with an interior U+2028", "p\u2028q\nr\n"),
+			Entry("multiline string with a leading U+0085 NEXT LINE", "\u0085p\nq\n"),
+			Entry("multiline string with a leading carriage return", "\rp\nq\n"),
+			Entry("multiline string with an interior carriage return", "p\rq\nr\n"),
+			Entry("CRLF line endings", "p\r\nq\r\n"),
+			Entry("multiline string with a trailing space", "p \nq \n"),
+		)
+	})
+
 	// []string and map[string]string used to copy their strings straight across, and
 	// map keys were never looked at, so a string the rules reject reached the output
 	// unchecked. []string is live: a write flow puts its topic list into the input.
