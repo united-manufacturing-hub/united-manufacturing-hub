@@ -301,7 +301,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			// never-measured signal, never the measured one. If the join dropped
 			// all-but-the-first name this fails; this is the plural-path guard.
 			Expect(len(spy.sentryWarns)).To(Equal(1))
-			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).To(Equal("throttling, saturation, limit-saturation"),
+			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).To(Equal("throttling, host-cpu-full, container-limit-full"),
 				"all three never-measured names ride in the field, not just the first")
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).NotTo(ContainSubstring("pressure"),
 				"the measured capable signal is never named")
