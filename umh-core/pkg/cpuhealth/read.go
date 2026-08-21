@@ -22,7 +22,8 @@ package cpuhealth
 import (
 	"context"
 	"fmt"
-	"time"
+
+	"github.com/benbjohnson/clock"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -50,11 +51,28 @@ const (
 	HasLimitedVisibility diagnosis.Capability = "cpuhealth.HasLimitedVisibility"
 )
 
-// NewLinuxSampler returns a Sampler reading via fs from base.
+// NewLinuxSampler returns a Sampler reading via fs from base, stamping each
+// tick from the system clock.
 func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
+	return NewLinuxSamplerWithClock(fs, base, clock.New())
+}
+
+// NewLinuxSamplerWithClock returns a Sampler reading via fs from base, stamping
+// each tick from c. A nil c means the system clock.
+//
+// Sample.Timestamp is the only instant the diagnosis pipeline sees, so a caller
+// supplying a clock controls every elapsed time derived from it: each rate the
+// sampler computes, and each sliding window and latch downstream. That is what
+// makes a test over this package deterministic.
+func NewLinuxSamplerWithClock(fs filesystem.Service, base string, c clock.Clock) Sampler {
+	if c == nil {
+		c = clock.New()
+	}
+
 	return &linuxSampler{
 		cgroup: newCgroupSource(fs, base),
 		host:   newHostSource(fs),
+		clock:  c,
 	}
 }
 
@@ -66,6 +84,7 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 type linuxSampler struct {
 	cgroup *cgroupSource
 	host   *hostSource
+	clock  clock.Clock
 }
 
 // Read samples the cgroup at base from cpu.max, the container's CPU limit: a
@@ -77,10 +96,10 @@ type linuxSampler struct {
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
-	// calls time.Now() itself, so both rate derivations divide by the same
-	// elapsed time and Decide never compares a machine-wide mean against a
-	// cgroup mean taken from a different instant.
-	ts := time.Now()
+	// reads a clock itself, so both rate derivations divide by the same elapsed
+	// time and Decide never compares a machine-wide mean against a cgroup mean
+	// taken from a different instant.
+	ts := s.clock.Now()
 	smp.Timestamp = ts
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
