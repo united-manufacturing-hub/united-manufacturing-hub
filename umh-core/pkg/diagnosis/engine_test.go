@@ -822,7 +822,7 @@ var _ = Describe("Engine", func() {
 	// Owning the Instruments slice is not enough: copying the structs leaves
 	// every instrument's Requires header pointing into the caller's own array,
 	// so a later edit there rewrites what the engine's instrument asks the
-	// environment for. Capable drops an instrument whose capability the
+	// environment for. CapableInstruments drops an instrument whose capability the
 	// environment lacks, which is the whole signal here, so the edit would show
 	// up as NoInstrument. The positive control runs the same table unedited in
 	// the same environment, which shows the instrument is reachable at all.

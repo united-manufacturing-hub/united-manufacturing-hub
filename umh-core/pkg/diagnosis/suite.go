@@ -212,7 +212,7 @@ func drive[S any](e *Engine[S], interval time.Duration, env Environment, seq []b
 // instruments, falling back to the smallest on the signal, then to one.
 func minCapableMin[S any](s Signal[S], env Environment) int {
 	m := 0
-	for _, inst := range s.Capable(env) {
+	for _, inst := range s.CapableInstruments(env) {
 		if m == 0 || inst.Reduction.Min < m {
 			m = inst.Reduction.Min
 		}

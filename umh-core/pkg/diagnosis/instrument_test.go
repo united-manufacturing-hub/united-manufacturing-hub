@@ -19,10 +19,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// Instrument is one way of measuring a signal, and Signal.Capable is the
-// capability gate and nothing more: it returns every instrument whose required
-// capabilities are present, in table order, and does not pick a winner. The
-// gate filters on startup facts, so tests use bare capability names and unit
+// Instrument is one way of measuring a signal, and Signal.CapableInstruments is
+// the capability gate and nothing more: it returns every instrument whose
+// required capabilities are present, in table order, and does not pick a winner.
+// The gate filters on startup facts, so tests use bare capability names and unit
 // strings, which are the caller's vocabulary.
 var _ = Describe("Instrument", func() {
 	// snap is a generic caller snapshot type holding both counters of a pair.
@@ -103,7 +103,7 @@ var _ = Describe("Instrument", func() {
 			},
 		}
 
-		got := signal.Capable(NewEnvironment("source-1"))
+		got := signal.CapableInstruments(NewEnvironment("source-1"))
 		Expect(got).To(HaveLen(2), "the environment satisfies the free instrument and the source-1 instrument only")
 		Expect(got[0].Name).To(Equal("A-free"), "a zero-Requires instrument is satisfied by any environment")
 		Expect(got[1].Name).To(Equal("A-1"), "the satisfied instruments come back in table order")
@@ -118,7 +118,7 @@ var _ = Describe("Instrument", func() {
 			},
 		}
 
-		got := signal.Capable(NewEnvironment())
+		got := signal.CapableInstruments(NewEnvironment())
 		Expect(got).To(HaveLen(1), "an empty environment satisfies only the zero-Requires instrument")
 		Expect(got[0].Name).To(Equal("A-free"))
 	})
@@ -132,7 +132,7 @@ var _ = Describe("Instrument", func() {
 			},
 		}
 
-		got := signal.Capable(NewEnvironment("source-1"))
+		got := signal.CapableInstruments(NewEnvironment("source-1"))
 		Expect(got).To(HaveLen(2), "both instruments declaring the same capability survive the gate")
 		Expect(got[0].Name).To(Equal("A-p95"), "the first match keeps its place in table order")
 		Expect(got[1].Name).To(Equal("A-mean"), "the second match is not discarded by a gate that picks a winner")

@@ -92,11 +92,13 @@ type Signal[S any] struct {
 	// the first instrument that can supply a number is the one used.
 	Instruments []Instrument[S]
 	// Refinements are signals declared under this one, narrowing its answer with
-	// their own instruments and marks. Each is sampled and judged on every tick,
-	// whether or not this signal fired, so its window is warm when this one fires
-	// and its Since is the tick IT crossed its mark. A refinement appears in
-	// Fired.Refinements under a parent that fired, and never as a verdict of its
-	// own. The Refinements section of the package doc works through an example.
+	// their own instruments and marks. A refinement is itself a Signal, so it may
+	// declare refinements of its own, to any depth. Each is sampled and judged on
+	// every tick, whether or not this signal fired, so its window is warm when
+	// this one fires and its Since is the tick IT crossed its mark. A refinement
+	// appears in Fired.Refinements under a parent that fired, and never as a
+	// verdict of its own. The Refinements section of the package doc works
+	// through an example.
 	Refinements []Signal[S]
 	// DemoteSpan is how long a signal may go unread before its window empties:
 	// stale detection, so an old number cannot stand forever.
@@ -112,8 +114,9 @@ type Signal[S any] struct {
 	ReleaseOnAbsent bool
 }
 
-// Capable returns the instruments the environment satisfies, in declared order.
-func (s Signal[S]) Capable(env Environment) []Instrument[S] {
+// CapableInstruments returns the instruments the environment satisfies, in
+// declared order.
+func (s Signal[S]) CapableInstruments(env Environment) []Instrument[S] {
 	capable := make([]Instrument[S], 0, len(s.Instruments))
 	for _, inst := range s.Instruments {
 		satisfied := true

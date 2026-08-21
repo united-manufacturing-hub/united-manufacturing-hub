@@ -18,10 +18,10 @@
 // collectively say, an Availability, and drive that signal's latch with it.
 //
 // The environment is not checked while building: NewEngine takes no Environment
-// and builds a window for every instrument, capable or not. Signal.Capable runs
-// inside Observe, every tick, so one table runs unchanged on boxes with
-// different capabilities and a capability that appears or disappears takes
-// effect on the next tick.
+// and builds a window for every instrument, capable or not.
+// Signal.CapableInstruments runs inside Observe, every tick, so one table runs
+// unchanged on boxes with different capabilities and a capability that appears
+// or disappears takes effect on the next tick.
 //
 // Using it:
 //
@@ -110,9 +110,10 @@ type signalState[S any] struct {
 	releaseOnAbsent bool
 }
 
-// capable applies Signal.Capable to the instruments this state holds.
-func (st *signalState[S]) capable(env Environment) []Instrument[S] {
-	return Signal[S]{Instruments: st.instruments}.Capable(env)
+// capableInstruments applies Signal.CapableInstruments to the instruments this
+// state holds.
+func (st *signalState[S]) capableInstruments(env Environment) []Instrument[S] {
+	return Signal[S]{Instruments: st.instruments}.CapableInstruments(env)
 }
 
 // measurementState is one measurement and the single window it reduces through,
@@ -181,6 +182,14 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 // the same path and share a window.
 const pathSeparator = "/"
 
+// childPath is the path a refinement's windows and latch are keyed under: its
+// parent's path, then pathSeparator, then its own name. Every caller that walks
+// into a refinement composes the path through here, so the three walks cannot
+// disagree about what a nested signal is called.
+func childPath(parent, name string) string {
+	return parent + pathSeparator + name
+}
+
 // buildSignalState pairs one signal with the latch that judges it, then recurses
 // into its refinements under the same paths buildWindows keyed their windows
 // under. index is the signal's position among its siblings, which Identity.Index
@@ -212,7 +221,7 @@ func buildSignalState[S any](path string, s Signal[S], index int) signalState[S]
 	}
 
 	for i, r := range s.Refinements {
-		st.refinements = append(st.refinements, buildSignalState(path+pathSeparator+r.Name, r, i))
+		st.refinements = append(st.refinements, buildSignalState(childPath(path, r.Name), r, i))
 	}
 
 	return st
@@ -232,7 +241,7 @@ func buildWindows[S any](e *Engine[S], path string, s Signal[S]) error {
 	}
 
 	for _, r := range s.Refinements {
-		if err := buildWindows(e, path+pathSeparator+r.Name, r); err != nil {
+		if err := buildWindows(e, childPath(path, r.Name), r); err != nil {
 			return err
 		}
 	}
@@ -392,7 +401,7 @@ func validateSignal[S any](path string, s Signal[S], interval time.Duration) err
 
 		seen[r.Name] = true
 
-		if err := validateSignal(path+pathSeparator+r.Name, r, interval); err != nil {
+		if err := validateSignal(childPath(path, r.Name), r, interval); err != nil {
 			return err
 		}
 	}
@@ -436,12 +445,13 @@ func validateMeasurement[S any](row string, spanNoun string, m Measurement[S], i
 // extent and the Availability that justifies them. It is caller-facing API:
 // nothing in the package calls it, and Observe applies the same two gates itself.
 //
-// Gate one is CAPABILITY, Signal.Capable, re-evaluated every tick against the
-// Environment handed in. Gate two is READINESS: can this instrument's window
-// supply a trustworthy value right now. They stay separate because a percentile
-// instrument and the cheap fallback behind it usually declare the SAME
-// capability: a capability-only selector would return the percentile forever,
-// leave it untrusted below twenty samples, and never reach the fallback.
+// Gate one is CAPABILITY, Signal.CapableInstruments, re-evaluated every tick
+// against the Environment handed in. Gate two is READINESS: can this
+// instrument's window supply a trustworthy value right now. They stay separate
+// because a percentile instrument and the cheap fallback behind it usually
+// declare the SAME capability: a capability-only selector would return the
+// percentile forever, leave it untrusted below twenty samples, and never reach
+// the fallback.
 //
 // Select takes a top-level signal of the table. Passing a refinement is not
 // supported: windows are keyed by path and Select keys on the bare name, so a
@@ -456,7 +466,7 @@ func validateMeasurement[S any](row string, spanNoun string, m Measurement[S], i
 // so a window reduced without a preceding Observe reports entries left over from
 // an earlier tick as trusted.
 func (e *Engine[S]) Select(s Signal[S], env Environment) (Instrument[S], Reduced, Coverage, Availability) {
-	return e.resolve(s.Name, s.Capable(env))
+	return e.resolve(s.Name, s.CapableInstruments(env))
 }
 
 // resolve applies the readiness gate to a signal's already-capable instruments:
@@ -537,7 +547,7 @@ func observeWindows[S any](e *Engine[S], st *signalState[S], sample S, at time.T
 // refinements' as the recursion reaches them, so a parent's row comes
 // immediately before the rows of the subtree under it.
 func (e *Engine[S]) judge(st *signalState[S], env Environment, at time.Time, into []Readiness) []Readiness {
-	inst, reduced, cov, avail := e.resolve(st.path, st.capable(env))
+	inst, reduced, cov, avail := e.resolve(st.path, st.capableInstruments(env))
 	l := &st.latch
 
 	switch avail {
@@ -604,9 +614,9 @@ func firedTree[S any](st *signalState[S]) (Fired, bool) {
 // the readiness rows are depth-first, each signal immediately before the subtree
 // under it, and each named by its path. In order: append to every measurement's
 // and every instrument's window; then walk the signals, resolving each one's
-// Availability over the instruments Signal.Capable allows it this tick, driving
-// its single latch and emitting its Readiness row whether or not it fired, and
-// collecting each top-level signal whose latch is fired.
+// Availability over the instruments Signal.CapableInstruments allows it this
+// tick, driving its single latch and emitting its Readiness row whether or not
+// it fired, and collecting each top-level signal whose latch is fired.
 //
 // The append pass is unconditional, instruments this environment cannot satisfy
 // included, because Observe is the only call that ages a window: skip it once
