@@ -56,7 +56,7 @@ var workerVerdictMessage = cpuhealth.ComposeMessage(
 		State:  cpuhealth.StateDegraded,
 		Causes: []cpuhealth.Cause{{Kind: cpuhealth.CauseKindThrottling, Value: 0.5}},
 	},
-	cpuhealth.Signals{ThrottleRatio: 0.5},
+	cpuhealth.Details{ThrottleRatio: 0.5},
 )
 
 // workerHealthyMessage is cpuhealth.ComposeMessage's output for a healthy
@@ -64,12 +64,12 @@ var workerVerdictMessage = cpuhealth.ComposeMessage(
 // discriminating the two paths exactly like workerVerdictMessage.
 var workerHealthyMessage = cpuhealth.ComposeMessage(
 	cpuhealth.Verdict{State: cpuhealth.StateHealthy},
-	cpuhealth.Signals{
+	cpuhealth.Details{
 		CapacityCores:          8,
 		LimitApplies:           false,
 		HostBusyRingActive:     true,
 		HostBusyCoresAvailable: true,
-		HostBusyCores60sMean:   2,
+		AvgHostBusyCores:       2,
 		ReserveCores:           1,
 	},
 )
