@@ -309,25 +309,12 @@ var _ = Describe("canonicalize fast path", func() {
 		})
 	})
 
-	// checkString screens the first character with HasPrefix("\n"), but yaml's
-	// block-scalar emitter treats U+2028 and U+2029 as line breaks too and swallows
-	// a leading one the same way it swallows a leading newline. This table asserts
-	// the SAFETY contract from canonicalize_walk.go directly rather than naming the
-	// characters the walk is expected to decline: accepting is optional, agreeing is
-	// not. A fix may either decline the value or reproduce the round-trip exactly,
-	// and this spec passes for both.
-	//
-	// The safe members of the class are listed alongside the unsafe ones on purpose:
-	// they pin the boundary, so a fix that declines every string containing any
-	// separator shows up as over-refusal instead of passing quietly.
-	Describe("the SAFETY contract over yaml line-break characters", func() {
-		// A leading break puts the block-scalar header on the same line as a "- ",
-		// and yaml cannot re-parse what it just wrote. canonicalizeMap answers a
-		// round-trip error by returning the whole section unchanged, so there is no
-		// per-value result to agree with: the only way the walk reproduces that is
-		// to decline and let the fallback hit the same error. Asserting it here
-		// keeps the sequence positions from passing merely because the round-trip
-		// blew up before it could disagree with anything.
+	// Asserts the SAFETY contract itself, not a list of characters to refuse:
+	// accepting is optional, agreeing is not. Safe cases sit beside unsafe ones so
+	// that refusing a whole class shows up as over-refusal.
+	Describe("the SAFETY contract against yaml's block-scalar emitter", func() {
+		// On a round-trip error canonicalizeMap keeps the section as it stands, which
+		// no per-value result can match, so the walk has to decline instead.
 		expectWalkAgreesWhenItAccepts := func(value string) {
 			for _, pos := range valuePositions {
 				in := pos.wrap(value)
@@ -354,7 +341,9 @@ var _ = Describe("canonicalize fast path", func() {
 			}
 		}
 
-		DescribeTable("never accepts a value it cannot reproduce",
+		// yaml counts U+2028 and U+2029 as line breaks too and swallows a leading one
+		// the way it swallows a leading "\n".
+		DescribeTable("never accepts a line break it cannot reproduce",
 			expectWalkAgreesWhenItAccepts,
 			Entry("multiline string with a leading U+2028 LINE SEPARATOR", "\u2028p\nq\n"),
 			Entry("multiline string with a leading U+2029 PARAGRAPH SEPARATOR", "\u2029p\nq\n"),
@@ -366,6 +355,16 @@ var _ = Describe("canonicalize fast path", func() {
 			Entry("multiline string with an interior carriage return", "p\rq\nr\n"),
 			Entry("CRLF line endings", "p\r\nq\r\n"),
 			Entry("multiline string with a trailing space", "p \nq \n"),
+		)
+
+		// A leading tab lands in the block scalar's indentation, so yaml cannot parse
+		// its own output. Only multi-line: on one line the value gets quoted.
+		DescribeTable("never accepts a tab it cannot reproduce",
+			expectWalkAgreesWhenItAccepts,
+			Entry("multiline string with a leading tab", "\tif x\n\tbody\n"),
+			Entry("single-line string with a leading tab", "\tif x"),
+			Entry("multiline string with an interior tab", "if x\n\tbody\n"),
+			Entry("multiline string with a leading space before the tab", " \tif x\n\tbody\n"),
 		)
 	})
 

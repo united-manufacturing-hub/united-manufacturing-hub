@@ -52,44 +52,36 @@ func intFromUint64(v uint64) interface{} {
 	return v
 }
 
-// checkString rejects the strings yaml's block-scalar emitter does not round-trip:
+// checkString rejects the strings yaml's block-scalar emitter does not round-trip.
+// A leading break is swallowed ("\nSELECT 1" -> "SELECT 1"); U+2028 and U+2029 count
+// as breaks too, hence decoding the first rune rather than matching a byte. U+0085
+// stays accepted: a break to the parser, but the emitter quotes it.
 //
-//	"\nSELECT 1"    -> "SELECT 1"    leading line break dropped
-//	"  a\n    b\n"  -> "a\n  b\n"    in a sequence element, the common indent is
-//	                                 stripped from every line
+// A leading space loses the common indent inside a sequence element, a leading tab
+// makes yaml emit output it cannot read back. Both need a multi-line string, which
+// is what makes yaml reach for a block scalar at all.
 //
-// The second depends on position, which the walk cannot see, so decline every
-// multi-line string starting with a space. Tabs are safe: YAML forbids them as
-// indentation, so those strings get quoted instead of blocked.
-//
-// A leading break is not only "\n": yaml counts U+2028 and U+2029 as line breaks
-// too and opens the block scalar past them the same way, so the first rune has to
-// be decoded rather than byte-matched. U+0085 is a break for the parser but not for
-// the emitter, which quotes it instead, so it round-trips and stays accepted.
-//
-// Every string reaching the fast path must pass through here, including map keys
-// and the elements of []string and map[string]string. Those used to be copied
-// verbatim, which let the exact values this rejects through unchecked.
+// Every string on the fast path passes through here, map keys and the elements of
+// []string and map[string]string included.
 func checkString(s string) (out interface{}, ok bool, unsupported string) {
 	if r, _ := utf8.DecodeRuneInString(s); r == '\n' || r == '\u2028' || r == '\u2029' {
 		return nil, false, "string(leading line break)"
 	}
 
-	if strings.HasPrefix(s, " ") && strings.Contains(s, "\n") {
-		return nil, false, "string(multiline, leading space)"
+	if (strings.HasPrefix(s, " ") || strings.HasPrefix(s, "\t")) && strings.Contains(s, "\n") {
+		return nil, false, "string(multiline, leading whitespace)"
 	}
 
 	return s, true, ""
 }
 
-// normalizeValue reproduces what a yaml.Marshal + yaml.Unmarshal round-trip does to
-// a generic value, without serialising to text. The third return value names the
-// shape it gave up on, so the caller can report what is still missing.
+// normalizeValue reproduces a yaml.Marshal + yaml.Unmarshal round-trip without
+// serialising. The third return value names the shape it gave up on.
 //
 // SAFETY: the result must be indistinguishable from the round-trip. A wrong answer
-// makes two equal configs look different and re-applies the config forever. Anything
-// this cannot reproduce exactly returns ok=false and the caller falls back to the
-// real round-trip. Being slow is acceptable; being wrong is not.
+// makes two equal configs look different and re-applies the config forever, so
+// anything it cannot reproduce exactly returns ok=false and falls back. Being slow
+// is acceptable; being wrong is not.
 func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string) {
 	switch t := v.(type) {
 	case nil:
@@ -248,7 +240,7 @@ var reportedFallbackTypes sync.Map // map[string]struct{}, one report per type
 //
 // Sentry is best-effort on top: its warning path shares one process-wide two-hour
 // debounce across every warning, and the type is marked before the send, so a
-// debounced report is never retried. The log line is the dependable signal.
+// debounced report is never retried.
 func reportFallback(unsupported string) {
 	if unsupported == "" {
 		return
