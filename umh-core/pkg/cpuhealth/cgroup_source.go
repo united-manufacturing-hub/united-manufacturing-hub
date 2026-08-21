@@ -64,8 +64,8 @@ type usageBaseline struct {
 // what the next tick measures against. It returns this tick's instantaneous usage
 // rate: the delta of usage against the baseline it replaced, divided by the
 // elapsed time since that baseline. ts is the composer's single per-tick
-// Timestamp and never time.Now(); Read in read.go says why both sources have to
-// divide by the same elapsed time.
+// Timestamp and never a clock of its own; Read in read.go says why both sources
+// have to divide by the same elapsed time.
 func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
 	if c.usageBase.have {
