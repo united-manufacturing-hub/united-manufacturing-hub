@@ -224,10 +224,19 @@ type shareRun struct {
 	tree     *diagnosis.Engine[Sample]
 	at       time.Time
 	env      diagnosis.Environment
-	// seen holds one entry per tick: the refinements fired under host-cpu-full on
-	// that tick, so a spec can assert over a whole run rather than its end.
-	seen  [][]string
+	// seen holds one entry per tick, so a spec can assert over a whole run
+	// rather than its end.
+	seen  []tickShares
 	scope Scope
+}
+
+// tickShares is one tick's reading of the refinements fired under
+// host-cpu-full. hostCpuFull says whether that signal fired at all, which the
+// refinements alone cannot: a signal that did not fire and a signal that fired
+// with nothing narrowing it both leave the list empty.
+type tickShares struct {
+	refinements []string
+	hostCpuFull bool
 }
 
 // newShareRun builds a run on a box with no quota and no PSI, so the only
@@ -252,8 +261,9 @@ func newShareRun(cores float64, scope Scope) *shareRun {
 // returns the last tick's verdict with the refinements fired on that tick. Sixty
 // ticks flush a 60-second window, so a phase longer than that ends on the new
 // share and not on a mean still carrying the old one.
-func (r *shareRun) advance(n int, hostBusy, usage float64) (Verdict, []string) {
+func (r *shareRun) advance(n int, hostBusy, usage float64) (Verdict, []string, bool) {
 	var verdict Verdict
+	var last tickShares
 
 	for i := 0; i < n; i++ {
 		smp := Sample{
@@ -264,16 +274,20 @@ func (r *shareRun) advance(n int, hostBusy, usage float64) (Verdict, []string) {
 		}
 		verdict, _ = Decide(r.verdicts, smp, r.env)
 		fired, _ := r.tree.Observe(smp, r.env, r.at)
-		r.seen = append(r.seen, firedShares(fired))
+		refinements, hostCpuFull := firedShares(fired)
+		last = tickShares{refinements: refinements, hostCpuFull: hostCpuFull}
+		r.seen = append(r.seen, last)
 		r.at = r.at.Add(time.Second)
 	}
 
-	return verdict, r.seen[len(r.seen)-1]
+	return verdict, last.refinements, last.hostCpuFull
 }
 
 // firedShares names the refinements fired under the host-cpu-full signal, and
-// nil when that signal itself did not fire.
-func firedShares(fired []diagnosis.Fired) []string {
+// says whether that signal fired at all. The two answers are separate because
+// a signal that did not fire has no refinements for the same reason a signal
+// narrowed by nothing has none, and the caller needs to tell them apart.
+func firedShares(fired []diagnosis.Fired) ([]string, bool) {
 	for _, f := range fired {
 		if f.Identity.Signal != sigHostCpuFull {
 			continue
@@ -284,10 +298,10 @@ func firedShares(fired []diagnosis.Fired) []string {
 			out = append(out, ref.Identity.Signal)
 		}
 
-		return out
+		return out, true
 	}
 
-	return nil
+	return nil, false
 }
 
 var _ = Describe("the share that narrows a full machine to a side", func() {
@@ -299,7 +313,7 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 		// usage 3.0 puts usage-fraction at 0.75, so host-cpu-full still fires and
 		// the tick still needs a blame.
 		pinned := newShareRun(4, ScopeAffinity)
-		verdict, refinements := pinned.advance(6, 10.0, 3.0)
+		verdict, refinements, _ := pinned.advance(6, 10.0, 3.0)
 		Expect(verdict.Causes).To(HaveLen(1), "usage-fraction 3.0 / 4 = 0.75 fires host-cpu-full")
 		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 		Expect(refinements).To(BeEmpty(), "the share is not a number on a pinned container")
@@ -308,9 +322,30 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 		// The control: the same two numbers on a host-scoped sample, where the
 		// share means what it says.
 		whole := newShareRun(4, ScopeHost)
-		verdict, refinements = whole.advance(6, 10.0, 3.0)
+		verdict, refinements, _ = whole.advance(6, 10.0, 3.0)
 		Expect(refinements).To(Equal([]string{refHostShare}))
 		Expect(verdict.Attribution).To(Equal(AttributionHost))
+	})
+
+	It("should tell a signal that never fired from one that fired with nothing narrowing it", func() {
+		// Both runs end with no refinements, and only the second one has a
+		// signal to hang them under. An idle four-core box is 0.1 busy, which
+		// leaves host-headroom far from its mark and usage-fraction at 0.025,
+		// so nothing fires at all.
+		idle := newShareRun(4, ScopeHost)
+		verdict, refinements, hostCpuFull := idle.advance(6, 0.1, 0.1)
+		Expect(verdict.Causes).To(BeEmpty())
+		Expect(hostCpuFull).To(BeFalse(), "an idle box does not fire host-cpu-full")
+		Expect(refinements).To(BeEmpty())
+
+		// The pinned container of the spec above: usage-fraction 3.0 / 4 = 0.75
+		// fires host-cpu-full, and the share that would narrow it is withheld
+		// because it is not a number on a pinned container.
+		pinned := newShareRun(4, ScopeAffinity)
+		verdict, refinements, hostCpuFull = pinned.advance(6, 10.0, 3.0)
+		Expect(verdict.Causes).To(HaveLen(1))
+		Expect(hostCpuFull).To(BeTrue(), "a pinned container at 0.75 does fire host-cpu-full")
+		Expect(refinements).To(BeEmpty())
 	})
 
 	It("should hold the side already blamed while the share sits between the two fire marks", func() {
@@ -320,19 +355,19 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 		// then some, so each phase ends on its own share.
 		run := newShareRun(4, ScopeHost)
 
-		verdict, refinements := run.advance(90, 3.5, 1.40) // share 0.40
+		verdict, refinements, _ := run.advance(90, 3.5, 1.40) // share 0.40
 		Expect(refinements).To(Equal([]string{refHostShare}), "0.40 is past host-share's 0.49 fire mark")
 		Expect(verdict.Attribution).To(Equal(AttributionHost))
 
-		verdict, refinements = run.advance(90, 3.5, 1.75) // share 0.50
+		verdict, refinements, _ = run.advance(90, 3.5, 1.75) // share 0.50
 		Expect(refinements).To(Equal([]string{refHostShare}), "0.50 is short of host-share's 0.505 clear mark, so it holds")
 		Expect(verdict.Attribution).To(Equal(AttributionHost))
 
-		verdict, refinements = run.advance(90, 3.5, 2.10) // share 0.60
+		verdict, refinements, _ = run.advance(90, 3.5, 2.10) // share 0.60
 		Expect(refinements).To(Equal([]string{refContainerShare}), "0.60 clears host-share and fires container-share")
 		Expect(verdict.Attribution).To(Equal(AttributionContainer))
 
-		verdict, refinements = run.advance(90, 3.5, 1.75) // share 0.50 again
+		verdict, refinements, _ = run.advance(90, 3.5, 1.75) // share 0.50 again
 		Expect(refinements).To(Equal([]string{refContainerShare}), "the same 0.50 now holds the container, which is the whole point of the band")
 		Expect(verdict.Attribution).To(Equal(AttributionContainer))
 	})
@@ -348,10 +383,10 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 		}
 
 		both := make(map[string]bool)
-		for tick, refinements := range run.seen {
-			Expect(len(refinements)).To(BeNumerically("<=", 1),
-				"tick %d fired %v: the two bands do not overlap, so firing either one clears the other", tick, refinements)
-			for _, name := range refinements {
+		for tick, shares := range run.seen {
+			Expect(len(shares.refinements)).To(BeNumerically("<=", 1),
+				"tick %d fired %v: the two bands do not overlap, so firing either one clears the other", tick, shares.refinements)
+			for _, name := range shares.refinements {
 				both[name] = true
 			}
 		}
