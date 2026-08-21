@@ -27,9 +27,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
-// intFromInt64 and intFromUint64 pick the Go type yaml's resolver picks: int when
-// the value fits, otherwise int64 or uint64. The wider branches only matter on a
-// 32-bit build.
+// intFromInt64 and intFromUint64 pick the type yaml's resolver picks: int when it
+// fits, otherwise int64 or uint64. The wider branches only matter on 32-bit.
 func intFromInt64(v int64) interface{} {
 	if v > math.MaxInt || v < math.MinInt {
 		return v
@@ -43,8 +42,7 @@ func intFromUint64(v uint64) interface{} {
 		return int(v)
 	}
 
-	// ParseInt still accepts it, so yaml keeps it signed; only past MaxInt64 does
-	// it fall through to ParseUint.
+	// Still signed to yaml; only past MaxInt64 does its resolver reach ParseUint.
 	if v <= math.MaxInt64 {
 		return int64(v)
 	}
@@ -91,9 +89,8 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 	case string:
 		return checkString(t)
 	case float64:
-		// yaml writes floats as a plain, untagged scalar, so float64(1000) becomes
-		// "1000" and reads back as int. Resolve the emitted text the way yaml does:
-		// ParseInt, then ParseUint, otherwise it stays a float.
+		// float64(1000) is emitted as a plain "1000" and reads back as int, so resolve
+		// the emitted text the way yaml does.
 		text := strconv.FormatFloat(t, 'g', -1, 64)
 		if i, err := strconv.ParseInt(text, 10, 64); err == nil {
 			return intFromInt64(i), true, ""
@@ -123,8 +120,8 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 	case uint64:
 		return intFromUint64(t), true, ""
 	case float32:
-		// Round-trips through a 32-bit decimal form, so the result is not float64(t).
-		// Reproducible, but nothing in the config path produces a float32.
+		// Round-trips via a 32-bit decimal form, so the result is not float64(t).
+		// Reproducible, but no config path produces one.
 		return nil, false, "float32"
 	case []interface{}:
 		res := make([]interface{}, len(t))
@@ -222,7 +219,7 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 
 		return res, true, ""
 	default:
-		// Structs, pointers, custom types: yaml encodes these via their tags, and
+		// Structs, pointers, custom types: yaml goes through their tags, and
 		// replicating that would be a second marshaller.
 		return nil, false, fmt.Sprintf("%T", v)
 	}
@@ -230,17 +227,14 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 
 var reportedFallbackTypes sync.Map // map[string]struct{}, one report per type
 
-// reportFallback surfaces a type the fast path cannot handle. A single declining
-// value makes its whole config section fall back, so this is the only signal that
-// the optimization has stopped applying somewhere.
+// reportFallback surfaces a type the fast path cannot handle. One declining value
+// sends its whole config section back to the slow path, so this is the only signal
+// that the optimization stopped applying somewhere.
 //
-// WARN, not DEBUG: the default level is Info, so a DEBUG line is invisible exactly
-// where this matters. It fires at most once per type per process and means a whole
-// config section went back to the slow path, which is a reconcile budget concern.
-//
-// Sentry is best-effort on top: its warning path shares one process-wide two-hour
-// debounce across every warning, and the type is marked before the send, so a
-// debounced report is never retried.
+// WARN, not DEBUG: the default level is Info, which would hide it exactly where it
+// matters. Fires once per type per process. Sentry on top is best-effort - its
+// warning path shares one process-wide two-hour debounce and the type is marked
+// before the send, so a debounced report is never retried.
 func reportFallback(unsupported string) {
 	if unsupported == "" {
 		return
@@ -257,8 +251,7 @@ func reportFallback(unsupported string) {
 			"Correct but slower; add the case to normalizeValue in canonicalize_walk.go.",
 		unsupported)
 
-	// Passing log rather than nil: ReportIssueWithContext swaps nil for a no-op
-	// logger, which silently drops its own half of the report.
+	// log, not nil: ReportIssueWithContext swaps nil for a no-op logger.
 	sentry.ReportIssueWithContext(
 		fmt.Errorf("canonicalize fast path unsupported type: %s", unsupported),
 		sentry.IssueTypeWarning, log,
