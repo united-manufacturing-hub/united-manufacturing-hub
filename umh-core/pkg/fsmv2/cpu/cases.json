@@ -1,0 +1,328 @@
+{
+  "note": "Generated from pkg/fsmv2/cpu/cases.go; do not edit by hand. ticks is how many one-second clock advances happen before the read this entry answers for; one read runs before the first tick, so the answer is the last of ticks+1 reads. To refresh this file, run this from the umh-core module root: UPDATE_CPU_CASES_JSON=1 go test -tags=test -count=1 ./pkg/fsmv2/cpu/",
+  "cases": [
+    {
+      "name": "quiet-box",
+      "why": "A four-core machine at a fifth of its capacity: nothing fires, and the healthy message prints the budget it measured and only that.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 0.5,
+        "hostBusy": 0.2,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0.02,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "healthy",
+        "message": "CPU healthy. The machine is using 0.8 of 4 cores and can use 2.2 more before it is marked degraded.\nTechnical Details: Headroom 2.2 cores = 4 total - 0.8 used - 1.0 reserved (degraded below 0). Pressure 2% (degraded above 20%).",
+        "signalsCapable": 2,
+        "signalsMeasured": 2,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "starting-up",
+      "why": "quiet-box judged on its first read. A worker with no rate yet says so in one line and refuses admission, rather than reporting a budget it has not measured.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 0.5,
+        "hostBusy": 0.2,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0.02,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 0,
+      "answer": {
+        "verdict": "healthy",
+        "message": "CPU: starting up.",
+        "signalsCapable": 2,
+        "signalsMeasured": 1,
+        "refusingAdmission": true
+      }
+    },
+    {
+      "name": "host-full-not-us",
+      "why": "The machine is full and a fifth of its busy time is ours. The share refinement blames the host, and the paragraph sends the operator to the other software on the machine. host-full-because-us is the same machine with the load the other way round.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 3,
+        "usageCores": 0.64,
+        "hostBusy": 0.8,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0.05,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU running near full\nTechnical Details: The machine is full. Add CPU to the machine, or reduce other software running on it.",
+        "signalsCapable": 4,
+        "signalsMeasured": 4,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "host-full-because-us",
+      "why": "host-full-not-us with four fifths of the busy time ours. The blame moves to this instance and the remedy moves with it: the operator is sent to this instance's own load instead of to other software that is not the problem. The pair is the whole point — one machine state, two remedies, chosen by who filled it.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 3,
+        "usageCores": 2.56,
+        "hostBusy": 0.8,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0.05,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU running near full\nTechnical Details: The machine is full, and this instance is using most of it. Reduce the load on this instance, or add CPU to the machine.",
+        "signalsCapable": 4,
+        "signalsMeasured": 4,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "plain-host-no-psi",
+      "why": "A full machine with no CPU limit and a kernel publishing no pressure stats. That pair is what earns the trailing sentence asking for psi=1, which no other case here prints.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 1,
+        "hostBusy": 0.8,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0,
+        "psiPresent": false,
+        "virtualized": true,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU running near full\nTechnical Details: CPU averaged 80% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it. Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail.",
+        "signalsCapable": 2,
+        "signalsMeasured": 2,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "pressure-at-sixty",
+      "why": "Sixty percent busy with spare cores is still degraded: tasks are queueing for a core, so pressure fires while capacity stays quiet.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 1.2,
+        "hostBusy": 0.6,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0.25,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU contention\nTechnical Details: Tasks in this instance spent 25% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it.",
+        "signalsCapable": 2,
+        "signalsMeasured": 2,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "at-the-baseline",
+      "why": "Pressure one point under its 20% mark, on an eight-core machine with headroom to spare. The verdict is healthy and the budget line still prints the number that did not fire, so a reader can see how close it came.",
+      "machine": {
+        "cores": 8,
+        "quotaCores": 0,
+        "usageCores": 4.5,
+        "hostBusy": 0.6,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0.19,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "healthy",
+        "message": "CPU healthy. The machine is using 4.8 of 8 cores and can use 2.2 more before it is marked degraded.\nTechnical Details: Headroom 2.2 cores = 8 total - 4.8 used - 1.0 reserved (degraded below 0). Pressure 19% (degraded above 20%).",
+        "signalsCapable": 2,
+        "signalsMeasured": 2,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "throttled",
+      "why": "A container the kernel is pausing at its own CPU limit, and which is also out of budget. Throttling is starvation and outranks the saturation beside it, so it takes the headline; both paragraphs are printed, dominant first.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 2,
+        "usageCores": 1.9,
+        "hostBusy": 0.55,
+        "steal": 0,
+        "throttle": 0.12,
+        "pressure": 0,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU limited\nTechnical Details: This instance hit its CPU limit and was paused until the next cycle, in 12% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it.\n\nCPU averaged 95% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it.",
+        "signalsCapable": 4,
+        "signalsMeasured": 4,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "limit-full",
+      "why": "throttled's container out of its budget without being paused for it. The limit-saturation paragraph then speaks alone, under the saturation headline rather than the throttling one.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 2,
+        "usageCores": 1.85,
+        "hostBusy": 0.5,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU running near full\nTechnical Details: CPU averaged 93% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it.",
+        "signalsCapable": 4,
+        "signalsMeasured": 4,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "machine-and-limit-full",
+      "why": "The machine is full AND this instance is out of its own CPU limit. The two remedies contradict each other — raising a limit cannot help on a machine with nothing left to give — so the message blends them into one paragraph instead of handing the operator both.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 2,
+        "usageCores": 1.9,
+        "hostBusy": 0.9,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU running near full\nTechnical Details: The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its 2-core limit.)",
+        "signalsCapable": 4,
+        "signalsMeasured": 4,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "noisy-neighbour",
+      "why": "A guest whose hypervisor is taking 15% of the CPU it asked for. Steal is the only cause here whose remedy is on someone else's platform, and the message says so.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 1,
+        "hostBusy": 0.5,
+        "steal": 0.15,
+        "throttle": 0,
+        "pressure": 0,
+        "psiPresent": true,
+        "virtualized": true,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 2,
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU taken by the server\nTechnical Details: Other virtual machines on the same physical server took 15% of the CPU this instance needed over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server.",
+        "signalsCapable": 3,
+        "signalsMeasured": 3,
+        "refusingAdmission": false
+      }
+    },
+    {
+      "name": "cannot-measure",
+      "why": "cpu.stat is the primary read: losing it fails the whole sample, and the worker reports that it could not measure rather than a healthy zero. It is the only case whose answer is an error.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 1,
+        "hostBusy": 0.5,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0,
+        "psiPresent": false,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": [
+          "/sys/fs/cgroup/cpu.stat"
+        ]
+      },
+      "ticks": 2,
+      "readError": "read /sys/fs/cgroup/cpu.stat: fakebox: /sys/fs/cgroup/cpu.stat: no such file or directory"
+    },
+    {
+      "name": "no-host-stats",
+      "why": "An unreadable /proc/stat, and a KNOWN DEFECT rather than an intended answer. Losing that one host file takes the core count with it, so every signal drops out of the table and CPU monitoring goes dark on a machine with four readable cores — which is why the answer below reports four cores, no signals at all and a healthy verdict at the same time. The customer text is wrong twice over: it blames the cgroup, which read fine, and it says healthy about a machine it cannot see. That wording lives in pkg/cpuhealth/message.go and is out of scope here. Do not take this answer as what UMH should show when /proc/stat cannot be read; the case pins what the code does today, so a fix shows up as a diff on this entry.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 1,
+        "hostBusy": 0.5,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0,
+        "psiPresent": false,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": [
+          "/proc/stat"
+        ]
+      },
+      "ticks": 0,
+      "answer": {
+        "verdict": "healthy",
+        "message": "CPU monitoring unavailable: cgroup read failed. Defaulting to healthy.",
+        "signalsCapable": 0,
+        "signalsMeasured": 0,
+        "refusingAdmission": false
+      }
+    }
+  ]
+}
