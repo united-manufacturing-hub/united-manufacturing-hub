@@ -16,136 +16,246 @@ package examples
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// cpuScenarioBase is the cgroup path the mock sampler reads under, matching the
-// production sampler's "/sys/fs/cgroup".
+// cpuScenarioBase is where the fake machine serves its cgroup files and where
+// the sampler looks for them, matching the production sampler's
+// "/sys/fs/cgroup". One constant so the two cannot drift apart and leave every
+// read failing.
 const cpuScenarioBase = "/sys/fs/cgroup"
 
-// runCPUHealthScenario drives the fsmv2 CPU monitor worker over a MOCKED
-// filesystem through two paths: a healthy one (a quiet, present cgroup judges a
-// healthy verdict with its capable/measured counts) and an unhappy one (an
-// unreadable cpu.stat — a whole-sample failure — reports could-not-measure).
+// cpuCaseHeader opens every rendered block. It is the reader's eye-catch and
+// the spec's handle on where one situation ends and the next begins, so a
+// block that stops being rendered stops being counted.
+const cpuCaseHeader = "=== situation: "
+
+// cpuScenarioPreamble introduces the blocks and glosses the three words a
+// reader cannot guess: capable, measured and warm-up. It says nothing about
+// how many situations follow, because the reader can see them and a stated
+// number would go stale the moment one is added.
+const cpuScenarioPreamble = `CPU health: one block per named machine situation.
+
+Each block is one situation from pkg/fsmv2/cpu/cases.go, driven through the
+real sampler and the real engine over a fake machine, in the order a reader
+should meet them. "why" is what the situation exists to show.
+
+"capable" counts the CPU signals this machine can answer at all, and
+"measured" how many of those have ever produced a reading. Measured is
+sticky: a signal that measured once stays measured, so on a single read it
+means "has ever measured", not "measured just now".
+
+"warm-up" is this worker's own refusal of new work while it has not measured
+anything yet. It is NOT the gate that admits bridges: a degraded verdict
+blocks admission whatever the warm-up line says, so a block reading
+"degraded" and "not refusing" together is not the product accepting work.
+
+"message" is the text as the customer reads it.
+`
+
+// renderCPUHealthCases drives every entry of fsmv2cpu.Cases through the real
+// sampler and the real engine over a fake machine, and renders what the worker
+// answered. It returns the whole rendering rather than printing it, so a spec
+// can assert on the text the command line shows.
 //
-// It is a dev scenario, not a substitute for the rung specs: it exists so you
-// can watch the worker execute before the P4 seam mounts it.
+// The answer printed is the one the worker gave on the read, never the one the
+// case states. A case states its expected answer for the spec beside it to
+// assert; a renderer that printed that instead would print the same page
+// whatever the code did.
 //
 //	go run pkg/fsmv2/cmd/runner/main.go --scenario=cpuhealth
-func runCPUHealthScenario(ctx context.Context) string {
-	var out string
-	appendf := func(format string, a ...any) {
-		line := fmt.Sprintf(format, a...)
-		out += line + "\n"
-		fmt.Println(line)
+func renderCPUHealthCases(ctx context.Context) string {
+	var out strings.Builder
+
+	out.WriteString(cpuScenarioPreamble)
+
+	for _, c := range fsmv2cpu.Cases {
+		out.WriteString("\n" + cpuCaseHeader + c.Name + " ===\n")
+		out.WriteString("why        " + c.Why + "\n")
+		out.WriteString("machine    " + describeBox(c.Box) + "\n")
+		out.WriteString("reads      " + describeReads(c.Ticks) + "\n\n")
+
+		status, err := pollCase(ctx, c)
+		if err != nil {
+			// A failed read produced no verdict, no message and no counts, so
+			// the error is the whole answer. Saying so keeps a reader from
+			// reading the absent fields as an omission.
+			out.WriteString("read failed, so there is no verdict, no message and no counts\n")
+			out.WriteString(err.Error() + "\n")
+
+			continue
+		}
+
+		out.WriteString("verdict    " + status.Verdict + "\n")
+		out.WriteString(fmt.Sprintf("signals    %d capable, %d measured\n", status.SignalsCapable, status.SignalsMeasured))
+		out.WriteString("warm-up    " + describeWarmUp(status.RefusingAdmission) + "\n\n")
+
+		// The message goes out with no label in front of it and no indent, on
+		// its own lines. It is the one thing here a customer reads, so what is
+		// on the screen is the bytes the customer gets, newline included.
+		out.WriteString("message    (as the customer reads it)\n")
+		out.WriteString(status.Message + "\n")
 	}
 
-	appendf("--- cpuhealth scenario: healthy box ---")
+	return out.String()
+}
 
-	// Happy path: a readable cgroup. cpu.stat is primary; cpu.max names a
-	// 2-quota limit; /proc/stat and the cpuset make the host and affinity
-	// signals readable too.
-	healthyS := cpuhealth.NewLinuxSampler(cpuMockFS(false), cpuScenarioBase)
-	healthyD := fsmv2cpu.NewDepsWithSampler(
-		deps.Identity{ID: "cpu", WorkerType: fsmv2cpu.WorkerType},
-		deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, deps.Identity{ID: "cpu", WorkerType: fsmv2cpu.WorkerType}),
-		healthyS,
+// pollCase drives one case the way the spec beside Cases drives it: a fresh
+// machine and fresh dependencies, one read, then one more read after each
+// tick. Fresh matters — the engine holds each signal's 60-second window and
+// its latch, so a shared one would let an earlier case's history decide this
+// answer.
+func pollCase(ctx context.Context, c fsmv2cpu.Case) (fsmv2cpu.CPUStatus, error) {
+	box := fakebox.NewBox(cpuScenarioBase, c.Box)
+	identity := deps.Identity{ID: "cpu-cases", WorkerType: fsmv2cpu.WorkerType}
+	d := fsmv2cpu.NewDepsWithSampler(
+		identity,
+		deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity),
+		cpuhealth.NewLinuxSamplerWithClock(box.FS(), cpuScenarioBase, box.Clock()),
 	)
 
-	appendf("setup: mock filesystem serving a readable 2-quota cgroup")
+	status, err := fsmv2cpu.Poll(ctx, d, fsmv2cpu.CPUConfig{})
 
-	// A Poll is a faithful single tick (the collector calls Poll each interval).
-	status, err := fsmv2cpu.Poll(ctx, healthyD, fsmv2cpu.CPUConfig{})
-	if err != nil {
-		appendf("healthy tick errored: %v", err)
-	} else {
-		appendf("tick: verdict=%q message=%q capable=%d measured=%d", status.Verdict, status.Message, status.SignalsCapable, status.SignalsMeasured)
+	for i := 0; i < c.Ticks; i++ {
+		box.Tick(time.Second)
+		status, err = fsmv2cpu.Poll(ctx, d, fsmv2cpu.CPUConfig{})
 	}
 
-	appendf("--- cpuhealth scenario: failing read box ---")
+	return status, err
+}
 
-	// Unhappy path: cpu.stat unreadable. This is a whole-sample failure — the
-	// worker reports could-not-measure, never a healthy zero.
-	failingS := cpuhealth.NewLinuxSampler(cpuMockFS(true), cpuScenarioBase)
-	failingD := fsmv2cpu.NewDepsWithSampler(
-		deps.Identity{ID: "cpu", WorkerType: fsmv2cpu.WorkerType},
-		deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, deps.Identity{ID: "cpu", WorkerType: fsmv2cpu.WorkerType}),
-		failingS,
+// describeBox says what the machine is doing, in the operator units the
+// condition is written in. It prints only what is set: a bare-metal machine
+// says nothing about a hypervisor, and an unlimited cgroup says nothing about
+// a limit. The core count, the two load figures and a pressure clause print
+// on every machine, set or not, so the line is not a list of what the
+// situation turns on.
+//
+// Nothing enforces that a field added to fakebox.Condition reaches this
+// function. A new field is simply absent from the page and every test still
+// passes, so adding one means editing here by hand.
+func describeBox(c fakebox.Condition) string {
+	parts := []string{fmt.Sprintf("%d cores", c.Cores)}
+
+	if c.QuotaCores > 0 {
+		parts = append(parts, "limit "+coresText(c.QuotaCores))
+	}
+
+	parts = append(parts,
+		fmt.Sprintf("host %s busy", percentText(c.HostBusy)),
+		"this instance "+coresText(c.UsageCores),
 	)
 
-	status, err = fsmv2cpu.Poll(ctx, failingD, fsmv2cpu.CPUConfig{})
-	if err != nil {
-		appendf("failing tick: could not measure (%v)", err)
+	if c.PsiPresent {
+		parts = append(parts, "pressure "+percentText(c.Pressure))
 	} else {
-		appendf("failing tick: verdict=%q (a healthy zero here would be the bug)", status.Verdict)
+		parts = append(parts, "no pressure stats")
 	}
 
-	return out
+	if c.Throttle > 0 {
+		parts = append(parts, "throttled in "+percentText(c.Throttle)+" of periods")
+	}
+
+	if c.Steal > 0 {
+		parts = append(parts, "steal "+percentText(c.Steal))
+	}
+
+	if c.Virtualized {
+		parts = append(parts, "on a hypervisor")
+	}
+
+	if c.Affinity > 0 {
+		parts = append(parts, fmt.Sprintf("pinned to %d CPUs", c.Affinity))
+	}
+
+	if len(c.Unreadable) > 0 {
+		parts = append(parts, "cannot read "+strings.Join(c.Unreadable, " or "))
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+// describeReads says how many reads ran and which one the block reports.
+// It says reads rather than judgements: a machine whose sample cannot be read
+// is read just as often and judged not at all, so a line about judging would
+// contradict the read failure printed under it.
+//
+// Ticks is how many one-second ticks pass before the reported read, and one
+// read runs before the first tick, so the count is always one more than the
+// ticks.
+func describeReads(ticks int) string {
+	if ticks == 0 {
+		return "one read, and the answer below is that read"
+	}
+
+	return fmt.Sprintf("%d reads a second apart, and the answer below is the last", ticks+1)
+}
+
+// describeWarmUp spells out RefusingAdmission, naming it for the warm-up it
+// reports. An earlier wording said "new work accepted", which read as the
+// product's answer on admission and was backwards on the eight degraded
+// situations: the bridge-admission gate refuses on a degraded verdict, and
+// this bit is only the worker's own refusal while nothing has measured yet.
+// The wording here has to keep those two apart on its own, because the line
+// is read next to the verdict.
+func describeWarmUp(refusing bool) string {
+	if refusing {
+		return "refusing new work until a capable signal first measures"
+	}
+
+	return "not refusing: this worker's own start-up adds no block"
+}
+
+// coresText writes a core count the way an operator says it, with the plural
+// that reads right at exactly one.
+func coresText(v float64) string {
+	if v == 1 {
+		return "1 core"
+	}
+
+	return fmt.Sprintf("%g cores", v)
+}
+
+// percentText writes a 0-to-1 fraction as whole percent, the unit the
+// customer-visible messages use for the same figures.
+func percentText(v float64) string {
+	return fmt.Sprintf("%.0f%%", v*100)
 }
 
 // CPUHealthScenarioEntry registers the cpuhealth scenario for CLI access.
 //
 // It uses a CustomRunner with YAMLConfig "" — a YAML-spawned worker would go
 // through the production NewDeps and get a real filesystem, which is exactly
-// what a mocked-filesystem scenario cannot use.
+// what a fake-machine scenario cannot use.
 //
 // # CLI Usage
 //
 //	go run pkg/fsmv2/cmd/runner/main.go --scenario cpuhealth
 //
-// What it drives: the fsmv2 CPU monitor worker's Poll over a mocked filesystem,
-// through a healthy (quiet present cgroup judges healthy with capable/measured
-// counts) and an unhappy (unreadable cpu.stat reports could-not-measure) path.
+// What it drives: the fsmv2 CPU monitor worker's Poll over every named machine
+// situation in pkg/fsmv2/cpu/cases.go, printing what the worker answered about
+// each one.
 var CPUHealthScenarioEntry = Scenario{
 	Name:        "cpuhealth",
-	Description: "Drives the CPU monitor worker over a mocked filesystem (healthy + failing read)",
-	YAMLConfig:  "", // worker built directly with a mock-backed sampler
+	Description: "Prints what the CPU monitor worker answers about every named machine situation",
+	YAMLConfig:  "", // worker built directly with a fake machine's sampler
 	CustomRunner: func(ctx context.Context, _ RunConfig) (*RunResult, error) {
-		runCPUHealthScenario(ctx)
+		out := renderCPUHealthCases(ctx)
+		fmt.Print(out)
+
 		done := make(chan struct{})
 		close(done)
 
-		// ShutdownClean is true: this scenario drives Poll directly over a
-		// mocked filesystem and has no supervisor, so there is nothing that
-		// could drain uncleanly. The CLI exits 0 when it is true.
-		return &RunResult{Done: done, ShutdownClean: true}, nil
+		// ShutdownClean is true: this scenario drives Poll directly over a fake
+		// machine and has no supervisor, so there is nothing that could drain
+		// uncleanly. The CLI exits 0 when it is true.
+		return &RunResult{Output: out, Done: done, ShutdownClean: true}, nil
 	},
-}
-
-// cpuMockFS returns a mocked filesystem.Service. When failCPUStat is true,
-// cpu.stat is unreadable (a whole-sample failure); otherwise it serves a quiet,
-// readable, 2-quota cgroup so the healthy path judges healthy.
-func cpuMockFS(failCPUStat bool) filesystem.Service {
-	fs := filesystem.NewMockFileSystem()
-	fs.ReadFileFunc = func(_ context.Context, path string) ([]byte, error) {
-		switch path {
-		case cpuScenarioBase + "/cpu.stat":
-			if failCPUStat {
-				return nil, errors.New("permission denied")
-			}
-			return []byte("usage_usec 5000000\nuser_usec 4000000\nsystem_usec 1000000\nnr_periods 100\nnr_throttled 2\n"), nil
-		case cpuScenarioBase + "/cpu.max":
-			return []byte("200000 100000\n"), nil
-		case cpuScenarioBase + "/cpu.pressure":
-			// PSI "some" avg60=10 (10% pressure, quiet). Serves a readable
-			// pressure so the healthy box's first tick judges it measured.
-			return []byte("some avg10=0.10 avg60=10.00 avg300=20.00 total=100000\n"), nil
-		case "/proc/stat":
-			return []byte("cpu  100 0 50 1000 0 10 5 0 0 0\ncpu0 50 0 25 500 0 5 2 0 0 0\n"), nil
-		case cpuScenarioBase + "/cpuset.cpus.effective":
-			return []byte("0\n"), nil
-		case "/proc/cpuinfo":
-			return []byte("processor\t: 0\n"), nil
-		default:
-			return nil, errors.New("unreadable")
-		}
-	}
-
-	return fs
 }

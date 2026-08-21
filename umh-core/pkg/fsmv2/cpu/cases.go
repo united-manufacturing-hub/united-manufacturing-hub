@@ -21,12 +21,12 @@
 // difference directly, and a change in wording shows up as a diff on the line
 // that carries it.
 //
-// One caller reads it today: the spec beside it drives every entry through the
-// real sampler and the real engine. A command-line renderer that prints them
-// for a human is the intended second caller and is not written yet, which is
-// why this is ordinary code rather than a _test.go file. That choice has a
-// cost worth stating: cases.go is the only non-test importer of fakebox, so
-// the fixture now sits in the shipped binary's dependency graph.
+// Two callers read it. The spec beside it drives every entry through the real
+// sampler and the real engine. The cpuhealth scenario in pkg/fsmv2/examples
+// renders every entry for a human at the command line, which is why this is
+// ordinary code rather than a _test.go file. That choice has a cost worth
+// stating: cases.go and that renderer are the only non-test importers of
+// fakebox, so the fixture sits in the shipped binary's dependency graph.
 
 package fsmv2cpu
 
@@ -353,10 +353,18 @@ var Cases = []Case{
 	},
 	{
 		Name: "no-host-stats",
-		Why: "An unreadable /proc/stat. Nothing on this machine can answer any " +
-			"signal, so there is no capable signal to refuse admission over, and " +
-			"the healthy verdict is reported through the monitoring-unavailable " +
-			"line rather than a budget.",
+		Why: "An unreadable /proc/stat, and a KNOWN DEFECT rather than an " +
+			"intended answer. Losing that one host file takes the core count " +
+			"with it, so every signal drops out of the table and CPU monitoring " +
+			"goes dark on a machine with four readable cores — which is why the " +
+			"answer below reports four cores, no signals at all and a healthy " +
+			"verdict at the same time. The customer text is wrong twice over: it " +
+			"blames the cgroup, which read fine, and it says healthy about a " +
+			"machine it cannot see. That wording lives in " +
+			"pkg/cpuhealth/message.go and is out of scope here. Do not take this " +
+			"answer as what UMH should show when /proc/stat cannot be read; the " +
+			"case pins what the code does today, so a fix shows up as a diff on " +
+			"this entry.",
 		Box: fakebox.Condition{Cores: 4, HostBusy: 0.50, UsageCores: 1.0, QuotaCores: 0, PsiPresent: false, Unreadable: []string{"/proc/stat"}},
 		// Zero. Nothing here is derived from a rate or a window, so the first
 		// read is already the settled one.
