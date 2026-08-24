@@ -102,7 +102,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.NrPeriods = periods
 	smp.NrThrottled = throttled
 	smp.UsageUsec = usage
-	smp.UsageCores = s.cgroup.usageRate(ts, usage)
+	smp.UsageCores = s.cgroup.advanceUsageRate(ts, usage)
 
 	// Host signals: the first /proc/stat read fixes a baseline and publishes
 	// neither; a read after that publishes this tick's instantaneous host-busy
@@ -129,7 +129,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 				smp.CpuScope = ScopeAffinity
 			}
 		}
-		smp.HostBusy, smp.Steal = s.host.hostRates(ts, busy, steal, denom)
+		smp.HostBusy, smp.Steal = s.host.advanceHostRates(ts, busy, steal, denom)
 	} else {
 		// An unreadable machine CPU count reads ScopeUnknown — never a silent
 		// ScopeHost, since a pinned idle container misread as host would have

@@ -50,7 +50,7 @@ func newCgroupSource(fs filesystem.Service, base string) *cgroupSource {
 	return &cgroupSource{fs: fs, base: base}
 }
 
-// usageBaseline is the previous tick's usage_usec edge, from which usageRate
+// usageBaseline is the previous tick's usage_usec edge, from which advanceUsageRate
 // derives the instantaneous usage rate. have is false before the first
 // successful read; a falling edge (a counter reset) re-baselines instead of
 // publishing a nonsense rate.
@@ -60,12 +60,12 @@ type usageBaseline struct {
 	have  bool
 }
 
-// usageRate derives this tick's instantaneous usage rate — the delta of usage
+// advanceUsageRate derives this tick's instantaneous usage rate — the delta of usage
 // against the baseline this source owns, divided by the elapsed time since the
 // baseline — then updates the baseline for the next tick. ts is the composer's
 // single per-tick Timestamp and never time.Now(); Read in read.go says why both
 // sources have to divide by the same elapsed time.
-func (c *cgroupSource) usageRate(ts time.Time, usage diagnosis.Reading) diagnosis.Reading {
+func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
 	if c.usageBase.have {
 		// A rising cumulative counter over a positive elapsed time derives an

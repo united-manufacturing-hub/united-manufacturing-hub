@@ -60,7 +60,7 @@ func newHostSource(fs filesystem.Service) *hostSource {
 }
 
 // hostBaseline is the previous tick's /proc/stat edges (busy, steal, denominator
-// jiffy totals) and its read timestamp, from which hostRates derives the
+// jiffy totals) and its read timestamp, from which advanceHostRates derives the
 // instantaneous host-busy rate and per-interval steal fraction. have is false
 // until a first successful read fixes the baseline; a falling counter (a host
 // restart) re-baselines instead of publishing a nonsense value.
@@ -70,12 +70,12 @@ type hostBaseline struct {
 	have               bool
 }
 
-// hostRates derives this tick's HostBusy rate and Steal fraction from busy,
+// advanceHostRates derives this tick's HostBusy rate and Steal fraction from busy,
 // steal and denom against the baseline this source owns, then updates the
 // baseline for the next tick. ts is the composer's single per-tick Timestamp
 // and never time.Now(); Read in read.go says why both sources have to divide
 // by the same elapsed time.
-func (h *hostSource) hostRates(ts time.Time, busy, steal, denom float64) (hostBusy, stealFrac diagnosis.Reading) {
+func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) (hostBusy, stealFrac diagnosis.Reading) {
 	hostBusy = diagnosis.Unknown()
 	stealFrac = diagnosis.Unknown()
 	if h.hostBase.have {

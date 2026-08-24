@@ -396,7 +396,7 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 
 	It("should divide one interval's cgroup usage by the same interval's host busy time, so the share does not depend on when either was read", func() {
 		// The share is a quotient of two rates the sampler derives separately:
-		// cgroupSource.usageRate from cpu.stat's usage_usec, hostSource.hostRates
+		// cgroupSource.advanceUsageRate from cpu.stat's usage_usec, hostSource.advanceHostRates
 		// from /proc/stat's busy jiffies. Both divide by an elapsed time, and the
 		// elapsed time cancels out of the quotient only while it is the same
 		// number on both sides. linuxSampler.Read stamps one Timestamp and hands
