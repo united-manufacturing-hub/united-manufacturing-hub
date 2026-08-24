@@ -374,7 +374,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 									Protocol: dataflowcomponentserviceconfig.HistorianDestinationProtocol,
 									Code:     "data_contract_name: pump",
 								},
-								Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.*"},
+								Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1._historian.*"},
 							},
 						},
 						Variables: variables.VariableBundle{User: map[string]interface{}{}},

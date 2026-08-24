@@ -16,6 +16,7 @@ package dataflowcomponentserviceconfig
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -28,6 +29,16 @@ const HistorianDestinationProtocol = "historian"
 // UNSTopicPrefix is the fixed prefix of every UNS topic. The segments after it are the
 // location path, followed by the data contract and any virtual path.
 const UNSTopicPrefix = "umh.v1."
+
+// UNSDataContractPrefix marks the data contract segment of a UNS topic, the segment that
+// follows the location path (`_historian` in `umh.v1.plant-A.line-4._historian.temperature`).
+const UNSDataContractPrefix = "_"
+
+// BuiltinDataContracts are the data contracts that exist without being declared in the
+// `dataContracts:` section of config.yaml: `_raw` carries no validation rules and
+// `_historian` is the built-in timeseries contract. Both are unversioned, so the UNS
+// output bypasses schema validation for them.
+var BuiltinDataContracts = []string{"_raw", "_historian"}
 
 // PlaceholderUMHTopicUnset is used when no input topics were configured for a write DFC.
 // It makes the misconfiguration visible in Benthos logs rather than silently subscribing to nothing.
@@ -100,8 +111,8 @@ type WriteConfigExtra struct {
 //
 //	source:
 //	  topics: |-
-//	    - umh.v1.enterprise.site.line.device.*
-//	    - umh.v1.enterprise.site.line.otherDevice.*
+//	    - umh.v1.enterprise.site.line.device._historian.*
+//	    - umh.v1.enterprise.site.line.otherDevice._historian.*
 //	processing:
 //	  type: "nodered_js"
 //	  code: |-
@@ -206,31 +217,67 @@ func topicUnderLocation(topic, locationPath string) bool {
 	return strings.HasPrefix(relative, locationPath+".") && len(relative) > len(locationPath)+1
 }
 
-// ValidateTopicsUnderLocation reports the topics that do not lie beneath locationPath.
+// topicDataContract returns the data contract of topic, its first `_`-prefixed segment,
+// or an empty string when the topic names none.
+func topicDataContract(topic string) string {
+	for segment := range strings.SplitSeq(strings.TrimSpace(topic), ".") {
+		if strings.HasPrefix(segment, UNSDataContractPrefix) {
+			return segment
+		}
+	}
+
+	return ""
+}
+
+// ValidateTopics reports the topics a write flow may not subscribe to.
 //
-// A write flow may only consume data from its own branch of the UNS tree: a bridge at
-// `enterprise.cologne.sublevel` must not subscribe to `enterprise.cologne.foo`. Topics
-// must already be rendered; an unrendered `{{ }}` action is compared verbatim and reported.
-func (c DataflowComponentWriteConfig) ValidateTopicsUnderLocation(locationPath string) error {
-	var offending []string
+// Two rules apply to every topic. It must lie strictly beneath locationPath, so a write
+// flow only consumes data from its own branch of the UNS tree: a bridge at
+// `enterprise.cologne.sublevel` must not subscribe to `enterprise.cologne.foo`. And it
+// must name one existing data contract, which rules out a topic naming no contract at all
+// and a wildcard standing in for the contract, either of which would pull in every
+// contract of a location at once.
+//
+// dataContracts holds the contracts declared in the `dataContracts:` section, to which
+// BuiltinDataContracts are added.
+//
+// Topics must already be rendered; an unrendered `{{ }}` action is compared verbatim and
+// reported.
+func (c DataflowComponentWriteConfig) ValidateTopics(locationPath string, dataContracts []string) error {
+	known := append(slices.Clone(BuiltinDataContracts), dataContracts...)
+
+	var outsideLocation, unknownDataContract []string
 
 	for _, topic := range c.Topics {
 		if topic == PlaceholderUMHTopicUnset {
 			continue
 		}
 
-		if !topicUnderLocation(topic, locationPath) {
-			offending = append(offending, topic)
+		switch {
+		case !topicUnderLocation(topic, locationPath):
+			outsideLocation = append(outsideLocation, topic)
+		case !slices.Contains(known, topicDataContract(topic)):
+			unknownDataContract = append(unknownDataContract, topic)
 		}
 	}
 
-	if len(offending) == 0 {
+	var problems []string
+
+	if len(outsideLocation) > 0 {
+		problems = append(problems, fmt.Sprintf("must be beneath the bridge location %q: %s",
+			UNSTopicPrefix+locationPath, strings.Join(outsideLocation, ", ")))
+	}
+
+	if len(unknownDataContract) > 0 {
+		problems = append(problems, fmt.Sprintf("must each name one existing data contract (%s): %s",
+			strings.Join(known, ", "), strings.Join(unknownDataContract, ", ")))
+	}
+
+	if len(problems) == 0 {
 		return nil
 	}
 
-	return fmt.Errorf(
-		"write flow topics must be beneath the bridge location %q: %s",
-		UNSTopicPrefix+locationPath, strings.Join(offending, ", "))
+	return fmt.Errorf("write flow topics %s", strings.Join(problems, "; "))
 }
 
 // HasOutput reports whether a write output is configured.
