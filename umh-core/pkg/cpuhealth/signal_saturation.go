@@ -15,6 +15,16 @@
 // The two capacity signals: is the machine full, and are we out of our own CPU
 // limit. Both are declared here, with the two instruments that measure the
 // machine and the two refinements that narrow a full machine to a side.
+//
+// Both refinements read our usage over the machine's busy time. That number
+// needs both of its terms measured over the same CPUs, so a box whose
+// /proc/stat is unreadable and a container pinned to a subset of the CPUs both
+// come out unknown. A share in the narrow band around one half crosses neither
+// fire threshold, so nothing new is narrowed there. A refinement that fired
+// earlier holds its answer only while the share stays inside its own clear
+// threshold. That clear threshold is nearer the middle still. Where neither has
+// ever fired, and where the one that did has released, nothing narrows the full
+// machine to a side and the blame is unknown.
 
 package cpuhealth
 
@@ -55,6 +65,8 @@ func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 					// core count was readable, so cores > 0 here; the scope guard stays
 					// because off a host-scoped sample the count means something else
 					// and there is no headroom to read.
+					// Why subtracting a machine-wide busy time from this
+					// container-scoped count is valid: see host_source.go's header.
 					Extract: func(s Sample) diagnosis.Reading {
 						// Unreachable in production: cpuTable declares no host-cpu-full signal when
 						// cores <= 0, pinned by host_headroom_guard_test.go. The guard stays so

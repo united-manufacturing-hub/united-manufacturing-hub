@@ -55,6 +55,8 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	}
 	// Only when the core count was readable. cores <= 0 means the cgroup's
 	// cpuset could not be read, so there is no capacity to be full against.
+	// Why a machine-wide busy time may be subtracted from cores, which is a
+	// container-scoped count: see host_source.go's header.
 	if cores > 0 {
 		t.Signals = append(t.Signals, hostCpuFullSignal(cores))
 	}

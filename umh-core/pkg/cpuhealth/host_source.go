@@ -16,6 +16,26 @@
 // of any particular cgroup — /proc/stat, /proc/cpuinfo, and the DMI identity
 // files. Distinct from cgroupSource, which reads one cgroup's own accounting
 // files under its base.
+//
+// The machine-wide numbers all come from /proc/stat: the busy time of every
+// CPU, the time a hypervisor took, and the machine's CPU count. That machine
+// count (Sample.HostCpus) is read every tick, no signal is judged against it,
+// and it is what decides whether the sample covers the whole machine. The count
+// the host-cpu-full row is declared on is a different one: the CPUs this
+// container may use (Sample.LogicalCpus). It is read from the cgroup's cpuset
+// and handed to Table as cores once, before the first tick. It is also the
+// count host-headroom subtracts the busy time from. Wherever host-headroom
+// answers, those two counts are the same number: the sample covers the whole
+// machine only where the container's count equals the machine's, and
+// host-headroom withholds off any other sample. That equality is what makes
+// subtracting a machine-wide busy time from a container-scoped count valid.
+// Everything else is read from the cgroup's own files. Once the table is built,
+// a /proc/stat that cannot be read leaves steal and host-headroom with nothing
+// to judge, so host-cpu-full is left to usage-fraction and goes unanswered
+// wherever that instrument is not allowed to answer. The sampler reads the
+// cpuset only on a tick whose /proc/stat read succeeded, so a box that cannot
+// read /proc/stat at all supplies no such count and gets no host-cpu-full row.
+// Throttling, pressure and container-limit-full are unaffected.
 
 package cpuhealth
 

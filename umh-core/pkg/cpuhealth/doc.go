@@ -85,31 +85,11 @@
 //	                pressure statistics, so nothing better can answer.
 //
 // Only the first of those measures the machine. The second measures us, and
-// stands in for the machine: with no limit to overrun and no pressure
-// statistics to read the harm off, a container using most of the CPUs it may
-// run on is the last evidence left that the machine is filling up. It is a
-// stand-in and not the same quantity, which is why it answers only where the
-// instrument that does measure the machine cannot.
-//
-// The machine-wide numbers all come from /proc/stat: the busy time of every
-// CPU, the time a hypervisor took, and the machine's CPU count. That machine
-// count (Sample.HostCpus) is read every tick, no signal is judged against it,
-// and it is what decides whether the sample covers the whole machine. The count
-// the host-cpu-full row is declared on is a different one: the CPUs this
-// container may use (Sample.LogicalCpus), read from the cgroup's cpuset and
-// handed to Table as cores once, before the first tick, and the same count
-// host-headroom subtracts the busy time from. Wherever host-headroom answers,
-// those two counts are the same number: the sample covers the whole machine
-// only where the container's count equals the machine's, and host-headroom
-// withholds off any other sample. That equality is what makes subtracting a
-// machine-wide busy time from a container-scoped count valid. Everything else
-// is read from the cgroup's own files. Once the table is built, a /proc/stat
-// that cannot be read leaves steal and host-headroom with nothing to judge, so
-// host-cpu-full is left to usage-fraction and goes unanswered wherever that
-// instrument is not allowed to answer. The sampler reads the cpuset only on a
-// tick whose /proc/stat read succeeded, so a box that cannot read /proc/stat
-// at all supplies no such count and gets no host-cpu-full row. Throttling,
-// pressure and container-limit-full are unaffected.
+// stands in for the machine. It answers where there is no limit to overrun and
+// no pressure statistics to read the harm off. On such a box, a container using
+// most of the CPUs it may run on is the last evidence left that the machine is
+// filling up. It is a stand-in and not the same quantity, which is why it
+// answers only where the instrument that does measure the machine cannot.
 //
 // # Who is to blame
 //
@@ -132,24 +112,15 @@
 // Container-limit-full is the container, because it is our own limit.
 //
 // The host-cpu-full signal says nothing by itself about whose load filled the
-// machine, so two refinements narrow it: host-share when the rest of the box
-// accounts for most of the busy time, container-share when we account for most
-// of it. A refinement is an ordinary signal declared under a parent signal,
-// with its own instruments and thresholds, so any signal may carry them.
-// host-cpu-full is the only one that does; pressure declares none, and the
-// ambiguity above is left standing rather than narrowed. A refinement is judged
-// every tick whether or not its parent has fired, but it is reported only while
-// the parent is fired, so a refinement can never degrade the verdict on its own.
-//
-// Both refinements read our usage over the machine's busy time. That number
-// needs both of its terms measured over the same CPUs, so a box whose
-// /proc/stat is unreadable and a container pinned to a subset of the CPUs both
-// come out unknown. A share in the narrow band around one half crosses neither
-// fire threshold, so nothing new is narrowed there; a refinement that fired
-// earlier holds its answer only while the share stays inside its own clear
-// threshold, which is nearer the middle still. Where neither has ever fired,
-// and where the one that did has released, nothing narrows the full machine to
-// a side and the blame is unknown.
+// machine, so two refinements narrow it. The host-share refinement covers the
+// case where the rest of the box accounts for most of the busy time. The
+// container-share refinement covers the case where we account for most of it.
+// A refinement is an ordinary signal declared under a parent signal, with its
+// own instruments and thresholds, so any signal may carry them. host-cpu-full
+// is the only one that does; pressure declares none, and the ambiguity above is
+// left standing rather than narrowed. A refinement is judged every tick whether
+// or not its parent has fired, but it is reported only while the parent is
+// fired, so a refinement can never degrade the verdict on its own.
 //
 // The advice moves with the blame: in the refusal line, and in the paragraph
 // only where a limit is in force. A machine filled from outside is answered
