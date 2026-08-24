@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -39,6 +40,23 @@ const (
 	// InstanceName is the fixed dynamic-child name for the single per-instance
 	// CPU monitor, matching how the configworker reconciles a singleton child.
 	InstanceName = "cpu"
+
+	// FilesystemDepsKey is the register.SetDeps key under which a caller
+	// publishes the filesystem.Service the sampler reads through. It is
+	// distinct from WorkerType, which is where a worker's own typed deps
+	// payload goes, because the typed deps registry keys on the string alone
+	// and two payloads cannot share a key. Same convention, and the same
+	// reason, as configworker.ConfigManagerDepsKey.
+	FilesystemDepsKey = WorkerType + ".filesystem"
+
+	// cgroupBase is the cgroup v2 mount point whose CPU controller files the
+	// sampler reads (cpu.stat, cpu.max, cpu.pressure, cpuset.cpus.effective).
+	// The specs in this package that serve those files from a fixture read this
+	// same constant, so the served paths and the looked-for paths cannot drift
+	// apart and leave every read failing. Elsewhere the fixture declares its
+	// own base (pkg/fsmv2/examples names cpuScenarioBase), which has to be kept
+	// equal to this by hand.
+	cgroupBase = "/sys/fs/cgroup"
 
 	// pollInterval is the poll cadence. It sets both the poll cadence and, at
 	// 3x, the seam's maxAge downstream; the two are one decision (SPEC §9 P3 R1).
@@ -143,7 +161,7 @@ type CPUDeps struct {
 	admissionReported bool
 }
 
-// NewDeps builds CPU's per-instance deps. It constructs a real cgroup sampler
+// NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
 // (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
 // it, and builds the table and engine. NewDeps cannot fail — it returns TDeps
 // and nothing else — so a startup snapshot whose read fails yields cores=0,
@@ -153,8 +171,28 @@ type CPUDeps struct {
 // (engineErr) makes Poll report it could not measure — a read failure at
 // construction yields a healthy first verdict from a permanently thinned
 // table, which is why the startup read error is logged.
+//
+// The filesystem the sampler reads through is whichever one a caller published
+// under FilesystemDepsKey before the worker was spawned. NewDeps runs per
+// instance at spawn time, not at init(), so a caller that publishes first
+// decides which files this instance sees.
+//
+// Nothing published means the real filesystem. That differs from the transport
+// pull worker, which errors when its deps are missing, and the difference is
+// deliberate: production wants the real filesystem and should not have to
+// publish one to get it. The price is paid by a caller who meant to publish a
+// fixture and forgot. On Linux the real cgroup files read fine, so that caller
+// gets a real verdict computed from the real machine — and a loose assertion,
+// such as one expecting "healthy" on an idle box, passes on numbers it never
+// staged. An assertion that names something only the published filesystem could
+// produce does not have that hole.
 func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(filesystem.NewDefaultService(), "/sys/fs/cgroup"))
+	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
+	if fs == nil {
+		fs = filesystem.NewDefaultService()
+	}
+
+	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(fs, cgroupBase))
 }
 
 // NewDepsWithSampler builds CPU's per-instance deps around an explicit sampler.

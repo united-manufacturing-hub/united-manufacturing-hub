@@ -302,9 +302,13 @@ func percentText(v float64) string {
 
 // CPUHealthScenarioEntry registers the cpuhealth scenario for CLI access.
 //
-// It uses a CustomRunner with YAMLConfig "" — a YAML-spawned worker would go
-// through the production NewDeps and get a real filesystem, which is exactly
-// what a fake-machine scenario cannot use.
+// It uses a CustomRunner with YAMLConfig "", and no longer has to. Production
+// NewDeps now reads its filesystem from the deps registry under
+// fsmv2cpu.FilesystemDepsKey, so publishing the fake machine's filesystem
+// before the supervisor spawns the worker makes a YAML-spawned worker read it.
+// Moving this scenario onto that path would put the collector, the FSM and the
+// CSE store between Poll and the printed answer — everything a CustomRunner
+// bypasses today.
 //
 // # CLI Usage
 //
