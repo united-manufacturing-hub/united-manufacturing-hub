@@ -6,6 +6,10 @@
 
 - Preview of more detailed memory reporting. Memory is judged on its average over the last 60 seconds, and a degraded status names the cause: the container's memory limit, the machine's memory, processes waiting for memory, or a process stopped because memory ran out. Turn it on with `USE_FSMV2_MEMORY_MONITOR=true` and recreate the container
 
+### Improvements
+
+- A write flow can now only subscribe to topics beneath the location of its own bridge, so a bridge at `enterprise.site.line` no longer reads data from elsewhere in the hierarchy. Existing write flows that subscribe outside their location stop writing after the upgrade and name the offending topics in the bridge's status, and the bridge's read flow keeps running while the topics are corrected
+
 ### Fixes
 
 - A bridge deploy now fails within seconds when benthos rejects the configuration before it starts, for example a misspelled setting (`field retension not recognised`). The error names every rejected setting at once. The bridge is kept and only the rejected flow is stopped. Before, the deploy waited 30 seconds and failed without naming the setting
