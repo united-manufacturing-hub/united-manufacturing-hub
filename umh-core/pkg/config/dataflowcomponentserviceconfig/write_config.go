@@ -15,6 +15,7 @@
 package dataflowcomponentserviceconfig
 
 import (
+	"fmt"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -23,6 +24,10 @@ import (
 // HistorianDestinationProtocol is the destination protocol of the built-in historian output
 // plugin. A write DFC targeting it renders against the shared historian: render scope.
 const HistorianDestinationProtocol = "historian"
+
+// UNSTopicPrefix is the fixed prefix of every UNS topic. The segments after it are the
+// location path, followed by the data contract and any virtual path.
+const UNSTopicPrefix = "umh.v1."
 
 // PlaceholderUMHTopicUnset is used when no input topics were configured for a write DFC.
 // It makes the misconfiguration visible in Benthos logs rather than silently subscribing to nothing.
@@ -183,6 +188,49 @@ func splitTopics(s string) []string {
 	}
 
 	return out
+}
+
+// topicUnderLocation reports whether topic addresses a node strictly beneath locationPath.
+// The `umh.v1.` prefix is optional on topic. An empty locationPath places no restriction
+// beyond the topic naming at least one segment.
+func topicUnderLocation(topic, locationPath string) bool {
+	relative := strings.TrimPrefix(strings.TrimSpace(topic), UNSTopicPrefix)
+
+	if locationPath == "" {
+		return relative != ""
+	}
+
+	// The trailing dot rules out a topic that merely shares a prefix with a longer
+	// sibling level (`site.cologne2` is not beneath `site.cologne`), and the length
+	// check rules out the bridge location itself, which is not beneath itself.
+	return strings.HasPrefix(relative, locationPath+".") && len(relative) > len(locationPath)+1
+}
+
+// ValidateTopicsUnderLocation reports the topics that do not lie beneath locationPath.
+//
+// A write flow may only consume data from its own branch of the UNS tree: a bridge at
+// `enterprise.cologne.sublevel` must not subscribe to `enterprise.cologne.foo`. Topics
+// must already be rendered; an unrendered `{{ }}` action is compared verbatim and reported.
+func (c DataflowComponentWriteConfig) ValidateTopicsUnderLocation(locationPath string) error {
+	var offending []string
+
+	for _, topic := range c.Topics {
+		if topic == PlaceholderUMHTopicUnset {
+			continue
+		}
+
+		if !topicUnderLocation(topic, locationPath) {
+			offending = append(offending, topic)
+		}
+	}
+
+	if len(offending) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"write flow topics must be beneath the bridge location %q: %s",
+		UNSTopicPrefix+locationPath, strings.Join(offending, ", "))
 }
 
 // HasOutput reports whether a write output is configured.

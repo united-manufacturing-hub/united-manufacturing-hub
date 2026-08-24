@@ -236,6 +236,70 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should go to DegradedDFC instead of waiting in StartingDFC when the write flow topics lie outside the bridge location", func() {
+			var err error
+
+			// A write flow rejected by the topic hierarchy check is kept out of the runtime
+			// and never becomes healthy. The bridge must not wait for it in starting_dfc:
+			// it reports degraded_dfc so the read flow stays usable and the cause is visible.
+			instance, mockService, _ = fsmtest.SetupProtocolConverterInstanceWithOutsideLocationWriteTopics(
+				componentName, protocolconverterfsm.OperationalStateStopped)
+
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockRegistry, componentName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.ExistingComponents[componentName] = true
+			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockRegistry, componentName,
+				internalfsm.LifecycleStateCreating,
+				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockRegistry, componentName,
+				protocolconverterfsm.OperationalStateStopped,
+				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockRegistry, componentName,
+				protocolconverterfsm.OperationalStateStartingConnection,
+				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockRegistry, componentName,
+				protocolconverterfsm.OperationalStateStartingRedpanda,
+				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Even with every underlying service reporting idle, the bridge lands in
+			// degraded_dfc rather than idle, and names the offending topics.
+			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockRegistry, componentName,
+				protocolconverterfsm.OperationalStateStartingDFC,
+				protocolconverterfsm.OperationalStateDegradedDFC, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			observed, ok := instance.GetLastObservedState().(protocolconverterfsm.ProtocolConverterObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(observed.ServiceInfo.StatusReason).To(ContainSubstring("write flow config error"))
+			Expect(observed.ServiceInfo.StatusReason).To(ContainSubstring("umh.v1.some-other-location.*"))
+		})
+
 		It("should transition from Idle to Active when processing data", func() {
 			var err error
 

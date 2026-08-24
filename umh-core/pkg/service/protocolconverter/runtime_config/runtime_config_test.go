@@ -16,6 +16,7 @@ package runtime_config_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strconv"
 
@@ -317,7 +318,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.line-1.*\numh.v1.factory.line-2.*"},
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.plant-A.line-4.press.*\numh.v1.plant-A.line-4.oven.*"},
 						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 					},
 				},
@@ -330,7 +331,70 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(writeInput).To(HaveKey("uns"))
 			unsInput, ok := writeInput["uns"].(map[string]any)
 			Expect(ok).To(BeTrue())
-			Expect(unsInput["umh_topics"]).To(Equal([]string{"umh.v1.factory.line-1.*", "umh.v1.factory.line-2.*"}))
+			Expect(unsInput["umh_topics"]).To(Equal([]string{"umh.v1.plant-A.line-4.press.*", "umh.v1.plant-A.line-4.oven.*"}))
+		})
+
+		It("should reject topics outside the bridge location and keep the read flow rendered", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{"generate": map[string]any{"mapping": "root = {}"}},
+						},
+					},
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.plant-A.line-4.press.*\numh.v1.plant-A.line-9.oven.*"},
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.plant-A.line-9.oven.*")))
+			Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
+			Expect(errors.As(err, new(*runtime_config.WriteFlowConfigError))).To(BeTrue())
+
+			// The violation is confined to the write flow: the connection and read flow
+			// stay usable so the bridge comes up and the write flow can be debugged.
+			Expect(result.DataflowComponentWriteServiceConfig).To(Equal(dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}))
+			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("127.0.0.1"))
+			Expect(result.DataflowComponentReadServiceConfig.BenthosConfig.Input).To(HaveKey("generate"))
+		})
+
+		It("should not validate the topics of a write flow whose desired state is stopped", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.somewhere.else.*"},
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+					},
+				},
+				WriteDFCDesiredState: "stopped",
+			}
+
+			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept topics that resolve beneath the bridge location via location_path", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.{{ .location_path }}.press.*"},
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			unsInput, ok := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input["uns"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(unsInput["umh_topics"]).To(Equal([]string{"umh.v1.plant-A.line-4.press.*"}))
 		})
 
 		It("should not require UMHTopics when write DFC has no output", func() {

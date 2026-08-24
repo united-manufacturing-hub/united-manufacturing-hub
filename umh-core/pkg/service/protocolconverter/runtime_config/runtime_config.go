@@ -34,6 +34,10 @@ import (
 // name is identical across both callers — update both if this ever changes.
 const BridgedByPlaceholder = "unimplemented"
 
+// dfcDesiredStateStopped repeats the DFC FSM's "stopped" literal, because the FSM packages
+// depend on this one.
+const dfcDesiredStateStopped = "stopped"
+
 // BuildRuntimeConfig merges all variables (user + agent + global + internal),
 // performs the location merge, derives the `bridged_by` header, and finally
 // renders the three sub-templates.
@@ -72,6 +76,9 @@ const BridgedByPlaceholder = "unimplemented"
 //   - The function is pure: it performs no side-effects and never mutates *Spec*.
 //   - Passing a nil *Spec* results in an explicit error; an empty runtime
 //     struct is **never** returned.
+//   - A *WriteFlowConfigError* is returned together with a runtime whose connection and
+//     read flow are usable and whose write flow is blank. Callers that need only the read
+//     side can ignore it; the bridge stays up either way.
 //   - After rendering, **no** `{{ … }}` directives remain.
 //   - The returned object is ready for diffing or to be handed straight to the
 //     Protocol-Converter FSM.
@@ -230,13 +237,30 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
 
-	runtime, err := renderConfig(spec, scope, secrets) // unexported helper that enforces UNS
+	runtime, err := renderConfig(spec, scope, locationPath, secrets) // unexported helper that enforces UNS
 	if err != nil && !historianUsable && referencesMissingHistorian(err) {
 		return runtime, fmt.Errorf(
 			"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", err)
 	}
 
 	return runtime, err
+}
+
+// WriteFlowConfigError marks a configuration failure confined to the write flow of a
+// bridge. BuildRuntimeConfig returns it alongside a runtime whose connection and read
+// flow are rendered and whose write flow is blank, so the read flow keeps running.
+type WriteFlowConfigError struct {
+	Err error
+}
+
+// Error implements the error interface.
+func (e *WriteFlowConfigError) Error() string {
+	return "write flow: " + e.Err.Error()
+}
+
+// Unwrap exposes the underlying cause to errors.Is and errors.As.
+func (e *WriteFlowConfigError) Unwrap() error {
+	return e.Err
 }
 
 // referencesMissingHistorian reports whether err is the text/template
@@ -308,6 +332,7 @@ func referencesMissingHistorian(err error) bool {
 func renderConfig(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	scope map[string]any,
+	locationPath string,
 	secrets []string,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
@@ -353,6 +378,21 @@ func renderConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
+	// Enforce the UNS hierarchy: a write flow may only consume topics beneath the location
+	// of the bridge it belongs to. Checked after rendering, so topics written as
+	// `umh.v1.{{ .location_path }}.…` are checked in their resolved form. A violation blanks
+	// the write flow instead of failing the render, leaving connection and read flow up.
+	// A write flow with no destination, or a stopped one, subscribes to nothing.
+	var writeFlowErr error
+
+	writeStopped := spec.WriteDFCDesiredState == dfcDesiredStateStopped
+	if renderedWriteConfig.HasOutput() && !writeStopped {
+		if err := renderedWriteConfig.ToWriteConfig().ValidateTopicsUnderLocation(locationPath); err != nil {
+			writeFlowErr = &WriteFlowConfigError{Err: err}
+			renderedWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{}
+		}
+	}
+
 	// Extract the resolved bridged_by value from the scope to wire up the UNS consumer group.
 	// A blank value is acceptable only for structural comparisons (no live Benthos wire).
 	// When a write output is configured, bridgedBy must be non-empty — a blank value means
@@ -375,7 +415,7 @@ func renderConfig(
 		ConnectionServiceConfig:             connRuntime,
 		DataflowComponentReadServiceConfig:  read,
 		DataflowComponentWriteServiceConfig: write,
-	}, nil
+	}, writeFlowErr
 }
 
 // appendDownsampler appends a downsampler as the last processor if one doesn't already exist.
