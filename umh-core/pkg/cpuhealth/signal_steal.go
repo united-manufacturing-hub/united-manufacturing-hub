@@ -26,6 +26,10 @@ import (
 // This pair is a ratio on a 0..1 scale with capacity 1.0, and it is shared by
 // both steal arms: the mean fallback reuses the p95 bar, which is what lets the
 // mean stand in for a percentile at two samples without a second threshold.
+//
+// A third steal arm has to carry this same pair. A fired episode releases only
+// against the mark pair it fired under, so an arm with its own pair would hold
+// that episode forever once selection hands over to it.
 var stealMarks = diagnosis.Marks{
 	Fire: diagnosis.Mark{At: 0.10}, Clear: diagnosis.Mark{At: 0.06},
 	Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Worst: 1.0,
@@ -63,7 +67,7 @@ func stealSignal() diagnosis.Signal[Sample] {
 					Span:      60 * time.Second,
 					Reduction: diagnosis.Mean, // minimum 2
 				},
-				Marks: stealMarks, // shares the p95 bar by design; see signal_steal_test.go.
+				Marks: stealMarks, // shares the p95 bar by design; see stealMarks above.
 				//
 				// Counter stays false, on both steal arms. A steal fraction that
 				// falls has fallen. Declare it a counter and the window restarts
