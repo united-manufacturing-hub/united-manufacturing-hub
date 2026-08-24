@@ -32,9 +32,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// healthySig builds a Details bag with every healthy-message input in a
+// healthyDetails builds a Details bag with every healthy-message input in a
 // usable state, so individual fields can be overridden per assertion.
-func healthySig() Details {
+func healthyDetails() Details {
 	return Details{
 		LimitApplies:           true,
 		CapacityCores:          2.0,
@@ -55,12 +55,12 @@ func healthySig() Details {
 var _ = Describe("the healthy headline", func() {
 	It("should render the headline in limit mode with a percentage, and in no-limit mode with 'The machine' as subject", func() {
 		// Limit mode: entry 9 "CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and can use %s more before it is marked degraded."
-		limit := healthySig()
+		limit := healthyDetails()
 		Expect(composeHealthy(limit)).To(ContainSubstring(
 			"CPU healthy. This instance is using 0.0 of 2 cores (0% of its limit) and can use 1.8 more before it is marked degraded."))
 
 		// No-limit mode: entry 13 with subject entry 10 "The machine"; used is host-busy.
-		nolimit := healthySig()
+		nolimit := healthyDetails()
 		nolimit.LimitApplies = false
 		nolimit.CapacityCores = 8
 		nolimit.AvgUsageCores = 0
@@ -71,20 +71,20 @@ var _ = Describe("the healthy headline", func() {
 	})
 
 	It("should derive the displayed headroom from the already-rounded total, used and reserve so the printed arithmetic is exact", func() {
-		sig := healthySig()
-		sig.AvgUsageCores = 0.3
-		msg := composeHealthy(sig)
+		details := healthyDetails()
+		details.AvgUsageCores = 0.3
+		msg := composeHealthy(details)
 		// 2 total - 0.3 used - 0.2 reserved = 1.5, printed exactly.
 		Expect(msg).To(ContainSubstring("Headroom 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degraded below 0)."))
 		Expect(msg).To(ContainSubstring("can use 1.5 more before it is marked degraded."))
 	})
 
 	It("should omit the percentage suffix when the rounded total is zero, as a sub-0.05-core quota produces", func() {
-		sig := healthySig()
-		sig.CapacityCores = 0.04 // rounds to 0.0 total
-		sig.AvgUsageCores = 0.01
-		sig.ReserveCores = 0.0
-		msg := composeHealthy(sig)
+		details := healthyDetails()
+		details.CapacityCores = 0.04 // rounds to 0.0 total
+		details.AvgUsageCores = 0.01
+		details.ReserveCores = 0.0
+		msg := composeHealthy(details)
 		// The no-percentage close headline with the limit-mode subject: no
 		// "(N% of its limit)" suffix, "This instance".
 		Expect(msg).To(ContainSubstring("CPU healthy. This instance is using 0.0 of 0 cores and is close to being marked degraded."))
@@ -92,20 +92,20 @@ var _ = Describe("the healthy headline", func() {
 	})
 
 	It("should say the instance is close to being marked degraded once the displayed headroom falls below 0.05 cores, instead of offering more", func() {
-		sig := healthySig()
-		sig.AvgUsageCores = 1.8 // headroom 2.0-1.8-0.2 = 0.0 < 0.05
-		Expect(composeHealthy(sig)).To(ContainSubstring("and is close to being marked degraded."))
-		Expect(composeHealthy(sig)).NotTo(ContainSubstring("and can use"))
+		details := healthyDetails()
+		details.AvgUsageCores = 1.8 // headroom 2.0-1.8-0.2 = 0.0 < 0.05
+		Expect(composeHealthy(details)).To(ContainSubstring("and is close to being marked degraded."))
+		Expect(composeHealthy(details)).NotTo(ContainSubstring("and can use"))
 
-		above := healthySig()
+		above := healthyDetails()
 		above.AvgUsageCores = 0.0 // headroom 1.8 >= 0.05
 		Expect(composeHealthy(above)).To(ContainSubstring("and can use 1.8 more before it is marked degraded."))
 	})
 
 	It("should put the limited-visibility advisory between the headline and the technical details when limited visibility is set", func() {
-		sig := healthySig()
-		sig.LimitedVisibility = true
-		msg := composeHealthy(sig)
+		details := healthyDetails()
+		details.LimitedVisibility = true
+		msg := composeHealthy(details)
 		Expect(msg).To(ContainSubstring(
 			"Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."))
 		// The advisory sits between the headline and the Technical Details separator.
@@ -118,25 +118,25 @@ var _ = Describe("the healthy headline", func() {
 	})
 
 	It("should render the monitoring-unavailable line alone when capacity is zero, with no headline, no advisory and no technical details", func() {
-		sig := healthySig()
-		sig.CapacityCores = 0
-		Expect(composeHealthy(sig)).To(Equal(
+		details := healthyDetails()
+		details.CapacityCores = 0
+		Expect(composeHealthy(details)).To(Equal(
 			"CPU monitoring unavailable: cgroup read failed. Defaulting to healthy."))
 	})
 
 	It("should say host headroom is unavailable, naming both core counts, when the container's count describes only the CPUs it may run on", func() {
-		sig := healthySig()
-		sig.HostHeadroomAvailable = false
-		sig.HostCpus = 8
-		sig.LogicalCpus = 2
-		msg := composeHealthy(sig)
+		details := healthyDetails()
+		details.HostHeadroomAvailable = false
+		details.HostCpus = 8
+		details.LogicalCpus = 2
+		msg := composeHealthy(details)
 		Expect(msg).To(ContainSubstring("host headroom unavailable: this container is pinned to 2 of 8 CPUs"))
 		// It is an advisory-slot line, not the whole message.
 		Expect(msg).To(ContainSubstring("CPU healthy."))
 		Expect(msg).To(ContainSubstring("Technical Details:"))
 		// On ScopeUnknown HostCpus is 0 (bare float64, unknown Get leaves it 0),
 		// so the sentence is not rendered for an unknown machine count.
-		unknown := healthySig()
+		unknown := healthyDetails()
 		unknown.HostHeadroomAvailable = false
 		unknown.HostCpus = 0
 		unknown.LogicalCpus = 2
@@ -160,10 +160,10 @@ var _ = Describe("the healthy headline", func() {
 			// it healthy.
 			Pressure: diagnosis.Known(0.0),
 		}
-		_, sig := Decide(engine, smp, env)
-		Expect(sig.CapacityCores).To(Equal(2.0), "limit mode: capacity is the quota")
-		Expect(sig.ReserveCores).To(Equal(0.2), "limit mode: reserve is 0.10 x quota")
-		Expect(sig.HostBusyCoresAvailable).To(BeTrue(), "the sample's HostBusy ok bit rides the readability flag")
+		_, details := Decide(engine, smp, env)
+		Expect(details.CapacityCores).To(Equal(2.0), "limit mode: capacity is the quota")
+		Expect(details.ReserveCores).To(Equal(0.2), "limit mode: reserve is 0.10 x quota")
+		Expect(details.HostBusyCoresAvailable).To(BeTrue(), "the sample's HostBusy ok bit rides the readability flag")
 
 		// No-limit mode uses a sample whose quota is not positive (the cpu.max
 		// "max" case reads Known(0)) — a no-limit box never carries a positive
@@ -181,36 +181,36 @@ var _ = Describe("the healthy headline", func() {
 
 var _ = Describe("the healthy message reports only what it measured", func() {
 	It("should not report host usage or headroom when the host reading is absent", func() {
-		sig := healthySig()
-		sig.LimitApplies = false
-		sig.CapacityCores = 8
-		sig.AvgHostBusyCores = 0.0
-		sig.ReserveCores = 1.0
-		sig.HostBusyCoresAvailable = false // read failed, window still full
-		Expect(composeHealthy(sig)).To(Equal("CPU: starting up."))
+		details := healthyDetails()
+		details.LimitApplies = false
+		details.CapacityCores = 8
+		details.AvgHostBusyCores = 0.0
+		details.ReserveCores = 1.0
+		details.HostBusyCoresAvailable = false // read failed, window still full
+		Expect(composeHealthy(details)).To(Equal("CPU: starting up."))
 	})
 
 	It("should not report the limit-mode usage figure when the container's own window holds too few samples to reduce, even though the reading succeeded", func() {
-		sig := healthySig()
-		sig.UsageRingActive = false
-		Expect(composeHealthy(sig)).To(Equal("CPU: starting up."))
+		details := healthyDetails()
+		details.UsageRingActive = false
+		Expect(composeHealthy(details)).To(Equal("CPU: starting up."))
 	})
 
 	It("should not report the no-limit usage figure when the host window holds too few samples to reduce, even though the reading succeeded", func() {
-		sig := healthySig()
-		sig.LimitApplies = false
-		sig.CapacityCores = 8
-		sig.AvgHostBusyCores = 0.0
-		sig.ReserveCores = 1.0
-		sig.HostBusyCoresAvailable = true
-		sig.HostBusyRingActive = false
-		Expect(composeHealthy(sig)).To(Equal("CPU: starting up."))
+		details := healthyDetails()
+		details.LimitApplies = false
+		details.CapacityCores = 8
+		details.AvgHostBusyCores = 0.0
+		details.ReserveCores = 1.0
+		details.HostBusyCoresAvailable = true
+		details.HostBusyRingActive = false
+		Expect(composeHealthy(details)).To(Equal("CPU: starting up."))
 	})
 
 	It("should render no headline at all on a tick whose usage figure is withheld, returning through the same single-line path the zero-capacity guard uses rather than a headline with a hole in it", func() {
-		sig := healthySig()
-		sig.UsageRingActive = false
-		msg := composeHealthy(sig)
+		details := healthyDetails()
+		details.UsageRingActive = false
+		msg := composeHealthy(details)
 		Expect(msg).To(Equal("CPU: starting up."))
 		Expect(msg).NotTo(ContainSubstring("CPU healthy."))
 		Expect(msg).NotTo(ContainSubstring("Technical Details:"))
@@ -218,7 +218,7 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 		// The floors are per measurement, not one flag: a limit-mode headline uses
 		// the container's usage-cores, so a thin host-busy window must NOT
 		// withhold it.
-		limitOK := healthySig()
+		limitOK := healthyDetails()
 		limitOK.HostBusyRingActive = false
 		Expect(composeHealthy(limitOK)).To(ContainSubstring("CPU healthy."))
 	})
@@ -226,7 +226,7 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 
 var _ = Describe("the budget lines", func() {
 	It("should list the headroom budget always, and each of throttle, pressure and steal only when this tick's reading is usable", func() {
-		all := healthySig()
+		all := healthyDetails()
 		all.ThrottleRatio = 0.02
 		all.PressureAvg60 = 0.05
 		all.StealP95 = 0.30
@@ -241,7 +241,7 @@ var _ = Describe("the budget lines", func() {
 	It("should print each budget line from its signal's readiness, never from the capability flag", func() {
 		// A virtualized box (StealApplies true) whose steal window has no usable
 		// value this tick must not print a confident 0% steal line.
-		vm := healthySig()
+		vm := healthyDetails()
 		vm.StealApplies = true
 		vm.StealSignalReady = false
 		msg := composeHealthy(vm)
@@ -250,13 +250,13 @@ var _ = Describe("the budget lines", func() {
 		Expect(msg).To(ContainSubstring("Headroom"))
 
 		// The throttle gate is readiness, not LimitApplies.
-		noThrottle := healthySig()
+		noThrottle := healthyDetails()
 		noThrottle.LimitApplies = true
 		noThrottle.ThrottleSignalReady = false
 		Expect(composeHealthy(noThrottle)).NotTo(ContainSubstring("Throttling"))
 
 		// The pressure gate is readiness, not PressureApplies.
-		noPressure := healthySig()
+		noPressure := healthyDetails()
 		noPressure.PressureApplies = true
 		noPressure.PressureSignalReady = false
 		Expect(composeHealthy(noPressure)).NotTo(ContainSubstring("Pressure"))
@@ -264,7 +264,7 @@ var _ = Describe("the budget lines", func() {
 		// Readiness is the gate, not capability: a ready steal signal prints
 		// even when StealApplies is false (they agree on bare metal, but this
 		// pins the gate to the readiness trio).
-		ready := healthySig()
+		ready := healthyDetails()
 		ready.StealApplies = false
 		ready.StealSignalReady = true
 		ready.StealP95 = 0.30
@@ -479,12 +479,12 @@ var _ = Describe("block reasons", func() {
 				HostCpus:    diagnosis.Known(4),
 				UsageCores:  diagnosis.Known(3.6),
 			}
-			verdict, sig := Decide(engine, smp, env)
+			verdict, details := Decide(engine, smp, env)
 			if i == 2 {
 				Expect(verdict.Causes).To(HaveLen(1))
 				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 				Expect(verdict.Causes[0].Instrument).To(Equal(instrumentHostHeadroom))
-				Expect(sig.LimitApplies).To(BeFalse(), "no quota applies, so the no-limit wording is the one that renders")
+				Expect(details.LimitApplies).To(BeFalse(), "no quota applies, so the no-limit wording is the one that renders")
 			}
 		}
 	})
@@ -506,7 +506,7 @@ var _ = Describe("block reasons", func() {
 
 		base := time.Now()
 		var verdict Verdict
-		var sig Details
+		var details Details
 		for i := 0; i <= 5; i++ {
 			smp := Sample{
 				Timestamp:   base.Add(time.Duration(i) * time.Second),
@@ -517,7 +517,7 @@ var _ = Describe("block reasons", func() {
 				LogicalCpus: diagnosis.Known(4),
 				HostCpus:    diagnosis.Known(4),
 			}
-			verdict, sig = Decide(engine, smp, env)
+			verdict, details = Decide(engine, smp, env)
 		}
 
 		// The two capacity signals produce two causes of two kinds. Collapsing
@@ -562,17 +562,17 @@ var _ = Describe("block reasons", func() {
 		// sentence, so it is handed the real cause list every time and only the
 		// speaker varies. BlockReason has no blended line, so a candidate on its
 		// own renders exactly what it would have said.
-		details := spokeWith("the technical details",
-			causeDetails(speakingCause(verdict.Causes), verdict.Causes, verdict.Attribution, sig),
-			func(speaker Cause) string { return causeDetails(speaker, verdict.Causes, verdict.Attribution, sig) })
-		block := spokeWith("the bridge-refusal reason",
-			BlockReason(verdict.Causes, verdict.Attribution, sig),
-			func(speaker Cause) string { return BlockReason([]Cause{speaker}, verdict.Attribution, sig) })
+		detailsSpeaker := spokeWith("the technical details",
+			causeDetails(speakingCause(verdict.Causes), verdict.Causes, verdict.Attribution, details),
+			func(speaker Cause) string { return causeDetails(speaker, verdict.Causes, verdict.Attribution, details) })
+		blockSpeaker := spokeWith("the bridge-refusal reason",
+			BlockReason(verdict.Causes, verdict.Attribution, details),
+			func(speaker Cause) string { return BlockReason([]Cause{speaker}, verdict.Attribution, details) })
 
-		Expect(details).To(Equal(block),
+		Expect(detailsSpeaker).To(Equal(blockSpeaker),
 			"the two surfaces disagree on one tick: the technical details blame %s while the bridge refusal blames %s, so a customer is given two contradictory remedies",
-			details, block)
-		Expect(details).To(Equal(name(candidates[0])),
+			detailsSpeaker, blockSpeaker)
+		Expect(detailsSpeaker).To(Equal(name(candidates[0])),
 			"the machine's own reading is the measured one, so it is the cause both surfaces speak with")
 	})
 })

@@ -44,7 +44,7 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 
 		base := time.Now()
 		var verdict Verdict
-		var sig Details
+		var details Details
 		for i := 0; i < 3; i++ {
 			s := Sample{
 				Timestamp:    base.Add(time.Duration(i) * time.Second),
@@ -62,16 +62,16 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 				Virtualized:  false,
 			}
 			env := DeriveEnvironment(s)
-			verdict, sig = Decide(engine, s, env)
+			verdict, details = Decide(engine, s, env)
 		}
 
-		msg := ComposeMessage(verdict, sig)
+		msg := ComposeMessage(verdict, details)
 
 		// The full invariant, asserted together on the genuinely no-PSI chain.
 		Expect(verdict.State).To(Equal(StateHealthy), "a benign limited-visibility box stays healthy")
 		Expect(verdict.Causes).To(BeEmpty(), "no cause may fire on a healthy box")
-		Expect(sig.PressureApplies).To(BeFalse(), "a no-PSI host must not claim PSI applies")
-		Expect(sig.LimitedVisibility).To(BeTrue(), "no limit AND no PSI must set LimitedVisibility")
+		Expect(details.PressureApplies).To(BeFalse(), "a no-PSI host must not claim PSI applies")
+		Expect(details.LimitedVisibility).To(BeTrue(), "no limit AND no PSI must set LimitedVisibility")
 		// The healthy dashboard rendered, not the below-floor "CPU: starting up."
 		// single-liner — proving the real chain produced the full message.
 		Expect(msg).To(ContainSubstring("CPU healthy."))

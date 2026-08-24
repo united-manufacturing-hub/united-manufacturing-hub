@@ -185,26 +185,26 @@ var _ = Describe("verdict assembly", func() {
 				NrPeriods:   diagnosis.Known(100 * float64(i)),
 				NrThrottled: diagnosis.Known(2 * float64(i)),
 			}
-			verdict, sig := Decide(engine, smp, env)
+			verdict, details := Decide(engine, smp, env)
 			if i == 65 {
 				Expect(verdict.State).To(Equal(StateHealthy))
 				Expect(verdict.Causes).To(BeEmpty())
 
 				// Metrics, from the same pass, below their marks.
-				Expect(sig.ThrottleRatio).To(BeNumerically("~", 0.02, 1e-9), "a quiet throttle latch must not publish 0")
-				Expect(sig.PressureAvg60).To(BeNumerically("~", 0.1, 1e-9))
-				Expect(sig.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9))
-				Expect(sig.AvgHostBusyCores).To(BeNumerically("~", 0.5, 1e-9))
+				Expect(details.ThrottleRatio).To(BeNumerically("~", 0.02, 1e-9), "a quiet throttle latch must not publish 0")
+				Expect(details.PressureAvg60).To(BeNumerically("~", 0.1, 1e-9))
+				Expect(details.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9))
+				Expect(details.AvgHostBusyCores).To(BeNumerically("~", 0.5, 1e-9))
 
 				// The two measurement floors.
-				Expect(sig.UsageRingActive).To(BeTrue())
-				Expect(sig.HostBusyRingActive).To(BeTrue())
+				Expect(details.UsageRingActive).To(BeTrue())
+				Expect(details.HostBusyRingActive).To(BeTrue())
 
 				// Readiness trio: ready where a capable window has a value, false
 				// on the bare-metal steal signal that no instrument can answer.
-				Expect(sig.ThrottleSignalReady).To(BeTrue())
-				Expect(sig.PressureSignalReady).To(BeTrue())
-				Expect(sig.StealSignalReady).To(BeFalse(), "a bare-metal box has no steal answer, whatever its window holds")
+				Expect(details.ThrottleSignalReady).To(BeTrue())
+				Expect(details.PressureSignalReady).To(BeTrue())
+				Expect(details.StealSignalReady).To(BeFalse(), "a bare-metal box has no steal answer, whatever its window holds")
 			}
 		}
 	})
@@ -220,9 +220,9 @@ var _ = Describe("verdict assembly", func() {
 		env := diagnosis.NewEnvironment(HasLimit, HasPressureStats)
 		base := time.Now()
 
-		var sig Details
+		var details Details
 		for i := 0; i <= 65; i++ {
-			_, sig = Decide(engine, Sample{
+			_, details = Decide(engine, Sample{
 				Timestamp:   base.Add(time.Duration(i) * time.Second),
 				CpuScope:    ScopeHost,
 				Pressure:    diagnosis.Known(0.1),
@@ -236,14 +236,14 @@ var _ = Describe("verdict assembly", func() {
 
 		// A sibling the same pass DOES fill. Without it this spec would also pass
 		// on a Decide that filled nothing at all.
-		Expect(sig.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9), "the pass must have run for the absences below to mean anything")
+		Expect(details.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9), "the pass must have run for the absences below to mean anything")
 
 		absent := func(r diagnosis.Reading) bool { _, ok := r.Get(); return !ok }
-		Expect(absent(sig.UsageFraction)).To(BeTrue(), "UsageFraction")
-		Expect(absent(sig.P95UsageFraction)).To(BeTrue(), "P95UsageFraction")
-		Expect(absent(sig.P99UsageFraction)).To(BeTrue(), "P99UsageFraction")
-		Expect(absent(sig.P95UsageCores)).To(BeTrue(), "P95UsageCores")
-		Expect(absent(sig.P99UsageCores)).To(BeTrue(), "P99UsageCores")
-		Expect(absent(sig.HeadroomCores)).To(BeTrue(), "HeadroomCores")
+		Expect(absent(details.UsageFraction)).To(BeTrue(), "UsageFraction")
+		Expect(absent(details.P95UsageFraction)).To(BeTrue(), "P95UsageFraction")
+		Expect(absent(details.P99UsageFraction)).To(BeTrue(), "P99UsageFraction")
+		Expect(absent(details.P95UsageCores)).To(BeTrue(), "P95UsageCores")
+		Expect(absent(details.P99UsageCores)).To(BeTrue(), "P99UsageCores")
+		Expect(absent(details.HeadroomCores)).To(BeTrue(), "HeadroomCores")
 	})
 })

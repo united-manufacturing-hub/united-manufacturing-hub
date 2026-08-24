@@ -111,10 +111,10 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		base := time.Now()
 
 		smp := headroomSample(base, 0, ScopeAffinity, 2, 8)
-		_, sig := Decide(engine, smp, env)
-		Expect(sig.HostHeadroomAvailable).To(BeFalse(), "an affinity box withholds headroom: withheld, not failed")
-		Expect(sig.LogicalCpus).To(Equal(2.0))
-		Expect(sig.HostCpus).To(Equal(8.0))
+		_, details := Decide(engine, smp, env)
+		Expect(details.HostHeadroomAvailable).To(BeFalse(), "an affinity box withholds headroom: withheld, not failed")
+		Expect(details.LogicalCpus).To(Equal(2.0))
+		Expect(details.HostCpus).To(Equal(8.0))
 
 		// ScopeHost keeps the bit set even when the window is absent on a read
 		// failure — the bit dispatches on the scope, so a plain /proc/stat

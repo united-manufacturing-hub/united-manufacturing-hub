@@ -59,7 +59,7 @@ var _ = Describe("the fallback metric set", func() {
 			if hbKnown {
 				smp.HostBusy = diagnosis.Known(0.5)
 			}
-			_, sig := Decide(engine, smp, env)
+			_, details := Decide(engine, smp, env)
 			if i == 129 {
 				// Sixty readable ticks filled host-headroom; sixty absent ones
 				// emptied it. Selection walks to usage-fraction, which stayed
@@ -74,7 +74,7 @@ var _ = Describe("the fallback metric set", func() {
 				Expect(v).To(BeNumerically("~", 0.1, 1e-9))
 				// The metric is usage-fraction's OWN reduction — not the
 				// usage-cores measurement divided by anything.
-				Expect(sig.AvgUsageFraction).To(BeNumerically("~", 0.1, 1e-9))
+				Expect(details.AvgUsageFraction).To(BeNumerically("~", 0.1, 1e-9))
 			}
 		}
 
@@ -134,10 +134,10 @@ var _ = Describe("the fallback metric set", func() {
 				UsageCores:   diagnosis.Known(0.2),
 				HostBusy:     diagnosis.Known(0.5),
 			}
-			verdict, sig := Decide(engine, smp, env)
+			verdict, details := Decide(engine, smp, env)
 			Expect(verdict.State).To(Equal(StateHealthy))
 			if i == 4 {
-				Expect(sig.LimitedVisibility).To(BeTrue(), "no quota and no PSI is limited visibility")
+				Expect(details.LimitedVisibility).To(BeTrue(), "no quota and no PSI is limited visibility")
 			}
 		}
 
@@ -158,9 +158,9 @@ var _ = Describe("the fallback metric set", func() {
 				UsageCores:   diagnosis.Known(0.2),
 				HostBusy:     diagnosis.Known(0.5),
 			}
-			_, sig := Decide(engine2, smp, env2)
+			_, details := Decide(engine2, smp, env2)
 			if i == 4 {
-				Expect(sig.LimitedVisibility).To(BeFalse(), "a positive quota lifts limited visibility even without PSI")
+				Expect(details.LimitedVisibility).To(BeFalse(), "a positive quota lifts limited visibility even without PSI")
 			}
 		}
 	})
@@ -205,15 +205,15 @@ var _ = Describe("the gate on the usage estimate", func() {
 	// answer.
 	driveGate := func(engine *diagnosis.Engine[Sample], quota diagnosis.Reading, psi bool) (diagnosis.Environment, Verdict, Details) {
 		var verdict Verdict
-		var sig Details
+		var details Details
 		base := time.Now()
 		env := DeriveEnvironment(gatedSample(base, quota, psi))
 
 		for i := 0; i <= 5; i++ {
-			verdict, sig = Decide(engine, gatedSample(base.Add(time.Duration(i)*time.Second), quota, psi), env)
+			verdict, details = Decide(engine, gatedSample(base.Add(time.Duration(i)*time.Second), quota, psi), env)
 		}
 
-		return env, verdict, sig
+		return env, verdict, details
 	}
 
 	// estimateWithheld asserts the shape both no-verdict specs share: the gate
@@ -221,7 +221,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 	// nothing to read, nothing fired, and the estimate itself still reduced to
 	// a value past its fire mark — so the quiet tick is the gate withholding a
 	// number, not a box that measured fine.
-	estimateWithheld := func(engine *diagnosis.Engine[Sample], sat diagnosis.Signal[Sample], env diagnosis.Environment, verdict Verdict, sig Details) {
+	estimateWithheld := func(engine *diagnosis.Engine[Sample], sat diagnosis.Signal[Sample], env diagnosis.Environment, verdict Verdict, details Details) {
 		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instrumentHostHeadroom}),
 			"the gate takes the estimate out of the capable set and leaves the /proc/stat arm alone")
 		_, _, _, avail := engine.Select(sat, env)
@@ -234,18 +234,18 @@ var _ = Describe("the gate on the usage estimate", func() {
 		Expect(state).To(Equal(diagnosis.StateValue))
 		Expect(fraction).To(BeNumerically("~", 0.75, 1e-9),
 			"0.75 is past the 0.70 fire mark, so the gate is what kept the signal quiet")
-		Expect(sig.AvgUsageFraction).To(BeNumerically("~", 0.75, 1e-9),
+		Expect(details.AvgUsageFraction).To(BeNumerically("~", 0.75, 1e-9),
 			"the number is still published, so a reader sees a busy box rather than a measured-and-fine one")
 	}
 
 	It("should leave the machine full question unanswered where the kernel reports pressure statistics", func() {
 		engine, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())
-		env, verdict, sig := driveGate(engine, diagnosis.Unknown(), true)
+		env, verdict, details := driveGate(engine, diagnosis.Unknown(), true)
 		Expect(env.Has(HasLimitedVisibility)).To(BeFalse(), "PSI is better evidence than the estimate")
 
-		estimateWithheld(engine, signalNamed(cpuTable(4, 0), signalHostCpuFull), env, verdict, sig)
-		Expect(sig.PressureApplies).To(BeTrue(), "the pressure signal is what covers this box instead")
+		estimateWithheld(engine, signalNamed(cpuTable(4, 0), signalHostCpuFull), env, verdict, details)
+		Expect(details.PressureApplies).To(BeTrue(), "the pressure signal is what covers this box instead")
 	})
 
 	It("should leave the machine full question unanswered where a CPU limit is set", func() {
@@ -254,11 +254,11 @@ var _ = Describe("the gate on the usage estimate", func() {
 		// and the tick is healthy for want of any capacity reading at all.
 		engine, err := NewEngine(4, 8.0)
 		Expect(err).NotTo(HaveOccurred())
-		env, verdict, sig := driveGate(engine, diagnosis.Known(8.0), false)
+		env, verdict, details := driveGate(engine, diagnosis.Known(8.0), false)
 		Expect(env.Has(HasLimitedVisibility)).To(BeFalse(), "a CPU limit is better evidence than the estimate")
 
-		estimateWithheld(engine, signalNamed(cpuTable(4, 8.0), signalHostCpuFull), env, verdict, sig)
-		Expect(sig.LimitApplies).To(BeTrue(), "throttling and container-limit-full are what cover this box instead")
+		estimateWithheld(engine, signalNamed(cpuTable(4, 8.0), signalHostCpuFull), env, verdict, details)
+		Expect(details.LimitApplies).To(BeTrue(), "throttling and container-limit-full are what cover this box instead")
 	})
 
 	It("should still answer from our own usage where there is no CPU limit and no pressure statistic", func() {
@@ -266,7 +266,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 		// /proc/stat, the same 0.75, and only the gate varies.
 		engine, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())
-		env, verdict, sig := driveGate(engine, diagnosis.Unknown(), false)
+		env, verdict, details := driveGate(engine, diagnosis.Unknown(), false)
 		Expect(env.Has(HasLimitedVisibility)).To(BeTrue(), "no limit and no PSI is where nothing better exists")
 
 		sat := signalNamed(cpuTable(4, 0), signalHostCpuFull)
@@ -279,7 +279,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
 		Expect(verdict.Causes[0].Instrument).To(Equal(instrumentUsageFraction))
 		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 0.75, 1e-9))
-		Expect(sig.LimitedVisibility).To(BeTrue(), "the same condition the gate reads, reported on Details")
+		Expect(details.LimitedVisibility).To(BeTrue(), "the same condition the gate reads, reported on Details")
 	})
 })
 

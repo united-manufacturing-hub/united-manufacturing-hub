@@ -348,11 +348,11 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		// The belt-and-braces guard: even a direct call to hostCpuFullSignal with
 		// a non-positive count must not divide by it — both Extract arms return
 		// Unknown, never a Known(+Inf) that would latch a permanent full machine.
-		sig := hostCpuFullSignal(0)
-		Expect(sig.Instruments).To(HaveLen(2))
-		host := sig.Instruments[0]
+		fullSignal := hostCpuFullSignal(0)
+		Expect(fullSignal.Instruments).To(HaveLen(2))
+		host := fullSignal.Instruments[0]
 		Expect(host.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Unknown()))
-		usage := sig.Instruments[1]
+		usage := fullSignal.Instruments[1]
 		Expect(usage.Extract(Sample{UsageCores: diagnosis.Known(1.4)})).To(Equal(diagnosis.Unknown()))
 	})
 })

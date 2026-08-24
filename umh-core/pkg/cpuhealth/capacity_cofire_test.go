@@ -82,7 +82,7 @@ var _ = Describe("two capacity causes on one tick", func() {
 			base := time.Now()
 
 			var verdict Verdict
-			var sig Details
+			var details Details
 			for i := 0; i <= 5; i++ {
 				smp := Sample{
 					Timestamp:   base.Add(time.Duration(i) * time.Second),
@@ -95,7 +95,7 @@ var _ = Describe("two capacity causes on one tick", func() {
 					NrPeriods:   diagnosis.Known(0),
 					NrThrottled: diagnosis.Known(0),
 				}
-				verdict, sig = Decide(engine, smp, env)
+				verdict, details = Decide(engine, smp, env)
 			}
 
 			// The two kinds are distinct all the way to the verdict. Nothing
@@ -113,14 +113,14 @@ var _ = Describe("two capacity causes on one tick", func() {
 			// One blended sentence, not two paragraphs. Telling a customer to add
 			// CPU to a full machine and also to raise their own limit gives them a
 			// remedy that cannot work.
-			Expect(ComposeMessage(verdict, sig)).To(Equal(
+			Expect(ComposeMessage(verdict, details)).To(Equal(
 				"CPU running near full"+
 					"\nTechnical Details: "+
 					"The machine is full and this instance's CPU limit cannot help. "+
 					"Add CPU to the machine, or reduce other software running on it. "+
 					"(This instance is also at its 2-core limit.)"),
 				"limit row first: %v", limitFirst)
-			Expect(BlockReason(verdict.Causes, verdict.Attribution, sig)).To(Equal(
+			Expect(BlockReason(verdict.Causes, verdict.Attribution, details)).To(Equal(
 				"Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."),
 				"limit row first: %v", limitFirst)
 		}
@@ -154,9 +154,9 @@ var _ = Describe("two capacity causes on one tick", func() {
 		env := DeriveEnvironment(sample(base))
 
 		var verdict Verdict
-		var sig Details
+		var details Details
 		for i := 0; i <= 5; i++ {
-			verdict, sig = Decide(engine, sample(base.Add(time.Duration(i)*time.Second)), env)
+			verdict, details = Decide(engine, sample(base.Add(time.Duration(i)*time.Second)), env)
 		}
 
 		// One capacity cause, and it is the limit's.
@@ -178,12 +178,12 @@ var _ = Describe("two capacity causes on one tick", func() {
 		// Neither customer surface claims anything about the machine's
 		// capacity. Both machine-full sentences, detailSatHostFull and
 		// detailSatBothAtLimit, open with the same four words.
-		msg := ComposeMessage(verdict, sig)
+		msg := ComposeMessage(verdict, details)
 		Expect(msg).NotTo(ContainSubstring("The machine is full"))
 		Expect(msg).To(ContainSubstring(detailSatHostUnavail),
 			"an unreadable /proc/stat is reported as unreadable, never as a machine that measured fine")
-		Expect(BlockReason(verdict.Causes, verdict.Attribution, sig)).
-			To(Equal(BlockReason(oneCause(CauseKindContainerLimitFull, instrumentLimitHeadroom), verdict.Attribution, sig)),
+		Expect(BlockReason(verdict.Causes, verdict.Attribution, details)).
+			To(Equal(BlockReason(oneCause(CauseKindContainerLimitFull, instrumentLimitHeadroom), verdict.Attribution, details)),
 				"with one capacity cause there is no pair to blend, so the refusal is the limit's own line")
 	})
 })

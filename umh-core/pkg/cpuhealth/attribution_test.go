@@ -129,9 +129,9 @@ var _ = Describe("attribution consults its evidence", func() {
 				NrThrottled: diagnosis.Known(0),
 				Steal:       diagnosis.Known(0),
 			}
-			verdict, sig := Decide(engine2, smp, env2)
+			verdict, details := Decide(engine2, smp, env2)
 			if i == 5 {
-				Expect(sig.HostHeadroomCores).To(BeNumerically("~", -0.2, 1e-9), "host-headroom 4 - 3.2 - 1.0 = -0.2 fires")
+				Expect(details.HostHeadroomCores).To(BeNumerically("~", -0.2, 1e-9), "host-headroom 4 - 3.2 - 1.0 = -0.2 fires")
 				Expect(verdict.Causes[0].Instrument).To(Equal(instrumentHostHeadroom))
 				hbm, _ := engine2.Measurement(measurementHostBusy).Get()
 				oum, _ := engine2.Measurement(measurementUsageCores).Get()

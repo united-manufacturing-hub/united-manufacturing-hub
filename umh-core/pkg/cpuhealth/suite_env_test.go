@@ -35,12 +35,12 @@ var _ = Describe("the environment the generated suite runs in", func() {
 		// quota 0, so the quota-0 table can carry a requirement the quota-2
 		// table does not, and vice versa.
 		for _, t := range []diagnosis.Table[Sample]{cpuTable(4, 2.0), cpuTable(4, 0)} {
-			for _, sig := range t.Signals {
-				for _, inst := range sig.Instruments {
+			for _, tableSignal := range t.Signals {
+				for _, inst := range tableSignal.Instruments {
 					for _, req := range inst.Requires {
 						Expect(env.Has(req)).To(BeTrue(),
 							"signal %q instrument %q requires %q, which the suite environment does not grant — that signal is NoInstrument in every scenario and the suite tests nothing about it",
-							sig.Name, inst.Name, req)
+							tableSignal.Name, inst.Name, req)
 					}
 				}
 			}

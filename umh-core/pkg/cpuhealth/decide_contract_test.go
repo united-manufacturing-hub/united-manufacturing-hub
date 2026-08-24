@@ -40,7 +40,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
 		base := time.Now()
 
-		var sig Details
+		var details Details
 		for i := 0; i <= 65; i++ {
 			smp := Sample{
 				Timestamp:    base.Add(time.Duration(i) * time.Second),
@@ -57,10 +57,10 @@ var _ = Describe("Decide's whole Details contract", func() {
 				LogicalCpus:  diagnosis.Known(4),
 				HostCpus:     diagnosis.Known(8),
 			}
-			_, sig = Decide(engine, smp, env)
+			_, details = Decide(engine, smp, env)
 		}
 
-		Expect(sig).To(Equal(Details{
+		Expect(details).To(Equal(Details{
 			UsageFraction:    diagnosis.Unknown(), // declared for a future projection; never filled
 			ThrottleRatio:    0.02,
 			PressureAvg60:    0.1,
@@ -104,7 +104,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
 		base := time.Now()
 
-		var sig Details
+		var details Details
 		for i := 0; i <= 65; i++ {
 			smp := Sample{
 				Timestamp:    base.Add(time.Duration(i) * time.Second),
@@ -121,10 +121,10 @@ var _ = Describe("Decide's whole Details contract", func() {
 				LogicalCpus:  diagnosis.Known(4),
 				HostCpus:     diagnosis.Known(8),
 			}
-			_, sig = Decide(engine, smp, env)
+			_, details = Decide(engine, smp, env)
 		}
 
-		Expect(sig).To(Equal(Details{
+		Expect(details).To(Equal(Details{
 			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0.06,
 			PressureAvg60:    0.1,
@@ -168,7 +168,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
 		base := time.Now()
 
-		var sig Details
+		var details Details
 		for i := 0; i <= 65; i++ {
 			smp := Sample{
 				Timestamp:    base.Add(time.Duration(i) * time.Second),
@@ -185,10 +185,10 @@ var _ = Describe("Decide's whole Details contract", func() {
 				LogicalCpus:  diagnosis.Known(4),
 				HostCpus:     diagnosis.Known(8),
 			}
-			_, sig = Decide(engine, smp, env)
+			_, details = Decide(engine, smp, env)
 		}
 
-		Expect(sig).To(Equal(Details{
+		Expect(details).To(Equal(Details{
 			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0.02,
 			PressureAvg60:    0.35,
@@ -232,7 +232,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
 		base := time.Now()
 
-		var sig Details
+		var details Details
 		for i := 0; i <= 65; i++ {
 			smp := Sample{
 				Timestamp:    base.Add(time.Duration(i) * time.Second),
@@ -249,10 +249,10 @@ var _ = Describe("Decide's whole Details contract", func() {
 				LogicalCpus:  diagnosis.Known(4),
 				HostCpus:     diagnosis.Known(8),
 			}
-			_, sig = Decide(engine, smp, env)
+			_, details = Decide(engine, smp, env)
 		}
 
-		Expect(sig).To(Equal(Details{
+		Expect(details).To(Equal(Details{
 			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0.02,
 			PressureAvg60:    0.1,
@@ -304,7 +304,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
 		base := time.Now()
 
-		var sig Details
+		var details Details
 		for i := 0; i <= 100; i++ {
 			usage, hb := 0.2, 0.1
 			if i >= 40 {
@@ -317,10 +317,10 @@ var _ = Describe("Decide's whole Details contract", func() {
 				UsageCores:  diagnosis.Known(usage),
 				HostBusy:    diagnosis.Known(hb),
 			}
-			_, sig = Decide(engine, smp, env)
+			_, details = Decide(engine, smp, env)
 		}
 
-		Expect(sig).To(Equal(Details{
+		Expect(details).To(Equal(Details{
 			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0,
 			PressureAvg60:    0,
@@ -367,7 +367,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 		env := diagnosis.NewEnvironment(HasLimit)
 		base := time.Now()
 
-		var sig Details
+		var details Details
 		for i := 0; i <= 5; i++ {
 			smp := Sample{
 				Timestamp:   base.Add(time.Duration(i) * time.Second),
@@ -377,10 +377,10 @@ var _ = Describe("Decide's whole Details contract", func() {
 				NrPeriods:   diagnosis.Known(0),
 				NrThrottled: diagnosis.Known(0),
 			}
-			_, sig = Decide(engine, smp, env)
+			_, details = Decide(engine, smp, env)
 		}
 
-		Expect(sig).To(Equal(Details{
+		Expect(details).To(Equal(Details{
 			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0,
 			PressureAvg60:    0,
@@ -428,7 +428,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 		env := diagnosis.NewEnvironment()
 		base := time.Now()
 
-		var sig Details
+		var details Details
 		for i := 0; i <= 5; i++ {
 			smp := Sample{
 				Timestamp:  base.Add(time.Duration(i) * time.Second),
@@ -436,10 +436,10 @@ var _ = Describe("Decide's whole Details contract", func() {
 				HostBusy:   diagnosis.Known(3.5),
 				UsageCores: diagnosis.Known(0.5),
 			}
-			_, sig = Decide(engine, smp, env)
+			_, details = Decide(engine, smp, env)
 		}
 
-		Expect(sig).To(Equal(Details{
+		Expect(details).To(Equal(Details{
 			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0,
 			PressureAvg60:    0,
@@ -507,9 +507,9 @@ var _ = Describe("Decide's whole Details contract", func() {
 			LogicalCpus:  diagnosis.Known(4),
 			HostCpus:     diagnosis.Known(8),
 		}
-		_, sig := Decide(engine, smp, env)
+		_, details := Decide(engine, smp, env)
 
-		Expect(sig).To(Equal(Details{
+		Expect(details).To(Equal(Details{
 			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0,
 			PressureAvg60:    0.1,

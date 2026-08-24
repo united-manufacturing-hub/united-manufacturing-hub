@@ -61,7 +61,7 @@ var _ = Describe("the per-signal readiness gate on a thin window", func() {
 			NrThrottled:  diagnosis.Known(2),
 		}
 
-		_, sig := Decide(engine, smp, env)
+		_, details := Decide(engine, smp, env)
 
 		// The premise, read off the same windows Decide judged: one sample is
 		// not a window, so both signals resolve NoneReady rather than
@@ -77,9 +77,9 @@ var _ = Describe("the per-signal readiness gate on a thin window", func() {
 			"one sample cannot fill the steal window, and a virtualized box has the instrument")
 
 		// So the message layer must be told it has no number to print.
-		Expect(sig.ThrottleSignalReady).To(BeFalse(),
+		Expect(details.ThrottleSignalReady).To(BeFalse(),
 			"a NoneReady throttle signal must not be reported ready: the message would publish a throttle ratio off one sample")
-		Expect(sig.StealSignalReady).To(BeFalse(),
+		Expect(details.StealSignalReady).To(BeFalse(),
 			"a NoneReady steal signal must not be reported ready: the message would publish a steal budget off one sample")
 	})
 })
