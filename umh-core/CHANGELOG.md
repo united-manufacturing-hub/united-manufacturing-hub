@@ -5,6 +5,7 @@
 ### Improvements
 
 - A write flow can now only subscribe to topics beneath the location of its own bridge, so a bridge at `enterprise.site.line` no longer reads data from elsewhere in the hierarchy. Existing write flows that subscribe outside their location stop writing after the upgrade and name the offending topics in the bridge's status, and the bridge's read flow keeps running while the topics are corrected
+- Each write flow topic must now name one existing data contract, such as `umh.v1.enterprise.site.line._historian.*`, instead of covering every contract of a location at once. Accepted contracts are `_raw`, `_historian`, and the ones listed under `dataContracts:`, so a typo no longer silently subscribes to nothing. Existing write flows whose topics name no contract, or one that does not exist, stop writing after the upgrade and the bridge's status names the offending topics alongside the contracts they may use
 
 ## [0.44.43]
 
