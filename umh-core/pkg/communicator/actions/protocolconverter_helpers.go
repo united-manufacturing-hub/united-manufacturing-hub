@@ -19,10 +19,13 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 )
 
 // buildUserScope constructs the template rendering scope from a ProtocolConverter's
@@ -50,6 +53,38 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 		if err := ValidateDataFlowComponentState(state); err != nil {
 			return fmt.Errorf("invalid write DFC state: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// validateWriteTopicHierarchy rejects a bridge whose write flow subscribes to topics
+// outside the bridge's own location, so the violation is reported to the user instead of
+// only degrading the bridge later. The rule itself lives in BuildRuntimeConfig, which
+// reports it as a WriteFlowConfigError; every other render failure is left to the
+// reconciliation loop, which reports it on the bridge.
+//
+// The agent location is read from the system snapshot; with no snapshot manager that half
+// of the bridge location is unknown, so the check is skipped.
+func validateWriteTopicHierarchy(pcConfig config.ProtocolConverterConfig, snapshotManager *fsm.SnapshotManager) error {
+	if snapshotManager == nil {
+		return nil
+	}
+
+	snapshot := snapshotManager.GetDeepCopySnapshot()
+
+	_, err := runtime_config.BuildRuntimeConfig(
+		pcConfig.ProtocolConverterServiceConfig,
+		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
+		nil, // TODO: add global vars
+		nil, // historian: a write flow referencing it fails the render, which is not this check's concern
+		runtime_config.BridgedByPlaceholder,
+		pcConfig.Name,
+	)
+
+	var writeFlowErr *runtime_config.WriteFlowConfigError
+	if errors.As(err, &writeFlowErr) {
+		return writeFlowErr.Err
 	}
 
 	return nil
