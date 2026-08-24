@@ -297,7 +297,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			observed, ok := instance.GetLastObservedState().(protocolconverterfsm.ProtocolConverterObservedState)
 			Expect(ok).To(BeTrue())
 			Expect(observed.ServiceInfo.StatusReason).To(ContainSubstring("write flow config error"))
-			Expect(observed.ServiceInfo.StatusReason).To(ContainSubstring("umh.v1.some-other-location.*"))
+			Expect(observed.ServiceInfo.StatusReason).To(ContainSubstring("umh.v1.some-other-location._historian.*"))
 		})
 
 		It("should transition from Idle to Active when processing data", func() {
