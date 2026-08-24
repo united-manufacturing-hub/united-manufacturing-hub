@@ -86,7 +86,7 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 	// anything, so a mid-run core-count change cannot split them. It is filled
 	// on every tick, not only when usage-fraction is the instrument that
 	// fired.
-	d.AvgUsageFraction, _ = engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
+	d.AvgUsageFraction, _ = engine.Reduction(signalHostCpuFull, instrumentUsageFraction).Get()
 
 	// Limited visibility is quota nil or non-positive AND PSI absent. It is an
 	// annotation on a healthy verdict, never a state, and LimitedVisibility is
@@ -100,17 +100,17 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 	// its mark still reaches Details. Observe returns fired latches only, so
 	// without these reads a confident 0 would be published on every healthy
 	// tick.
-	d.ThrottleRatio, _ = engine.Reduction(sigThrottling, instThrottleRatio).Get()
-	d.PressureAvg60, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
-	d.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()
-	d.HostHeadroomCores, _ = engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
+	d.ThrottleRatio, _ = engine.Reduction(signalThrottling, instrumentThrottleRatio).Get()
+	d.PressureAvg60, _ = engine.Reduction(signalPressure, instrumentPressureAvg60).Get()
+	d.StealP95, _ = engine.Reduction(signalSteal, instrumentStealP95).Get()
+	d.HostHeadroomCores, _ = engine.Reduction(signalHostCpuFull, instrumentHostHeadroom).Get()
 
 	// The two measurements, each a plain 60-second average declared in
 	// table_cpu.go. The state says whether the window reduced to a value, and
 	// the healthy headline gates on it so a thin window is not reported as a
 	// confident 0.
-	hostBusyMean, hostBusyState := engine.Measurement(measHostBusy).Get()
-	usageMean, usageState := engine.Measurement(measUsageCores).Get()
+	hostBusyMean, hostBusyState := engine.Measurement(measurementHostBusy).Get()
+	usageMean, usageState := engine.Measurement(measurementUsageCores).Get()
 	d.AvgUsageCores = usageMean
 	d.AvgHostBusyCores = hostBusyMean
 	d.UsageRingActive = usageState == diagnosis.StateValue
@@ -139,11 +139,11 @@ func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Enviro
 	for _, r := range readiness {
 		usable := r.Availability == diagnosis.Ready
 		switch r.Signal {
-		case sigThrottling:
+		case signalThrottling:
 			d.ThrottleSignalReady = usable
-		case sigPressure:
+		case signalPressure:
 			d.PressureSignalReady = usable
-		case sigSteal:
+		case signalSteal:
 			d.StealSignalReady = usable
 		}
 	}

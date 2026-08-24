@@ -63,7 +63,7 @@ func coupling(instrument, outcome string) string {
 
 var _ = Describe("the host-cpu-full arms are told apart in the verdict", func() {
 	It("should blame the host for a full machine the host-headroom arm found", func() {
-		Expect(declaresArm(sigHostCpuFull, instHostHeadroom)).To(BeTrue(),
+		Expect(declaresArm(signalHostCpuFull, instrumentHostHeadroom)).To(BeTrue(),
 			"the host-headroom arm must be in the table for this spec to mean anything")
 
 		// 4 cores, no quota: host-headroom is 4 - 3.5 - 1.0 = -0.5 and fires,
@@ -88,14 +88,14 @@ var _ = Describe("the host-cpu-full arms are told apart in the verdict", func() 
 			}
 			Expect(verdict.Causes).To(HaveLen(1))
 			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
-			Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom), "host-headroom 4 - 3.5 - 1.0 = -0.5 fires")
+			Expect(verdict.Causes[0].Instrument).To(Equal(instrumentHostHeadroom), "host-headroom 4 - 3.5 - 1.0 = -0.5 fires")
 			Expect(verdict.Attribution).To(Equal(AttributionHost),
-				coupling(instHostHeadroom, "Attribution changed: a full machine the split blames on the host now reports an unknown cause."))
+				coupling(instrumentHostHeadroom, "Attribution changed: a full machine the split blames on the host now reports an unknown cause."))
 		}
 	})
 
 	It("should name the fallback arm in the cause when a machine has no host stats", func() {
-		Expect(declaresArm(sigHostCpuFull, instUsageFraction)).To(BeTrue(),
+		Expect(declaresArm(signalHostCpuFull, instrumentUsageFraction)).To(BeTrue(),
 			"the usage-fraction arm must be in the table for this spec to mean anything")
 
 		// Host stats unreadable on a box with no quota and no PSI, which is the
@@ -122,12 +122,12 @@ var _ = Describe("the host-cpu-full arms are told apart in the verdict", func() 
 			}
 			Expect(verdict.Causes).To(HaveLen(1))
 			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
-			Expect(verdict.Causes[0].Instrument).To(Equal(instUsageFraction),
-				coupling(instUsageFraction, "The cause misnames its instrument: host-cpu-full answered through the fallback arm, but the verdict was built as if the host-headroom arm had fired."))
+			Expect(verdict.Causes[0].Instrument).To(Equal(instrumentUsageFraction),
+				coupling(instrumentUsageFraction, "The cause misnames its instrument: host-cpu-full answered through the fallback arm, but the verdict was built as if the host-headroom arm had fired."))
 
-			fraction, _ := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
+			fraction, _ := engine.Reduction(signalHostCpuFull, instrumentUsageFraction).Get()
 			Expect(verdict.Causes[0].Value).To(BeNumerically("~", fraction, 1e-9),
-				coupling(instUsageFraction, "The customer is shown the wrong number: the cause value came from an instrument other than the one that fired."))
+				coupling(instrumentUsageFraction, "The customer is shown the wrong number: the cause value came from an instrument other than the one that fired."))
 		}
 	})
 })

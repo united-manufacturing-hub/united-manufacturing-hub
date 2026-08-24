@@ -139,7 +139,7 @@ var _ = Describe("the handover at twenty samples", func() {
 
 		Expect(verdict.Causes).To(HaveLen(1))
 		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSteal))
-		Expect(verdict.Causes[0].Instrument).To(Equal(instStealMean), "the arm that fired at tick 3, never re-stamped")
+		Expect(verdict.Causes[0].Instrument).To(Equal(instrumentStealMean), "the arm that fired at tick 3, never re-stamped")
 		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 3.6/20, 1e-9),
 			"the mean of the twenty samples; a build that preferred the matured p95 reports 0.90 here")
 	})

@@ -27,27 +27,27 @@ import (
 // The signal names. Every window CPU reads back is named by one of these, in
 // the table that declares it and at the call site that reads it.
 const (
-	sigHostCpuFull        = "host-cpu-full"
-	sigContainerLimitFull = "container-limit-full"
-	sigThrottling         = "throttling"
-	sigSteal              = "steal"
-	sigPressure           = "pressure"
+	signalHostCpuFull        = "host-cpu-full"
+	signalContainerLimitFull = "container-limit-full"
+	signalThrottling         = "throttling"
+	signalSteal              = "steal"
+	signalPressure           = "pressure"
 
-	instHostHeadroom  = "host-headroom"
-	instUsageFraction = "usage-fraction"
-	instLimitHeadroom = "limit-headroom"
-	instThrottleRatio = "throttle-ratio"
-	instStealP95      = "steal-p95"
-	instStealMean     = "steal-mean"
-	instPressureAvg60 = "pressure-avg60"
+	instrumentHostHeadroom  = "host-headroom"
+	instrumentUsageFraction = "usage-fraction"
+	instrumentLimitHeadroom = "limit-headroom"
+	instrumentThrottleRatio = "throttle-ratio"
+	instrumentStealP95      = "steal-p95"
+	instrumentStealMean     = "steal-mean"
+	instrumentPressureAvg60 = "pressure-avg60"
 
-	measHostBusy   = "host-busy"
-	measUsageCores = "usage-cores"
+	measurementHostBusy   = "host-busy"
+	measurementUsageCores = "usage-cores"
 
 	// The refinements of host-cpu-full. Each names its single instrument the
 	// same as itself: a refinement is one narrowing, read one way.
-	refHostShare      = "host-share"
-	refContainerShare = "container-share"
+	refinementHostShare      = "host-share"
+	refinementContainerShare = "container-share"
 )
 
 // The tiers. Starvation means something outside this container is taking CPU

@@ -41,7 +41,7 @@ import (
 // blames nobody and the two refinements under it narrow that.
 func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name:            sigHostCpuFull,
+		Name:            signalHostCpuFull,
 		Tier:            tierSaturation,
 		Attribution:     blameUnknown,
 		DemoteSpan:      60 * time.Second,
@@ -50,7 +50,7 @@ func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 		Instruments: []diagnosis.Instrument[Sample]{
 			{
 				Measurement: diagnosis.Measurement[Sample]{
-					Name: instHostHeadroom,
+					Name: instrumentHostHeadroom,
 					// cores − hostBusy − 1.0. This arm exists only on a box whose
 					// core count was readable, so cores > 0 here; the scope guard stays
 					// because off a host-scoped sample the count means something else
@@ -94,7 +94,7 @@ func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 			},
 			{
 				Measurement: diagnosis.Measurement[Sample]{
-					Name: instUsageFraction,
+					Name: instrumentUsageFraction,
 					// Evidence of last resort. Our own usage over the CPUs we may
 					// run on reserves 30% of them, where host-headroom reserves one
 					// core of the machine, so the two arms disagree about what full
@@ -174,14 +174,14 @@ func containerShare(s Sample) diagnosis.Reading {
 func shareRefinements() []diagnosis.Signal[Sample] {
 	return []diagnosis.Signal[Sample]{
 		{
-			Name:            refHostShare,
+			Name:            refinementHostShare,
 			Tier:            tierSaturation,
 			Attribution:     blameHost,
 			DemoteSpan:      60 * time.Second,
 			ReleaseOnAbsent: true,
 			Instruments: []diagnosis.Instrument[Sample]{{
 				Measurement: diagnosis.Measurement[Sample]{
-					Name:      refHostShare,
+					Name:      refinementHostShare,
 					Extract:   containerShare,
 					Span:      60 * time.Second,
 					Reduction: diagnosis.Mean,
@@ -197,14 +197,14 @@ func shareRefinements() []diagnosis.Signal[Sample] {
 			}},
 		},
 		{
-			Name:            refContainerShare,
+			Name:            refinementContainerShare,
 			Tier:            tierSaturation,
 			Attribution:     blameContainer,
 			DemoteSpan:      60 * time.Second,
 			ReleaseOnAbsent: true,
 			Instruments: []diagnosis.Instrument[Sample]{{
 				Measurement: diagnosis.Measurement[Sample]{
-					Name:      refContainerShare,
+					Name:      refinementContainerShare,
 					Extract:   containerShare,
 					Span:      60 * time.Second,
 					Reduction: diagnosis.Mean,
@@ -230,7 +230,7 @@ func shareRefinements() []diagnosis.Signal[Sample] {
 // is a pair NewEngine rejects.
 func containerLimitFullSignal(quota float64) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name: sigContainerLimitFull,
+		Name: signalContainerLimitFull,
 		Tier: tierSaturation,
 		// Spending OUR OWN budget is inside this container by definition, so
 		// this row needs no refinement to place the blame.
@@ -239,7 +239,7 @@ func containerLimitFullSignal(quota float64) diagnosis.Signal[Sample] {
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
 			Measurement: diagnosis.Measurement[Sample]{
-				Name:     instLimitHeadroom,
+				Name:     instrumentLimitHeadroom,
 				Requires: []diagnosis.Capability{HasLimit},
 				// quota − usage − 0.10 × quota, in cores. The usage term is the
 				// SAMPLER's rate, never the cumulative counter beside it:

@@ -31,7 +31,7 @@ import (
 // tick 0.
 func pressureSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name: sigPressure,
+		Name: signalPressure,
 		// Stalled time names no side: our tasks can wait because the machine is
 		// busy, or because we asked for more CPU than we may use, and the
 		// pressure number alone does not separate those.
@@ -41,7 +41,7 @@ func pressureSignal() diagnosis.Signal[Sample] {
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
 			Measurement: diagnosis.Measurement[Sample]{
-				Name:      instPressureAvg60,
+				Name:      instrumentPressureAvg60,
 				Requires:  []diagnosis.Capability{HasPressureStats},
 				Extract:   func(s Sample) diagnosis.Reading { return s.Pressure },
 				Span:      60 * time.Second,

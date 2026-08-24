@@ -35,13 +35,13 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 		// on Details for the wire and the healthy message.
 		Measurements: []diagnosis.Measurement[Sample]{
 			{
-				Name:      measHostBusy,
+				Name:      measurementHostBusy,
 				Extract:   func(s Sample) diagnosis.Reading { return s.HostBusy },
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean, // minimum 2 — Mean's own sample floor
 			},
 			{
-				Name:      measUsageCores,
+				Name:      measurementUsageCores,
 				Extract:   func(s Sample) diagnosis.Reading { return s.UsageCores },
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean,

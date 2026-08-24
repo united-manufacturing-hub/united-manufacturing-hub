@@ -34,7 +34,7 @@ var throttleMarks = diagnosis.Marks{
 // for why.
 func throttlingSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name: sigThrottling,
+		Name: signalThrottling,
 		Tier: tierStarvation,
 		// The kernel is cutting us off at OUR OWN quota, so the cause is inside
 		// this container by definition, whatever the host is doing.
@@ -43,7 +43,7 @@ func throttlingSignal() diagnosis.Signal[Sample] {
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
 			Measurement: diagnosis.Measurement[Sample]{
-				Name:      instThrottleRatio,
+				Name:      instrumentThrottleRatio,
 				Requires:  []diagnosis.Capability{HasLimit},
 				Extract:   func(s Sample) diagnosis.Reading { return s.NrThrottled },
 				Against:   func(s Sample) diagnosis.Reading { return s.NrPeriods },

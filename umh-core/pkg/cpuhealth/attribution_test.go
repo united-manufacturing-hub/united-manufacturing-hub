@@ -63,7 +63,7 @@ var _ = Describe("attribution consults its evidence", func() {
 				Expect(kindsOf(verdict.Causes)).To(ConsistOf(CauseKindHostCpuFull, CauseKindContainerLimitFull),
 					"the machine-full and own-budget signals are two causes, not one")
 				machine := causeOfKind(verdict.Causes, CauseKindHostCpuFull)
-				Expect(machine.Instrument).To(Equal(instHostHeadroom), "the machine-full arm must fire")
+				Expect(machine.Instrument).To(Equal(instrumentHostHeadroom), "the machine-full arm must fire")
 				Expect(machine.Value).To(BeNumerically("~", -0.8, 1e-9), "the machine's own headroom, 4 - 3.8 - 1.0")
 				Expect(machine.Unit).To(Equal(Unit("cores")))
 			}
@@ -98,8 +98,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, _ := Decide(engine, smp, env)
 			if i == 100 {
-				hbm, _ := engine.Measurement(measHostBusy).Get()
-				oum, _ := engine.Measurement(measUsageCores).Get()
+				hbm, _ := engine.Measurement(measurementHostBusy).Get()
+				oum, _ := engine.Measurement(measurementUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.8, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.95, 1e-9))
 				Expect(oum/hbm).To(BeNumerically(">", 0.51), "1.95 / 3.80 = 0.5132, past container-share's fire mark")
@@ -132,9 +132,9 @@ var _ = Describe("attribution consults its evidence", func() {
 			verdict, sig := Decide(engine2, smp, env2)
 			if i == 5 {
 				Expect(sig.HostHeadroomCores).To(BeNumerically("~", -0.2, 1e-9), "host-headroom 4 - 3.2 - 1.0 = -0.2 fires")
-				Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom))
-				hbm, _ := engine2.Measurement(measHostBusy).Get()
-				oum, _ := engine2.Measurement(measUsageCores).Get()
+				Expect(verdict.Causes[0].Instrument).To(Equal(instrumentHostHeadroom))
+				hbm, _ := engine2.Measurement(measurementHostBusy).Get()
+				oum, _ := engine2.Measurement(measurementUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 3.2, 1e-9))
 				Expect(oum).To(BeNumerically("~", 1.6, 1e-9))
 				Expect(oum/hbm).To(BeNumerically("~", 0.5, 1e-9), "1.6 / 3.2 is 0.5000 exactly")
@@ -165,8 +165,8 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, _ := Decide(engine, smp, env)
 			if i == 5 {
-				hbm, _ := engine.Measurement(measHostBusy).Get()
-				oum, _ := engine.Measurement(measUsageCores).Get()
+				hbm, _ := engine.Measurement(measurementHostBusy).Get()
+				oum, _ := engine.Measurement(measurementUsageCores).Get()
 				Expect(hbm).To(BeNumerically("~", 1.0, 1e-9))
 				Expect(oum).To(BeNumerically("~", 0.2, 1e-9))
 				Expect(hbm).To(BeNumerically(">", 2*oum), "the split itself says host")
@@ -203,11 +203,11 @@ var _ = Describe("attribution consults its evidence", func() {
 			}
 			verdict, _ := Decide(engine, smp, env)
 			if i == 5 {
-				_, hbState := engine.Measurement(measHostBusy).Get()
+				_, hbState := engine.Measurement(measurementHostBusy).Get()
 				Expect(hbState).NotTo(Equal(diagnosis.StateValue), "the host-busy mean cannot run with no host stats")
 				Expect(verdict.Causes).To(HaveLen(1))
 				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
-				Expect(verdict.Causes[0].Instrument).To(Equal(instUsageFraction))
+				Expect(verdict.Causes[0].Instrument).To(Equal(instrumentUsageFraction))
 				Expect(verdict.Causes[0].Unit).To(Equal(Unit("fraction")))
 				Expect(verdict.Attribution).To(Equal(AttributionUnknown), "a split that cannot run attributes unknown")
 			}
@@ -289,7 +289,7 @@ func (r *shareRun) advance(n int, hostBusy, usage float64) (Verdict, []string, b
 // narrowed by nothing has none, and the caller needs to tell them apart.
 func firedShares(fired []diagnosis.Fired) ([]string, bool) {
 	for _, f := range fired {
-		if f.Identity.Signal != sigHostCpuFull {
+		if f.Identity.Signal != signalHostCpuFull {
 			continue
 		}
 
@@ -323,7 +323,7 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 		// share means what it says.
 		whole := newShareRun(4, ScopeHost)
 		verdict, refinements, _ = whole.advance(6, 10.0, 3.0)
-		Expect(refinements).To(Equal([]string{refHostShare}))
+		Expect(refinements).To(Equal([]string{refinementHostShare}))
 		Expect(verdict.Attribution).To(Equal(AttributionHost))
 	})
 
@@ -356,19 +356,19 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 		run := newShareRun(4, ScopeHost)
 
 		verdict, refinements, _ := run.advance(90, 3.5, 1.40) // share 0.40
-		Expect(refinements).To(Equal([]string{refHostShare}), "0.40 is past host-share's 0.49 fire mark")
+		Expect(refinements).To(Equal([]string{refinementHostShare}), "0.40 is past host-share's 0.49 fire mark")
 		Expect(verdict.Attribution).To(Equal(AttributionHost))
 
 		verdict, refinements, _ = run.advance(90, 3.5, 1.75) // share 0.50
-		Expect(refinements).To(Equal([]string{refHostShare}), "0.50 is short of host-share's 0.505 clear mark, so it holds")
+		Expect(refinements).To(Equal([]string{refinementHostShare}), "0.50 is short of host-share's 0.505 clear mark, so it holds")
 		Expect(verdict.Attribution).To(Equal(AttributionHost))
 
 		verdict, refinements, _ = run.advance(90, 3.5, 2.10) // share 0.60
-		Expect(refinements).To(Equal([]string{refContainerShare}), "0.60 clears host-share and fires container-share")
+		Expect(refinements).To(Equal([]string{refinementContainerShare}), "0.60 clears host-share and fires container-share")
 		Expect(verdict.Attribution).To(Equal(AttributionContainer))
 
 		verdict, refinements, _ = run.advance(90, 3.5, 1.75) // share 0.50 again
-		Expect(refinements).To(Equal([]string{refContainerShare}), "the same 0.50 now holds the container, which is the whole point of the band")
+		Expect(refinements).To(Equal([]string{refinementContainerShare}), "the same 0.50 now holds the container, which is the whole point of the band")
 		Expect(verdict.Attribution).To(Equal(AttributionContainer))
 	})
 
@@ -390,8 +390,8 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 				both[name] = true
 			}
 		}
-		Expect(both).To(HaveKey(refHostShare), "the run must reach a share that blames the host, or the sweep asserts nothing")
-		Expect(both).To(HaveKey(refContainerShare), "the run must reach a share that blames the container, or the sweep asserts nothing")
+		Expect(both).To(HaveKey(refinementHostShare), "the run must reach a share that blames the host, or the sweep asserts nothing")
+		Expect(both).To(HaveKey(refinementContainerShare), "the run must reach a share that blames the container, or the sweep asserts nothing")
 	})
 
 	It("should divide one interval's cgroup usage by the same interval's host busy time, so the share does not depend on when either was read", func() {

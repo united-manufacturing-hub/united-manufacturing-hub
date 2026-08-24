@@ -125,22 +125,22 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine 
 		if len(fields) < 9 {
 			return 0, 0, 0, machine, false
 		}
-		vals := make([]float64, len(fields))
+		values := make([]float64, len(fields))
 		for i := 1; i < len(fields); i++ {
 			v, err := strconv.ParseFloat(fields[i], 64)
 			if err != nil {
 				return 0, 0, 0, machine, false
 			}
-			vals[i] = v
+			values[i] = v
 		}
 		// Busy is user, nice, system, irq and softirq. Idle and iowait are not
 		// busy, and steal is time this machine did not get at all.
-		busy := vals[1] + vals[2] + vals[3] + vals[6] + vals[7]
+		busy := values[1] + values[2] + values[3] + values[6] + values[7]
 		// The steal denominator runs from user through steal. The kernel already
 		// counts guest inside user and guest_nice inside nice, so adding those
 		// two fields would count the same time twice.
-		denom := vals[1] + vals[2] + vals[3] + vals[4] + vals[5] + vals[6] + vals[7] + vals[8]
-		return busy, vals[8], denom, machine, true
+		denom := values[1] + values[2] + values[3] + values[4] + values[5] + values[6] + values[7] + values[8]
+		return busy, values[8], denom, machine, true
 	}
 	return 0, 0, 0, machine, false
 }

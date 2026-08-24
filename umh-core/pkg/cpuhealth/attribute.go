@@ -48,15 +48,15 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 	// names no kind, rather than borrowing the kind of whichever arm happens to
 	// sit last.
 	switch f.Identity.Signal {
-	case sigThrottling:
+	case signalThrottling:
 		cause.Kind = CauseKindThrottling
-	case sigPressure:
+	case signalPressure:
 		cause.Kind = CauseKindPressure
-	case sigSteal:
+	case signalSteal:
 		cause.Kind = CauseKindSteal
-	case sigHostCpuFull:
+	case signalHostCpuFull:
 		cause.Kind = CauseKindHostCpuFull
-	case sigContainerLimitFull:
+	case signalContainerLimitFull:
 		cause.Kind = CauseKindContainerLimitFull
 	}
 

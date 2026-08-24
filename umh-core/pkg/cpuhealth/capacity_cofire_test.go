@@ -41,7 +41,7 @@ func orderedEngine(cores, quota float64, limitFirst bool) *diagnosis.Engine[Samp
 	base := cpuTable(cores, quota)
 	sigs := make([]diagnosis.Signal[Sample], 0, len(base.Signals))
 	for _, s := range base.Signals {
-		if s.Name == sigHostCpuFull || s.Name == sigContainerLimitFull {
+		if s.Name == signalHostCpuFull || s.Name == signalContainerLimitFull {
 			continue
 		}
 		sigs = append(sigs, s)
@@ -71,9 +71,9 @@ var _ = Describe("two capacity causes on one tick", func() {
 		// list them. Severity decides it — -0.8 against a worst of -1.0 beats
 		// -0.15 against a worst of -0.2 — and Rank reaches declaration position
 		// only as its last tie-break.
-		Expect(declaresArm(sigHostCpuFull, instHostHeadroom)).To(BeTrue(),
+		Expect(declaresArm(signalHostCpuFull, instrumentHostHeadroom)).To(BeTrue(),
 			"the host-headroom arm must be in the table for this spec to mean anything")
-		Expect(declaresArm(sigContainerLimitFull, instLimitHeadroom)).To(BeTrue(),
+		Expect(declaresArm(signalContainerLimitFull, instrumentLimitHeadroom)).To(BeTrue(),
 			"the limit arm must be in the table for this spec to mean anything")
 
 		for _, limitFirst := range []bool{false, true} {
@@ -103,9 +103,9 @@ var _ = Describe("two capacity causes on one tick", func() {
 			// other.
 			Expect(kindsOf(verdict.Causes)).To(ConsistOf(CauseKindHostCpuFull, CauseKindContainerLimitFull),
 				"both capacity signals must fire for this spec to mean anything (limit row first: %v)", limitFirst)
-			Expect(causeOfKind(verdict.Causes, CauseKindHostCpuFull).Instrument).To(Equal(instHostHeadroom),
+			Expect(causeOfKind(verdict.Causes, CauseKindHostCpuFull).Instrument).To(Equal(instrumentHostHeadroom),
 				"limit row first: %v", limitFirst)
-			Expect(causeOfKind(verdict.Causes, CauseKindContainerLimitFull).Instrument).To(Equal(instLimitHeadroom),
+			Expect(causeOfKind(verdict.Causes, CauseKindContainerLimitFull).Instrument).To(Equal(instrumentLimitHeadroom),
 				"limit row first: %v", limitFirst)
 			Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull),
 				"the machine outranks the limit on severity, whichever row was declared first (limit row first: %v)", limitFirst)
@@ -161,16 +161,16 @@ var _ = Describe("two capacity causes on one tick", func() {
 
 		// One capacity cause, and it is the limit's.
 		Expect(kindsOf(verdict.Causes)).To(Equal([]CauseKind{CauseKindContainerLimitFull}))
-		Expect(verdict.Causes[0].Instrument).To(Equal(instLimitHeadroom))
+		Expect(verdict.Causes[0].Instrument).To(Equal(instrumentLimitHeadroom))
 
 		// The machine question was asked and could not be answered. The
 		// estimate is gated off, so host-headroom is the signal's only capable
 		// arm and it read nothing.
-		sat := signalNamed(cpuTable(4, 3.5), sigHostCpuFull)
-		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instHostHeadroom}))
+		sat := signalNamed(cpuTable(4, 3.5), signalHostCpuFull)
+		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instrumentHostHeadroom}))
 		_, _, _, avail := engine.Select(sat, env)
 		Expect(avail).To(Equal(diagnosis.AllAbsent))
-		fraction, state := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
+		fraction, state := engine.Reduction(signalHostCpuFull, instrumentUsageFraction).Get()
 		Expect(state).To(Equal(diagnosis.StateValue))
 		Expect(fraction).To(BeNumerically("~", 0.875, 1e-9),
 			"0.875 is past the 0.70 fire mark, so the gate is what kept the machine silent")
@@ -183,7 +183,7 @@ var _ = Describe("two capacity causes on one tick", func() {
 		Expect(msg).To(ContainSubstring(detailSatHostUnavail),
 			"an unreadable /proc/stat is reported as unreadable, never as a machine that measured fine")
 		Expect(BlockReason(verdict.Causes, verdict.Attribution, sig)).
-			To(Equal(BlockReason(oneCause(CauseKindContainerLimitFull, instLimitHeadroom), verdict.Attribution, sig)),
+			To(Equal(BlockReason(oneCause(CauseKindContainerLimitFull, instrumentLimitHeadroom), verdict.Attribution, sig)),
 				"with one capacity cause there is no pair to blend, so the refusal is the limit's own line")
 	})
 })

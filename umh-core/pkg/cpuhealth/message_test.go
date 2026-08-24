@@ -297,8 +297,8 @@ func degradedVerdict(kind CauseKind, instrument string, value float64) Verdict {
 // machine is full and this container is also out of its own CPU limit.
 func bothCapacityVerdict(value float64) Verdict {
 	return Verdict{State: StateDegraded, Attribution: AttributionHost, Causes: []Cause{
-		{Kind: CauseKindHostCpuFull, Instrument: instHostHeadroom, Value: value},
-		{Kind: CauseKindContainerLimitFull, Instrument: instLimitHeadroom, Value: value},
+		{Kind: CauseKindHostCpuFull, Instrument: instrumentHostHeadroom, Value: value},
+		{Kind: CauseKindContainerLimitFull, Instrument: instrumentLimitHeadroom, Value: value},
 	}}
 }
 
@@ -319,7 +319,7 @@ var _ = Describe("degraded copy", func() {
 		// the mean is the arm that fires in the first twenty seconds. "At peak"
 		// would be a claim about a percentile, so the sentence makes none.
 		// Asserted whole, because the wording is customer-visible copy.
-		msg := ComposeMessage(degradedVerdict(CauseKindSteal, instStealMean, 0.18), degradedSig())
+		msg := ComposeMessage(degradedVerdict(CauseKindSteal, instrumentStealMean, 0.18), degradedSig())
 		Expect(msg).To(Equal("CPU taken by the server\nTechnical Details: Other virtual machines on the same physical server took 18% of the CPU this instance needed over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server."))
 	})
 
@@ -341,7 +341,7 @@ var _ = Describe("degraded copy", func() {
 	It("should dispatch the capacity paragraph on the cause it is handed and append the two clauses rather than replacing their paragraphs", func() {
 		// The machine read full, with a limit in force and the container not
 		// at it, entry 30.
-		msg := ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instHostHeadroom, 0.5), degradedSig())
+		msg := ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentHostHeadroom, 0.5), degradedSig())
 		Expect(msg).To(ContainSubstring("The machine is full. Add CPU to the machine, or reduce other software running on it."))
 
 		// The machine read full AND the container at its limit, entry 29 with
@@ -358,7 +358,7 @@ var _ = Describe("degraded copy", func() {
 		ls.AvgUsageCores = 1.9
 		ls.CapacityCores = 2.0
 		ls.HostBusyCoresAvailable = false
-		msg = ComposeMessage(degradedVerdict(CauseKindContainerLimitFull, instLimitHeadroom, 0.5), ls)
+		msg = ComposeMessage(degradedVerdict(CauseKindContainerLimitFull, instrumentLimitHeadroom, 0.5), ls)
 		Expect(msg).To(ContainSubstring("CPU averaged 95% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it."))
 		Expect(msg).To(ContainSubstring(" Host stats are unavailable, so host-side contention is not visible."))
 
@@ -367,7 +367,7 @@ var _ = Describe("degraded copy", func() {
 		nl6 := degradedSig()
 		nl6.LimitApplies = false
 		nl6.HostBusyCoresAvailable = false
-		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instHostHeadroom, 0.5), nl6)
+		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentHostHeadroom, 0.5), nl6)
 		Expect(msg).To(ContainSubstring("CPU is degraded. Host CPU usage is not readable right now (host stats temporarily unavailable), so the host-busy percentage cannot be shown. Add CPU capacity, or reduce the load on it."))
 
 		// The same with the host reading present, entry 36, with entry 37
@@ -377,20 +377,20 @@ var _ = Describe("degraded copy", func() {
 		arm7.AvgHostBusyCores = 3.8
 		arm7.CapacityCores = 4.0
 		arm7.LimitedVisibility = true
-		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instHostHeadroom, 0.5), arm7)
+		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentHostHeadroom, 0.5), arm7)
 		Expect(msg).To(ContainSubstring("CPU averaged 95% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."))
 		Expect(msg).To(ContainSubstring(" Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."))
 
 		// The machine estimated full from our own usage, with and without PSI.
 		// The PressureApplies-false arm is the one that EARNS the psi advice.
 		on := degradedSig()
-		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instUsageFraction, 0.8), on)
+		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentUsageFraction, 0.8), on)
 		Expect(msg).To(ContainSubstring("CPU averaged 80% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Consider adding CPU capacity."))
 		Expect(msg).NotTo(ContainSubstring("Enable Linux pressure stats"))
 
 		off := degradedSig()
 		off.PressureApplies = false
-		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instUsageFraction, 0.8), off)
+		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentUsageFraction, 0.8), off)
 		Expect(msg).To(ContainSubstring("Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity."))
 	})
 
@@ -405,7 +405,7 @@ var _ = Describe("degraded copy", func() {
 		limitArm := degradedSig()
 		limitArm.CapacityCores = 0
 		limitArm.AvgUsageCores = 2.0
-		msg := ComposeMessage(degradedVerdict(CauseKindContainerLimitFull, instLimitHeadroom, 0.5), limitArm)
+		msg := ComposeMessage(degradedVerdict(CauseKindContainerLimitFull, instrumentLimitHeadroom, 0.5), limitArm)
 		Expect(msg).NotTo(ContainSubstring("9223372036854775807"))
 		Expect(msg).NotTo(ContainSubstring("%"))
 		Expect(msg).To(ContainSubstring("not currently readable"))
@@ -419,7 +419,7 @@ var _ = Describe("degraded copy", func() {
 		defaultArm.HostBusyCoresAvailable = true
 		defaultArm.CapacityCores = 0
 		defaultArm.AvgHostBusyCores = 0.0
-		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instHostHeadroom, 0.5), defaultArm)
+		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentHostHeadroom, 0.5), defaultArm)
 		Expect(msg).NotTo(ContainSubstring("CPU averaged 0% of the machine"))
 		Expect(msg).To(ContainSubstring("not currently readable"))
 	})
@@ -437,19 +437,19 @@ func oneCause(kind CauseKind, instrument string) []Cause {
 
 var _ = Describe("block reasons", func() {
 	It("should render one block reason per cause kind, dispatching the machine-full kind on the instrument that measured it", func() {
-		Expect(BlockReason(oneCause(CauseKindThrottling, instThrottleRatio), AttributionContainer, degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
-		Expect(BlockReason(oneCause(CauseKindPressure, instPressureAvg60), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
-		Expect(BlockReason(oneCause(CauseKindSteal, instStealP95), AttributionHost, degradedSig())).To(Equal("Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."))
+		Expect(BlockReason(oneCause(CauseKindThrottling, instrumentThrottleRatio), AttributionContainer, degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
+		Expect(BlockReason(oneCause(CauseKindPressure, instrumentPressureAvg60), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
+		Expect(BlockReason(oneCause(CauseKindSteal, instrumentStealP95), AttributionHost, degradedSig())).To(Equal("Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."))
 		// blockGeneric: the default kind arm.
 		Expect(BlockReason(oneCause(CauseKind("future-kind"), ""), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is degraded."))
 
 		noLimit := degradedSig()
 		noLimit.LimitApplies = false
 
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), AttributionHost, degradedSig())).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
-		Expect(BlockReason(oneCause(CauseKindContainerLimitFull, instLimitHeadroom), AttributionContainer, degradedSig())).To(Equal("Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."))
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instUsageFraction), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."))
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), AttributionHost, noLimit)).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom), AttributionHost, degradedSig())).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
+		Expect(BlockReason(oneCause(CauseKindContainerLimitFull, instrumentLimitHeadroom), AttributionContainer, degradedSig())).To(Equal("Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentUsageFraction), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom), AttributionHost, noLimit)).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
 		// The machine-full default arm (entry 46), reachable only from a cause
 		// whose instrument is none of the two that can measure the machine.
 		Expect(BlockReason(oneCause(CauseKindHostCpuFull, ""), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."))
@@ -457,8 +457,8 @@ var _ = Describe("block reasons", func() {
 		// blockHostFull and blockNoLimitHost are byte-identical and the collision is intentional
 		// and must survive (the remediation for a full machine is the same with
 		// or without a limit).
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), AttributionHost, degradedSig())).
-			To(Equal(BlockReason(oneCause(CauseKindHostCpuFull, instHostHeadroom), AttributionHost, noLimit)))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom), AttributionHost, degradedSig())).
+			To(Equal(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom), AttributionHost, noLimit)))
 	})
 
 	It("conformance: Decide names the host-headroom instrument on a full host in no-limit mode", func() {
@@ -483,7 +483,7 @@ var _ = Describe("block reasons", func() {
 			if i == 2 {
 				Expect(verdict.Causes).To(HaveLen(1))
 				Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
-				Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom))
+				Expect(verdict.Causes[0].Instrument).To(Equal(instrumentHostHeadroom))
 				Expect(sig.LimitApplies).To(BeFalse(), "no quota applies, so the no-limit wording is the one that renders")
 			}
 		}
@@ -524,9 +524,9 @@ var _ = Describe("block reasons", func() {
 		// them to one kind is what let two different situations render the same
 		// paragraph, so the split is asserted here before anything is rendered.
 		Expect(kindsOf(verdict.Causes)).To(ConsistOf(CauseKindHostCpuFull, CauseKindContainerLimitFull))
-		Expect(causeOfKind(verdict.Causes, CauseKindHostCpuFull).Instrument).To(Equal(instHostHeadroom),
+		Expect(causeOfKind(verdict.Causes, CauseKindHostCpuFull).Instrument).To(Equal(instrumentHostHeadroom),
 			"a readable /proc/stat is measured by host-headroom")
-		Expect(causeOfKind(verdict.Causes, CauseKindContainerLimitFull).Instrument).To(Equal(instLimitHeadroom))
+		Expect(causeOfKind(verdict.Causes, CauseKindContainerLimitFull).Instrument).To(Equal(instrumentLimitHeadroom))
 
 		// Recover the cause each surface spoke with, without naming a sentence:
 		// re-render that surface for each candidate cause and match against what
@@ -540,7 +540,7 @@ var _ = Describe("block reasons", func() {
 		candidates := []Cause{
 			causeOfKind(verdict.Causes, CauseKindHostCpuFull),
 			causeOfKind(verdict.Causes, CauseKindContainerLimitFull),
-			{Kind: CauseKindHostCpuFull, Instrument: instUsageFraction},
+			{Kind: CauseKindHostCpuFull, Instrument: instrumentUsageFraction},
 		}
 		name := func(c Cause) string { return string(c.Kind) + "/" + c.Instrument }
 		spokeWith := func(surface string, printed string, render func(Cause) string) string {

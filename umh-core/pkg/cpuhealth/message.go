@@ -207,7 +207,7 @@ func hasKind(causes []Cause, kind CauseKind) bool {
 // the arm the episode fired on, which a later handover does not move.
 func machineWasRead(causes []Cause) bool {
 	for _, c := range causes {
-		if c.Kind == CauseKindHostCpuFull && c.Instrument == instHostHeadroom {
+		if c.Kind == CauseKindHostCpuFull && c.Instrument == instrumentHostHeadroom {
 			return true
 		}
 	}
@@ -289,7 +289,7 @@ func causeDetails(c Cause, causes []Cause, attribution Attribution, details Deta
 		return detail
 	case CauseKindHostCpuFull:
 		switch c.Instrument {
-		case instUsageFraction:
+		case instrumentUsageFraction:
 			// The estimate from our own usage. The no-PSI wording is the one
 			// that earns the pressure-stats advice.
 			if details.PressureApplies {
@@ -297,7 +297,7 @@ func causeDetails(c Cause, causes []Cause, attribution Attribution, details Deta
 			}
 
 			return fmt.Sprintf(detailSatNoStatsNoPSI, pctOf(c.Value))
-		case instHostHeadroom:
+		case instrumentHostHeadroom:
 			if hasKind(causes, CauseKindContainerLimitFull) {
 				return fmt.Sprintf(detailSatBothAtLimit, fmtCoresTotal(round1(details.CapacityCores)))
 			}
@@ -385,7 +385,7 @@ func BlockReason(causes []Cause, attribution Attribution, details Details) strin
 		cause = blockLimitSaturation
 	case CauseKindHostCpuFull:
 		switch c.Instrument {
-		case instHostHeadroom:
+		case instrumentHostHeadroom:
 			// The order causeDetails takes: a container also at its limit is
 			// answered there by one blended sentence, which carries the host
 			// remedy, so the refusal shown beside it carries the host remedy
@@ -395,7 +395,7 @@ func BlockReason(causes []Cause, attribution Attribution, details Details) strin
 			} else {
 				cause = fullMachineBlock(attribution, details)
 			}
-		case instUsageFraction:
+		case instrumentUsageFraction:
 			cause = blockNoHostStats
 		default:
 			cause = blockSaturationOther

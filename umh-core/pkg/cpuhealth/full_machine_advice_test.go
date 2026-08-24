@@ -72,7 +72,7 @@ var _ = Describe("the advice on a full machine follows whose load filled it", fu
 
 		Expect(kindsOf(verdict.Causes)).To(Equal([]CauseKind{CauseKindHostCpuFull}),
 			"the machine cause must stand alone, or the blend answers instead of the split")
-		Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom))
+		Expect(verdict.Causes[0].Instrument).To(Equal(instrumentHostHeadroom))
 		Expect(signals.LimitApplies).To(BeTrue(), "the paragraph that splits is the limit-mode one")
 		Expect(verdict.Attribution).To(Equal(AttributionHost))
 
@@ -90,7 +90,7 @@ var _ = Describe("the advice on a full machine follows whose load filled it", fu
 
 		Expect(kindsOf(verdict.Causes)).To(Equal([]CauseKind{CauseKindHostCpuFull}),
 			"the machine cause must stand alone, or the blend answers instead of the split")
-		Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom))
+		Expect(verdict.Causes[0].Instrument).To(Equal(instrumentHostHeadroom))
 		Expect(signals.LimitApplies).To(BeTrue())
 		Expect(verdict.Attribution).To(Equal(AttributionContainer))
 
@@ -113,7 +113,7 @@ var _ = Describe("the advice on a full machine follows whose load filled it", fu
 
 		Expect(kindsOf(verdict.Causes)).To(Equal([]CauseKind{CauseKindHostCpuFull}),
 			"the machine cause must stand alone, or the blend answers instead of the split")
-		Expect(verdict.Causes[0].Instrument).To(Equal(instHostHeadroom))
+		Expect(verdict.Causes[0].Instrument).To(Equal(instrumentHostHeadroom))
 		Expect(signals.LimitApplies).To(BeTrue())
 		Expect(verdict.Attribution).To(Equal(AttributionUnknown))
 

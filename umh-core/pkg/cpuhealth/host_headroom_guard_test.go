@@ -54,7 +54,7 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		// this loop are gone because they do not discriminate — engine.Reduction on
 		// a missing signal returns the same (0.0, StateAbsent) as a
 		// present-but-withholding row, so they passed under both designs.
-		Expect(hasSignal(cpuTable(0, 2.0), sigHostCpuFull)).To(BeFalse(),
+		Expect(hasSignal(cpuTable(0, 2.0), signalHostCpuFull)).To(BeFalse(),
 			"a box with no readable core count must declare no host-cpu-full signal")
 
 		// Never-readable is not capability: the box still builds and reads healthy
@@ -84,7 +84,7 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		for i := 0; i < 5; i++ {
 			smp := headroomSample(base, i, ScopeAffinity, 2, 8)
 			verdict, _ := Decide(engine, smp, env)
-			_, st := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
+			_, st := engine.Reduction(signalHostCpuFull, instrumentHostHeadroom).Get()
 			Expect(st).To(Equal(diagnosis.StateAbsent), "an affinity-scoped sample must append nothing to host-headroom")
 			Expect(verdict.State).To(Equal(StateHealthy), "the host-cpu-full latch must not fire on an invalid subtraction")
 		}
@@ -94,7 +94,7 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		for i := 0; i < 5; i++ {
 			smp := headroomSample(base, i, ScopeUnknown, 2, 8)
 			verdict, _ := Decide(engine2, smp, env)
-			_, st := engine2.Reduction(sigHostCpuFull, instHostHeadroom).Get()
+			_, st := engine2.Reduction(signalHostCpuFull, instrumentHostHeadroom).Get()
 			Expect(st).To(Equal(diagnosis.StateAbsent), "an unestablished scope must withhold host headroom too")
 			Expect(verdict.State).To(Equal(StateHealthy))
 		}
@@ -125,7 +125,7 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 		smp2.HostBusy = diagnosis.Unknown()
 		_, sig2 := Decide(engine2, smp2, env)
 		Expect(sig2.HostHeadroomAvailable).To(BeTrue(), "a host-scoped sample is available even when the busy read failed")
-		_, hhst := engine2.Reduction(sigHostCpuFull, instHostHeadroom).Get()
+		_, hhst := engine2.Reduction(signalHostCpuFull, instrumentHostHeadroom).Get()
 		Expect(hhst).To(Equal(diagnosis.StateAbsent), "the failed read leaves the window absent")
 	})
 })

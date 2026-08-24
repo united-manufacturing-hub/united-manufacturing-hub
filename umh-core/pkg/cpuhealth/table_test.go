@@ -340,7 +340,7 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		// per-tick adds the capability back. The row must be absent, not
 		// present-but-withholding: no signal, no instruments, no window.
 		t := cpuTable(0, 2.0)
-		Expect(hasSignal(t, sigHostCpuFull)).To(BeFalse(),
+		Expect(hasSignal(t, signalHostCpuFull)).To(BeFalse(),
 			"a box with no readable core count must declare no host-cpu-full signal")
 	})
 
@@ -515,18 +515,18 @@ var _ = Describe("the window names", func() {
 		// The control. Both read routes answer with a value under the declared
 		// name, so the absent reads below cannot be passing because the engine
 		// observed nothing.
-		_, declaredMeas := engine.Measurement(measHostBusy).Get()
+		_, declaredMeas := engine.Measurement(measurementHostBusy).Get()
 		Expect(declaredMeas).To(Equal(diagnosis.StateValue), "host-busy must reduce to a value under its declared name")
-		_, declaredInst := engine.Reduction(sigPressure, instPressureAvg60).Get()
+		_, declaredInst := engine.Reduction(signalPressure, instrumentPressureAvg60).Get()
 		Expect(declaredInst).To(Equal(diagnosis.StateValue), "pressure-avg60 must reduce to a value under its declared name")
 
 		// One character out, on each of the three names a read site can get
 		// wrong, and the engine reports absence rather than failing.
 		_, typoMeas := engine.Measurement("host_busy").Get()
 		Expect(typoMeas).To(Equal(diagnosis.StateAbsent), "a misspelled measurement name reads as absent, not as an error")
-		_, typoInst := engine.Reduction(sigPressure, "pressure-avg-60").Get()
+		_, typoInst := engine.Reduction(signalPressure, "pressure-avg-60").Get()
 		Expect(typoInst).To(Equal(diagnosis.StateAbsent), "a misspelled instrument name reads as absent, not as an error")
-		_, typoSig := engine.Reduction("presure", instPressureAvg60).Get()
+		_, typoSig := engine.Reduction("presure", instrumentPressureAvg60).Get()
 		Expect(typoSig).To(Equal(diagnosis.StateAbsent), "a misspelled signal name reads as absent, not as an error")
 	})
 })

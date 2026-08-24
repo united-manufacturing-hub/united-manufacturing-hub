@@ -64,11 +64,11 @@ var _ = Describe("the fallback metric set", func() {
 				// Sixty readable ticks filled host-headroom; sixty absent ones
 				// emptied it. Selection walks to usage-fraction, which stayed
 				// ready on our own usage the whole way.
-				_, hhst := engine.Reduction(sigHostCpuFull, instHostHeadroom).Get()
+				_, hhst := engine.Reduction(signalHostCpuFull, instrumentHostHeadroom).Get()
 				Expect(hhst).To(Equal(diagnosis.StateAbsent), "the host window must be absent, not untrusted")
 				sel, red, _, avail := engine.Select(sat, env)
 				Expect(avail).To(Equal(diagnosis.Ready))
-				Expect(sel.Name).To(Equal(instUsageFraction), "the fallback instrument is selected by name, not merely the verdict")
+				Expect(sel.Name).To(Equal(instrumentUsageFraction), "the fallback instrument is selected by name, not merely the verdict")
 				v, st := red.Get()
 				Expect(st).To(Equal(diagnosis.StateValue))
 				Expect(v).To(BeNumerically("~", 0.1, 1e-9))
@@ -222,7 +222,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 	// a value past its fire mark — so the quiet tick is the gate withholding a
 	// number, not a box that measured fine.
 	estimateWithheld := func(engine *diagnosis.Engine[Sample], sat diagnosis.Signal[Sample], env diagnosis.Environment, verdict Verdict, sig Details) {
-		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instHostHeadroom}),
+		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instrumentHostHeadroom}),
 			"the gate takes the estimate out of the capable set and leaves the /proc/stat arm alone")
 		_, _, _, avail := engine.Select(sat, env)
 		Expect(avail).To(Equal(diagnosis.AllAbsent),
@@ -230,7 +230,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 		Expect(kindsOf(verdict.Causes)).NotTo(ContainElement(CauseKindHostCpuFull))
 		Expect(verdict.State).To(Equal(StateHealthy))
 
-		fraction, state := engine.Reduction(sigHostCpuFull, instUsageFraction).Get()
+		fraction, state := engine.Reduction(signalHostCpuFull, instrumentUsageFraction).Get()
 		Expect(state).To(Equal(diagnosis.StateValue))
 		Expect(fraction).To(BeNumerically("~", 0.75, 1e-9),
 			"0.75 is past the 0.70 fire mark, so the gate is what kept the signal quiet")
@@ -244,7 +244,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 		env, verdict, sig := driveGate(engine, diagnosis.Unknown(), true)
 		Expect(env.Has(HasLimitedVisibility)).To(BeFalse(), "PSI is better evidence than the estimate")
 
-		estimateWithheld(engine, signalNamed(cpuTable(4, 0), sigHostCpuFull), env, verdict, sig)
+		estimateWithheld(engine, signalNamed(cpuTable(4, 0), signalHostCpuFull), env, verdict, sig)
 		Expect(sig.PressureApplies).To(BeTrue(), "the pressure signal is what covers this box instead")
 	})
 
@@ -257,7 +257,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 		env, verdict, sig := driveGate(engine, diagnosis.Known(8.0), false)
 		Expect(env.Has(HasLimitedVisibility)).To(BeFalse(), "a CPU limit is better evidence than the estimate")
 
-		estimateWithheld(engine, signalNamed(cpuTable(4, 8.0), sigHostCpuFull), env, verdict, sig)
+		estimateWithheld(engine, signalNamed(cpuTable(4, 8.0), signalHostCpuFull), env, verdict, sig)
 		Expect(sig.LimitApplies).To(BeTrue(), "throttling and container-limit-full are what cover this box instead")
 	})
 
@@ -269,15 +269,15 @@ var _ = Describe("the gate on the usage estimate", func() {
 		env, verdict, sig := driveGate(engine, diagnosis.Unknown(), false)
 		Expect(env.Has(HasLimitedVisibility)).To(BeTrue(), "no limit and no PSI is where nothing better exists")
 
-		sat := signalNamed(cpuTable(4, 0), sigHostCpuFull)
-		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instHostHeadroom, instUsageFraction}),
+		sat := signalNamed(cpuTable(4, 0), signalHostCpuFull)
+		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instrumentHostHeadroom, instrumentUsageFraction}),
 			"both arms are capable here, and only the second has anything to read")
 		_, _, _, avail := engine.Select(sat, env)
 		Expect(avail).To(Equal(diagnosis.Ready))
 		Expect(verdict.State).To(Equal(StateDegraded))
 		Expect(verdict.Causes).To(HaveLen(1))
 		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindHostCpuFull))
-		Expect(verdict.Causes[0].Instrument).To(Equal(instUsageFraction))
+		Expect(verdict.Causes[0].Instrument).To(Equal(instrumentUsageFraction))
 		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 0.75, 1e-9))
 		Expect(sig.LimitedVisibility).To(BeTrue(), "the same condition the gate reads, reported on Details")
 	})
