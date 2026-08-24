@@ -39,9 +39,13 @@ const cgroupBase = "/sys/fs/cgroup"
 // The order is a reading arc rather than an accident, so a new case belongs
 // where the arc puts it and not at the end: a healthy machine first, then one
 // too young to have measured anything, then the capacity story with its
-// attribution pair, then pressure, then the CPU-limit cases, then steal, and
-// last the two machines whose files cannot be read. The read failures close the
-// set because they are where a reader stops expecting a verdict at all.
+// attribution pair, then pressure, then the CPU-limit cases, then steal, then
+// the two machines that do not hold still, and last the two whose files cannot
+// be read. The moving machines come after every steady one because they are
+// not a new cause — they are the causes above happening over time, and a
+// reader needs to know what one answer looks like before reading a sequence of
+// them. The read failures close the set because they are where a reader stops
+// expecting a verdict at all.
 var caseNames = []string{
 	"quiet-box",
 	"starting-up",
@@ -54,6 +58,8 @@ var caseNames = []string{
 	"limit-full",
 	"machine-and-limit-full",
 	"noisy-neighbour",
+	"flicker",
+	"recovery",
 	"cannot-measure",
 	"no-host-stats",
 }
@@ -87,13 +93,45 @@ var _ = Describe("the named machine situations", func() {
 					Expect(err).NotTo(HaveOccurred(), "every read of a servable box must succeed")
 				}
 
-				status, err := Poll(context.Background(), d, CPUConfig{})
-				expectRead(status, err)
+				// Every read's verdict, in order, so that a case stating
+				// VerdictStretches can be checked against what the whole
+				// sequence did. A machine that could not be read contributes
+				// nothing here, because it produced no verdicts.
+				var (
+					verdicts []string
+					status   CPUStatus
+					err      error
+				)
 
-				for i := 0; i < c.Ticks; i++ {
-					box.Tick(time.Second)
+				read := func() {
 					status, err = Poll(context.Background(), d, CPUConfig{})
 					expectRead(status, err)
+
+					if c.PollError == "" {
+						verdicts = append(verdicts, status.Verdict)
+					}
+				}
+
+				// The reads of one stretch of ticks at one condition: one
+				// tick and one read each. The reads at Box come first and
+				// follow the read taken before any tick, which is why that
+				// one is taken outside.
+				runPhase := func(ticks int) {
+					for i := 0; i < ticks; i++ {
+						box.Tick(time.Second)
+						read()
+					}
+				}
+
+				read()
+				runPhase(c.Ticks)
+
+				// A phase changes the machine and then reads it. Set accrues
+				// nothing itself, so the change reaches the reads through the
+				// ticks below it and not through the counters already served.
+				for _, p := range c.Phases {
+					box.Set(p.Box)
+					runPhase(p.Ticks)
 				}
 
 				// The answer fields are the whole assertion for a machine that
@@ -117,6 +155,15 @@ var _ = Describe("the named machine situations", func() {
 				Expect(status.SignalsCapable).To(Equal(c.SignalsCapable))
 				Expect(status.SignalsMeasured).To(Equal(c.SignalsMeasured))
 				Expect(status.RefusingAdmission).To(Equal(c.RefusingAdmission))
+
+				// What the verdict did along the way, on the cases that state
+				// it. Asserted last because it is the only claim here about
+				// reads other than the judged one, and a case whose judged
+				// answer is already wrong is better read as that.
+				if len(c.VerdictStretches) > 0 {
+					Expect(Stretches(verdicts)).To(Equal(c.VerdictStretches),
+						"the verdict moved differently across the sequence than the case states")
+				}
 			})
 		}
 	})
@@ -143,6 +190,40 @@ var _ = Describe("the named machine situations", func() {
 			for _, c := range Cases {
 				Expect(c.Why).NotTo(BeEmpty(), "case "+c.Name+" states no reason to exist")
 			}
+		})
+
+		It("makes every moving machine state what the verdict did while it moved", func() {
+			// Nothing else here would catch a phased case that states only
+			// its last answer. Such a case runs its whole sequence and
+			// asserts one read of it, so it passes whether the verdict held
+			// or flapped on every tick along the way — which is the one thing
+			// a moving machine is in the set to say.
+			//
+			// Counted, and required to be non-zero below. This walk skips
+			// every steady case, so a set that lost both moving machines
+			// would leave it iterating nothing and passing, and the package
+			// owning the latch claim would not notice its only evidence for
+			// that claim had gone.
+			moving := 0
+
+			for _, c := range Cases {
+				if len(c.Phases) == 0 {
+					continue
+				}
+
+				moving++
+
+				Expect(c.VerdictStretches).NotTo(BeEmpty(),
+					"case "+c.Name+" moves its machine and states nothing about what the verdict did")
+
+				for _, p := range c.Phases {
+					Expect(p.Ticks).To(BeNumerically(">", 0),
+						"case "+c.Name+" has a phase that changes the machine and never reads it")
+				}
+			}
+
+			Expect(moving).To(BeNumerically(">", 0),
+				"no case moves its machine, so this package no longer demonstrates that a held verdict survives a reading that moves")
 		})
 	})
 })

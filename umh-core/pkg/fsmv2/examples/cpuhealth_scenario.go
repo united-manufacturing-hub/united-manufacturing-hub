@@ -57,6 +57,10 @@ anything yet. It is NOT the gate that admits bridges: a degraded verdict
 blocks admission whatever the warm-up line says, so a block reading
 "degraded" and "not refusing" together is not the product accepting work.
 
+Most machines hold one condition for the whole block. One that does not gets
+a "then" line per later condition, and an "across" line saying what the
+verdict did over every read rather than only over the last one.
+
 "message" is the text as the customer reads it.
 `
 
@@ -80,9 +84,14 @@ func renderCPUHealthCases(ctx context.Context) string {
 		out.WriteString("\n" + cpuCaseHeader + c.Name + " ===\n")
 		out.WriteString("why        " + c.Why + "\n")
 		out.WriteString("machine    " + describeBox(c.Box) + "\n")
-		out.WriteString("reads      " + describeReads(c.Ticks) + "\n\n")
 
-		status, err := pollCase(ctx, c)
+		for _, p := range c.Phases {
+			out.WriteString("then       " + describeBox(p.Box) + "\n")
+		}
+
+		out.WriteString("reads      " + describeReads(totalTicks(c)) + "\n\n")
+
+		status, track, err := pollCase(ctx, c)
 		if err != nil {
 			// A failed read produced no verdict, no message and no counts, so
 			// the error is the whole answer. Saying so keeps a reader from
@@ -94,6 +103,14 @@ func renderCPUHealthCases(ctx context.Context) string {
 		}
 
 		out.WriteString("verdict    " + status.Verdict + "\n")
+
+		// The across line goes only on a machine that moved. On a steady one
+		// it would print the same verdict a second time and say nothing the
+		// line above it has not already said.
+		if len(c.Phases) > 0 {
+			out.WriteString("across     " + describeTrack(track) + "\n")
+		}
+
 		out.WriteString(fmt.Sprintf("signals    %d capable, %d measured\n", status.SignalsCapable, status.SignalsMeasured))
 		out.WriteString("warm-up    " + describeWarmUp(status.RefusingAdmission) + "\n\n")
 
@@ -109,10 +126,13 @@ func renderCPUHealthCases(ctx context.Context) string {
 
 // pollCase drives one case the way the spec beside Cases drives it: a fresh
 // machine and fresh dependencies, one read, then one more read after each
-// tick. Fresh matters — the engine holds each signal's 60-second window and
-// its latch, so a shared one would let an earlier case's history decide this
-// answer.
-func pollCase(ctx context.Context, c fsmv2cpu.Case) (fsmv2cpu.CPUStatus, error) {
+// tick, changing the machine at every phase boundary. Fresh matters — the
+// engine holds each signal's 60-second window and its latch, so a shared one
+// would let an earlier case's history decide this answer.
+//
+// It returns the last read's answer and what the verdict did across every
+// read, both measured here rather than read off the case.
+func pollCase(ctx context.Context, c fsmv2cpu.Case) (fsmv2cpu.CPUStatus, []fsmv2cpu.VerdictStretch, error) {
 	box := fakebox.NewBox(cpuScenarioBase, c.Box)
 	identity := deps.Identity{ID: "cpu-cases", WorkerType: fsmv2cpu.WorkerType}
 	d := fsmv2cpu.NewDepsWithSampler(
@@ -121,14 +141,65 @@ func pollCase(ctx context.Context, c fsmv2cpu.Case) (fsmv2cpu.CPUStatus, error) 
 		cpuhealth.NewLinuxSamplerWithClock(box.FS(), cpuScenarioBase, box.Clock()),
 	)
 
-	status, err := fsmv2cpu.Poll(ctx, d, fsmv2cpu.CPUConfig{})
+	var verdicts []string
 
-	for i := 0; i < c.Ticks; i++ {
-		box.Tick(time.Second)
-		status, err = fsmv2cpu.Poll(ctx, d, fsmv2cpu.CPUConfig{})
+	status, err := fsmv2cpu.Poll(ctx, d, fsmv2cpu.CPUConfig{})
+	if err == nil {
+		verdicts = append(verdicts, status.Verdict)
 	}
 
-	return status, err
+	runPhase := func(ticks int) {
+		for i := 0; i < ticks; i++ {
+			box.Tick(time.Second)
+
+			status, err = fsmv2cpu.Poll(ctx, d, fsmv2cpu.CPUConfig{})
+			if err == nil {
+				verdicts = append(verdicts, status.Verdict)
+			}
+		}
+	}
+
+	runPhase(c.Ticks)
+
+	for _, p := range c.Phases {
+		box.Set(p.Box)
+		runPhase(p.Ticks)
+	}
+
+	return status, fsmv2cpu.Stretches(verdicts), err
+}
+
+// totalTicks is every tick the case runs, its first condition's and every
+// later phase's together.
+func totalTicks(c fsmv2cpu.Case) int {
+	ticks := c.Ticks
+	for _, p := range c.Phases {
+		ticks += p.Ticks
+	}
+
+	return ticks
+}
+
+// describeTrack says what the verdict did across the whole sequence, reading
+// as a sentence rather than as a list of pairs: "degraded for all 73 reads",
+// or "degraded for 66 reads, then healthy for 8".
+func describeTrack(track []fsmv2cpu.VerdictStretch) string {
+	if len(track) == 1 {
+		return fmt.Sprintf("%s for all %d reads", track[0].Verdict, track[0].Reads)
+	}
+
+	parts := make([]string, 0, len(track))
+	for i, s := range track {
+		if i == 0 {
+			parts = append(parts, fmt.Sprintf("%s for %d reads", s.Verdict, s.Reads))
+
+			continue
+		}
+
+		parts = append(parts, fmt.Sprintf("then %s for %d", s.Verdict, s.Reads))
+	}
+
+	return strings.Join(parts, ", ")
 }
 
 // describeBox says what the machine is doing, in the operator units the

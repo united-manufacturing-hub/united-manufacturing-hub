@@ -1,5 +1,5 @@
 {
-  "note": "Generated from pkg/fsmv2/cpu/cases.go; do not edit by hand. ticks is how many one-second clock advances happen before the read this entry answers for; one read runs before the first tick, so the answer is the last of ticks+1 reads. To refresh this file, run this from the umh-core module root: UPDATE_CPU_CASES_JSON=1 go test -tags=test -count=1 ./pkg/fsmv2/cpu/",
+  "note": "Generated from pkg/fsmv2/cpu/cases.go; do not edit by hand. ticks is how many one-second clock advances happen before the read this entry answers for; one read runs before the first tick, so the answer is the last of ticks+1 reads. phases, where present, are the machine's later conditions in the order it moves through them, each replacing the one before it and holding for its own ticks, so the reads are one plus every ticks in the entry; verdictStretches is what the verdict did across all of those reads, one entry per stretch of consecutive reads that answered the same way. To refresh this file, run this from the umh-core module root: UPDATE_CPU_CASES_JSON=1 go test -tags=test -count=1 ./pkg/fsmv2/cpu/",
   "cases": [
     {
       "name": "quiet-box",
@@ -274,6 +274,172 @@
         "signalsCapable": 3,
         "signalsMeasured": 3,
         "refusingAdmission": false
+      }
+    },
+    {
+      "name": "flicker",
+      "why": "Pressure crossing its fire mark five times in seventy seconds and never once falling to the clear mark. The verdict is decided on the first read and does not move again. Every situation above holds one condition still, so this is the first one that can show what the two-mark latch is for.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 1.2,
+        "hostBusy": 0.6,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0.25,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 12,
+      "phases": [
+        {
+          "machine": {
+            "cores": 4,
+            "quotaCores": 0,
+            "usageCores": 1.2,
+            "hostBusy": 0.6,
+            "steal": 0,
+            "throttle": 0,
+            "pressure": 0.15,
+            "psiPresent": true,
+            "virtualized": false,
+            "affinity": 0,
+            "unreadable": []
+          },
+          "ticks": 12
+        },
+        {
+          "machine": {
+            "cores": 4,
+            "quotaCores": 0,
+            "usageCores": 1.2,
+            "hostBusy": 0.6,
+            "steal": 0,
+            "throttle": 0,
+            "pressure": 0.25,
+            "psiPresent": true,
+            "virtualized": false,
+            "affinity": 0,
+            "unreadable": []
+          },
+          "ticks": 12
+        },
+        {
+          "machine": {
+            "cores": 4,
+            "quotaCores": 0,
+            "usageCores": 1.2,
+            "hostBusy": 0.6,
+            "steal": 0,
+            "throttle": 0,
+            "pressure": 0.15,
+            "psiPresent": true,
+            "virtualized": false,
+            "affinity": 0,
+            "unreadable": []
+          },
+          "ticks": 12
+        },
+        {
+          "machine": {
+            "cores": 4,
+            "quotaCores": 0,
+            "usageCores": 1.2,
+            "hostBusy": 0.6,
+            "steal": 0,
+            "throttle": 0,
+            "pressure": 0.25,
+            "psiPresent": true,
+            "virtualized": false,
+            "affinity": 0,
+            "unreadable": []
+          },
+          "ticks": 12
+        },
+        {
+          "machine": {
+            "cores": 4,
+            "quotaCores": 0,
+            "usageCores": 1.2,
+            "hostBusy": 0.6,
+            "steal": 0,
+            "throttle": 0,
+            "pressure": 0.15,
+            "psiPresent": true,
+            "virtualized": false,
+            "affinity": 0,
+            "unreadable": []
+          },
+          "ticks": 12
+        }
+      ],
+      "answer": {
+        "verdict": "degraded",
+        "message": "CPU contention\nTechnical Details: Tasks in this instance spent 15% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it.",
+        "signalsCapable": 2,
+        "signalsMeasured": 2,
+        "refusingAdmission": false,
+        "verdictStretches": [
+          {
+            "verdict": "degraded",
+            "reads": 73
+          }
+        ]
+      }
+    },
+    {
+      "name": "recovery",
+      "why": "flicker's other half: a machine that fires, stays degraded while the pressure stays up, then genuinely quietens under the clear mark and is let go. The latch holds a verdict against noise, not against a machine that got better.",
+      "machine": {
+        "cores": 4,
+        "quotaCores": 0,
+        "usageCores": 1.2,
+        "hostBusy": 0.6,
+        "steal": 0,
+        "throttle": 0,
+        "pressure": 0.25,
+        "psiPresent": true,
+        "virtualized": false,
+        "affinity": 0,
+        "unreadable": []
+      },
+      "ticks": 65,
+      "phases": [
+        {
+          "machine": {
+            "cores": 4,
+            "quotaCores": 0,
+            "usageCores": 1.2,
+            "hostBusy": 0.6,
+            "steal": 0,
+            "throttle": 0,
+            "pressure": 0.02,
+            "psiPresent": true,
+            "virtualized": false,
+            "affinity": 0,
+            "unreadable": []
+          },
+          "ticks": 8
+        }
+      ],
+      "answer": {
+        "verdict": "healthy",
+        "message": "CPU healthy. The machine is using 2.4 of 4 cores and can use 0.6 more before it is marked degraded.\nTechnical Details: Headroom 0.6 cores = 4 total - 2.4 used - 1.0 reserved (degraded below 0). Pressure 2% (degraded above 20%).",
+        "signalsCapable": 2,
+        "signalsMeasured": 2,
+        "refusingAdmission": false,
+        "verdictStretches": [
+          {
+            "verdict": "degraded",
+            "reads": 66
+          },
+          {
+            "verdict": "healthy",
+            "reads": 8
+          }
+        ]
       }
     },
     {

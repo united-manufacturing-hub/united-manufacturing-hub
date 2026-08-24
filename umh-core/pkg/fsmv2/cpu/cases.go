@@ -45,10 +45,26 @@ type Case struct {
 	// Box is the machine, in the operator units fakebox.Condition takes.
 	Box fakebox.Condition
 
-	// Ticks is how many one-second Tick calls happen before the read whose
-	// answer the case states. Zero judges the first read. Each tick is one
-	// poll: the worker polls once, then once more after every tick.
+	// Ticks is how many one-second Tick calls happen at Box before the read
+	// whose answer the case states. Zero judges the first read. Each tick is
+	// one poll: the worker polls once, then once more after every tick.
+	//
+	// On a case that states Phases, Ticks is how long the machine stays at
+	// Box before the first phase replaces it, and the judged read is the last
+	// read of the last phase rather than the last read at Box.
 	Ticks int
+
+	// Phases are the conditions the machine moves through after Box, in the
+	// order it moves through them, on a case whose machine does not hold
+	// still. Empty on a case that states one steady condition, which is most
+	// of them.
+	//
+	// The judged read is the last read of the last phase, so the five answer
+	// fields below say what the worker answered at the END of the sequence.
+	// What it answered ALONG the way is VerdictStretches, and a case with
+	// phases has to state that too: a moving machine judged only at its last
+	// read says nothing about the moving.
+	Phases []Phase
 
 	// Verdict is the expected cpuhealth.State as a string, "healthy" or
 	// "degraded".
@@ -79,6 +95,22 @@ type Case struct {
 	// admission window has not run out.
 	RefusingAdmission bool
 
+	// VerdictStretches is what the verdict did across EVERY read of the
+	// sequence, not only the judged one: one entry per stretch of consecutive
+	// reads that answered the same way, in order, with the number of reads in
+	// each. A machine that answered "degraded" on all 73 of its reads is one
+	// entry of 73.
+	//
+	// It is the only field that can state a claim about the sequence rather
+	// than about one read. Verdict alone cannot: a machine that flapped
+	// healthy-degraded-healthy-degraded and a machine that fired once and held
+	// both end degraded, and the whole point of a flicker case is telling
+	// those two apart.
+	//
+	// Empty on a case that does not make such a claim, and the spec then
+	// asserts nothing about the intermediate reads.
+	VerdictStretches []VerdictStretch
+
 	// PollError is the text the read's error must contain, on a machine whose
 	// sample cannot be read at all. It exists because cpu.stat is the primary
 	// read: when it fails the whole sample fails, so Poll returns a zero
@@ -89,12 +121,103 @@ type Case struct {
 	//
 	// Empty on every case that can be read, and the five answer fields above —
 	// Verdict, Message, the two counts and RefusingAdmission — are then the
-	// whole answer. Non-empty replaces those five: the spec asserts the error
-	// and asserts nothing else, because a failed read produced nothing else.
-	// Ticks is not one of the five and still applies, so a case can state both
-	// an error and how many reads have to produce it.
+	// whole answer for the judged read. Non-empty replaces those five: the
+	// spec asserts the error and asserts nothing else, because a failed read
+	// produced nothing else. Ticks is not one of the five and still applies,
+	// so a case can state both an error and how many reads have to produce it.
+	//
+	// The same goes for VerdictStretches, which no read-failure case can
+	// state: every read of such a machine produced no verdict, so there are no
+	// stretches to write down.
 	PollError string
 }
+
+// Phase is one of the conditions a moving machine passes through, and how long
+// it stays there.
+type Phase struct {
+	// Box is the machine's condition for this phase, in the same operator
+	// units Case.Box takes. It REPLACES the previous condition rather than
+	// being merged into it, so a phase that means to change only the pressure
+	// still repeats the cores, the host load and the rest.
+	//
+	// The core count cannot change: fakebox.Box.Set panics on it, because a
+	// machine that lost a CPU while its /proc/stat counters kept rising would
+	// report more busy cores than it has.
+	Box fakebox.Condition
+
+	// Ticks is how many one-second Tick calls happen at this condition, each
+	// followed by a read. Zero would change the machine and never read it, so
+	// a phase states at least one.
+	//
+	// The new condition reaches the reads through fakebox.Box.Set, which
+	// changes what LATER ticks accrue and rewrites nothing already served. The
+	// tick that opens this phase therefore accrues wholly at the new
+	// condition, and the RAW number the sampler publishes on this phase's
+	// first read is wholly this phase's straight away — a level such as
+	// pressure, and equally a rate derived from two counter readings.
+	//
+	// What lags is the REDUCTION the signal judges on, and it lags by a WINDOW
+	// rather than by a tick. Every instrument in pkg/cpuhealth declares a
+	// 60-second span, so one reducing by Mean, P95 or DeltaRatio keeps
+	// averaging the previous phase's readings until they age out of that span,
+	// and reports this phase's number alone only once a whole span has passed.
+	// Pressure is the exception that hides this: it reduces by Last, so its
+	// judged value moves on the first read.
+	//
+	// A phase meaning to move a signal judged by a mean therefore needs tens
+	// of ticks, not one.
+	Ticks int
+}
+
+// VerdictStretch is one run of consecutive reads that all answered the same
+// way. A sequence of verdicts written as stretches is short enough to state
+// literally in a case, where seventy-odd individual verdicts would not be, and
+// it still pins the exact read on which the answer changed.
+type VerdictStretch struct {
+	// Verdict is the cpuhealth.State every read in this stretch answered, as a
+	// string.
+	Verdict string
+
+	// Reads is how many reads in a row answered it. The first stretch includes
+	// the read that happens before any tick, so the Reads of all stretches sum
+	// to one more than every Ticks in the case together.
+	Reads int
+}
+
+// Stretches compresses one verdict per read into the stretches a Case states.
+// Both callers use it — the spec that asserts VerdictStretches and the
+// renderer that prints what the worker actually did — so the two cannot
+// disagree about what a stretch is.
+func Stretches(verdicts []string) []VerdictStretch {
+	stretches := make([]VerdictStretch, 0, len(verdicts))
+
+	for _, v := range verdicts {
+		if len(stretches) > 0 && stretches[len(stretches)-1].Verdict == v {
+			stretches[len(stretches)-1].Reads++
+
+			continue
+		}
+
+		stretches = append(stretches, VerdictStretch{Verdict: v, Reads: 1})
+	}
+
+	return stretches
+}
+
+// The three pressures the two moving machines below pass through. All three
+// are pressure-at-sixty's machine with a different pressure and nothing else
+// touched, written out here because the flicker case alternates between two of
+// them six times and six spelled-out literals would bury the one field that
+// moves.
+//
+// 25% is past the pressure signal's 20% fire mark. 2% is well under its 12%
+// clear mark. 15% is past neither: it sits inside the band between the two
+// marks, which is where the two-mark latch does its work.
+var (
+	pressureFiring = fakebox.Condition{Cores: 4, HostBusy: 0.60, UsageCores: 1.2, Pressure: 0.25, PsiPresent: true}
+	pressureInBand = fakebox.Condition{Cores: 4, HostBusy: 0.60, UsageCores: 1.2, Pressure: 0.15, PsiPresent: true}
+	pressureQuiet  = fakebox.Condition{Cores: 4, HostBusy: 0.60, UsageCores: 1.2, Pressure: 0.02, PsiPresent: true}
+)
 
 // Cases are the situations, in the order a reader should meet them.
 var Cases = []Case{
@@ -334,6 +457,97 @@ var Cases = []Case{
 		SignalsCapable:    3,
 		SignalsMeasured:   3,
 		RefusingAdmission: false,
+	},
+	{
+		Name: "flicker",
+		Why: "Pressure crossing its fire mark five times in seventy seconds and " +
+			"never once falling to the clear mark. The verdict is decided on " +
+			"the first read and does not move again. Every situation above " +
+			"holds one condition still, so this is the first one that can show " +
+			"what the two-mark latch is for.",
+		Box: pressureFiring,
+		// Twelve at 25%, then twelve at a time either side of the fire mark.
+		// The alternation is what a reader should picture; the length is
+		// chosen so that the machine is still oscillating after the pressure
+		// window has covered its whole 60-second span.
+		//
+		// That matters, because until the window is full a latch cannot
+		// release AT ALL, whatever the reading says. A flicker case that
+		// finished inside the first minute would hold for that reason and
+		// would still pass with the two marks collapsed onto one. The last
+		// phase runs from tick 61 to tick 72, so twelve of its reads are
+		// judged with a full window and a reading below the fire mark, and the
+		// only thing holding the verdict there is that 15% has not reached the
+		// 12% clear mark.
+		Ticks: 12,
+		Phases: []Phase{
+			{Box: pressureInBand, Ticks: 12},
+			{Box: pressureFiring, Ticks: 12},
+			{Box: pressureInBand, Ticks: 12},
+			{Box: pressureFiring, Ticks: 12},
+			{Box: pressureInBand, Ticks: 12},
+		},
+		Verdict: "degraded",
+		// 15%, which is UNDER the 20% mark this signal fires at, on a read whose
+		// verdict is degraded. The two are not in conflict and the pair is
+		// worth reading twice: the latch holds the state, and the number in the
+		// text is the live reading rather than the one the episode fired at.
+		// causeOf in pkg/cpuhealth/attribute.go says why it is built that way —
+		// a held episode reports what the machine is doing now, not what it was
+		// doing when it went degraded.
+		Message: "CPU contention\nTechnical Details: Tasks in this instance spent 15% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it.",
+		// Pressure and host-cpu-full, as on pressure-at-sixty: same machine,
+		// and neither the hypervisor nor the quota that would add the other
+		// two.
+		SignalsCapable:    2,
+		SignalsMeasured:   2,
+		RefusingAdmission: false,
+		// One stretch, and it is the whole assertion. Stating only the final
+		// verdict would pass on a machine that flapped on every crossing and
+		// happened to end degraded, which is the production behaviour this
+		// case exists to rule out.
+		VerdictStretches: []VerdictStretch{{Verdict: "degraded", Reads: 73}},
+	},
+	{
+		Name: "recovery",
+		Why: "flicker's other half: a machine that fires, stays degraded while " +
+			"the pressure stays up, then genuinely quietens under the clear " +
+			"mark and is let go. The latch holds a verdict against noise, not " +
+			"against a machine that got better.",
+		Box: pressureFiring,
+		// Sixty-five, and sixty of them are the pressure window filling.
+		// Releasing a latch is gated on the window covering its whole span, so
+		// a worker younger than 60 seconds of sample time cannot release
+		// however quiet the machine goes. Dropping the pressure before tick 60
+		// would still be followed by a release at tick 60, and the case would
+		// then be pinning the worker's age rather than the machine's recovery.
+		// The five reads after the window fills are the episode holding with
+		// nothing left to wait for.
+		Ticks: 65,
+		// Eight reads under the clear mark. One would do to see the release;
+		// the rest are there to show the verdict stays healthy afterwards
+		// rather than snapping back.
+		Phases:  []Phase{{Box: pressureQuiet, Ticks: 8}},
+		Verdict: "healthy",
+		// The budget line a healthy machine prints, which no degraded case
+		// can: 2.4 of 4 cores busy is the host's own load, not this instance's
+		// 1.2, because the headroom signal measures the machine.
+		Message: "CPU healthy. The machine is using 2.4 of 4 cores and can use 0.6 more before it is marked degraded.\nTechnical Details: Headroom 0.6 cores = 4 total - 2.4 used - 1.0 reserved (degraded below 0). Pressure 2% (degraded above 20%).",
+		// Two, as flicker: the same machine, and a pressure that changed is
+		// still a pressure the machine can answer.
+		SignalsCapable:    2,
+		SignalsMeasured:   2,
+		RefusingAdmission: false,
+		// Two stretches, and the boundary between them is the answer. Sixty-six
+		// degraded reads is every read up to and including the last one taken
+		// at 25%; the release lands on the first read taken at 2%. A latch that
+		// held for a further minute after the machine recovered, and a latch
+		// that released the moment the reading dipped anywhere below the fire
+		// mark, both fail on that boundary while ending healthy either way.
+		VerdictStretches: []VerdictStretch{
+			{Verdict: "degraded", Reads: 66},
+			{Verdict: "healthy", Reads: 8},
+		},
 	},
 	{
 		Name: "cannot-measure",
