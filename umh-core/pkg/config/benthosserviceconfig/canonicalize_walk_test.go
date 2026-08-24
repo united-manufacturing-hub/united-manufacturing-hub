@@ -37,6 +37,16 @@ func fastNormalize(v interface{}) (interface{}, bool) {
 	return out, ok
 }
 
+// pinGate forces the walk on or off for one spec and marks gateOnce as spent, so
+// the first roundTrip does not resolve the ambient environment over it. Reset
+// gateOnce afterwards to hand the next spec an unresolved gate.
+func pinGate(on bool) {
+	gateOnce = sync.Once{}
+	gateOnce.Do(func() {})
+
+	useCanonicalizeFast = on
+}
+
 // yamlRoundTrip is the original canonicalization. normalizeValue must be
 // indistinguishable from it whenever it accepts.
 func yamlRoundTrip(v interface{}) (interface{}, error) {
@@ -447,12 +457,11 @@ var _ = Describe("canonicalize fast path", func() {
 		// reaching the walk.
 		It("is reached through ConfigsEqual, not only in isolation", func() {
 			// Forced on rather than read: the suite is also run with
-			// USE_CANONICALIZE_FAST=false to exercise the fallback, and there is no
+			// USE_CANONICALIZE_FAST=0 to exercise the fallback, and there is no
 			// walk to be reached in that configuration.
-			prev := useCanonicalizeFast
-			useCanonicalizeFast = true
+			pinGate(true)
 
-			defer func() { useCanonicalizeFast = prev }()
+			defer func() { gateOnce = sync.Once{} }()
 
 			reportedFallbackTypes = sync.Map{}
 

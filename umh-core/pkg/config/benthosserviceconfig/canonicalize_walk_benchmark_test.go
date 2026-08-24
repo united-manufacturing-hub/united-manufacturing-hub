@@ -39,10 +39,9 @@ var configSizes = []int{10, 50, 100, 250, 500, 1000}
 // setting afterwards. Benchmarks in this file are sequential, so a package
 // variable is safe to swap.
 func withWalkGate(on bool, f func()) {
-	prev := useCanonicalizeFast
-	useCanonicalizeFast = on
+	pinGate(on)
 
-	defer func() { useCanonicalizeFast = prev }()
+	defer func() { gateOnce = sync.Once{} }()
 
 	f()
 }

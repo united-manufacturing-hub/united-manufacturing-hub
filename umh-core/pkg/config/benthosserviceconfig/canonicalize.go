@@ -15,28 +15,51 @@
 package benthosserviceconfig
 
 import (
-	"gopkg.in/yaml.v3"
+	"os"
+	"strings"
+	"sync"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
-// useCanonicalizeFast gates the walk in canonicalize_walk.go behind
-// USE_CANONICALIZE_FAST. Opt-out and on by default: normalizeValue is a
-// hand-written reimplementation of what yaml.Marshal/Unmarshal do (see the SAFETY
-// note there), so a shape it gets wrong would make two equal configs compare
-// unequal on every tick. Setting USE_CANONICALIZE_FAST=false turns it off in
-// place, without a rollback, if that ever happens in production; every section
-// then takes the YAML round-trip that predates it.
-var useCanonicalizeFast = canonicalizeFastEnabled()
+// canonicalizeFastEnv turns off the walk in canonicalize_walk.go, leaving every
+// section on the YAML round-trip that predates it. On by default. Set it to 0 to
+// switch the walk off at a customer site if it ever misbehaves; it goes away again
+// once the walk has proven itself.
+const canonicalizeFastEnv = "USE_CANONICALIZE_FAST"
 
-// canonicalizeFastEnabled reads the gate. Separate from the variable so a test can
-// assert what an unset or explicitly disabled USE_CANONICALIZE_FAST resolves to;
-// the variable itself is fixed at process start and carries whatever the ambient
-// environment said.
-func canonicalizeFastEnabled() bool {
-	enabled, _ := env.GetAsBool("USE_CANONICALIZE_FAST", false, true)
+var (
+	gateOnce sync.Once
+	// useCanonicalizeFast reports whether the walk runs. Only valid once initGate
+	// has run, which roundTrip guarantees before reading it.
+	useCanonicalizeFast bool
+)
 
-	return enabled
+// initGate reads the gate and warns about a value it cannot use. It runs on first
+// use rather than at package initialization, because main installs the logger only
+// after that and a warning written there reaches nobody.
+//
+// Only 0 and 1 are accepted. Anything else turns the walk off rather than leaving
+// the default on: whoever set the variable was reaching for the off switch, and the
+// round-trip only costs time. Whitespace is trimmed, and LookupEnv is used so that
+// set-but-empty still counts as set.
+func initGate() {
+	raw, isSet := os.LookupEnv(canonicalizeFastEnv)
+
+	switch {
+	case !isSet, strings.TrimSpace(raw) == "1":
+		useCanonicalizeFast = true
+	case strings.TrimSpace(raw) == "0":
+		useCanonicalizeFast = false
+	default:
+		useCanonicalizeFast = false
+
+		zap.S().Warnf(
+			"%s is set to %q, which is neither 0 nor 1. Canonicalization fell back to "+
+				"the YAML round-trip, which is correct but slower.",
+			canonicalizeFastEnv, raw)
+	}
 }
 
 // canonicalize rewrites the free-form config maps into the types they take once
@@ -124,6 +147,10 @@ func canonicalizeResources(s []map[string]interface{}) []map[string]interface{} 
 // On a marshal or unmarshal error the caller keeps the original value, so
 // canonicalization can never make two equal configs look different.
 func roundTrip(v interface{}) (interface{}, error) {
+	// Here rather than in canonicalize: canonicalizeMap and canonicalizeResources
+	// are also reachable on their own, and an unresolved gate reads as false.
+	gateOnce.Do(initGate)
+
 	if useCanonicalizeFast {
 		out, ok, unsupported := normalizeValue(v)
 		if ok {
