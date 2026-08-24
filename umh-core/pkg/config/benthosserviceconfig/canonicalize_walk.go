@@ -63,11 +63,11 @@ func intFromUint64(v uint64) interface{} {
 // []string and map[string]string included.
 func checkString(s string) (out interface{}, ok bool, unsupported string) {
 	if r, _ := utf8.DecodeRuneInString(s); r == '\n' || r == '\u2028' || r == '\u2029' {
-		return nil, false, "string(leading line break)"
+		return nil, false, declinedLeadingBreak
 	}
 
 	if (strings.HasPrefix(s, " ") || strings.HasPrefix(s, "\t")) && strings.Contains(s, "\n") {
-		return nil, false, "string(multiline, leading whitespace)"
+		return nil, false, declinedLeadingWhitespace
 	}
 
 	return s, true, ""
@@ -225,35 +225,70 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 	}
 }
 
-var reportedFallbackTypes sync.Map // map[string]struct{}, one report per type
+// declinedLeadingBreak and declinedLeadingWhitespace name the two value shapes
+// checkString refuses. They are ordinary configuration - an indented SQL block or
+// a script pasted with its leading whitespace - so they are reported differently
+// from a Go type the walk has no case for.
+const (
+	declinedLeadingBreak      = "string(leading line break)"
+	declinedLeadingWhitespace = "string(multiline, leading whitespace)"
+)
 
-// reportFallback surfaces a type the fast path cannot handle. One declining value
-// sends its whole config section back to the slow path, so this is the only signal
-// that the optimization stopped applying somewhere.
+// isDeclinedShape reports whether reason names a value the walk refuses on purpose
+// rather than a type it cannot handle. HasSuffix because a map key arrives as
+// "map key " + reason.
+func isDeclinedShape(reason string) bool {
+	return strings.HasSuffix(reason, declinedLeadingBreak) ||
+		strings.HasSuffix(reason, declinedLeadingWhitespace)
+}
+
+var reportedFallbacks sync.Map // map[string]struct{}, one report per section and reason
+
+// reportFallback surfaces a section that went back to the slow path. One declining
+// value costs the round-trip for everything around it, so this is the only signal
+// that the optimization stopped applying somewhere. It fires at most once per
+// section and reason per process.
 //
-// WARN, not DEBUG: the default level is Info, which would hide it exactly where it
-// matters. Fires once per type per process. Sentry on top is best-effort - its
-// warning path shares one process-wide two-hour debounce and the type is marked
-// before the send, so a debounced report is never retried.
-func reportFallback(unsupported string) {
-	if unsupported == "" {
+// Two very different things end up here, and only one is a defect:
+//
+//   - A refused value shape. The round-trip result depends on where the value sits
+//     in the document, which the walk cannot see, so refusing is the only correct
+//     answer and the config is fine. Info, and no Sentry issue: an engineer has
+//     nothing to do, and a customer with an indented SQL query would otherwise file
+//     one for us on every deployment.
+//   - A Go type with no case in normalizeValue. That means something new reached the
+//     config path and the walk silently stopped applying to it. WARN plus Sentry,
+//     because it is actionable and nobody would otherwise notice.
+func reportFallback(section, reason string) {
+	if reason == "" {
 		return
 	}
 
-	if _, alreadyReported := reportedFallbackTypes.LoadOrStore(unsupported, struct{}{}); alreadyReported {
+	if _, alreadyReported := reportedFallbacks.LoadOrStore(section+"/"+reason, struct{}{}); alreadyReported {
 		return
 	}
 
 	log := zap.S()
 
+	if isDeclinedShape(reason) {
+		log.Infof(
+			"Benthos config canonicalization took the YAML round-trip for the %s section: "+
+				"it holds a %s, which cannot be normalized without knowing where it sits in "+
+				"the document. Correct, only slower.",
+			section, reason)
+
+		return
+	}
+
 	log.Warnf(
-		"benthos config canonicalization fell back to the YAML round-trip: unsupported type %q. "+
-			"Correct but slower; add the case to normalizeValue in canonicalize_walk.go.",
-		unsupported)
+		"Benthos config canonicalization fell back to the YAML round-trip for the %s "+
+			"section: unsupported type %q. Correct but slower; add the case to "+
+			"normalizeValue in canonicalize_walk.go.",
+		section, reason)
 
 	// log, not nil: ReportIssueWithContext swaps nil for a no-op logger.
 	sentry.ReportIssueWithContext(
-		fmt.Errorf("canonicalize fast path unsupported type: %s", unsupported),
+		fmt.Errorf("canonicalize fast path unsupported type: %s", reason),
 		sentry.IssueTypeWarning, log,
-		map[string]interface{}{"trigger": "canonicalize_fallback_" + unsupported})
+		map[string]interface{}{"trigger": "canonicalize_fallback_" + reason, "section": section})
 }

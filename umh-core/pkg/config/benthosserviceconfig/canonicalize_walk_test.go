@@ -453,53 +453,84 @@ var _ = Describe("canonicalize fast path", func() {
 	})
 
 	Describe("fallback reporting", func() {
-		// The observer is set to WarnLevel, so this fails if the report is ever
-		// lowered back to DEBUG: the default level is Info and the line would not
-		// reach an operator at all.
-		It("logs once per type at a level the default configuration keeps", func() {
+		// An unhandled Go type means the walk silently stopped applying to something
+		// new in the config path. WARN, because the default level is Info and a DEBUG
+		// line would not reach an operator at all.
+		It("warns once per section and type at a level the default keeps", func() {
 			core, logs := observer.New(zapcore.WarnLevel)
 			defer zap.ReplaceGlobals(zap.New(core))()
 
-			const shape = "test-only-shape"
+			const goType = "test-only-type"
 
-			reportFallback(shape)
-			reportFallback(shape)
+			reportFallback("input", goType)
+			reportFallback("input", goType)
 
 			Expect(logs.FilterMessageSnippet("fell back to the YAML round-trip").Len()).
-				To(Equal(1), "expected exactly one visible warning for a repeated shape")
-			Expect(logs.FilterMessageSnippet(shape).Len()).
-				To(BeNumerically(">=", 1), "the report must name the shape that was declined")
+				To(Equal(1), "expected exactly one visible warning for a repeated type")
+			Expect(logs.FilterMessageSnippet(goType).Len()).
+				To(BeNumerically(">=", 1), "the report must name the type")
+			Expect(logs.FilterMessageSnippet("input").Len()).
+				To(BeNumerically(">=", 1), "and the section it happened in")
+		})
+
+		// The same type in another section is worth its own line: the first one says
+		// nothing about how far the fallback spread.
+		It("reports the same type again for a different section", func() {
+			core, logs := observer.New(zapcore.WarnLevel)
+			defer zap.ReplaceGlobals(zap.New(core))()
+
+			reportFallback("input", "test-only-type-2")
+			reportFallback("output", "test-only-type-2")
+
+			Expect(logs.Len()).To(Equal(2))
+		})
+
+		// A refused value shape is ordinary configuration - an indented SQL block, a
+		// script pasted with its whitespace. Refusing is the only correct answer, so
+		// it must not reach WARN or Sentry, where it would read as a defect and have
+		// a customer file an issue for code that is behaving.
+		It("keeps a refused value shape out of WARN", func() {
+			core, logs := observer.New(zapcore.WarnLevel)
+			defer zap.ReplaceGlobals(zap.New(core))()
+
+			reportFallback("output", declinedLeadingWhitespace)
+			reportFallback("output", "map key "+declinedLeadingBreak)
+
+			Expect(logs.Len()).To(BeZero(),
+				"a config the walk refuses on purpose was reported as a defect")
+		})
+
+		It("still says something about a refused shape, at Info", func() {
+			core, logs := observer.New(zapcore.InfoLevel)
+			defer zap.ReplaceGlobals(zap.New(core))()
+
+			reportFallback("pipeline", declinedLeadingBreak)
+
+			Expect(logs.Len()).To(Equal(1))
+			Expect(logs.All()[0].Message).To(ContainSubstring("pipeline"))
 		})
 
 		It("says nothing when there is nothing to report", func() {
-			core, logs := observer.New(zapcore.WarnLevel)
+			core, logs := observer.New(zapcore.InfoLevel)
 			defer zap.ReplaceGlobals(zap.New(core))()
 
-			reportFallback("")
+			reportFallback("input", "")
 
 			Expect(logs.Len()).To(BeZero())
 		})
 
-		// Proves the walk is actually wired into ConfigsEqual. Only the production
-		// path calls reportFallback, so if the fast path were dropped from roundTrip
-		// this warning would never appear — while every other spec here would still
-		// pass, because they call normalizeValue directly.
-		//
-		// The two sides must differ in representation, not just be the same value
-		// twice: ConfigsEqual compares them as they stand before it canonicalizes
-		// anything, and two copies of one Go-built config settle there without ever
-		// reaching the walk.
 		It("is reached through ConfigsEqual, not only in isolation", func() {
-			// Forced on rather than read: the suite is also run with
-			// USE_CANONICALIZE_FAST=0 to exercise the fallback, and there is no
-			// walk to be reached in that configuration.
+			// Forced on rather than read, so the spec still means something when the
+			// suite runs with the gate turned off.
 			pinGate(true)
 
 			defer func() { gateOnce = sync.Once{} }()
 
-			reportedFallbackTypes = sync.Map{}
+			reportedFallbacks = sync.Map{}
 
-			core, logs := observer.New(zapcore.WarnLevel)
+			// Info, because the fixture declines on a value shape rather than an
+			// unhandled type, and those are deliberately kept out of WARN.
+			core, logs := observer.New(zapcore.InfoLevel)
 			defer zap.ReplaceGlobals(zap.New(core))()
 
 			desired := bridgeConfigDeclining(5)
@@ -512,7 +543,7 @@ var _ = Describe("canonicalize fast path", func() {
 
 			NewComparator().ConfigsEqual(desired, observed)
 
-			Expect(logs.FilterMessageSnippet("fell back to the YAML round-trip").Len()).
+			Expect(logs.FilterMessageSnippet("took the YAML round-trip for the input section").Len()).
 				To(BeNumerically(">=", 1),
 					"ConfigsEqual never consulted the walk; is it still wired into roundTrip?")
 		})

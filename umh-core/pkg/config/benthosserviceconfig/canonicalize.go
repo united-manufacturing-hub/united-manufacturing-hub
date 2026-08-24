@@ -75,25 +75,26 @@ func initGate() {
 // round-trip for its own section and no others. The result shares unreplaced maps
 // with cfg, which callers must not mutate.
 func canonicalize(cfg BenthosServiceConfig) BenthosServiceConfig {
-	cfg.Input = canonicalizeMap(cfg.Input)
-	cfg.Output = canonicalizeMap(cfg.Output)
-	cfg.Pipeline = canonicalizeMap(cfg.Pipeline)
-	cfg.Buffer = canonicalizeMap(cfg.Buffer)
-	cfg.CacheResources = canonicalizeResources(cfg.CacheResources)
-	cfg.RateLimitResources = canonicalizeResources(cfg.RateLimitResources)
+	cfg.Input = canonicalizeMap(cfg.Input, "input")
+	cfg.Output = canonicalizeMap(cfg.Output, "output")
+	cfg.Pipeline = canonicalizeMap(cfg.Pipeline, "pipeline")
+	cfg.Buffer = canonicalizeMap(cfg.Buffer, "buffer")
+	cfg.CacheResources = canonicalizeResources(cfg.CacheResources, "cache_resources")
+	cfg.RateLimitResources = canonicalizeResources(cfg.RateLimitResources, "rate_limit_resources")
 
 	return cfg
 }
 
 // canonicalizeMap returns m in the shape it takes after a YAML round-trip. A nil
 // or empty map is returned unchanged, since the comparator wants the normalizer's
-// empty map rather than the sequence an empty section renders as.
-func canonicalizeMap(m map[string]interface{}) map[string]interface{} {
+// empty map rather than the sequence an empty section renders as. section names
+// the config section for the fallback report.
+func canonicalizeMap(m map[string]interface{}, section string) map[string]interface{} {
 	if len(m) == 0 {
 		return m
 	}
 
-	out, err := roundTrip(m)
+	out, err := roundTrip(m, section)
 	if err != nil {
 		return m
 	}
@@ -108,12 +109,12 @@ func canonicalizeMap(m map[string]interface{}) map[string]interface{} {
 
 // canonicalizeResources returns the resource slice in the shape it takes after a
 // YAML round-trip. A nil or empty slice is returned unchanged.
-func canonicalizeResources(s []map[string]interface{}) []map[string]interface{} {
+func canonicalizeResources(s []map[string]interface{}, section string) []map[string]interface{} {
 	if len(s) == 0 {
 		return s
 	}
 
-	out, err := roundTrip(s)
+	out, err := roundTrip(s, section)
 	if err != nil {
 		return s
 	}
@@ -146,7 +147,7 @@ func canonicalizeResources(s []map[string]interface{}) []map[string]interface{} 
 //
 // On a marshal or unmarshal error the caller keeps the original value, so
 // canonicalization can never make two equal configs look different.
-func roundTrip(v interface{}) (interface{}, error) {
+func roundTrip(v interface{}, section string) (interface{}, error) {
 	// Here rather than in canonicalize: canonicalizeMap and canonicalizeResources
 	// are also reachable on their own, and an unresolved gate reads as false.
 	gateOnce.Do(initGate)
@@ -157,7 +158,7 @@ func roundTrip(v interface{}) (interface{}, error) {
 			return out, nil
 		}
 
-		reportFallback(unsupported)
+		reportFallback(section, unsupported)
 	}
 
 	encoded, err := yaml.Marshal(v)

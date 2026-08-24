@@ -27,14 +27,9 @@ import (
 
 var _ = Describe("canonicalize", func() {
 	// The gate is an opt-out kill switch, so the walk is what production runs and
-	// what every other spec here is about. A default flipped to false would leave
-	// the optimization shipped but never taken, and a misspelled variable name would
+	// what every other spec here is about. A default flipped to off would leave the
+	// optimization shipped but never taken, and a misspelled variable name would
 	// leave it impossible to turn off.
-	//
-	// Asserted against the environment these specs set rather than against
-	// useCanonicalizeFast, which is fixed at process start: running the suite with
-	// USE_CANONICALIZE_FAST=0 is a supported way to check the fallback, and must
-	// not fail the spec that describes the default.
 	Describe("USE_CANONICALIZE_FAST", func() {
 		var prev string
 
@@ -142,7 +137,7 @@ var _ = Describe("canonicalize", func() {
 			gateOnce = sync.Once{}
 			useCanonicalizeFast = false
 
-			canonicalizeMap(map[string]interface{}{"a": "b"})
+			canonicalizeMap(map[string]interface{}{"a": "b"}, "input")
 
 			Expect(useCanonicalizeFast).To(BeTrue(), "roundTrip did not resolve the gate")
 		})
@@ -180,15 +175,15 @@ var _ = Describe("canonicalize", func() {
 		It("returns an empty map untouched", func() {
 			empty := map[string]interface{}{}
 
-			Expect(canonicalizeMap(empty)).To(Equal(empty))
-			Expect(canonicalizeMap(nil)).To(BeNil())
+			Expect(canonicalizeMap(empty, "input")).To(Equal(empty))
+			Expect(canonicalizeMap(nil, "input")).To(BeNil())
 		})
 
 		It("returns an empty resource list untouched", func() {
 			empty := []map[string]interface{}{}
 
-			Expect(canonicalizeResources(empty)).To(Equal(empty))
-			Expect(canonicalizeResources(nil)).To(BeNil())
+			Expect(canonicalizeResources(empty, "cache_resources")).To(Equal(empty))
+			Expect(canonicalizeResources(nil, "cache_resources")).To(BeNil())
 		})
 	})
 
