@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -247,6 +248,51 @@ var _ = Describe("DeployProtocolConverter", func() {
 	})
 
 	Describe("Execute", func() {
+		// deployWithWriteTopics deploys a bridge at pcLocation whose write flow subscribes
+		// to the given topics, and returns the Execute error.
+		deployWithWriteTopics := func(topics string) error {
+			topicAction := actions.NewDeployProtocolConverterAction(
+				userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, fsm.NewSnapshotManager())
+
+			payload := map[string]interface{}{
+				"name": pcName,
+				"connection": map[string]interface{}{
+					"ip":   pcIP,
+					"port": pcPort,
+				},
+				"location": pcLocation,
+				"writeDFC": map[string]interface{}{
+					"ignoreErrors": true,
+					"destination": map[string]interface{}{
+						"protocol": "stdout",
+					},
+					"source": map[string]interface{}{
+						"topics": topics,
+					},
+				},
+			}
+
+			Expect(topicAction.Parse(payload)).To(Succeed())
+			Expect(topicAction.Validate()).To(Succeed())
+
+			_, _, err := topicAction.Execute()
+
+			return err
+		}
+
+		It("should reject a write flow whose topics are outside the bridge location", func() {
+			err := deployWithWriteTopics("umh.v1.TestEnterprise.OtherSite.foo")
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must be beneath the bridge location"))
+			Expect(err.Error()).To(ContainSubstring("umh.v1.TestEnterprise.OtherSite.foo"))
+			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
+		})
+
+		It("should accept a write flow whose topics resolve beneath the bridge location", func() {
+			Expect(deployWithWriteTopics("umh.v1.{{ .location_path }}.foo")).To(Succeed())
+		})
+
 		It("should deploy protocol converter successfully", func() {
 			// Setup - parse valid payload first
 			payload := map[string]interface{}{
