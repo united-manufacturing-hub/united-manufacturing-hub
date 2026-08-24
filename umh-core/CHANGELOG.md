@@ -7,6 +7,9 @@
 ### Improvements
 
 - Wait time between reads on the S7 input is now configurable with `timeBetweenReads`, for example `500ms` or `2s`. The default is unchanged at `1s`, and very short values can overload the PLC 
+### Improvements
+
+- A write flow can now only subscribe to topics beneath the location of its own bridge, so a bridge at `enterprise.site.line` no longer reads data from elsewhere in the hierarchy. Existing write flows that subscribe outside their location stop writing after the upgrade and name the offending topics in the bridge's status, and the bridge's read flow keeps running while the topics are corrected
 
 ### Fixes
 
