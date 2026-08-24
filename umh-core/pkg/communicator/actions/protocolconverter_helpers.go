@@ -24,8 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 )
@@ -61,34 +59,26 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 }
 
 // validateWriteTopicHierarchy rejects a bridge whose write flow subscribes to topics
-// outside the bridge's own location, so the violation is reported to the user instead of
-// only degrading the bridge later. The rule itself lives in BuildRuntimeConfig, which
-// reports it as a WriteFlowConfigError; every other render failure is left to the
-// reconciliation loop, which reports it on the bridge.
+// outside the bridge's own location, or to a data contract that does not exist, so the
+// violation is reported to the user instead of only degrading the bridge later. The rule
+// itself lives in BuildRuntimeConfig, which reports it as a WriteFlowConfigError; every
+// other render failure is left to the reconciliation loop, which reports it on the bridge.
 //
-// The agent location is read from the system snapshot; with no snapshot manager that half
-// of the bridge location is unknown, so the check is skipped. The historian section is not
-// part of the snapshot, so it is read from the config manager to render historian variables.
-func validateWriteTopicHierarchy(pcConfig config.ProtocolConverterConfig, snapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) error {
-	if snapshotManager == nil {
-		return nil
-	}
-
-	snapshot := snapshotManager.GetDeepCopySnapshot()
-
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-	defer cancel()
-
+// The agent location and the declared data contracts are read from the config manager
+// rather than from the system snapshot, because the snapshot carries no config (see
+// fsm.GetManagerSnapshots).
+func validateWriteTopicHierarchy(ctx context.Context, pcConfig config.ProtocolConverterConfig, configManager config.ConfigManager) error {
 	currentConfig, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
-		return fmt.Errorf("failed to read current config for historian variables: %w", err)
+		return fmt.Errorf("failed to read current config: %w", err)
 	}
 
 	_, err = runtime_config.BuildRuntimeConfig(
 		pcConfig.ProtocolConverterServiceConfig,
-		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
+		convertIntMapToStringMap(currentConfig.Agent.Location),
 		nil, // TODO: add global vars
 		currentConfig.Historian,
+		currentConfig.DataContracts,
 		runtime_config.BridgedByPlaceholder,
 		pcConfig.Name,
 	)

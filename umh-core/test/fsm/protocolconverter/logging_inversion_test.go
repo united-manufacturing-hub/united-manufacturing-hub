@@ -104,6 +104,7 @@ var _ = Describe("ConfigDivergence reset and staging", func() {
 			map[string]string{},
 			nil,
 			nil,
+			nil,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)
@@ -249,6 +250,7 @@ var _ = Describe("ConfigDivergence composition into StatusReason", func() {
 			map[string]string{},
 			nil,
 			nil,
+			nil,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)
@@ -368,6 +370,7 @@ var _ = Describe("ConfigDivergence composition into StatusReason", func() {
 		rendered, err := runtime_config.BuildRuntimeConfig(
 			cfg,
 			map[string]string{},
+			nil,
 			nil,
 			nil,
 			runtime_config.BridgedByPlaceholder,
@@ -520,6 +523,7 @@ var _ = Describe("Heartbeat WARN on the PC divergence branch", func() {
 			map[string]string{},
 			nil,
 			nil,
+			nil,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)
@@ -656,6 +660,7 @@ var _ = Describe("Capstone: full Reconcile lifecycle under sustained divergence"
 		rendered, err := runtime_config.BuildRuntimeConfig(
 			cfg,
 			map[string]string{},
+			nil,
 			nil,
 			nil,
 			runtime_config.BridgedByPlaceholder,

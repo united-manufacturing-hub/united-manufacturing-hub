@@ -167,35 +167,75 @@ var _ = Describe("write_config", func() {
 				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
 				}
-				accepted := input.ToWriteConfig().ValidateTopicsUnderLocation(locationPath) == nil
+				accepted := input.ToWriteConfig().ValidateTopics(locationPath, nil) == nil
 
 				Expect(accepted).To(Equal(expected))
 			},
-			Entry("direct child", "umh.v1.UMHDEVTEST.cologne.foo", "UMHDEVTEST.cologne", true),
-			Entry("deep child", "umh.v1.UMHDEVTEST.cologne.a.b.c", "UMHDEVTEST.cologne", true),
-			Entry("topic without umh.v1. prefix", "UMHDEVTEST.cologne.foo", "UMHDEVTEST.cologne", true),
-			Entry("sibling branch", "umh.v1.UMHDEVTEST.cologne.foo", "UMHDEVTEST.cologne.sublevel", false),
-			Entry("parent level", "umh.v1.UMHDEVTEST.foo", "UMHDEVTEST.cologne", false),
-			Entry("shared prefix but different level", "umh.v1.UMHDEVTEST.cologne2.foo", "UMHDEVTEST.cologne", false),
+			Entry("direct child", "umh.v1.UMHDEVTEST.cologne._historian.foo", "UMHDEVTEST.cologne", true),
+			Entry("deep child", "umh.v1.UMHDEVTEST.cologne.a.b._historian.c", "UMHDEVTEST.cologne", true),
+			Entry("topic without umh.v1. prefix", "UMHDEVTEST.cologne._historian.foo", "UMHDEVTEST.cologne", true),
+			Entry("sibling branch", "umh.v1.UMHDEVTEST.cologne._historian.foo", "UMHDEVTEST.cologne.sublevel", false),
+			Entry("parent level", "umh.v1.UMHDEVTEST._historian.foo", "UMHDEVTEST.cologne", false),
+			Entry("shared prefix but different level", "umh.v1.UMHDEVTEST.cologne2._historian.foo", "UMHDEVTEST.cologne", false),
 			Entry("bridge location itself", "umh.v1.UMHDEVTEST.cologne", "UMHDEVTEST.cologne", false),
-			Entry("empty location accepts any topic", "umh.v1.anything.foo", "", true),
+			Entry("empty location accepts any topic naming a contract", "umh.v1.anything._historian.foo", "", true),
 		)
 	})
 
-	Describe("ValidateTopicsUnderLocation", func() {
+	Describe("topic data contract", func() {
+		configured := []string{"_pump_v1"}
+
+		DescribeTable("reports whether a topic names an existing data contract",
+			func(topic string, expected bool) {
+				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
+				}
+				accepted := input.ToWriteConfig().ValidateTopics("UMHDEVTEST.cologne", configured) == nil
+
+				Expect(accepted).To(Equal(expected))
+			},
+			Entry("built-in contract and tag", "umh.v1.UMHDEVTEST.cologne._historian.temperature", true),
+			Entry("built-in contract subtree", "umh.v1.UMHDEVTEST.cologne._raw.*", true),
+			Entry("contract without a virtual path", "umh.v1.UMHDEVTEST.cologne._historian", true),
+			Entry("configured contract", "umh.v1.UMHDEVTEST.cologne._pump_v1.pressure", true),
+			Entry("contract behind further location levels", "umh.v1.UMHDEVTEST.cologne.line-4._raw.temperature", true),
+			Entry("contract that is not configured", "umh.v1.UMHDEVTEST.cologne._valve_v1.position", false),
+			Entry("misspelled contract", "umh.v1.UMHDEVTEST.cologne._pmup_v1.pressure", false),
+			Entry("no contract at all", "umh.v1.UMHDEVTEST.cologne.temperature", false),
+			Entry("wildcard in place of the contract", "umh.v1.UMHDEVTEST.cologne.*", false),
+			Entry("wildcard contract", "umh.v1.UMHDEVTEST.cologne._*", false),
+			Entry("bare contract prefix", "umh.v1.UMHDEVTEST.cologne._.temperature", false),
+		)
+	})
+
+	Describe("ValidateTopics", func() {
 		validate := func(topics, locationPath string) error {
 			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topics},
 			}
 
-			return input.ToWriteConfig().ValidateTopicsUnderLocation(locationPath)
+			return input.ToWriteConfig().ValidateTopics(locationPath, nil)
 		}
 
 		It("reports every offending topic", func() {
-			err := validate("umh.v1.UMHDEVTEST.cologne.foo\numh.v1.UMHDEVTEST.cologne.bar", "UMHDEVTEST.cologne.sublevel")
-			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.foo")))
-			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.bar")))
+			err := validate("umh.v1.UMHDEVTEST.cologne._historian.foo\numh.v1.UMHDEVTEST.cologne._historian.bar", "UMHDEVTEST.cologne.sublevel")
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne._historian.foo")))
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne._historian.bar")))
 			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.sublevel")))
+		})
+
+		It("reports a location violation and an unknown contract in one error", func() {
+			err := validate("umh.v1.elsewhere._historian.foo\numh.v1.UMHDEVTEST.cologne.bar", "UMHDEVTEST.cologne")
+			Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.elsewhere._historian.foo")))
+			Expect(err).To(MatchError(ContainSubstring("must each name one existing data contract")))
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.bar")))
+		})
+
+		It("names the contracts a topic may use", func() {
+			err := validate("umh.v1.UMHDEVTEST.cologne._nope.foo", "UMHDEVTEST.cologne")
+			Expect(err).To(MatchError(ContainSubstring("_raw")))
+			Expect(err).To(MatchError(ContainSubstring("_historian")))
 		})
 
 		It("accepts the placeholder used when no topic was configured", func() {
