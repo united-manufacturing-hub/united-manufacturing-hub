@@ -26,11 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// cgroupBase is where a Box serves its cgroup files and where the sampler
-// looks for them. One constant so the two cannot drift apart and leave every
-// read failing.
-const cgroupBase = "/sys/fs/cgroup"
-
 // caseNames is the roster: every case that must exist, in order. It is written
 // out here rather than derived from Cases, because a spec that reads the list
 // it is checking cannot notice a case going missing. Deleting or reordering an
