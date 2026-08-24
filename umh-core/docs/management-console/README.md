@@ -47,4 +47,4 @@ Open the account menu at the bottom of the sidebar, then **Settings**, for three
 
 - **Account** shows your name, email, company, and licence state.
 - **Settings** holds **Advanced Mode**, which reveals options for power users, and **Early Access Features**, which switches on features that are still being finished. Early access features can change or break without notice.
-- **Permissions** shows your current role and what it allows, see [Users and Permissions](users-and-permissions/README.md).
+- **Permissions** (only available for Enterprise) shows your current role and what it allows, see [Users and Permissions](users-and-permissions/README.md).
