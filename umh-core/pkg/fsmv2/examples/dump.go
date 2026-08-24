@@ -245,7 +245,10 @@ func (d *ScenarioDump) FormatHuman() string {
 	return sb.String()
 }
 
-// formatValue formats a value, truncating at 80 characters.
+// formatValue formats a value for the delta history, truncating at 80
+// characters. The history is one line per change across a whole run, so an
+// untruncated value there costs the reader the ability to scan it. FINAL STATE
+// makes the opposite trade and renders values whole; see formatDocument.
 func formatValue(v interface{}) string {
 	s := fmt.Sprintf("%v", v)
 	if len(s) > 80 {
@@ -255,7 +258,12 @@ func formatValue(v interface{}) string {
 	return s
 }
 
-// formatDocument writes document fields to the string builder, skipping CSE metadata.
+// formatDocument writes document fields to the string builder, skipping CSE
+// metadata. It writes each value whole rather than through formatValue,
+// because FINAL STATE is one snapshot per worker and a truncated value there
+// hides the very answer the section exists to give. The cpu worker's health
+// message is the case that decided this: it runs past 80 characters, and this
+// is the only place in the dump where its full text is readable.
 func formatDocument(sb *strings.Builder, doc persistence.Document, indent string) {
 	if len(doc) == 0 {
 		sb.WriteString(indent + "(empty)\n")
@@ -276,7 +284,7 @@ func formatDocument(sb *strings.Builder, doc persistence.Document, indent string
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		fmt.Fprintf(sb, "%s%s: %v\n", indent, k, formatValue(doc[k]))
+		fmt.Fprintf(sb, "%s%s: %v\n", indent, k, doc[k])
 	}
 
 	if len(keys) == 0 {
