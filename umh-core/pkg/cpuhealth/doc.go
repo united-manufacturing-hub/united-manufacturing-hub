@@ -112,9 +112,11 @@
 // Container-limit-full is the container, because it is our own limit.
 //
 // The host-cpu-full signal says nothing by itself about whose load filled the
-// machine, so two refinements narrow it. The host-share refinement covers the
-// case where the rest of the box accounts for most of the busy time. The
-// container-share refinement covers the case where we account for most of it.
+// machine, so two refinements narrow it. The host-share refinement fires when
+// the rest of the box accounts for most of the busy time. The container-share
+// refinement fires when we account for most of it. Where neither fires,
+// nothing narrows the machine to a side and the blame is unknown. The header
+// of signal_saturation.go says when that happens.
 // A refinement is an ordinary signal declared under a parent signal, with its
 // own instruments and thresholds, so any signal may carry them. host-cpu-full
 // is the only one that does; pressure declares none, and the ambiguity above is
