@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- Bridges on instances with large configurations no longer flicker between degraded and active, or show as inactive while they are still passing data. Checking whether a bridge still matched its desired configuration was slow enough that some bridges were skipped, then torn down and restarted as though they had got stuck
+- Instances with large configurations no longer run out of time in the control loop. Comparing a bridge against its desired configuration was slow enough that the loop overran its budget and skipped reconciles, so starting, stopping and configuration changes took effect late or not at all, and the logs filled with "not enough time left to reconcile"
 
 ## [0.44.35]
 
