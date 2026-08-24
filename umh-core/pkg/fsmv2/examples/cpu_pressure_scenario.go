@@ -277,7 +277,17 @@ type tickingBox struct {
 	box  *fakebox.Box
 	stop chan struct{}
 	done chan struct{}
-	mu   sync.Mutex
+	// base is the cgroup mount this box serves, so the read-driven mode below
+	// can recognise the file the sampler opens once per read.
+	base string
+	// perRead is how much machine time one sampler read advances the box, and
+	// zero when the box is driven by a wall-clock ticker instead. StartPerRead
+	// sets it and Stop clears it.
+	perRead time.Duration
+	// ticking records that a wall-clock ticker was started, so Stop knows
+	// whether there is a goroutine to join.
+	ticking bool
+	mu      sync.Mutex
 }
 
 // newTickingBox returns a box serving base in the condition initial describes.
@@ -285,6 +295,7 @@ type tickingBox struct {
 func newTickingBox(base string, initial fakebox.Condition) *tickingBox {
 	return &tickingBox{
 		box:  fakebox.NewBox(base, initial),
+		base: base,
 		stop: make(chan struct{}),
 		done: make(chan struct{}),
 	}
@@ -332,10 +343,43 @@ func (t *tickingBox) fs() filesystem.Service {
 		t.mu.Lock()
 		defer t.mu.Unlock()
 
+		// The read-driven advance. cpu.pressure is the file the sampler opens
+		// first and exactly once per read, before anything that can fail the
+		// read early, so seeing it is seeing a read begin. It ticks even when
+		// the condition makes that file unreadable, because the box serves the
+		// failure rather than skipping the open.
+		//
+		// The tick lands after the sampler has stamped the read and before any
+		// file is served, so the stamp trails the counters by one tick — the
+		// SAME one tick on every read, which is what makes the deltas exact:
+		// one tick of counters over one tick of clock is the rate the condition
+		// states, with none of the straddling cpuPressureMachineTick has to
+		// bound.
+		if t.perRead > 0 && path == t.base+"/cpu.pressure" {
+			t.box.Tick(t.perRead)
+		}
+
 		return inner.ReadFile(ctx, path)
 	}
 
 	return guarded
+}
+
+// MachineNow reads the box's own clock: the instant the sampler stamps its
+// samples from, and the one every window span and release rule downstream is
+// denominated in.
+//
+// A driver whose story is measured in machine time waits against this rather
+// than against the wall clock. How much machine time a wall second buys is not
+// fixed: it is however many ticks the ticker actually delivered, and a run
+// under debug logging delivers fewer of them than a run with a discarding
+// logger. A wall-clock hold therefore covers a different stretch of the story
+// on each, while a machine-time hold covers the same stretch on both and pays
+// the difference in wall seconds instead.
+//
+// clock.Mock synchronises itself, so this is safe to call while the box ticks.
+func (t *tickingBox) MachineNow() time.Time {
+	return t.box.Clock().Now()
 }
 
 // Set changes the condition later ticks accrue at, and takes effect on the next
@@ -349,7 +393,8 @@ func (t *tickingBox) Set(c fakebox.Condition) {
 	t.box.Set(c)
 }
 
-// Start advances the box by every, every. Call it once.
+// Start advances the box by every, every, so machine time keeps pace with the
+// wall clock. Call it once.
 //
 // A ticker drops ticks under load rather than queueing them, and on the box's
 // own clock a drop withholds a tick's counters and a tick's clock together, so
@@ -366,10 +411,47 @@ func (t *tickingBox) Set(c fakebox.Condition) {
 // sampler's elapsed is zero, and that reading is withheld rather than served
 // low.
 func (t *tickingBox) Start(every time.Duration) {
+	t.startTicker(every, every)
+}
+
+// StartPerRead advances the box by advance once per sampler read, rather than
+// on a wall-clock ticker. Call it once, and not beside Start.
+//
+// A scenario reaches for this when it has to reach a RELEASE. A latch releases
+// only on a window whose Coverage is Full, and Coverage is the distance from
+// the oldest stored reading to the newest AFTER everything older than the span
+// has been pruned. Pruning keeps a reading landing exactly on the cutoff and
+// drops everything before it, so that distance reaches the span only when a
+// stored reading sits exactly one span before the newest. One read, one tick
+// puts every reading a whole tick from every other, so a span that is a whole
+// number of ticks is covered from the moment enough readings exist. Under a
+// wall-clock ticker the readings land wherever the two cadences happen to
+// cross, and Coverage is Full only by coincidence: measured at ten ticks to the
+// poll, on 17 readings out of 200, first at the 69th rather than the 61st.
+//
+// It is also exact rather than merely repeatable. Every reading covers one
+// tick of counters over one tick of clock, so the rate is the one the condition
+// states, with none of the straddling cpuPressureMachineTick has to bound.
+//
+// The price is that machine time now advances only while the worker is reading.
+// A driver waiting on this clock waits out its ctx if the worker stops polling,
+// and how much wall time a machine second costs is the collector's cadence
+// rather than a ticker's.
+func (t *tickingBox) StartPerRead(advance time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.perRead = advance
+}
+
+// startTicker advances the box by advance, every interval of wall time.
+func (t *tickingBox) startTicker(interval, advance time.Duration) {
+	t.ticking = true
+
 	go func() {
 		defer close(t.done)
 
-		ticker := time.NewTicker(every)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
 		for {
@@ -378,7 +460,7 @@ func (t *tickingBox) Start(every time.Duration) {
 				return
 			case <-ticker.C:
 				t.mu.Lock()
-				t.box.Tick(every)
+				t.box.Tick(advance)
 				t.mu.Unlock()
 			}
 		}
@@ -386,7 +468,9 @@ func (t *tickingBox) Start(every time.Duration) {
 }
 
 // Stop halts the advancing and waits for it to have halted, so no tick lands
-// after Stop returns.
+// after Stop returns. It ends both modes: it joins the ticker goroutine when
+// there is one, and it stops a read-driven box advancing, so the reads the
+// worker keeps making during the settle window no longer move machine time.
 //
 // A driver's defer fires this when the driver returns, which is BEFORE the
 // runner's settle window. Everything the worker reads during that window comes
@@ -404,6 +488,12 @@ func (t *tickingBox) Start(every time.Duration) {
 // so the page ends on an idle machine with full headroom that nothing flags as
 // unmeasured. Stopping the clock turns that into no reading at all.
 func (t *tickingBox) Stop() {
-	close(t.stop)
-	<-t.done
+	t.mu.Lock()
+	t.perRead = 0
+	t.mu.Unlock()
+
+	if t.ticking {
+		close(t.stop)
+		<-t.done
+	}
 }
