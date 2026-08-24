@@ -148,6 +148,32 @@ var _ = Describe("canonicalize", func() {
 		})
 	})
 
+	// Every section needs its own call, and a section that only holds strings, ints
+	// and maps cannot show a missing one: those survive the file unchanged, so the
+	// result is the same either way. []string is the cheapest value that must change
+	// - a real Kafka output carries its addresses that way - and each section gets
+	// one, so a forgotten call names the section it was forgotten in.
+	It("canonicalizes every section", func() {
+		list := []string{"a", "b"}
+		want := []interface{}{"a", "b"}
+
+		out := canonicalize(BenthosServiceConfig{
+			Input:              map[string]interface{}{"k": list},
+			Output:             map[string]interface{}{"k": list},
+			Pipeline:           map[string]interface{}{"k": list},
+			Buffer:             map[string]interface{}{"k": list},
+			CacheResources:     []map[string]interface{}{{"k": list}},
+			RateLimitResources: []map[string]interface{}{{"k": list}},
+		})
+
+		Expect(out.Input["k"]).To(Equal(want), "Input")
+		Expect(out.Output["k"]).To(Equal(want), "Output")
+		Expect(out.Pipeline["k"]).To(Equal(want), "Pipeline")
+		Expect(out.Buffer["k"]).To(Equal(want), "Buffer")
+		Expect(out.CacheResources[0]["k"]).To(Equal(want), "CacheResources")
+		Expect(out.RateLimitResources[0]["k"]).To(Equal(want), "RateLimitResources")
+	})
+
 	// An empty section renders as a sequence rather than a map, so round-tripping it
 	// would hand the comparator a shape it does not expect.
 	Describe("empty sections", func() {

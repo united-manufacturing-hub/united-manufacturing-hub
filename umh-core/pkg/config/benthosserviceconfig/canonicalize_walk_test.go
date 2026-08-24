@@ -248,6 +248,14 @@ var _ = Describe("canonicalize fast path", func() {
 			Entry("map[string]string becomes map[string]interface{}",
 				map[string]string{"k": "v"}, map[string]interface{}{"k": "v"}),
 			Entry("int64 collapses to int", int64(42), 42),
+			// One per narrowing arm: without a value of that exact type the arm is
+			// never entered, and dropping its conversion would go unnoticed.
+			Entry("int8 collapses to int", int8(7), 7),
+			Entry("int16 collapses to int", int16(7), 7),
+			Entry("int32 collapses to int", int32(7), 7),
+			Entry("uint8 collapses to int", uint8(7), 7),
+			Entry("uint16 collapses to int", uint16(7), 7),
+			Entry("uint32 at its max collapses to int", uint32(math.MaxUint32), int(math.MaxUint32)),
 			Entry("int64 max", int64(math.MaxInt64), math.MaxInt),
 			Entry("int64 min", int64(math.MinInt64), math.MinInt),
 			Entry("uint collapses to int", uint(7), 7),
@@ -319,13 +327,13 @@ var _ = Describe("canonicalize fast path", func() {
 		})
 	})
 
-	// Asserts the SAFETY contract itself, not a list of characters to refuse:
-	// accepting is optional, agreeing is not. Safe cases sit beside unsafe ones so
-	// that refusing a whole class shows up as over-refusal.
+	// The two tables are split by what is being promised, not by which character is
+	// involved: one holds the values the walk must not get wrong, the other the ones
+	// it must not refuse. Mixing them would mean a weaker assertion for both.
 	Describe("the SAFETY contract against yaml's block-scalar emitter", func() {
 		// On a round-trip error canonicalizeMap keeps the section as it stands, which
-		// no per-value result can match, so the walk has to decline instead.
-		expectWalkAgreesWhenItAccepts := func(value string) {
+		// no per-value result can match, so the walk has to decline there.
+		expectAgreesOrDeclines := func(value string) {
 			for _, pos := range valuePositions {
 				in := pos.wrap(value)
 
@@ -351,30 +359,56 @@ var _ = Describe("canonicalize fast path", func() {
 			}
 		}
 
-		// yaml counts U+2028 and U+2029 as line breaks too and swallows a leading one
-		// the way it swallows a leading "\n".
-		DescribeTable("never accepts a line break it cannot reproduce",
-			expectWalkAgreesWhenItAccepts,
+		// Declining is allowed here, so these say nothing about over-refusal - that is
+		// what the table below is for.
+		DescribeTable("never accepts a value it cannot reproduce",
+			expectAgreesOrDeclines,
+			// yaml counts U+2028 and U+2029 as line breaks and swallows a leading one
+			// the way it swallows a leading "\n".
 			Entry("multiline string with a leading U+2028 LINE SEPARATOR", "\u2028p\nq\n"),
 			Entry("multiline string with a leading U+2029 PARAGRAPH SEPARATOR", "\u2029p\nq\n"),
-			Entry("bare U+2028 string", "\u2028"),
-			Entry("bare U+2029 string", "\u2029"),
-			Entry("multiline string with an interior U+2028", "p\u2028q\nr\n"),
-			Entry("multiline string with a leading U+0085 NEXT LINE", "\u0085p\nq\n"),
-			Entry("multiline string with a leading carriage return", "\rp\nq\n"),
-			Entry("multiline string with an interior carriage return", "p\rq\nr\n"),
-			Entry("CRLF line endings", "p\r\nq\r\n"),
-			Entry("multiline string with a trailing space", "p \nq \n"),
+			// A leading tab lands in the block scalar's indentation, so yaml cannot
+			// parse its own output.
+			Entry("multiline string with a leading tab", "\tif x\n\tbody\n"),
+			Entry("multiline string with a leading space before the tab", " \tif x\n\tbody\n"),
+			// Refused today although the round-trip leaves them alone: the screen looks
+			// at the first rune without asking whether the string is multi-line at all.
+			// Correct, just slower than it needs to be, and no config holds a value
+			// that is one separator character.
+			Entry("bare U+2028 string, refused for now", "\u2028"),
+			Entry("bare U+2029 string, refused for now", "\u2029"),
 		)
 
-		// A leading tab lands in the block scalar's indentation, so yaml cannot parse
-		// its own output. Only multi-line: on one line the value gets quoted.
-		DescribeTable("never accepts a tab it cannot reproduce",
-			expectWalkAgreesWhenItAccepts,
-			Entry("multiline string with a leading tab", "\tif x\n\tbody\n"),
+		// The other half of the contract. Declining these would be correct but slow,
+		// and a walk that refuses a whole class silently costs the optimization
+		// everywhere - so acceptance is required, not just agreement.
+		DescribeTable("accepts and reproduces the neighbours of those values",
+			func(value string) {
+				for _, pos := range valuePositions {
+					in := pos.wrap(value)
+
+					slow, err := yamlRoundTrip(in)
+					Expect(err).NotTo(HaveOccurred(), "%s: round-trip failed", pos.name)
+
+					fast, ok := fastNormalize(in)
+					Expect(ok).To(BeTrue(),
+						"%s: the walk refused %q, which it can reproduce; the whole section "+
+							"falls back for nothing", pos.name, value)
+					Expect(fast).To(Equal(slow), "%s: disagrees with the round-trip", pos.name)
+				}
+			},
+			// One line, so yaml quotes the value and the leading character stops
+			// mattering.
 			Entry("single-line string with a leading tab", "\tif x"),
+			// Not leading, so the block scalar opens before them.
+			Entry("multiline string with an interior U+2028", "p\u2028q\nr\n"),
 			Entry("multiline string with an interior tab", "if x\n\tbody\n"),
-			Entry("multiline string with a leading space before the tab", " \tif x\n\tbody\n"),
+			Entry("multiline string with an interior carriage return", "p\rq\nr\n"),
+			// A break to the parser but not to the emitter, which quotes it instead.
+			Entry("multiline string with a leading U+0085 NEXT LINE", "\u0085p\nq\n"),
+			Entry("multiline string with a leading carriage return", "\rp\nq\n"),
+			Entry("CRLF line endings", "p\r\nq\r\n"),
+			Entry("multiline string with a trailing space", "p \nq \n"),
 		)
 	})
 
