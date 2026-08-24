@@ -194,10 +194,13 @@ type CPUDeps struct {
 // instance at spawn time, not at init(), so a caller that publishes first
 // decides which files this instance sees and which clock times them.
 //
-// Publish both or neither. Every rate the sampler reports is a counter delta
-// over the gap between two Sample timestamps, so a caller staging counters on a
-// fixture clock while the sampler stamps from the wall clock gets rates that
-// are neither the staged ones nor the machine's.
+// A caller staging counters on a fixture clock has to publish both. Every rate
+// the sampler reports is a counter delta over the gap between two Sample
+// timestamps, so staging the counters on one clock while the sampler stamps
+// from another yields rates that are neither the staged ones nor the machine's.
+//
+// A caller who stages no counters needs only the filesystem, and the specs
+// beside this file that read a Box once do exactly that.
 //
 // Nothing published means the real filesystem. That differs from the transport
 // pull worker, which errors when its deps are missing, and the difference is

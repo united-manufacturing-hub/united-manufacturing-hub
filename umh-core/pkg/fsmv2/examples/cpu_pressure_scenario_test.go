@@ -75,15 +75,22 @@ var _ = Describe("CPU pressure ScenarioV2", func() {
 		// end of the path this scenario exists to exercise: a fake machine
 		// published into the deps registry, a supervisor-spawned worker, the
 		// real sampler, the real engine, the collector, and the store.
-		//
-		// The verdict alone is the assertion. What the message says about it is
-		// pinned by the specs in pkg/cpuhealth; the only thing left to show
-		// here is that the real machinery carried a verdict end to end, and
-		// that it is the one the raised pressure calls for rather than the
-		// healthy one the run started on.
 		var observed fsmv2.Observation[fsmv2cpu.CPUStatus]
 		Expect(store.LoadObservedTyped(context.Background(),
 			fsmv2cpu.WorkerType, config.ChildID(fsmv2cpu.InstanceName), &observed)).To(Succeed())
+
 		Expect(observed.Status.Verdict).To(Equal("degraded"))
+
+		// The verdict alone would be satisfied by any degraded machine: a run
+		// whose capacity signal fired for its own reasons, or a real host that
+		// happened to be loaded if the driver's publish were removed. The
+		// percentage below is the pressure this driver stages and nothing else
+		// stages, so it names the machine the verdict came from.
+		//
+		// This is not a check on the message's wording, which the specs in
+		// pkg/cpuhealth pin. It is a check on which reading the verdict was
+		// computed from.
+		Expect(observed.Status.Message).To(ContainSubstring(
+			"spent 25% of the last minute waiting for a free CPU core"))
 	})
 })

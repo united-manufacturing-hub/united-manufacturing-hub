@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benbjohnson/clock"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -46,35 +48,54 @@ const (
 	cpuPressureFiring = 0.25
 
 	// cpuPressureCores is the fake machine's CPU count, and cpuPressureHostBusy
-	// how much of it the whole machine is using. Four cores at 60% busy leaves
-	// 4 - 2.4 - 1.0 = 0.6 cores of headroom over the one-core reserve the
-	// capacity signal keeps, which is above that signal's clear mark. So
-	// capacity stays quiet at both pressures, and the verdict can only move for
-	// the reason this scenario is about.
+	// how much of it the whole machine is using.
+	//
+	// The capacity signal reads headroom as cores - busy - a one-core reserve,
+	// averaged over 60 seconds, and calls the machine full below zero. Four
+	// cores at 60% busy is 4 - 2.4 - 1.0 = 0.6 cores, and that is what the run
+	// reports from its first measured reading onward, with no ramp into it: the
+	// worker's very first read has no baseline to rate against, and because the
+	// clock it is stamped from is the box's own, no machine time has passed
+	// either, so the reading is withheld rather than counted as a zero that the
+	// average would then have to climb out of.
+	//
+	// So the run sits 0.6 cores above the mark at which this machine would be
+	// called full, and stays there. That is the story: it is a busy machine
+	// with capacity to spare, and what makes it degraded later has nothing to
+	// do with capacity.
 	cpuPressureCores    = 4
 	cpuPressureHostBusy = 0.60
 
-	// cpuPressureUsageCores is what this instance itself is using, well under
-	// the machine's own busy time. It is the smaller half of the split, so the
-	// machine's load is mostly somebody else's.
+	// cpuPressureUsageCores is what this instance itself is using: 0.5 cores of
+	// the 2.4 the machine is busy with, so about a fifth of the load is ours and
+	// the rest is somebody else's. Nothing in this story turns on that split; it
+	// is set to a plausible figure rather than left at zero, which would be a
+	// machine busy with nothing.
 	cpuPressureUsageCores = 0.5
 
-	// cpuPressureMachineTick is how much fake machine time one real tick
-	// advances. Counters and the real clock have to move together: every rate
-	// the sampler publishes is a counter delta over the gap between two real
-	// sample timestamps, so a box ticking slower than real time serves a
-	// machine idler than the one stated. At a tenth of the worker's own
-	// one-second poll cadence, a whole tick landing on either side of a poll
-	// moves the rate that poll reads by a tenth, which is far inside the margin
-	// the headroom figure above leaves.
+	// cpuPressureMachineTick is how much machine time one tick of the ticker
+	// advances. Its ratio to the worker's one-second poll cadence is a
+	// correctness bound, not a matter of taste, and a tenth is what keeps this
+	// machine's capacity signal quiet.
+	//
+	// A tick that lands inside the sampler's read adds counters the stamp does
+	// not cover (see tickingBox), so that one reading overstates its rate by
+	// tick over poll. At a tenth, host busy reads 2.64 against a stated 2.4 and
+	// headroom bottoms out at 0.36, still clear of the mark at 0, and a
+	// 60-second mean damps even that. At a tick equal to the poll it reads
+	// 4.80, headroom is -1.80, and the machine is reported full.
+	//
+	// So a scenario parking a signal near its mark has to check this ratio
+	// against its own margin rather than inherit the number.
 	cpuPressureMachineTick = 100 * time.Millisecond
 
 	// cpuPressureHold is how long each condition is held before the story moves
-	// on. The CPU worker polls once a second, so five seconds is five readings:
-	// one that can catch the change and four more that have to agree with it. A
-	// shorter hold would leave the verdict resting on a single poll landing at
-	// the right moment, which is indistinguishable from a verdict that settled.
-	cpuPressureHold = 5 * time.Second
+	// on. The verdict does not need it: pressure reduces by Last, so the first
+	// reading after a change already carries the new one. The page does. Two
+	// seconds is two of the worker's one-second readings, which is a short
+	// stretch at each condition rather than a single line, and a reader can see
+	// that the machine sat there rather than passed through.
+	cpuPressureHold = 2 * time.Second
 
 	// cpuPressureReadyPoll is how often the driver asks whether the worker has
 	// read the machine yet. It is well under the worker's own poll cadence, so
@@ -99,8 +120,8 @@ const (
 // no Health function, so its verdict never moves the worker's FSM state and
 // nothing about the verdict is logged at info. The collector's observed_changed
 // line, which is a debug line, is where the verdict flip shows up. Run it at
-// info and the page carries the two machine conditions and the supervisor's
-// spawn and teardown, with nothing in between.
+// info and the page still carries the supervisor spawning its children between
+// the two machine conditions, but nothing about what the worker made of either.
 var CPUPressureScenarioV2 = ScenarioV2{
 	Name:        "cpu-pressure",
 	Description: "Steps a fake machine's CPU pressure over its fire mark while capacity stays clear (v2)",
@@ -117,13 +138,11 @@ func driveCPUPressure(ctx context.Context, env Env) error {
 	calm := cpuPressureMachine(cpuPressureCalm)
 	machine := newTickingBox(cpuPressureBase, calm)
 
-	// Published before the Upsert below, because cpu.NewDeps reads this key
-	// once, at the moment the supervisor spawns the worker; a filesystem
-	// published after that spawn reaches nothing. Cleared on the way out
-	// because the key is process-global, so a driver that left it set would
-	// hand the next scenario in this process its fake machine.
-	register.SetDeps[filesystem.Service](fsmv2cpu.FilesystemDepsKey, machine.FS())
-	defer register.ClearDeps(fsmv2cpu.FilesystemDepsKey)
+	// Published before the Upsert below, because cpu.NewDeps reads both keys
+	// once, at the moment the supervisor spawns the worker; anything published
+	// after that spawn reaches nothing.
+	clearDeps := machine.Deps()
+	defer clearDeps()
 
 	machine.Start(cpuPressureMachineTick)
 	defer machine.Stop()
@@ -230,17 +249,30 @@ func holdFor(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// tickingBox is a fakebox.Box that advances with real time and can be read
-// while it advances.
+// tickingBox is a fakebox.Box that runs, and that can be read while it runs.
 //
-// A Box does neither on its own, and a worker under a supervisor needs both. Its
-// counters move only when someone calls Tick, so a Box handed straight to such a
-// worker serves an idle machine whatever condition it states — every rate the
-// sampler publishes is a counter delta over real elapsed time. And a Box is not
+// A Box does neither on its own, and a worker under a supervisor needs both.
+// Its counters and its clock move only when someone calls Tick, so a Box handed
+// straight to such a worker serves a machine frozen at zero. And a Box is not
 // safe for concurrent use, while the collector reads it from its own goroutine.
 //
-// Everything that touches the Box goes through the one mutex here: the reads the
-// collector makes, the ticks, and Set.
+// Publish FS and Clock together, which Deps does. Tick moves the counters and
+// the clock by the same amount, so once the sampler stamps from that clock, the
+// time it divides by and the counters it divides are the same quantity, and the
+// rate that comes out is the rate the condition states. Stamping from the wall
+// clock instead divides a tick's worth of counter by however long the two reads
+// happened to be apart, which at spawn can be under a millisecond: a hundredfold
+// overstatement that then sits in a 60-second mean for a minute.
+//
+// Everything that touches the Box's counters goes through the one mutex here:
+// the reads the collector makes, the ticks, and Set. The clock is not covered by
+// it and does not need to be, because clock.Mock synchronises itself. What that
+// leaves is an ordering gap rather than a race. The sampler stamps once at the
+// top of a read and then opens the files (read.go, ts := s.clock.Now()), so a
+// tick landing after the stamp adds counters the stamp does not account for, and
+// whichever source is read after that tick reports a rate too high by one tick's
+// worth. Only one tick can fit, so the overstatement is bounded; the wall-clock
+// version divided by a gap that could be arbitrarily short and was not.
 type tickingBox struct {
 	box  *fakebox.Box
 	stop chan struct{}
@@ -258,10 +290,41 @@ func newTickingBox(base string, initial fakebox.Condition) *tickingBox {
 	}
 }
 
-// FS returns a filesystem service serving this box, safe to read while the box
+// Deps publishes this box's filesystem and clock for the next CPU worker the
+// supervisor spawns, and returns the function that takes both back out. Both
+// keys are process-global, so a driver that left either set would hand the next
+// scenario in this process its fake machine.
+//
+// Publishing the pair together is the point of this method, because one of the
+// halves fails silently on its own.
+//
+// A filesystem with no clock is that half. Nothing errors. The sampler stamps
+// from the wall clock while the counters accrue on this box's, so it divides a
+// tick's worth of counter by however long two reads happened to be apart, which
+// at spawn is on the order of a hundred microseconds. In this scenario that
+// reads as a machine thousands of percent busy, and the 60-second mean carries
+// it for a minute. It is also exactly what a scenario copied from a pre-clock
+// one does.
+//
+// A clock nothing advances is the loud half. Machine time stands still, the
+// sampler's elapsed is never positive, every rate is withheld, and a driver
+// waiting for the worker's first reading waits out its ctx instead.
+//
+// Publishing neither is production: the real filesystem and the real clock.
+func (t *tickingBox) Deps() (clear func()) {
+	register.SetDeps[filesystem.Service](fsmv2cpu.FilesystemDepsKey, t.fs())
+	register.SetDeps[clock.Clock](fsmv2cpu.ClockDepsKey, t.box.Clock())
+
+	return func() {
+		register.ClearDeps(fsmv2cpu.FilesystemDepsKey)
+		register.ClearDeps(fsmv2cpu.ClockDepsKey)
+	}
+}
+
+// fs returns a filesystem service serving this box, safe to read while the box
 // advances. It wraps the Box's own service rather than replacing it, so what a
 // reader gets back is whatever the Box would have served.
-func (t *tickingBox) FS() filesystem.Service {
+func (t *tickingBox) fs() filesystem.Service {
 	inner := t.box.FS()
 
 	guarded := filesystem.NewMockFileSystem()
@@ -288,10 +351,20 @@ func (t *tickingBox) Set(c fakebox.Condition) {
 
 // Start advances the box by every, every. Call it once.
 //
-// A ticker drops ticks under load rather than queueing them, so a busy machine
-// leaves the box running behind real time. That serves a machine idler than the
-// one stated, never a busier one, which is the harmless direction: the capacity
-// signal this scenario needs to keep quiet fires on too little headroom.
+// A ticker drops ticks under load rather than queueing them, and on the box's
+// own clock a drop withholds a tick's counters and a tick's clock together, so
+// no rate it reports is wrong. The wall-clock version had to argue that a drop
+// erred in the harmless direction; this one does not err at all.
+//
+// It does not lengthen the run either. Both the driver's holds and the worker's
+// polls are on the wall clock, so a drop does not buy back the time: it thins
+// the run, leaving less machine time inside each wall-clock second. The visible
+// effect is fewer sample-seconds per reading, not a longer story.
+//
+// Enough consecutive drops to span a whole poll is the case that is not merely
+// thinner. Machine time then does not advance between two reads at all, the
+// sampler's elapsed is zero, and that reading is withheld rather than served
+// low.
 func (t *tickingBox) Start(every time.Duration) {
 	go func() {
 		defer close(t.done)
@@ -313,7 +386,23 @@ func (t *tickingBox) Start(every time.Duration) {
 }
 
 // Stop halts the advancing and waits for it to have halted, so no tick lands
-// after Stop returns. The box stays readable and holds whatever it last served.
+// after Stop returns.
+//
+// A driver's defer fires this when the driver returns, which is BEFORE the
+// runner's settle window. Everything the worker reads during that window comes
+// from a stopped box — and a stopped box has stopped its clock too, so the
+// sampler's elapsed time is zero, every rate is withheld rather than recomputed,
+// and no window ages.
+//
+// This scenario would survive the freeze without any of that, because what
+// carries its verdict is PSI pressure, which the kernel reports as a level and
+// a Box writes rather than accrues. A frozen box keeps serving 25%.
+//
+// What the stopped clock protects is the scenario that copies this one and
+// hangs its verdict on a rate. Freeze the counters while the wall clock runs and
+// its rates do not merely fall: every one of them converges on a confident zero,
+// so the page ends on an idle machine with full headroom that nothing flags as
+// unmeasured. Stopping the clock turns that into no reading at all.
 func (t *tickingBox) Stop() {
 	close(t.stop)
 	<-t.done
