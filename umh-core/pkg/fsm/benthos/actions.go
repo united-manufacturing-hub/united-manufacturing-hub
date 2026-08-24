@@ -301,12 +301,17 @@ func (b *BenthosInstance) logS6DirectoryStateAsync(
 	}
 
 	sentry.ReportIssueWithContext(
-		fmt.Errorf("S6 directory health issue: service=%s, state='%s', trigger=%s",
-			serviceName, s6State, trigger),
+		s6DirectoryHealthError(trigger),
 		sentry.IssueTypeWarning,
 		logger,
 		diagnosticContext,
 	)
+}
+
+// Sentry fingerprints on the message, so this must not interpolate per-service or
+// per-state values — they travel as tags instead. Guarded by s6_diagnostic_message_test.go.
+func s6DirectoryHealthError(trigger string) error {
+	return fmt.Errorf("S6 directory health issue: trigger=%s", trigger)
 }
 
 // CreateInstance attempts to add the Benthos to the S6 manager.

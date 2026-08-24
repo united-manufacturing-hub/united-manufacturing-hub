@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## [0.44.35]
+
+### Improvements
+
+- A message dropped for a missing `timestamp_ms` says how to supply one, noting that the tag processor sets the field automatically and that any other processing has to carry it in the payload
+- The historian output reports dropped messages at error level, one aggregated line per reason per batch, naming the reason, how much of the batch it accounted for, an example topic and the fix. Reporting starts with the first batch rather than after 30 seconds, and `missing_value_or_timestamp` is split into `missing_value` and `missing_timestamp`
+- The historian output refuses a whole batch carrying a message for a data contract other than its configured `data_contract_name`, rather than discarding those messages silently, and the batch is not retried. The error names the contracts that arrived and the `umh_topics` pattern to narrow to, so a subscription broader than one contract stores nothing until it is narrowed
+- A versioned data contract whose schema was bypassed is rejected by the historian output, because the version claims a schema that was never applied; an unversioned contract such as `_historian` is stored, since it never claimed one. A tag that changes datatype still has its offending rows dropped, and the error names the new `allow_datatype_changes` option that stores both types on it instead. Payloads carrying fields beyond `value` and `timestamp_ms` are rejected as `not_timeseries`
+- The historian output's drop counter is renamed from `historian_messages_dropped` to `messages_dropped`, matching the metric name every other plugin already uses
+- The historian output stores `data_contract_version` as metadata, read as `attribute->>'data_contract_version'`, so a connected application can tell which contract version a reading arrived under. All versions of a contract share one table and one `umh.tag` row, so no column recorded the version and it was previously dropped
+
+
+### Fixes
+
+- When the connection to the Management Console degrades after repeated failures, the log now names the upstream cause — the HTTP status and a snippet of the response — instead of only the error count. Previously the cause was recorded internally but never reached the log, so a connection that kept failing and recovering showed repeated degradation with no reason given
+- Renaming a bridge whose deployment then fails no longer leaves it impossible to edit or save. A failed deployment now undoes the rename along with the rest of the configuration, while Save Anyway keeps the new name as before
+- The historian output no longer discards tags whose virtual path merely starts with the OPC UA diagnostics prefix, such as `Root.Objects.ServerRoom`; only the `Root.Objects.Server` subtree itself is skipped
+
+## [0.44.34]
+
+### Improvements
+
+- New instances now save 7 days of raw messages even in default settings. Existing instances are unaffected, and to switch one over set `internal.redpanda.redpandaServiceConfig.topic.defaultTopicCleanupPolicy` to `delete`. Note that seven days scales with message rate, roughly 40–55 GB for `umh.messages` at 700 msg/s, so check the sizing guide before running a high-throughput instance
+
 ## [0.44.33]
 
 ### Improvements

@@ -1,10 +1,14 @@
 # Topic Browser GraphQL API
 
+{% hint style="info" %}
+**Early Access.** The GraphQL API lets developers query the Unified Namespace programmatically. It's experimental and off by default. To turn it on, set `agent.graphql.enabled: true` in the `agent:` block of your `umh-core` instance configuration. See [Configuration](#configuration) for all options. Tell us what you think.
+{% endhint %}
+
 ## Overview
 Query Unified Namespace topics and metadata in real-time.
 
 - **Endpoint:** `http://localhost:8090/graphql`
-- **Default:** Enabled (`graphql.enabled: true`)
+- **Default:** Disabled; opt in with `agent.graphql.enabled: true`
 - **Authentication:** None (open by default)
 
 ## Schema
@@ -127,7 +131,7 @@ curl -X POST http://localhost:8090/graphql \
 ```yaml
 agent:
   graphql:
-    enabled: true    # Default: true
+    enabled: false   # Default: false; set true to opt in
     port: 8090      # Default: 8090
     debug: false    # Set true for GraphiQL UI
     corsOrigins: [] # Default: allows all origins
