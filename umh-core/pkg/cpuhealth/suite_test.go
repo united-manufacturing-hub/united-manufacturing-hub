@@ -74,14 +74,14 @@ func (f cpuFeed) Unreadable(at time.Time) Sample {
 	return Sample{Timestamp: at, CpuScope: ScopeHost, Virtualized: true, PsiAvailable: true}
 }
 
-// RunSuite drives the six-scenario suite generated from the CPU table itself,
+// runSuite drives the six-scenario suite generated from the CPU table itself,
 // through diagnosis.Run. It builds that table from cpuTable directly rather
 // than through Table(), so Table's same-call guarantee does not cover this
-// suite — "nothing in cpuhealth can drift" is not a claim RunSuite is in a
+// suite — "nothing in cpuhealth can drift" is not a claim runSuite is in a
 // position to make. A sixth row that reports a Known value on a failed read
 // instead of Unknown() reaches Ready on CaseLongOutage where AllAbsent is
 // required, and there is no way to make that scenario green.
-func RunSuite(cores, quota float64) []diagnosis.Outcome {
+func runSuite(cores, quota float64) []diagnosis.Outcome {
 	t := cpuTable(cores, quota)
 	return diagnosis.Run(t, suiteEnvironment(), cpuFeed{cores: cores, quota: quota})
 }
@@ -95,7 +95,7 @@ func RunSuite(cores, quota float64) []diagnosis.Outcome {
 // subject is the readability path of every row rather than any one box's
 // capabilities.
 //
-// It is a named function rather than a literal inside RunSuite so the spec that
+// It is a named function rather than a literal inside runSuite so the spec that
 // checks it against the table's Requires reads the SAME value the suite runs
 // on. A capability missing here does not fail loudly: the signal that requires
 // it resolves NoInstrument in all six scenarios — skipped, not tested — and the

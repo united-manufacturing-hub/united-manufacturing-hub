@@ -35,9 +35,9 @@ var _ = Describe("bind the generated suite to the real CPU table", func() {
 		// 6 x 5 and 6 x 4, because cpuTable omits container-limit-full entirely at
 		// quota 0. A suite built from a fixture cannot tell the two apart, and
 		// one that generated scenarios for the measurements would read 42 and 36.
-		out30 := RunSuite(4, 2.0)
+		out30 := runSuite(4, 2.0)
 		Expect(out30).To(HaveLen(30), "6 x 5 signals with a quota")
-		out24 := RunSuite(4, 0)
+		out24 := runSuite(4, 0)
 		Expect(out24).To(HaveLen(24), "6 x 4 signals without a quota")
 
 		// The readability path lands where it should: a live, fully-readable
