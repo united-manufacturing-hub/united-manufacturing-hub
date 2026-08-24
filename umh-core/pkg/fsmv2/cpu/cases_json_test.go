@@ -67,11 +67,18 @@ const casesJSONRefreshInstruction = "run this from the umh-core module root: " +
 const casesJSONTicksNote = "ticks is how many one-second clock advances happen before the read this entry answers for; " +
 	"one read runs before the first tick, so the answer is the last of ticks+1 reads."
 
+// casesJSONPhasesNote glosses the two fields a moving machine adds, for the
+// same reason casesJSONTicksNote exists: a consumer sees the JSON and no
+// prose but this.
+const casesJSONPhasesNote = "phases, where present, are the machine's later conditions in the order it moves through them, " +
+	"each replacing the one before it and holding for its own ticks, so the reads are one plus every ticks in the entry; " +
+	"verdictStretches is what the verdict did across all of those reads, one entry per stretch of consecutive reads that answered the same way."
+
 // casesJSONNote heads the file. JSON carries no comments, so this field is the
 // only prose a consumer ever sees, and it is where the file says where it came
 // from, how to refresh it and what its one unguessable field counts.
 const casesJSONNote = "Generated from pkg/fsmv2/cpu/cases.go; do not edit by hand. " +
-	casesJSONTicksNote + " To refresh this file, " + casesJSONRefreshInstruction
+	casesJSONTicksNote + " " + casesJSONPhasesNote + " To refresh this file, " + casesJSONRefreshInstruction
 
 // publishedCases is the whole file: the note, then the situations in the order
 // Cases states them.
@@ -80,19 +87,27 @@ type publishedCases struct {
 	Cases []publishedCase `json:"cases"`
 }
 
-// publishedCase is one Case as JSON. Eight of Case's ten fields keep their
+// publishedCase is one Case as JSON. Ten of Case's twelve fields keep their
 // spelling, lower-camelled, so a reader maps those keys straight back to
 // cases.go. Two are renamed and are the only two worth memorising: Box is
 // published as machine, and PollError as readError.
 //
 // The nesting is the grouping Case's own documentation already makes. Box
 // becomes the machine object, and the five answer fields become answer, which
-// readError replaces.
+// readError replaces. VerdictStretches goes inside answer with them: it is
+// what the worker answered, and a machine that could not be read has no more
+// of it than it has a verdict.
 type publishedCase struct {
 	Name    string           `json:"name"`
 	Why     string           `json:"why"`
 	Machine publishedMachine `json:"machine"`
 	Ticks   int              `json:"ticks"`
+
+	// Phases is omitted on a machine that holds one condition, which is most
+	// of them. Writing an empty array on all of those would put a key on every
+	// entry to say that nothing happens, and would make the first moving case
+	// a diff across the whole file.
+	Phases []publishedPhase `json:"phases,omitempty"`
 
 	// Answer is absent exactly when ReadError is present, which is the rule
 	// Case.PollError states: a machine whose sample cannot be read produced no
@@ -100,6 +115,19 @@ type publishedCase struct {
 	// fields to say.
 	Answer    *publishedAnswer `json:"answer,omitempty"`
 	ReadError string           `json:"readError,omitempty"`
+}
+
+// publishedPhase is one Phase as JSON, nested the way publishedCase nests its
+// own machine so that a consumer reads the two the same way.
+type publishedPhase struct {
+	Machine publishedMachine `json:"machine"`
+	Ticks   int              `json:"ticks"`
+}
+
+// publishedStretch is one VerdictStretch as JSON.
+type publishedStretch struct {
+	Verdict string `json:"verdict"`
+	Reads   int    `json:"reads"`
 }
 
 // publishedMachine is fakebox.Condition as JSON.
@@ -134,6 +162,11 @@ type publishedAnswer struct {
 	SignalsCapable    int  `json:"signalsCapable"`
 	SignalsMeasured   int  `json:"signalsMeasured"`
 	RefusingAdmission bool `json:"refusingAdmission"`
+
+	// VerdictStretches is omitted on a case that claims nothing about the
+	// reads before the judged one, for the reason Phases is omitted: an empty
+	// array on every steady entry says nothing and costs a key.
+	VerdictStretches []publishedStretch `json:"verdictStretches,omitempty"`
 }
 
 // renderCasesJSON is the whole file's bytes, built from Cases. It is the single
@@ -151,6 +184,7 @@ func renderCasesJSON() ([]byte, error) {
 			Why:       c.Why,
 			Machine:   publishMachine(c.Box),
 			Ticks:     c.Ticks,
+			Phases:    publishPhases(c.Phases),
 			ReadError: c.PollError,
 		}
 
@@ -161,6 +195,7 @@ func renderCasesJSON() ([]byte, error) {
 				SignalsCapable:    c.SignalsCapable,
 				SignalsMeasured:   c.SignalsMeasured,
 				RefusingAdmission: c.RefusingAdmission,
+				VerdictStretches:  publishStretches(c.VerdictStretches),
 			}
 		}
 
@@ -168,6 +203,36 @@ func renderCasesJSON() ([]byte, error) {
 	}
 
 	return encodeCasesJSON(published)
+}
+
+// publishPhases returns nil on a machine that holds still, so that the key is
+// omitted rather than written as an empty array.
+func publishPhases(phases []Phase) []publishedPhase {
+	if len(phases) == 0 {
+		return nil
+	}
+
+	out := make([]publishedPhase, 0, len(phases))
+	for _, p := range phases {
+		out = append(out, publishedPhase{Machine: publishMachine(p.Box), Ticks: p.Ticks})
+	}
+
+	return out
+}
+
+// publishStretches returns nil on a case that states none, for the reason
+// publishPhases returns nil.
+func publishStretches(stretches []VerdictStretch) []publishedStretch {
+	if len(stretches) == 0 {
+		return nil
+	}
+
+	out := make([]publishedStretch, 0, len(stretches))
+	for _, s := range stretches {
+		out = append(out, publishedStretch{Verdict: s.Verdict, Reads: s.Reads})
+	}
+
+	return out
 }
 
 func publishMachine(c fakebox.Condition) publishedMachine {
@@ -234,17 +299,22 @@ func encodeCasesJSON(v any) ([]byte, error) {
 //
 // That is the structural bound of a file generated from the code it describes,
 // and chasing it is not worth the machinery. Each of those three rewrites all
-// thirteen entries, so each arrives as a diff across the whole file in the pull
+// fifteen entries, so each arrives as a diff across the whole file in the pull
 // request. Being readable there is what the file is for.
 var caseFields = []string{
-	"Name", "Why", "Box", "Ticks", "Verdict", "Message",
-	"SignalsCapable", "SignalsMeasured", "RefusingAdmission", "PollError",
+	"Name", "Why", "Box", "Ticks", "Phases", "Verdict", "Message",
+	"SignalsCapable", "SignalsMeasured", "RefusingAdmission", "VerdictStretches",
+	"PollError",
 }
 
 var conditionFields = []string{
 	"Cores", "QuotaCores", "UsageCores", "HostBusy", "Steal", "Throttle",
 	"Pressure", "PsiPresent", "Virtualized", "Affinity", "Unreadable",
 }
+
+var phaseFields = []string{"Box", "Ticks"}
+
+var stretchFields = []string{"Verdict", "Reads"}
 
 func fieldNames(v any) []string {
 	t := reflect.TypeOf(v)
@@ -302,6 +372,16 @@ var _ = Describe("the situations published as a file", func() {
 	It("carries every field a machine condition has", func() {
 		Expect(fieldNames(fakebox.Condition{})).To(Equal(conditionFields),
 			"a field added to fakebox.Condition must be published in cases.json too")
+	})
+
+	It("carries every field a phase has", func() {
+		Expect(fieldNames(Phase{})).To(Equal(phaseFields),
+			"a field added to Phase must be published in cases.json too")
+	})
+
+	It("carries every field a verdict stretch has", func() {
+		Expect(fieldNames(VerdictStretch{})).To(Equal(stretchFields),
+			"a field added to VerdictStretch must be published in cases.json too")
 	})
 
 	Describe("the messages it publishes", func() {

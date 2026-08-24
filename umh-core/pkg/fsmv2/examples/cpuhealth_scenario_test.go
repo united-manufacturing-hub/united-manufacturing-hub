@@ -149,6 +149,39 @@ var _ = Describe("CPUHealthScenario", func() {
 			}
 		})
 
+		It("carries each moving machine's later conditions and its whole verdict track, in that machine's own block", func() {
+			blocks := blocksByCase(output)
+
+			// Counted, and required to be non-zero. The walk below still
+			// visits the steady cases and holds them to the negative check,
+			// but a set that lost both moving machines would run none of the
+			// positive ones and pass while the page said nothing about either.
+			moving := 0
+
+			for _, c := range fsmv2cpu.Cases {
+				if len(c.Phases) == 0 {
+					// A steady machine must not carry the line at all. It
+					// would print the verdict a second time and read as a
+					// claim about a sequence there is none of.
+					Expect(blocks[c.Name]).NotTo(ContainSubstring("across     "),
+						"case "+c.Name+" holds one condition and has no sequence to report")
+
+					continue
+				}
+
+				moving++
+
+				block := blocks[c.Name]
+				Expect(strings.Count(block, "\nthen       ")).To(Equal(len(c.Phases)),
+					"case "+c.Name+" renders a different number of later conditions than it has")
+				Expect(block).To(ContainSubstring("across     "+trackText(c.VerdictStretches)+"\n"),
+					"case "+c.Name+" renders a verdict track that is not the one it states")
+			}
+
+			Expect(moving).To(BeNumerically(">", 0),
+				"no case moves its machine, so the checks above asserted nothing")
+		})
+
 		It("carries each case's whole customer message, or its read error, in that case's own block", func() {
 			blocks := blocksByCase(output)
 			for _, c := range fsmv2cpu.Cases {
@@ -167,6 +200,29 @@ var _ = Describe("CPUHealthScenario", func() {
 		})
 	})
 })
+
+// trackText is the wording the page must carry for a case's verdict track. It
+// is written out here rather than imported for the reason warmUpText is: a
+// spec over rendered text has to fail when either side's wording changes, and
+// one that imported the renderer's own sentence could not tell the two apart.
+func trackText(track []fsmv2cpu.VerdictStretch) string {
+	if len(track) == 1 {
+		return fmt.Sprintf("%s for all %d reads", track[0].Verdict, track[0].Reads)
+	}
+
+	parts := make([]string, 0, len(track))
+	for i, s := range track {
+		if i == 0 {
+			parts = append(parts, fmt.Sprintf("%s for %d reads", s.Verdict, s.Reads))
+
+			continue
+		}
+
+		parts = append(parts, fmt.Sprintf("then %s for %d", s.Verdict, s.Reads))
+	}
+
+	return strings.Join(parts, ", ")
+}
 
 // warmUpText is the wording the page must carry for a RefusingAdmission bit.
 // It is written out here rather than imported so that a change to either
