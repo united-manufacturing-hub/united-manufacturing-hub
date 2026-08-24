@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/benbjohnson/clock"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -48,6 +50,20 @@ const (
 	// and two payloads cannot share a key. Same convention, and the same
 	// reason, as configworker.ConfigManagerDepsKey.
 	FilesystemDepsKey = WorkerType + ".filesystem"
+
+	// ClockDepsKey is the register.SetDeps key under which a caller publishes
+	// the clock.Clock the sampler stamps each Sample from. Separate from
+	// FilesystemDepsKey for the reason that key is separate from WorkerType:
+	// the registry keys on the string alone, so two payloads cannot share one.
+	//
+	// The two keys belong together. Every rate the sampler publishes is a
+	// counter delta divided by the gap between two Sample timestamps, so a
+	// caller staging counters on one clock while the sampler stamps from
+	// another gets rates neither of them describes. A fakebox.Box advances its
+	// counters and its own clock in one Tick for exactly that reason; publish
+	// its FS under FilesystemDepsKey and its Clock under this key, and the
+	// numbers it was told come back out.
+	ClockDepsKey = WorkerType + ".clock"
 
 	// cgroupBase is the cgroup v2 mount point whose CPU controller files the
 	// sampler reads (cpu.stat, cpu.max, cpu.pressure, cpuset.cpus.effective).
@@ -173,9 +189,15 @@ type CPUDeps struct {
 // table, which is why the startup read error is logged.
 //
 // The filesystem the sampler reads through is whichever one a caller published
-// under FilesystemDepsKey before the worker was spawned. NewDeps runs per
+// under FilesystemDepsKey before the worker was spawned, and the clock it stamps
+// from is whichever one was published under ClockDepsKey. NewDeps runs per
 // instance at spawn time, not at init(), so a caller that publishes first
-// decides which files this instance sees.
+// decides which files this instance sees and which clock times them.
+//
+// Publish both or neither. Every rate the sampler reports is a counter delta
+// over the gap between two Sample timestamps, so a caller staging counters on a
+// fixture clock while the sampler stamps from the wall clock gets rates that
+// are neither the staged ones nor the machine's.
 //
 // Nothing published means the real filesystem. That differs from the transport
 // pull worker, which errors when its deps are missing, and the difference is
@@ -192,7 +214,12 @@ func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 		fs = filesystem.NewDefaultService()
 	}
 
-	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(fs, cgroupBase))
+	clk := register.GetDeps[clock.Clock](ClockDepsKey)
+	if clk == nil {
+		clk = clock.New()
+	}
+
+	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSamplerWithClock(fs, cgroupBase, clk))
 }
 
 // NewDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
