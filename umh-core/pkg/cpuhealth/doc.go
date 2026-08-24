@@ -117,6 +117,7 @@
 // refinement fires when we account for most of it. Where neither fires,
 // nothing narrows the machine to a side and the blame is unknown. The header
 // of signal_saturation.go says when that happens.
+//
 // A refinement is an ordinary signal declared under a parent signal, with its
 // own instruments and thresholds, so any signal may carry them. host-cpu-full
 // is the only one that does; pressure declares none, and the ambiguity above is

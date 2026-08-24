@@ -75,13 +75,14 @@ type Unit string
 
 // cpuReserveCores is the no-limit headroom reserve: one core set aside for
 // Redpanda. It is Redpanda's default maxCores (--smp), not a calibration
-// guess. Decide stamps it onto Details.ReserveCores so the message reads the
-// same number the verdict subtracted.
+// guess. buildDetails stamps it onto Details.ReserveCores, so the message
+// reads the same number the verdict subtracted.
 const cpuReserveCores = 1.0
 
 // limitReserveFraction is the limit-mode headroom reserve: the fraction of a
 // container's own CPU quota held back as headroom, cpuReserveCores' pair for
-// limit mode. Decide stamps the product onto Details.ReserveCores the same way.
+// limit mode. buildDetails stamps the product onto Details.ReserveCores the
+// same way.
 const limitReserveFraction = 0.10
 
 // Cause is one entry in a degraded verdict, ordered by diagnosis.Rank. It says

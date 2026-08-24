@@ -17,9 +17,9 @@
 // DeriveEnvironment observed and what an instrument requires. Two constants
 // sharing a string silently merge two unrelated facts: a copy-paste that gave
 // HasPressureStats the string "cpuhealth.HasLimit" makes a PSI-present box with
-// no quota answer true to env.Has(HasLimit), so Decide stamps LimitApplies and
-// the message renders limit mode on a box that has no limit. Nothing else in
-// the package can catch that — every instrument and every derivation is written
+// no quota answer true to env.Has(HasLimit), so buildDetails stamps
+// LimitApplies and the message renders limit mode on a box that has no
+// limit. Nothing else in the package can catch that — every instrument and every derivation is written
 // in terms of the constants, so all of them agree with the typo.
 package cpuhealth
 

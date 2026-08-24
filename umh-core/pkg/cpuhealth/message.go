@@ -92,7 +92,8 @@ func composeHealthy(details Details) string {
 	}
 
 	// The display figures. ReserveCores is read from Details in both modes —
-	// Decide filled it from the verdict's own reserve — never from the constant.
+	// buildDetails filled it from the verdict's own reserve, never from the
+	// constant.
 	var usedDisp, reserveDisp float64
 	if details.LimitApplies {
 		usedDisp = round1(details.AvgUsageCores)
