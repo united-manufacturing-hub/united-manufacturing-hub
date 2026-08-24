@@ -78,4 +78,5 @@ var RegistryV2 = map[string]ScenarioV2{
 	"noop":         NoopScenarioV2,
 	"dynamic":      DynamicScenarioV2,
 	"cpu-pressure": CPUPressureScenarioV2,
+	"cpu-filling":  CPUFillingScenarioV2,
 }
