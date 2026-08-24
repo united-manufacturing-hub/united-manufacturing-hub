@@ -14,7 +14,7 @@
 
 // Decide, the judgement entry point. Observe runs first and buildVerdict ranks
 // the set it returned, so no verdict field is asserted without the evidence for
-// it. detailsFor reads this tick's numbers back out of the same engine. The
+// it. buildDetails reads this tick's numbers back out of the same engine. The
 // attribution is read off the fired signal that ranked first, where the table
 // declared it.
 
@@ -30,7 +30,7 @@ import (
 func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment) (Verdict, Details) {
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
 	verdict := buildVerdict(engine, fired)
-	details := detailsFor(engine, s, env, readiness)
+	details := buildDetails(engine, s, env, readiness)
 	return verdict, details
 }
 
@@ -48,21 +48,21 @@ func buildVerdict(engine *diagnosis.Engine[Sample], fired []diagnosis.Fired) Ver
 	ranked := diagnosis.Rank(fired)
 	causes := make([]Cause, len(ranked))
 	for i, f := range ranked {
-		causes[i] = causeOf(engine, f)
+		causes[i] = describeCause(engine, f)
 	}
 	verdict := Verdict{Causes: causes}
 	if len(causes) == 0 {
 		verdict.State = StateHealthy
 	} else {
 		verdict.State = StateDegraded
-		verdict.Attribution = attributionOf(declaredBlame(ranked[0]))
+		verdict.Attribution = nameAttribution(declaredBlame(ranked[0]))
 	}
 	return verdict
 }
 
-// detailsFor fills every Details field. buildVerdict returns the Verdict alone,
+// buildDetails fills every Details field. buildVerdict returns the Verdict alone,
 // so this is the sole producer of the struct.
-func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness) Details {
+func buildDetails(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness) Details {
 	var d Details
 
 	// The withheld-headroom facts belong on Details, not Verdict — no other

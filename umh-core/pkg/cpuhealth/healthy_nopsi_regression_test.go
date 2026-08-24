@@ -86,7 +86,7 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 // the point: it isolates the HasPressureStats Requires gate as the thing
 // holding the pressure signal back, on a reading that would otherwise fire.
 // PressureApplies and LimitedVisibility cannot stand in for this: both are set
-// straight from PsiAvailable in detailsFor, never through the engine's
+// straight from PsiAvailable in buildDetails, never through the engine's
 // capability selection, so they pass unchanged whether the gate is present or
 // not. Only a produced cause routes through the gate. Without this spec, a
 // future PsiAvailable regression that keeps handing out readings — for

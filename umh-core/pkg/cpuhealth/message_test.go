@@ -315,7 +315,7 @@ var _ = Describe("degraded copy", func() {
 
 	It("should state the steal figure as a plain share of the last minute, claiming no peak", func() {
 		// A steal cause can carry the mean of the last minute, not only the
-		// percentile: causeOf reports whichever arm the episode fired on, and
+		// percentile: describeCause reports whichever arm the episode fired on, and
 		// the mean is the arm that fires in the first twenty seconds. "At peak"
 		// would be a claim about a percentile, so the sentence makes none.
 		// Asserted whole, because the wording is customer-visible copy.
@@ -396,12 +396,12 @@ var _ = Describe("degraded copy", func() {
 
 	It("should not render an unbounded or silently-wrong percentage when a capacity cause's capacity reads zero", func() {
 		// The limit arm: AvgUsageCores/CapacityCores with CapacityCores == 0 is
-		// +Inf, and pctOf's int(math.Round(...)) conversion of +Inf is
+		// +Inf, and toPercent's int(math.Round(...)) conversion of +Inf is
 		// implementation-defined — on this platform it comes out as
 		// math.MaxInt64, a 19-digit percentage. Reachable when the limit-mode
 		// quota-based signal fires from its own frozen quota while the sample's
 		// own Quota reads unknown/zero on the same tick and LogicalCpus is also
-		// unset, so detailsFor's fallback leaves CapacityCores at 0.
+		// unset, so buildDetails's fallback leaves CapacityCores at 0.
 		limitArm := degradedSig()
 		limitArm.CapacityCores = 0
 		limitArm.AvgUsageCores = 2.0
@@ -411,7 +411,7 @@ var _ = Describe("degraded copy", func() {
 		Expect(msg).To(ContainSubstring("not currently readable"))
 
 		// The default (readable no-limit) arm: AvgHostBusyCores/CapacityCores
-		// with CapacityCores == 0 is 0/0 = NaN, and pctOf(NaN) happens to come
+		// with CapacityCores == 0 is 0/0 = NaN, and toPercent(NaN) happens to come
 		// out as 0 on this platform — a silently wrong "0%" that looks
 		// plausible but was never measured.
 		defaultArm := degradedSig()

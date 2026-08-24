@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// causeOf maps one fired signal to a Cause. Each signal names its own cause
+// describeCause maps one fired signal to a Cause. Each signal names its own cause
 // kind. The value is the CURRENT reduction of the instrument that produced the
 // latch, read back through Engine.Reduction — not Fired.Value,
 // which is stamped at the firing tick and stays constant while the latch holds;
@@ -38,7 +38,7 @@ import (
 // a start, the percentile takes twenty samples, and both arms share one mark
 // pair, so nothing re-stamps the latch and the episode reports the mean until
 // it releases.
-func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
+func describeCause(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 	// Rank does not flatten refinements, so every Fired reaching here is a
 	// top-level signal, whose window path is its own name.
 	v, _ := engine.Reduction(f.Identity.Signal, f.Instrument).Get()
@@ -75,10 +75,10 @@ func declaredBlame(f diagnosis.Fired) int {
 	return f.Identity.Attribution
 }
 
-// attributionOf names a blame value. A number no row declared is unknown: the
+// nameAttribution names a blame value. A number no row declared is unknown: the
 // alternative is an empty Attribution, which reads as a value rather than as
 // the absence of one.
-func attributionOf(blame int) Attribution {
+func nameAttribution(blame int) Attribution {
 	switch blame {
 	case blameHost:
 		return AttributionHost

@@ -116,7 +116,7 @@ func composeHealthy(details Details) string {
 
 	var headline string
 	if details.LimitApplies && !totalTooSmallToPct {
-		pctOfLimit := pctOf(usedDisp / totalDisp)
+		pctOfLimit := toPercent(usedDisp / totalDisp)
 		if headroomDisp < 0.05 {
 			headline = fmt.Sprintf(headlineLimitClose, usedStr, totalStr, pctOfLimit)
 		} else {
@@ -156,13 +156,13 @@ func composeHealthy(details Details) string {
 		fmt.Sprintf(headroomLine, headroomStr, totalStr, usedStr, reserveStr),
 	}
 	if details.ThrottleSignalReady {
-		budget = append(budget, fmt.Sprintf(throttleLine, pctOf(details.ThrottleRatio)))
+		budget = append(budget, fmt.Sprintf(throttleLine, toPercent(details.ThrottleRatio)))
 	}
 	if details.PressureSignalReady {
-		budget = append(budget, fmt.Sprintf(pressureLine, pctOf(details.PressureAvg60)))
+		budget = append(budget, fmt.Sprintf(pressureLine, toPercent(details.PressureAvg60)))
 	}
 	if details.StealSignalReady {
-		budget = append(budget, fmt.Sprintf(stealLine, pctOf(details.StealP95)))
+		budget = append(budget, fmt.Sprintf(stealLine, toPercent(details.StealP95)))
 	}
 
 	return msg + technicalDetails + strings.Join(budget, " ")
@@ -266,11 +266,11 @@ func speakingCause(causes []Cause) Cause {
 func causeDetails(c Cause, causes []Cause, attribution Attribution, details Details) string {
 	switch c.Kind {
 	case CauseKindThrottling:
-		return fmt.Sprintf(detailThrottling, pctOf(details.ThrottleRatio))
+		return fmt.Sprintf(detailThrottling, toPercent(details.ThrottleRatio))
 	case CauseKindPressure:
-		return fmt.Sprintf(detailPressure, pctOf(c.Value))
+		return fmt.Sprintf(detailPressure, toPercent(c.Value))
 	case CauseKindSteal:
-		return fmt.Sprintf(detailSteal, pctOf(c.Value))
+		return fmt.Sprintf(detailSteal, toPercent(c.Value))
 	case CauseKindContainerLimitFull:
 		// CapacityCores == 0 replaces the percentage sentence — never
 		// prefixes it — here and on the machine arm's readable branch below.
@@ -280,7 +280,7 @@ func causeDetails(c Cause, causes []Cause, attribution Attribution, details Deta
 		if details.CapacityCores == 0 {
 			detail = detailSatCapacityUnavailable
 		} else {
-			detail = fmt.Sprintf(detailSatLimit, pctOf(details.AvgUsageCores/details.CapacityCores))
+			detail = fmt.Sprintf(detailSatLimit, toPercent(details.AvgUsageCores/details.CapacityCores))
 		}
 		if !details.HostBusyCoresAvailable {
 			detail += detailSatHostUnavail
@@ -293,10 +293,10 @@ func causeDetails(c Cause, causes []Cause, attribution Attribution, details Deta
 			// The estimate from our own usage. The no-PSI wording is the one
 			// that earns the pressure-stats advice.
 			if details.PressureApplies {
-				return fmt.Sprintf(detailSatNoStatsPSI, pctOf(c.Value))
+				return fmt.Sprintf(detailSatNoStatsPSI, toPercent(c.Value))
 			}
 
-			return fmt.Sprintf(detailSatNoStatsNoPSI, pctOf(c.Value))
+			return fmt.Sprintf(detailSatNoStatsNoPSI, toPercent(c.Value))
 		case instrumentHostHeadroom:
 			if hasKind(causes, CauseKindContainerLimitFull) {
 				return fmt.Sprintf(detailSatBothAtLimit, fmtCoresTotal(round1(details.CapacityCores)))
@@ -311,7 +311,7 @@ func causeDetails(c Cause, causes []Cause, attribution Attribution, details Deta
 			if details.CapacityCores == 0 {
 				detail = detailSatCapacityUnavailable
 			} else {
-				detail = fmt.Sprintf(detailSatNoLimitRead, pctOf(details.AvgHostBusyCores/details.CapacityCores))
+				detail = fmt.Sprintf(detailSatNoLimitRead, toPercent(details.AvgHostBusyCores/details.CapacityCores))
 			}
 			if details.LimitedVisibility {
 				detail += detailSatNoLimitClause
@@ -428,10 +428,10 @@ func fmtCoresTotal(v float64) string {
 	return fmt.Sprintf("%.1f", v)
 }
 
-// pctOf converts a 0..1 fraction to a rounded integer percentage. Values >1
+// toPercent converts a 0..1 fraction to a rounded integer percentage. Values >1
 // (oversubscription / multi-core busy) are preserved as >100 (the Linux CPU%
 // convention), so a three-core contention reads as 300%, not clamped to 100.
-func pctOf(fraction float64) int {
+func toPercent(fraction float64) int {
 	return int(math.Round(fraction * 100))
 }
 

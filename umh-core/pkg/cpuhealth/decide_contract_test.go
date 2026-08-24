@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The whole-Details contract. detailsFor fills every field without changing
+// The whole-Details contract. buildDetails fills every field without changing
 // any exported signature, so no existing test edits when a field is wired to
 // the wrong source: a mis-wire still returns a Details of the right shape,
 // just with a value read from the wrong place. Every other test in this

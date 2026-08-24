@@ -41,7 +41,7 @@ const (
 
 // The blame values the table declares beside its signals and refinements.
 // diagnosis.Signal.Attribution is an int the engine carries and never reads, so
-// the numbering is this package's own; attributionOf names one of them.
+// the numbering is this package's own; nameAttribution names one of them.
 // blameUnknown is zero, so a row that declares nothing blames nobody.
 const (
 	blameUnknown int = iota

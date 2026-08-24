@@ -14,7 +14,7 @@
 
 // The host-cpu-full signal answers one question through two instruments, its
 // two arms, and a verdict has to say which arm answered. diagnosis.Identity
-// names only the signal, so causeOf recovers the arm from Fired.Instrument and
+// names only the signal, so describeCause recovers the arm from Fired.Instrument and
 // reads the cause's value back from that arm's own reduction. The two specs
 // below drive each arm through Decide and check what the verdict then says.
 
@@ -54,9 +54,9 @@ func coupling(instrument, outcome string) string {
 	return fmt.Sprintf(
 		"%s\n\n"+
 			"This spec drove the %s arm of host-cpu-full. diagnosis.Identity names only the\n"+
-			"signal, so causeOf reads the arm that fired out of Fired.Instrument and takes the\n"+
+			"signal, so describeCause reads the arm that fired out of Fired.Instrument and takes the\n"+
 			"cause's value from that arm's reduction. The blame comes from whichever share\n"+
-			"refinement fired, never from the arm. Read causeOf in attribute.go and\n"+
+			"refinement fired, never from the arm. Read describeCause in attribute.go and\n"+
 			"shareRefinements in signal_saturation.go before changing what this expects.",
 		outcome, instrument)
 }
