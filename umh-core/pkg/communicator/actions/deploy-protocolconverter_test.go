@@ -281,16 +281,48 @@ var _ = Describe("DeployProtocolConverter", func() {
 		}
 
 		It("should reject a write flow whose topics are outside the bridge location", func() {
-			err := deployWithWriteTopics("umh.v1.TestEnterprise.OtherSite.foo")
+			err := deployWithWriteTopics("umh.v1.TestEnterprise.OtherSite._historian.foo")
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must be beneath the bridge location"))
-			Expect(err.Error()).To(ContainSubstring("umh.v1.TestEnterprise.OtherSite.foo"))
+			Expect(err.Error()).To(ContainSubstring("umh.v1.TestEnterprise.OtherSite._historian.foo"))
 			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
 		})
 
+		It("should reject a write flow whose topics name no data contract", func() {
+			err := deployWithWriteTopics("umh.v1.{{ .location_path }}.*")
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must each name one existing data contract"))
+			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
+		})
+
+		It("should reject a write flow whose topics name a data contract that does not exist", func() {
+			err := deployWithWriteTopics("umh.v1.{{ .location_path }}._pump_v1.pressure")
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must each name one existing data contract"))
+			Expect(err.Error()).To(ContainSubstring("_pump_v1"))
+			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
+		})
+
+		It("should accept a write flow naming a data contract declared in the config", func() {
+			mockConfig.Config.DataContracts = []config.DataContractsConfig{{Name: "_pump_v1"}}
+
+			Expect(deployWithWriteTopics("umh.v1.{{ .location_path }}._pump_v1.pressure")).To(Succeed())
+		})
+
+		It("should list the configured data contracts when a topic names an unknown one", func() {
+			mockConfig.Config.DataContracts = []config.DataContractsConfig{{Name: "_pump_v1"}}
+
+			err := deployWithWriteTopics("umh.v1.{{ .location_path }}._pmup_v1.pressure")
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("_pump_v1"))
+		})
+
 		It("should accept a write flow whose topics resolve beneath the bridge location", func() {
-			Expect(deployWithWriteTopics("umh.v1.{{ .location_path }}.foo")).To(Succeed())
+			Expect(deployWithWriteTopics("umh.v1.{{ .location_path }}._historian.foo")).To(Succeed())
 		})
 
 		It("should deploy protocol converter successfully", func() {
@@ -437,7 +469,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]any{
-						"topics": "umh.v1.factory.*\numh.v1.plant.*",
+						"topics": "umh.v1.TestEnterprise.TestSite._raw.*\numh.v1.TestEnterprise.TestSite._historian.*",
 					},
 				},
 			}
@@ -460,7 +492,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			addedPC := mockConfig.Config.ProtocolConverter[0]
 			Expect(addedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal(
-				"umh.v1.factory.*\numh.v1.plant.*",
+				"umh.v1.TestEnterprise.TestSite._raw.*\numh.v1.TestEnterprise.TestSite._historian.*",
 			))
 		})
 
@@ -477,7 +509,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]any{
-						"topics": "umh.v1.factory.*",
+						"topics": "umh.v1.TestEnterprise.TestSite._raw.*",
 					},
 					"state": "stopped",
 				},

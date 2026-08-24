@@ -77,7 +77,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 	Describe("BuildRuntimeConfig", func() {
 		It("should successfully build runtime config from example config", func() {
-			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the runtime config structure
@@ -94,7 +94,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		})
 
 		It("should properly merge agent and PC locations", func() {
-			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// The location should be properly merged and accessible via variables
@@ -103,7 +103,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		})
 
 		It("should handle template variable substitution", func() {
-			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check that template variables {{ .IP }} and {{ .PORT }} have been substituted
@@ -112,7 +112,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		})
 
 		It("should generate proper bridged_by header", func() {
-			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// We can't directly check the bridged_by header, but the function should succeed
@@ -127,7 +127,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				"3": "workstation-5", // Gap at levels 1,2
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(spec, incompleteLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(spec, incompleteLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should fill gaps with "unknown" and not fail
@@ -137,20 +137,20 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		It("should return error for empty spec", func() {
 			emptySpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}
 
-			result, err := runtime_config.BuildRuntimeConfig(emptySpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(emptySpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("nil spec"))
 			Expect(result).To(Equal(protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}))
 		})
 
 		It("should handle empty global vars", func() {
-			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, nil, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, nil, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeZero())
 		})
 
 		It("should handle empty node name", func() {
-			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, "", pcName)
+			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nil, "", pcName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeZero())
 		})
@@ -158,7 +158,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 	Describe("Variable expansion", func() {
 		It("should expand all template variables correctly", func() {
-			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify that no template strings remain (no {{ }} patterns)
@@ -192,7 +192,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 			result, err := runtime_config.BuildRuntimeConfig(
 				historianRefSpec("{{ .historian.timescale.host }}", "{{ .historian.timescale.port }}"),
-				agentLocation, globalVars, historian, nodeName, pcName)
+				agentLocation, globalVars, historian, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("timescale.internal"))
@@ -206,7 +206,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 			result, err := runtime_config.BuildRuntimeConfig(
 				historianRefSpec("{{ .historian.timescale.database }}", "{{ .historian.timescale.port }}"),
-				agentLocation, globalVars, historian, nodeName, pcName)
+				agentLocation, globalVars, historian, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("umh"))
@@ -230,7 +230,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 			result, err := runtime_config.BuildRuntimeConfig(
 				historianRefSpec(allFields, "{{ .historian.timescale.port }}"),
-				agentLocation, globalVars, historian, nodeName, pcName)
+				agentLocation, globalVars, historian, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(
@@ -241,7 +241,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		It("should fail with an actionable error when historian is referenced but not configured", func() {
 			_, err := runtime_config.BuildRuntimeConfig(
 				historianRefSpec("{{ .historian.timescale.host }}", "8080"),
-				agentLocation, globalVars, nil, nodeName, pcName)
+				agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no valid historian: section is configured"))
 		})
@@ -252,7 +252,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 			_, err := runtime_config.BuildRuntimeConfig(
 				historianRefSpec("{{ .historian.timescale.host }}", "8080"),
-				agentLocation, globalVars, invalid, nodeName, pcName)
+				agentLocation, globalVars, invalid, nil, nodeName, pcName)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no valid historian: section is configured"))
 		})
@@ -262,7 +262,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 			result, err := runtime_config.BuildRuntimeConfig(
 				historianRefSpec("static-host", "8080"),
-				agentLocation, globalVars, invalid, nodeName, pcName)
+				agentLocation, globalVars, invalid, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("static-host"))
 		})
@@ -274,7 +274,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 			result, err := runtime_config.BuildRuntimeConfig(
 				historianRefSpec("{{ .historian.timescale.password }}", "{{ .historian.timescale.port }}"),
-				agentLocation, globalVars, historian, nodeName, pcName)
+				agentLocation, globalVars, historian, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 			// Redaction only masks the error snippet; the real value must still
 			// reach the rendered runtime config.
@@ -302,7 +302,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			writeInput := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input
@@ -318,20 +318,20 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.plant-A.line-4.press.*\numh.v1.plant-A.line-4.oven.*"},
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.plant-A.line-4._historian.press.*\numh.v1.plant-A.line-4._historian.oven.*"},
 						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 					},
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			writeInput := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input
 			Expect(writeInput).To(HaveKey("uns"))
 			unsInput, ok := writeInput["uns"].(map[string]any)
 			Expect(ok).To(BeTrue())
-			Expect(unsInput["umh_topics"]).To(Equal([]string{"umh.v1.plant-A.line-4.press.*", "umh.v1.plant-A.line-4.oven.*"}))
+			Expect(unsInput["umh_topics"]).To(Equal([]string{"umh.v1.plant-A.line-4._historian.press.*", "umh.v1.plant-A.line-4._historian.oven.*"}))
 		})
 
 		It("should reject topics outside the bridge location and keep the read flow rendered", func() {
@@ -344,14 +344,14 @@ var _ = Describe("BuildRuntimeConfig", func() {
 						},
 					},
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.plant-A.line-4.press.*\numh.v1.plant-A.line-9.oven.*"},
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.plant-A.line-4._historian.press.*\numh.v1.plant-A.line-9._historian.oven.*"},
 						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 					},
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
-			Expect(err).To(MatchError(ContainSubstring("umh.v1.plant-A.line-9.oven.*")))
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.plant-A.line-9._historian.oven.*")))
 			Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
 			Expect(errors.As(err, new(*runtime_config.WriteFlowConfigError))).To(BeTrue())
 
@@ -367,14 +367,14 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.somewhere.else.*"},
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.somewhere.else._historian.*"},
 						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 					},
 				},
 				WriteDFCDesiredState: "stopped",
 			}
 
-			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -383,18 +383,18 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.{{ .location_path }}.press.*"},
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.{{ .location_path }}._historian.press.*"},
 						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 					},
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			unsInput, ok := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input["uns"].(map[string]any)
 			Expect(ok).To(BeTrue())
-			Expect(unsInput["umh_topics"]).To(Equal([]string{"umh.v1.plant-A.line-4.press.*"}))
+			Expect(unsInput["umh_topics"]).To(Equal([]string{"umh.v1.plant-A.line-4._historian.press.*"}))
 		})
 
 		It("should not require UMHTopics when write DFC has no output", func() {
@@ -405,7 +405,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.DataflowComponentWriteServiceConfig.BenthosConfig.Input).To(BeEmpty())
 		})
@@ -441,7 +441,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check that NO downsampler was injected (since no tag_processor)
@@ -482,7 +482,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check that NO downsampler was injected (multiple processors = custom)
@@ -543,7 +543,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should not inject additional downsampler
@@ -593,7 +593,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check that NO downsampler was injected (nodered_js is relational, not timeseries)
@@ -628,7 +628,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should NOT create pipeline with downsampler (no tag_processor)
@@ -658,7 +658,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -673,7 +673,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -688,7 +688,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				},
 			}
 
-			runtimeConfig, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nodeName, pcName)
+			runtimeConfig, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
 			writeDFC := runtimeConfig.DataflowComponentWriteServiceConfig

@@ -398,7 +398,10 @@ func (a *EditProtocolConverterAction) validateSuppliedWriteTopics(newSpec config
 		return nil
 	}
 
-	return validateWriteTopicHierarchy(newSpec, a.systemSnapshotManager, a.configManager)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	return validateWriteTopicHierarchy(ctx, newSpec, a.configManager)
 }
 
 // applyMutation analyzes the current configuration and applies the necessary mutations
@@ -1247,6 +1250,7 @@ func (a *EditProtocolConverterAction) resolvedConnectionEndpoint(newSpec protoco
 		agentLocation,
 		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
+		currentConfig.DataContracts,
 		runtime_config.BridgedByPlaceholder,
 		a.name,
 	)
@@ -1324,6 +1328,7 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		agentLocation,
 		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
+		currentConfig.DataContracts,
 		runtime_config.BridgedByPlaceholder,
 		pcName,
 	)
