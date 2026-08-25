@@ -123,7 +123,7 @@ var _ = Describe("absence of evidence is not health", func() {
 	Describe("keep admitting through a read outage on a signal that already measured", func() {
 		It("keeps counting a first-measured signal as measured, however long a later outage lasts", func() {
 			// Tick 1: pressure first-measures (Ready, judged on the first
-			// sample), so its first-fill bit is set.
+			// sample), so its everMeasured bit is set.
 			d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				return cpuhealth.Sample{
 					Timestamp: time.Now(),
@@ -141,7 +141,7 @@ var _ = Describe("absence of evidence is not health", func() {
 			Expect(status1.SignalsMeasured).To(Equal(1), "pressure first-measured on tick 1")
 
 			// Tick 2 onward: a read outage makes pressure unreadable. The
-			// first-fill bit must NOT be cleared, so a signal that has measured
+			// everMeasured bit must NOT be cleared, so a signal that has measured
 			// keeps the worker admitting. The worker refuses on thin evidence,
 			// never on stale evidence: the frozen arm of NoneReady must not refuse.
 			d.sampler = stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
@@ -160,7 +160,7 @@ var _ = Describe("absence of evidence is not health", func() {
 			status2, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status2.SignalsMeasured).To(Equal(1),
-				"a signal that already measured keeps counting measured through the outage (the first-fill bit is never cleared)")
+				"a signal that already measured keeps counting measured through the outage (the everMeasured bit is never cleared)")
 		})
 	})
 })
