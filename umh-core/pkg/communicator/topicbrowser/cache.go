@@ -145,8 +145,8 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 		log.Warnf("Data loss detected: gap of %d sequences, lost %d buffers, processing all %d available",
 			newItemCount, lostCount, availableItems)
 	} else {
-		// Normal case: process first newItemCount items (they're newest-to-oldest)
-		itemsToProcess = buffers[:newItemCount]
+		// Normal case: process the last newItemCount items (they are oldest-to-newest)
+		itemsToProcess = buffers[len(buffers)-int(newItemCount):]
 	}
 
 	// Process the selected buffers
