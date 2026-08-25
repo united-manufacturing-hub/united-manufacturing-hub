@@ -64,11 +64,6 @@ import (
 // until Done, so the deps key is cleared and the dump printed by the time it
 // returns.
 type RunResult struct {
-	// Output is what the scenario rendered for a human to read. It exists so
-	// a spec can assert on the text the command line shows, rather than on the
-	// fact that the run finished. The cpuhealth scenario is the only one that
-	// sets it today.
-	Output   string
 	Done     <-chan struct{}
 	Shutdown func()
 	// ShutdownClean reports whether the run's supervisor drained cleanly on

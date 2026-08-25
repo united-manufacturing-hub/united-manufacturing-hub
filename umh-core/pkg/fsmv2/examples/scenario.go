@@ -189,7 +189,6 @@ var Registry = map[string]Scenario{
 	"communicator": CommunicatorScenarioEntry,
 	"concurrent":   ConcurrentScenario,
 	"persistence":  PersistenceScenarioEntry,
-	"cpuhealth":    CPUHealthScenarioEntry,
 }
 
 // CommunicatorScenarioEntry registers the communicator scenario for CLI access.
