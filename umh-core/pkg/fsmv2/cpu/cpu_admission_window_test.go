@@ -25,8 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("R4 — absence of evidence is not health", func() {
-	Describe("spec 5 — the 10-second admission bound (F16)", func() {
+var _ = Describe("absence of evidence is not health", func() {
+	Describe("the 10-second admission bound", func() {
 		It("should stop refusing admission ten seconds after the worker starts, even when a capable signal has still never measured", func() {
 			// A PSI box whose pressure never first-measures: pressure is capable
 			// (PsiAvailable true, so not NoInstrument) but stays non-Ready, so
@@ -48,9 +48,9 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 			}}, 4, 0)
 
 			// Pin the window's width to a literal independent of the code
-			// constant, so widening f16AdmissionWindow alone cannot silently pass.
+			// constant, so widening admissionWindow alone cannot silently pass.
 			const wantWindow = 10 * time.Second
-			Expect(f16AdmissionWindow).To(Equal(wantWindow),
+			Expect(admissionWindow).To(Equal(wantWindow),
 				"the admission window is pinned to a literal width; a widened code constant must fail here")
 
 			var refusing []bool
@@ -76,7 +76,7 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 			// is bounded, not fixed to the counts. Tick index i sits at delta i
 			// seconds, so the first non-refusing index is exactly the window in
 			// whole seconds.
-			boundary := int(f16AdmissionWindow / time.Second)
+			boundary := int(admissionWindow / time.Second)
 			// Pin the width on the left edge with a literal index: delta 9s is the
 			// last tick strictly inside a 10s window. A literal (not boundary-1,
 			// which scales with the window and stays satisfied at any width) fails
@@ -95,12 +95,16 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 
 			// (d) The reported health is unchanged across the boundary too. The
 			// deadline releases admission and nothing else: it must not turn the
-			// never-measured signal into a bad verdict. Downstream (F18/P4) a
-			// degraded verdict becomes a BLOCKED BRIDGE, so "the window expired
-			// and the signal still never measured, surely that is degraded"
-			// would reinstate exactly the permanent blocking F16 exists to end —
-			// and it would do so silently, because every other spec that reads
-			// Verdict uses time.Now() timestamps and never crosses the deadline.
+			// never-measured signal into a bad verdict. The intended consumer is
+			// bridge admission, where a degraded verdict stops new bridges from
+			// starting. That consumer is not built: nothing outside this
+			// package's own specs and the demo scenarios reads Verdict, and
+			// nothing outside this package reads RefusingAdmission at all. Once
+			// it exists, "the window expired and the signal still never
+			// measured, surely that is degraded" would reinstate exactly the
+			// permanent blocking the window exists to end. It would do so
+			// silently, because every other spec that reads Verdict uses
+			// time.Now() timestamps and never crosses the deadline.
 			// The inside-window value (index 1) is the reference on both sides.
 			Expect(verdict[1]).NotTo(Equal(string(cpuhealth.StateDegraded)),
 				"the reference tick inside the window is not already degraded, so the comparison below can discriminate")

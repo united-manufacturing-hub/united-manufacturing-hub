@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("R2 — the worker never fabricates", func() {
+var _ = Describe("the worker never fabricates", func() {
 	It("reports that it could not measure, rather than a healthy zero, when the sample failed", func() {
 		// "The sample failed" means Read returned a non-nil error and nothing
 		// else (e.g. an unreadable cpu.stat fails the whole snapshot). On that

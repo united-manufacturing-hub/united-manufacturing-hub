@@ -107,13 +107,13 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 
 			// Pin the window width to a literal, so a widened code constant
 			// cannot silently push the deadline past these ticks.
-			Expect(f16AdmissionWindow).To(Equal(10 * time.Second))
+			Expect(admissionWindow).To(Equal(10 * time.Second))
 
 			// Poll 13 times: indices 0..9 are strictly inside the 10s window
 			// (deltas 0..9s of sample time), indices 10..12 are past/at the
 			// deadline. Record the cumulative SentryWarn count after each Poll
 			// call; Poll must keep succeeding (never a Poll error) throughout.
-			boundary := int(f16AdmissionWindow / time.Second)
+			boundary := int(admissionWindow / time.Second)
 			all := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, boundary, boundary + 1, boundary + 2}
 
 			counts := make([]int, len(all))
@@ -232,7 +232,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 				}, nil
 			}}, 0, 0)
 
-			boundary := int(f16AdmissionWindow / time.Second)
+			boundary := int(admissionWindow / time.Second)
 			for i := 0; i <= boundary+2; i++ {
 				_, err := Poll(context.Background(), d, CPUConfig{})
 				Expect(err).NotTo(HaveOccurred())
@@ -269,7 +269,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 				}, nil
 			}}, 4, 1)
 
-			boundary := int(f16AdmissionWindow / time.Second)
+			boundary := int(admissionWindow / time.Second)
 			var last CPUStatus
 			for i := 0; i <= boundary+2; i++ {
 				st, err := Poll(context.Background(), d, CPUConfig{})

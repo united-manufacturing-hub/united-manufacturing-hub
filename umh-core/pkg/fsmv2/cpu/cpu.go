@@ -74,16 +74,23 @@ const (
 	// equal to this by hand.
 	cgroupBase = "/sys/fs/cgroup"
 
-	// pollInterval is the poll cadence. It sets both the poll cadence and, at
-	// 3x, the seam's maxAge downstream; the two are one decision (SPEC §9 P3 R1).
+	// pollInterval is how often the worker samples the cgroup.
+	//
+	// It also fixes the staleness bound on the read side. A reader that goes
+	// through pkg/fsmv2/adapter treats an observation as stale once it is older
+	// than three times the worker's registered poll interval (staleAfterFor),
+	// and simple.Register publishes this constant as that interval. Changing
+	// this number therefore moves the sampling cadence and the staleness bound
+	// together. Nothing reads the CPU worker through that adapter today, so
+	// only the sampling cadence has an effect so far.
 	pollInterval = 1 * time.Second
 
-	// f16AdmissionWindow is how long a fresh worker may refuse admission while
+	// admissionWindow is how long a fresh worker may refuse admission while
 	// a capable signal has still not first-measured. Once this much sample time
 	// has passed since the worker's first sample, admission opens even if the
 	// counts are unchanged. The synthetic-clock tests step the sample clock in
 	// whole seconds, so the window is a whole number of them.
-	f16AdmissionWindow = 10 * time.Second
+	admissionWindow = 10 * time.Second
 )
 
 // Ref is the (WorkerType, Name) pair identifying the CPU monitor child, shared
@@ -97,10 +104,8 @@ var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 // dropping every 60s window.
 type CPUConfig struct{}
 
-// CPUStatus is the result of one CPU-health observation.
-//
-// R1 settles the field set. It reports the verdict (not a raw measurement) and
-// the customer-visible message; the two counts stay zero until R4 fills them.
+// CPUStatus is the result of one CPU-health observation. It carries judgements
+// and counts, never a raw measurement such as a CPU-utilisation percentage.
 type CPUStatus struct {
 	// Verdict is the ranked judgement Decide produced this tick, as the
 	// cpuhealth.State string ("healthy" or "degraded"). Empty when the tick
@@ -111,10 +116,10 @@ type CPUStatus struct {
 	Message string `json:"message"`
 
 	// SignalsCapable is how many CPU signals this box can answer (not
-	// NoInstrument). Filled by R4; zero until then.
+	// NoInstrument).
 	SignalsCapable int `json:"signalsCapable"`
 	// SignalsMeasured is how many capable signals have produced a first
-	// measurement since this worker started. Filled by R4; zero until then.
+	// measurement since this worker started.
 	SignalsMeasured int `json:"signalsMeasured"`
 
 	// RefusingAdmission reports whether admission is currently refused: a
@@ -122,7 +127,7 @@ type CPUStatus struct {
 	// 10s admission window. Consume the flag; do not re-derive the count
 	// comparison, which drops the window bound. It is meaningful only on a
 	// successful read — an errored/empty Poll yields this false ('no
-	// determination'), which F18 must not read as 'admission open'.
+	// determination'), which a consumer must not read as 'admission open'.
 	RefusingAdmission bool `json:"refusingAdmission"`
 
 	// Polls is how many observations this worker has completed.
@@ -144,7 +149,7 @@ type CPUDeps struct {
 	// engine owns every (signal, instrument) window and per-signal latch. It is
 	// nil when NewEngine failed at construction (engineErr is then set).
 	engine *diagnosis.Engine[cpuhealth.Sample]
-	// table is the declaration R4 walks: engine.Select needs the Signal values,
+	// table is the declaration Poll walks: engine.Select needs the Signal values,
 	// which are only reachable through the table the engine was built from.
 	table diagnosis.Table[cpuhealth.Sample]
 	// engineErr records a NewEngine failure from NewDeps. NewDeps cannot fail, so
@@ -155,15 +160,15 @@ type CPUDeps struct {
 	engineErr error
 
 	// polls counts completed observations. It is the non-pointer mutation the
-	// R1 two-tick spec guards.
+	// two-tick spec guards.
 	polls uint64
 
 	// firstFilled records, per signal name, whether it has ever reduced to a
 	// Ready value since this worker started. Set the first tick that signal's
 	// Availability is Ready; never cleared while the worker lives. A respawn
-	// builds a new worker and a new engine, so it clears exactly when F10 says
-	// it should. This bit is what keeps a signal that already measured counting
-	// as measured through a later read outage (R4 spec 4).
+	// builds a new worker and a new engine, so it clears then. This bit is what
+	// keeps a signal that already measured counting as measured through a later
+	// read outage.
 	firstFilled map[string]bool
 
 	// startedAt anchors the 10s admission window: the first sample timestamp
@@ -239,11 +244,11 @@ func NewDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpu
 
 	// The table and engine are built once, at construction, from the startup
 	// snapshot. Both cores and quota are startup facts; a quota change at
-	// runtime needs a rebuilt table, which is out of P3 scope. A table that
+	// runtime needs a rebuilt table, which this worker does not do. A table that
 	// will not build leaves the engine nil and sets engineErr, which Poll
 	// reports as could-not-measure rather than letting Decide panic on a nil
 	// engine (simple has no recover around Poll; recovery is at the collector).
-	// The table is held so R4 can walk table.Signals for per-signal Availability.
+	// The table is held so Poll can walk table.Signals for per-signal Availability.
 	cores, quota := startupCapacity(context.Background(), sampler, bd)
 	d.table = cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
@@ -277,7 +282,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
 
-	// The absence-of-evidence counts (R4), from the same walk Decide used: the
+	// The absence-of-evidence counts, from the same walk Decide used: the
 	// SAME env, the same tick, after Decide returns. engine.Select returns each
 	// signal's Availability; capable means not NoInstrument (something on this
 	// box can answer it), measured means its first-fill bit is set. The bit is
@@ -309,8 +314,8 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// delta from the anchor; production sample timestamps come from monotonic
 	// time.Now(), so it is never negative.
 	elapsed := sample.Timestamp.Sub(d.startedAt)
-	overDeadline := elapsed >= f16AdmissionWindow
-	refusing := measured < capable && elapsed < f16AdmissionWindow
+	overDeadline := elapsed >= admissionWindow
+	refusing := measured < capable && elapsed < admissionWindow
 
 	// Once the 10s window has elapsed and a capable signal has still never
 	// first-measured, admission opens even though a source that should answer
@@ -333,7 +338,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 			deps.String("never_measured_signals", strings.Join(unmeasured, ", ")),
 			deps.Int("signals_measured", measured),
 			deps.Int("signals_capable", capable),
-			deps.Duration("admission_window", f16AdmissionWindow))
+			deps.Duration("admission_window", admissionWindow))
 	}
 
 	return CPUStatus{
