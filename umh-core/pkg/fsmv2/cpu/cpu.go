@@ -170,22 +170,19 @@ type CPUDeps struct {
 // report it could not measure. A failed startup read yields a healthy first
 // verdict from a permanently thinned table instead, which is why it is logged.
 //
-// The sampler reads the real cgroup files through the real filesystem. A caller
-// that needs Poll driven off something else builds its own sampler and passes it
-// to NewDepsWithSampler.
+// The sampler reads the real cgroup files through the real filesystem. This
+// package exports no way to supply a different one: the specs beside this file
+// build CPUDeps directly around a stub Sampler instead.
 func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(filesystem.NewDefaultService(), cgroupBase))
+	return newDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(filesystem.NewDefaultService(), cgroupBase))
 }
 
-// NewDepsWithSampler builds CPU's per-instance deps around an explicit sampler,
-// for a caller holding one already rather than one that wants the cgroup sampler
-// NewDeps builds. The table and engine are built from a startup snapshot through
-// that sampler, on the same path NewDeps takes, so deps built either way behave
-// identically from Poll's side. Passing an explicit sampler is also how a
-// caller keeps Poll off the real /sys. The specs beside this file take a
-// shorter route for that: they build CPUDeps directly around a stub Sampler,
-// which skips the startup snapshot as well.
-func NewDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
+// newDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
+// NewDeps is its only caller and supplies the cgroup sampler; the split keeps
+// the choice of sampler separate from the startup-snapshot construction below.
+// The specs beside this file do not call it: they build CPUDeps directly around
+// a stub Sampler, which skips the startup snapshot as well.
+func newDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
 	d := &CPUDeps{
 		BaseDependencies: bd,
 		sampler:          sampler,
