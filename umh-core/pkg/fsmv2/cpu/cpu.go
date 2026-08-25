@@ -291,11 +291,12 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// env, in the same tick, after Decide returns. It has to run after — Select
 	// reports a window's readiness without ageing it, so it is only trustworthy
 	// following an Observe on that tick, and Decide is what Observes.
-	// engine.Select returns each signal's Availability; capable means not
-	// NoInstrument (something on this box can answer it), measured means its
-	// first-fill bit is set. The bit is
-	// set the first tick that signal is Ready and never cleared, so a signal
-	// that has measured keeps counting as measured through a later read outage.
+	//
+	// Select gives each signal's Availability. Capable means not NoInstrument:
+	// something on this box can answer the signal. Measured means the signal's
+	// first-fill bit is set, which happens the first tick it reads Ready and is
+	// never undone, so a signal that has measured keeps counting as measured
+	// through a later read outage.
 	capable, measured := 0, 0
 	unmeasured := []string{}
 	for _, s := range d.table.Signals {
@@ -320,13 +321,11 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// Production sample timestamps come from monotonic time.Now(), so it is
 	// never negative there.
 	elapsed := sample.Timestamp.Sub(d.startedAt)
-	refusing, overDeadline := admissionDecision(elapsed, admissionWindow, measured, capable)
+	refusing, shortfallAtDeadline := admissionDecision(elapsed, admissionWindow, measured, capable)
 
-	// Once the admission window has elapsed and a capable signal has still never
-	// first-measured, admission opens even though a source that should answer
-	// has stayed silent. Raise exactly one SentryWarn naming every signal that
-	// never measured — never once per tick (the admissionReported latch), and
-	// never on a box no instrument can answer (capable==0 keeps it silent). A
+	// Say once that admission opened on a source which should answer and never
+	// did. Once per worker, not once per tick — that is the admissionReported
+	// latch, and it is the reason this gate is not the pure decision above. A
 	// WARN, not an error: there is nothing for an operator to act on — the box
 	// simply cannot fully see its own CPU, so paging on-call would be noise.
 	//
@@ -336,7 +335,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// combination its own Sentry issue. Every dynamic value rides in the
 	// structured fields, which is also how every other worker reports
 	// (transport's "persistent_auth_failure", pull's "pending_buffer_overflow").
-	if overDeadline && measured < capable && !d.admissionReported {
+	if shortfallAtDeadline && !d.admissionReported {
 		d.admissionReported = true
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
 			"cpu_admission_deadline_never_measured_signal",
@@ -356,26 +355,30 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}, nil
 }
 
-// admissionDecision answers the two questions the admission window poses on one
-// tick: whether admission is refused right now, and whether the window has run
-// out. It reads nothing but its arguments — no worker, no sampler, no clock.
+// admissionDecision answers what the admission window says about one tick. It
+// reads nothing but its arguments — no worker, no sampler, no clock.
 //
 // elapsed is how much sample time has passed since the worker's first sample.
-// measured and capable are the tick's evidence counts: how many signals this box
-// can answer at all, and how many of those have ever produced a reading.
+// capable and measured are the tick's evidence counts: how many signals this box
+// can answer at all, and how many of those have ever produced a reading. A
+// shortfall is measured below capable — some signal this box can answer has
+// never once answered.
 //
-// Both answers turn on the same comparison of elapsed against window, in
-// opposite directions, which is why one function decides them:
+// A shortfall does one of two things, and which one depends only on where the
+// tick falls in the window:
 //
-//	refusing      a capable signal has not measured, AND the window is still open
-//	overDeadline  the window has closed, whatever the counts say
+//	refusing             inside the window: hold admission back and wait
+//	shortfallAtDeadline  the window has closed: admit anyway, and report it
 //
 // So the refusal is bounded rather than fixed to the counts. A signal that never
 // measures stops blocking admission once the window closes, which is what keeps
-// a box that cannot fully see its own CPU from being blocked for its whole life.
-// The two results can never both be true.
-func admissionDecision(elapsed, window time.Duration, measured, capable int) (refusing, overDeadline bool) {
-	return measured < capable && elapsed < window, elapsed >= window
+// a box that cannot fully see its own CPU from being blocked for its whole life;
+// it is reported instead. The two results are the same shortfall split by the
+// window, so they can never both be true, and with no shortfall neither is.
+func admissionDecision(elapsed, window time.Duration, measured, capable int) (refusing, shortfallAtDeadline bool) {
+	shortfall := measured < capable
+
+	return shortfall && elapsed < window, shortfall && elapsed >= window
 }
 
 // startupCapacity derives the two startup facts cpuhealth.Table shapes itself

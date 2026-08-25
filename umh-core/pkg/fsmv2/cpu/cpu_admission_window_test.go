@@ -87,9 +87,10 @@ var _ = Describe("absence of evidence is not health", func() {
 			Expect(measured[boundary]).To(BeNumerically("<", capable[boundary]),
 				"the capable-but-never-measured signal still holds at the deadline (admission opens, counts do not change)")
 
-			// (c) The deadline is a separate boolean, not a count change: the
-			// capable and measured counts are identical inside the window
-			// (tick 2, delta 1s) vs past the window (tick boundary+1, delta 10s).
+			// (c) Admission opens on the window closing, not on the evidence
+			// changing: the capable and measured counts are identical inside the
+			// window (tick 2, delta 1s) and past the window (tick boundary+1,
+			// delta 10s).
 			Expect(capable[boundary]).To(Equal(capable[1]), "capable count unchanged across the 10s window boundary")
 			Expect(measured[boundary]).To(Equal(measured[1]), "measured count unchanged across the 10s window boundary")
 
