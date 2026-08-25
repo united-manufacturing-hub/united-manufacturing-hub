@@ -167,7 +167,7 @@ var _ = Describe("two capacity causes on one tick", func() {
 		// estimate is gated off, so host-headroom is the signal's only capable
 		// arm and it read nothing.
 		sat := signalNamed(cpuTable(4, 3.5), signalHostCpuFull)
-		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instrumentHostHeadroom}))
+		Expect(instrumentNames(sat.CapableInstruments(env))).To(Equal([]string{instrumentHostHeadroom}))
 		_, _, _, avail := engine.Select(sat, env)
 		Expect(avail).To(Equal(diagnosis.AllAbsent))
 		fraction, state := engine.Reduction(signalHostCpuFull, instrumentUsageFraction).Get()

@@ -222,7 +222,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 	// a value past its fire mark — so the quiet tick is the gate withholding a
 	// number, not a box that measured fine.
 	estimateWithheld := func(engine *diagnosis.Engine[Sample], sat diagnosis.Signal[Sample], env diagnosis.Environment, verdict Verdict, details Details) {
-		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instrumentHostHeadroom}),
+		Expect(instrumentNames(sat.CapableInstruments(env))).To(Equal([]string{instrumentHostHeadroom}),
 			"the gate takes the estimate out of the capable set and leaves the /proc/stat arm alone")
 		_, _, _, avail := engine.Select(sat, env)
 		Expect(avail).To(Equal(diagnosis.AllAbsent),
@@ -270,7 +270,7 @@ var _ = Describe("the gate on the usage estimate", func() {
 		Expect(env.Has(HasLimitedVisibility)).To(BeTrue(), "no limit and no PSI is where nothing better exists")
 
 		sat := signalNamed(cpuTable(4, 0), signalHostCpuFull)
-		Expect(instrumentNames(sat.Capable(env))).To(Equal([]string{instrumentHostHeadroom, instrumentUsageFraction}),
+		Expect(instrumentNames(sat.CapableInstruments(env))).To(Equal([]string{instrumentHostHeadroom, instrumentUsageFraction}),
 			"both arms are capable here, and only the second has anything to read")
 		_, _, _, avail := engine.Select(sat, env)
 		Expect(avail).To(Equal(diagnosis.Ready))
