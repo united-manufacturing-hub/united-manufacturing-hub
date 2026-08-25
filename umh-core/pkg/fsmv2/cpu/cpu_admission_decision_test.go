@@ -41,19 +41,19 @@ var _ = Describe("the admission-window decision", func() {
 
 	Describe("a box whose capable signal has never measured", func() {
 		It("still refuses nine seconds in, and has not reached the deadline", func() {
-			refusing, overDeadline := admissionDecision(9*time.Second, window, neverMeasured, oneCapable)
+			refusing, atDeadline := admissionDecision(9*time.Second, window, neverMeasured, oneCapable)
 
 			Expect(refusing).To(BeTrue(),
 				"nine seconds is inside a ten-second window and nothing has measured, so the worker refuses")
-			Expect(overDeadline).To(BeFalse(),
+			Expect(atDeadline).To(BeFalse(),
 				"nine seconds has not reached a ten-second deadline")
 		})
 
 		It("still refuses at the last instant inside the window", func() {
-			refusing, overDeadline := admissionDecision(window-time.Nanosecond, window, neverMeasured, oneCapable)
+			refusing, atDeadline := admissionDecision(window-time.Nanosecond, window, neverMeasured, oneCapable)
 
 			Expect(refusing).To(BeTrue(), "one nanosecond short of the window is still inside it")
-			Expect(overDeadline).To(BeFalse())
+			Expect(atDeadline).To(BeFalse())
 		})
 
 		It("admits at exactly the window, and calls that same instant the deadline", func() {
@@ -62,19 +62,19 @@ var _ = Describe("the admission-window decision", func() {
 			// worker that waited for elapsed to exceed the window would still
 			// be refusing here, and one that refused up to and including the
 			// window would not have opened yet.
-			refusing, overDeadline := admissionDecision(window, window, neverMeasured, oneCapable)
+			refusing, atDeadline := admissionDecision(window, window, neverMeasured, oneCapable)
 
 			Expect(refusing).To(BeFalse(),
 				"admission opens the instant the window closes, with the counts unchanged")
-			Expect(overDeadline).To(BeTrue(),
+			Expect(atDeadline).To(BeTrue(),
 				"that same instant is the deadline the warning fires on")
 		})
 
 		It("stays admitted after the window has closed", func() {
-			refusing, overDeadline := admissionDecision(11*time.Second, window, neverMeasured, oneCapable)
+			refusing, atDeadline := admissionDecision(11*time.Second, window, neverMeasured, oneCapable)
 
 			Expect(refusing).To(BeFalse(), "the refusal does not come back once the window has closed")
-			Expect(overDeadline).To(BeTrue())
+			Expect(atDeadline).To(BeTrue())
 		})
 
 		It("treats a sample timestamp that stepped backwards as still inside the window", func() {
@@ -82,10 +82,10 @@ var _ = Describe("the admission-window decision", func() {
 			// are monotonic, but a synthetic clock can step backwards. It reads
 			// as inside the window exactly like zero does, so a backward step
 			// prolongs the refusal rather than opening admission early.
-			refusing, overDeadline := admissionDecision(-3*time.Second, window, neverMeasured, oneCapable)
+			refusing, atDeadline := admissionDecision(-3*time.Second, window, neverMeasured, oneCapable)
 
 			Expect(refusing).To(BeTrue(), "a negative elapsed is inside the window, like the anchor tick itself")
-			Expect(overDeadline).To(BeFalse())
+			Expect(atDeadline).To(BeFalse())
 		})
 	})
 
@@ -124,16 +124,20 @@ var _ = Describe("the admission-window decision", func() {
 				"a count above capable is a surplus, never a shortfall")
 		})
 
-		It("reports the deadline reached whatever the counts say", func() {
-			// overDeadline is a fact about time alone. The worker uses it
-			// together with the counts, so a version that folded the counts in
-			// here would answer the caller's question twice and hide the
-			// difference between 'the window closed' and 'something is missing'.
+		It("says nothing at the deadline when there was no shortfall to report", func() {
+			// The deadline is what makes the worker give up waiting and warn.
+			// Reaching it is not on its own a reason to warn: a box that
+			// measured everything, and a box with nothing to measure, both
+			// reach it with nothing wrong. Only the box still missing a reading
+			// is worth an operator's attention.
 			_, measuredBox := admissionDecision(window, window, allMeasured, oneCapable)
 			_, emptyBox := admissionDecision(window, window, 0, 0)
+			_, shortBox := admissionDecision(window, window, neverMeasured, oneCapable)
 
-			Expect(measuredBox).To(BeTrue(), "the window closes on a fully measured box too")
-			Expect(emptyBox).To(BeTrue(), "and on a box with nothing capable")
+			Expect(measuredBox).To(BeFalse(), "a fully measured box reaches the deadline with nothing to say")
+			Expect(emptyBox).To(BeFalse(), "nor does a box no instrument can answer")
+			Expect(shortBox).To(BeTrue(),
+				"the box still missing a reading at the deadline is the one that gets reported")
 		})
 	})
 
@@ -144,41 +148,46 @@ var _ = Describe("the admission-window decision", func() {
 			// refuse here and the deadline would not have been reached.
 			const short = 5 * time.Second
 
-			refusingBefore, deadlineBefore := admissionDecision(4*time.Second, short, neverMeasured, oneCapable)
+			refusingBefore, atDeadlineBefore := admissionDecision(4*time.Second, short, neverMeasured, oneCapable)
 			Expect(refusingBefore).To(BeTrue(), "four seconds is inside a five-second window")
-			Expect(deadlineBefore).To(BeFalse())
+			Expect(atDeadlineBefore).To(BeFalse())
 
-			refusingAfter, deadlineAfter := admissionDecision(short, short, neverMeasured, oneCapable)
+			refusingAfter, atDeadlineAfter := admissionDecision(short, short, neverMeasured, oneCapable)
 			Expect(refusingAfter).To(BeFalse(), "five seconds closes a five-second window")
-			Expect(deadlineAfter).To(BeTrue())
+			Expect(atDeadlineAfter).To(BeTrue())
 
-			refusingLater, deadlineLater := admissionDecision(9*time.Second, short, neverMeasured, oneCapable)
+			refusingLater, atDeadlineLater := admissionDecision(9*time.Second, short, neverMeasured, oneCapable)
 			Expect(refusingLater).To(BeFalse(),
 				"nine seconds is past a five-second window, however long the shipped one is")
-			Expect(deadlineLater).To(BeTrue())
+			Expect(atDeadlineLater).To(BeTrue())
 		})
 	})
 
 	Describe("the two answers taken together", func() {
-		It("never refuses and reports the deadline reached on the same tick", func() {
-			// Refusing means the window is open; the deadline means it has
-			// closed. Both true at once would let the worker refuse admission
-			// and raise its give-up warning on the same tick.
-			var sawRefusing, sawDeadline int
+		It("handles every shortfall exactly once — refused, or reported, never both and never neither", func() {
+			// Both true at once would let the worker refuse admission and raise
+			// its give-up warning on the same tick. Both false while a signal is
+			// still missing would drop the shortfall on the floor: the box would
+			// be admitted with a blind spot nobody was ever told about.
+			var sawRefusing, sawAtDeadline int
 
 			for _, elapsed := range []time.Duration{-time.Second, 0, time.Second, window - time.Nanosecond, window, window + time.Second} {
 				for _, counts := range [][2]int{{0, 0}, {0, 1}, {1, 1}, {1, 2}, {2, 2}} {
-					refusing, overDeadline := admissionDecision(elapsed, window, counts[0], counts[1])
+					measured, capable := counts[0], counts[1]
+					refusing, atDeadline := admissionDecision(elapsed, window, measured, capable)
 
-					Expect(refusing && overDeadline).To(BeFalse(),
-						"refusing and past-deadline at elapsed %s with measured %d of %d capable",
-						elapsed, counts[0], counts[1])
+					Expect(refusing && atDeadline).To(BeFalse(),
+						"refused AND reported at elapsed %s with measured %d of %d capable",
+						elapsed, measured, capable)
+					Expect(refusing || atDeadline).To(Equal(measured < capable),
+						"a shortfall is refused or reported, and a box without one is neither, at elapsed %s with measured %d of %d capable",
+						elapsed, measured, capable)
 
 					if refusing {
 						sawRefusing++
 					}
-					if overDeadline {
-						sawDeadline++
+					if atDeadline {
+						sawAtDeadline++
 					}
 				}
 			}
@@ -186,7 +195,7 @@ var _ = Describe("the admission-window decision", func() {
 			// Without these the loop above would pass on a decision that never
 			// returned true at all.
 			Expect(sawRefusing).To(BeNumerically(">", 0), "the grid reaches the refusing case")
-			Expect(sawDeadline).To(BeNumerically(">", 0), "the grid reaches the past-deadline case")
+			Expect(sawAtDeadline).To(BeNumerically(">", 0), "the grid reaches the reported case")
 		})
 	})
 
@@ -196,13 +205,13 @@ var _ = Describe("the admission-window decision", func() {
 			// a change to admissionWindow. This one would not: it names the two
 			// seconds either side of ten and hands the decision the constant the
 			// worker actually polls with.
-			refusingAtNine, deadlineAtNine := admissionDecision(9*time.Second, admissionWindow, neverMeasured, oneCapable)
+			refusingAtNine, atDeadlineAtNine := admissionDecision(9*time.Second, admissionWindow, neverMeasured, oneCapable)
 			Expect(refusingAtNine).To(BeTrue(), "the shipped window is still open at nine seconds")
-			Expect(deadlineAtNine).To(BeFalse())
+			Expect(atDeadlineAtNine).To(BeFalse())
 
-			refusingAtTen, deadlineAtTen := admissionDecision(10*time.Second, admissionWindow, neverMeasured, oneCapable)
+			refusingAtTen, atDeadlineAtTen := admissionDecision(10*time.Second, admissionWindow, neverMeasured, oneCapable)
 			Expect(refusingAtTen).To(BeFalse(), "the shipped window has closed by ten seconds")
-			Expect(deadlineAtTen).To(BeTrue())
+			Expect(atDeadlineAtTen).To(BeTrue())
 		})
 	})
 })
