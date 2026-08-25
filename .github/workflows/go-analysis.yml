@@ -38,13 +38,14 @@ jobs:
         with:
           go-version-file: umh-core/go.mod
           cache: true
+          cache-dependency-path: umh-core/go.sum
 
       - name: Run go vet
         run: make vet
 
   nilaway:
     name: Nilaway Analysis
-    runs-on: depot-ubuntu-24.04
+    runs-on: depot-ubuntu-24.04-4
     defaults:
       run:
         working-directory: ./umh-core
@@ -62,6 +63,7 @@ jobs:
         with:
           go-version-file: umh-core/go.mod
           cache: true
+          cache-dependency-path: umh-core/go.sum
 
       - name: Get Nilaway version from Makefile
         id: nilaway_version
