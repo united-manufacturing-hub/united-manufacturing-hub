@@ -25,12 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/benbjohnson/clock"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -44,35 +41,8 @@ const (
 	// CPU monitor, matching how the configworker reconciles a singleton child.
 	InstanceName = "cpu"
 
-	// FilesystemDepsKey is the register.SetDeps key under which a caller
-	// publishes the filesystem.Service the sampler reads through. It is
-	// distinct from WorkerType, which is where a worker's own typed deps
-	// payload goes, because the typed deps registry keys on the string alone
-	// and two payloads cannot share a key. Same convention, and the same
-	// reason, as configworker.ConfigManagerDepsKey.
-	FilesystemDepsKey = WorkerType + ".filesystem"
-
-	// ClockDepsKey is the register.SetDeps key under which a caller publishes
-	// the clock.Clock the sampler stamps each Sample from. Separate from
-	// FilesystemDepsKey for the reason that key is separate from WorkerType:
-	// the registry keys on the string alone, so two payloads cannot share one.
-	//
-	// The two keys belong together. Every rate the sampler publishes is a
-	// counter delta divided by the gap between two Sample timestamps, so a
-	// caller staging counters on one clock while the sampler stamps from
-	// another gets rates neither of them describes. A fakebox.Box advances its
-	// counters and its own clock in one Tick for exactly that reason; publish
-	// its FS under FilesystemDepsKey and its Clock under this key, and the
-	// numbers it was told come back out.
-	ClockDepsKey = WorkerType + ".clock"
-
 	// cgroupBase is the cgroup v2 mount point whose CPU controller files the
 	// sampler reads (cpu.stat, cpu.max, cpu.pressure, cpuset.cpus.effective).
-	// The specs in this package that serve those files from a fixture read this
-	// same constant, so the served paths and the looked-for paths cannot drift
-	// apart and leave every read failing. Elsewhere the fixture declares its
-	// own base (pkg/fsmv2/examples names cpuPressureBase), which has to be kept
-	// equal to this by hand.
 	cgroupBase = "/sys/fs/cgroup"
 
 	// pollInterval is how often the worker samples the cgroup.
@@ -200,47 +170,19 @@ type CPUDeps struct {
 // report it could not measure. A failed startup read yields a healthy first
 // verdict from a permanently thinned table instead, which is why it is logged.
 //
-// The filesystem the sampler reads through is whichever one a caller published
-// under FilesystemDepsKey before the worker was spawned, and the clock it stamps
-// from is whichever one was published under ClockDepsKey. NewDeps runs per
-// instance at spawn time, not at init(), so a caller that publishes first
-// decides which files this instance sees and which clock times them. A caller
-// staging counters has to publish both keys, for the reason ClockDepsKey gives;
-// a caller who stages none needs only the filesystem, and the specs beside this
-// file that read a Box once do exactly that.
-//
-// Nothing published means the real filesystem. That differs from the transport
-// pull worker, which errors when its deps are missing, and the difference is
-// deliberate: production wants the real filesystem and should not have to
-// publish one to get it. The price is paid by a caller who meant to publish a
-// fixture and forgot. On Linux the real cgroup files read fine, so that caller
-// gets a real verdict computed from the real machine — and a loose assertion,
-// such as one expecting "healthy" on an idle box, passes on numbers it never
-// staged. An assertion that names something only the published filesystem could
-// produce does not have that hole.
+// The sampler reads the real cgroup files through the real filesystem. A caller
+// that needs Poll driven off something else builds its own sampler and passes it
+// to NewDepsWithSampler.
 func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
-	if fs == nil {
-		fs = filesystem.NewDefaultService()
-	}
-
-	clk := register.GetDeps[clock.Clock](ClockDepsKey)
-	if clk == nil {
-		clk = clock.New()
-	}
-
-	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSamplerWithClock(fs, cgroupBase, clk))
+	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(filesystem.NewDefaultService(), cgroupBase))
 }
 
 // NewDepsWithSampler builds CPU's per-instance deps around an explicit sampler,
 // for a caller holding one already rather than one that wants the cgroup sampler
 // NewDeps builds. The table and engine are built from a startup snapshot through
 // that sampler, on the same path NewDeps takes, so deps built either way behave
-// identically from Poll's side.
-//
-// A caller who only wants Poll kept off the real /sys does not need this:
-// publishing a filesystem under FilesystemDepsKey is enough, and the specs
-// beside this file do exactly that.
+// identically from Poll's side. It is also how a caller keeps Poll off the real
+// /sys: the specs beside this file pass a sampler over a fixture filesystem.
 func NewDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
 	d := &CPUDeps{
 		BaseDependencies: bd,

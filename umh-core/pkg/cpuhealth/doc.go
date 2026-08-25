@@ -33,8 +33,6 @@
 // Five stages, each with a named entry point:
 //
 //	read      NewLinuxSampler(fs, base) returns a Sampler.
-//	          NewLinuxSamplerWithClock(fs, base, c) is the same sampler with
-//	          the tick's instant taken from c, so a test controls elapsed time.
 //	sample    Sampler.Read yields one Sample: every reading of one tick.
 //	table     Table(cores, quota) declares the signals; NewEngine builds the
 //	          engine from that same table.

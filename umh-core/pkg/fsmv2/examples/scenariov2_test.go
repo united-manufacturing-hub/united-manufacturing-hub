@@ -19,8 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -75,45 +73,6 @@ func logContainsEvent(logOutput, msg string) bool {
 	}
 
 	return false
-}
-
-// captureStdout returns everything fn writes to os.Stdout. The store dump
-// prints there, so stdout is the only channel a spec can read it on. The pipe
-// is drained concurrently because a dump larger than the pipe buffer would
-// otherwise block the writer forever.
-func captureStdout(fn func()) string {
-	original := os.Stdout
-
-	reader, writer, err := os.Pipe()
-	Expect(err).NotTo(HaveOccurred())
-
-	os.Stdout = writer
-
-	defer func() { os.Stdout = original }()
-
-	captured := make(chan string, 1)
-
-	go func() {
-		var sb strings.Builder
-
-		_, _ = io.Copy(&sb, reader)
-
-		captured <- sb.String()
-	}()
-
-	fn()
-
-	// Restore before closing so a stray later write lands on the real stdout
-	// rather than a closed pipe. Closing the writer ends the io.Copy, which is
-	// what lets the receive below return instead of blocking on an open pipe.
-	// The deferred restore above covers the case where fn panics.
-	os.Stdout = original
-	_ = writer.Close()
-
-	out := <-captured
-	_ = reader.Close()
-
-	return out
 }
 
 var _ = Describe("ScenarioV2 framework", func() {
@@ -230,40 +189,38 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the failed run must not replace or clear the already-published registry")
 	})
 
-	It("prints a store dump naming the workers that ran when a v2 scenario sets DumpStore", func() {
-		// A logger that writes nowhere keeps stdout carrying the dump alone.
-		logger := deps.NewNopFSMLogger()
+	It("warns and ignores DumpStore for a v2 scenario", func() {
+		logBuf := &v2LogBuffer{}
+		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
+
+		dumpRequested := examples.ScenarioV2{
+			Name:        "dump-requested",
+			Description: "test-local driver for the DumpStore warning path",
+			Driver: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		// noop is the framework's own template scenario: it drives nothing,
-		// so the application worker spawns only its config worker kernel and
-		// the dump has a known, small worker set.
-		dumped := captureStdout(func() {
-			result, err := examples.Run(ctx, examples.RunConfig{
-				ScenarioV2:   examples.NoopScenarioV2,
-				Duration:     2 * time.Second,
-				TickInterval: 50 * time.Millisecond,
-				Logger:       logger,
-				Store:        store,
-				DumpStore:    true,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Eventually(result.Done, "55s").Should(BeClosed())
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   dumpRequested,
+			Duration:     time.Second,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+			DumpStore:    true,
 		})
+		Expect(err).NotTo(HaveOccurred(),
+			"DumpStore must not break a v2 run, only warn")
+		Eventually(result.Done, "55s").Should(BeClosed())
 
-		// Assert on which workers the dump names, not on the fact that
-		// something printed. A header with no workers under it would still
-		// satisfy "a dump appeared" while telling a reader nothing about the
-		// run, and stdout is the only channel the dump arrives on.
-		Expect(dumped).To(ContainSubstring("CSE SCENARIO DUMP"),
-			"a v2 run with DumpStore set must print the store dump to stdout")
-		Expect(dumped).To(ContainSubstring(application.WorkerTypeName),
-			"the dump must name the application worker that ran the scenario")
-		Expect(dumped).To(ContainSubstring(configworker.WorkerTypeName),
-			"the dump must name the config worker kernel, the one child a noop v2 run spawns")
+		// A silently ignored DumpStore lets a developer misread "no dump
+		// printed" as "no store changes", so the gap must be logged.
+		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeTrue(),
+			"runV2 must warn that DumpStore is ignored for v2 scenarios")
 	})
 
 	It("tears down gracefully on a live tick loop when the caller ctx is cancelled mid-run", func() {
