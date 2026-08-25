@@ -68,13 +68,15 @@ import (
 type RunResult struct {
 	Done     <-chan struct{}
 	Shutdown func()
-	// Logs holds every entry a v2 run emitted. It is nil on the v1 YAML and
-	// CustomRunner paths, which emit to the caller's logger but are not
-	// captured. The capture logs at debug level through an unsampled logger
-	// regardless of the caller's logger configuration, so Logs can contain
-	// entries a filtered or sampling caller sink never received.
-	// Store-originated entries appear only when the store came from
-	// SetupStore. Read it after Done closes.
+	// Logs holds every entry the capture had received when teardown parsed
+	// it; writes that trail teardown are absent — runV2's teardown comment
+	// names the three classes. It is nil on the v1 YAML and CustomRunner
+	// paths, which emit to the caller's logger but are not captured. The
+	// capture logs at debug level through an unsampled logger regardless of
+	// the caller's logger configuration, so Logs can contain entries a
+	// filtered or sampling caller sink never received. Store-originated
+	// entries appear only when the store came from SetupStore. Read it after
+	// Done closes.
 	Logs []LogEntry
 	// ShutdownClean reports whether the run's supervisor drained cleanly on
 	// both the v1 and v2 paths: true if the graceful shutdown reaped every
