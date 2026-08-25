@@ -259,15 +259,16 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // runV2 executes a v2 scenario on the kernel-only application supervisor (no
 // YAML children, so the config worker kernel is the only child).
 //
-// runV2 keeps the process-global configworker deps key published for exactly
-// the supervisor's lifetime: the dynamicchildren registry is published under
-// the key before the supervisor starts (the application worker reads it every
-// tick), and the key is cleared on every exit path once the supervisor exists,
-// including a Driver panic, strictly after the supervisor has stopped.
-// Clearing the key earlier flips the application worker's
-// RegistryConfigured observation mid-shutdown; a key that is never cleared
-// makes every later runV2 in the same process fail its already-published
-// check below.
+// runV2 publishes the process-global configworker deps key before it builds
+// the supervisor, because the application worker reads the dynamicchildren
+// registry under that key every tick. If construction fails after that
+// publish, the construction error path clears the key itself: no supervisor
+// ever came to exist, so no teardown will. Once the supervisor exists, the
+// key is cleared on every exit path, including a Driver panic, strictly
+// after the supervisor has stopped. Clearing the key earlier flips the
+// application worker's RegistryConfigured observation mid-shutdown; a key
+// that is never cleared makes every later runV2 in the same process fail
+// its already-published check below.
 //
 // The supervisor runs on a context detached from the caller's ctx. The
 // caller's ctx drives the Driver, the Duration wait, and the teardown
@@ -326,6 +327,9 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
 	if err != nil {
+		// Construction failed before the deferred teardown below was
+		// registered, so nothing else clears the key published above.
+		register.ClearDeps(configworker.WorkerTypeName)
 		return nil, err
 	}
 

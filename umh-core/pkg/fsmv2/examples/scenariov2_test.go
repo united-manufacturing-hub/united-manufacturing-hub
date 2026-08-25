@@ -26,12 +26,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // v2LogBuffer is a goroutine-safe buffer for capturing JSON log output in
@@ -84,6 +86,22 @@ func logsContainMsg(entries []examples.LogEntry, msg string) bool {
 	}
 
 	return false
+}
+
+// errStoreSaveFailed is the error failingSavesStore's SaveIdentity returns,
+// so a spec can recognise its own injected failure in the error Run
+// propagates.
+var errStoreSaveFailed = errors.New("store save failed")
+
+// failingSavesStore is a TriangularStore whose SaveIdentity fails, so
+// building a supervisor against it cannot persist the application worker's
+// initial documents and construction fails.
+type failingSavesStore struct {
+	storage.TriangularStoreInterface
+}
+
+func (s *failingSavesStore) SaveIdentity(_ context.Context, _ string, _ string, _ persistence.Document) error {
+	return errStoreSaveFailed
 }
 
 var _ = Describe("ScenarioV2 framework", func() {
@@ -198,6 +216,68 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(
 			BeIdenticalTo(firstRunWriter.Registry()),
 			"the failed run must not replace or clear the already-published registry")
+	})
+
+	It("clears the configworker deps key when supervisor construction fails, so a later run can publish it", func() {
+		logger := deps.NewNopFSMLogger()
+
+		// Run 1 fails while the supervisor is being built: construction
+		// cannot persist the application worker's initial documents. By
+		// then runV2 has already published the deps key, so this is the
+		// path that leaks it.
+		failingConstruction := examples.ScenarioV2{
+			Name:        "construction-fails",
+			Description: "test-local driver for the supervisor-construction failure path",
+			Driver: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		// Cancellable so a regression that lets construction succeed still
+		// tears run 1 down: with no Duration, ctx cancellation is the only
+		// teardown trigger.
+		ctx1, cancel1 := context.WithCancel(context.Background())
+		defer cancel1()
+
+		result1, err := examples.Run(ctx1, examples.RunConfig{
+			ScenarioV2:   failingConstruction,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        &failingSavesStore{TriangularStoreInterface: examples.SetupStore(logger)},
+		})
+		Expect(err).To(MatchError(ContainSubstring(errStoreSaveFailed.Error())),
+			"the run must fail on the injected store failure, proving construction was reached and failed")
+		Expect(result1).To(BeNil())
+
+		// The key must be cleared even though the supervisor never came to exist.
+		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+			"a failed construction must clear the configworker deps key")
+
+		// A nil key cannot distinguish cleared from never-published; only a
+		// later run proves publication works. It must share this spec,
+		// because the suite's DeferCleanup clears the key between specs.
+		laterRun := examples.ScenarioV2{
+			Name:        "later-run",
+			Description: "test-local driver proving a run can follow a failed construction",
+			Driver: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel2()
+
+		result2, err := examples.Run(ctx2, examples.RunConfig{
+			ScenarioV2:   laterRun,
+			Duration:     time.Second,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        examples.SetupStore(logger),
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a later v2 run must start once the failed construction cleared the key")
+		Eventually(result2.Done, "55s").Should(BeClosed(),
+			"the later run must complete end-to-end")
 	})
 
 	It("warns and ignores DumpStore for a v2 scenario", func() {
