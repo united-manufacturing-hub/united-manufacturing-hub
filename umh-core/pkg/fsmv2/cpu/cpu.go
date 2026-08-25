@@ -284,21 +284,14 @@ func (d *CPUDeps) evidenceCounts(env diagnosis.Environment) (capable, measured i
 // expecting "healthy" on an idle box passes on numbers it never staged. An
 // assertion that names something only the published filesystem can produce
 // does not have that hole.
-func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
+func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
 		fs = filesystem.NewDefaultService()
 	}
 
-	return newDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(fs, cgroupBase))
-}
+	sampler := cpuhealth.NewLinuxSampler(fs, cgroupBase)
 
-// newDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
-// NewDeps is its only caller and supplies the cgroup sampler; the split keeps
-// the choice of sampler separate from the startup-snapshot construction below.
-// The specs beside this file do not call it: they build CPUDeps directly around
-// a stub Sampler, which skips the startup snapshot as well.
-func newDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
 	d := &CPUDeps{
 		BaseDependencies: bd,
 		sampler:          sampler,
