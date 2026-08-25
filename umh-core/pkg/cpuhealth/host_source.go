@@ -93,9 +93,8 @@ type hostBaseline struct {
 // advanceHostRates advances the baseline this source owns to this tick, which is
 // what the next tick measures against. It returns this tick's own HostBusy rate
 // and Steal fraction, from busy, steal and denom against the baseline it
-// replaced. ts is the composer's single per-tick Timestamp and never a clock of
-// its own; Read in read.go says why both sources have to divide by the same
-// elapsed time.
+// replaced. ts is the composer's single per-tick Timestamp and never time.Now();
+// Read in read.go says why both sources have to divide by the same elapsed time.
 func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) (hostBusy, stealFrac diagnosis.Reading) {
 	hostBusy = diagnosis.Unknown()
 	stealFrac = diagnosis.Unknown()

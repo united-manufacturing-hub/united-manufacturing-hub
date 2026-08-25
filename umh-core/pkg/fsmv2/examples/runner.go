@@ -54,15 +54,13 @@ import (
 // RunResult contains the result of running a scenario.
 //
 // The two fields carry different guarantees per scenario form. Done closes
-// when teardown is complete: for a v1 scenario that is when the supervisor has
-// stopped and its cleanup ran; for a v2 scenario it additionally includes
-// clearing the published configworker deps key, which is what makes
-// back-to-back v2 runs safe. On both forms, DumpStore adds the store dump to
-// teardown, and Done closes only once that dump has printed. Shutdown
-// initiates teardown: the v1 Shutdown does not wait for Done (the DumpStore
-// summary may still be printing when it returns), while the v2 Shutdown blocks
-// until Done, so the deps key is cleared and the dump printed by the time it
-// returns.
+// when teardown is complete: for a v1 scenario that is when the supervisor
+// has stopped and its cleanup ran (plus the dump when DumpStore is set); for
+// a v2 scenario it additionally includes clearing the published configworker
+// deps key, which is what makes back-to-back v2 runs safe. Shutdown initiates
+// teardown: the v1 Shutdown does not wait for Done (the DumpStore summary may
+// still be printing when it returns), while the v2 Shutdown blocks until Done
+// so the deps key is already cleared when it returns.
 type RunResult struct {
 	Done     <-chan struct{}
 	Shutdown func()
@@ -86,9 +84,10 @@ type RunResult struct {
 // live tick loop instead of killing the loop and forcing the drain to wait
 // out its timeouts. CustomRunner scenarios own their supervisor lifecycle.
 //
-// If DumpStore is enabled, the YAML path and the v2 path both print a store
-// changes summary after the run. CustomRunner scenarios receive cfg.DumpStore
-// and are responsible for their own dump handling; Run does not dump for them.
+// If DumpStore is enabled, the YAML path prints a store changes summary
+// after the run. The v2 path does not support DumpStore yet: runV2 logs a
+// warning and ignores it. CustomRunner scenarios receive cfg.DumpStore and
+// are responsible for their own dump handling; Run does not dump for them.
 func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	hasYAML := cfg.Scenario.YAMLConfig != ""
 	hasCustom := cfg.Scenario.CustomRunner != nil
@@ -131,7 +130,14 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	var startSyncID int64
 
 	if cfg.DumpStore {
-		startSyncID = storeDumpStartSyncID(ctx, cfg)
+		var err error
+
+		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
+		if err != nil {
+			cfg.Logger.SentryWarn(deps.FeatureExamples, "", "sync_id_fetch_failed",
+				deps.Err(err),
+				deps.String("impact", "dump_shows_all_changes"))
+		}
 	}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
@@ -195,7 +201,15 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		go func() {
 			<-done
 
-			printStoreDump(cfg, startSyncID)
+			dumpCtx := context.Background()
+
+			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
+			if err != nil {
+				cfg.Logger.SentryWarn(deps.FeatureExamples, "", "scenario_dump_failed",
+					deps.Err(err))
+			} else {
+				fmt.Print(dump.FormatHuman())
+			}
 
 			close(wrappedDone)
 		}()
@@ -242,10 +256,10 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			"so another v2 run is still active in this process", cfg.ScenarioV2.Name)
 	}
 
-	var startSyncID int64
-
 	if cfg.DumpStore {
-		startSyncID = storeDumpStartSyncID(ctx, cfg)
+		cfg.Logger.SentryWarn(deps.FeatureExamples, "", "dump_store_not_supported_for_v2",
+			deps.String("scenario", cfg.ScenarioV2.Name),
+			deps.String("impact", "no_store_dump_printed"))
 	}
 
 	writer := dynamicchildren.NewWriter()
@@ -347,11 +361,6 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			deps.String("wake_reason", wakeReason))
 
 		teardown()
-
-		if cfg.DumpStore {
-			printStoreDump(cfg, startSyncID)
-		}
-
 		close(done)
 	}()
 
@@ -364,38 +373,6 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	return result, nil
-}
-
-// storeDumpStartSyncID reads the store's current sync ID so a later dump shows
-// only the changes this run made. Both scenario paths call it before starting
-// their supervisor. A failed read is logged rather than fatal: the dump then
-// starts from whatever the store returned, which is the whole history.
-func storeDumpStartSyncID(ctx context.Context, cfg RunConfig) int64 {
-	syncID, err := cfg.Store.GetLatestSyncID(ctx)
-	if err != nil {
-		cfg.Logger.SentryWarn(deps.FeatureExamples, "", "sync_id_fetch_failed",
-			deps.Err(err),
-			deps.String("impact", "dump_shows_all_changes"))
-	}
-
-	return syncID
-}
-
-// printStoreDump writes the run's store changes summary to stdout. Both
-// scenario paths call it once teardown is complete, so the dump covers the
-// whole run. It reads the store on context.Background() because the caller's
-// ctx is usually already cancelled by the time teardown finishes, and a
-// cancelled ctx would fail the read that produces the dump.
-func printStoreDump(cfg RunConfig, startSyncID int64) {
-	dump, err := DumpScenario(context.Background(), cfg.Store, startSyncID)
-	if err != nil {
-		cfg.Logger.SentryWarn(deps.FeatureExamples, "", "scenario_dump_failed",
-			deps.Err(err))
-
-		return
-	}
-
-	fmt.Print(dump.FormatHuman())
 }
 
 // SetupStore creates an in-memory TriangularStore for testing and CLI usage.
