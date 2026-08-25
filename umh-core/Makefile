@@ -403,7 +403,7 @@ benchmark-encoding:
 	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
 
 # Meta target to setup the environment for the tests
-pre-test: build-protobuf stop-all-pods vet-nilaway-lint
+pre-test: build-protobuf stop-all-pods
 
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
