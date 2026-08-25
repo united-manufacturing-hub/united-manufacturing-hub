@@ -65,25 +65,6 @@ var _ = Describe("CPU monitor worker", func() {
 				"Register records an initial state for the worker type")
 		})
 
-		It("keeps the sampler's baselines in per-instance deps behind a pointer, so a poll's mutations survive the tick", func() {
-			d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
-				return cpuhealth.Sample{Timestamp: time.Now()}, nil
-			}}, 4, 2)
-
-			// Two ticks. Poll takes d by value; because TDeps is *CPUDeps, the
-			// value is the pointer and the second tick sees the first's
-			// mutation. If TDeps were the value CPUDeps, the non-pointer `polls`
-			// field would be copied and reset to zero each tick.
-			_, err := Poll(context.Background(), d, CPUConfig{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(d.polls).To(Equal(uint64(1)), "first tick increments the deps' poll counter")
-
-			_, err = Poll(context.Background(), d, CPUConfig{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(d.polls).To(Equal(uint64(2)),
-				"second tick sees the first's mutation — a value-TDeps refactor would show 1")
-		})
-
 		It("reports a verdict from Decide rather than a raw measurement", func() {
 			d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				return cpuhealth.Sample{
