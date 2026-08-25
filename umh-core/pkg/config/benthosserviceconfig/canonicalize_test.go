@@ -77,7 +77,7 @@ var _ = Describe("canonicalize", func() {
 			Expect(logs.Len()).To(BeZero())
 		})
 
-		DescribeTable("reads 0 and 1, and says nothing about them",
+		DescribeTable("reads what strconv.ParseBool reads, and says nothing about it",
 			func(value string, expected bool) {
 				fast, logs := resolve(value, true)
 
@@ -86,8 +86,12 @@ var _ = Describe("canonicalize", func() {
 			},
 			Entry("1 keeps the walk", "1", true),
 			Entry("0 is the kill switch", "0", false),
-			// A trailing space survives a compose file; that is a typo in the
-			// whitespace, not an unclear intent.
+			Entry("true", "true", true),
+			Entry("false", "false", false),
+			Entry("upper case", "FALSE", false),
+			Entry("single letter", "t", true),
+			// ParseBool itself rejects these, so the trim is what makes them work; a
+			// space out of a compose file is a typo in the whitespace.
 			Entry("trailing space", "0 ", false),
 			Entry("leading space", " 1", true),
 		)
@@ -105,11 +109,11 @@ var _ = Describe("canonicalize", func() {
 				line := logs.All()[0].Message
 				Expect(line).To(ContainSubstring("USE_CANONICALIZE_FAST"))
 				Expect(line).To(ContainSubstring(`"`+value+`"`), "the warning must name the value")
-				Expect(line).To(ContainSubstring("0 nor 1"), "and say what is accepted")
+				Expect(line).To(ContainSubstring("not a boolean"), "and say what was wrong with it")
 			},
 			Entry("a word", "disabled"),
-			Entry("true, which is not accepted", "true"),
-			Entry("false, which is not accepted", "false"),
+			Entry("a typo", "flase"),
+			Entry("another spelling ParseBool does not take", "yes"),
 			Entry("any other digit", "2"),
 			Entry("set but empty", ""),
 		)

@@ -16,6 +16,7 @@ package benthosserviceconfig
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -40,26 +41,30 @@ var (
 // use rather than at package initialization, because main installs the logger only
 // after that and a warning written there reaches nobody.
 //
-// Only 0 and 1 are accepted. Anything else turns the walk off rather than leaving
-// the default on: whoever set the variable was reaching for the off switch, and the
-// round-trip only costs time. Whitespace is trimmed, and LookupEnv is used so that
-// set-but-empty still counts as set.
+// A value strconv.ParseBool cannot read turns the walk off rather than leaving the
+// default on: whoever set the variable was reaching for the off switch, and the
+// round-trip only costs time. LookupEnv so that set-but-empty still counts as set.
 func initGate() {
 	raw, isSet := os.LookupEnv(canonicalizeFastEnv)
-
-	switch {
-	case !isSet, strings.TrimSpace(raw) == "1":
+	if !isSet {
 		useCanonicalizeFast = true
-	case strings.TrimSpace(raw) == "0":
-		useCanonicalizeFast = false
-	default:
+		return
+	}
+
+	// Trimmed first: ParseBool rejects " 1", and a space out of a compose file is a
+	// typo in the whitespace rather than an unclear intent.
+	enabled, err := strconv.ParseBool(strings.TrimSpace(raw))
+	if err != nil {
 		useCanonicalizeFast = false
 
 		zap.S().Warnf(
-			"%s is set to %q, which is neither 0 nor 1. Canonicalization fell back to "+
+			"%s is set to %q, which is not a boolean. Canonicalization fell back to "+
 				"the YAML round-trip, which is correct but slower.",
 			canonicalizeFastEnv, raw)
+		return
 	}
+
+	useCanonicalizeFast = enabled
 }
 
 // canonicalize rewrites the free-form config maps into the types they take once
