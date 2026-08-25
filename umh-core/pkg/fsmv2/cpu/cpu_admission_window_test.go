@@ -118,10 +118,11 @@ var _ = Describe("absence of evidence is not health", func() {
 
 		It("ends the refusal the moment measured reaches capable, without waiting for the 10s deadline", func() {
 			// Twin A: a bare no-quota box whose ONLY capable signal is pressure
-			// (a cores=0 table drops saturation; throttling and steal are
-			// NoInstrument without a limit or virtualization). Pressure lands
+			// (cores=0 and quota=0 keep both capacity signals out of the table;
+			// throttling and steal are NoInstrument without a limit or
+			// virtualization). Pressure lands
 			// Ready at tick 3, so measured reaches capable then — admission must
-			// open immediately, still inside the window. This pins the
+			// open immediately, still inside the window. This guards the
 			// `measured < capable` term: a regression that deleted it would
 			// refuse this healthy box for the whole window. Twin B: the same box
 			// whose pressure never measures — at the same window position it
@@ -182,9 +183,9 @@ var _ = Describe("absence of evidence is not health", func() {
 		It("never refuses when no signal is capable, however fresh the worker", func() {
 			// A box nothing can answer: no limit (quota 0), no PSI (PsiAvailable
 			// false), no virtualization (Virtualized false), and no cores for a
-			// saturation signal. Every signal resolves NoInstrument, so capable
+			// host-cpu-full signal. Every signal resolves NoInstrument, so capable
 			// is 0 and measured < capable is false on every tick — the refusal
-			// cannot hold even inside the window. Pins the `measured < capable`
+			// cannot hold even inside the window. Guards the `measured < capable`
 			// term against a regression that left only the elapsed clause.
 			start := time.Unix(1_700_000_000, 0).UTC()
 			tick := 0

@@ -85,8 +85,9 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 	Describe("Sentry-once at the 10s admission deadline", func() {
 		It("raises a SentryWarn exactly once, naming the never-measured signal, when the deadline passes — never per tick, never on a no-PSI box", func() {
 			// A PSI box whose only capable signal is pressure, which never
-			// first-measures: cores=0/quota=0 drops saturation and makes every
-			// other signal NoInstrument, so exactly pressure is capable and it
+			// first-measures: cores=0/quota=0 keeps both capacity signals out of
+			// the table and makes the rest NoInstrument, so exactly pressure is
+			// capable and it
 			// stays non-Ready forever — measured 0 < capable 1 on every tick.
 			// Past the 10s window admission opens and the worker must raise one
 			// SentryWarn naming "pressure", not one per tick.
@@ -168,10 +169,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			// logger_impl.go emits as the `feature` and `hierarchy_path` fields.
 			// The event name and the payload can be perfect while the warning
 			// lands in another team's alert bucket, or names no instance at all,
-			// and an operator would never find it. This is the same argument list
-			// a defect already slipped through once (the interpolated event name):
-			// the previous hardening pinned the message and the fields, leaving
-			// the first two arguments unasserted.
+			// and an operator would never find it.
 			Expect(spy.sentryWarns[0].feature).To(Equal(deps.FeatureSupportCPU),
 				"the warning routes to the CPU feature, not some other worker's bucket")
 			Expect(spy.sentryWarns[0].hierarchyPath).NotTo(BeEmpty(),
@@ -209,7 +207,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 		It("raises no SentryWarn on a box whose only capable signal measured within the window", func() {
 			// A PSI box whose only capable signal is pressure, which first-measures
 			// on the second tick — measured==capable==1 thereafter. Past the 10s
-			// window the box is healthy, so no SentryWarn may ever fire. This pins
+			// window the box is healthy, so no SentryWarn may ever fire. This guards
 			// the measured < capable discrimination on a healthy capable box: if a
 			// regression changed < to <=, this worker would raise a spurious
 			// SentryWarn past the deadline.
@@ -244,10 +242,10 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 		It("on a many-capable box names EVERY never-measured signal and the shortfall, once, never the measured one", func() {
 			// A quota'd PSI box (cores=4, quota=1, HasLimit + HasPressureStats in the
 			// environment): pressure becomes capable only because PsiAvailable is
-			// true; throttle and limit-saturation become capable because the quota
-			// is positive; saturation is capable because cores are readable. Only
+			// true; throttle and container-limit-full become capable because the quota
+			// is positive; host-cpu-full is capable because cores are readable. Only
 			// pressure ever produces a reading (Known on every tick); throttle
-			// (counter, no NrThrottled), limit-saturation and saturation (no
+			// (counter, no NrThrottled), container-limit-full and host-cpu-full (no
 			// usage/host-busy input) stay AllAbsent forever. So SignalsMeasured==1
 			// and SignalsCapable==4 on every tick, and the never-measured set is
 			// THREE names — the plural name-assembly path a single-capable box never
@@ -279,7 +277,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 				Expect(st.SignalsMeasured).To(Equal(1),
 					"exactly one capable signal (pressure) first-measures; the rest never do")
 				Expect(st.SignalsCapable).To(Equal(4),
-					"throttling, limit-saturation and saturation are capable alongside pressure")
+					"throttling, container-limit-full and host-cpu-full are capable alongside pressure")
 				last = st
 			}
 

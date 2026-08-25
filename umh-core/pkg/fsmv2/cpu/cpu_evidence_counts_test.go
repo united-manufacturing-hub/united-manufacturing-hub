@@ -30,7 +30,7 @@ var _ = Describe("absence of evidence is not health", func() {
 		It("reports, alongside the verdict, how many signals are capable and how many have first-measured", func() {
 			// Bare metal, no quota. Measured by the engine: throttling and steal
 			// are NoInstrument (not capable); pressure (Ready this tick) and
-			// saturation (AllAbsent) are capable.
+			// host-cpu-full (AllAbsent) are capable.
 			d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				return cpuhealth.Sample{
 					Timestamp: time.Now(),
@@ -45,16 +45,16 @@ var _ = Describe("absence of evidence is not health", func() {
 
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
-			// Pressure is Ready (capable and first-measured); saturation is
+			// Pressure is Ready (capable and first-measured); host-cpu-full is
 			// AllAbsent (capable, not yet measured). So one measured of two
 			// capable.
-			Expect(status.SignalsCapable).To(Equal(2), "pressure + saturation are capable on this bare box")
-			Expect(status.SignalsMeasured).To(Equal(1), "pressure judged on its first sample; saturation has not")
+			Expect(status.SignalsCapable).To(Equal(2), "pressure + host-cpu-full are capable on this bare box")
+			Expect(status.SignalsMeasured).To(Equal(1), "pressure judged on its first sample; host-cpu-full has not")
 			Expect(status.SignalsMeasured).To(BeNumerically("<=", status.SignalsCapable),
 				"measured is never greater than capable")
 			// One signal first-measured and another capable one still has not, so
 			// measured (1) is below capable (2): the refusal holds on this partial
-			// box too, not only on the measured==0 case. Pins the `measured <
+			// box too, not only on the measured==0 case. Guards the `measured <
 			// capable` term: a regression to `measured == 0` would pass the other
 			// specs yet wrongly admit this box inside the window. This single Poll
 			// anchors the window at its own sample (delta 0s), so it is inside it.
@@ -84,7 +84,7 @@ var _ = Describe("absence of evidence is not health", func() {
 
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(status.SignalsCapable).To(Equal(2), "pressure + saturation are still capable")
+			Expect(status.SignalsCapable).To(Equal(2), "pressure + host-cpu-full are still capable")
 			Expect(status.SignalsMeasured).To(Equal(0), "no capable signal has measured yet")
 			Expect(status.SignalsMeasured).To(BeNumerically("<", status.SignalsCapable),
 				"a capable signal that has never measured must keep measured < capable (the refusal)")
@@ -113,7 +113,7 @@ var _ = Describe("absence of evidence is not health", func() {
 
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
-			// Table has 4 signals; only 2 are capable (pressure, saturation).
+			// Table has 4 signals; only 2 are capable (pressure, host-cpu-full).
 			// throttling and steal are NoInstrument and must not appear here.
 			Expect(status.SignalsCapable).To(Equal(2),
 				"NoInstrument signals are excluded from the capable count, so a bare box shows its real answerable set")
