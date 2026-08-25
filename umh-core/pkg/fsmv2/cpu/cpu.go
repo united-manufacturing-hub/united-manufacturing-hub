@@ -35,11 +35,10 @@ import (
 )
 
 const (
-	// WorkerType is the canonical worker-type name used in config and CSE storage.
+	// WorkerType names this worker in config, in CSE storage, and in Ref.
 	WorkerType = "cpu"
 
-	// InstanceName is the fixed dynamic-child name for the single per-instance
-	// CPU monitor, matching how the configworker reconciles a singleton child.
+	// InstanceName names the child in Ref.
 	InstanceName = "cpu"
 
 	// FilesystemDepsKey is the register.SetDeps key under which a caller
@@ -58,26 +57,22 @@ const (
 
 	// pollInterval is how often the worker samples the cgroup.
 	//
-	// It also fixes the staleness bound on the read side. A reader that goes
-	// through pkg/fsmv2/adapter treats an observation as stale once it is older
-	// than three times the worker's registered poll interval (staleAfterFor),
-	// and simple.Register publishes this constant as that interval. Changing
-	// this number therefore moves the sampling cadence and the staleness bound
-	// together. Nothing reads the CPU worker through that adapter today, so
-	// only the sampling cadence has an effect so far.
+	// It also sets a staleness bound. simple.Register publishes it as this
+	// worker's observation interval, and pkg/fsmv2/adapter calls an observation
+	// stale at three times that (staleAfterFor). Nothing reads the CPU worker
+	// through that adapter yet, so today the number only moves the cadence.
 	pollInterval = 1 * time.Second
 )
 
-// Ref is the (WorkerType, Name) pair identifying the CPU monitor child. The
-// configworker upserts the child under it, gated behind USE_FSMV2_CPU, and a
-// reader fetches that child's status back under the same pair through
-// fsmv2client.
+// Ref identifies the CPU monitor child by the (WorkerType, InstanceName) pair
+// above. The configworker reconciles exactly one such child, upserting it under
+// this pair behind USE_FSMV2_CPU, and a reader fetches its status back under
+// the same pair through fsmv2client.
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
-// CPUConfig is the worker's config: the CPU child is upserted with an empty
-// config, so this is a deliberately empty struct. A config that carried values
-// would make the configworker re-upsert and respawn the child on every tick,
-// dropping every 60s window.
+// CPUConfig is deliberately empty. A config that carried values would make the
+// configworker re-upsert and respawn the child every tick, and each respawn
+// discards every 60s window the engine had warmed.
 type CPUConfig struct{}
 
 // CPUStatus is the result of one CPU-health observation. It carries judgements
@@ -142,23 +137,22 @@ type CPUDeps struct {
 	// table is the declaration Poll walks: engine.Select needs the Signal values,
 	// which are only reachable through the table the engine was built from.
 	table diagnosis.Table[cpuhealth.Sample]
-	// engineErr records a NewEngine failure from NewDeps. NewDeps cannot fail, so
-	// a table that will not build is reported through Poll: the worker stores no
-	// verdict and reports it could not measure, instead of calling Decide on a
-	// nil engine, which panics at the supervisor (simple has no recover around
-	// Poll).
+	// engineErr records a NewEngine failure. NewDeps cannot fail, so a table
+	// that will not build has to surface at the next Poll instead, which reports
+	// it could not measure. The alternative is Decide on a nil engine, which
+	// panics at the supervisor: simple has no recover around Poll, and recovery
+	// is at the collector.
 	engineErr error
 
 	// polls counts completed observations. It is the plain-field mutation the
 	// two-tick spec in cpu_test.go guards.
 	polls uint64
 
-	// firstFilled records, per signal name, whether it has ever reduced to a
-	// Ready value since this worker started. Set the first tick that signal's
-	// Availability is Ready; never cleared while the worker lives. A respawn
-	// builds a new worker and a new engine, so it clears then. This bit is what
-	// keeps a signal that already measured counting as measured through a later
-	// read outage.
+	// firstFilled is what keeps a signal that has measured once counting as
+	// measured through a later read outage. It records, per signal name, whether
+	// that signal has ever read Ready since this worker started, and is never
+	// cleared while the worker lives. A respawn builds a new worker, so it starts
+	// empty again.
 	firstFilled map[string]bool
 
 	// adm is the admission window's state: its anchor and its report latch.
@@ -185,16 +179,13 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
 
-	// The absence-of-evidence counts: a second walk of the table, with the same
-	// env, in the same tick, after Decide returns. It has to run after — Select
-	// reports a window's readiness without ageing it, so it is only trustworthy
-	// following an Observe on that tick, and Decide is what Observes.
+	// Count how many signals this box can answer and how many have answered, by
+	// walking the table a second time with the same env. It has to be the second
+	// walk: Select reports a window's readiness without ageing it, so it is only
+	// trustworthy after an Observe on this tick, and Decide is what Observes.
 	//
-	// Select gives each signal's Availability. Capable means not NoInstrument:
-	// something on this box can answer the signal. Measured means the signal's
-	// first-fill bit is set, which happens the first tick it reads Ready and is
-	// never undone, so a signal that has measured keeps counting as measured
-	// through a later read outage.
+	// Capable means not NoInstrument — something on this box can answer the
+	// signal at all. Measured means firstFilled is set for it; see that field.
 	capable, measured := 0, 0
 	unmeasured := []string{}
 	for _, s := range d.table.Signals {
@@ -296,13 +287,10 @@ func newDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpu
 		sampler:          sampler,
 	}
 
-	// The table and engine are built once, at construction, from the startup
-	// snapshot. Both cores and quota are startup facts; a quota change at
-	// runtime needs a rebuilt table, which this worker does not do. A table that
-	// will not build leaves the engine nil and sets engineErr, which Poll
-	// reports as could-not-measure rather than letting Decide panic on a nil
-	// engine (simple has no recover around Poll; recovery is at the collector).
-	// The table is held so Poll can walk table.Signals for per-signal Availability.
+	// The table and engine are built once, here, from the startup snapshot. Both
+	// cores and quota are startup facts; a quota change at runtime needs a
+	// rebuilt table, which this worker does not do. The table is held because
+	// Poll walks table.Signals for per-signal Availability.
 	cores, quota := startupCapacity(context.Background(), sampler, bd)
 	d.table = cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
