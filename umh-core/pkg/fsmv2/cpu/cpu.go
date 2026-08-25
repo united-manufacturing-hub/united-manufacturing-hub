@@ -149,15 +149,9 @@ type CPUDeps struct {
 	// read outage.
 	firstFilled map[string]bool
 
-	// startedAt anchors the admission window: the first sample timestamp
-	// the worker ever sees. Elapsed sample time is measured from it, so the
-	// window is driven by the sample clock, not the wall clock.
-	startedAt time.Time
-
-	// admissionReported records whether a capable signal that never first-measured
-	// has already been reported at the admission-window deadline. The report fires
-	// once per worker, never once per tick.
-	admissionReported bool
+	// adm is the admission window's state: its anchor and its report latch.
+	// admission.go has what the window is for.
+	adm admission
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
@@ -240,12 +234,6 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 		return CPUStatus{}, err
 	}
 
-	// The admission window is anchored on the first sample timestamp the worker
-	// ever sees, so the refusal below is bounded by sample time, not wall time.
-	if d.startedAt.IsZero() {
-		d.startedAt = sample.Timestamp
-	}
-
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
 
@@ -279,15 +267,11 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	d.polls++
 
-	// Elapsed is the sample-time delta from the anchor, never a wall-clock one.
-	// Production sample timestamps come from monotonic time.Now(), so it is
-	// never negative there.
-	elapsed := sample.Timestamp.Sub(d.startedAt)
-	refusing, shortfallAtDeadline := admissionDecision(elapsed, admissionWindow, measured, capable)
+	refusing, shortfallAtDeadline := d.adm.decide(sample.Timestamp, measured, capable)
 
 	// Say once that admission opened on a source which should answer and never
-	// did. Once per worker, not once per tick — that is the admissionReported
-	// latch, and it is the reason this gate is not the pure decision above. A
+	// did. Once per worker, not once per tick — that is reportOnce, and it is
+	// the reason this gate is not part of the decision above. A
 	// WARN, not an error: there is nothing for an operator to act on — the box
 	// simply cannot fully see its own CPU, so paging on-call would be noise.
 	//
@@ -297,8 +281,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// combination its own Sentry issue. Every dynamic value rides in the
 	// structured fields, which is also how every other worker reports
 	// (transport's "persistent_auth_failure", pull's "pending_buffer_overflow").
-	if shortfallAtDeadline && !d.admissionReported {
-		d.admissionReported = true
+	if shortfallAtDeadline && d.adm.reportOnce() {
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
 			"cpu_admission_deadline_never_measured_signal",
 			deps.String("never_measured_signals", strings.Join(unmeasured, ", ")),
