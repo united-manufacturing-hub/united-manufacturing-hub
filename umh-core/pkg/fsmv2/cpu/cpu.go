@@ -100,11 +100,13 @@ type CPUStatus struct {
 	Message string `json:"message"`
 
 	// SignalsCapable is how many CPU signals this box can answer (not
-	// NoInstrument). It has no consumer: nothing outside this package decides,
-	// displays or alerts on it.
+	// NoInstrument). Its reader is the scenario harness, which asserts on it to
+	// separate capability from readability: a signal stays capable after the file
+	// it reads disappears, because the box still has the instrument. Nothing in
+	// the Management Console reads it.
 	SignalsCapable int `json:"signalsCapable"`
 	// SignalsMeasured is how many capable signals have produced a first
-	// measurement since this worker started. It has no consumer either.
+	// measurement since this worker started. Nothing reads it.
 	SignalsMeasured int `json:"signalsMeasured"`
 
 	// RefusingAdmission reports whether admission is currently refused: a
