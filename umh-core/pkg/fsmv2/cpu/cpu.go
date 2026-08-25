@@ -316,14 +316,11 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	d.polls++
 
-	// The refusal is bounded: it holds only while a capable signal has not
-	// first-measured AND the admission window has not elapsed. Past the window,
-	// admission opens even if counts are unchanged. Elapsed is the sample-time
-	// delta from the anchor; production sample timestamps come from monotonic
-	// time.Now(), so it is never negative.
+	// Elapsed is the sample-time delta from the anchor, never a wall-clock one.
+	// Production sample timestamps come from monotonic time.Now(), so it is
+	// never negative there.
 	elapsed := sample.Timestamp.Sub(d.startedAt)
-	overDeadline := elapsed >= admissionWindow
-	refusing := measured < capable && elapsed < admissionWindow
+	refusing, overDeadline := admissionDecision(elapsed, admissionWindow, measured, capable)
 
 	// Once the admission window has elapsed and a capable signal has still never
 	// first-measured, admission opens even though a source that should answer
@@ -357,6 +354,28 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 		RefusingAdmission: refusing,
 		Polls:             d.polls,
 	}, nil
+}
+
+// admissionDecision answers the two questions the admission window poses on one
+// tick: whether admission is refused right now, and whether the window has run
+// out. It reads nothing but its arguments — no worker, no sampler, no clock.
+//
+// elapsed is how much sample time has passed since the worker's first sample.
+// measured and capable are the tick's evidence counts: how many signals this box
+// can answer at all, and how many of those have ever produced a reading.
+//
+// Both answers turn on the same comparison of elapsed against window, in
+// opposite directions, which is why one function decides them:
+//
+//	refusing      a capable signal has not measured, AND the window is still open
+//	overDeadline  the window has closed, whatever the counts say
+//
+// So the refusal is bounded rather than fixed to the counts. A signal that never
+// measures stops blocking admission once the window closes, which is what keeps
+// a box that cannot fully see its own CPU from being blocked for its whole life.
+// The two results can never both be true.
+func admissionDecision(elapsed, window time.Duration, measured, capable int) (refusing, overDeadline bool) {
+	return measured < capable && elapsed < window, elapsed >= window
 }
 
 // startupCapacity derives the two startup facts cpuhealth.Table shapes itself
