@@ -98,9 +98,8 @@ var _ = Describe("absence of evidence is not health", func() {
 			// deadline releases admission and nothing else: it must not turn the
 			// never-measured signal into a bad verdict. The intended consumer is
 			// bridge admission, where a degraded verdict stops new bridges from
-			// starting. That consumer is not built: nothing outside this
-			// package's own specs and the demo scenarios reads Verdict, and
-			// nothing outside this package reads RefusingAdmission at all. Once
+			// starting. That consumer is not built: outside this package,
+			// nothing reads Verdict and nothing reads RefusingAdmission. Once
 			// it exists, "the window expired and the signal still never
 			// measured, surely that is degraded" would reinstate exactly the
 			// permanent blocking the window exists to end. It would do so
