@@ -71,8 +71,11 @@ type Ringbuffer struct {
 
 // RingBufferSnapshot provides a consistent view of the ring buffer state.
 type RingBufferSnapshot struct {
-	Items           []*BufferItem // Current buffer contents, newest-to-oldest
-	LastSequenceNum uint64        // Latest sequence number
+	// Items holds the buffer contents oldest first, the order they were added.
+	// Whatever fills this field keeps that order, and a reader that wants the
+	// most recent N items takes them from the end.
+	Items           []*BufferItem
+	LastSequenceNum uint64 // Latest sequence number
 }
 
 // NewRingbufferWithDefaultCapacity creates a ring buffer with the standard production capacity.
@@ -159,12 +162,14 @@ func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
 	}
 }
 
-// getBuffersInternal returns shared references to buffer items (newest to oldest)
+// getBuffersInternal returns shared references to buffer items, oldest first.
 // This is used internally by GetSnapshot and assumes mutex is already held.
 func (rb *Ringbuffer) getBuffersInternal() []*BufferItem {
 	result := make([]*BufferItem, 0, rb.count)
 	for i := range rb.count {
-		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
+		// writePos is the next slot to write, so the oldest live item sits
+		// count places behind it.
+		idx := (rb.writePos - rb.count + i + len(rb.buf)) % len(rb.buf)
 		if b := rb.buf[idx]; b != nil {
 			result = append(result, b) // Share the reference, no copying
 		}

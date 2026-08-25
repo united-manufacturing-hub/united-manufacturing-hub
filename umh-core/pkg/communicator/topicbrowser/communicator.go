@@ -250,7 +250,7 @@ func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserse
 
 	// Update sequence tracking to latest
 	if len(buffers) > 0 {
-		tbc.lastProcessedSequence = buffers[0].SequenceNum // Newest buffer (first in slice)
+		tbc.lastProcessedSequence = buffers[len(buffers)-1].SequenceNum // Newest buffer (last in slice)
 	}
 
 	result.DebugInfo = fmt.Sprintf("Processed ALL %d buffers from %s after overwrite (seq up to %d), %d errors",
@@ -265,7 +265,7 @@ func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserse
 func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicbrowserservice.BufferItem, newBufferCount uint64, source ProcessingSource) (*ProcessingResult, error) {
 	result := &ProcessingResult{}
 
-	// Buffers are newest-to-oldest, so we need the last N items
+	// Buffers are oldest-to-newest, so the newest ones are the last N items
 	startIndex := len(buffers) - int(newBufferCount)
 	if startIndex < 0 {
 		startIndex = 0
@@ -295,7 +295,7 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 
 	// Update sequence tracking to latest
 	if len(buffers) > 0 {
-		tbc.lastProcessedSequence = buffers[0].SequenceNum // Newest buffer (first in slice)
+		tbc.lastProcessedSequence = buffers[len(buffers)-1].SequenceNum // Newest buffer (last in slice)
 	}
 
 	// Validate topic count after processing
@@ -308,9 +308,9 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 	var debugInfo string
 
 	if result.ProcessedCount > 0 {
-		minSeq := buffers[len(buffers)-1].SequenceNum // Oldest processed buffer
+		minSeq := buffers[startIndex].SequenceNum // Oldest processed buffer
 
-		maxSeq := buffers[startIndex].SequenceNum // Newest processed buffer
+		maxSeq := buffers[len(buffers)-1].SequenceNum // Newest processed buffer
 		if minSeq == maxSeq {
 			debugInfo = fmt.Sprintf("Processed %d incremental buffers from %s (seq %d), %d errors",
 				result.ProcessedCount, source.String(), minSeq, result.SkippedCount)
