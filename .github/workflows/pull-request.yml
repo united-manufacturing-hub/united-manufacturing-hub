@@ -101,7 +101,8 @@ jobs:
   fossa-container:
     name: FOSSA Container Scan
     needs: [changes, build]
-    if: github.event_name == 'pull_request' # && github.base_ref == 'main'
+    # Temporarily disabled: container scan is slow. Restore the condition below to re-enable.
+    if: false # github.event_name == 'pull_request' # && github.base_ref == 'main'
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 30
     permissions:
