@@ -50,15 +50,15 @@ func (e Environment) Has(c Capability) bool {
 // measurement can answer a signal. Its number is judged only where an
 // Instrument pairs it with marks.
 type Measurement[S any] struct {
-	Name string
 	// Extract reads the value from a snapshot, the numerator under DeltaRatio.
 	Extract func(S) Reading
 	// Against reads the DENOMINATOR of a ratio: DeltaRatio divides the delta of
 	// Extract's counter by the delta of this one. Nil for a single series.
 	Against   func(S) Reading
-	Span      time.Duration
-	Reduction Reduction
+	Name      string
 	Requires  []Capability
+	Reduction Reduction
+	Span      time.Duration
 	// Boolean says the series is zero or one and nothing between.
 	Boolean bool
 	// Counter says both series are monotone counters, so a backwards step means

@@ -82,17 +82,17 @@ type Fired struct {
 	// Instrument is the instrument that fired, stamped on the fire transition and
 	// never refreshed; a later live winner does not overwrite it.
 	Instrument string
+	// Refinements are the signals hanging under this one that have fired, each
+	// judged against its own marks and ordered lowest Tier first, ties going to
+	// declaration order, at every depth. Index 0 is the most urgent narrowing of
+	// this signal.
+	Refinements []Fired
 	Identity
 	// Marks is the pair Value fired against, stamped with it: Severity scores the
 	// one against the other, so a later instrument's pair would not measure it.
 	Marks Marks
 	// Value is the number that fired, untransformed by polarity.
 	Value float64
-	// Refinements are the signals hanging under this one that have fired, each
-	// judged against its own marks and ordered lowest Tier first, ties going to
-	// declaration order, at every depth. Index 0 is the most urgent narrowing of
-	// this signal.
-	Refinements []Fired
 }
 
 // Latch holds one signal's fired-or-not verdict, one per signal and never one per
