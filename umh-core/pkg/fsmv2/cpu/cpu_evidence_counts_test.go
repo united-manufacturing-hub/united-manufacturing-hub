@@ -25,8 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("R4 — absence of evidence is not health", func() {
-	Describe("spec 1 — the capable/measured evidence counts", func() {
+var _ = Describe("absence of evidence is not health", func() {
+	Describe("the capable/measured evidence counts", func() {
 		It("reports, alongside the verdict, how many signals are capable and how many have first-measured", func() {
 			// Bare metal, no quota. Measured by the engine: throttling and steal
 			// are NoInstrument (not capable); pressure (Ready this tick) and
@@ -37,8 +37,8 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
 					Pressure:  diagnosis.Known(0.2),
-					// PSI present: the box is pressurable (F17 rung 1 derives
-					// HasPressureStats from the sticky PsiAvailable).
+					// PSI present: the box is pressurable (DeriveEnvironment
+					// derives HasPressureStats from the sticky PsiAvailable).
 					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
@@ -63,7 +63,7 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 		})
 	})
 
-	Describe("spec 2 — refuse while a capable signal has not first-measured", func() {
+	Describe("refuse while a capable signal has not first-measured", func() {
 		It("keeps measured below capable while a capable signal has produced no first measurement", func() {
 			// The same bare box, but pressure is ABSENT this tick, so neither
 			// capable signal has measured yet: measured < capable, which is the
@@ -91,7 +91,7 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 		})
 	})
 
-	Describe("spec 3 — do NOT refuse for a signal no instrument can answer", func() {
+	Describe("do NOT refuse for a signal no instrument can answer", func() {
 		It("does not count (and so cannot refuse on) a signal with no instrument on this box", func() {
 			// Bare metal: steal has no instrument (Virtualized=false), throttling
 			// has none (no quota). These NoInstrument signals are NOT capable, so
@@ -105,8 +105,8 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
 					Pressure:  diagnosis.Known(0.2),
-					// PSI present: the box is pressurable (F17 rung 1 derives
-					// HasPressureStats from the sticky PsiAvailable).
+					// PSI present: the box is pressurable (DeriveEnvironment
+					// derives HasPressureStats from the sticky PsiAvailable).
 					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
@@ -120,7 +120,7 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 		})
 	})
 
-	Describe("spec 4 — keep admitting through a read outage on a signal that already measured", func() {
+	Describe("keep admitting through a read outage on a signal that already measured", func() {
 		It("keeps counting a first-measured signal as measured, however long a later outage lasts", func() {
 			// Tick 1: pressure first-measures (Ready, judged on the first
 			// sample), so its first-fill bit is set.
@@ -130,8 +130,8 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
 					Pressure:  diagnosis.Known(0.2),
-					// PSI present: the box is pressurable (F17 rung 1 derives
-					// HasPressureStats from the sticky PsiAvailable).
+					// PSI present: the box is pressurable (DeriveEnvironment
+					// derives HasPressureStats from the sticky PsiAvailable).
 					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
@@ -142,16 +142,16 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 
 			// Tick 2 onward: a read outage makes pressure unreadable. The
 			// first-fill bit must NOT be cleared, so a signal that has measured
-			// keeps the worker admitting (F10's 'refuses on thin evidence, never
-			// on stale evidence' — the frozen arm of NoneReady must not refuse).
+			// keeps the worker admitting. The worker refuses on thin evidence,
+			// never on stale evidence: the frozen arm of NoneReady must not refuse.
 			d.sampler = stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				return cpuhealth.Sample{
 					Timestamp: time.Now(),
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
 					// Pressure unreadable during the outage. PsiAvailable stays
-					// true (sticky, F17 rung 1) — an outage removes the reading,
-					// not the box's pressurability, so pressure stays capable.
+					// true (sticky) — an outage removes the reading, not the
+					// box's pressurability, so pressure stays capable.
 					Pressure:     diagnosis.Unknown(),
 					PsiAvailable: true,
 				}, nil
