@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -100,12 +101,31 @@ func logsContainMsgAtLevel(entries []examples.LogEntry, msg, level string) bool 
 	return false
 }
 
-// v2LogKey identifies a log entry by the three attributes the completeness
-// comparison in the ScenarioV2 specs counts: level, message and worker.
+// v2LogKey identifies a log entry by the attributes the completeness
+// comparison in the ScenarioV2 specs counts: the struct's fields below.
+// Fields is what separates same-message copies that report different
+// things, so a dropped copy cannot hide behind later copies that report
+// something different. Copies with identical fields share one key, so a
+// dropped copy can hide behind an identical later copy; the
+// checkCapturedEntries doc names that limit.
 type v2LogKey struct {
 	Level  string
 	Msg    string
 	Worker string
+	// Fields holds the entry's structured key-value pairs in v2FieldsKey's
+	// canonical form, so the key stays comparable.
+	Fields string
+}
+
+// v2FieldsKey renders one side's structured fields canonically, so the
+// buffer side and the Logs side build the same key for the same entry.
+// json.Marshal sorts map keys, and both sides hold values that came from
+// JSON, so the rendering is deterministic and identical. Both parsers build
+// the map even for an entry without fields, so such entries render as {} on
+// either side.
+func v2FieldsKey(fields map[string]any) string {
+	encoded, _ := json.Marshal(fields)
+	return string(encoded)
 }
 
 // parseV2LogKeys turns the caller's captured JSON lines into v2LogKeys. It
@@ -140,10 +160,179 @@ func parseV2LogKeys(logOutput string) (keys []v2LogKey, allParsed bool) {
 			key.Worker = worker
 		}
 
+		// The runner's parseLogEntries keeps the reserved keys out of
+		// Fields, so the buffer side drops the same keys here or the two
+		// sides would never agree on one entry's fields.
+		fields := make(map[string]any, len(raw))
+		for k, val := range raw {
+			switch k {
+			case "level", "msg", "worker", "ts":
+				continue
+			}
+
+			fields[k] = val
+		}
+		key.Fields = v2FieldsKey(fields)
+
 		keys = append(keys, key)
 	}
 
 	return keys, allParsed
+}
+
+// v2LogKeyFromEntry builds the Logs-side key for one parsed entry, so the
+// comparison in checkCapturedEntries counts entries by the same attributes
+// on both sides.
+func v2LogKeyFromEntry(entry examples.LogEntry) v2LogKey {
+	return v2LogKey{
+		Level:  entry.Level,
+		Msg:    entry.Msg,
+		Worker: entry.Worker,
+		Fields: v2FieldsKey(entry.Fields),
+	}
+}
+
+// checkCapturedEntries judges a run's captured entries against the caller's
+// own buffer, with two comparisons. The prefix-containment check demands
+// that every key the buffer holds before the sentinel appear in logs at
+// least as often; the reverse check demands that no key appear in logs more
+// often than in the whole buffer. It returns nil only when both hold.
+//
+// The sentinel is an entry the calling spec logs through the caller's
+// logger at the moment it begins shutdown: it reaches the caller's buffer
+// alone and never the run's capture, so it marks the shutdown boundary in
+// the buffer instead of claiming capture. It must appear in the buffer
+// exactly once, with at least one entry before it, or the
+// prefix-containment check has no bounded range. A second entry carrying
+// the sentinel's message would bound the range at the first and silently
+// demand less than the caller marked. Every non-empty buffer line must
+// parse, because the runner drops an unparseable line from result.Logs, so
+// an unparseable line in the caller's buffer is a missing entry rather than
+// noise.
+//
+// The prefix-containment check treats the buffer as the control: every
+// entry the run emitted through its tee reached it, so a capture that
+// dropped an entry the run emitted before shutdown began is a mismatch.
+// Logs entries carry no position, so the check cannot bound the logs side
+// at the shutdown boundary: it counts each key over all of logs, which
+// makes a dropped copy detectable only when no copy after the sentinel
+// carries an identical full key. A later tick emitting the same fields
+// again stands in for the dropped copy, and the check passes.
+//
+// The reverse check holds because the specs that run this check hand the
+// run a caller logger at the capture's own debug level, unsampled, so every
+// entry teed to the caller also reached its buffer. Teeing alone would not
+// imply receipt: a caller logging at info filters debug entries out of its
+// buffer, and a sampling caller drops entries at random. Under that
+// precondition, a key that appears in logs but never in the buffer means
+// the runner captured an entry without teeing it to the caller.
+//
+// Both comparisons count entries per key rather than comparing positions,
+// because the tee's two sinks take their locks independently and may order
+// concurrent entries differently. The sentinel bounds only the
+// prefix-containment check: writes that trail the teardown parse appear in
+// the buffer but never in logs and would fail it on every correct run.
+func checkCapturedEntries(logOutput string, logs []examples.LogEntry, sentinelMsg string) error {
+	bufferKeys, allParsed := parseV2LogKeys(logOutput)
+	if !allParsed {
+		return errors.New("every line in the caller's buffer must parse, or the runner dropped an unparseable line from result.Logs")
+	}
+
+	sentinelCount := 0
+	sentinelIdx := -1
+	for i, key := range bufferKeys {
+		if key.Msg != sentinelMsg {
+			continue
+		}
+
+		sentinelCount++
+		if sentinelIdx < 0 {
+			sentinelIdx = i
+		}
+	}
+
+	if sentinelCount == 0 {
+		return errors.New("the sentinel must appear in the caller's buffer, or the prefix-containment check has no bounded range")
+	}
+
+	if sentinelCount > 1 {
+		return fmt.Errorf("the sentinel must appear exactly once in the caller's buffer: %d entries carry its message, and the check bounds its range at the first",
+			sentinelCount)
+	}
+
+	if sentinelIdx == 0 {
+		return errors.New("entries must appear in the buffer before the sentinel, or the prefix-containment check is vacuous")
+	}
+
+	logsCounts := map[v2LogKey]int{}
+	for _, entry := range logs {
+		logsCounts[v2LogKeyFromEntry(entry)]++
+	}
+
+	prefixCounts := map[v2LogKey]int{}
+	for _, key := range bufferKeys[:sentinelIdx] {
+		prefixCounts[key]++
+	}
+
+	for key, want := range prefixCounts {
+		if have := logsCounts[key]; have < want {
+			return fmt.Errorf("an entry the run emitted before shutdown began is missing from result.Logs: level=%s msg=%s worker=%q appears %d times in the caller's buffer before the sentinel and only %d times in Logs",
+				key.Level, key.Msg, key.Worker, want, have)
+		}
+	}
+
+	fullBufferCounts := map[v2LogKey]int{}
+	for _, key := range bufferKeys {
+		fullBufferCounts[key]++
+	}
+
+	for key, have := range logsCounts {
+		if seen := fullBufferCounts[key]; have > seen {
+			return fmt.Errorf("result.Logs holds an entry the caller's buffer never received: level=%s msg=%s worker=%q appears %d times in Logs but only %d times in the caller's buffer",
+				key.Level, key.Msg, key.Worker, have, seen)
+		}
+	}
+
+	return nil
+}
+
+// waitForConfigworkerChildAdded blocks until the caller's buffer holds the
+// application supervisor's child_reconciliation_completed report for the
+// tick that added the configworker child: the entry carrying added=1. The
+// observed store state cannot settle a spec on this: the document AddWorker
+// saves for a just-added child already carries the child's registered
+// initial state (Running for the configworker), so the store reports
+// Running while the reconcile that adds the child is still mid-flight. The
+// added=1 report is written at that reconcile's end, so once it is in the
+// buffer the child is added rather than mid-spawn, and whatever the spec
+// writes next (a sentinel, a cancel) lands after the report in the
+// caller's buffer.
+func waitForConfigworkerChildAdded(logOutput func() string, appWorker string) {
+	Eventually(func(g Gomega) {
+		found := false
+		for _, line := range strings.Split(logOutput(), "\n") {
+			if line == "" {
+				continue
+			}
+
+			var raw map[string]any
+			if err := json.Unmarshal([]byte(line), &raw); err != nil {
+				continue
+			}
+
+			if raw["msg"] == "child_reconciliation_completed" &&
+				raw["worker"] == appWorker &&
+				raw["added"] == float64(1) {
+				found = true
+
+				break
+			}
+		}
+
+		g.Expect(found).To(BeTrue(),
+			"the caller's buffer must hold the application supervisor's added=1 reconciliation report")
+	}, "30s").Should(Succeed(),
+		"the run must finish the reconcile that adds the configworker child before the spec proceeds")
 }
 
 // errStoreSaveFailed is the error failingSavesStore's SaveIdentity returns,
@@ -389,8 +578,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// result.Logs. A driver that logs nothing (NoopScenarioV2's) leaves
 		// that routing unobserved. A runner that hands the driver
 		// RunConfig.Logger instead leaves the entry in the caller's sink
-		// but out of Logs, which the containment below already fails; the
-		// driver-entry check is what catches an entry lost to both sinks.
+		// but out of Logs, which the prefix-containment check already
+		// fails; the driver-entry check is what catches an entry lost to
+		// both sinks.
 		loggingDriver := examples.ScenarioV2{
 			Name:        "logs-complete",
 			Description: "test-local driver that logs one entry through Env.Logger",
@@ -401,9 +591,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 			},
 		}
 
-		// Duration=0 leaves caller-ctx cancellation as the only teardown
-		// trigger, so this spec decides when shutdown begins and can mark
-		// that moment in the caller's buffer before triggering it.
+		// Duration=0 leaves ctx-cancellation as the only teardown trigger
+		// (ScenarioV2.Driver's doc), so this spec decides when shutdown
+		// begins and can mark that moment in the caller's buffer.
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -416,77 +606,29 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Settle gate: cancel only once the configworker child is observably
-		// running, so the claimed entries below include a live tick loop's
-		// output rather than startup alone.
-		Eventually(func(g Gomega) {
-			dump, err := examples.DumpScenario(context.Background(), store, 0)
-			g.Expect(err).NotTo(HaveOccurred())
+		const appWorker = "scenariov2-logs-complete(application)"
 
-			observedStates := map[string]interface{}{}
-			for _, w := range dump.Workers {
-				observedStates[w.WorkerType] = w.Observed["state"]
-			}
+		// Settle gate: the claims below need the prefix to hold a live tick
+		// loop's output rather than startup alone, and the added=1 report
+		// is that output, so wait for it before marking shutdown.
+		waitForConfigworkerChildAdded(logBuf.String, appWorker)
 
-			g.Expect(observedStates).To(HaveKeyWithValue(configworker.WorkerTypeName, "Running"))
-		}, "30s").Should(Succeed(),
-			"the configworker child must be running before shutdown is triggered")
-
-		// The sentinel: an entry no scenario emits, logged through the
-		// caller's logger right before the cancel that begins shutdown. It
-		// reaches the caller's buffer alone and never the run's capture, so
-		// it marks a position instead of claiming capture. Every entry the
-		// run wrote before that position was emitted before shutdown began.
+		// The sentinel marks the shutdown boundary in the caller's buffer
+		// (checkCapturedEntries' doc holds its contract), logged right
+		// before the cancel that begins shutdown.
 		logger.Info("spec_sentinel_before_shutdown")
 
 		cancel()
-		// Once Done is closed, result.Logs is final: teardown parsed the
-		// capture before closing Done. Entries that trail that parse may be
-		// absent from Logs, which is why the claim below stops at the
+		// Once Done closes, result.Logs is final (RunResult.Logs' doc:
+		// teardown parsed the capture first, and trailing writes are that
+		// doc's named exception), which is why the claim below stops at the
 		// sentinel and asserts nothing about what follows it.
 		Eventually(result.Done, "55s").Should(BeClosed())
 
-		// Completeness, judged against the caller's own sink. The buffer is
-		// the control: every entry the run emitted through its tee reached
-		// it, so each entry before the sentinel must also sit in
-		// result.Logs. Entries are counted per Level, Msg and Worker rather
-		// than compared by position, because the tee's two sinks take their
-		// locks independently and may order concurrent entries differently.
-		// A capture that dropped a pre-sentinel entry fails here, and so
-		// does a runner that stopped teeing: the buffer then holds an entry
-		// Logs lacks.
-		bufferKeys, allParsed := parseV2LogKeys(logBuf.String())
-		Expect(allParsed).To(BeTrue(),
-			"every line in the caller's buffer must parse, or the runner dropped an unparseable line from result.Logs")
-
-		sentinelIdx := -1
-		for i, key := range bufferKeys {
-			if key.Msg == "spec_sentinel_before_shutdown" {
-				sentinelIdx = i
-
-				break
-			}
-		}
-		Expect(sentinelIdx).To(BeNumerically(">=", 0),
-			"the sentinel must be found in the caller's buffer, or the claimed range has no bound")
-		Expect(sentinelIdx).To(BeNumerically(">", 0),
-			"entries must exist before the sentinel, or the containment claim is vacuous")
-
-		logsCounts := map[v2LogKey]int{}
-		for _, entry := range result.Logs {
-			logsCounts[v2LogKey{Level: entry.Level, Msg: entry.Msg, Worker: entry.Worker}]++
-		}
-
-		prefixCounts := map[v2LogKey]int{}
-		for _, key := range bufferKeys[:sentinelIdx] {
-			prefixCounts[key]++
-		}
-
-		for key, want := range prefixCounts {
-			Expect(logsCounts[key]).To(BeNumerically(">=", want),
-				"an entry the run emitted before shutdown began is missing from result.Logs: level=%s msg=%s worker=%q appears %d times in the caller's buffer before the sentinel and only %d times in Logs",
-				key.Level, key.Msg, key.Worker, want, logsCounts[key])
-		}
+		// Completeness, judged against the caller's own sink; the
+		// checkCapturedEntries doc holds the contract.
+		Expect(checkCapturedEntries(logBuf.String(), result.Logs, "spec_sentinel_before_shutdown")).To(Succeed(),
+			"every entry the caller's buffer holds before the sentinel must appear in result.Logs, and result.Logs must hold no entry the whole buffer lacks")
 
 		// The driver's entry: proves Env.Logger is the run's tee, so driver
 		// entries reach the caller's sink and Logs alike.
@@ -536,6 +678,165 @@ var _ = Describe("ScenarioV2 framework", func() {
 			Expect(typed.Fields).NotTo(HaveKey(reserved),
 				"the parser must lift %s out of Fields, not copy it", reserved)
 		}
+	})
+
+	It("detects a dropped entry whose key recurs after the sentinel, and an entry Logs holds that the caller's buffer never received", func() {
+		logBuf := &v2LogBuffer{}
+		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
+		store := examples.SetupStore(logger)
+
+		quietDriver := examples.ScenarioV2{
+			Name:        "capture-check",
+			Description: "test-local driver for the corrupted-capture checks",
+			Driver: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		// Duration=0 leaves ctx-cancellation as the only teardown trigger
+		// (ScenarioV2.Driver's doc), so this spec decides when shutdown
+		// begins and can mark that moment in the caller's buffer.
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   quietDriver,
+			Duration:     0,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		const appWorker = "scenariov2-capture-check(application)"
+
+		// Settle gate: the entry this spec drops is the reconciliation
+		// report for the tick that added the configworker child, so that
+		// report must appear in the caller's buffer before the sentinel,
+		// or the drop removes an entry the sentinel does not bound.
+		waitForConfigworkerChildAdded(logBuf.String, appWorker)
+
+		// The sentinel marks the shutdown boundary in the caller's buffer
+		// (checkCapturedEntries' doc holds its contract): the drop below
+		// must remove an entry that precedes it.
+		logger.Info("spec_sentinel_before_shutdown")
+
+		cancel()
+		// Once Done closes, result.Logs is final (RunResult.Logs' doc), so
+		// the corruptions below run on a frozen slice.
+		Eventually(result.Done, "55s").Should(BeClosed())
+
+		// Positive control: the intact pair must pass, or the two
+		// corruptions below cannot prove the check detects them.
+		Expect(checkCapturedEntries(logBuf.String(), result.Logs, "spec_sentinel_before_shutdown")).To(Succeed(),
+			"the intact run must satisfy the captured-entry check")
+
+		// Corruption one: drop the reconciliation entry for the tick that
+		// added the configworker child. Its level, message and worker also
+		// appear after the sentinel: the pre-sentinel copy carries
+		// added=1, while the copies teardown emits after the sentinel
+		// report an updated child instead. Match the entry by its added
+		// field rather than by position, so the drop finds the
+		// pre-sentinel copy whatever order Logs holds.
+		dropped := make([]examples.LogEntry, 0, len(result.Logs))
+		droppedAdded := 0
+		for _, entry := range result.Logs {
+			if entry.Msg == "child_reconciliation_completed" &&
+				entry.Worker == appWorker &&
+				entry.Fields["added"] == float64(1) {
+				droppedAdded++
+
+				continue
+			}
+
+			dropped = append(dropped, entry)
+		}
+		Expect(droppedAdded).To(Equal(1),
+			"Logs must hold exactly one reconciliation entry reporting the added child, or the drop has no single target")
+
+		// The drop must leave the hole this spec guards against: an entry
+		// whose level, message and worker recur after the sentinel. Counted
+		// by those three alone, the later copies stand in for the dropped
+		// copy and the check cannot see the drop; the entry's structured
+		// fields are what separate it from the later copies. Only buffer
+		// entries carry position, so the recurrence is counted there, past
+		// the sentinel; counting logs entries instead would let pre-sentinel
+		// copies satisfy a claim about post-sentinel ones.
+		bufferKeys, _ := parseV2LogKeys(logBuf.String())
+		sentinelIdx := -1
+		for i, key := range bufferKeys {
+			if key.Msg == "spec_sentinel_before_shutdown" {
+				sentinelIdx = i
+
+				break
+			}
+		}
+
+		recurring := 0
+		for _, key := range bufferKeys[sentinelIdx+1:] {
+			if key.Msg == "child_reconciliation_completed" && key.Worker == appWorker {
+				recurring++
+			}
+		}
+		Expect(recurring).To(BeNumerically(">=", 1),
+			"the buffer must hold another child_reconciliation_completed entry after the sentinel, or the dropped key would not recur and the count would already catch the drop")
+
+		dropErr := checkCapturedEntries(logBuf.String(), dropped, "spec_sentinel_before_shutdown")
+		Expect(dropErr).To(HaveOccurred(),
+			"dropping the pre-sentinel reconciliation entry must fail the check, because its structured fields distinguish it from the later copies")
+		Expect(dropErr.Error()).To(ContainSubstring("child_reconciliation_completed"),
+			"the failure must name the entry the check found missing")
+
+		// Corruption two: add an entry only Logs holds. A run entry reaches
+		// the caller's buffer and the capture together or not at all, so an
+		// entry Logs holds that the buffer never received means the runner
+		// captured without teeing to the caller. Build the pair from the
+		// intact Logs, so the fabricated entry is the only difference from
+		// the passing control.
+		withForeign := append(append([]examples.LogEntry{}, result.Logs...), examples.LogEntry{
+			Level:  "info",
+			Msg:    "entry_no_run_emits",
+			Worker: appWorker,
+		})
+		foreignErr := checkCapturedEntries(logBuf.String(), withForeign, "spec_sentinel_before_shutdown")
+		Expect(foreignErr).To(HaveOccurred(),
+			"an entry Logs holds that the caller's buffer never received must fail the check")
+		Expect(foreignErr.Error()).To(ContainSubstring("entry_no_run_emits"),
+			"the failure must name the entry the caller's buffer never received")
+	})
+
+	It("errors on an unparseable buffer line and on a missing, leading, or duplicated sentinel", func() {
+		logs := []examples.LogEntry{{Level: "info", Msg: "real_entry", Worker: "worker"}}
+
+		// One non-JSON line: the runner drops unparseable lines from
+		// result.Logs, so a buffer line that cannot parse is a missing
+		// entry, not noise.
+		unparseable := "{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\nnot json\n"
+		Expect(checkCapturedEntries(unparseable, logs, "spec_sentinel_before_shutdown")).
+			To(MatchError(ContainSubstring("must parse")))
+
+		// No sentinel: the prefix-containment check has no bound, so the
+		// comparison cannot claim anything.
+		noSentinel := "{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n"
+		Expect(checkCapturedEntries(noSentinel, logs, "spec_sentinel_before_shutdown")).
+			To(MatchError(ContainSubstring("no bounded range")))
+
+		// Sentinel first: the prefix is empty and the prefix-containment
+		// check is vacuous.
+		sentinelFirst := "{\"level\":\"info\",\"msg\":\"spec_sentinel_before_shutdown\"}\n" +
+			"{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n"
+		Expect(checkCapturedEntries(sentinelFirst, logs, "spec_sentinel_before_shutdown")).
+			To(MatchError(ContainSubstring("vacuous")))
+
+		// Two entries carrying the sentinel's message: the check would
+		// bound its range at the first and silently demand less than the
+		// caller marked, so a duplicate must fail loudly.
+		duplicateSentinel := "{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n" +
+			"{\"level\":\"info\",\"msg\":\"spec_sentinel_before_shutdown\"}\n" +
+			"{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n" +
+			"{\"level\":\"info\",\"msg\":\"spec_sentinel_before_shutdown\"}\n"
+		Expect(checkCapturedEntries(duplicateSentinel, logs, "spec_sentinel_before_shutdown")).
+			To(MatchError(ContainSubstring("exactly once")))
 	})
 
 	It("holds debug entries in result.Logs even when the caller's logger drops them", func() {
@@ -607,23 +908,12 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Settle gate: cancel only once the configworker child is observably
-		// running, so the cancellation lands mid-run on a live tick loop. A
-		// blind sleep can fire while the child is still mid-startup, and a
-		// mid-spawn child intermittently cannot finish draining within one
-		// graceful-shutdown phase budget.
-		Eventually(func(g Gomega) {
-			dump, err := examples.DumpScenario(context.Background(), store, 0)
-			g.Expect(err).NotTo(HaveOccurred())
+		const appWorker = "scenariov2-cancel-mid-run(application)"
 
-			observedStates := map[string]interface{}{}
-			for _, w := range dump.Workers {
-				observedStates[w.WorkerType] = w.Observed["state"]
-			}
-
-			g.Expect(observedStates).To(HaveKeyWithValue(configworker.WorkerTypeName, "Running"))
-		}, "30s").Should(Succeed(),
-			"the configworker child must be running before the mid-run cancellation")
+		// Settle gate: the cancellation must land past the child's spawn,
+		// because a mid-spawn child intermittently cannot finish draining
+		// within one graceful-shutdown phase budget.
+		waitForConfigworkerChildAdded(logBuf.String, appWorker)
 
 		cancel()
 		Eventually(result.Done, "55s").Should(BeClosed(),
@@ -694,8 +984,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"Env must carry the run's logger for the driver")
 
 		// Store check: with no YAML children declared, the only child the
-		// application supervisor spawns is the config worker kernel, so the
-		// store must contain exactly the application and configworker types.
+		// application supervisor spawns is the config worker kernel.
 		dump, err := examples.DumpScenario(context.Background(), store, 0)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -808,7 +1097,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Caller-ctx cancellation is the only teardown path for a Duration=0
-		// run; a regression here leaves such a run hanging forever.
+		// run (ScenarioV2.Driver's doc); a regression here leaves such a run
+		// hanging forever.
 		cancel()
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the v2 runner must tear down when the context is cancelled")
