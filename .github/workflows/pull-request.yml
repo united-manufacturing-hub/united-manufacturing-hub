@@ -32,6 +32,10 @@ jobs:
       changelog: ${{ steps.filter.outputs.changelog }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          filter: blob:none
+          # paths-filter only reads .github/path-filters.yml; it diffs git trees, not the worktree
+          sparse-checkout: .github
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
@@ -74,6 +78,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          filter: blob:none
+          sparse-checkout: |
+            umh-core
+            .github
       - name: FOSSA Analyze
         uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2
         with:
@@ -109,6 +118,10 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          filter: blob:none
+          # Scans a published image, not the source tree; checkout is only for git revision metadata
+          sparse-checkout: .github
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
@@ -144,6 +157,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          filter: blob:none
+          sparse-checkout: .fossa-vendored
 
       - name: FOSSA Analyze (vendored binaries)
         uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2
@@ -224,6 +240,11 @@ jobs:
       # the changelog guard for tag lookup and merge-base computation)
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            umh-core/CHANGELOG.md
+            .github/
           fetch-depth: 0
       # Generate token for cross-repo access
       - name: Generate GitHub App token
