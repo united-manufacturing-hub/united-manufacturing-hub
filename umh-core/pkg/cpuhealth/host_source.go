@@ -85,8 +85,8 @@ func newHostSource(fs filesystem.Service) *hostSource {
 // until a first successful read fixes the baseline; a falling counter (a host
 // restart) re-baselines instead of publishing a nonsense value.
 type hostBaseline struct {
-	busy, steal, denom float64
 	time               time.Time
+	busy, steal, denom float64
 	have               bool
 }
 

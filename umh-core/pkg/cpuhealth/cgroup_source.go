@@ -55,8 +55,8 @@ func newCgroupSource(fs filesystem.Service, base string) *cgroupSource {
 // successful read; a falling edge (a counter reset) re-baselines instead of
 // publishing a nonsense rate.
 type usageBaseline struct {
-	usage float64
 	time  time.Time
+	usage float64
 	have  bool
 }
 

@@ -49,6 +49,10 @@ const (
 // throttle counters; CpuScope needs /proc/stat and the cpuset. And all fields
 // share one Timestamp a split would fork — prometheus/procfs keeps Stat flat.
 type Sample struct {
+
+	// Timestamp is the time of this read. Every field off the same read carries
+	// the same Timestamp.
+	Timestamp time.Time
 	// Quota is the container's CPU limit in cores — the figure docker run
 	// --cpus, a Kubernetes CPU limit, or a Compose cpus: entry sets. It is
 	// present when cpu.max names a positive limit (the capacity in cores), the
@@ -62,10 +66,6 @@ type Sample struct {
 	// fraction the marks are denominated in). It is absent when that read fails
 	// this tick.
 	Pressure diagnosis.Reading
-
-	// PsiAvailable is sticky: it is set true on the first successful
-	// cpu.pressure read and never cleared, even when a later read fails.
-	PsiAvailable bool
 
 	// NrPeriods and NrThrottled come from the SAME cpu.stat read that carries
 	// usage. Each is present when its key is in cpu.stat and parses, and
@@ -118,6 +118,10 @@ type Sample struct {
 	// ScopeAffinity, and ScopeUnknown for what each value means.
 	CpuScope Scope
 
+	// PsiAvailable is sticky: it is set true on the first successful
+	// cpu.pressure read and never cleared, even when a later read fails.
+	PsiAvailable bool
+
 	// Virtualized reports whether this host is a virtual machine. It is resolved
 	// once and cached across ticks, not re-read every tick. On x86 the evidence
 	// is the "hypervisor" flag in /proc/cpuinfo's flags line; an ARM64 cpuinfo
@@ -125,10 +129,6 @@ type Sample struct {
 	// of /sys/class/dmi/id/product_name naming a known hypervisor. An unreadable
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
-
-	// Timestamp is the time of this read. Every field off the same read carries
-	// the same Timestamp.
-	Timestamp time.Time
 }
 
 // Sampler reads one tick of CPU health signals: a cgroup's own accounting

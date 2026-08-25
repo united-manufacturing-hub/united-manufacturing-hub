@@ -95,8 +95,8 @@ type Cause struct {
 	// read from /proc/stat and host-cpu-full estimated from our own usage earn
 	// different sentences.
 	Instrument string
-	Value      float64
 	Unit       Unit
+	Value      float64
 }
 
 // Verdict is what Decide returns: the state, the attribution of the dominant
