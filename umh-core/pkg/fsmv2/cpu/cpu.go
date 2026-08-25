@@ -70,7 +70,7 @@ const (
 	// The specs in this package that serve those files from a fixture read this
 	// same constant, so the served paths and the looked-for paths cannot drift
 	// apart and leave every read failing. Elsewhere the fixture declares its
-	// own base (pkg/fsmv2/examples names cpuScenarioBase), which has to be kept
+	// own base (pkg/fsmv2/examples names cpuPressureBase), which has to be kept
 	// equal to this by hand.
 	cgroupBase = "/sys/fs/cgroup"
 
