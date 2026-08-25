@@ -137,12 +137,15 @@ func (w *ConfigworkerWorker) GetDependenciesAny() any {
 	return nil
 }
 
-// CollectObservedState reconciles the historian monitor child from the live
-// config, then returns the observed state. It reads config through the config
-// manager and upserts or deletes the historian child in the shared registry so
-// live edits apply without a restart. Reconcile failures are logged, not
-// returned: a transient config read or upsert error must not fail the tick and
-// stall the worker.
+// CollectObservedState reconciles this worker's dynamic children, then returns
+// the observed state. A collect method does this because the fsmv2.Worker
+// interface offers no other per-tick entry point: DeriveDesiredState must not
+// touch dependencies (an architecture validator enforces that) and
+// GetInitialState runs once. Every dynamic child follows the same pair:
+// reconcileX gathers the input and logs its failures, syncX upserts or deletes
+// the child in the registry. Failures are logged rather than returned, so a
+// transient config read or upsert error cannot fail the tick and stall the
+// worker.
 func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -174,15 +177,12 @@ func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
 	}
 }
 
-// syncCPU upserts exactly one CPU monitor child (with an empty config) when the
-// flag is on. The flag is read once at construction and cannot change mid-run,
-// so the disabled arm below is not a live "turn the flag off and tear it down"
-// behaviour: a disabled worker's registry never contained the CPU child in the
-// first place (each process start builds a fresh registry). The Delete is kept
-// as the total gating invariant — a disabled worker must never leave a CPU
-// child behind, whatever a future registry-persistence or default-flip change
-// does — not because this process can observe the state it removes. It returns
-// the upsert error so the caller can log it.
+// syncCPU upserts the CPU monitor child with an empty config when the flag is
+// on, and deletes it when off. The flag cannot change mid-run (see the
+// cpuEnabled field), so a disabled process never upserted the child and the
+// Delete removes nothing. The Delete is kept so that a change which does let
+// the flag flip — registry persistence, a flipped default — cannot leave a CPU
+// child behind.
 func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
 	if !enabled {
 		client.Delete(fsmv2cpu.Ref)
