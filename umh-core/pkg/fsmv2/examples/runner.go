@@ -15,9 +15,13 @@
 package examples
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -53,7 +57,7 @@ import (
 
 // RunResult contains the result of running a scenario.
 //
-// The two fields carry different guarantees per scenario form. Done closes
+// Done and Shutdown carry different guarantees per scenario form. Done closes
 // when teardown is complete: for a v1 scenario that is when the supervisor
 // has stopped and its cleanup ran (plus the dump when DumpStore is set); for
 // a v2 scenario it additionally includes clearing the published configworker
@@ -64,12 +68,38 @@ import (
 type RunResult struct {
 	Done     <-chan struct{}
 	Shutdown func()
+	// Logs holds every entry a v2 run emitted. It is nil on the v1 YAML and
+	// CustomRunner paths, which emit to the caller's logger but are not
+	// captured. The capture logs at debug level through an unsampled logger
+	// regardless of the caller's logger configuration, so Logs can contain
+	// entries a filtered or sampling caller sink never received.
+	// Store-originated entries appear only when the store came from
+	// SetupStore. Read it after Done closes.
+	Logs []LogEntry
 	// ShutdownClean reports whether the run's supervisor drained cleanly on
 	// both the v1 and v2 paths: true if the graceful shutdown reaped every
 	// worker within its budget. It is false only when a drain phase warned
 	// graceful_shutdown_timeout or graceful_shutdown_budget_exhausted. Read it
 	// after Done closes.
 	ShutdownClean bool
+}
+
+// LogEntry is one entry a v2 run emitted to the caller's logger.
+type LogEntry struct {
+	// Fields holds the entry's structured key-value pairs, excluding the
+	// keys parsed into Level, Msg and Worker, and the timestamp.
+	Fields map[string]any
+	// Level is the severity the entry was logged at ("debug", "info",
+	// "warn", "error").
+	Level string
+
+	// Msg is the log message.
+	Msg string
+
+	// Worker names the worker that emitted the entry, from the "worker"
+	// context field per-worker loggers carry. It is empty for runner-level
+	// entries.
+	Worker string
 }
 
 // Run executes a scenario with the given configuration.
@@ -230,11 +260,12 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // runV2 keeps the process-global configworker deps key published for exactly
 // the supervisor's lifetime: the dynamicchildren registry is published under
 // the key before the supervisor starts (the application worker reads it every
-// tick), and the key is cleared on EVERY exit path, including a Driver panic,
-// strictly after the supervisor has stopped. Clearing the key earlier flips
-// the application worker's RegistryConfigured observation mid-shutdown; a key
-// that is never cleared makes every later runV2 in the same process fail its
-// already-published check below.
+// tick), and the key is cleared on every exit path once the supervisor exists,
+// including a Driver panic, strictly after the supervisor has stopped.
+// Clearing the key earlier flips the application worker's
+// RegistryConfigured observation mid-shutdown; a key that is never cleared
+// makes every later runV2 in the same process fail its already-published
+// check below.
 //
 // The supervisor runs on a context detached from the caller's ctx. The
 // caller's ctx drives the Driver, the Duration wait, and the teardown
@@ -256,8 +287,18 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			"so another v2 run is still active in this process", cfg.ScenarioV2.Name)
 	}
 
+	// The run logs through a tee: one arm is the caller's logger, the other
+	// captures every entry the run emits so RunResult.Logs can hold them
+	// parsed. Teeing (rather than replacing the caller's logger) keeps every
+	// entry flowing to whatever sink the caller passed.
+	capture := &syncBuffer{}
+	runLogger := teeLogger{
+		a: cfg.Logger,
+		b: deps.NewJSONFSMLogger(capture, deps.LevelDebug),
+	}
+
 	if cfg.DumpStore {
-		cfg.Logger.SentryWarn(deps.FeatureExamples, "", "dump_store_not_supported_for_v2",
+		runLogger.SentryWarn(deps.FeatureExamples, "", "dump_store_not_supported_for_v2",
 			deps.String("scenario", cfg.ScenarioV2.Name),
 			deps.String("impact", "no_store_dump_printed"))
 	}
@@ -265,18 +306,24 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	writer := dynamicchildren.NewWriter()
 	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
 
+	// The store logs its own entries (observed_changed and friends) through
+	// the logger it was built with, which is the caller's, so without this
+	// swap those entries would reach the caller's sink but not Logs. The swap
+	// precedes supervisor construction because construction already saves the
+	// application worker's documents; the restore in teardown runs strictly
+	// after the supervisor stopped, when no store activity is left.
+	restoreStoreLogger := swapStoreLogger(cfg.Store, runLogger)
+
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:                      "scenariov2-" + cfg.ScenarioV2.Name,
 		Name:                    cfg.ScenarioV2.Name,
 		Store:                   cfg.Store,
-		Logger:                  cfg.Logger,
+		Logger:                  runLogger,
 		TickInterval:            cfg.TickInterval,
 		EnableTraceLogging:      cfg.EnableTraceLogging,
 		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
 	if err != nil {
-		register.ClearDeps(configworker.WorkerTypeName)
-
 		return nil, err
 	}
 
@@ -305,6 +352,21 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// ClearDeps strictly after supDone: clearing earlier flips the
 		// application worker's RegistryConfigured observation mid-shutdown.
 		register.ClearDeps(configworker.WorkerTypeName)
+
+		if restoreStoreLogger != nil {
+			restoreStoreLogger()
+		}
+
+		// The parse runs after the appSup.Shutdown() call above returned. In
+		// this goroutine that call runs supervisor/lifecycle.go's Phase 4
+		// itself, so the entries those phases write are in the capture by
+		// then. Writes that trail this point are not captured: the
+		// collector's final collector_loop_stopped debug trails the channel
+		// close its Stop waits on; a driver goroutine still holding
+		// Env.Logger can keep writing; and a caller-initiated
+		// result.Shutdown() runs Phase 4 on the caller's goroutine while the
+		// call above early-returns on an already-stopped supervisor.
+		result.Logs = parseLogEntries(capture.lines())
 	}
 
 	// The Driver is user-authored code, so it may return an error or panic.
@@ -321,7 +383,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}()
 
 	client := fsmv2client.NewFSMv2Client(writer, cfg.Store)
-	if err := cfg.ScenarioV2.Driver(ctx, Env{Client: client, Logger: cfg.Logger}); err != nil {
+	if err := cfg.ScenarioV2.Driver(ctx, Env{Client: client, Logger: runLogger}); err != nil {
 		return nil, fmt.Errorf("scenario %q driver failed: %w", cfg.ScenarioV2.Name, err)
 	}
 
@@ -356,7 +418,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			}
 		}
 
-		cfg.Logger.Info("v2_run_teardown_starting",
+		runLogger.Info("v2_run_teardown_starting",
 			deps.String("scenario", cfg.ScenarioV2.Name),
 			deps.String("wake_reason", wakeReason))
 
@@ -377,7 +439,185 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 // SetupStore creates an in-memory TriangularStore for testing and CLI usage.
 func SetupStore(logger deps.FSMLogger) storage.TriangularStoreInterface {
-	basicStore := memory.NewInMemoryStore()
+	swapLogger := &swappableLogger{l: logger}
 
-	return storage.NewTriangularStore(basicStore, logger)
+	return &swappableStore{
+		TriangularStore: storage.NewTriangularStore(memory.NewInMemoryStore(), swapLogger),
+		logger:          swapLogger,
+	}
+}
+
+// teeLogger is an FSMLogger that forwards every entry to two loggers.
+type teeLogger struct {
+	a deps.FSMLogger
+	b deps.FSMLogger
+}
+
+func (t teeLogger) Debug(msg string, fields ...deps.Field) {
+	t.a.Debug(msg, fields...)
+	t.b.Debug(msg, fields...)
+}
+
+func (t teeLogger) Info(msg string, fields ...deps.Field) {
+	t.a.Info(msg, fields...)
+	t.b.Info(msg, fields...)
+}
+
+func (t teeLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
+	t.a.SentryWarn(feature, hierarchyPath, msg, fields...)
+	t.b.SentryWarn(feature, hierarchyPath, msg, fields...)
+}
+
+func (t teeLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
+	t.a.SentryError(feature, hierarchyPath, err, msg, fields...)
+	t.b.SentryError(feature, hierarchyPath, err, msg, fields...)
+}
+
+// With keeps both arms enriched, so a per-worker logger derived from the tee
+// still writes to the caller's logger and the capture alike.
+func (t teeLogger) With(fields ...deps.Field) deps.FSMLogger {
+	return teeLogger{a: t.a.With(fields...), b: t.b.With(fields...)}
+}
+
+// syncBuffer is a goroutine-safe bytes.Buffer: the capture is written by the
+// run's goroutines and read once after the run joined them, and the read must
+// not race a straggling write.
+type syncBuffer struct {
+	buf bytes.Buffer
+	mu  sync.Mutex
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) lines() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return strings.Split(b.buf.String(), "\n")
+}
+
+// parseLogEntries turns captured JSON log lines into LogEntry values. It is
+// pure: bytes in, structs out. A line that does not parse as JSON is
+// dropped; the capture's only writer is the JSON logger built in runV2,
+// which writes one complete line per entry, so a dropped line cannot occur
+// by construction.
+func parseLogEntries(lines []string) []LogEntry {
+	entries := make([]LogEntry, 0, len(lines))
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
+			continue
+		}
+
+		entry := LogEntry{Fields: make(map[string]any, len(raw))}
+
+		if level, ok := raw["level"].(string); ok {
+			entry.Level = level
+		}
+
+		if msg, ok := raw["msg"].(string); ok {
+			entry.Msg = msg
+		}
+
+		if worker, ok := raw["worker"].(string); ok {
+			entry.Worker = worker
+		}
+
+		for key, val := range raw {
+			switch key {
+			case "level", "msg", "worker", "ts":
+				continue
+			}
+
+			entry.Fields[key] = val
+		}
+
+		entries = append(entries, entry)
+	}
+
+	return entries
+}
+
+// swappableLogger forwards to a logger that can be exchanged mid-flight, so a
+// store built before a run can log through the run's logger once the run
+// starts. The store calls only the four log methods; a logger derived via With
+// is not swappable, and nothing in pkg/cse/storage derives one.
+//
+// The mutex is what makes the exchange safe to overlap with logging: when a
+// caller-initiated result.Shutdown() runs the supervisor's Phase 4 on the
+// caller's goroutine, the teardown goroutine's own Shutdown call
+// early-returns, so the restore of the store's original logger can overlap a
+// store entry still being logged.
+type swappableLogger struct {
+	l  deps.FSMLogger
+	mu sync.RWMutex
+}
+
+func (s *swappableLogger) swap(l deps.FSMLogger) deps.FSMLogger {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	prev := s.l
+	s.l = l
+
+	return prev
+}
+
+func (s *swappableLogger) get() deps.FSMLogger {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.l
+}
+
+func (s *swappableLogger) Debug(msg string, fields ...deps.Field) {
+	s.get().Debug(msg, fields...)
+}
+
+func (s *swappableLogger) Info(msg string, fields ...deps.Field) {
+	s.get().Info(msg, fields...)
+}
+
+func (s *swappableLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
+	s.get().SentryWarn(feature, hierarchyPath, msg, fields...)
+}
+
+func (s *swappableLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
+	s.get().SentryError(feature, hierarchyPath, err, msg, fields...)
+}
+
+func (s *swappableLogger) With(fields ...deps.Field) deps.FSMLogger {
+	return s.get().With(fields...)
+}
+
+// swappableStore is a TriangularStore whose logger can be swapped for a run.
+type swappableStore struct {
+	*storage.TriangularStore
+	logger *swappableLogger
+}
+
+// swapStoreLogger points a swappable store's logging at l for the duration of
+// a run. It returns a restore function, or nil when the store cannot be
+// swapped (a caller-built store that is not from SetupStore).
+func swapStoreLogger(store storage.TriangularStoreInterface, l deps.FSMLogger) func() {
+	swappable, ok := store.(*swappableStore)
+	if !ok {
+		return nil
+	}
+
+	prev := swappable.logger.swap(l)
+
+	return func() {
+		swappable.logger.swap(prev)
+	}
 }

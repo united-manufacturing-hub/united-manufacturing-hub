@@ -75,6 +75,17 @@ func logContainsEvent(logOutput, msg string) bool {
 	return false
 }
 
+// logsContainMsg reports whether any parsed entry has the given Msg value.
+func logsContainMsg(entries []examples.LogEntry, msg string) bool {
+	for _, entry := range entries {
+		if entry.Msg == msg {
+			return true
+		}
+	}
+
+	return false
+}
+
 var _ = Describe("ScenarioV2 framework", func() {
 	// The configworker deps key is process-global; a spec that fails mid-run
 	// would otherwise leak it into every later spec in this process.
@@ -221,6 +232,119 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// printed" as "no store changes", so the gap must be logged.
 		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeTrue(),
 			"runV2 must warn that DumpStore is ignored for v2 scenarios")
+
+		// The warning is routed through the run's tee logger, so it must
+		// also sit in result.Logs; routing it to RunConfig.Logger alone
+		// keeps the buffer assertion above green while dropping it from
+		// Logs.
+		Expect(logsContainMsg(result.Logs, "dump_store_not_supported_for_v2")).To(BeTrue(),
+			"the DumpStore warning must reach result.Logs")
+	})
+
+	It("delivers the run's log entries to the caller as result.Logs, complete and typed", func() {
+		logBuf := &v2LogBuffer{}
+		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
+		store := examples.SetupStore(logger)
+
+		// The driver logs through Env.Logger: the run hands the driver its
+		// tee logger, so the entry must reach the caller's sink AND
+		// result.Logs. A driver that logs nothing (NoopScenarioV2's) leaves
+		// that routing unobserved — handing the driver RunConfig.Logger
+		// instead would keep every count green while dropping driver
+		// entries from Logs.
+		loggingDriver := examples.ScenarioV2{
+			Name:        "logs-complete",
+			Description: "test-local driver that logs one entry through Env.Logger",
+			Driver: func(_ context.Context, env examples.Env) error {
+				env.Logger.Info("driver_logged_entry")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   loggingDriver,
+			Duration:     time.Second,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		// Once Done is closed, result.Logs is final: teardown parsed the
+		// capture before closing Done. What that parse captures is the
+		// ordering runV2's teardown comment documents.
+		Eventually(result.Done, "55s").Should(BeClosed())
+
+		// Completeness, judged against an independent count. The buffer the
+		// caller's logger wrote to is the control: every non-empty line in
+		// it is one entry the run emitted, so result.Logs must hold exactly
+		// that many. The control counts lines, not parseable lines, so a
+		// line the parser drops diverges the counts instead of vanishing
+		// from both sides at once. Agreeing counts also prove the runner
+		// tee'd the caller's logger rather than replacing it: a replaced
+		// logger leaves this buffer empty while result.Logs is not, and the
+		// counts diverge.
+		bufferEntries := 0
+		for _, line := range strings.Split(logBuf.String(), "\n") {
+			if line == "" {
+				continue
+			}
+
+			bufferEntries++
+		}
+		Expect(bufferEntries).To(BeNumerically(">", 0),
+			"the control must count a non-empty run: a run that emitted and captured nothing would make equal counts meaningless")
+		Expect(result.Logs).To(HaveLen(bufferEntries),
+			"result.Logs must hold every entry the run emitted to the caller's logger, and no others")
+
+		// The driver's entry: proves Env.Logger is the run's tee, so driver
+		// entries reach the caller's sink and Logs alike.
+		Expect(logsContainMsg(result.Logs, "driver_logged_entry")).To(BeTrue(),
+			"an entry the driver logs through Env.Logger must reach result.Logs")
+
+		// The store's entry: SetupStore's logger swap points the store at
+		// the tee, so its identity_created debug lands in Logs. Without the
+		// swap the entry still reaches the caller's sink and only Logs
+		// misses it.
+		Expect(logsContainMsg(result.Logs, "identity_created")).To(BeTrue(),
+			"the store's identity_created entry must reach result.Logs through the swapped store logger")
+
+		// One known entry arrives typed. Every run drives the config worker
+		// kernel child through state transitions, and the supervisor logs
+		// each one as a state_transition at info, naming the child in the
+		// worker field and carrying from_state/to_state/reason. The entry
+		// must reach the caller parsed, not merely present: exact level,
+		// exact worker, its transition keys, and no reserved key leaking
+		// into Fields.
+		const configWorkerChild = "scenariov2-logs-complete(application)/config-worker-001(configworker)"
+		var typed *examples.LogEntry
+		for i := range result.Logs {
+			if result.Logs[i].Msg == "state_transition" && result.Logs[i].Worker == configWorkerChild {
+				entry := result.Logs[i]
+				typed = &entry
+
+				break
+			}
+		}
+		Expect(typed).NotTo(BeNil(),
+			"result.Logs must contain the config worker child's state_transition entry")
+		Expect(typed.Level).To(Equal("info"),
+			"state_transition is logged at info, so a parsed entry carries its exact level")
+		Expect(typed.Worker).To(Equal(configWorkerChild),
+			"a parsed entry names the worker that emitted it, by its hierarchy path")
+		Expect(typed.Fields).To(HaveKey("from_state"),
+			"state_transition carries from_state")
+		Expect(typed.Fields).To(HaveKey("to_state"),
+			"state_transition carries to_state")
+		Expect(typed.Fields).NotTo(BeEmpty(),
+			"a parsed entry carries its structured fields")
+		for _, reserved := range []string{"ts", "level", "msg", "worker"} {
+			Expect(typed.Fields).NotTo(HaveKey(reserved),
+				"the parser must lift %s out of Fields, not copy it", reserved)
+		}
 	})
 
 	It("tears down gracefully on a live tick loop when the caller ctx is cancelled mid-run", func() {

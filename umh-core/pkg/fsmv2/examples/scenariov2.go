@@ -32,8 +32,9 @@ type Env struct {
 	// observed state.
 	Client *fsmv2client.FSMv2Client
 
-	// Logger is the run's logger (the same logger RunConfig.Logger carries),
-	// so drivers log into the same stream the post-run log checks read.
+	// Logger is the run's tee logger, not RunConfig.Logger itself: an entry
+	// a driver logs reaches both the caller's sink and RunResult.Logs, so
+	// post-run log checks find it.
 	Logger deps.FSMLogger
 }
 
