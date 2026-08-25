@@ -82,28 +82,43 @@ type CPUConfig struct{}
 
 // CPUStatus is the result of one CPU-health observation. It carries judgements
 // and counts, never a raw measurement such as a CPU-utilisation percentage.
+//
+// The struct is not itself a wire shape; two of its six fields are. Verdict and
+// Message fill the Category and the Message of the models.Health a container
+// monitor reports for CPU. What reads that Health lives outside this package:
+// the Management Console frontend, and
+// ProtocolConverterService.IsResourceLimited, which quotes the message into its
+// reason for refusing a new bridge.
 type CPUStatus struct {
 	// Verdict is the ranked judgement Decide produced this tick, as the
 	// cpuhealth.State string ("healthy" or "degraded"). Empty when the tick
-	// could not measure.
+	// could not measure. Those two values are the ones that map onto
+	// models.Active and models.Degraded, and that health category is what the
+	// Management Console colours its CPU reading from.
 	Verdict string `json:"verdict"`
 
-	// Message is ComposeMessage's output for this tick's verdict and signals.
+	// Message is ComposeMessage's output for this tick's verdict and signals. It
+	// is the sentence a customer reads: the Management Console renders a health
+	// message verbatim, and IsResourceLimited prefixes it with "CPU degraded: "
+	// as the reason a new bridge was refused. Both use it as text, so the
+	// wording is the whole contract.
 	Message string `json:"message"`
 
 	// SignalsCapable is how many CPU signals this box can answer (not
-	// NoInstrument).
+	// NoInstrument). It has no consumer: nothing outside this package decides,
+	// displays or alerts on it.
 	SignalsCapable int `json:"signalsCapable"`
 	// SignalsMeasured is how many capable signals have produced a first
-	// measurement since this worker started.
+	// measurement since this worker started. It has no consumer either.
 	SignalsMeasured int `json:"signalsMeasured"`
 
 	// RefusingAdmission reports whether admission is currently refused: a
 	// capable signal has not first-measured (measured < capable) within the
-	// admission window. Consume the flag; do not re-derive the count
-	// comparison, which drops the window bound. It is meaningful only on a
-	// successful read — an errored/empty Poll yields this false ('no
-	// determination'), which a consumer must not read as 'admission open'.
+	// admission window. Nothing consumes it; the contract below binds whatever
+	// first does. Consume the flag; do not re-derive the count comparison,
+	// which drops the window bound. It is meaningful only on a successful read
+	// — an errored/empty Poll yields this false ('no determination'), which a
+	// consumer must not read as 'admission open'.
 	RefusingAdmission bool `json:"refusingAdmission"`
 
 	// Polls is how many observations this worker has completed.
