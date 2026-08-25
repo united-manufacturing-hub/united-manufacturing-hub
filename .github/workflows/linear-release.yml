@@ -82,6 +82,7 @@ jobs:
       # always the revision the running workflow came from, which does.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          filter: blob:none
           ref: ${{ github.workflow_sha }}
           path: .ci-tooling
           sparse-checkout: .github/scripts
