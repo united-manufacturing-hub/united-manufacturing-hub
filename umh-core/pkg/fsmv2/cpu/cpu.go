@@ -14,9 +14,10 @@
 
 // Package fsmv2cpu is the fsmv2 simple monitor that polls a cgroup's CPU health
 // with the pkg/cpuhealth library. It owns the sampler, because the sampler
-// holds per-tick baselines and the worker owns the tick. Decide stays a pure
-// library function in pkg/cpuhealth, so the recording gate keeps driving it
-// directly rather than through the worker.
+// carries the baselines every rate is derived from and the worker owns the tick
+// they advance on. It owns no judgement: cpuhealth.Decide is a plain function
+// over one sample, and the worker only hands it a sample and reports what came
+// back.
 package fsmv2cpu
 
 import (
@@ -93,9 +94,10 @@ const (
 	admissionWindow = 10 * time.Second
 )
 
-// Ref is the (WorkerType, Name) pair identifying the CPU monitor child, shared
-// by the configworker that upserts it (gated behind USE_FSMV2_CPU) and the seam
-// that reads it back.
+// Ref is the (WorkerType, Name) pair identifying the CPU monitor child. The
+// configworker upserts the child under it, gated behind USE_FSMV2_CPU, and a
+// reader fetches that child's status back under the same pair through
+// fsmv2client.
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 // CPUConfig is the worker's config: the CPU child is upserted with an empty
@@ -124,7 +126,7 @@ type CPUStatus struct {
 
 	// RefusingAdmission reports whether admission is currently refused: a
 	// capable signal has not first-measured (measured < capable) within the
-	// 10s admission window. Consume the flag; do not re-derive the count
+	// admission window. Consume the flag; do not re-derive the count
 	// comparison, which drops the window bound. It is meaningful only on a
 	// successful read — an errored/empty Poll yields this false ('no
 	// determination'), which a consumer must not read as 'admission open'.
@@ -136,15 +138,17 @@ type CPUStatus struct {
 
 // CPUDeps is the per-instance state Poll reads and mutates.
 //
-// TDeps must be *CPUDeps, never the value: Poll takes d by value, and copying a
-// value CPUDeps would silently lose every non-pointer field's mutation on the
-// copy (the engine is a pointer and would survive, but nothing else is). The
-// pointer keeps every field shared across ticks.
+// TDeps must be *CPUDeps, never the value: Poll takes d by value, so a value
+// CPUDeps would hand each tick its own copy and lose every mutation to a plain
+// field. The failure would be partial rather than total, and so quiet — the map
+// and the pointers below share their contents across a copy, and only the plain
+// fields would reset. The pointer keeps all of them shared.
 type CPUDeps struct {
 	*deps.BaseDependencies
 
-	// sampler reads the cgroup. The sampler holds the per-tick baselines; it is
-	// a *cgroupSampler behind the interface, so it is shared across ticks.
+	// sampler reads the cgroup. Behind the interface it is a pointer, and the
+	// counter baselines each rate is derived from live in the sources that
+	// pointer owns, so both survive the tick.
 	sampler cpuhealth.Sampler
 	// engine owns every (signal, instrument) window and per-signal latch. It is
 	// nil when NewEngine failed at construction (engineErr is then set).
@@ -159,8 +163,8 @@ type CPUDeps struct {
 	// Poll).
 	engineErr error
 
-	// polls counts completed observations. It is the non-pointer mutation the
-	// two-tick spec guards.
+	// polls counts completed observations. It is the plain-field mutation the
+	// two-tick spec in cpu_test.go guards.
 	polls uint64
 
 	// firstFilled records, per signal name, whether it has ever reduced to a
@@ -171,41 +175,39 @@ type CPUDeps struct {
 	// read outage.
 	firstFilled map[string]bool
 
-	// startedAt anchors the 10s admission window: the first sample timestamp
+	// startedAt anchors the admission window: the first sample timestamp
 	// the worker ever sees. Elapsed sample time is measured from it, so the
 	// window is driven by the sample clock, not the wall clock.
 	startedAt time.Time
 
 	// admissionReported records whether a capable signal that never first-measured
-	// has already been reported at the 10s window deadline. The report fires once
-	// per worker, never once per tick.
+	// has already been reported at the admission-window deadline. The report fires
+	// once per worker, never once per tick.
 	admissionReported bool
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
 // (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
-// it, and builds the table and engine. NewDeps cannot fail — it returns TDeps
-// and nothing else — so a startup snapshot whose read fails yields cores=0,
-// quota=0, which silently drops the quota-dependent signals (throttling,
-// limit-saturation) from the table for this instance's whole lifetime; a later
-// read that succeeds does NOT restore them. Only a table that will not build
-// (engineErr) makes Poll report it could not measure — a read failure at
-// construction yields a healthy first verdict from a permanently thinned
-// table, which is why the startup read error is logged.
+// it, and builds the table and engine.
+//
+// NewDeps cannot fail — it returns TDeps and nothing else — so a startup
+// snapshot whose read fails yields cores=0, quota=0. cpuhealth.Table adds its
+// host-capacity signal only for a positive core count, and its container-limit
+// signal only for a positive quota, so a failed startup read drops both from
+// this instance's table for its whole lifetime; a later read that succeeds does
+// NOT restore them. Of the two things that can go wrong here — the startup read
+// and building the engine — only a failure to build (engineErr) makes Poll
+// report it could not measure. A failed startup read yields a healthy first
+// verdict from a permanently thinned table instead, which is why it is logged.
 //
 // The filesystem the sampler reads through is whichever one a caller published
 // under FilesystemDepsKey before the worker was spawned, and the clock it stamps
 // from is whichever one was published under ClockDepsKey. NewDeps runs per
 // instance at spawn time, not at init(), so a caller that publishes first
-// decides which files this instance sees and which clock times them.
-//
-// A caller staging counters on a fixture clock has to publish both. Every rate
-// the sampler reports is a counter delta over the gap between two Sample
-// timestamps, so staging the counters on one clock while the sampler stamps
-// from another yields rates that are neither the staged ones nor the machine's.
-//
-// A caller who stages no counters needs only the filesystem, and the specs
-// beside this file that read a Box once do exactly that.
+// decides which files this instance sees and which clock times them. A caller
+// staging counters has to publish both keys, for the reason ClockDepsKey gives;
+// a caller who stages none needs only the filesystem, and the specs beside this
+// file that read a Box once do exactly that.
 //
 // Nothing published means the real filesystem. That differs from the transport
 // pull worker, which errors when its deps are missing, and the difference is
@@ -230,12 +232,15 @@ func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	return NewDepsWithSampler(id, bd, cpuhealth.NewLinuxSamplerWithClock(fs, cgroupBase, clk))
 }
 
-// NewDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
-// Production NewDeps uses a real cgroup sampler; the dev scenario and tests pass
-// a sampler backed by a mock filesystem, which is the only way a Poll can be
-// driven without touching a real /sys. The table and engine are built once from
-// a startup snapshot, exactly as NewDeps does — the two constructors share this
-// path so a mock-backed deps behaves identically to a real one.
+// NewDepsWithSampler builds CPU's per-instance deps around an explicit sampler,
+// for a caller holding one already rather than one that wants the cgroup sampler
+// NewDeps builds. The table and engine are built from a startup snapshot through
+// that sampler, on the same path NewDeps takes, so deps built either way behave
+// identically from Poll's side.
+//
+// A caller who only wants Poll kept off the real /sys does not need this:
+// publishing a filesystem under FilesystemDepsKey is enough, and the specs
+// beside this file do exactly that.
 func NewDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
 	d := &CPUDeps{
 		BaseDependencies: bd,
@@ -273,8 +278,8 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 		return CPUStatus{}, err
 	}
 
-	// Anchor the 10s admission window on the first sample timestamp the worker
-	// ever sees. The refusal is bounded by sample time, not wall time.
+	// The admission window is anchored on the first sample timestamp the worker
+	// ever sees, so the refusal below is bounded by sample time, not wall time.
 	if d.startedAt.IsZero() {
 		d.startedAt = sample.Timestamp
 	}
@@ -282,10 +287,13 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
 
-	// The absence-of-evidence counts, from the same walk Decide used: the
-	// SAME env, the same tick, after Decide returns. engine.Select returns each
-	// signal's Availability; capable means not NoInstrument (something on this
-	// box can answer it), measured means its first-fill bit is set. The bit is
+	// The absence-of-evidence counts: a second walk of the table, with the same
+	// env, in the same tick, after Decide returns. It has to run after — Select
+	// reports a window's readiness without ageing it, so it is only trustworthy
+	// following an Observe on that tick, and Decide is what Observes.
+	// engine.Select returns each signal's Availability; capable means not
+	// NoInstrument (something on this box can answer it), measured means its
+	// first-fill bit is set. The bit is
 	// set the first tick that signal is Ready and never cleared, so a signal
 	// that has measured keeps counting as measured through a later read outage.
 	capable, measured := 0, 0
@@ -317,7 +325,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	overDeadline := elapsed >= admissionWindow
 	refusing := measured < capable && elapsed < admissionWindow
 
-	// Once the 10s window has elapsed and a capable signal has still never
+	// Once the admission window has elapsed and a capable signal has still never
 	// first-measured, admission opens even though a source that should answer
 	// has stayed silent. Raise exactly one SentryWarn naming every signal that
 	// never measured — never once per tick (the admissionReported latch), and
@@ -351,16 +359,16 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}, nil
 }
 
-// startupCapacity derives the two startup facts NewEngine consumes — the number
-// of cores the cgroup may use and its positive quota — from a startup snapshot.
-// On failure both are zero: no cores, no quota, which is the no-limit table.
+// startupCapacity derives the two startup facts cpuhealth.Table shapes itself
+// from — the number of cores the cgroup may use and its positive quota — out of
+// one startup snapshot. On failure both are zero, which is the table without
+// either capacity signal.
 func startupCapacity(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
 	smp, err := s.Read(ctx)
 	if err != nil {
-		// A startup read failure pins cores=0/quota=0 for the instance's whole
-		// lifetime (the quota signals drop from the table and are never
-		// restored). This is silent otherwise — the first Poll would report
-		// healthy from the thinned table — so log it. (See NewDeps.)
+		// Log it: a failed startup read is otherwise silent, because the first
+		// Poll reports healthy from the thinned table rather than an error.
+		// NewDeps has why the thinning lasts the instance's whole lifetime.
 		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
 			"cpu: startup cgroup snapshot failed; quota signals omitted", deps.Err(err))
 	}
