@@ -124,8 +124,14 @@ type CPUStatus struct {
 // TDeps must be *CPUDeps, never the value: Poll takes d by value, so a value
 // CPUDeps would hand each tick its own copy and lose every mutation to a plain
 // field. The failure would be partial rather than total, and so quiet — the map
-// and the pointers below share their contents across a copy, and only the plain
-// fields would reset. The pointer keeps all of them shared.
+// and the pointers below share their contents across a copy, while adm's window
+// anchor and its report latch would reset on every tick.
+//
+// Nothing enforces this. The spec that did was deleted along with the counter it
+// watched, knowing that cost. pkg/fsmv2/simple's own isolation spec is not a
+// substitute: it binds a pointer as its TDeps and checks that one instance's
+// mutations stay out of another's, so it never exercises the value case this
+// paragraph forbids.
 type CPUDeps struct {
 	*deps.BaseDependencies
 
@@ -145,10 +151,6 @@ type CPUDeps struct {
 	// panics at the supervisor: simple has no recover around Poll, and recovery
 	// is at the collector.
 	engineErr error
-
-	// polls counts completed observations. It is the plain-field mutation the
-	// two-tick spec in cpu_test.go guards.
-	polls uint64
 
 	// everMeasured keeps a signal that has measured once counting as measured
 	// through a later read outage. Set the first tick a signal reads Ready, and
@@ -182,8 +184,6 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	// After Decide, never before it, and on the same env. evidenceCounts says why.
 	capable, measured, unmeasured := d.evidenceCounts(env)
-
-	d.polls++
 
 	refusing, shortfallAtDeadline := d.adm.decide(sample.Timestamp, measured, capable)
 
