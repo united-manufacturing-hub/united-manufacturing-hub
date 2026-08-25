@@ -150,12 +150,11 @@ type CPUDeps struct {
 	// two-tick spec in cpu_test.go guards.
 	polls uint64
 
-	// firstFilled is what keeps a signal that has measured once counting as
-	// measured through a later read outage. It records, per signal name, whether
-	// that signal has ever read Ready since this worker started, and is never
-	// cleared while the worker lives. A respawn builds a new worker, so it starts
-	// empty again.
-	firstFilled map[string]bool
+	// everMeasured keeps a signal that has measured once counting as measured
+	// through a later read outage. Set the first tick a signal reads Ready, and
+	// never cleared while the worker lives; a respawn builds a new worker, so it
+	// starts empty again.
+	everMeasured map[string]bool
 
 	// adm is the admission window's state: its anchor and its report latch.
 	// admission.go has what the window is for.
@@ -187,7 +186,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// trustworthy after an Observe on this tick, and Decide is what Observes.
 	//
 	// Capable means not NoInstrument — something on this box can answer the
-	// signal at all. Measured means firstFilled is set for it; see that field.
+	// signal at all. Measured means everMeasured is set for it; see that field.
 	capable, measured := 0, 0
 	unmeasured := []string{}
 	for _, s := range d.table.Signals {
@@ -196,9 +195,9 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 			continue // no instrument on this box: not capable, cannot refuse
 		}
 		if availability == diagnosis.Ready {
-			d.firstFilled[s.Name] = true
+			d.everMeasured[s.Name] = true
 		}
-		if d.firstFilled[s.Name] {
+		if d.everMeasured[s.Name] {
 			measured++
 		} else {
 			unmeasured = append(unmeasured, s.Name)
@@ -296,7 +295,7 @@ func newDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpu
 	cores, quota := startupCapacity(context.Background(), sampler, bd)
 	d.table = cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
-	d.firstFilled = make(map[string]bool)
+	d.everMeasured = make(map[string]bool)
 
 	return d
 }

@@ -50,7 +50,7 @@ func newDeps(s cpuhealth.Sampler, cores, quota float64) *CPUDeps {
 		sampler:          s,
 		engine:           engine,
 		table:            table,
-		firstFilled:      make(map[string]bool),
+		everMeasured:     make(map[string]bool),
 	}
 }
 
