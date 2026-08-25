@@ -102,8 +102,6 @@ var _ = Describe("CPU monitor worker", func() {
 
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(status.Polls).To(Equal(uint64(1)))
-
 			// The verdict is a state from Decide, not a raw Sample reading such
 			// as usage cores. A quiet, present tick judges healthy.
 			Expect(status.Verdict).To(Equal(string(cpuhealth.StateHealthy)))

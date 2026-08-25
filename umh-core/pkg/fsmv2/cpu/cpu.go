@@ -83,7 +83,7 @@ type CPUConfig struct{}
 // CPUStatus is the result of one CPU-health observation. It carries judgements
 // and counts, never a raw measurement such as a CPU-utilisation percentage.
 //
-// The struct is not itself a wire shape; two of its six fields are. Verdict and
+// The struct is not itself a wire shape; two of its five fields are. Verdict and
 // Message fill the Category and the Message of the models.Health a container
 // monitor reports for CPU. What reads that Health lives outside this package:
 // the Management Console frontend, and
@@ -120,9 +120,6 @@ type CPUStatus struct {
 	// — an errored/empty Poll yields this false ('no determination'), which a
 	// consumer must not read as 'admission open'.
 	RefusingAdmission bool `json:"refusingAdmission"`
-
-	// Polls is how many observations this worker has completed.
-	Polls uint64 `json:"polls"`
 }
 
 // CPUDeps is the per-instance state Poll reads and mutates.
@@ -247,7 +244,6 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 		SignalsCapable:    capable,
 		SignalsMeasured:   measured,
 		RefusingAdmission: refusing,
-		Polls:             d.polls,
 	}, nil
 }
 
