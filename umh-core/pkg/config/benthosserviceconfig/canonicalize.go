@@ -49,6 +49,7 @@ func initGate() {
 	raw, isSet := os.LookupEnv(canonicalizeFastEnv)
 	if !isSet {
 		useCanonicalizeFast = true
+
 		return
 	}
 
@@ -62,6 +63,7 @@ func initGate() {
 			"%s is set to %q, which is not a boolean. Canonicalization fell back to "+
 				"the YAML round-trip, which is correct but slower.",
 			canonicalizeFastEnv, raw)
+
 		return
 	}
 
