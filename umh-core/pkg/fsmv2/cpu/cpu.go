@@ -181,8 +181,10 @@ func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 // for a caller holding one already rather than one that wants the cgroup sampler
 // NewDeps builds. The table and engine are built from a startup snapshot through
 // that sampler, on the same path NewDeps takes, so deps built either way behave
-// identically from Poll's side. It is also how a caller keeps Poll off the real
-// /sys: the specs beside this file pass a sampler over a fixture filesystem.
+// identically from Poll's side. Passing an explicit sampler is also how a
+// caller keeps Poll off the real /sys. The specs beside this file take a
+// shorter route for that: they build CPUDeps directly around a stub Sampler,
+// which skips the startup snapshot as well.
 func NewDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
 	d := &CPUDeps{
 		BaseDependencies: bd,
