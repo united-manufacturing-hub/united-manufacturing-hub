@@ -475,6 +475,11 @@ var _ = Describe("canonicalize fast path", func() {
 
 		// The same type in another section is worth its own line: the first one says
 		// nothing about how far the fallback spread.
+		//
+		// Filtered rather than counted: sentry.ReportIssueWithContext logs the error
+		// itself before sending, and whether that second line appears depends on a
+		// process-wide debounce the first warning anywhere consumes. Counting every
+		// line would make this spec depend on which spec ran before it.
 		It("reports the same type again for a different section", func() {
 			core, logs := observer.New(zapcore.WarnLevel)
 			defer zap.ReplaceGlobals(zap.New(core))()
@@ -482,7 +487,10 @@ var _ = Describe("canonicalize fast path", func() {
 			reportFallback("input", "test-only-type-2")
 			reportFallback("output", "test-only-type-2")
 
-			Expect(logs.Len()).To(Equal(2))
+			ours := logs.FilterMessageSnippet("fell back to the YAML round-trip")
+			Expect(ours.Len()).To(Equal(2))
+			Expect(ours.FilterMessageSnippet("input section").Len()).To(Equal(1))
+			Expect(ours.FilterMessageSnippet("output section").Len()).To(Equal(1))
 		})
 
 		// A refused value shape is ordinary configuration - an indented SQL block, a
