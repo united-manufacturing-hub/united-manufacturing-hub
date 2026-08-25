@@ -114,6 +114,18 @@ func (w *throttledLogger) log(key string, warnMsg string, level zapcore.Level, e
 	}
 }
 
+// ResetThrottleLoggerForTest points the throttled logger at l and forgets every
+// key. Without it the destination is resolved once, on the first ThrottledX call
+// anywhere in the process, and cached - so a test in another package can never
+// observe what these helpers emit, and its keys stay throttled across specs.
+func ResetThrottleLoggerForTest(l *zap.SugaredLogger) {
+	reconcileLogger.mu.Lock()
+	defer reconcileLogger.mu.Unlock()
+
+	reconcileLogger.logger = l
+	reconcileLogger.entries = make(map[string]*throttleEntry)
+}
+
 // ThrottledError logs a transient shared-code condition at Error, throttled per
 // key. Use when no single caller owns the error; for an owned error stream with
 // a success signal, use DedupLogger instead.

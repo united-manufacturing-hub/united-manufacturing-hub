@@ -26,6 +26,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 	"gopkg.in/yaml.v3"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 // fastNormalize drops the third return value of normalizeValue. It lives here
@@ -460,13 +462,19 @@ var _ = Describe("canonicalize fast path", func() {
 			core, logs := observer.New(zapcore.WarnLevel)
 			defer zap.ReplaceGlobals(zap.New(core))()
 
+			logger.ResetThrottleLoggerForTest(zap.New(core).Sugar())
+
 			const goType = "test-only-type"
 
 			reportFallback("input", goType)
 			reportFallback("input", goType)
 
+			// Throttled announces the suppression on the second occurrence rather than
+			// going quiet, so the repeat is one line saying it will stop repeating.
+			Expect(logs.FilterMessageSnippet("suppressing further occurrences").Len()).
+				To(Equal(1), "the repeat neither warned nor announced that it stops")
 			Expect(logs.FilterMessageSnippet("fell back to the YAML round-trip").Len()).
-				To(Equal(1), "expected exactly one visible warning for a repeated type")
+				To(Equal(2), "expected the warning and its suppression notice, nothing more")
 			Expect(logs.FilterMessageSnippet(goType).Len()).
 				To(BeNumerically(">=", 1), "the report must name the type")
 			Expect(logs.FilterMessageSnippet("input").Len()).
@@ -483,6 +491,8 @@ var _ = Describe("canonicalize fast path", func() {
 		It("reports the same type again for a different section", func() {
 			core, logs := observer.New(zapcore.WarnLevel)
 			defer zap.ReplaceGlobals(zap.New(core))()
+
+			logger.ResetThrottleLoggerForTest(zap.New(core).Sugar())
 
 			reportFallback("input", "test-only-type-2")
 			reportFallback("output", "test-only-type-2")
@@ -512,6 +522,8 @@ var _ = Describe("canonicalize fast path", func() {
 			core, logs := observer.New(zapcore.InfoLevel)
 			defer zap.ReplaceGlobals(zap.New(core))()
 
+			logger.ResetThrottleLoggerForTest(zap.New(core).Sugar())
+
 			reportFallback("pipeline", declinedLeadingBreak)
 
 			Expect(logs.Len()).To(Equal(1))
@@ -534,12 +546,14 @@ var _ = Describe("canonicalize fast path", func() {
 
 			defer func() { gateOnce = sync.Once{} }()
 
-			reportedFallbacks = sync.Map{}
+			reportedToSentry = sync.Map{}
 
 			// Info, because the fixture declines on a value shape rather than an
 			// unhandled type, and those are deliberately kept out of WARN.
 			core, logs := observer.New(zapcore.InfoLevel)
 			defer zap.ReplaceGlobals(zap.New(core))()
+
+			logger.ResetThrottleLoggerForTest(zap.New(core).Sugar())
 
 			desired := bridgeConfigDeclining(5)
 

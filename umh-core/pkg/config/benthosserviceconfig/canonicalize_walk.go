@@ -241,12 +241,15 @@ func isDeclinedShape(reason string) bool {
 		strings.HasSuffix(reason, declinedLeadingWhitespace)
 }
 
-var reportedFallbacks sync.Map // map[string]struct{}, one report per section and reason
+// reportedToSentry keeps the Sentry side to one issue per section and reason.
+// logger.ThrottledX covers the log side but knows nothing about Sentry, and the
+// Sentry call takes a process-wide mutex this hot path should not touch on every
+// tick, so the map stays - narrowed to Sentry rather than removed.
+var reportedToSentry sync.Map // map[string]struct{}
 
 // reportFallback surfaces a section that went back to the slow path. One declining
 // value costs the round-trip for everything around it, so this is the only signal
-// that the optimization stopped applying somewhere. It fires at most once per
-// section and reason per process.
+// that the optimization stopped applying somewhere.
 //
 // Two very different things end up here, and only one is a defect:
 //
@@ -258,19 +261,18 @@ var reportedFallbacks sync.Map // map[string]struct{}, one report per section an
 //   - A Go type with no case in normalizeValue. That means something new reached the
 //     config path and the walk silently stopped applying to it. WARN plus Sentry,
 //     because it is actionable and nobody would otherwise notice.
+//
+// Throttled rather than reported once and then never again: the count folded into
+// the next line says how far the fallback spread, which "once per process" hides.
 func reportFallback(section, reason string) {
 	if reason == "" {
 		return
 	}
 
-	if _, alreadyReported := reportedFallbacks.LoadOrStore(section+"/"+reason, struct{}{}); alreadyReported {
-		return
-	}
-
-	log := logger.For(logger.ComponentBenthosConfig)
+	key := section + "/" + reason
 
 	if isDeclinedShape(reason) {
-		log.Infof(
+		logger.ThrottledInfo(key,
 			"Benthos config canonicalization took the YAML round-trip for the %s section: "+
 				"it holds a %s, which cannot be normalized without knowing where it sits in "+
 				"the document. Correct, only slower.",
@@ -279,15 +281,20 @@ func reportFallback(section, reason string) {
 		return
 	}
 
-	log.Warnf(
+	logger.ThrottledWarn(key,
 		"Benthos config canonicalization fell back to the YAML round-trip for the %s "+
 			"section: unsupported type %q. Correct but slower; add the case to "+
 			"normalizeValue in canonicalize_walk.go.",
 		section, reason)
 
-	// log, not nil: ReportIssueWithContext swaps nil for a no-op logger.
+	if _, alreadySent := reportedToSentry.LoadOrStore(key, struct{}{}); alreadySent {
+		return
+	}
+
+	// log, not nil: a nil logger is swapped for a no-op one, which silently drops
+	// the local half of the report.
 	sentry.ReportIssueWithContext(
 		fmt.Errorf("canonicalize fast path unsupported type: %s", reason),
-		sentry.IssueTypeWarning, log,
+		sentry.IssueTypeWarning, logger.For(logger.ComponentBenthosConfig),
 		map[string]interface{}{"trigger": "canonicalize_fallback_" + reason, "section": section})
 }
