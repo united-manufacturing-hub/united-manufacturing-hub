@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -40,6 +41,16 @@ const (
 	// InstanceName is the fixed dynamic-child name for the single per-instance
 	// CPU monitor, matching how the configworker reconciles a singleton child.
 	InstanceName = "cpu"
+
+	// FilesystemDepsKey is the register.SetDeps key under which a caller
+	// publishes the filesystem.Service the sampler reads the cgroup files
+	// through. NewDeps looks it up per instance at spawn time.
+	//
+	// The key is deliberately not WorkerType, which is where a worker's own
+	// typed deps payload goes: the typed deps registry keys on the string
+	// alone, so two payloads cannot share one key. Same convention, and the
+	// same reason, as configworker.ConfigManagerDepsKey.
+	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup v2 mount point whose CPU controller files the
 	// sampler reads (cpu.stat, cpu.max, cpu.pressure, cpuset.cpus.effective).
@@ -170,11 +181,28 @@ type CPUDeps struct {
 // report it could not measure. A failed startup read yields a healthy first
 // verdict from a permanently thinned table instead, which is why it is logged.
 //
-// The sampler reads the real cgroup files through the real filesystem. This
-// package exports no way to supply a different one: the specs beside this file
-// build CPUDeps directly around a stub Sampler instead.
+// The sampler reads through whichever filesystem.Service a caller published
+// under FilesystemDepsKey, and through the real filesystem when nothing was
+// published. The lookup happens here, per instance, at spawn time rather than
+// at init(), so a caller that publishes before the spawn decides which files
+// that instance sees for the rest of its life.
+//
+// Falling back rather than failing differs from the transport pull worker,
+// which errors when its deps are missing, and the difference is deliberate:
+// production wants the real filesystem and should not have to publish one to
+// get it. The price falls on a caller who meant to publish a fixture and
+// forgot. On Linux the real cgroup files read fine, so that caller gets a
+// verdict computed from the real machine, and a loose assertion such as one
+// expecting "healthy" on an idle box passes on numbers it never staged. An
+// assertion that names something only the published filesystem can produce
+// does not have that hole.
 func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	return newDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(filesystem.NewDefaultService(), cgroupBase))
+	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
+	if fs == nil {
+		fs = filesystem.NewDefaultService()
+	}
+
+	return newDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(fs, cgroupBase))
 }
 
 // newDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
