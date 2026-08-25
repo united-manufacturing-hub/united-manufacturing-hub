@@ -334,6 +334,16 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
+	// Only an edit that supplies a write config is held to the topic hierarchy: a read-only
+	// edit must not be blocked by a violation it did not introduce.
+	if err := a.validateSuppliedWriteTopics(newSpec); err != nil {
+		errorMsg := fmt.Sprintf("Invalid write flow configuration: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, a.outboundChannel, models.EditProtocolConverter)
+
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
 	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
@@ -377,6 +387,16 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	}
 
 	return response, nil, nil
+}
+
+// validateSuppliedWriteTopics enforces the topic hierarchy only when this edit supplies a
+// write config. See validateWriteTopicHierarchy for the rule itself.
+func (a *EditProtocolConverterAction) validateSuppliedWriteTopics(newSpec config.ProtocolConverterConfig) error {
+	if a.writeDFCInput == nil {
+		return nil
+	}
+
+	return validateWriteTopicHierarchy(newSpec, a.systemSnapshotManager)
 }
 
 // applyMutation analyzes the current configuration and applies the necessary mutations
@@ -1207,6 +1227,13 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		runtime_config.BridgedByPlaceholder,
 		pcName,
 	)
+	// A failure confined to the write flow still yields a usable read flow, so a read-side
+	// verification must not fail because of it.
+	var writeFlowErr *runtime_config.WriteFlowConfigError
+	if errors.As(err, &writeFlowErr) && dfcTypeToReturn == DFCTypeRead {
+		err = nil
+	}
+
 	if err != nil {
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to build runtime config: %w", err)
 	}

@@ -160,4 +160,46 @@ var _ = Describe("write_config", func() {
 			Expect(svc.BenthosConfig.Buffer).To(HaveKey("memory"))
 		})
 	})
+
+	Describe("topic hierarchy", func() {
+		DescribeTable("reports whether a topic lies beneath the bridge location",
+			func(topic, locationPath string, expected bool) {
+				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
+				}
+				accepted := input.ToWriteConfig().ValidateTopicsUnderLocation(locationPath) == nil
+
+				Expect(accepted).To(Equal(expected))
+			},
+			Entry("direct child", "umh.v1.UMHDEVTEST.cologne.foo", "UMHDEVTEST.cologne", true),
+			Entry("deep child", "umh.v1.UMHDEVTEST.cologne.a.b.c", "UMHDEVTEST.cologne", true),
+			Entry("topic without umh.v1. prefix", "UMHDEVTEST.cologne.foo", "UMHDEVTEST.cologne", true),
+			Entry("sibling branch", "umh.v1.UMHDEVTEST.cologne.foo", "UMHDEVTEST.cologne.sublevel", false),
+			Entry("parent level", "umh.v1.UMHDEVTEST.foo", "UMHDEVTEST.cologne", false),
+			Entry("shared prefix but different level", "umh.v1.UMHDEVTEST.cologne2.foo", "UMHDEVTEST.cologne", false),
+			Entry("bridge location itself", "umh.v1.UMHDEVTEST.cologne", "UMHDEVTEST.cologne", false),
+			Entry("empty location accepts any topic", "umh.v1.anything.foo", "", true),
+		)
+	})
+
+	Describe("ValidateTopicsUnderLocation", func() {
+		validate := func(topics, locationPath string) error {
+			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topics},
+			}
+
+			return input.ToWriteConfig().ValidateTopicsUnderLocation(locationPath)
+		}
+
+		It("reports every offending topic", func() {
+			err := validate("umh.v1.UMHDEVTEST.cologne.foo\numh.v1.UMHDEVTEST.cologne.bar", "UMHDEVTEST.cologne.sublevel")
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.foo")))
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.bar")))
+			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.sublevel")))
+		})
+
+		It("accepts the placeholder used when no topic was configured", func() {
+			Expect(validate(dataflowcomponentserviceconfig.PlaceholderUMHTopicUnset, "UMHDEVTEST.cologne")).To(Succeed())
+		})
+	})
 })

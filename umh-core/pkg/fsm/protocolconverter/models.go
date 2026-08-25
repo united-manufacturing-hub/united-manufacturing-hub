@@ -202,6 +202,11 @@ type ProtocolConverterInstance struct {
 	// determine the next state
 	ObservedState ProtocolConverterObservedState
 
+	// writeFlowConfigErr is the last write-flow-only render failure, or nil. Such a write
+	// flow (e.g. topics outside the bridge location) is kept out of the runtime and never
+	// starts, so the bridge reports degraded_dfc with this as the reason.
+	writeFlowConfigErr error
+
 	// debugLevel controls whether debug logging is enabled for the underlying Benthos processes
 	debugLevel bool
 }

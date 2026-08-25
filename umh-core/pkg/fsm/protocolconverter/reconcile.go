@@ -410,6 +410,15 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 			return err, false
 		}
 
+		// A rejected write flow config never becomes healthy, so waiting here would hold the
+		// bridge in starting forever and leave the read flow looking stopped. Degrade
+		// instead: the read flow keeps running and the cause is visible.
+		if p.writeFlowConfigErr != nil {
+			p.ObservedState.ServiceInfo.StatusReason = "flow degraded: " + p.writeFlowConfigReason()
+
+			return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
+		}
+
 		// Now check whether the flow is healthy
 		running, reason = p.IsDFCHealthy()
 		if !running {

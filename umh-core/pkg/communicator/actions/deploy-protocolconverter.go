@@ -178,6 +178,14 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	// currently, we canot reuse templates, so we need to create a new one
 	pcConfig.ProtocolConverterServiceConfig.TemplateRef = pcConfig.Name
 
+	if err := validateWriteTopicHierarchy(pcConfig, a.systemSnapshotManager); err != nil {
+		errorMsg := fmt.Sprintf("Invalid write flow configuration: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
+
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
 	// Add to configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
