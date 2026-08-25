@@ -78,7 +78,7 @@ var _ = Describe("the advice on a full machine follows whose load filled it", fu
 
 		Expect(ComposeMessage(verdict, signals)).To(ContainSubstring(
 			"The machine is full. Add CPU to the machine, or reduce other software running on it."))
-		Expect(BlockReason(verdict.Causes, verdict.Attribution, signals)).To(Equal(
+		Expect(BlockReason(verdict.Causes, signals)).To(Equal(
 			"Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
 	})
 
@@ -99,7 +99,7 @@ var _ = Describe("the advice on a full machine follows whose load filled it", fu
 			"The machine is full, and this instance is using most of it. Reduce the load on this instance, or add CPU to the machine."))
 		Expect(msg).NotTo(ContainSubstring("reduce other software running on it"),
 			"the load is our own, so sending the customer after other people's software is wrong advice")
-		Expect(BlockReason(verdict.Causes, verdict.Attribution, signals)).To(Equal(
+		Expect(BlockReason(verdict.Causes, signals)).To(Equal(
 			"Can't add another bridge: the machine is full, and this instance is using most of it. Reduce the load on this instance, or add CPU to the machine, first."))
 	})
 
@@ -122,7 +122,7 @@ var _ = Describe("the advice on a full machine follows whose load filled it", fu
 			"The machine is full. Add CPU to the machine, or reduce what is running on it."))
 		Expect(msg).NotTo(ContainSubstring("other software"),
 			"nothing placed the load on either side, so the sentence claims nothing about who")
-		Expect(BlockReason(verdict.Causes, verdict.Attribution, signals)).To(Equal(
+		Expect(BlockReason(verdict.Causes, signals)).To(Equal(
 			"Can't add another bridge: the machine is full. Add CPU to the machine, or reduce what is running on it, first."))
 	})
 
@@ -161,8 +161,41 @@ var _ = Describe("the advice on a full machine follows whose load filled it", fu
 			"The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its 2-core limit.)"))
 		Expect(msg).NotTo(ContainSubstring("this instance is using most of it"),
 			"the pair is answered by one blended sentence; the attribution split applies to a machine cause standing alone")
-		Expect(BlockReason(verdict.Causes, verdict.Attribution, signals)).To(Equal(
+		Expect(BlockReason(verdict.Causes, signals)).To(Equal(
 			"Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."),
 			"the refusal stays in step with the blended paragraph it is shown beside")
+	})
+	It("should still blame this instance for a full machine when a starvation cause ranks first", func() {
+		// Steal is starvation, so it outranks the machine cause and the verdict's
+		// own attribution is the host's. The machine paragraph must read the
+		// refinement that measured whose load filled the machine, which is ours.
+		engine, err := NewEngine(4, 8.0)
+		Expect(err).NotTo(HaveOccurred())
+		env := diagnosis.NewEnvironment(HasLimit, HasVirtualization)
+		base := time.Now()
+
+		var verdict Verdict
+		var signals Details
+		for i := 0; i < 70; i++ {
+			verdict, signals = Decide(engine, Sample{
+				Timestamp:   base.Add(time.Duration(i) * time.Second),
+				CpuScope:    ScopeHost,
+				Virtualized: true,
+				HostBusy:    diagnosis.Known(3.8),
+				UsageCores:  diagnosis.Known(3.0),
+				Steal:       diagnosis.Known(0.20),
+				Quota:       diagnosis.Known(8.0),
+				LogicalCpus: diagnosis.Known(4),
+				HostCpus:    diagnosis.Known(4),
+			}, env)
+		}
+
+		Expect(kindsOf(verdict.Causes)).To(ConsistOf(CauseKindSteal, CauseKindHostCpuFull),
+			"steal and the machine cause must both fire, or this spec is not the disagreement")
+		Expect(verdict.Attribution).To(Equal(AttributionHost),
+			"steal ranked first and blames the host, or this spec is not being asked to beat it")
+
+		Expect(ComposeMessage(verdict, signals)).To(ContainSubstring(detailSatHostFullContainer),
+			"our 3.0 cores of the machine's 3.8 busy is most of it, so the machine paragraph must name this instance and not other software")
 	})
 })

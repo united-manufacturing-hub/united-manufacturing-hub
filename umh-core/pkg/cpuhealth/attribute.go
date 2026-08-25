@@ -42,7 +42,7 @@ func describeCause(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 	// Rank does not flatten refinements, so every Fired reaching here is a
 	// top-level signal, whose window path is its own name.
 	v, _ := engine.Reduction(f.Identity.Signal, f.Instrument).Get()
-	cause := Cause{Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit)}
+	cause := Cause{Instrument: f.Instrument, Value: v, Unit: Unit(f.Marks.Unit), Attribution: nameAttribution(declaredBlame(f))}
 
 	// One arm per signal and no default arm: a signal named nowhere below
 	// names no kind, rather than borrowing the kind of whichever arm happens to

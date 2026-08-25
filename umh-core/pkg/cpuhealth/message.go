@@ -49,7 +49,7 @@ func ComposeMessage(verdict Verdict, details Details) string {
 		if !speaksForCapacity(c, verdict.Causes) {
 			continue
 		}
-		parts = append(parts, causeDetails(c, verdict.Causes, verdict.Attribution, details))
+		parts = append(parts, causeDetails(c, verdict.Causes, details))
 	}
 	body := strings.Join(parts, "\n\n")
 
@@ -264,7 +264,7 @@ func speakingCause(causes []Cause) Cause {
 // limit, which is the case whose two remedies have to be blended into one
 // sentence, and failing that whose load filled the machine, which
 // fullMachineDetail answers.
-func causeDetails(c Cause, causes []Cause, attribution Attribution, details Details) string {
+func causeDetails(c Cause, causes []Cause, details Details) string {
 	switch c.Kind {
 	case CauseKindThrottling:
 		return fmt.Sprintf(detailThrottling, toPercent(details.ThrottleRatio))
@@ -303,7 +303,7 @@ func causeDetails(c Cause, causes []Cause, attribution Attribution, details Deta
 				return fmt.Sprintf(detailSatBothAtLimit, fmtCoresTotal(round1(details.CapacityCores)))
 			}
 			if details.LimitApplies {
-				return fullMachineDetail(attribution)
+				return fullMachineDetail(c.Attribution)
 			}
 			if !details.HostBusyCoresAvailable {
 				return detailSatNoLimitUnavail
@@ -367,7 +367,7 @@ func fullMachineBlock(attribution Attribution, details Details) string {
 // It reads the attribution for the same reason, and asks the ranked causes the
 // same blend question first. An unknown kind falls back to the generic degraded
 // message.
-func BlockReason(causes []Cause, attribution Attribution, details Details) string {
+func BlockReason(causes []Cause, details Details) string {
 	if len(causes) == 0 {
 		return blockPrefix + blockGeneric
 	}
@@ -394,7 +394,7 @@ func BlockReason(causes []Cause, attribution Attribution, details Details) strin
 			if hasKind(causes, CauseKindContainerLimitFull) {
 				cause = blockHostFull
 			} else {
-				cause = fullMachineBlock(attribution, details)
+				cause = fullMachineBlock(c.Attribution, details)
 			}
 		case instrumentUsageFraction:
 			cause = blockNoHostStats

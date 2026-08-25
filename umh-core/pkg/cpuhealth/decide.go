@@ -55,7 +55,7 @@ func buildVerdict(engine *diagnosis.Engine[Sample], fired []diagnosis.Fired) Ver
 		verdict.State = StateHealthy
 	} else {
 		verdict.State = StateDegraded
-		verdict.Attribution = nameAttribution(declaredBlame(ranked[0]))
+		verdict.Attribution = causes[0].Attribution
 	}
 	return verdict
 }

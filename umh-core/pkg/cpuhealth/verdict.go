@@ -96,7 +96,12 @@ type Cause struct {
 	// different sentences.
 	Instrument string
 	Unit       Unit
-	Value      float64
+	// Attribution is the blame the table declared for the signal that produced
+	// this cause, or for the refinement narrowing it. Each cause carries its
+	// own: Rank puts starvation ahead of saturation, so the verdict's blame can
+	// come from a different signal than the one a paragraph is rendering.
+	Attribution Attribution
+	Value       float64
 }
 
 // Verdict is what Decide returns: the state, the attribution of the dominant

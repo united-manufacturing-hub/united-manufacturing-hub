@@ -120,7 +120,7 @@ var _ = Describe("two capacity causes on one tick", func() {
 					"Add CPU to the machine, or reduce other software running on it. "+
 					"(This instance is also at its 2-core limit.)"),
 				"limit row first: %v", limitFirst)
-			Expect(BlockReason(verdict.Causes, verdict.Attribution, details)).To(Equal(
+			Expect(BlockReason(verdict.Causes, details)).To(Equal(
 				"Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."),
 				"limit row first: %v", limitFirst)
 		}
@@ -182,8 +182,8 @@ var _ = Describe("two capacity causes on one tick", func() {
 		Expect(msg).NotTo(ContainSubstring("The machine is full"))
 		Expect(msg).To(ContainSubstring(detailSatHostUnavail),
 			"an unreadable /proc/stat is reported as unreadable, never as a machine that measured fine")
-		Expect(BlockReason(verdict.Causes, verdict.Attribution, details)).
-			To(Equal(BlockReason(oneCause(CauseKindContainerLimitFull, instrumentLimitHeadroom), verdict.Attribution, details)),
+		Expect(BlockReason(verdict.Causes, details)).
+			To(Equal(BlockReason(oneCause(CauseKindContainerLimitFull, instrumentLimitHeadroom, verdict.Attribution), details)),
 				"with one capacity cause there is no pair to blend, so the refusal is the limit's own line")
 	})
 })

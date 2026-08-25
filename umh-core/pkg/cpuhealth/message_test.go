@@ -290,15 +290,15 @@ func degradedSig() Details {
 // degradedVerdict builds a one-cause degraded verdict. The instrument is what
 // the two capacity kinds dispatch on, so it is named at every call.
 func degradedVerdict(kind CauseKind, instrument string, value float64) Verdict {
-	return Verdict{State: StateDegraded, Attribution: AttributionHost, Causes: []Cause{{Kind: kind, Instrument: instrument, Value: value}}}
+	return Verdict{State: StateDegraded, Attribution: AttributionHost, Causes: []Cause{{Kind: kind, Instrument: instrument, Attribution: AttributionHost, Value: value}}}
 }
 
 // bothCapacityVerdict builds the degraded verdict of a tick on which the
 // machine is full and this container is also out of its own CPU limit.
 func bothCapacityVerdict(value float64) Verdict {
 	return Verdict{State: StateDegraded, Attribution: AttributionHost, Causes: []Cause{
-		{Kind: CauseKindHostCpuFull, Instrument: instrumentHostHeadroom, Value: value},
-		{Kind: CauseKindContainerLimitFull, Instrument: instrumentLimitHeadroom, Value: value},
+		{Kind: CauseKindHostCpuFull, Instrument: instrumentHostHeadroom, Attribution: AttributionHost, Value: value},
+		{Kind: CauseKindContainerLimitFull, Instrument: instrumentLimitHeadroom, Attribution: AttributionHost, Value: value},
 	}}
 }
 
@@ -431,34 +431,34 @@ var _ = Describe("degraded copy", func() {
 })
 
 // oneCause wraps a single cause as the ranked list BlockReason reads.
-func oneCause(kind CauseKind, instrument string) []Cause {
-	return []Cause{{Kind: kind, Instrument: instrument}}
+func oneCause(kind CauseKind, instrument string, attribution Attribution) []Cause {
+	return []Cause{{Kind: kind, Instrument: instrument, Attribution: attribution}}
 }
 
 var _ = Describe("block reasons", func() {
 	It("should render one block reason per cause kind, dispatching the machine-full kind on the instrument that measured it", func() {
-		Expect(BlockReason(oneCause(CauseKindThrottling, instrumentThrottleRatio), AttributionContainer, degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
-		Expect(BlockReason(oneCause(CauseKindPressure, instrumentPressureAvg60), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
-		Expect(BlockReason(oneCause(CauseKindSteal, instrumentStealP95), AttributionHost, degradedSig())).To(Equal("Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."))
+		Expect(BlockReason(oneCause(CauseKindThrottling, instrumentThrottleRatio, AttributionContainer), degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
+		Expect(BlockReason(oneCause(CauseKindPressure, instrumentPressureAvg60, AttributionUnknown), degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
+		Expect(BlockReason(oneCause(CauseKindSteal, instrumentStealP95, AttributionHost), degradedSig())).To(Equal("Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."))
 		// blockGeneric: the default kind arm.
-		Expect(BlockReason(oneCause(CauseKind("future-kind"), ""), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is degraded."))
+		Expect(BlockReason(oneCause(CauseKind("future-kind"), "", AttributionUnknown), degradedSig())).To(Equal("Can't add another bridge: CPU is degraded."))
 
 		noLimit := degradedSig()
 		noLimit.LimitApplies = false
 
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom), AttributionHost, degradedSig())).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
-		Expect(BlockReason(oneCause(CauseKindContainerLimitFull, instrumentLimitHeadroom), AttributionContainer, degradedSig())).To(Equal("Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."))
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentUsageFraction), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."))
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom), AttributionHost, noLimit)).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom, AttributionHost), degradedSig())).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
+		Expect(BlockReason(oneCause(CauseKindContainerLimitFull, instrumentLimitHeadroom, AttributionContainer), degradedSig())).To(Equal("Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentUsageFraction, AttributionUnknown), degradedSig())).To(Equal("Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom, AttributionHost), noLimit)).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
 		// The machine-full default arm (entry 46), reachable only from a cause
 		// whose instrument is none of the two that can measure the machine.
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, ""), AttributionUnknown, degradedSig())).To(Equal("Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, "", AttributionUnknown), degradedSig())).To(Equal("Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."))
 
 		// blockHostFull and blockNoLimitHost are byte-identical and the collision is intentional
 		// and must survive (the remediation for a full machine is the same with
 		// or without a limit).
-		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom), AttributionHost, degradedSig())).
-			To(Equal(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom), AttributionHost, noLimit)))
+		Expect(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom, AttributionHost), degradedSig())).
+			To(Equal(BlockReason(oneCause(CauseKindHostCpuFull, instrumentHostHeadroom, AttributionHost), noLimit)))
 	})
 
 	It("conformance: Decide names the host-headroom instrument on a full host in no-limit mode", func() {
@@ -563,11 +563,11 @@ var _ = Describe("block reasons", func() {
 		// speaker varies. BlockReason has no blended line, so a candidate on its
 		// own renders exactly what it would have said.
 		detailsSpeaker := spokeWith("the technical details",
-			causeDetails(speakingCause(verdict.Causes), verdict.Causes, verdict.Attribution, details),
-			func(speaker Cause) string { return causeDetails(speaker, verdict.Causes, verdict.Attribution, details) })
+			causeDetails(speakingCause(verdict.Causes), verdict.Causes, details),
+			func(speaker Cause) string { return causeDetails(speaker, verdict.Causes, details) })
 		blockSpeaker := spokeWith("the bridge-refusal reason",
-			BlockReason(verdict.Causes, verdict.Attribution, details),
-			func(speaker Cause) string { return BlockReason([]Cause{speaker}, verdict.Attribution, details) })
+			BlockReason(verdict.Causes, details),
+			func(speaker Cause) string { return BlockReason([]Cause{speaker}, details) })
 
 		Expect(detailsSpeaker).To(Equal(blockSpeaker),
 			"the two surfaces disagree on one tick: the technical details blame %s while the bridge refusal blames %s, so a customer is given two contradictory remedies",
