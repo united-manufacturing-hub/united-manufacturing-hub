@@ -20,8 +20,9 @@ import (
 	"strings"
 	"sync"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 // canonicalizeFastEnv turns off the walk in canonicalize_walk.go, leaving every
@@ -57,7 +58,7 @@ func initGate() {
 	if err != nil {
 		useCanonicalizeFast = false
 
-		zap.S().Warnf(
+		logger.For(logger.ComponentBenthosConfig).Warnf(
 			"%s is set to %q, which is not a boolean. Canonicalization fell back to "+
 				"the YAML round-trip, which is correct but slower.",
 			canonicalizeFastEnv, raw)

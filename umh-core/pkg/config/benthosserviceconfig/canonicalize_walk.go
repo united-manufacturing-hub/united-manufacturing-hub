@@ -22,8 +22,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"go.uber.org/zap"
-
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
@@ -268,7 +267,7 @@ func reportFallback(section, reason string) {
 		return
 	}
 
-	log := zap.S()
+	log := logger.For(logger.ComponentBenthosConfig)
 
 	if isDeclinedShape(reason) {
 		log.Infof(

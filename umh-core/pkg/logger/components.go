@@ -68,6 +68,7 @@ const (
 	ComponentTopicBrowserService      = "TopicBrowserService"
 	// Configuration.
 	ComponentConfigManager = "ConfigManager"
+	ComponentBenthosConfig = "BenthosConfig"
 
 	// Agent.
 	AgentManagerComponentName  = "AgentManager"
