@@ -180,30 +180,8 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
 
-	// Count how many signals this box can answer and how many have answered, by
-	// walking the table a second time with the same env. It has to be the second
-	// walk: Select reports a window's readiness without ageing it, so it is only
-	// trustworthy after an Observe on this tick, and Decide is what Observes.
-	//
-	// Capable means not NoInstrument — something on this box can answer the
-	// signal at all. Measured means everMeasured is set for it; see that field.
-	capable, measured := 0, 0
-	unmeasured := []string{}
-	for _, s := range d.table.Signals {
-		_, _, _, availability := d.engine.Select(s, env)
-		if availability == diagnosis.NoInstrument {
-			continue // no instrument on this box: not capable, cannot refuse
-		}
-		if availability == diagnosis.Ready {
-			d.everMeasured[s.Name] = true
-		}
-		if d.everMeasured[s.Name] {
-			measured++
-		} else {
-			unmeasured = append(unmeasured, s.Name)
-		}
-		capable++
-	}
+	// After Decide, never before it, and on the same env. evidenceCounts says why.
+	capable, measured, unmeasured := d.evidenceCounts(env)
 
 	d.polls++
 
@@ -237,6 +215,44 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 		SignalsMeasured:   measured,
 		RefusingAdmission: refusing,
 	}, nil
+}
+
+// evidenceCounts walks the signal table and answers three questions about this
+// tick: how many signals this box can answer at all, how many of those have
+// ever answered, and which capable ones never have.
+//
+// Capable means the signal is not NoInstrument — the box has some instrument
+// that could answer it. Measured means everMeasured is set, which happens the
+// first tick the signal reads Ready and never reverses. So a signal counts as
+// capable-but-unmeasured only if nothing has ever read it successfully, which
+// is the shortfall the admission window is about.
+//
+// It must run after Decide, on the same tick and the same env. Select reports a
+// window's readiness without ageing it, so its answer is trustworthy only
+// following an Observe on that tick, and Decide is what Observes.
+func (d *CPUDeps) evidenceCounts(env diagnosis.Environment) (capable, measured int, unmeasured []string) {
+	unmeasured = []string{}
+
+	for _, s := range d.table.Signals {
+		_, _, _, availability := d.engine.Select(s, env)
+		if availability == diagnosis.NoInstrument {
+			continue // no instrument on this box: not capable, cannot refuse
+		}
+
+		if availability == diagnosis.Ready {
+			d.everMeasured[s.Name] = true
+		}
+
+		if d.everMeasured[s.Name] {
+			measured++
+		} else {
+			unmeasured = append(unmeasured, s.Name)
+		}
+
+		capable++
+	}
+
+	return capable, measured, unmeasured
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
