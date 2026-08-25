@@ -23,6 +23,47 @@ import "time"
 // whole seconds, so the window is a whole number of them.
 const admissionWindow = 10 * time.Second
 
+// admission is the admission window's per-worker state: where the window
+// started, and whether its deadline has already been reported.
+type admission struct {
+	// startedAt is the first sample timestamp the worker ever saw, and zero
+	// until then.
+	startedAt time.Time
+
+	// reported records whether the deadline report has already fired.
+	reported bool
+}
+
+// decide anchors the window on the first tick and answers what it says about
+// this one. at is the tick's sample timestamp; measured and capable are its
+// evidence counts, and the two results are admissionDecision's.
+//
+// Elapsed is the delta between at and the anchor, so the window is driven by
+// the sample clock rather than the wall clock: it advances only as fast as the
+// samples do, which is what lets the synthetic-clock tests reach the deadline
+// without waiting. Production sample timestamps come from monotonic time.Now(),
+// so elapsed is never negative there.
+func (a *admission) decide(at time.Time, measured, capable int) (refusing, shortfallAtDeadline bool) {
+	if a.startedAt.IsZero() {
+		a.startedAt = at
+	}
+
+	return admissionDecision(at.Sub(a.startedAt), admissionWindow, measured, capable)
+}
+
+// reportOnce returns true on its first call and false on every later one, so a
+// caller that guards its report with it reports once per worker rather than
+// once per tick.
+func (a *admission) reportOnce() bool {
+	if a.reported {
+		return false
+	}
+
+	a.reported = true
+
+	return true
+}
+
 // admissionDecision answers what the admission window says about one tick. It
 // reads nothing but its arguments — no worker, no sampler, no clock.
 //
