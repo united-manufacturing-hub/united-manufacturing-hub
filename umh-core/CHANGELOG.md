@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- Instances with large configurations no longer run out of time in the control loop. Comparing a bridge against its desired configuration was slow enough that the loop overran its budget and skipped reconciles, so starting, stopping and configuration changes took effect late or not at all, and the logs filled with "not enough time left to reconcile"
+- Instances with large configurations no longer run out of time in the control loop, which previously caused "not enough time left to reconcile" error log messages.
 
 ## [0.44.35]
 
