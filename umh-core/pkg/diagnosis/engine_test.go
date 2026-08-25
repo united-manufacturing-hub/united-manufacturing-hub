@@ -40,11 +40,13 @@ var _ = Describe("Engine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[engSnap]{
 				{
-					Name:      "A-p95",
-					Requires:  []Capability{"source-1"},
-					Extract:   extract,
-					Reduction: P95,
-					Span:      60 * time.Second,
+					Measurement: Measurement[engSnap]{
+						Name:      "A-p95",
+						Requires:  []Capability{"source-1"},
+						Extract:   extract,
+						Reduction: P95,
+						Span:      60 * time.Second,
+					},
 					Marks: Marks{
 						Unit:     "ratio",
 						Fire:     Mark{At: 2.0, Inclusive: true},
@@ -54,11 +56,13 @@ var _ = Describe("Engine", func() {
 					},
 				},
 				{
-					Name:      "A-mean",
-					Requires:  []Capability{"source-1"},
-					Extract:   extract,
-					Reduction: Mean,
-					Span:      3 * time.Second,
+					Measurement: Measurement[engSnap]{
+						Name:      "A-mean",
+						Requires:  []Capability{"source-1"},
+						Extract:   extract,
+						Reduction: Mean,
+						Span:      3 * time.Second,
+					},
 					Marks: Marks{
 						Unit:     "ratio",
 						Fire:     Mark{At: 2.0, Inclusive: true},
@@ -103,11 +107,13 @@ var _ = Describe("Engine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[cpuSnap]{
 				{
-					Name:      "pressure",
-					Requires:  []Capability{"psi"},
-					Extract:   func(s cpuSnap) Reading { return Known(s.stall) },
-					Reduction: Last,
-					Span:      60 * time.Second,
+					Measurement: Measurement[cpuSnap]{
+						Name:      "pressure",
+						Requires:  []Capability{"psi"},
+						Extract:   func(s cpuSnap) Reading { return Known(s.stall) },
+						Reduction: Last,
+						Span:      60 * time.Second,
+					},
 					Marks: Marks{
 						Unit:     "ratio",
 						Fire:     Mark{At: 0.10},
@@ -117,10 +123,12 @@ var _ = Describe("Engine", func() {
 					},
 				},
 				{
-					Name:      "headroom",
-					Extract:   func(s cpuSnap) Reading { return Known(s.headroom) },
-					Reduction: Last,
-					Span:      60 * time.Second,
+					Measurement: Measurement[cpuSnap]{
+						Name:      "headroom",
+						Extract:   func(s cpuSnap) Reading { return Known(s.headroom) },
+						Reduction: Last,
+						Span:      60 * time.Second,
+					},
 					Marks: Marks{
 						Unit:     "cores",
 						Fire:     Mark{At: 0},
@@ -157,11 +165,13 @@ var _ = Describe("Engine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[snap]{
 				{
-					Name:      "I",
-					Requires:  []Capability{"rise"},
-					Extract:   func(s snap) Reading { return Known(s.v) },
-					Reduction: Last,
-					Span:      60 * time.Second,
+					Measurement: Measurement[snap]{
+						Name:      "I",
+						Requires:  []Capability{"rise"},
+						Extract:   func(s snap) Reading { return Known(s.v) },
+						Reduction: Last,
+						Span:      60 * time.Second,
+					},
 					Marks: Marks{
 						Unit:     "u",
 						Fire:     Mark{At: 2, Inclusive: true},
@@ -189,6 +199,40 @@ var _ = Describe("Engine", func() {
 		Expect(readiness[0].Availability).To(Equal(Ready))
 	})
 
+	It("stamps the signal's Attribution, who the caller blames, onto the fired verdict", func() {
+		type snap struct{ v float64 }
+		sig := Signal[snap]{
+			Name:        "P",
+			DemoteSpan:  60 * time.Second,
+			Attribution: 7,
+			Instruments: []Instrument[snap]{
+				{
+					Measurement: Measurement[snap]{
+						Name:      "I",
+						Requires:  []Capability{"rise"},
+						Extract:   func(s snap) Reading { return Known(s.v) },
+						Reduction: Last,
+						Span:      60 * time.Second,
+					},
+					Marks: Marks{
+						Unit:     "u",
+						Fire:     Mark{At: 2, Inclusive: true},
+						Worst:    4,
+						Clear:    Mark{At: 1, Inclusive: true},
+						Polarity: HigherIsWorse,
+					},
+				},
+			},
+		}
+
+		e, err := NewEngine(Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second})
+		Expect(err).ToNot(HaveOccurred())
+
+		fired, _ := e.Observe(snap{v: 3.0}, NewEnvironment("rise"), time.Now())
+		Expect(fired).To(HaveLen(1), "a value above the fire mark arms the signal")
+		Expect(fired[0].Identity.Attribution).To(Equal(7), "the verdict stamps who the caller said to blame")
+	})
+
 	It("reads back a populated window's reduction rather than reporting a permanent absence", func() {
 		type snap struct{ v float64 }
 		sig := Signal[snap]{
@@ -196,11 +240,13 @@ var _ = Describe("Engine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[snap]{
 				{
-					Name:      "I",
-					Requires:  []Capability{"rise"},
-					Extract:   func(s snap) Reading { return Known(s.v) },
-					Reduction: Last,
-					Span:      60 * time.Second,
+					Measurement: Measurement[snap]{
+						Name:      "I",
+						Requires:  []Capability{"rise"},
+						Extract:   func(s snap) Reading { return Known(s.v) },
+						Reduction: Last,
+						Span:      60 * time.Second,
+					},
 					Marks: Marks{
 						Unit:     "u",
 						Fire:     Mark{At: 2, Inclusive: true},
@@ -227,20 +273,50 @@ var _ = Describe("Engine", func() {
 		Expect(v).To(Equal(4.0), "under a last-value reduction the newest entry is the answer")
 	})
 
-	It("should fold every declared track on every tick and reduce it back by name, without selecting, judging or firing anything", func() {
+	It("keys refinement windows by path, so two parents each carrying an X keep their own reduction", func() {
+		type snap struct{ a, b float64 }
+		arm := func(name string, read func(s snap) float64) Instrument[snap] {
+			return Instrument[snap]{
+				Measurement: Measurement[snap]{Name: name, Extract: func(s snap) Reading { return Known(read(s)) }, Reduction: Last, Span: 60 * time.Second},
+				Marks:       Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse},
+			}
+		}
+		sig := func(name string, arms ...Instrument[snap]) Signal[snap] {
+			return Signal[snap]{Name: name, DemoteSpan: 60 * time.Second, Instruments: arms}
+		}
+
+		a := sig("A", arm("I", func(s snap) float64 { return s.a }))
+		a.Refinements = []Signal[snap]{sig("X", arm("I", func(s snap) float64 { return s.a }))}
+		b := sig("B", arm("I", func(s snap) float64 { return s.b }))
+		b.Refinements = []Signal[snap]{sig("X", arm("I", func(s snap) float64 { return s.b }))}
+
+		e, err := NewEngine(Table[snap]{Signals: []Signal[snap]{a, b}, Interval: time.Second})
+		Expect(err).ToNot(HaveOccurred())
+
+		e.Observe(snap{a: 1.0, b: 5.0}, NewEnvironment(), time.Now())
+
+		va, _ := e.Reduction("A/X", "I").Get()
+		Expect(va).To(Equal(1.0), "A/X reduces its own 1.0 from the shared snapshot")
+		vb, _ := e.Reduction("B/X", "I").Get()
+		Expect(vb).To(Equal(5.0), "B/X keeps a separate window and reduces its own 5.0")
+	})
+
+	It("should fold every declared measurement on every tick and reduce it back by name, without selecting, judging or firing anything", func() {
 		type tsnap struct{ v float64 }
 		// The signal is quiet (fire mark far above any value), so the fired set is
-		// empty and any fired/readiness contribution from the TRACK is plainly
-		// absent.
+		// empty and any fired/readiness contribution from the MEASUREMENT is
+		// plainly absent.
 		sig := Signal[tsnap]{
 			Name:       "S",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[tsnap]{{
-				Name:      "I",
-				Requires:  []Capability{"c"},
-				Extract:   func(s tsnap) Reading { return Known(s.v) },
-				Reduction: Last,
-				Span:      60 * time.Second,
+				Measurement: Measurement[tsnap]{
+					Name:      "I",
+					Requires:  []Capability{"c"},
+					Extract:   func(s tsnap) Reading { return Known(s.v) },
+					Reduction: Last,
+					Span:      60 * time.Second,
+				},
 				Marks: Marks{
 					Unit:     "u",
 					Fire:     Mark{At: 100, Inclusive: true},
@@ -250,9 +326,9 @@ var _ = Describe("Engine", func() {
 				},
 			}},
 		}
-		track := Track[tsnap]{Name: "T", Extract: func(s tsnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
+		measurement := Measurement[tsnap]{Name: "T", Extract: func(s tsnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
 
-		tbl := Table[tsnap]{Signals: []Signal[tsnap]{sig}, Tracks: []Track[tsnap]{track}, Interval: time.Second}
+		tbl := Table[tsnap]{Signals: []Signal[tsnap]{sig}, Measurements: []Measurement[tsnap]{measurement}, Interval: time.Second}
 		env := NewEnvironment("c")
 		e, err := NewEngine(tbl)
 		Expect(err).ToNot(HaveOccurred())
@@ -261,35 +337,37 @@ var _ = Describe("Engine", func() {
 		e.Observe(tsnap{v: 1.0}, env, base)
 		_, readiness := e.Observe(tsnap{v: 3.0}, env, base.Add(time.Second))
 
-		v, st := e.Track("T").Get()
-		Expect(st).To(Equal(StateValue), "a track that has met its floor is trustworthy")
-		Expect(v).To(Equal(2.0), "the track folds the mean of its two ticks (1,3)")
+		v, st := e.Measurement("T").Get()
+		Expect(st).To(Equal(StateValue), "a measurement that has met its floor is trustworthy")
+		Expect(v).To(Equal(2.0), "the measurement folds the mean of its two ticks (1,3)")
 
-		// A track is neither selected, judged nor fired: exactly one readiness row
+		// A measurement is neither selected, judged nor fired: exactly one readiness row
 		// (the signal), and the signal stays quiet (below its fire mark).
-		Expect(readiness).To(HaveLen(1), "a track adds no readiness row of its own")
+		Expect(readiness).To(HaveLen(1), "a measurement adds no readiness row of its own")
 		Expect(readiness[0].Signal).To(Equal("S"))
 
-		_, absent := e.Track("nope").Get()
-		Expect(absent).To(Equal(StateAbsent), "an unnamed track reduces to absence")
+		_, absent := e.Measurement("nope").Get()
+		Expect(absent).To(Equal(StateAbsent), "an unnamed measurement reduces to absence")
 	})
 
-	It("should reduce a track whose extractor never reads to an absence, not to a zero the caller would publish as a measurement", func() {
+	It("should reduce a measurement whose extractor never reads to an absence, not to a zero the caller would publish as a measurement", func() {
 		type usnap struct{ v float64 }
-		// Two tracks over the same ticks: one reads, one never does. The reading
+		// Two measurements over the same ticks: one reads, one never does. The reading
 		// one is the positive control, so an absence on the silent one is a fact
-		// about its extractor and not about a track that was never folded.
-		reads := Track[usnap]{Name: "reads", Extract: func(s usnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
-		silent := Track[usnap]{Name: "silent", Extract: func(usnap) Reading { return Unknown() }, Span: 60 * time.Second, Reduction: Mean}
+		// about its extractor and not about a measurement that was never folded.
+		reads := Measurement[usnap]{Name: "reads", Extract: func(s usnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
+		silent := Measurement[usnap]{Name: "silent", Extract: func(usnap) Reading { return Unknown() }, Span: 60 * time.Second, Reduction: Mean}
 
 		sig := Signal[usnap]{
 			Name: "S", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[usnap]{{
-				Name: "I", Extract: func(s usnap) Reading { return Known(s.v) }, Reduction: Last, Span: 60 * time.Second,
+				Measurement: Measurement[usnap]{
+					Name: "I", Extract: func(s usnap) Reading { return Known(s.v) }, Reduction: Last, Span: 60 * time.Second,
+				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Worst: 200, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
-		e, err := NewEngine(Table[usnap]{Signals: []Signal[usnap]{sig}, Tracks: []Track[usnap]{reads, silent}, Interval: time.Second})
+		e, err := NewEngine(Table[usnap]{Signals: []Signal[usnap]{sig}, Measurements: []Measurement[usnap]{reads, silent}, Interval: time.Second})
 		Expect(err).ToNot(HaveOccurred())
 
 		base := time.Unix(4_000_000, 0)
@@ -297,47 +375,53 @@ var _ = Describe("Engine", func() {
 		e.Observe(usnap{v: 2.0}, env, base)
 		e.Observe(usnap{v: 4.0}, env, base.Add(time.Second))
 
-		v, st := e.Track("reads").Get()
-		Expect(st).To(Equal(StateValue), "the reading track met its floor of two samples over these two ticks")
-		Expect(v).To(Equal(3.0), "the reading track folds the mean of its two ticks (2,4)")
+		v, st := e.Measurement("reads").Get()
+		Expect(st).To(Equal(StateValue), "the reading measurement met its floor of two samples over these two ticks")
+		Expect(v).To(Equal(3.0), "the reading measurement folds the mean of its two ticks (2,4)")
 
-		sv, sst := e.Track("silent").Get()
-		Expect(sst).To(Equal(StateAbsent), "a track whose extractor answered Unknown on every tick stored nothing, so it has no number to reduce")
+		sv, sst := e.Measurement("silent").Get()
+		Expect(sst).To(Equal(StateAbsent), "a measurement whose extractor answered Unknown on every tick stored nothing, so it has no number to reduce")
 		Expect(sv).To(Equal(0.0), "the absence carries the zero value, which Get hands back only alongside StateAbsent")
 	})
 
 	It("should return one readiness row per signal beside the fired set, carrying the same availability the latch arm acted on, for signals that fired and signals that could not be read alike", func() {
-		type s9 struct{ v float64 }
-		ext := func(s s9) Reading { return Known(s.v) }
+		type snap struct{ v float64 }
+		ext := func(s snap) Reading { return Known(s.v) }
 
-		fire := Signal[s9]{
+		fire := Signal[snap]{
 			Name: "F", DemoteSpan: 60 * time.Second,
-			Instruments: []Instrument[s9]{{
-				Name: "I", Requires: []Capability{"c"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
+			Instruments: []Instrument[snap]{{
+				Measurement: Measurement[snap]{
+					Name: "I", Requires: []Capability{"c"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
+				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
-		quiet := Signal[s9]{
+		quiet := Signal[snap]{
 			Name: "Q", DemoteSpan: 60 * time.Second,
-			Instruments: []Instrument[s9]{{
-				Name: "I", Requires: []Capability{"c"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
+			Instruments: []Instrument[snap]{{
+				Measurement: Measurement[snap]{
+					Name: "I", Requires: []Capability{"c"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
+				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Worst: 200, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
-		incapable := Signal[s9]{
+		incapable := Signal[snap]{
 			Name: "N", DemoteSpan: 60 * time.Second,
-			Instruments: []Instrument[s9]{{
-				Name: "I", Requires: []Capability{"missing"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
+			Instruments: []Instrument[snap]{{
+				Measurement: Measurement[snap]{
+					Name: "I", Requires: []Capability{"missing"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
+				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse},
 			}},
 		}
 
-		tbl := Table[s9]{Signals: []Signal[s9]{fire, quiet, incapable}, Interval: time.Second}
+		tbl := Table[snap]{Signals: []Signal[snap]{fire, quiet, incapable}, Interval: time.Second}
 		env := NewEnvironment("c")
 		e, err := NewEngine(tbl)
 		Expect(err).ToNot(HaveOccurred())
 
-		fired, readiness := e.Observe(s9{v: 3.0}, env, time.Unix(6_000_000, 0))
+		fired, readiness := e.Observe(snap{v: 3.0}, env, time.Unix(6_000_000, 0))
 
 		Expect(readiness).To(HaveLen(3), "one readiness row per signal, in table order")
 		Expect(readiness[0].Signal).To(Equal("F"))
@@ -353,37 +437,39 @@ var _ = Describe("Engine", func() {
 
 	It("should reset a fired latch the moment its window is AllAbsent when the signal declares release-on-absent, while a non-release signal holds until its own demote clock elapses", func() {
 		// Carries nothing: this spec switches readability through the closures
-		// below, not through the snapshot, so every Observe passes s6{}.
-		type s6 struct{}
+		// below, not through the snapshot, so every Observe passes snap{}.
+		type snap struct{}
 
 		// Readability-switched extractors: when a signal's switch is on, its
 		// window stores an over-fire value; when off, an absence on every tick.
 		onT, onF := true, true
-		mkElem := func(name string, on *bool, release bool) Signal[s6] {
-			return Signal[s6]{
+		mkElem := func(name string, on *bool, release bool) Signal[snap] {
+			return Signal[snap]{
 				Name: name, DemoteSpan: 60 * time.Second, ReleaseOnAbsent: release,
-				Instruments: []Instrument[s6]{{
-					Name: "I", Requires: []Capability{"c"},
-					Extract: func(s s6) Reading {
-						if !*on {
-							return Unknown()
-						}
+				Instruments: []Instrument[snap]{{
+					Measurement: Measurement[snap]{
+						Name: "I", Requires: []Capability{"c"},
+						Extract: func(s snap) Reading {
+							if !*on {
+								return Unknown()
+							}
 
-						return Known(5.0)
+							return Known(5.0)
+						},
+						Reduction: Last, Span: 60 * time.Second,
 					},
-					Reduction: Last, Span: 60 * time.Second,
 					Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 				}},
 			}
 		}
 
-		tbl := Table[s6]{Signals: []Signal[s6]{mkElem("T", &onT, true), mkElem("F", &onF, false)}, Interval: time.Second}
+		tbl := Table[snap]{Signals: []Signal[snap]{mkElem("T", &onT, true), mkElem("F", &onF, false)}, Interval: time.Second}
 		env := NewEnvironment("c")
 		e, err := NewEngine(tbl)
 		Expect(err).ToNot(HaveOccurred())
 
 		base := time.Unix(7_000_000, 0)
-		e.Observe(s6{}, env, base) // both readable: both fire
+		e.Observe(snap{}, env, base) // both readable: both fire
 
 		// Give F one more trusted (Ready) tick just inside its demote boundary so
 		// its latch clock restarts from a recent update. The Reset arm and the
@@ -393,7 +479,7 @@ var _ = Describe("Engine", func() {
 		// make the arms observable, F's clock must still be running on the AllAbsent
 		// tick, which means F's window must not yet be empty.
 		onT = false
-		e.Observe(s6{}, env, base.Add(55*time.Second)) // F still readable -> Ready; T freezes, holds
+		e.Observe(snap{}, env, base.Add(55*time.Second)) // F still readable -> Ready; T freezes, holds
 
 		// Silence both and advance past T's demote boundary. T's window (fired at
 		// base, never re-updated) demotes -> AllAbsent -> Reset: released
@@ -402,7 +488,7 @@ var _ = Describe("Engine", func() {
 		// update, has NOT elapsed: F stays fired. T's Reset is what distinguishes
 		// the two on this tick.
 		onF = false
-		fired, readiness := e.Observe(s6{}, env, base.Add(61*time.Second))
+		fired, readiness := e.Observe(snap{}, env, base.Add(61*time.Second))
 
 		byName := make(map[string]bool, len(fired))
 		for _, f := range fired {
@@ -415,7 +501,7 @@ var _ = Describe("Engine", func() {
 		// Once F's own demote boundary passes (base+55s + 60s) F, too, releases on
 		// the clock, so the two converge with the clock alone.
 		onT, onF = false, false
-		firedAfter, _ := e.Observe(s6{}, env, base.Add(116*time.Second))
+		firedAfter, _ := e.Observe(snap{}, env, base.Add(116*time.Second))
 		Expect(firedAfter).To(BeEmpty(), "F releases once its own demote boundary passes")
 	})
 
@@ -424,9 +510,11 @@ var _ = Describe("Engine", func() {
 		sig := Signal[nsnap]{
 			Name: "N", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[nsnap]{{
-				Name: "I", Requires: []Capability{"c"},
-				Extract:   func(s nsnap) Reading { return Known(s.v) },
-				Reduction: Last, Span: 60 * time.Second,
+				Measurement: Measurement[nsnap]{
+					Name: "I", Requires: []Capability{"c"},
+					Extract:   func(s nsnap) Reading { return Known(s.v) },
+					Reduction: Last, Span: 60 * time.Second,
+				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
@@ -453,9 +541,11 @@ var _ = Describe("Engine", func() {
 		sig := Signal[rsnap]{
 			Name: "R", DemoteSpan: 60 * time.Second, ReleaseOnAbsent: true,
 			Instruments: []Instrument[rsnap]{{
-				Name: "I", Requires: []Capability{"c"},
-				Extract:   func(s rsnap) Reading { return Known(s.v) },
-				Reduction: Last, Span: 60 * time.Second,
+				Measurement: Measurement[rsnap]{
+					Name: "I", Requires: []Capability{"c"},
+					Extract:   func(s rsnap) Reading { return Known(s.v) },
+					Reduction: Last, Span: 60 * time.Second,
+				},
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
@@ -487,12 +577,18 @@ var _ = Describe("Engine", func() {
 			Name: "S", DemoteSpan: 60 * time.Second, ReleaseOnAbsent: true,
 			Instruments: []Instrument[qsnap]{
 				{
-					Name: "A", Requires: []Capability{"psi"}, Reduction: Last, Span: 60 * time.Second, Marks: marks,
-					Extract: func(s qsnap) Reading { return Known(s.v) },
+					Measurement: Measurement[qsnap]{
+						Name: "A", Requires: []Capability{"psi"}, Reduction: Last, Span: 60 * time.Second,
+						Extract: func(s qsnap) Reading { return Known(s.v) },
+					},
+					Marks: marks,
 				},
 				{
-					Name: "B", Reduction: Last, Span: 60 * time.Second, Marks: marks,
-					Extract: func(qsnap) Reading { return Unknown() },
+					Measurement: Measurement[qsnap]{
+						Name: "B", Reduction: Last, Span: 60 * time.Second,
+						Extract: func(qsnap) Reading { return Unknown() },
+					},
+					Marks: marks,
 				},
 			},
 		}
@@ -535,18 +631,24 @@ var _ = Describe("Engine", func() {
 			Name: "S", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[fsnap]{
 				{
-					Name: "A", Requires: []Capability{"psi"}, Reduction: Last, Span: 60 * time.Second, Marks: marks,
-					Extract: func(fsnap) Reading {
-						if !firing {
-							return Unknown()
-						}
+					Measurement: Measurement[fsnap]{
+						Name: "A", Requires: []Capability{"psi"}, Reduction: Last, Span: 60 * time.Second,
+						Extract: func(fsnap) Reading {
+							if !firing {
+								return Unknown()
+							}
 
-						return Known(3.0)
+							return Known(3.0)
+						},
 					},
+					Marks: marks,
 				},
 				{
-					Name: "B", Reduction: Last, Span: 60 * time.Second, Marks: marks,
-					Extract: func(fsnap) Reading { return Unknown() },
+					Measurement: Measurement[fsnap]{
+						Name: "B", Reduction: Last, Span: 60 * time.Second,
+						Extract: func(fsnap) Reading { return Unknown() },
+					},
+					Marks: marks,
 				},
 			},
 		}
@@ -614,10 +716,12 @@ var _ = Describe("Engine", func() {
 				Name:       "s",
 				DemoteSpan: 60 * time.Second,
 				Instruments: []Instrument[snap]{{
-					Name:      "i",
-					Extract:   func(s snap) Reading { return Known(s.v) },
-					Reduction: Mean,
-					Span:      3 * time.Second,
+					Measurement: Measurement[snap]{
+						Name:      "i",
+						Extract:   func(s snap) Reading { return Known(s.v) },
+						Reduction: Mean,
+						Span:      3 * time.Second,
+					},
 					Marks: Marks{
 						Unit:     "u",
 						Fire:     Mark{At: 100, Inclusive: true},
@@ -655,6 +759,194 @@ var _ = Describe("Engine", func() {
 			"a caller's later edit to their own table must not detach the engine from its windows")
 	})
 
+	// The engine must own the instruments it stores at every depth, not only at
+	// the top: buildSignalState recurses into refinements, so the copy has to
+	// happen there too. The positive control runs the same table unedited,
+	// which shows the refinement's window reads its sample back at all. Only
+	// then does the failing half rename the REFINEMENT's instrument through the
+	// caller's own table.
+	It("keeps a refinement's window reachable when the caller edits their own table after NewEngine returns", func() {
+		type snap struct{ v float64 }
+
+		arm := func(name string) Instrument[snap] {
+			return Instrument[snap]{
+				Measurement: Measurement[snap]{
+					Name:      name,
+					Extract:   func(s snap) Reading { return Known(s.v) },
+					Reduction: Last,
+					Span:      60 * time.Second,
+				},
+				Marks: Marks{
+					Unit:     "u",
+					Fire:     Mark{At: 100, Inclusive: true},
+					Worst:    200,
+					Clear:    Mark{At: 0, Inclusive: false},
+					Polarity: HigherIsWorse,
+				},
+			}
+		}
+
+		mk := func() Table[snap] {
+			parent := Signal[snap]{
+				Name:        "P",
+				DemoteSpan:  60 * time.Second,
+				Instruments: []Instrument[snap]{arm("pi")},
+			}
+			parent.Refinements = []Signal[snap]{{
+				Name:        "C",
+				DemoteSpan:  60 * time.Second,
+				Instruments: []Instrument[snap]{arm("ci")},
+			}}
+
+			return Table[snap]{Signals: []Signal[snap]{parent}, Interval: time.Second}
+		}
+
+		control, err := NewEngine(mk())
+		Expect(err).ToNot(HaveOccurred())
+		control.Observe(snap{v: 7.0}, NewEnvironment(), time.Unix(10_000_000, 0))
+		controlValue, controlState := control.Reduction("P/C", "ci").Get()
+		Expect(controlState).To(Equal(StateValue), "unedited, the refinement's window holds the tick's sample")
+		Expect(controlValue).To(Equal(7.0))
+
+		tbl := mk()
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+		tbl.Signals[0].Refinements[0].Instruments[0].Name = "renamed"
+		e.Observe(snap{v: 7.0}, NewEnvironment(), time.Unix(10_000_001, 0))
+
+		value, state := e.Reduction("P/C", "ci").Get()
+		Expect(state).To(Equal(StateValue),
+			"a caller's later edit to their own table must not detach a REFINEMENT from its window either")
+		Expect(value).To(Equal(7.0), "the refinement reduces the sample this tick observed")
+	})
+	// Owning the Instruments slice is not enough: copying the structs leaves
+	// every instrument's Requires header pointing into the caller's own array,
+	// so a later edit there rewrites what the engine's instrument asks the
+	// environment for. CapableInstruments drops an instrument whose capability the
+	// environment lacks, which is the whole signal here, so the edit would show
+	// up as NoInstrument. The positive control runs the same table unedited in
+	// the same environment, which shows the instrument is reachable at all.
+	It("keeps an instrument capable when the caller edits their own Requires after NewEngine returns", func() {
+		type snap struct{ v float64 }
+
+		mk := func() Table[snap] {
+			sig := Signal[snap]{
+				Name:       "s",
+				DemoteSpan: 60 * time.Second,
+				Instruments: []Instrument[snap]{{
+					Measurement: Measurement[snap]{
+						Name:      "i",
+						Requires:  []Capability{"declared"},
+						Extract:   func(s snap) Reading { return Known(s.v) },
+						Reduction: Last,
+						Span:      60 * time.Second,
+					},
+					Marks: Marks{
+						Unit:     "u",
+						Fire:     Mark{At: 100, Inclusive: true},
+						Worst:    200,
+						Clear:    Mark{At: 0, Inclusive: false},
+						Polarity: HigherIsWorse,
+					},
+				}},
+			}
+
+			return Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
+		}
+
+		// The environment holds the capability the table declares and nothing
+		// else, so an instrument asking for any other one is dropped.
+		env := NewEnvironment("declared")
+
+		control, err := NewEngine(mk())
+		Expect(err).ToNot(HaveOccurred())
+		_, controlReadiness := control.Observe(snap{v: 7.0}, env, time.Unix(10_000_000, 0))
+		Expect(controlReadiness[0].Availability).To(Equal(Ready),
+			"unedited, the environment satisfies the instrument and its window reduces this tick's sample")
+
+		tbl := mk()
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+		tbl.Signals[0].Instruments[0].Requires[0] = "undeclared"
+		_, readiness := e.Observe(snap{v: 7.0}, env, time.Unix(10_000_001, 0))
+		Expect(readiness[0].Availability).To(Equal(Ready),
+			"a caller's later edit to their own capability list must not make the engine's instrument incapable")
+	})
+
+	// The capability list has to be copied at every depth, for the same reason
+	// the Instruments slice does: buildSignalState recurses into refinements, so
+	// a refinement's instrument holds its own header into the caller's array.
+	// The positive control runs the same table unedited, which shows the
+	// refinement's instrument is capable at all. Only then does the failing half
+	// rewrite the REFINEMENT's capability through the caller's own table.
+	It("keeps a refinement's instrument capable when the caller edits their own Requires after NewEngine returns", func() {
+		type snap struct{ v float64 }
+
+		arm := func(name string) Instrument[snap] {
+			return Instrument[snap]{
+				Measurement: Measurement[snap]{
+					Name:      name,
+					Requires:  []Capability{"declared"},
+					Extract:   func(s snap) Reading { return Known(s.v) },
+					Reduction: Last,
+					Span:      60 * time.Second,
+				},
+				Marks: Marks{
+					Unit:     "u",
+					Fire:     Mark{At: 100, Inclusive: true},
+					Worst:    200,
+					Clear:    Mark{At: 0, Inclusive: false},
+					Polarity: HigherIsWorse,
+				},
+			}
+		}
+
+		mk := func() Table[snap] {
+			parent := Signal[snap]{
+				Name:        "P",
+				DemoteSpan:  60 * time.Second,
+				Instruments: []Instrument[snap]{arm("pi")},
+			}
+			parent.Refinements = []Signal[snap]{{
+				Name:        "C",
+				DemoteSpan:  60 * time.Second,
+				Instruments: []Instrument[snap]{arm("ci")},
+			}}
+
+			return Table[snap]{Signals: []Signal[snap]{parent}, Interval: time.Second}
+		}
+
+		// Readiness carries one row per signal at every depth, keyed by path, so
+		// the refinement is read as "P/C" rather than by position.
+		availabilityOf := func(rows []Readiness, path string) Availability {
+			for _, r := range rows {
+				if r.Signal == path {
+					return r.Availability
+				}
+			}
+
+			Fail("readiness carries no row for " + path)
+
+			return NoInstrument
+		}
+
+		env := NewEnvironment("declared")
+
+		control, err := NewEngine(mk())
+		Expect(err).ToNot(HaveOccurred())
+		_, controlReadiness := control.Observe(snap{v: 7.0}, env, time.Unix(10_000_000, 0))
+		Expect(availabilityOf(controlReadiness, "P/C")).To(Equal(Ready),
+			"unedited, the environment satisfies the refinement's instrument and its window reduces this tick's sample")
+
+		tbl := mk()
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+		tbl.Signals[0].Refinements[0].Instruments[0].Requires[0] = "undeclared"
+		_, readiness := e.Observe(snap{v: 7.0}, env, time.Unix(10_000_001, 0))
+		Expect(availabilityOf(readiness, "P/C")).To(Equal(Ready),
+			"a caller's later edit must not make a REFINEMENT's instrument incapable either")
+	})
+
 	// Fired must remember WHICH instrument crossed the fire mark, not which
 	// instrument is the live winner on any later tick: the latch stamps Marks and
 	// Value at the fire transition and never refreshes them, and Instrument must be
@@ -678,8 +970,8 @@ var _ = Describe("Engine", func() {
 			Name:       "S",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[armSnap]{
-				{Name: "p95", Extract: extract, Reduction: P95, Span: 60 * time.Second, Marks: marks},
-				{Name: "mean", Extract: extract, Reduction: Mean, Span: 60 * time.Second, Marks: marks},
+				{Measurement: Measurement[armSnap]{Name: "p95", Extract: extract, Reduction: P95, Span: 60 * time.Second}, Marks: marks},
+				{Measurement: Measurement[armSnap]{Name: "mean", Extract: extract, Reduction: Mean, Span: 60 * time.Second}, Marks: marks},
 			},
 		}
 		tbl := Table[armSnap]{Signals: []Signal[armSnap]{sig}, Interval: time.Second}
