@@ -58,3 +58,47 @@ var _ = Describe("Ringbuffer snapshot ordering", func() {
 		Expect(sequences(rb.GetSnapshot().Items)).To(Equal([]uint64{3, 4, 5}))
 	})
 })
+
+var _ = Describe("RingBufferSnapshot accessors", func() {
+	snapshotOf := func(seqs ...uint64) RingBufferSnapshot {
+		snapshot := RingBufferSnapshot{}
+		for _, seq := range seqs {
+			snapshot.AppendNewest(&BufferItem{SequenceNum: seq})
+		}
+
+		return snapshot
+	}
+
+	It("AppendNewest puts each entry after the ones already there", func() {
+		snapshot := snapshotOf(1, 2, 3)
+
+		Expect(snapshot.Items).To(HaveLen(3))
+		Expect(snapshot.Items[len(snapshot.Items)-1].SequenceNum).To(Equal(uint64(3)))
+	})
+
+	It("NewestN returns the most recent n, still in arrival order", func() {
+		snapshot := snapshotOf(1, 2, 3, 4, 5)
+
+		window := snapshot.NewestN(3)
+
+		Expect(window).To(HaveLen(3))
+		Expect(window[0].SequenceNum).To(Equal(uint64(3)))
+		Expect(window[len(window)-1].SequenceNum).To(Equal(uint64(5)))
+	})
+
+	It("NewestN returns everything it holds when n is larger", func() {
+		snapshot := snapshotOf(1, 2)
+
+		window := snapshot.NewestN(9)
+
+		Expect(window).To(HaveLen(2))
+		Expect(window[0].SequenceNum).To(Equal(uint64(1)))
+	})
+
+	It("NewestN returns nothing for a non-positive n", func() {
+		snapshot := snapshotOf(1, 2)
+
+		Expect(snapshot.NewestN(0)).To(BeEmpty())
+		Expect(snapshot.NewestN(-1)).To(BeEmpty())
+	})
+})

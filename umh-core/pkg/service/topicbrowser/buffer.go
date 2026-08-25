@@ -78,6 +78,29 @@ type RingBufferSnapshot struct {
 	LastSequenceNum uint64 // Latest sequence number
 }
 
+// NewestN returns up to n entries, the most recently added ones, in the order
+// they arrived. Fewer are returned when the snapshot holds fewer than n.
+//
+// Callers use this instead of slicing Items, so which end is newest is stated
+// once here rather than at each call site.
+func (s RingBufferSnapshot) NewestN(n int) []*BufferItem {
+	if n <= 0 {
+		return nil
+	}
+
+	if n >= len(s.Items) {
+		return s.Items
+	}
+
+	return s.Items[len(s.Items)-n:]
+}
+
+// AppendNewest adds item as the most recently arrived entry. Producers that
+// build a snapshot by hand use this so the call site never states an order.
+func (s *RingBufferSnapshot) AppendNewest(item *BufferItem) {
+	s.Items = append(s.Items, item)
+}
+
 // NewRingbufferWithDefaultCapacity creates a ring buffer with the standard production capacity.
 func NewRingbufferWithDefaultCapacity() *Ringbuffer {
 	return NewRingbuffer(constants.RingBufferCapacity)

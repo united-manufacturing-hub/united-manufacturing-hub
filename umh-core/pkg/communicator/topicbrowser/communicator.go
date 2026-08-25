@@ -211,7 +211,7 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 	} else {
 		// Incremental processing: only process new buffers
 		newBufferCount := snapshot.LastSequenceNum - tbc.lastProcessedSequence
-		result, err = tbc.processIncrementalBuffers(snapshot.Items, newBufferCount, source)
+		result, err = tbc.processIncrementalBuffers(snapshot.NewestN(int(newBufferCount)), source)
 	}
 
 	if err != nil {
@@ -228,6 +228,9 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserservice.BufferItem, source ProcessingSource) (*ProcessingResult, error) {
 	result := &ProcessingResult{}
 
+	// buffers arrive oldest first, so the last one ingested is the newest.
+	var newestSeq uint64
+
 	for _, buf := range buffers {
 		bundle, err := tbc.ingestBuffer(buf)
 		if err != nil {
@@ -239,6 +242,7 @@ func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserse
 		}
 
 		result.ProcessedCount++
+		newestSeq = buf.SequenceNum
 
 		tbc.pendingToSend = append(tbc.pendingToSend, bundle)
 
@@ -248,13 +252,8 @@ func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserse
 		}
 	}
 
-	// Update sequence tracking to latest
-	if len(buffers) > 0 {
-		tbc.lastProcessedSequence = buffers[len(buffers)-1].SequenceNum // Newest buffer (last in slice)
-	}
-
 	result.DebugInfo = fmt.Sprintf("Processed ALL %d buffers from %s after overwrite (seq up to %d), %d errors",
-		result.ProcessedCount, source.String(), tbc.lastProcessedSequence, result.SkippedCount)
+		result.ProcessedCount, source.String(), newestSeq, result.SkippedCount)
 
 	tbc.logger.Debugf("TopicBrowserCommunicator DebugInfo: %s", result.DebugInfo)
 
@@ -262,18 +261,14 @@ func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserse
 }
 
 // processIncrementalBuffers processes only new buffers since last processing.
-func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicbrowserservice.BufferItem, newBufferCount uint64, source ProcessingSource) (*ProcessingResult, error) {
+func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicbrowserservice.BufferItem, source ProcessingSource) (*ProcessingResult, error) {
 	result := &ProcessingResult{}
 
-	// Buffers are oldest-to-newest, so the newest ones are the last N items
-	startIndex := len(buffers) - int(newBufferCount)
-	if startIndex < 0 {
-		startIndex = 0
-	}
+	// buffers arrive oldest first, so the range reported below is the first and
+	// last entry actually ingested, skipped ones excluded.
+	var minSeq, maxSeq uint64
 
-	for i := startIndex; i < len(buffers); i++ {
-		buf := buffers[i]
-
+	for _, buf := range buffers {
 		bundle, err := tbc.ingestBuffer(buf)
 		if err != nil {
 			tbc.logger.Errorf("Failed to process buffer seq=%d: %v", buf.SequenceNum, err)
@@ -284,6 +279,11 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 		}
 
 		result.ProcessedCount++
+		if result.ProcessedCount == 1 {
+			minSeq = buf.SequenceNum
+		}
+
+		maxSeq = buf.SequenceNum
 
 		tbc.pendingToSend = append(tbc.pendingToSend, bundle)
 
@@ -291,11 +291,6 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 		if buf.Timestamp.After(result.LatestTimestamp) {
 			result.LatestTimestamp = buf.Timestamp
 		}
-	}
-
-	// Update sequence tracking to latest
-	if len(buffers) > 0 {
-		tbc.lastProcessedSequence = buffers[len(buffers)-1].SequenceNum // Newest buffer (last in slice)
 	}
 
 	// Validate topic count after processing
@@ -308,9 +303,6 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 	var debugInfo string
 
 	if result.ProcessedCount > 0 {
-		minSeq := buffers[startIndex].SequenceNum // Oldest processed buffer
-
-		maxSeq := buffers[len(buffers)-1].SequenceNum // Newest processed buffer
 		if minSeq == maxSeq {
 			debugInfo = fmt.Sprintf("Processed %d incremental buffers from %s (seq %d), %d errors",
 				result.ProcessedCount, source.String(), minSeq, result.SkippedCount)
