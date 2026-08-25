@@ -87,9 +87,10 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           filter: blob:none
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
             umh-core/CHANGELOG.md
-            umh-core/changelog-images
+            umh-core/changelog-images/
           path: umh-core
 
       - name: Generate GitHub App token
