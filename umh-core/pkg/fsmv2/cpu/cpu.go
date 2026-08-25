@@ -154,70 +154,6 @@ type CPUDeps struct {
 	adm admission
 }
 
-// NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
-// (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
-// it, and builds the table and engine.
-//
-// NewDeps cannot fail — it returns TDeps and nothing else — so a startup
-// snapshot whose read fails yields cores=0, quota=0. cpuhealth.Table adds its
-// host-capacity signal only for a positive core count, and its container-limit
-// signal only for a positive quota, so a failed startup read drops both from
-// this instance's table for its whole lifetime; a later read that succeeds does
-// NOT restore them. Of the two things that can go wrong here — the startup read
-// and building the engine — only a failure to build (engineErr) makes Poll
-// report it could not measure. A failed startup read yields a healthy first
-// verdict from a permanently thinned table instead, which is why it is logged.
-//
-// The sampler reads through whichever filesystem.Service a caller published
-// under FilesystemDepsKey, and through the real filesystem when nothing was
-// published. The lookup happens here, per instance, at spawn time rather than
-// at init(), so a caller that publishes before the spawn decides which files
-// that instance sees for the rest of its life.
-//
-// Falling back rather than failing differs from the transport pull worker,
-// which errors when its deps are missing, and the difference is deliberate:
-// production wants the real filesystem and should not have to publish one to
-// get it. The price falls on a caller who meant to publish a fixture and
-// forgot. On Linux the real cgroup files read fine, so that caller gets a
-// verdict computed from the real machine, and a loose assertion such as one
-// expecting "healthy" on an idle box passes on numbers it never staged. An
-// assertion that names something only the published filesystem can produce
-// does not have that hole.
-func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
-	if fs == nil {
-		fs = filesystem.NewDefaultService()
-	}
-
-	return newDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(fs, cgroupBase))
-}
-
-// newDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
-// NewDeps is its only caller and supplies the cgroup sampler; the split keeps
-// the choice of sampler separate from the startup-snapshot construction below.
-// The specs beside this file do not call it: they build CPUDeps directly around
-// a stub Sampler, which skips the startup snapshot as well.
-func newDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
-	d := &CPUDeps{
-		BaseDependencies: bd,
-		sampler:          sampler,
-	}
-
-	// The table and engine are built once, at construction, from the startup
-	// snapshot. Both cores and quota are startup facts; a quota change at
-	// runtime needs a rebuilt table, which this worker does not do. A table that
-	// will not build leaves the engine nil and sets engineErr, which Poll
-	// reports as could-not-measure rather than letting Decide panic on a nil
-	// engine (simple has no recover around Poll; recovery is at the collector).
-	// The table is held so Poll can walk table.Signals for per-signal Availability.
-	cores, quota := startupCapacity(context.Background(), sampler, bd)
-	d.table = cpuhealth.Table(cores, quota)
-	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
-	d.firstFilled = make(map[string]bool)
-
-	return d
-}
-
 // Poll samples the cgroup once and reports the verdict Decide judged. On any
 // failure — a NewEngine construction error, or a non-nil Read error — the
 // worker stores no verdict and reports it could not measure, never a healthy
@@ -298,6 +234,70 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 		RefusingAdmission: refusing,
 		Polls:             d.polls,
 	}, nil
+}
+
+// NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
+// (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
+// it, and builds the table and engine.
+//
+// NewDeps cannot fail — it returns TDeps and nothing else — so a startup
+// snapshot whose read fails yields cores=0, quota=0. cpuhealth.Table adds its
+// host-capacity signal only for a positive core count, and its container-limit
+// signal only for a positive quota, so a failed startup read drops both from
+// this instance's table for its whole lifetime; a later read that succeeds does
+// NOT restore them. Of the two things that can go wrong here — the startup read
+// and building the engine — only a failure to build (engineErr) makes Poll
+// report it could not measure. A failed startup read yields a healthy first
+// verdict from a permanently thinned table instead, which is why it is logged.
+//
+// The sampler reads through whichever filesystem.Service a caller published
+// under FilesystemDepsKey, and through the real filesystem when nothing was
+// published. The lookup happens here, per instance, at spawn time rather than
+// at init(), so a caller that publishes before the spawn decides which files
+// that instance sees for the rest of its life.
+//
+// Falling back rather than failing differs from the transport pull worker,
+// which errors when its deps are missing, and the difference is deliberate:
+// production wants the real filesystem and should not have to publish one to
+// get it. The price falls on a caller who meant to publish a fixture and
+// forgot. On Linux the real cgroup files read fine, so that caller gets a
+// verdict computed from the real machine, and a loose assertion such as one
+// expecting "healthy" on an idle box passes on numbers it never staged. An
+// assertion that names something only the published filesystem can produce
+// does not have that hole.
+func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
+	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
+	if fs == nil {
+		fs = filesystem.NewDefaultService()
+	}
+
+	return newDepsWithSampler(id, bd, cpuhealth.NewLinuxSampler(fs, cgroupBase))
+}
+
+// newDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
+// NewDeps is its only caller and supplies the cgroup sampler; the split keeps
+// the choice of sampler separate from the startup-snapshot construction below.
+// The specs beside this file do not call it: they build CPUDeps directly around
+// a stub Sampler, which skips the startup snapshot as well.
+func newDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
+	d := &CPUDeps{
+		BaseDependencies: bd,
+		sampler:          sampler,
+	}
+
+	// The table and engine are built once, at construction, from the startup
+	// snapshot. Both cores and quota are startup facts; a quota change at
+	// runtime needs a rebuilt table, which this worker does not do. A table that
+	// will not build leaves the engine nil and sets engineErr, which Poll
+	// reports as could-not-measure rather than letting Decide panic on a nil
+	// engine (simple has no recover around Poll; recovery is at the collector).
+	// The table is held so Poll can walk table.Signals for per-signal Availability.
+	cores, quota := startupCapacity(context.Background(), sampler, bd)
+	d.table = cpuhealth.Table(cores, quota)
+	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
+	d.firstFilled = make(map[string]bool)
+
+	return d
 }
 
 // startupCapacity derives the two startup facts cpuhealth.Table shapes itself
