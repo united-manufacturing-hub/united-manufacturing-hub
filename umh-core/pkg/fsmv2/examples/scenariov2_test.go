@@ -528,8 +528,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 	})
 
 	It("warns and ignores DumpStore for a v2 scenario", func() {
-		logBuf := &v2LogBuffer{}
-		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
+		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
 		dumpRequested := examples.ScenarioV2{
@@ -557,13 +556,12 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// A silently ignored DumpStore lets a developer misread "no dump
 		// printed" as "no store changes", so the gap must be logged.
-		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeTrue(),
+		Expect(logsContainMsg(result.Logs, "dump_store_not_supported_for_v2")).To(BeTrue(),
 			"runV2 must warn that DumpStore is ignored for v2 scenarios")
 
 		// The warning is routed through the run's tee logger, so it must
-		// also sit in result.Logs; routing it to RunConfig.Logger alone
-		// keeps the buffer assertion above passing while dropping it from
-		// Logs.
+		// sit in result.Logs; routing it to RunConfig.Logger alone would
+		// leave the capture without it.
 		Expect(logsContainMsg(result.Logs, "dump_store_not_supported_for_v2")).To(BeTrue(),
 			"the DumpStore warning must reach result.Logs")
 	})
@@ -932,7 +930,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// loop shared the caller's ctx, the cancel would kill it before
 		// Shutdown, and every drain phase would wait out its timeout and
 		// emit this warning.
-		Expect(logContainsEvent(logBuf.String(), "graceful_shutdown_timeout")).To(BeFalse(),
+		Expect(logsContainMsg(result.Logs, "graceful_shutdown_timeout")).To(BeFalse(),
 			"the supervisor must drain via a live tick loop, not time out against a dead one")
 	})
 
