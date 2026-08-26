@@ -142,9 +142,6 @@ type CPUDeps struct {
 	// engine owns every (signal, instrument) window and per-signal latch. It is
 	// nil when NewEngine failed at construction (engineErr is then set).
 	engine *diagnosis.Engine[cpuhealth.Sample]
-	// table is the declaration Poll walks: engine.Select needs the Signal values,
-	// which are only reachable through the table the engine was built from.
-	table diagnosis.Table[cpuhealth.Sample]
 	// engineErr records a NewEngine failure. NewDeps cannot fail, so a table
 	// that will not build has to surface at the next Poll instead, which reports
 	// it could not measure. The alternative is Decide on a nil engine, which
@@ -161,6 +158,10 @@ type CPUDeps struct {
 	// adm is the admission window's state: its anchor and its report latch.
 	// admission.go has what the window is for.
 	adm admission
+
+	// table is the declaration Poll walks: engine.Select needs the Signal values,
+	// which are only reachable through the table the engine was built from.
+	table diagnosis.Table[cpuhealth.Sample]
 }
 
 // Poll samples the cgroup once and reports the verdict Decide judged. On any

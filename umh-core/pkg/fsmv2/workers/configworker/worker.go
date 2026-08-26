@@ -88,12 +88,13 @@ type ConfigworkerWorker struct {
 	// FF-off paths and in unit tests. TODO(ENG-4400): drops out when the worker
 	// reads config.yaml directly (see package doc and ConfigManagerDepsKey).
 	configManager config.ConfigManager
+
+	fsmv2.WorkerBase[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps]
+
 	// cpuEnabled gates whether the fsmv2 CPU monitor child is upserted. It is
 	// set once at construction from CPUEnabledDepsKey (the USE_FSMV2_CPU env
 	// flag, read in cmd/main.go and never persisted).
 	cpuEnabled bool
-
-	fsmv2.WorkerBase[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps]
 }
 
 // NewConfigworkerWorker creates a config worker holding the registry published
