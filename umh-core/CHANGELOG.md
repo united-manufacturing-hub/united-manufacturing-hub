@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Topic Browser updates are around 60% smaller on instances with many topics, because per-topic metadata is no longer resent with every refresh. This helps most on slow or metered connections
+
 ### Fixes
 
 - Instances with large configurations no longer run out of time in the control loop, which previously caused "not enough time left to reconcile" error log messages.

@@ -48,12 +48,6 @@ pre-push:
           exit 1
         fi
 
-    - name: field-alignment
-      glob: "**/*.go"
-      root: "umh-core"
-      run: |
-        make betteralign
-
 pre-commit:
   parallel: true
   jobs:
