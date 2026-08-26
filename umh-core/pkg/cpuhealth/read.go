@@ -22,7 +22,8 @@ package cpuhealth
 import (
 	"context"
 	"fmt"
-	"time"
+
+	"github.com/benbjohnson/clock"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -52,9 +53,16 @@ const (
 
 // NewLinuxSampler returns a Sampler reading via fs from base.
 func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
+	return NewLinuxSamplerWithClock(fs, base, clock.New())
+}
+
+// NewLinuxSamplerWithClock returns a Sampler reading via fs from base that
+// stamps every Sample from clk.
+func NewLinuxSamplerWithClock(fs filesystem.Service, base string, clk clock.Clock) Sampler {
 	return &linuxSampler{
 		cgroup: newCgroupSource(fs, base),
 		host:   newHostSource(fs),
+		clock:  clk,
 	}
 }
 
@@ -64,6 +72,7 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 // exists only to stamp the tick's single Timestamp and derive CPU scope, the
 // one fact that needs both sources' reads to compute.
 type linuxSampler struct {
+	clock  clock.Clock
 	cgroup *cgroupSource
 	host   *hostSource
 }
@@ -84,10 +93,10 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	s.recordRawReads(ctx, &sample)
 
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
-	// calls time.Now() itself, so both rate derivations divide by the same
+	// reads a clock itself, so both rate derivations divide by the same
 	// elapsed time and Decide never compares a machine-wide mean against a
 	// cgroup mean taken from a different instant.
-	timestamp := time.Now()
+	timestamp := s.clock.Now()
 	sample.Timestamp = timestamp
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
