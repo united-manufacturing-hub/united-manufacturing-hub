@@ -40,7 +40,9 @@ jobs:
         with:
           filter: blob:none
           sparse-checkout-cone-mode: false
-          sparse-checkout: umh-core/CHANGELOG.md
+          sparse-checkout: |
+            umh-core/CHANGELOG.md
+            umh-core/changelog-images/
           ref: ${{ inputs.version || github.event.release.tag_name }}
 
       - name: Extract changelog section
