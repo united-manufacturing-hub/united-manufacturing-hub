@@ -186,7 +186,7 @@ func main() {
 		ScenarioV2:         v2Scenario,
 		Duration:           runDuration,
 		TickInterval:       *tickInterval,
-		Logger:             deps.NewFSMLogger(logger.Sugar()),
+		Logger:             deps.NewUnsampledFSMLogger(logger.Sugar()),
 		Store:              store,
 		EnableTraceLogging: *traceFlag,
 		DumpStore:          *dumpStore,
