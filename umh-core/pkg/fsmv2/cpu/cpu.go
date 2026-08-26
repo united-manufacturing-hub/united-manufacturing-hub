@@ -85,10 +85,10 @@ type CPUStatus struct {
 
 // CPUDeps is the per-instance state Poll reads and mutates.
 //
-// TDeps must be *CPUDeps, never the value: Poll takes d by value, so a value
-// CPUDeps would hand each tick its own copy and lose the window anchor and the
-// report latch below, while the map and the pointers kept working across the
-// copy. Nothing enforces this.
+// TDeps must be *CPUDeps, never the value: simple.MonitorSpec passes TDeps to
+// Poll by value, so binding CPUDeps would hand each tick its own copy and lose
+// the window anchor and the report latch below, while the map and the pointers
+// kept working across the copy. Nothing enforces this.
 type CPUDeps struct {
 	*deps.BaseDependencies
 
