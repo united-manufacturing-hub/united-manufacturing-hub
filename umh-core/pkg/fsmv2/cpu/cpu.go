@@ -196,15 +196,9 @@ func (d *CPUDeps) evidenceCounts(env diagnosis.Environment) (capable, measured i
 // (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
 // it, and builds the table and engine.
 //
-// NewDeps cannot fail — it returns TDeps and nothing else — so a startup
-// snapshot whose read fails yields cores=0, quota=0. cpuhealth.Table adds its
-// host-capacity signal only for a positive core count, and its container-limit
-// signal only for a positive quota, so a failed startup read drops both from
-// this instance's table for its whole lifetime; a later read that succeeds does
-// NOT restore them. Of the two things that can go wrong here — the startup read
-// and building the engine — only a failure to build (engineErr) makes Poll
-// report it could not measure. A failed startup read yields a healthy first
-// verdict from a permanently thinned table instead, which is why it is logged.
+// A failed startup read yields cores=0, quota=0, which drops the two capacity
+// signals from this instance's table for its whole lifetime; a later
+// successful read does not restore them (ENG-5752).
 //
 // The sampler reads through whichever filesystem.Service a caller published
 // under FilesystemDepsKey, looked up here per instance at spawn time, so a
