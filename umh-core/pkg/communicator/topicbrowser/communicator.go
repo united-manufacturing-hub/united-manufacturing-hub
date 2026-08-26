@@ -63,10 +63,18 @@ func validateBufferSizeFromSnapshot(snapshot topicbrowserservice.RingBufferSnaps
 
 // SubscriberData contains data prepared for topic browser subscribers (UI clients).
 type SubscriberData struct {
-	LatestTimestamp time.Time      // Latest timestamp in this subscriber batch
-	UnsBundles      map[int][]byte // Ready-to-send data indexed by position (0=cache, 1+=incremental)
-	Summary         string         // Human-readable summary for debugging
-	TopicCount      int            // Current number of topics in cache
+	LatestTimestamp time.Time // Latest timestamp in this subscriber batch
+
+	// UnsBundles holds ready-to-send payloads indexed by position: 0 is the
+	// whole cache, 1 and up are queued bundles.
+	//
+	// A caller must not write to these bytes. Positions 1 and up are the same
+	// slices pendingToSend holds, so a write here would reach every later
+	// subscriber too.
+	UnsBundles map[int][]byte
+
+	Summary    string // Human-readable summary for debugging
+	TopicCount int    // Current number of topics in cache
 }
 
 // queuedBundle is a bundle this package has encoded and is holding for
