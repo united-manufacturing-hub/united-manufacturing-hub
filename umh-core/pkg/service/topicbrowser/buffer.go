@@ -162,30 +162,42 @@ func (rb *Ringbuffer) Cap() int {
 	return len(rb.buf)
 }
 
-// GetSnapshot returns a consistent snapshot of the ring buffer state
-// This is the primary interface for consumers to get ring buffer data.
+// GetSnapshot returns the ring's items as a flat slice, oldest first, with the
+// newest sequence number assigned so far.
+//
+// The ring is a circular buffer behind a mutex, and its contents travel as part
+// of the FSM observed state. A caller needs one ordered value it can read after
+// the lock is released, without knowing about writePos.
+//
+// Only the pointers are copied. The items stay shared with the ring, which goes
+// on writing and may overwrite the slot an item came from, so a caller must
+// treat the payloads as read-only. Status.CopyBufferSnapshot depends on that
+// and skips a deep copy.
 func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 
-	return RingBufferSnapshot{
+	snapshot := RingBufferSnapshot{
 		LastSequenceNum: rb.sequenceNum,
-		Items:           rb.getBuffersInternal(),
+		Items:           make([]*BufferItem, 0, rb.count),
 	}
-}
 
-// getBuffersInternal returns shared references to buffer items, oldest first.
-// This is used internally by GetSnapshot and assumes mutex is already held.
-func (rb *Ringbuffer) getBuffersInternal() []*BufferItem {
-	result := make([]*BufferItem, 0, rb.count)
-	for i := range rb.count {
-		// writePos is the next slot to write, so the oldest live item sits
-		// count places behind it.
-		idx := (rb.writePos - rb.count + i + len(rb.buf)) % len(rb.buf)
+	// Start at the oldest live slot and step forward, wrapping at the end.
+	idx := rb.writePos - rb.count
+	if idx < 0 {
+		idx += len(rb.buf)
+	}
+
+	for range rb.count {
 		if b := rb.buf[idx]; b != nil {
-			result = append(result, b) // Share the reference, no copying
+			snapshot.AppendNewest(b)
+		}
+
+		idx++
+		if idx == len(rb.buf) {
+			idx = 0
 		}
 	}
 
-	return result
+	return snapshot
 }
