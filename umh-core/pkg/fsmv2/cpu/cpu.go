@@ -13,11 +13,8 @@
 // limitations under the License.
 
 // Package fsmv2cpu is the fsmv2 simple monitor that polls a cgroup's CPU health
-// with the pkg/cpuhealth library. It owns the sampler, because the sampler
-// carries the baselines every rate is derived from and the worker owns the tick
-// they advance on. It owns no judgement: cpuhealth.Decide is a plain function
-// over one sample, and the worker only hands it a sample and reports what came
-// back.
+// with the pkg/cpuhealth library. It owns the sampler; the judgement is
+// cpuhealth.Decide's.
 package fsmv2cpu
 
 import (
@@ -43,43 +40,28 @@ const (
 
 	// FilesystemDepsKey is the register.SetDeps key under which a caller
 	// publishes the filesystem.Service the sampler reads the cgroup files
-	// through. NewDeps looks it up per instance at spawn time.
+	// through. NewDeps looks it up per instance at spawn time and falls back to
+	// the real filesystem when nothing is published, so a caller that meant to
+	// publish a fixture and forgot silently reads the real machine instead.
 	//
-	// Publishing is optional: with nothing published here NewDeps falls back to
-	// the real filesystem, rather than failing the way the transport pull worker
-	// does when its deps are missing. Production wants the real filesystem and
-	// should not have to publish one to get it.
-	//
-	// The price falls on a caller who meant to publish a fixture and forgot. On
-	// Linux the real cgroup files read fine, so that caller gets a verdict
-	// computed from the real machine, and a loose assertion such as one
-	// expecting "healthy" on an idle box passes on numbers it never staged. An
-	// assertion that names something only the published filesystem can produce
-	// does not have that hole.
-	//
-	// The key is deliberately not WorkerType, which is where a worker's own
-	// typed deps payload goes: the typed deps registry keys on the string
-	// alone, so two payloads cannot share one key. Same convention, and the
-	// same reason, as configworker.ConfigManagerDepsKey.
+	// The key is not WorkerType: the typed deps registry keys on the string
+	// alone, so two payloads cannot share one key. Same convention as
+	// configworker.ConfigManagerDepsKey.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup v2 mount point whose CPU controller files the
 	// sampler reads (cpu.stat, cpu.max, cpu.pressure, cpuset.cpus.effective).
 	cgroupBase = "/sys/fs/cgroup"
 
-	// pollInterval is how often the worker samples the cgroup.
-	//
-	// It also sets a staleness bound. simple.Register publishes it as this
-	// worker's observation interval, and pkg/fsmv2/adapter calls an observation
-	// stale at three times that (staleAfterFor). Nothing reads the CPU worker
-	// through that adapter yet, so today the number only moves the cadence.
+	// pollInterval is how often the worker samples the cgroup. simple.Register
+	// also publishes it as this worker's observation interval, and
+	// pkg/fsmv2/adapter calls an observation stale at three times it.
 	pollInterval = 1 * time.Second
 )
 
-// Ref identifies the CPU monitor child by the (WorkerType, InstanceName) pair
-// above. The configworker reconciles exactly one such child, upserting it under
-// this pair behind USE_FSMV2_CPU, and a reader fetches its status back under
-// the same pair through fsmv2client.
+// Ref is the pair the configworker upserts this child under behind
+// USE_FSMV2_CPU, and that a reader fetches its status back under through
+// fsmv2client.
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 // CPUConfig is deliberately empty. A config that carried values would make the
@@ -87,82 +69,60 @@ var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 // discards every 60s window the engine had warmed.
 type CPUConfig struct{}
 
-// CPUStatus is the result of one CPU-health observation. It carries a
-// judgement, never a raw measurement such as a CPU-utilisation percentage.
-//
-// The struct is not itself a wire shape, but both its fields reach one: Verdict
-// and Message fill the Category and the Message of the models.Health a container
-// monitor reports for CPU. What reads that Health lives outside this package:
-// the Management Console frontend, and
-// ProtocolConverterService.IsResourceLimited, which quotes the message into its
-// reason for refusing a new bridge.
+// CPUStatus is the result of one CPU-health observation. Verdict and Message
+// fill the Category and the Message of the models.Health a container monitor
+// reports for CPU, which is read by the Management Console frontend and by
+// ProtocolConverterService.IsResourceLimited.
 type CPUStatus struct {
-	// Verdict is the ranked judgement Decide produced this tick, as the
-	// cpuhealth.State string ("healthy" or "degraded"). Empty when the tick
-	// could not measure. Those two values are the ones that map onto
-	// models.Active and models.Degraded, and that health category is what the
-	// Management Console colours its CPU reading from.
+	// Verdict is the cpuhealth.State string Decide produced this tick ("healthy"
+	// or "degraded"), and empty when the tick could not measure.
 	Verdict string `json:"verdict"`
 
-	// Message is ComposeMessage's output for this tick's verdict and signals. It
-	// is the sentence a customer reads: the Management Console renders a health
-	// message verbatim, and IsResourceLimited prefixes it with "CPU degraded: "
-	// as the reason a new bridge was refused. Both use it as text, so the
-	// wording is the whole contract.
+	// Message is what the user reads in the frontend: a headline such as "CPU
+	// healthy. This instance is using 0.0 of 2 cores (0% of its limit) and can
+	// use 1.8 more before it is marked degraded.", then a Technical Details
+	// line.
 	Message string `json:"message"`
 }
 
 // CPUDeps is the per-instance state Poll reads and mutates.
 //
 // TDeps must be *CPUDeps, never the value: Poll takes d by value, so a value
-// CPUDeps would hand each tick its own copy and lose every mutation to a plain
-// field. The failure would be partial rather than total, and so quiet — the map
-// and the pointers below share their contents across a copy, while adm's window
-// anchor and its report latch would reset on every tick.
-//
-// Nothing enforces this. The spec that did was deleted along with the counter it
-// watched, knowing that cost. pkg/fsmv2/simple's own isolation spec is not a
-// substitute: it binds a pointer as its TDeps and checks that one instance's
-// mutations stay out of another's, so it never exercises the value case this
-// paragraph forbids.
+// CPUDeps would hand each tick its own copy and lose the window anchor and the
+// report latch below, while the map and the pointers kept working across the
+// copy. Nothing enforces this.
 type CPUDeps struct {
 	*deps.BaseDependencies
 
-	// sampler reads the cgroup. Behind the interface it is a pointer, and the
-	// counter baselines each rate is derived from live in the sources that
-	// pointer owns, so both survive the tick.
+	// sampler reads the cgroup. Behind the interface it is a pointer holding the
+	// counter baselines every rate is derived from, so they survive the tick.
 	sampler cpuhealth.Sampler
 	// engine owns every (signal, instrument) window and per-signal latch. It is
 	// nil when NewEngine failed at construction (engineErr is then set).
 	engine *diagnosis.Engine[cpuhealth.Sample]
 	// engineErr records a NewEngine failure. NewDeps cannot fail, so a table
 	// that will not build has to surface at the next Poll instead, which reports
-	// it could not measure. The alternative is Decide on a nil engine, which
-	// panics at the supervisor: simple has no recover around Poll, and recovery
-	// is at the collector.
+	// it could not measure.
 	engineErr error
 
 	// everMeasured keeps a signal that has measured once counting as measured
 	// through a later read outage. Set the first tick a signal reads Ready, and
-	// never cleared while the worker lives; a respawn builds a new worker, so it
-	// starts empty again.
+	// never cleared while the worker lives.
 	everMeasured map[string]bool
 
-	// adm is the admission window's state: its anchor and its report latch.
-	// admission.go has what the window is for.
+	// adm is the admission window's anchor and its report latch. admission.go
+	// has what the window is for.
 	adm admission
 
-	// table is the declaration Poll walks: engine.Select needs the Signal values,
-	// which are only reachable through the table the engine was built from.
+	// table is held because engine.Select needs the Signal values, which are
+	// only reachable through the table the engine was built from.
 	table diagnosis.Table[cpuhealth.Sample]
 }
 
-// Poll samples the cgroup once and reports the verdict Decide judged. On any
-// failure — a NewEngine construction error, or a non-nil Read error — the
-// worker stores no verdict and reports it could not measure, never a healthy
-// zero. On a nil error with one field absent (e.g. Pressure) it reports the
-// verdict Decide produced, because a signal that cannot be read is the
-// readability path working rather than a failure.
+// Poll samples the cgroup once and reports the verdict Decide judged. On a
+// NewEngine construction error or a non-nil Read error it stores no verdict and
+// reports it could not measure, never a healthy zero. One absent field (e.g.
+// Pressure) on a nil error is not a failure: it reports what Decide produced.
 func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	if d.engineErr != nil {
 		return CPUStatus{}, d.engineErr
@@ -181,18 +141,10 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	atDeadline := d.adm.shortfallAtDeadline(sample.Timestamp, measured, capable)
 
-	// Say once that the worker gave up waiting on a source which should answer
-	// and never did. Once per worker, not once per tick — that is reportOnce,
-	// and it is the reason this gate is not part of the decision above. A
-	// WARN, not an error: there is nothing for an operator to act on — the box
-	// simply cannot fully see its own CPU, so paging on-call would be noise.
-	//
 	// The message is a FIXED event name, never interpolated: sentry's
-	// BuildFingerprint groups on the log entry's message verbatim, so a
-	// Sprintf carrying signal names and counts would give every distinct
-	// combination its own Sentry issue. Every dynamic value rides in the
-	// structured fields, which is also how every other worker reports
-	// (transport's "persistent_auth_failure", pull's "pending_buffer_overflow").
+	// BuildFingerprint groups on the log entry's message verbatim, so a Sprintf
+	// carrying signal names and counts would give every distinct combination its
+	// own Sentry issue. Dynamic values ride in the structured fields.
 	if atDeadline && d.adm.reportOnce() {
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
 			"cpu_admission_deadline_never_measured_signal",
@@ -208,15 +160,11 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}, nil
 }
 
-// evidenceCounts walks the signal table and answers three questions about this
-// tick: how many signals this box can answer at all, how many of those have
-// ever answered, and which capable ones never have.
-//
-// Capable means the signal is not NoInstrument — the box has some instrument
-// that could answer it. Measured means everMeasured is set, which happens the
-// first tick the signal reads Ready and never reverses. So a signal counts as
-// capable-but-unmeasured only if nothing has ever read it successfully, which
-// is the shortfall the admission window is about.
+// evidenceCounts answers three questions about this tick: how many signals this
+// box can answer at all (capable — the signal is not NoInstrument), how many of
+// those have ever answered (measured — everMeasured is set, which happens the
+// first tick the signal reads Ready and never reverses), and which capable ones
+// never have.
 //
 // It must run after Decide, on the same tick and the same env. Select reports a
 // window's readiness without ageing it, so its answer is trustworthy only
@@ -227,7 +175,7 @@ func (d *CPUDeps) evidenceCounts(env diagnosis.Environment) (capable, measured i
 	for _, s := range d.table.Signals {
 		_, _, _, availability := d.engine.Select(s, env)
 		if availability == diagnosis.NoInstrument {
-			continue // no instrument on this box: not capable, cannot be short
+			continue
 		}
 
 		if availability == diagnosis.Ready {
@@ -261,10 +209,9 @@ func (d *CPUDeps) evidenceCounts(env diagnosis.Environment) (capable, measured i
 // verdict from a permanently thinned table instead, which is why it is logged.
 //
 // The sampler reads through whichever filesystem.Service a caller published
-// under FilesystemDepsKey, and through the real filesystem when nothing was
-// published. The lookup happens here, per instance, at spawn time rather than
-// at init(), so a caller that publishes before the spawn decides which files
-// that instance sees for the rest of its life.
+// under FilesystemDepsKey, looked up here per instance at spawn time, so a
+// caller that publishes before the spawn decides which files that instance sees
+// for the rest of its life.
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
@@ -278,10 +225,8 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 		sampler:          sampler,
 	}
 
-	// The table and engine are built once, here, from the startup snapshot. Both
-	// cores and quota are startup facts; a quota change at runtime needs a
-	// rebuilt table, which this worker does not do. The table is held because
-	// Poll walks table.Signals for per-signal Availability.
+	// A quota change at runtime needs a rebuilt table, which this worker does not
+	// do: both cores and quota are read once, from the startup snapshot.
 	cores, quota := startupCapacity(context.Background(), sampler, bd)
 	d.table = cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
@@ -290,18 +235,13 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	return d
 }
 
-// startupCapacity takes the one snapshot cpuhealth.Table is called with. Table
-// fixes the signal set as it builds: a positive core count adds the
-// host-capacity signal, and a positive quota adds the container-limit signal.
-//
-// It returns those two numbers: the cores the cgroup may use, and its quota.
-// Either is zero when the snapshot did not carry it.
+// startupCapacity takes the one snapshot cpuhealth.Table is called with, and
+// returns the cores the cgroup may use and its quota. Either is zero when the
+// snapshot did not carry it, which thins the table for the instance's whole
+// lifetime — NewDeps has the consequence.
 func startupCapacity(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
 	smp, err := s.Read(ctx)
 	if err != nil {
-		// Log it: a failed startup read is otherwise silent, because the first
-		// Poll reports healthy from the thinned table rather than an error.
-		// NewDeps has why the thinning lasts the instance's whole lifetime.
 		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
 			"cpu: startup cgroup snapshot failed; quota signals omitted", deps.Err(err))
 	}
