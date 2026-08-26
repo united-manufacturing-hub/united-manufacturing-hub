@@ -350,15 +350,12 @@ func (tbc *TopicBrowserCommunicator) ingestBuffer(buf *topicbrowserservice.Buffe
 		}
 	}
 
-	// Metadata is cleared before the entry is stored, so nothing built from these
-	// entries carries it: not the internal cache, and not the bundle re-encoded
-	// below.
+	// Nothing built from this bundle carries metadata afterwards: not the
+	// internal cache below, and not the payload encoded from it.
+	removeMetadata(&ub)
+
 	for _, entry := range ub.GetUnsMap().GetEntries() {
-		// entry points into the ub unmarshaled just above, so nothing else holds
-		// it yet and clearing Metadata in place is safe.
-		hash := HashUNSTableEntry(entry)
-		entry.Metadata = nil
-		tbc.unsMap.Entries[hash] = entry
+		tbc.unsMap.Entries[HashUNSTableEntry(entry)] = entry
 	}
 
 	// Encoding on ingest costs one marshal per buffer, so the cost is
@@ -461,6 +458,18 @@ func (tbc *TopicBrowserCommunicator) cleanupOldPendingBuffers() {
 	tbc.pendingToSend = filtered
 
 	tbc.logger.Debugf("Cleaned up %d old pending buffers", dropped)
+}
+
+// removeMetadata clears the per-topic metadata map on every topic in the bundle.
+// The console reads none of it, and it is the bulk of what a topic costs to
+// send.
+//
+// The entries belong to a bundle the caller has just unmarshaled, so nothing
+// else holds them yet and clearing in place is safe.
+func removeMetadata(ub *tbproto.UnsBundle) {
+	for _, entry := range ub.GetUnsMap().GetEntries() {
+		entry.Metadata = nil
+	}
 }
 
 // unsentBundles returns the queued bundles a subscriber has not received yet, in
