@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -59,6 +61,52 @@ func TestShutdownExitCode(t *testing.T) {
 				t.Errorf("shutdownExitCode(%+v) = %d, want %d", tt.result, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestRunnerLogsUnsampled keeps the runner's log stream complete for the
+// developer watching it. The runner binary is a developer tool: it has no
+// Sentry connection and therefore no log quota to protect, so a sampling
+// logger would only hide entries from the person reading them.
+// deps.NewFSMLogger( samples everything below Warn (parameters in
+// deps.samplerWrap), which is why the production binary in cmd/main.go
+// keeps it and why this runner must not build it. The behavioral test in
+// pkg/fsmv2/examples/runner_cli_sampling_test.go builds the real runner
+// binary but guards only the run logger; the store logger (the SetupStore
+// call in main.go) is guarded only here, by design. This test reads this
+// package's non-test Go sources and fails if any of them still constructs
+// that sampling logger; test files are skipped by filename because this
+// comment names the symbol.
+func TestRunnerLogsUnsampled(t *testing.T) {
+	const samplingConstructor = "deps.NewFSMLogger("
+
+	sources, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("listing this package's Go sources: %v", err)
+	}
+
+	checked := 0
+	for _, name := range sources {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		src, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("reading %s: %v", name, err)
+		}
+		checked++
+
+		if strings.Contains(string(src), samplingConstructor) {
+			t.Errorf("%s builds the sampling logger %s; use deps.NewUnsampledFSMLogger( instead",
+				name, samplingConstructor)
+		}
+	}
+
+	// A wrong working directory or an empty glob would otherwise pass
+	// without checking anything.
+	if checked == 0 {
+		t.Fatal("no non-test Go sources found in this package; nothing was checked")
 	}
 }
 

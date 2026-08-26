@@ -167,7 +167,7 @@ func main() {
 		},
 	)
 
-	store := examples.SetupStore(deps.NewFSMLogger(logger.Sugar()))
+	store := examples.SetupStore(deps.NewUnsampledFSMLogger(logger.Sugar()))
 
 	durationStr := "endless (until Ctrl+C)"
 	if *duration > 0 {
