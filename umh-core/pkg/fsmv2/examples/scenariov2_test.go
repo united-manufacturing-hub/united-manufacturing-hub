@@ -754,32 +754,36 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(droppedAdded).To(Equal(1),
 			"Logs must hold exactly one reconciliation entry reporting the added child, or the drop has no single target")
 
-		// The drop must leave the hole this spec guards against: an entry
-		// whose level, message and worker recur after the sentinel. Counted
-		// by those three alone, the later copies stand in for the dropped
-		// copy and the check cannot see the drop; the entry's structured
-		// fields are what separate it from the later copies. Only buffer
-		// entries carry position, so the recurrence is counted there, past
-		// the sentinel; counting logs entries instead would let pre-sentinel
-		// copies satisfy a claim about post-sentinel ones.
-		bufferKeys, _ := parseV2LogKeys(logBuf.String())
-		sentinelIdx := -1
-		for i, key := range bufferKeys {
-			if key.Msg == "spec_sentinel_before_shutdown" {
-				sentinelIdx = i
-
-				break
+		// The drop must leave the hole this spec guards against: the
+		// corrupted Logs must still hold an entry matching the dropped one
+		// on level, message and worker. Without such a stand-in, a key
+		// carrying no Fields would fail the check too, and the spec would
+		// pass without ever exercising Fields.
+		//
+		// The count runs over Logs, not over the buffer, because Logs is
+		// the side checkCapturedEntries counts against the buffer's prefix.
+		// A stand-in the buffer holds but Logs does not is no stand-in at
+		// all.
+		droppedLevel := ""
+		for _, entry := range result.Logs {
+			if entry.Msg == "child_reconciliation_completed" &&
+				entry.Worker == appWorker &&
+				entry.Fields["added"] == float64(1) {
+				droppedLevel = entry.Level
 			}
 		}
 
-		recurring := 0
-		for _, key := range bufferKeys[sentinelIdx+1:] {
-			if key.Msg == "child_reconciliation_completed" && key.Worker == appWorker {
-				recurring++
+		standIns := 0
+		for _, entry := range dropped {
+			if entry.Level == droppedLevel &&
+				entry.Msg == "child_reconciliation_completed" &&
+				entry.Worker == appWorker {
+				standIns++
 			}
 		}
-		Expect(recurring).To(BeNumerically(">=", 1),
-			"the buffer must hold another child_reconciliation_completed entry after the sentinel, or the dropped key would not recur and the count would already catch the drop")
+
+		Expect(standIns).To(BeNumerically(">=", 1),
+			"the corrupted Logs must still hold an entry matching the dropped one on level, message and worker, or a key without Fields would catch the drop and this spec would not exercise Fields")
 
 		dropErr := checkCapturedEntries(logBuf.String(), dropped, "spec_sentinel_before_shutdown")
 		Expect(dropErr).To(HaveOccurred(),
