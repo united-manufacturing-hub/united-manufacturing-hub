@@ -38,6 +38,30 @@ func (s stubSampler) Read(ctx context.Context) (cpuhealth.Sample, error) {
 	return s.read(ctx)
 }
 
+// fixedSampler hands back the same sample on every tick, for a spec that holds
+// the sample in a variable of its own — the evidence counts are only meaningful
+// on an environment derived from the very sample the tick was judged on.
+func fixedSampler(sample cpuhealth.Sample) stubSampler {
+	return stubSampler{read: func(context.Context) (cpuhealth.Sample, error) { return sample, nil }}
+}
+
+// countsFor reads back the evidence counts Poll computed for one tick.
+//
+// The counts reach no caller outside this package — the deadline warning is the
+// only thing that reports them, and it speaks once, at the deadline. So a
+// per-tick assertion has to call evidenceCounts, and calling it a second time on
+// the tick's own env is what these specs read. That second call returns what
+// Poll's call did: engine.Select reports a window's readiness without ageing it,
+// and everMeasured only ever gets set.
+//
+// sample must be the very sample the stub handed that Poll, because the counts
+// are only meaningful on the environment derived from it.
+func countsFor(d *CPUDeps, sample cpuhealth.Sample) (capable, measured int) {
+	capable, measured, _ = d.evidenceCounts(cpuhealth.DeriveEnvironment(sample))
+
+	return capable, measured
+}
+
 // newDeps builds a CPUDeps with a stub sampler and a real engine + table, so a
 // test can drive Poll without the startup snapshot (which reads a real cgroup).
 func newDeps(s cpuhealth.Sampler, cores, quota float64) *CPUDeps {

@@ -81,7 +81,7 @@ func newDepsWithLogger(log deps.FSMLogger, s cpuhealth.Sampler, cores, quota flo
 	return d
 }
 
-var _ = Describe("admission is refused while a capable signal has not first-measured", func() {
+var _ = Describe("a capable signal that has not first-measured is reported at the deadline", func() {
 	Describe("Sentry-once at the 10s admission deadline", func() {
 		It("raises a SentryWarn exactly once, naming the never-measured signal, when the deadline passes — never per tick, never on a no-PSI box", func() {
 			// A PSI box whose only capable signal is pressure, which never
@@ -89,7 +89,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			// the table and makes the rest NoInstrument, so exactly pressure is
 			// capable and it
 			// stays non-Ready forever — measured 0 < capable 1 on every tick.
-			// Past the 10s window admission opens and the worker must raise one
+			// Past the 10s window the worker gives up waiting and must raise one
 			// SentryWarn naming "pressure", not one per tick.
 			start := time.Unix(1_700_000_000, 0).UTC()
 
@@ -125,11 +125,11 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 				counts[i] = len(spy.sentryWarnMsgs)
 			}
 
-			// (a) No SentryWarn before/at the deadline: every Poll strictly
-			// inside the window (deltas 0..9s, refusing) stays silent.
+			// (a) No SentryWarn before the deadline: every Poll strictly inside
+			// the window (deltas 0..9s) stays silent.
 			for i := 0; i < boundary; i++ {
 				Expect(counts[i]).To(Equal(0),
-					"no SentryWarn while still refusing inside the admission window (delta %ds)", i)
+					"no SentryWarn while still inside the admission window (delta %ds)", i)
 			}
 
 			// (b) Exactly ONE across all past-deadline Polls — the once-per-worker
@@ -246,8 +246,8 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			// is positive; host-cpu-full is capable because cores are readable. Only
 			// pressure ever produces a reading (Known on every tick); throttle
 			// (counter, no NrThrottled), container-limit-full and host-cpu-full (no
-			// usage/host-busy input) stay AllAbsent forever. So SignalsMeasured==1
-			// and SignalsCapable==4 on every tick, and the never-measured set is
+			// usage/host-busy input) stay AllAbsent forever. So measured==1 and
+			// capable==4 on every tick, and the never-measured set is
 			// THREE names — the plural name-assembly path a single-capable box never
 			// exercises. Past the 10s window exactly one SentryWarn must name all
 			// three, name none of the measured signal, and carry the shortfall
@@ -256,29 +256,31 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 
 			spy := &sentrySpyLogger{FSMLogger: deps.NewNopFSMLogger()}
 			tick := 0
+			var lastSample cpuhealth.Sample
 			d := newDepsWithLogger(spy, stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				tick++
-				return cpuhealth.Sample{
+				lastSample = cpuhealth.Sample{
 					Timestamp:    start.Add(time.Duration(tick) * time.Second),
 					Quota:        diagnosis.Known(1),
 					NrPeriods:    diagnosis.Known(1),
 					Pressure:     diagnosis.Known(0.2),
 					PsiAvailable: true,
-				}, nil
+				}
+
+				return lastSample, nil
 			}}, 4, 1)
 
 			boundary := int(admissionWindow / time.Second)
-			var last CPUStatus
 			for i := 0; i <= boundary+2; i++ {
-				st, err := Poll(context.Background(), d, CPUConfig{})
+				_, err := Poll(context.Background(), d, CPUConfig{})
 				Expect(err).NotTo(HaveOccurred())
-				// Every tick keeps the two-capable-plus shortfall (1 of 4): pressure
+				// Every tick keeps the same shortfall (1 of 4): pressure
 				// measured, the other three capable signals never first-measured.
-				Expect(st.SignalsMeasured).To(Equal(1),
+				capable, measured := countsFor(d, lastSample)
+				Expect(measured).To(Equal(1),
 					"exactly one capable signal (pressure) first-measures; the rest never do")
-				Expect(st.SignalsCapable).To(Equal(4),
+				Expect(capable).To(Equal(4),
 					"throttling, container-limit-full and host-cpu-full are capable alongside pressure")
-				last = st
 			}
 
 			// (1) Exactly ONE SentryWarn across every past-deadline Poll.
@@ -291,11 +293,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			Expect(spy.sentryWarnMsgs[0]).To(Equal("cpu_admission_deadline_never_measured_signal"),
 				"the event name is a fixed grouping key on the plural path too")
 
-			// (3) The measured/capable shortfall is surfaced on the status.
-			Expect(last.SignalsMeasured).To(Equal(1), "the status reports measured==1")
-			Expect(last.SignalsCapable).To(Equal(4), "the status reports capable==4")
-
-			// (4) The full plural name set rides in the structured field — EVERY
+			// (3) The full plural name set rides in the structured field — EVERY
 			// never-measured signal, never the measured one. If the join dropped
 			// all-but-the-first name this fails; this is the plural-path guard.
 			Expect(len(spy.sentryWarns)).To(Equal(1))
@@ -303,8 +301,10 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 				"all three never-measured names ride in the field, not just the first")
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).NotTo(ContainSubstring("pressure"),
 				"the measured capable signal is never named")
-			Expect(spy.sentryWarns[0].fields["signals_measured"]).To(Equal(1))
-			Expect(spy.sentryWarns[0].fields["signals_capable"]).To(Equal(4))
+			Expect(spy.sentryWarns[0].fields["signals_measured"]).To(Equal(1),
+				"the shortfall rides in the structured fields: one measured...")
+			Expect(spy.sentryWarns[0].fields["signals_capable"]).To(Equal(4),
+				"...of four capable")
 		})
 	})
 })
