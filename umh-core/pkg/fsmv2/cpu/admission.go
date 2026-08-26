@@ -16,11 +16,12 @@ package fsmv2cpu
 
 import "time"
 
-// admissionWindow is how long a fresh worker may refuse admission while
-// a capable signal has still not first-measured. Once this much sample time
-// has passed since the worker's first sample, admission opens even if the
-// counts are unchanged. The synthetic-clock tests step the sample clock in
-// whole seconds, so the window is a whole number of them.
+// admissionWindow is how long a fresh worker waits for a capable signal to
+// produce its first measurement before giving up on it. Once this much sample
+// time has passed since the worker's first sample, a signal that still has not
+// measured is reported rather than waited on any longer. The synthetic-clock
+// tests step the sample clock in whole seconds, so the window is a whole number
+// of them.
 const admissionWindow = 10 * time.Second
 
 // admission is the admission window's per-worker state: where the window
@@ -34,21 +35,22 @@ type admission struct {
 	reported bool
 }
 
-// decide anchors the window on the first tick and answers what it says about
-// this one. at is the tick's sample timestamp; measured and capable are its
-// evidence counts, and the two results are admissionDecision's.
+// shortfallAtDeadline anchors the window on the first tick and answers what it
+// says about this one. at is the tick's sample timestamp; measured and capable
+// are its evidence counts. The answer is the package function of the same name,
+// which is where the rule itself lives.
 //
 // Elapsed is the delta between at and the anchor, so the window is driven by
 // the sample clock rather than the wall clock: it advances only as fast as the
 // samples do, which is what lets the synthetic-clock tests reach the deadline
 // without waiting. Production sample timestamps come from monotonic time.Now(),
 // so elapsed is never negative there.
-func (a *admission) decide(at time.Time, measured, capable int) (refusing, shortfallAtDeadline bool) {
+func (a *admission) shortfallAtDeadline(at time.Time, measured, capable int) bool {
 	if a.startedAt.IsZero() {
 		a.startedAt = at
 	}
 
-	return admissionDecision(at.Sub(a.startedAt), admissionWindow, measured, capable)
+	return shortfallAtDeadline(at.Sub(a.startedAt), admissionWindow, measured, capable)
 }
 
 // reportOnce returns true on its first call and false on every later one, so a
@@ -64,8 +66,9 @@ func (a *admission) reportOnce() bool {
 	return true
 }
 
-// admissionDecision answers what the admission window says about one tick. It
-// reads nothing but its arguments — no worker, no sampler, no clock.
+// shortfallAtDeadline answers whether one tick has reached the admission
+// deadline with a shortfall still open. It reads nothing but its arguments — no
+// worker, no sampler, no clock.
 //
 // elapsed is how much sample time has passed since the worker's first sample.
 // capable and measured are the tick's evidence counts: how many signals this box
@@ -73,19 +76,11 @@ func (a *admission) reportOnce() bool {
 // shortfall is measured below capable — some signal this box can answer has
 // never once answered.
 //
-// A shortfall does one of two things, and which one depends only on where the
-// tick falls in the window:
-//
-//	refusing             inside the window: hold admission back and wait
-//	shortfallAtDeadline  the window has closed: admit anyway, and report it
-//
-// So the refusal is bounded rather than fixed to the counts. A signal that never
-// measures stops blocking admission once the window closes, which is what keeps
-// a box that cannot fully see its own CPU from being blocked for its whole life;
-// it is reported instead. The two results are the same shortfall split by the
-// window, so they can never both be true, and with no shortfall neither is.
-func admissionDecision(elapsed, window time.Duration, measured, capable int) (refusing, shortfallAtDeadline bool) {
-	shortfall := measured < capable
-
-	return shortfall && elapsed < window, shortfall && elapsed >= window
+// It takes both to be true here: a shortfall alone is not enough, because early
+// ticks are expected to be missing readings, and a closed window alone is not
+// enough, because most boxes reach it having measured everything. A box that
+// cannot fully see its own CPU is therefore reported rather than waited on
+// forever, and a box that can is never reported at all.
+func shortfallAtDeadline(elapsed, window time.Duration, measured, capable int) bool {
+	return measured < capable && elapsed >= window
 }

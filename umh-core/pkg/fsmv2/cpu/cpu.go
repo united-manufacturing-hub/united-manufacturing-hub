@@ -87,11 +87,11 @@ var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 // discards every 60s window the engine had warmed.
 type CPUConfig struct{}
 
-// CPUStatus is the result of one CPU-health observation. It carries judgements
-// and counts, never a raw measurement such as a CPU-utilisation percentage.
+// CPUStatus is the result of one CPU-health observation. It carries a
+// judgement, never a raw measurement such as a CPU-utilisation percentage.
 //
-// The struct is not itself a wire shape; two of its five fields are. Verdict and
-// Message fill the Category and the Message of the models.Health a container
+// The struct is not itself a wire shape, but both its fields reach one: Verdict
+// and Message fill the Category and the Message of the models.Health a container
 // monitor reports for CPU. What reads that Health lives outside this package:
 // the Management Console frontend, and
 // ProtocolConverterService.IsResourceLimited, which quotes the message into its
@@ -110,25 +110,6 @@ type CPUStatus struct {
 	// as the reason a new bridge was refused. Both use it as text, so the
 	// wording is the whole contract.
 	Message string `json:"message"`
-
-	// SignalsCapable is how many CPU signals this box can answer (not
-	// NoInstrument). Its reader is the scenario harness, which asserts on it to
-	// separate capability from readability: a signal stays capable after the file
-	// it reads disappears, because the box still has the instrument. Nothing in
-	// the Management Console reads it.
-	SignalsCapable int `json:"signalsCapable"`
-	// SignalsMeasured is how many capable signals have produced a first
-	// measurement since this worker started. Nothing reads it.
-	SignalsMeasured int `json:"signalsMeasured"`
-
-	// RefusingAdmission reports whether admission is currently refused: a
-	// capable signal has not first-measured (measured < capable) within the
-	// admission window. Nothing consumes it; the contract below binds whatever
-	// first does. Consume the flag; do not re-derive the count comparison,
-	// which drops the window bound. It is meaningful only on a successful read
-	// — an errored/empty Poll yields this false ('no determination'), which a
-	// consumer must not read as 'admission open'.
-	RefusingAdmission bool `json:"refusingAdmission"`
 }
 
 // CPUDeps is the per-instance state Poll reads and mutates.
@@ -198,11 +179,11 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// After Decide, never before it, and on the same env. evidenceCounts says why.
 	capable, measured, unmeasured := d.evidenceCounts(env)
 
-	refusing, shortfallAtDeadline := d.adm.decide(sample.Timestamp, measured, capable)
+	atDeadline := d.adm.shortfallAtDeadline(sample.Timestamp, measured, capable)
 
-	// Say once that admission opened on a source which should answer and never
-	// did. Once per worker, not once per tick — that is reportOnce, and it is
-	// the reason this gate is not part of the decision above. A
+	// Say once that the worker gave up waiting on a source which should answer
+	// and never did. Once per worker, not once per tick — that is reportOnce,
+	// and it is the reason this gate is not part of the decision above. A
 	// WARN, not an error: there is nothing for an operator to act on — the box
 	// simply cannot fully see its own CPU, so paging on-call would be noise.
 	//
@@ -212,7 +193,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// combination its own Sentry issue. Every dynamic value rides in the
 	// structured fields, which is also how every other worker reports
 	// (transport's "persistent_auth_failure", pull's "pending_buffer_overflow").
-	if shortfallAtDeadline && d.adm.reportOnce() {
+	if atDeadline && d.adm.reportOnce() {
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
 			"cpu_admission_deadline_never_measured_signal",
 			deps.String("never_measured_signals", strings.Join(unmeasured, ", ")),
@@ -222,11 +203,8 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}
 
 	return CPUStatus{
-		Verdict:           string(verdict.State),
-		Message:           cpuhealth.ComposeMessage(verdict, signals),
-		SignalsCapable:    capable,
-		SignalsMeasured:   measured,
-		RefusingAdmission: refusing,
+		Verdict: string(verdict.State),
+		Message: cpuhealth.ComposeMessage(verdict, signals),
 	}, nil
 }
 
@@ -249,7 +227,7 @@ func (d *CPUDeps) evidenceCounts(env diagnosis.Environment) (capable, measured i
 	for _, s := range d.table.Signals {
 		_, _, _, availability := d.engine.Select(s, env)
 		if availability == diagnosis.NoInstrument {
-			continue // no instrument on this box: not capable, cannot refuse
+			continue // no instrument on this box: not capable, cannot be short
 		}
 
 		if availability == diagnosis.Ready {
