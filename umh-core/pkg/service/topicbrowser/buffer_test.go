@@ -103,7 +103,7 @@ var _ = Describe("Ringbuffer", func() {
 		})
 	})
 
-	Context("GetSnapshot / memory management", func() {
+	Context("GetSnapshot", func() {
 		It("provides immutable snapshot access", func() {
 			rb := NewRingbuffer(4)
 			rb.Add(helperBuf(42))
@@ -122,43 +122,6 @@ var _ = Describe("Ringbuffer", func() {
 			Expect(newSnapshot.Items[1].Payload[0]).To(Equal(byte(99))) // Newest last
 		})
 
-		It("demonstrates proper consumer memory management", func() {
-			rb := NewRingbuffer(4)
-			rb.Add(helperBuf(42))
-			rb.Add(helperBuf(43))
-
-			// Consumer pattern: get snapshot and always return items to pool
-			snapshot := rb.GetSnapshot()
-			defer PutBufferItems(snapshot.Items) // CRITICAL: Always return to pool when done
-
-			// Process the items
-			Expect(snapshot.Items).To(HaveLen(2))
-			for _, item := range snapshot.Items {
-				// Verify we can read the data
-				Expect(item.Payload).ToNot(BeNil())
-				Expect(item.Payload[0]).To(BeNumerically(">=", 42))
-			}
-
-			// At this point, defer will call PutBufferItems to return items to pool
-			// After that, snapshot.Items should not be used
-		})
-
-		It("shows that PutBufferItems clears the items", func() {
-			rb := NewRingbuffer(2)
-			rb.Add(helperBuf(100))
-
-			snapshot := rb.GetSnapshot()
-			Expect(snapshot.Items).To(HaveLen(1))
-			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(100)))
-
-			// Return to pool - this clears the items
-			PutBufferItems(snapshot.Items)
-
-			// Items are now cleared (should not use after PutBufferItems!)
-			Expect(snapshot.Items[0].Payload).To(BeNil())
-			Expect(snapshot.Items[0].Timestamp).To(Equal(time.Time{}))
-			Expect(snapshot.Items[0].SequenceNum).To(Equal(uint64(0)))
-		})
 	})
 
 	Context("Sequence number tracking", func() {

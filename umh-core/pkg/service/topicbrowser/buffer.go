@@ -30,12 +30,13 @@
 //    parseBufferPool, decodes the hex directly into a *BufferItem* obtained
 //    from bufferItemPool, then hands that BufferItem to the ring buffer.
 // 2. The ring buffer owns the BufferItem until it is overwritten.
-// 3. GetSnapshot exposes *read‑only* pointers; consumers must call
-//    PutBufferItems once they are finished so the structs can be reused.
+// 3. GetSnapshot exposes read-only pointers. The ring buffer keeps its own
+//    reference to every item, so a consumer must neither modify nor recycle
+//    them.
 //
 //  ▸ BufferItem is **immutable** after creation.
-//  ▸ Overwritten items are **not** returned automatically to the pool to
-//    avoid use‑after‑free while snapshots might still be in flight.
+//  ▸ Items are never returned to bufferItemPool. A snapshot may still be in
+//    flight, and nothing tracks when the last consumer is finished.
 //  ▸ parseBufferPool buffers are always returned immediately.
 //
 // Concurrency guarantees: Add and GetSnapshot are mutex‑protected and safe to
@@ -145,18 +146,6 @@ var bufferItemPool = sync.Pool{
 	New: func() any {
 		return &BufferItem{}
 	},
-}
-
-// PutBufferItems must be called by every consumer of GetSnapshot() when
-// finished. It zeroes the structs and returns them to bufferItemPool.
-func PutBufferItems(items []*BufferItem) {
-	for _, item := range items {
-		// Clear the item and return to pool
-		item.Payload = nil
-		item.Timestamp = time.Time{}
-		item.SequenceNum = 0
-		bufferItemPool.Put(item)
-	}
 }
 
 func (rb *Ringbuffer) Len() int {
