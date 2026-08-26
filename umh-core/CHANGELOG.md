@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- An instance now rebuilds its full topic-browser cache for a console session once, when that session first subscribes, instead of every ten seconds for as long as it stays open. The console says whether a subscribe is a refresh, and that flag was never read, so every refresh was treated as a first-time subscriber. On an instance with many topics the rebuild is large enough to miss its one-second budget, and a session that misses it receives no status message at all and shows the instance as offline
+
 ## [0.44.35]
 
 ### Improvements
