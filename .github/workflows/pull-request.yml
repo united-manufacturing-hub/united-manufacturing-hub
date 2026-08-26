@@ -244,6 +244,7 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             umh-core/CHANGELOG.md
+            umh-core/changelog-images/
             .github/
           fetch-depth: 0
       # Generate token for cross-repo access
