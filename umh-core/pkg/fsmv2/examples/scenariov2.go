@@ -81,4 +81,5 @@ var RegistryV2 = map[string]ScenarioV2{
 	"cpu-filling":  CPUFillingScenarioV2,
 	"cpu-latch":    CPULatchScenarioV2,
 	"cpu-blind":    CPUBlindScenarioV2,
+	"cpu-host":     CPUHostScenarioV2,
 }
