@@ -182,9 +182,7 @@ func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
 	// Go through the ring oldest to newest, adding each item to the snapshot.
 	for range rb.count {
 		// Only the pointer is copied; the item stays owned by the ring.
-		if b := rb.buf[idx]; b != nil {
-			snapshot.AppendNewest(b)
-		}
+		snapshot.AppendNewest(rb.buf[idx])
 
 		// Step forward, wrapping at the end of the array.
 		idx++
