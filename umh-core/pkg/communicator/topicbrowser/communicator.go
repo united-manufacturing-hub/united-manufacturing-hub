@@ -69,15 +69,18 @@ type SubscriberData struct {
 	TopicCount      int            // Current number of topics in cache
 }
 
-// strippedBundle is one UnsBundle re-encoded by this package with the per-topic
-// metadata map removed.
+// queuedBundle is a bundle this package has encoded and is holding for
+// delivery; pendingToSend is a slice of these.
 //
-// It is deliberately not a topicbrowserservice.BufferItem. A ring-buffer item's
-// payload still carries the metadata, and its memory belongs to the ring buffer,
-// which keeps its own reference after handing out a snapshot. See the
-// Data & Ownership Flow section of the pkg/service/topicbrowser package doc.
-// Keeping the types apart means a ring-buffer item cannot reach pendingToSend.
-type strippedBundle struct {
+// It is deliberately not a topicbrowserservice.BufferItem. This package owns a
+// queuedBundle's bytes, while a ring-buffer item's belong to the ring buffer,
+// which keeps its own reference after handing out a snapshot. Keeping the types
+// apart means a ring-buffer item cannot reach pendingToSend. See the Data &
+// Ownership Flow section of the pkg/service/topicbrowser package doc.
+//
+// The per-topic metadata map is dropped on the way in, so the payload differs
+// from the ring-buffer item it came from.
+type queuedBundle struct {
 	Timestamp time.Time // ingest timestamp, copied from the ring-buffer item
 	Payload   []byte    // re-encoded UnsBundle, allocated here
 }
@@ -96,8 +99,8 @@ type TopicBrowserCommunicator struct {
 	logger    *zap.SugaredLogger // Component-specific logging
 
 	// 📡 COMMUNICATION STATE: Subscriber and delivery management
-	pendingToSend         []strippedBundle // Bundles not yet sent to subscribers
-	lastProcessedSequence uint64           // Last processed buffer sequence number
+	pendingToSend         []queuedBundle // Bundles not yet sent to subscribers
+	lastProcessedSequence uint64         // Last processed buffer sequence number
 
 	// 🔧 CONFIGURATION
 	maxPendingBuffers int // Cleanup threshold for old pending buffers
@@ -112,7 +115,7 @@ func NewTopicBrowserCommunicator(logger *zap.SugaredLogger) *TopicBrowserCommuni
 		eventMap:              make(map[string]*tbproto.EventTableEntry),
 		unsMap:                &tbproto.TopicMap{Entries: make(map[string]*tbproto.TopicInfo)},
 		lastProcessedSequence: 0, // Start from beginning
-		pendingToSend:         make([]strippedBundle, 0),
+		pendingToSend:         make([]queuedBundle, 0),
 		lastSentTimestamp:     time.Time{},
 		simulator:             nil,
 		simulatorEnabled:      false,
@@ -166,7 +169,7 @@ func (tbc *TopicBrowserCommunicator) ProcessSimulatedData() (*ProcessingResult, 
 // processNewBuffers handles the core buffer processing logic for both real and simulated data
 //
 // It reads BufferItems from obs.ServiceInfo.Status.BufferSnapshot.Items, updates
-// the internal cache from each, and queues a strippedBundle for delivery. The
+// the internal cache from each, and queues a queuedBundle for delivery. The
 // ring buffer's own items are not referenced after this returns.
 func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.ObservedStateSnapshot, source ProcessingSource) (*ProcessingResult, error) {
 	tbc.mu.Lock()
@@ -324,7 +327,7 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 
 // ingestBuffer updates the internal cache maps from one buffer, and returns that
 // buffer's bundle re-encoded without the metadata map.
-func (tbc *TopicBrowserCommunicator) ingestBuffer(buf *topicbrowserservice.BufferItem) (strippedBundle, error) {
+func (tbc *TopicBrowserCommunicator) ingestBuffer(buf *topicbrowserservice.BufferItem) (queuedBundle, error) {
 	// Unmarshal the protobuf data
 	var ub tbproto.UnsBundle
 	if err := proto.Unmarshal(buf.Payload, &ub); err != nil {
@@ -336,7 +339,7 @@ func (tbc *TopicBrowserCommunicator) ingestBuffer(buf *topicbrowserservice.Buffe
 		}
 		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, tbc.logger, context)
 
-		return strippedBundle{}, fmt.Errorf("failed to unmarshal protobuf: %w", err)
+		return queuedBundle{}, fmt.Errorf("failed to unmarshal protobuf: %w", err)
 	}
 
 	// Update event map: keep only the latest event per topic
@@ -370,10 +373,10 @@ func (tbc *TopicBrowserCommunicator) ingestBuffer(buf *topicbrowserservice.Buffe
 		}
 		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, tbc.logger, context)
 
-		return strippedBundle{}, fmt.Errorf("failed to marshal stripped protobuf: %w", err)
+		return queuedBundle{}, fmt.Errorf("failed to marshal stripped protobuf: %w", err)
 	}
 
-	return strippedBundle{
+	return queuedBundle{
 		Timestamp: buf.Timestamp,
 		Payload:   stripped,
 	}, nil
@@ -445,7 +448,7 @@ func (tbc *TopicBrowserCommunicator) cleanupOldPendingBuffers() {
 		return
 	}
 
-	filtered := make([]strippedBundle, 0, len(tbc.pendingToSend))
+	filtered := make([]queuedBundle, 0, len(tbc.pendingToSend))
 
 	for _, bundle := range tbc.pendingToSend {
 		if bundle.Timestamp.After(tbc.lastSentTimestamp) {
@@ -463,8 +466,8 @@ func (tbc *TopicBrowserCommunicator) cleanupOldPendingBuffers() {
 // unsentBundles returns the queued bundles a subscriber has not received yet, in
 // ingest order. It reads pendingToSend and lastSentTimestamp without locking;
 // GetSubscriberData holds the read lock, as it does for getCacheBundle.
-func (tbc *TopicBrowserCommunicator) unsentBundles() []strippedBundle {
-	unsent := make([]strippedBundle, 0, len(tbc.pendingToSend))
+func (tbc *TopicBrowserCommunicator) unsentBundles() []queuedBundle {
+	unsent := make([]queuedBundle, 0, len(tbc.pendingToSend))
 
 	for _, bundle := range tbc.pendingToSend {
 		if bundle.Timestamp.After(tbc.lastSentTimestamp) {
