@@ -79,17 +79,18 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		Expect(d.sampler).NotTo(BeNil(), "an unpublished filesystem still yields a sampler")
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")
 
-		// Poll's outcome depends on whether this machine has a cgroup v2 mount,
-		// so the spec asserts what holds on both: it returns rather than
-		// panicking, and whatever it read, it did not read the stub.
+		// Poll errors on a host with no cgroup v2 mount and succeeds on one that
+		// has it, so this must hold for a nil error too. errors.Is is used rather
+		// than NotTo(MatchError): MatchError rejects a nil actual even under
+		// NotTo, which passes on a host without cgroups and fails on one with.
 		//
-		// Read that second assertion for no more than it is worth. It has teeth
-		// only against a fallback that kept serving a previously published
+		// Read the assertion for no more than it is worth. It has teeth only
+		// against a fallback that kept serving a previously published
 		// filesystem. Asserting the fallback positively would mean asserting
 		// against the real disk, whose contents this spec does not control, so
 		// the gap is stated rather than papered over.
 		_, err := Poll(context.Background(), d, CPUConfig{})
-		Expect(err).NotTo(MatchError(errRefusedByStub),
+		Expect(errors.Is(err, errRefusedByStub)).To(BeFalse(),
 			"with nothing published the sampler must reach the real filesystem")
 	})
 })
