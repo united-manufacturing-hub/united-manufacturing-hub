@@ -110,9 +110,9 @@ type CPUDeps struct {
 	// never cleared while the worker lives.
 	everMeasured map[string]bool
 
-	// adm is the admission window's anchor and its report latch. admission.go
-	// has what the window is for.
-	adm admission
+	// admissionState is the admission window's anchor and its report latch.
+	// admission.go has what the window is for.
+	admissionState admission
 
 	// table is held because engine.Select needs the Signal values, which are
 	// only reachable through the table the engine was built from.
@@ -139,13 +139,13 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// After Decide, never before it, and on the same env. evidenceCounts says why.
 	capable, measured, unmeasured := d.evidenceCounts(env)
 
-	atDeadline := d.adm.shortfallAtDeadline(sample.Timestamp, measured, capable)
+	atDeadline := d.admissionState.shortfallAtDeadline(sample.Timestamp, measured, capable)
 
 	// The message is a FIXED event name, never interpolated: sentry's
 	// BuildFingerprint groups on the log entry's message verbatim, so a Sprintf
 	// carrying signal names and counts would give every distinct combination its
 	// own Sentry issue. Dynamic values ride in the structured fields.
-	if atDeadline && d.adm.reportOnce() {
+	if atDeadline && d.admissionState.reportOnce() {
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
 			"cpu_admission_deadline_never_measured_signal",
 			deps.String("never_measured_signals", strings.Join(unmeasured, ", ")),
