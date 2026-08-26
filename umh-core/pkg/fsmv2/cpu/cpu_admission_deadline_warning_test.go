@@ -50,6 +50,7 @@ type sentrySpyLogger struct {
 
 func (s *sentrySpyLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
 	s.sentryWarnMsgs = append(s.sentryWarnMsgs, msg)
+
 	rec := sentryWarnRecord{
 		fields:        make(map[string]any, len(fields)),
 		feature:       feature,
@@ -58,6 +59,7 @@ func (s *sentrySpyLogger) SentryWarn(feature deps.Feature, hierarchyPath string,
 	for _, f := range fields {
 		rec.fields[f.Key] = f.Value
 	}
+
 	s.sentryWarns = append(s.sentryWarns, rec)
 }
 
@@ -78,6 +80,7 @@ func newDepsWithLogger(log deps.FSMLogger, s cpuhealth.Sampler, cores, quota flo
 		WorkerType:    WorkerType,
 		HierarchyPath: testHierarchyPath,
 	})
+
 	return d
 }
 
@@ -97,6 +100,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			tick := 0
 			d := newDepsWithLogger(spy, stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				tick++
+
 				return cpuhealth.Sample{
 					Timestamp:    start.Add(time.Duration(tick) * time.Second),
 					Quota:        diagnosis.Known(0),
@@ -127,7 +131,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 
 			// (a) No SentryWarn before the deadline: every Poll strictly inside
 			// the window (deltas 0..9s) stays silent.
-			for i := 0; i < boundary; i++ {
+			for i := range boundary {
 				Expect(counts[i]).To(Equal(0),
 					"no SentryWarn while still inside the admission window (delta %ds)", i)
 			}
@@ -155,7 +159,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			// (c); the fields are what an operator reads once inside that one
 			// issue, and what the structured log line carries locally. A
 			// regression that stops emitting the structured fields must fail here.
-			Expect(len(spy.sentryWarns)).To(Equal(1), "the warning is recorded once, like the call")
+			Expect(spy.sentryWarns).To(HaveLen(1), "the warning is recorded once, like the call")
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).To(Equal("pressure"),
 				"the never-measured signal name rides in a structured field")
 			Expect(spy.sentryWarns[0].fields["signals_measured"]).To(Equal(0),
@@ -187,6 +191,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			tickQ := 0
 			dQ := newDepsWithLogger(spyQuiet, stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				tickQ++
+
 				return cpuhealth.Sample{
 					Timestamp:    start.Add(time.Duration(tickQ) * time.Second),
 					Quota:        diagnosis.Known(0),
@@ -221,6 +226,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 				if tick > 1 {
 					pressure = diagnosis.Known(0)
 				}
+
 				return cpuhealth.Sample{
 					Timestamp:    start.Add(time.Duration(tick) * time.Second),
 					Quota:        diagnosis.Known(0),
@@ -284,7 +290,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			}
 
 			// (1) Exactly ONE SentryWarn across every past-deadline Poll.
-			Expect(len(spy.sentryWarnMsgs)).To(Equal(1),
+			Expect(spy.sentryWarnMsgs).To(HaveLen(1),
 				"the many-capable box raises exactly one SentryWarn, never per tick")
 
 			// (2) The event name stays a FIXED literal even on the plural path — the
@@ -296,7 +302,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			// (3) The full plural name set rides in the structured field — EVERY
 			// never-measured signal, never the measured one. If the join dropped
 			// all-but-the-first name this fails; this is the plural-path guard.
-			Expect(len(spy.sentryWarns)).To(Equal(1))
+			Expect(spy.sentryWarns).To(HaveLen(1))
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).To(Equal("throttling, host-cpu-full, container-limit-full"),
 				"all three never-measured names ride in the field, not just the first")
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).NotTo(ContainSubstring("pressure"),
