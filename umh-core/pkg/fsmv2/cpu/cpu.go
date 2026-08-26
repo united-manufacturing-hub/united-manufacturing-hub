@@ -45,6 +45,18 @@ const (
 	// publishes the filesystem.Service the sampler reads the cgroup files
 	// through. NewDeps looks it up per instance at spawn time.
 	//
+	// Publishing is optional: with nothing published here NewDeps falls back to
+	// the real filesystem, rather than failing the way the transport pull worker
+	// does when its deps are missing. Production wants the real filesystem and
+	// should not have to publish one to get it.
+	//
+	// The price falls on a caller who meant to publish a fixture and forgot. On
+	// Linux the real cgroup files read fine, so that caller gets a verdict
+	// computed from the real machine, and a loose assertion such as one
+	// expecting "healthy" on an idle box passes on numbers it never staged. An
+	// assertion that names something only the published filesystem can produce
+	// does not have that hole.
+	//
 	// The key is deliberately not WorkerType, which is where a worker's own
 	// typed deps payload goes: the typed deps registry keys on the string
 	// alone, so two payloads cannot share one key. Same convention, and the
@@ -275,16 +287,6 @@ func (d *CPUDeps) evidenceCounts(env diagnosis.Environment) (capable, measured i
 // published. The lookup happens here, per instance, at spawn time rather than
 // at init(), so a caller that publishes before the spawn decides which files
 // that instance sees for the rest of its life.
-//
-// Falling back rather than failing differs from the transport pull worker,
-// which errors when its deps are missing, and the difference is deliberate:
-// production wants the real filesystem and should not have to publish one to
-// get it. The price falls on a caller who meant to publish a fixture and
-// forgot. On Linux the real cgroup files read fine, so that caller gets a
-// verdict computed from the real machine, and a loose assertion such as one
-// expecting "healthy" on an idle box passes on numbers it never staged. An
-// assertion that names something only the published filesystem can produce
-// does not have that hole.
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
@@ -310,10 +312,12 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	return d
 }
 
-// startupCapacity derives the two startup facts cpuhealth.Table shapes itself
-// from — the number of cores the cgroup may use and its positive quota — out of
-// one startup snapshot. On failure both are zero, which is the table without
-// either capacity signal.
+// startupCapacity takes the one snapshot cpuhealth.Table is called with. Table
+// fixes the signal set as it builds: a positive core count adds the
+// host-capacity signal, and a positive quota adds the container-limit signal.
+//
+// It returns those two numbers: the cores the cgroup may use, and its quota.
+// Either is zero when the snapshot did not carry it.
 func startupCapacity(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
 	smp, err := s.Read(ctx)
 	if err != nil {
