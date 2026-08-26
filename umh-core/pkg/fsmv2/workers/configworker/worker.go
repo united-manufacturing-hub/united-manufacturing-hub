@@ -138,15 +138,10 @@ func (w *ConfigworkerWorker) GetDependenciesAny() any {
 	return nil
 }
 
-// CollectObservedState reconciles this worker's dynamic children, then returns
-// the observed state. A collect method does this because the fsmv2.Worker
-// interface offers no other per-tick entry point: DeriveDesiredState must not
-// touch dependencies (an architecture validator enforces that) and
-// GetInitialState runs once. Every dynamic child follows the same pair:
-// reconcileX gathers the input and logs its failures, syncX upserts or deletes
-// the child in the registry. Failures are logged rather than returned, so a
-// transient config read or upsert error cannot fail the tick and stall the
-// worker.
+// CollectObservedState is the only per-tick hook available: DeriveDesiredState
+// must not touch dependencies (an architecture validator enforces that) and
+// GetInitialState runs once. Reconcile failures are logged rather than
+// returned, so a transient one cannot stall the worker.
 func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -154,9 +149,8 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	default:
 	}
 
-	// Standalone fsmv2 children are reconciled here. Others arrive elsewhere:
-	// nmap from the fsmv1 connection service, benthos_monitor from
-	// pkg/service/benthos.
+	// Standalone fsmv2 children are reconciled here. Other fsms like nmap and
+	// benthos_monitor are managed through the existing fsmv1 for now.
 	w.reconcileHistorian(ctx)
 	w.reconcileCPU(ctx)
 
