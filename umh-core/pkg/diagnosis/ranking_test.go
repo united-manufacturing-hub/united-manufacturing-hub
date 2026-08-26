@@ -58,9 +58,9 @@ var _ = Describe("Ranking", func() {
 	// falls builds a LowerIsWorse headroom cause whose severity is
 	// (fire-value)/(fire-worst), clamped to [0,1]. Worst is below fire, so it is
 	// the more negative number.
-	falls := func(tier, index int, value, fire, worst float64, external bool) Fired {
+	falls := func(tier, index int, value, fire, worst float64) Fired {
 		return Fired{
-			Identity: Identity{Signal: "f", Tier: tier, Index: index, External: external},
+			Identity: Identity{Signal: "f", Tier: tier, Index: index},
 			Value:    value,
 			Marks: Marks{
 				Fire:     Mark{At: fire},
@@ -92,7 +92,7 @@ var _ = Describe("Ranking", func() {
 
 	It("should give a falling mark the same severity scale as a rising one, so an absolute quantity and a ratio compare", func() {
 		// Headroom firing at 0 and exhausted at -4 cores: half of that is -2.
-		falling := falls(1, 0, -2, 0, -4, false) // (0-(-2))/(0-(-4)) = 0.5
+		falling := falls(1, 0, -2, 0, -4) // (0-(-2))/(0-(-4)) = 0.5
 		Expect(falling.Severity()).To(Equal(0.5),
 			"halfway between the fire mark and the worst value scores half")
 
@@ -102,30 +102,44 @@ var _ = Describe("Ranking", func() {
 			"an absolute quantity and a ratio with the same normalised severity share a scale")
 	})
 
-	It("should break a remaining tie in favour of the externally-attributed cause", func() {
-		internal := rises(1, 0, 0.5, 0.5, 1.0) // severity 0
-		external := rises(1, 1, 0.5, 0.5, 1.0) // severity 0
-		external.External = true
-		sorted := Rank([]Fired{internal, external})
-		Expect(indexes(sorted)).To(Equal([]int{1, 0}))
-	})
-
 	It("should break a last tie by the signal's declared position in the table", func() {
-		a := rises(1, 0, 0.5, 0.5, 1.0) // severity 0, not external
-		b := rises(1, 3, 0.5, 0.5, 1.0) // severity 0, not external, lower index wins
+		a := rises(1, 0, 0.5, 0.5, 1.0) // severity 0
+		b := rises(1, 3, 0.5, 0.5, 1.0) // severity 0, lower index wins
 		sorted := Rank([]Fired{b, a})
 		Expect(indexes(sorted)).To(Equal([]int{0, 3}))
 	})
 
+	It("should not consult Attribution at or before Index, leaving it payload rather than a sort key", func() {
+		// Two verdicts equal in Tier and severity, so the comparator falls
+		// through to Index, its last key. Attribution runs opposite to Index:
+		// the entry with the lower Index carries the higher Attribution. Index
+		// is unique per signal, so the Index comparison answers strictly and
+		// the expected sequence does not depend on what sort.Slice does with
+		// entries it treats as equal. A comparator reading Attribution at or
+		// before Index returns the pair the other way round. A read after Index
+		// cannot change any outcome, because Index already totally orders two
+		// distinct entries. So this covers every position where Attribution
+		// could matter: blame stays payload the caller reads off the fired set,
+		// uninterpreted by this package.
+		early := rises(1, 0, 0.5, 0.5, 1.0) // severity 0, Index 0
+		late := rises(1, 1, 0.5, 0.5, 1.0)  // severity 0, Index 1
+		early.Attribution = 7
+		late.Attribution = 2
+		Expect(indexes(Rank([]Fired{early, late}))).To(Equal([]int{0, 1}),
+			"Index decides the order, not the higher Attribution sitting on the lower Index")
+		Expect(indexes(Rank([]Fired{late, early}))).To(Equal([]int{0, 1}),
+			"the reversed input order gives the same sequence, still decided by Index")
+	})
+
 	It("should return a total order, so ranking the same set twice in different append orders gives the same sequence", func() {
-		// A set deliberately chosen to cluster on tier, severity and externality
-		// so that only the total order (all four keys) settles it.
+		// A set deliberately chosen to cluster on tier and severity so that only
+		// the total order (tier, then severity, then index) settles it.
 		set := []Fired{
 			rises(2, 0, 0.7, 0.5, 1.0), // tier 2, severity 0.4
 			rises(0, 1, 0.5, 0.5, 1.0), // tier 0, severity 0
-			falls(1, 2, -2, 0, -4, false),
-			falls(1, 3, -2, 0, -4, true), // same tier+severity, external
-			rises(1, 4, 0.5, 0.5, 1.0),   // same tier, severity 0, not external
+			falls(1, 2, -2, 0, -4),
+			falls(1, 3, -2, 0, -4),     // same tier+severity, so only index distinguishes
+			rises(1, 4, 0.5, 0.5, 1.0), // same tier, severity 0
 		}
 		want := indexes(Rank(append([]Fired{}, set...)))
 		shuffled := []Fired{set[4], set[1], set[3], set[0], set[2]}
@@ -156,8 +170,8 @@ var _ = Describe("Ranking", func() {
 		// scale; a value sitting exactly on the fire mark gives 0/0 = NaN, which
 		// must fall back to the bottom. Same handling as the rising arm, on the
 		// other polarity. Rank stays a total order.
-		below := falls(1, 0, 4, 8, 8, false) // (8-4)/(8-8) = 4/0 = +Inf
-		at := falls(1, 1, 8, 8, 8, false)    // (8-8)/(8-8) = 0/0 = NaN
+		below := falls(1, 0, 4, 8, 8) // (8-4)/(8-8) = 4/0 = +Inf
+		at := falls(1, 1, 8, 8, 8)    // (8-8)/(8-8) = 0/0 = NaN
 		for _, f := range []Fired{below, at} {
 			s := f.Severity()
 			Expect(math.IsNaN(s)).To(BeFalse(), "a degenerate falling mark must not leak NaN into the comparator")
@@ -168,7 +182,7 @@ var _ = Describe("Ranking", func() {
 		Expect(below.Severity()).To(Equal(1.0), "the overshooting arm clamps to the top of the severity scale")
 		Expect(at.Severity()).To(Equal(0.0), "the 0/0 arm falls back to the bottom of the severity scale")
 
-		set := []Fired{below, falls(1, 2, -2, 0, -4, false)}
+		set := []Fired{below, falls(1, 2, -2, 0, -4)}
 		want := indexes(Rank(append([]Fired{}, set...)))
 		Expect(indexes(Rank([]Fired{set[1], set[0]}))).To(Equal(want),
 			"the degenerate falling cause is still ranked deterministically")
@@ -188,8 +202,8 @@ var _ = Describe("Ranking", func() {
 		// carries the HIGHER Index. A comparator that stopped discriminating on
 		// severity would fall through to the Index tie-break and order these the
 		// other way round.
-		worse := falls(1, 1, 2, 5, -4, false) // (5-2)/(5-(-4)) = 3/9 -> 0.333, Index 1
-		less := falls(1, 0, 4, 5, -4, false)  // (5-4)/(5-(-4)) = 1/9 -> 0.111, Index 0
+		worse := falls(1, 1, 2, 5, -4) // (5-2)/(5-(-4)) = 3/9 -> 0.333, Index 1
+		less := falls(1, 0, 4, 5, -4)  // (5-4)/(5-(-4)) = 1/9 -> 0.111, Index 0
 		sorted := Rank([]Fired{less, worse})
 		Expect(indexes(sorted)).To(Equal([]int{1, 0}),
 			"the higher-severity falling cause ranks first within the tier")

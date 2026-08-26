@@ -61,7 +61,6 @@ GINKGO_VERSION = v2.23.4
 NILAWAY_VERSION = v0.0.0-20260213150243-937701de96c7
 LEFTHOOK_VERSION = v1.13.2
 GOLANGCI_LINT_VERSION = v2.5.0
-BETTERALIGN_VERSION = v0.7.1
 GOTESTSUM_VERSION = v1.13.0
 DLV_VERSION = v1.25.1
 
@@ -91,7 +90,6 @@ install:
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	go install github.com/dkorunic/betteralign/cmd/betteralign@$(BETTERALIGN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
 download-docker-binaries:
@@ -340,22 +338,10 @@ nilaway:
 		-exclude-errors-in-files="integration/" \
 		./...
 
-betteralign:
-	betteralign -test=false ./... || (echo "Consider running 'make betteralign-fix' to fix the issues" && exit 1)
-betteralign-fix:
-	betteralign -test=false -apply ./...
+# Meta target for vet, nilaway and lint
+vet-nilaway-lint: vet nilaway lint
 
-betteralign-fix-all:
-	@echo "Running betteralign-fix in loop until exit code is not 3..."
-	@while betteralign -test=false -apply ./...; [ $$? -eq 3 ]; do \
-		echo "betteralign-fix returned exit code 3, running again..."; \
-	done
-	@echo "betteralign-fix-all completed"
-
-# Meta target for vet, nilaway, lint, staticcheck and betteralign
-vet-nilaway-lint-betteralign: vet nilaway lint betteralign
-
-test: vet-nilaway-lint-betteralign
+test: vet-nilaway-lint
 	go test -race -v -tags=test ./...
 
 unit-test:
@@ -379,7 +365,7 @@ else
 endif
 
 # Sequential fallback using ginkgo directly (no fail-fast, full failure report, covers ./...)
-unit-test-fail-slow: vet-nilaway-lint-betteralign
+unit-test-fail-slow: vet-nilaway-lint
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='$(UNIT_LABEL_FILTER)' ./...
 
 benchmark:
@@ -417,7 +403,7 @@ benchmark-encoding:
 	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
 
 # Meta target to setup the environment for the tests
-pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
+pre-test: build-protobuf stop-all-pods
 
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
