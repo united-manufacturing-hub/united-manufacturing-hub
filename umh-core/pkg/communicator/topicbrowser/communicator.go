@@ -67,10 +67,6 @@ type SubscriberData struct {
 
 	// UnsBundles holds ready-to-send payloads indexed by position: 0 is the
 	// whole cache, 1 and up are queued bundles.
-	//
-	// A caller must not write to these bytes. Positions 1 and up are the same
-	// slices pendingToSend holds, so a write here would reach every later
-	// subscriber too.
 	UnsBundles map[int][]byte
 
 	Summary    string // Human-readable summary for debugging
@@ -403,7 +399,8 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 
 	// Bundles reach a subscriber from two sources. A subscriber that has just
 	// connected also gets bundle 0, the whole cache re-encoded by getCacheBundle.
-	// Every subscriber gets whatever unsentBundles has queued since its last send.
+	// Every subscriber gets whatever getUnsentBundles returns: the bundles
+	// queued since its last send.
 	if !isBootstrapped {
 		cacheBundle := tbc.getCacheBundle()
 		if cacheBundle != nil {
@@ -414,7 +411,7 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 		data.Summary = "Prepared cache bundle + "
 	}
 
-	unsent := tbc.unsentBundles()
+	unsent := tbc.getUnsentBundles()
 
 	for _, bundle := range unsent {
 		data.UnsBundles[index] = bundle.Payload
@@ -480,10 +477,11 @@ func removeMetadata(ub *tbproto.UnsBundle) {
 	}
 }
 
-// unsentBundles returns the queued bundles a subscriber has not received yet, in
-// ingest order. It reads pendingToSend and lastSentTimestamp without locking;
-// GetSubscriberData holds the read lock, as it does for getCacheBundle.
-func (tbc *TopicBrowserCommunicator) unsentBundles() []queuedBundle {
+// getUnsentBundles returns the queued bundles a subscriber has not received
+// yet, in ingest order. It reads pendingToSend and lastSentTimestamp without
+// locking; GetSubscriberData holds the read lock, as it does for
+// getCacheBundle.
+func (tbc *TopicBrowserCommunicator) getUnsentBundles() []queuedBundle {
 	unsent := make([]queuedBundle, 0, len(tbc.pendingToSend))
 
 	for _, bundle := range tbc.pendingToSend {
