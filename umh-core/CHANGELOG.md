@@ -11,6 +11,7 @@
 ### Fixes
 
 - Instances with large configurations no longer run out of time in the control loop, which previously caused "not enough time left to reconcile" error log messages.
+- Topics no longer go missing from the Topic Browser when several updates arrive in quick succession
 
 ## [0.44.35]
 
