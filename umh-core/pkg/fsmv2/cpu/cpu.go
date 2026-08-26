@@ -241,6 +241,7 @@ func startupCapacity(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDepe
 	if lc, ok := smp.LogicalCpus.Get(); ok {
 		cores = lc
 	}
+
 	if q, ok := smp.Quota.Get(); ok && q > 0 {
 		quota = q
 	}

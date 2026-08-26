@@ -41,6 +41,7 @@ func newCPUConstructedWorker(t *testing.T, cpuEnabled bool) (*configworker.Confi
 	t.Cleanup(func() { register.ClearDeps(configworker.CPUEnabledDepsKey) })
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
+
 	w, err := configworker.NewConfigworkerWorker(identity, deps.NewNopFSMLogger(), nil)
 	if err != nil {
 		t.Fatalf("NewConfigworkerWorker: %v", err)
