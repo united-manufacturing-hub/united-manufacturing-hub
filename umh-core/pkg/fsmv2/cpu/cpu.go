@@ -64,9 +64,7 @@ const (
 // fsmv2client.
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
-// CPUConfig is deliberately empty. A config that carried values would make the
-// configworker re-upsert and respawn the child every tick, and each respawn
-// discards every 60s window the engine had warmed.
+// CPUConfig is empty: the CPU worker takes no configuration.
 type CPUConfig struct{}
 
 // CPUStatus is the result of one CPU-health observation. Verdict and Message
