@@ -247,8 +247,9 @@ func (c *Cache) processBuffer(buf *topicbrowserservice.BufferItem, log *zap.Suga
 
 	// upsert the uns map
 	for _, entry := range ub.GetUnsMap().GetEntries() {
-		// generate a hash from the entry by calling HashUNSTableEntry
 		hash := HashUNSTableEntry(entry)
+		// Metadata stays populated: Topic.metadata in graphql/schema.graphqls
+		// resolves from this map.
 		c.unsMap.Entries[hash] = entry
 	}
 
