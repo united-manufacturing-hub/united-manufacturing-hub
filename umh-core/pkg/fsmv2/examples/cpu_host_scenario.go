@@ -38,7 +38,7 @@ import (
 // FSM state, so the collector's observed_changed line, which is a debug
 // line, is where each reading shows up.
 //
-// On a machine with no cgroup v2 CPU files — every developer Mac — no
+// On a machine with no cgroup v2 CPU files, such as every developer Mac, no
 // reading can ever land, and the driver refuses rather than spend its whole
 // duration on a machine it cannot read. The refusal names tools/cpu-host,
 // the wrapper that runs this scenario in a Linux container where those
@@ -58,6 +58,7 @@ var CPUHostScenarioV2 = ScenarioV2{
 		if err := env.Client.Upsert(fsmv2cpu.Ref, nil); err != nil {
 			return fmt.Errorf("upsert cpu monitor: %w", err)
 		}
+
 		return awaitFirstCPUReading(ctx, env.Client)
 	},
 }

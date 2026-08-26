@@ -29,7 +29,7 @@ limiting memory changes nothing it can see.
 
 - Docker
 - A Go toolchain
-- This repository checked out — the script builds the scenario runner from
+- This repository checked out. The script builds the scenario runner from
   `pkg/fsmv2/cmd/runner`
 
 ## Running
@@ -65,5 +65,6 @@ and telling them apart is the point of the exercise:
   untouched. Run the scenario without `CPUS` for this world: an unquota'd
   machine can only be filled by its host.
 
-Stop the in-container load with `Ctrl+C` in the second terminal or
-`docker kill cpu-host`.
+Stop the in-container load with `docker kill cpu-host`. `Ctrl+C` in the
+second terminal does not do it: the interrupt stops only the `docker exec`
+client, and the load keeps running inside the container.

@@ -52,9 +52,9 @@ var _ = Describe("CPU host ScenarioV2", func() {
 		// that machine the same question the driver asks: does the cgroup v2
 		// CPU accounting file exist? cpu.stat is the sampler's primary file,
 		// and a machine without it can never produce a reading, because every
-		// poll fails its read. Only one arm can run per machine — macOS and
-		// cgroup v1 hosts take the refusal, a cgroup v2 host the proceed — and
-		// neither arm skips, so a developer always sees the arm their machine
+		// poll fails its read. Only one arm can run per machine: macOS and
+		// cgroup v1 hosts take the refusal, a cgroup v2 host the proceed.
+		// Neither arm skips, so a developer always sees the arm their machine
 		// exercises.
 		_, statErr := os.Stat("/sys/fs/cgroup/cpu.stat")
 
@@ -81,16 +81,21 @@ var _ = Describe("CPU host ScenarioV2", func() {
 			// the readings exist only inside a Linux container.
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("tools/cpu-host"))
+
 			return
 		}
 
 		// The readable arm: the refusal must not fire here. The run may still
-		// fail for its own reasons — a machine whose cpu.stat exists but is
+		// fail for its own reasons: a machine whose cpu.stat exists but is
 		// unreadable produces no reading either, and ends the run on the
-		// context deadline — but no failure may claim the machine publishes
-		// no cgroup v2 CPU files, because this one does.
+		// context deadline. Two failures are still wrong here. One is the
+		// refusal, which claims a machine with the files has none. The other
+		// is the process-global deps key still held by an earlier run, which
+		// means this scenario never started at all.
 		if err != nil {
 			Expect(err.Error()).NotTo(ContainSubstring("tools/cpu-host"))
+			Expect(err.Error()).NotTo(ContainSubstring("deps key is already published"))
+
 			return
 		}
 
