@@ -89,7 +89,7 @@ var _ = Describe("CPU latch ScenarioV2", func() {
 
 		// Under the clear mark: released, and the budget dashboard prints the
 		// reading it released on.
-		released := messageAfter(history, held, "Pressure 5% (degraded above 20%)")
+		released := messageAfter(history, held, "Pressure 5% (degrades above 20%)")
 		Expect(released).To(BeNumerically(">", held),
 			"the verdict never let go on a recovered machine; readings seen: %d", len(history))
 
@@ -97,7 +97,7 @@ var _ = Describe("CPU latch ScenarioV2", func() {
 		// has released cannot fire again for a whole window. The dashboard
 		// prints 25% against a threshold of 20% while the verdict reads
 		// healthy, which is the cost of the bar rather than a rendering slip.
-		barred := messageAfter(history, released, "Pressure 25% (degraded above 20%)")
+		barred := messageAfter(history, released, "Pressure 25% (degrades above 20%)")
 		Expect(barred).To(BeNumerically(">", released),
 			"the machine never sat over its fire mark while still reported healthy; readings seen: %d", len(history))
 
