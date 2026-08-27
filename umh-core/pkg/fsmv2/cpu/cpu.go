@@ -72,10 +72,6 @@ type CPUConfig struct{}
 // name fields in a stored document: simple.Status merges them into the top
 // level of the persisted observation, so renaming one is a storage-format
 // change.
-//
-// The measured numbers arrive as one whole cpuhealth.Details rather than field
-// by field, so the wire shape under "details" is that type's own: a field added
-// there reaches the wire with no change here.
 type CPUStatus struct {
 	// Verdict is the cpuhealth.State string Decide produced this tick ("healthy"
 	// or "degraded"), and empty when the tick could not measure.
@@ -93,6 +89,8 @@ type CPUStatus struct {
 	// that could measure. It is a named field, not an embed, so its keys nest
 	// under "details" instead of flattening into the top level simple.Status
 	// merges "reason" and "degraded" into alongside "verdict" and "message".
+	// The wire shape under "details" is cpuhealth.Details' own, so a field added
+	// there reaches the wire with no change in this package.
 	Details cpuhealth.Details `json:"details"`
 }
 
@@ -147,11 +145,6 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 // A failed startup read yields cores=0, quota=0, which drops the two capacity
 // signals from this instance's table for its whole lifetime; a later
 // successful read does not restore them (ENG-5752).
-//
-// The sampler reads through whichever filesystem.Service a caller published
-// under FilesystemDepsKey, looked up here per instance at spawn time, so a
-// caller that publishes before the spawn decides which files that instance sees
-// for the rest of its life.
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
@@ -194,9 +187,8 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.Bas
 	return cores, quota
 }
 
-// healthFromStatus turns one poll's status into the worker's own health, so a
-// degraded CPU verdict degrades the worker instead of leaving it reporting
-// healthy. simple calls it after every good poll, and never after a failed one.
+// healthFromStatus turns one poll's verdict into the worker's own health.
+// simple calls it after every good poll, and never after a failed one.
 func healthFromStatus(_ CPUConfig, status CPUStatus) simple.Health {
 	if status.Verdict == string(cpuhealth.StateDegraded) {
 		return simple.Degraded(status.Message)

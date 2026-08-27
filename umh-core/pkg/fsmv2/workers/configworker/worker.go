@@ -151,8 +151,8 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	default:
 	}
 
-	// Standalone fsmv2 children are reconciled here. Other fsms like nmap and
-	// benthos_monitor are managed through the existing fsmv1 for now.
+	// Standalone fsmv2 children are reconciled here. nmap and benthos_monitor
+	// are fsmv1 and are not reconciled from this worker.
 	w.reconcileHistorian(ctx)
 	w.reconcileCPU(ctx)
 
