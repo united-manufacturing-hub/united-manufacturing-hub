@@ -417,6 +417,87 @@ var _ = Describe("the Technical Details table", func() {
 			"a rule dropped from the table is a rule the reader takes for fine")
 	})
 
+	It("should carry one headroom line per ceiling the engine is judging, decided by the predicates cpuTable declares the capacity signals with", func() {
+		// A box with no CPU limit. cpuTable declares no container-limit-full
+		// signal there, so a line for it would state a rule nothing judges and
+		// a threshold denominated in a quota that does not exist.
+		nolimit := healthyDetails()
+		nolimit.LimitApplies = false
+		nolimit.CapacityCores = 4
+		nolimit.LogicalCpus = 4
+		nolimit.ReserveCores = 1.0
+		nolimit.AvgHostBusyCores = 1.2
+		Expect(containerLimitFullDeclared(0)).To(BeFalse(), "the predicate the table appends that signal under")
+		Expect(tableRules(composeHealthy(nolimit))).To(Equal(machineOnlyRules))
+
+		// A box under a CPU limit whose cpuset could not be read. cpuTable
+		// declares no host-cpu-full signal on a non-positive core count, and the
+		// machine line has no total to subtract from.
+		noCores := healthyDetails()
+		noCores.LogicalCpus = 0
+		Expect(hostCpuFullDeclared(0)).To(BeFalse(), "the predicate the table appends that signal under")
+		Expect(tableRules(composeHealthy(noCores))).
+			To(Equal([]string{labelInstanceHeadroom, "Usage", "Throttling", "Pressure", "Steal"}))
+
+		// Both ceilings at once is the ordinary container-under-a-limit box, and
+		// it is the state in which one line for the pair could contradict the
+		// other: the machine can be full while the container sits well inside
+		// its own limit.
+		Expect(hostCpuFullDeclared(2)).To(BeTrue())
+		Expect(containerLimitFullDeclared(2)).To(BeTrue())
+		Expect(tableRules(composeHealthy(healthyDetails()))).To(Equal(bothCeilingRules))
+	})
+
+	It("should state each headroom line's own fire mark, read from the signal measuring that ceiling", func() {
+		// The two headroom lines are the ones the example table leads with, and
+		// each carries a different pair: the machine's is a fixed pair, the
+		// container's is denominated in its own quota. Both thresholds are
+		// computed here from the pair the engine judges against, so repointing a
+		// line at another signal's marks reddens this spec.
+		both := healthyDetails()
+		both.AvgHostBusyCores = 0.4
+		msg := composeHealthy(both)
+
+		Expect(msg).To(ContainSubstring(labelMachineHeadroom+" 0.6 cores = 2 total - 0.4 used - 1.0 reserved (degrades below %s).",
+			fmtCoresTotal(hostHeadroomMarks.Fire.At)))
+		Expect(msg).To(ContainSubstring(labelInstanceHeadroom+" 1.8 cores = 2 total - 0.0 used - 0.2 reserved (degrades below %s).",
+			fmtCoresTotal(limitHeadroomMarks(both.CapacityCores).Fire.At)))
+	})
+
+	It("should state each headroom line's own clear mark once its signal has latched, from the same pair", func() {
+		// The clear marks are where the two pairs differ by more than their
+		// denomination: the machine clears at a fixed half core, the container
+		// at a fraction of its quota. A line reading the other's pair states a
+		// number the engine will not release it on.
+		latched := degradedSig()
+		latched.AvgHostBusyCores = 3.5
+		msg := ComposeMessage(bothCapacityVerdict(-0.5), latched)
+
+		Expect(msg).To(ContainSubstring(labelMachineHeadroom+" -0.5 cores = 4 total - 3.5 used - 1.0 reserved (recovers above %s).",
+			fmtCoresTotal(round1(hostHeadroomMarks.Clear.At))))
+		Expect(msg).To(ContainSubstring(labelInstanceHeadroom+" 2.5 cores = 4 total - 0.5 used - 1.0 reserved (recovers above %s).",
+			fmtCoresTotal(round1(limitHeadroomMarks(latched.CapacityCores).Clear.At))))
+	})
+
+	It("should state the same side of the pair on both lines of one signal, because a signal holds one latch however many instruments it has", func() {
+		// The default docker box: no CPU limit and no pressure statistics, so
+		// host-cpu-full is judged by both of its arms and prints two lines. The
+		// machine reads full from /proc/stat while our own usage is over its own
+		// fire mark too. One question was answered yes, so neither line may
+		// state the mark that would fire it.
+		fired := limitedVisibilityDetails()
+		fired.AvgHostBusyCores = 3.2
+		fired.AvgUsageFraction = 0.75
+		msg := ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentHostHeadroom, -0.2), fired)
+
+		Expect(msg).To(ContainSubstring(labelMachineHeadroom+" -0.2 cores = 4 total - 3.2 used - 1.0 reserved (recovers above %s).",
+			fmtCoresTotal(round1(hostHeadroomMarks.Clear.At))))
+		Expect(msg).To(ContainSubstring("Usage 75%% of capacity (recovers below %d%%).",
+			toPercent(usageFractionMarks.Clear.At)))
+		Expect(msg).NotTo(ContainSubstring("degrades"),
+			"the arm that did not answer must not print its fire mark beside a reading that has already crossed it")
+	})
+
 	It("should say which kind of absence a missing reading is, because a kernel that reports no pressure statistics and a window still filling send a reader to different places", func() {
 		bare := healthyDetails()
 		bare.PressureApplies = false
