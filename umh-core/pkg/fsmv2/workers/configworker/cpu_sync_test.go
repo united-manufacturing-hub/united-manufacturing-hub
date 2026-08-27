@@ -52,9 +52,10 @@ func newCPUConstructedWorker(t *testing.T, cpuEnabled bool) (*configworker.Confi
 
 // withClient publishes a client backed by a fresh Writer and returns that
 // Writer's registry. That registry is deliberately not the one
-// newCPUConstructedWorker hands the worker. The assertion therefore sees the
-// child only when the worker went through the client, so a reconcile that wrote
-// its own registry directly would fail the test.
+// newCPUConstructedWorker hands the worker.
+// TestCollectObservedStateUpsertsCPUWhenEnabled therefore sees the child only
+// when the worker went through the client. A reconcile that wrote its own
+// registry directly would fail that test.
 func withClient(t *testing.T) *dynamicchildren.Registry {
 	t.Helper()
 
