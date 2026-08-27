@@ -51,8 +51,10 @@ type cpuObservation struct {
 // worker's observation holds one state at a time and the runner hands a spec
 // back a finished run, so anything a driver staged before the last condition is
 // unreachable through LoadObservedTyped. The delta history is the store's own
-// record of every field change, which is also what --dump-store prints, so
-// reading it here checks the same thing a reader of the command line sees.
+// record of every field change, and reading it here is the ONLY way to see the
+// sequence: --dump-store cannot show it, because runV2 ignores the flag and
+// warns dump_store_not_supported_for_v2, and every CPU scenario is v2. So a
+// spec sees readings a reader of the command line does not.
 //
 // Replaying rather than reading each delta alone is what makes a state whole: a
 // delta carries only the fields that changed, so a reading whose verdict moved

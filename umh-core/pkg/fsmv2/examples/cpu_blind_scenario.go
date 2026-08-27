@@ -30,7 +30,7 @@ const (
 	// cpuPressureBase carries the full note on why nothing checks that.
 	cpuBlindBase = "/sys/fs/cgroup"
 
-	// The two files this scenario takes away, in the order it takes them.
+	// The files this scenario takes away, in the order it takes them.
 	//
 	// /proc/stat is the machine's own CPU accounting, a HOST file outside the
 	// cgroup. cpu.stat is the cgroup's, and the sampler treats it as primary:
@@ -73,8 +73,10 @@ const (
 // door. That is a KNOWN DEFECT and not the intended answer. The message is
 // wrong twice over: it blames a cgroup read for a HOST file, and it announces
 // its own default rather than refusing to answer. This scenario pins what the
-// code does today so the behaviour is visible instead of inferred; the fix is
-// in pkg/cpuhealth, out of this package's scope, and already recorded there.
+// code does today so the behaviour is visible instead of inferred. The fix is in
+// pkg/cpuhealth, out of this package's scope, where healthy-on-unavailable is
+// currently the documented contract rather than a recorded defect.
+// TODO(ENG-XXXX): file the cpuhealth fix.
 //
 // Losing cpu.stat is the other shape. The read fails, the poll returns an
 // error, and the framework marks the worker degraded with the error as its
@@ -82,11 +84,12 @@ const (
 //
 // # CLI Usage
 //
-//	go run pkg/fsmv2/cmd/runner/main.go --scenario=cpu-blind --duration=200ms --log-level=debug --dump-store
+//	go run pkg/fsmv2/cmd/runner/main.go --scenario=cpu-blind --duration=200ms --log-level=debug
 //
-// The verdict shows up on the collector's observed_changed line, which is a
-// debug line — the CPU worker declares no Health function, so its verdict never
-// moves the worker's FSM state and nothing about the verdict is logged at info.
+// On every completed poll the cpu_reading debug line carries the verdict and the
+// composed message; a failed poll never reaches it. When the worker's state
+// changes, the message also appears at info in the state_transition line's
+// reason field.
 var CPUBlindScenarioV2 = ScenarioV2{
 	Name:        "cpu-blind",
 	Description: "Takes away the two files the CPU monitor reads, and shows that one fails open and the other does not (v2)",

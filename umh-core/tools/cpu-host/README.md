@@ -38,7 +38,7 @@ limiting memory changes nothing it can see.
 ./run.sh                 # no quota, 60 seconds
 CPUS=0.5 ./run.sh        # half a CPU of quota
 DURATION=10m ./run.sh    # watch longer
-LOG_LEVEL=info ./run.sh  # quieter; readings appear at debug
+LOG_LEVEL=info ./run.sh  # quieter; per-poll readings need debug
 ```
 
 Any argument is passed to `docker run` verbatim, so docker's own options
@@ -47,9 +47,14 @@ the container addressable for the load experiment below.
 
 ## What to watch
 
-The monitor's readings appear in the log as `observed_changed` lines, each
-carrying a verdict and a message. Two kinds of load move different signals,
-and telling them apart is the point of the exercise:
+The monitor runs as one worker inside the scenario runner, and its readings
+show up in that runner's log. On every completed poll the `cpu_reading` debug
+line carries the verdict and the composed message; a failed poll never
+reaches it. When the worker's state changes, the message also appears at info
+in the `state_transition` line's `reason` field.
+
+Two kinds of load move different signals, and telling them apart is the point
+of the exercise:
 
 - **Load inside the container** competes for the container's quota and
   moves the throttling signal (`nr_throttled`) and cgroup pressure (PSI).

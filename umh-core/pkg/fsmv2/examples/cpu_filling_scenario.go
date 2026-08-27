@@ -93,12 +93,12 @@ const (
 //
 // # CLI Usage
 //
-//	go run pkg/fsmv2/cmd/runner/main.go --scenario=cpu-filling --duration=200ms --log-level=debug --dump-store
+//	go run pkg/fsmv2/cmd/runner/main.go --scenario=cpu-filling --duration=200ms --log-level=debug
 //
-// The verdict shows up on the collector's observed_changed line, which is a
-// debug line — the CPU worker declares no Health function, so its verdict never
-// moves the worker's FSM state and nothing about the verdict is logged at info.
-// --dump-store prints the closing message whole.
+// On every completed poll the cpu_reading debug line carries the verdict and the
+// composed message; a failed poll never reaches it. When the worker's state
+// changes, the message also appears at info in the state_transition line's
+// reason field.
 var CPUFillingScenarioV2 = ScenarioV2{
 	Name:        "cpu-filling",
 	Description: "Fills a fake machine from outside, then from this instance, and shows the remedy change (v2)",
@@ -245,7 +245,7 @@ const (
 //
 // The registry behind it is process-global, exactly as the deps keys are, so a
 // driver that left it set would hand the next scenario in this process a CPU
-// worker polling twenty times a second. It is a plain function rather than
+// worker still polling at cpuFastPollWall. It is a plain function rather than
 // anything the supervisor owns, so it can be called before the worker spawns,
 // which is when the collector reads the cadence.
 //

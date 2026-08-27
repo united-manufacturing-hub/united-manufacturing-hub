@@ -34,9 +34,10 @@ import (
 //
 //	go run pkg/fsmv2/cmd/runner/main.go --scenario=cpu-host --duration=60s --log-level=debug
 //
-// Debug is the level to watch at: the CPU worker's verdict never moves its
-// FSM state, so the collector's observed_changed line, which is a debug
-// line, is where each reading shows up.
+// On every completed poll the cpu_reading debug line carries the verdict and the
+// composed message; a failed poll never reaches it. When the worker's state
+// changes, the message also appears at info in the state_transition line's
+// reason field.
 //
 // On a machine with no cgroup v2 CPU files, such as every developer Mac, no
 // reading can ever land, and the driver refuses rather than spend its whole

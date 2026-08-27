@@ -366,9 +366,9 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 
 	It("carries both decimals of the pressure it was given", func() {
 		// 0.0625 is 6.25 percent — a pressure that needs both of
-		// cpu.pressure's decimals. Case A's 0.25 is 25.00 percent and would
-		// survive being written with none, so it cannot tell this precision
-		// from a coarser one.
+		// cpu.pressure's decimals. The 0.25 the other specs state is 25.00
+		// percent and would survive being written with none, so none of them
+		// can tell this precision from a coarser one.
 		box := fakebox.NewBox(base, fakebox.Condition{
 			Cores:      4,
 			QuotaCores: 2,
@@ -427,8 +427,7 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		// Returning a clock.Clock is not on its own enough to hide the mock:
 		// the dynamic type travels with the interface, so an unwrapped mock
 		// would come straight back out of a type assertion, bringing Set with
-		// it. A backwards clock makes the admission window in pkg/fsmv2/cpu
-		// subtract to a negative elapsed, and it then refuses for good.
+		// it. fakebox.go's shieldedClock says what a backwards step costs.
 		box := fakebox.NewBox(base, fakebox.Condition{Cores: 4, QuotaCores: 2, PsiPresent: true})
 
 		_, recovered := box.Clock().(*clock.Mock)
