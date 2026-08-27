@@ -68,12 +68,10 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 // machine-wide busy time may be subtracted from cores, which is a
 // container-scoped count: see host_source.go's header.
 //
-// message.go reads this too, so the condition is spelled once. That does not
-// make the two sides agree: the table is built from the startup snapshot and
-// the message runs on the current tick. A cpuset that failed to read at startup
-// and reads later passes this test on the message side while the table holds no
-// machine-full signal, so the line states a ceiling nothing is judging
-// (ENG-5752).
+// message.go reads this too, spelling the condition once but not making the
+// two sides agree: the table is built from the startup snapshot, the message
+// runs on the current tick. A cpuset that failed at startup and reads later
+// makes this true while the engine holds no signal (ENG-5752).
 func hostCpuFullDeclared(cores float64) bool {
 	return cores > 0
 }
