@@ -68,10 +68,14 @@ type CPUConfig struct{}
 
 // CPUStatus is the result of one CPU-health observation by this worker.
 //
-// No Go code outside this package reads a CPUStatus today. Its two json tags
-// still name fields in a stored document: simple.Status merges them into the
-// top level of the persisted observation, so renaming one is a storage-format
+// No Go code outside this package reads a CPUStatus today. Its json tags still
+// name fields in a stored document: simple.Status merges them into the top
+// level of the persisted observation, so renaming one is a storage-format
 // change.
+//
+// The measured numbers arrive as one whole cpuhealth.Details rather than field
+// by field, so the wire shape under "details" is that type's own: a field added
+// there reaches the wire with no change here.
 type CPUStatus struct {
 	// Verdict is the cpuhealth.State string Decide produced this tick ("healthy"
 	// or "degraded"), and empty when the tick could not measure.
@@ -84,6 +88,12 @@ type CPUStatus struct {
 	// Technical Details line. Short forms carry no such line, among them the
 	// "CPU: starting up." message an instance shows for its first two ticks.
 	Message string `json:"message"`
+
+	// Details is the measured evidence behind the verdict, filled on every tick
+	// that could measure. It is a named field, not an embed, so its keys nest
+	// under "details" instead of flattening into the top level simple.Status
+	// merges "reason" and "degraded" into alongside "verdict" and "message".
+	Details cpuhealth.Details `json:"details"`
 }
 
 // CPUDeps is the per-instance state Poll reads.
@@ -126,6 +136,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	return CPUStatus{
 		Verdict: string(verdict.State),
 		Message: cpuhealth.ComposeMessage(verdict, details),
+		Details: details,
 	}, nil
 }
 
