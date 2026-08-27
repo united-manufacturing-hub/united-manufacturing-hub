@@ -42,15 +42,9 @@ func Unknown() Reading { return Reading{} }
 // Get returns the value and whether it is present; an absent Reading returns 0.
 func (r Reading) Get() (float64, bool) { return r.v, r.ok }
 
-// MarshalJSON writes a value as a JSON number and an absence as null. Both
-// fields of a Reading are unexported, so without this the encoder would see no
-// fields and write {}, dropping the number silently. A known zero is written as
-// 0, not null, because a zero is a value and only an absence is null.
-//
-// A NaN or an infinite value is written as null too. JSON has no way to spell
-// either one, and json.Marshal reports an error on both; returning that error
-// here would fail the whole surrounding document over one reading. Such a
-// reading is not a usable measurement, so it goes on the wire as an absence.
+// MarshalJSON writes a value as a JSON number and an absence as null. A NaN or
+// an infinite value has no JSON spelling, so it goes out as an absence rather
+// than failing the whole surrounding document.
 func (r Reading) MarshalJSON() ([]byte, error) {
 	if !r.ok || math.IsNaN(r.v) || math.IsInf(r.v, 0) {
 		return []byte("null"), nil

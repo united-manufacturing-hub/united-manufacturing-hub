@@ -176,16 +176,6 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 // the container's own resource limit, or the host's capacity. cpuhealth needs
 // that answer in advance, because the table is built from it once and never
 // rebuilt.
-//
-// It reads one snapshot and returns the cores the cgroup may use and its quota.
-// A positive quota means the container has a CPU limit, so cpuhealth judges
-// against that limit. A zero quota means the container has no limit of its own,
-// so the host's capacity governs. Zero says unlimited, not that there is no CPU
-// to use.
-//
-// Either return is also zero when the startup snapshot did not carry it, which
-// thins the table for the instance's whole lifetime. NewDeps has the
-// consequence.
 func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
 	smp, err := s.Read(ctx)
 	if err != nil {
