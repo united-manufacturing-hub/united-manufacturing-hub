@@ -196,12 +196,6 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.Bas
 // healthFromStatus turns one poll's status into the worker's own health, so a
 // degraded CPU verdict degrades the worker instead of leaving it reporting
 // healthy. simple calls it after every good poll, and never after a failed one.
-//
-// There are two cases and no third. cpuhealth's verdict builder sets a state on
-// every path, so Verdict is "healthy" or "degraded" whenever a poll succeeded;
-// it is empty only when Poll returned an error, and simple does not call this
-// on a poll error. Message is the composed customer-facing text, which is the
-// reason either way.
 func healthFromStatus(_ CPUConfig, status CPUStatus) simple.Health {
 	if status.Verdict == string(cpuhealth.StateDegraded) {
 		return simple.Degraded(status.Message)
