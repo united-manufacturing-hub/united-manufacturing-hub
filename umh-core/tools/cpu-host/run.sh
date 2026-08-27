@@ -20,7 +20,9 @@
 # stock Alpine image with no toolchain and no repository mounted.
 #
 # Environment variables:
-#   CPUS       CPU quota for the container, e.g. CPUS=0.5. Unset means no
+#   CPUS       CPU quota for the container, e.g. CPUS=2. Below umh-core's
+#              own minimum the reserves leave numbers describing no machine
+#              we support, so prefer 2 over 0.5. Unset means no
 #              quota, which is the other world worth watching: no throttling
 #              signal, only host load.
 #   DURATION   How long the monitor runs after its first reading. Default 0,
