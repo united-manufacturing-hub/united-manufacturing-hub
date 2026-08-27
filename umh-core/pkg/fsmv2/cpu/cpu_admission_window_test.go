@@ -74,7 +74,7 @@ var _ = Describe("absence of evidence is not health", func() {
 				message = append(message, st.Message)
 			}
 
-			// (a) Inside the 10s window the worker says nothing while it waits
+			// Inside the 10s window the worker says nothing while it waits
 			// for the capable signal to measure: early ticks (deltas 0-4s) are
 			// silent, and so is delta 9s. A literal 9 (not boundary-1, which
 			// scales with the window and stays satisfied at any width) fails if
@@ -83,7 +83,7 @@ var _ = Describe("absence of evidence is not health", func() {
 			Expect(warned[4]).To(Equal(0), "still silent at delta 4s of sample time")
 			Expect(warned[9]).To(Equal(0), "still silent at delta 9s, the last tick inside the window")
 
-			// (b) At/after the admission window of sample time the worker gives
+			// At/after the admission window of sample time the worker gives
 			// up waiting and reports, even though a capable signal has STILL
 			// never measured — the wait is bounded, not fixed to the counts.
 			// Tick index i sits at delta i seconds, so the reporting index is
@@ -92,7 +92,7 @@ var _ = Describe("absence of evidence is not health", func() {
 			Expect(warned[boundary]).To(Equal(1), "reports at >=10s of sample time")
 			Expect(warned[boundary+1]).To(Equal(1), "and says it once, not again past the window")
 
-			// (c) The report comes on the window closing, not on the evidence
+			// The report comes on the window closing, not on the evidence
 			// changing: the capable and measured counts are identical inside the
 			// window (index 1, delta 1s) and at the boundary (delta 10s).
 			Expect(measured[boundary]).To(BeNumerically("<", capable[boundary]),
@@ -100,7 +100,7 @@ var _ = Describe("absence of evidence is not health", func() {
 			Expect(capable[boundary]).To(Equal(capable[1]), "capable count unchanged across the 10s window boundary")
 			Expect(measured[boundary]).To(Equal(measured[1]), "measured count unchanged across the 10s window boundary")
 
-			// (d) The reported health is unchanged across the boundary too. The
+			// The reported health is unchanged across the boundary too. The
 			// deadline raises the warning and nothing else: it must not turn the
 			// never-measured signal into a bad verdict. The intended consumer is
 			// bridge admission, where a degraded verdict stops new bridges from

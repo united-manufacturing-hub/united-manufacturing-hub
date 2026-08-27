@@ -87,8 +87,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		// Read the assertion for no more than it is worth. It has teeth only
 		// against a fallback that kept serving a previously published
 		// filesystem. Asserting the fallback positively would mean asserting
-		// against the real disk, whose contents this spec does not control, so
-		// the gap is stated rather than papered over.
+		// against the real disk, whose contents this spec does not control.
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(errors.Is(err, errRefusedByStub)).To(BeFalse(),
 			"with nothing published the sampler must reach the real filesystem")
