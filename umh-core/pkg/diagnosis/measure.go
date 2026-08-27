@@ -19,6 +19,7 @@
 package diagnosis
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -40,6 +41,43 @@ func Unknown() Reading { return Reading{} }
 
 // Get returns the value and whether it is present; an absent Reading returns 0.
 func (r Reading) Get() (float64, bool) { return r.v, r.ok }
+
+// MarshalJSON writes a value as a JSON number and an absence as null. Both
+// fields of a Reading are unexported, so without this the encoder would see no
+// fields and write {}, dropping the number silently. A known zero is written as
+// 0, not null, because a zero is a value and only an absence is null.
+//
+// A NaN or an infinite value is written as null too. JSON has no way to spell
+// either one, and json.Marshal reports an error on both; returning that error
+// here would fail the whole surrounding document over one reading. Such a
+// reading is not a usable measurement, so it goes on the wire as an absence.
+func (r Reading) MarshalJSON() ([]byte, error) {
+	if !r.ok || math.IsNaN(r.v) || math.IsInf(r.v, 0) {
+		return []byte("null"), nil
+	}
+
+	return json.Marshal(r.v)
+}
+
+// UnmarshalJSON reads null as an absence and a number as a value, reversing
+// MarshalJSON. Decoding into a *float64 is what separates the two cases: JSON
+// null leaves the pointer nil, while 0 yields a pointer to zero.
+func (r *Reading) UnmarshalJSON(data []byte) error {
+	var f *float64
+	if err := json.Unmarshal(data, &f); err != nil {
+		return err
+	}
+
+	if f == nil {
+		*r = Unknown()
+
+		return nil
+	}
+
+	*r = Known(*f)
+
+	return nil
+}
 
 // Point is one stored reading: the instant it was taken, its value, and the
 // denominator a ratio divides by.
