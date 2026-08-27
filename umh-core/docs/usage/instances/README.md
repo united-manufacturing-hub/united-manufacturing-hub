@@ -16,7 +16,9 @@ The token does two things:
 Keep the token somewhere you can find it again, such as your password manager. For storage and rotation on the instance, see [AUTH_TOKEN in Environment Variable](../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
 
 ## Instance Overview Page
+<!-- TODO: Needs Instance Filtering explanation -->
 
+<!-- TODO: Needs new screenshot, UI outdated -->
 ![Instance Overview](./images/instance-overview.png)
 
 The instance overview shows all your UMH instances at a glance:
@@ -41,7 +43,7 @@ The instance overview shows all your UMH instances at a glance:
 - Delete
 
 ## Instance Details Page
-
+<!-- TODO: Needs new screenshot, UI outdated -->
 ![Instance Details](./images/instance-detail.png)
 
 The instance details page provides comprehensive monitoring and management:
