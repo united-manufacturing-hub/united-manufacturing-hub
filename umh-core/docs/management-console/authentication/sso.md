@@ -1,9 +1,7 @@
 # Single Sign-On
 
-> **Placeholder.** Structure only. Content follows in a separate PR.
-
 {% hint style="warning" %}
-Single Sign-On is a paid add-on and is not part of the Enterprise plan. Contact your account executive to enable it.
+Single Sign-On is a paid add-on  and isnot part of the Enterprise plan. Get in touch with your account executive to learn more.
 {% endhint %}
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
