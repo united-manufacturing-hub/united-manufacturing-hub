@@ -332,7 +332,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// This return is reached before the teardown closure below and
 		// the defer that calls it are, so nothing else clears the deps
 		// key that register.SetDeps published above: this ClearDeps is
-		// the failed construction's only cleanup.
+		// the only cleanup that key gets on this path.
 		register.ClearDeps(configworker.WorkerTypeName)
 		return nil, fmt.Errorf("scenario %q supervisor construction failed: %w", cfg.ScenarioV2.Name, err)
 	}

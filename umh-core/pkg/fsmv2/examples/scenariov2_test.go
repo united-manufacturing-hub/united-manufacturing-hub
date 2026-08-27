@@ -571,7 +571,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		store := examples.SetupStore(logger)
 
 		// The driver-entry check is the only assertion here that catches
-		// an entry that reached neither the caller's buffer nor
+		// the driver's entry lost to both the caller's buffer and
 		// result.Logs: checkCapturedEntries counts result.Logs against
 		// the caller's buffer, so an entry missing from both sides is
 		// invisible to it. The driver logs through Env.Logger, which is
@@ -851,7 +851,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// construction, whatever sink the caller passed. A caller logging at
 		// LevelInfo never receives a debug entry, so a debug entry in
 		// result.Logs proves the capture is not filtered through the
-		// caller's logger: a runner that captured from the caller's sink
+		// caller's logger: a runner that captured from the caller's buffer
 		// would hold none.
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelInfo)

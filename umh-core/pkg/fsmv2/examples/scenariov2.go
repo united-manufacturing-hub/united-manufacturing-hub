@@ -48,11 +48,11 @@ type ScenarioV2 struct {
 	// runner waits RunConfig.Duration (or until ctx is cancelled; 0 means
 	// ctx-only), then shuts the supervisor down. The wait can also end
 	// early if the supervisor stops on its own, which the kernel-only
-	// supervisor a v2 scenario runs never does: for a v2 scenario,
-	// cancelling ctx is the only thing that starts teardown of a
-	// Duration=0 run. Drivers must honor ctx cancellation: a cancelled ctx
-	// is the only stop signal a driver receives, and teardown cannot start
-	// until the Driver returns.
+	// supervisor a v2 scenario runs never does: for a Duration=0 run,
+	// teardown starts when the caller cancels ctx or calls
+	// result.Shutdown. Drivers must honor ctx cancellation: a cancelled
+	// ctx is the only stop signal a driver receives, and teardown cannot
+	// start until the Driver returns.
 	Driver func(ctx context.Context, env Env) error
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
