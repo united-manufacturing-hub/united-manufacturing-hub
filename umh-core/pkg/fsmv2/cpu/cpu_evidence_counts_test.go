@@ -25,6 +25,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
+// bareMetalWithPSI returns a sample from a bare box, with no quota and with
+// pressure readable on this tick. PSI present makes the box pressurable:
+// DeriveEnvironment derives HasPressureStats from the sticky PsiAvailable.
+func bareMetalWithPSI() cpuhealth.Sample {
+	return cpuhealth.Sample{
+		Timestamp:    time.Now(),
+		Quota:        diagnosis.Known(0),
+		NrPeriods:    diagnosis.Known(1),
+		Pressure:     diagnosis.Known(0.2),
+		PsiAvailable: true,
+	}
+}
+
 // countsAfterPoll drives one Poll on a sampler that always hands back sample,
 // then reads that tick's evidence counts through countsFor.
 func countsAfterPoll(d *CPUDeps, sample cpuhealth.Sample) (capable, measured int) {
@@ -40,15 +53,7 @@ var _ = Describe("absence of evidence is not health", func() {
 			// Bare metal, no quota. Measured by the engine: throttling and steal
 			// are NoInstrument (not capable); pressure (Ready this tick) and
 			// host-cpu-full (AllAbsent) are capable.
-			sample := cpuhealth.Sample{
-				Timestamp: time.Now(),
-				Quota:     diagnosis.Known(0),
-				NrPeriods: diagnosis.Known(1),
-				Pressure:  diagnosis.Known(0.2),
-				// PSI present: the box is pressurable (DeriveEnvironment
-				// derives HasPressureStats from the sticky PsiAvailable).
-				PsiAvailable: true,
-			}
+			sample := bareMetalWithPSI()
 			d := newDeps(fixedSampler(sample), 4, 0)
 
 			// Pressure is Ready (capable and first-measured); host-cpu-full is
@@ -97,15 +102,7 @@ var _ = Describe("absence of evidence is not health", func() {
 			// If NoInstrument were (wrongly) counted capable, a bare box would
 			// look mostly-measured and never be short, or be short forever —
 			// either way the count is the thing that must exclude them.
-			sample := cpuhealth.Sample{
-				Timestamp: time.Now(),
-				Quota:     diagnosis.Known(0),
-				NrPeriods: diagnosis.Known(1),
-				Pressure:  diagnosis.Known(0.2),
-				// PSI present: the box is pressurable (DeriveEnvironment
-				// derives HasPressureStats from the sticky PsiAvailable).
-				PsiAvailable: true,
-			}
+			sample := bareMetalWithPSI()
 			d := newDeps(fixedSampler(sample), 4, 0)
 
 			// Table has 4 signals; only 2 are capable (pressure, host-cpu-full).
@@ -120,15 +117,7 @@ var _ = Describe("absence of evidence is not health", func() {
 		It("keeps counting a first-measured signal as measured, however long a later outage lasts", func() {
 			// Tick 1: pressure first-measures (Ready, judged on the first
 			// sample), so its everMeasured bit is set.
-			first := cpuhealth.Sample{
-				Timestamp: time.Now(),
-				Quota:     diagnosis.Known(0),
-				NrPeriods: diagnosis.Known(1),
-				Pressure:  diagnosis.Known(0.2),
-				// PSI present: the box is pressurable (DeriveEnvironment
-				// derives HasPressureStats from the sticky PsiAvailable).
-				PsiAvailable: true,
-			}
+			first := bareMetalWithPSI()
 			d := newDeps(fixedSampler(first), 4, 0)
 
 			_, measured1 := countsAfterPoll(d, first)
