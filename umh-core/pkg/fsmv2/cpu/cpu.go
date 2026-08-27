@@ -136,9 +136,18 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
+	message := cpuhealth.ComposeMessage(verdict, details)
+
+	// Same fixed-event-name rule as the SentryWarn above: dynamic values ride
+	// in the structured fields, never in the message.
+	d.GetLogger().Debug("cpu_reading",
+		deps.String("verdict", string(verdict.State)),
+		deps.String("message", message),
+	)
+
 	return CPUStatus{
 		Verdict: string(verdict.State),
-		Message: cpuhealth.ComposeMessage(verdict, details),
+		Message: message,
 		Details: details,
 	}, nil
 }
