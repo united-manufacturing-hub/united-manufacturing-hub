@@ -136,7 +136,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}
 
 	env := cpuhealth.DeriveEnvironment(sample)
-	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
+	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
 	// After Decide, never before it, and on the same env. evidenceCounts says why.
 	capable, measured, unmeasured := d.evidenceCounts(env)
@@ -158,7 +158,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	return CPUStatus{
 		Verdict: string(verdict.State),
-		Message: cpuhealth.ComposeMessage(verdict, signals),
+		Message: cpuhealth.ComposeMessage(verdict, details),
 	}, nil
 }
 
