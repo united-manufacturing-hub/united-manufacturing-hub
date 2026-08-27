@@ -10,8 +10,8 @@ An instance authenticates with an `AUTH_TOKEN`, not with a user account. The Man
 
 The token does two things:
 
-- It proves the instance's identity, so the console accepts its status and hands it the configuration meant for it.
-- It encrypts the credentials the instance stores, such as PLC passwords. The key is derived from the token, so the instance can decrypt its own credentials and the console cannot.
+- It proves the instance's identity, so the Management Console accepts its status and hands it the configuration meant for it.
+- It encrypts the instance's authorization certificate and private key. The key is derived from the token, so the instance can decrypt its own credentials and the Management Console cannot.
 
 Keep the token somewhere you can find it again, such as your password manager. For storage and rotation on the instance, see [AUTH_TOKEN in Environment Variable](../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
 
