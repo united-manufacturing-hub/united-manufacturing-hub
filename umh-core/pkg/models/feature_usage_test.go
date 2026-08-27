@@ -37,7 +37,7 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).NotTo(HaveKey("featureUsage"))
 	})
 
-	It("serializes the FSMv2 CPU flag under the key PostHog reads", func() {
+	It("serializes the FSMv2 CPU flag under the JSON key fsmv2CpuEnabled", func() {
 		usage := models.FeatureUsage{
 			FSMv2CPUEnabled: true,
 		}
