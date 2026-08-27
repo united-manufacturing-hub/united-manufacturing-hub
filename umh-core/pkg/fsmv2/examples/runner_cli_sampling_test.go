@@ -113,9 +113,9 @@ var _ = Describe("Scenario runner CLI log stream", func() {
 			// logger with deps.NewFSMLogger again would apply the sampling
 			// contract stated at that constructor's doc, and the sampled
 			// stream would keep about a quarter of the entries (measured
-			// before this change: 70 of 264, the closest pair observed;
-			// retuning the sampler moves this arithmetic). No run-to-run
-			// variance reaches that far.
+			// with a sampled run logger: 70 of 264, the closest pair
+			// observed; retuning the sampler moves this arithmetic). No
+			// run-to-run variance reaches that far.
 			samplingTolerance = 80
 		)
 

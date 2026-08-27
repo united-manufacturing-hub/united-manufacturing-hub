@@ -469,21 +469,23 @@ Expect(obs.Status.Verdict).To(Equal("degraded"))
 ```
 
 **Only v2 scenarios have both channels.** `RunResult.Logs` is populated solely by the v2 runner —
-the single assignment sits in `runV2`'s teardown. The v1 YAML and CustomRunner paths emit to the
-caller's logger but capture nothing, so their `RunResult.Logs` is nil, and `RunPersistenceScenario`
-returns a `PersistenceRunResult` with no `Logs` field at all. A v1, CustomRunner or persistence spec
-has exactly one log channel — the caller's buffer — and reaching for the captured log there yields a
+the single assignment sits in `runV2`'s teardown. The v1 YAML and CustomRunner paths leave it nil
+(see the `Logs` field's doc on `RunResult`), and `RunPersistenceScenario` returns a
+`PersistenceRunResult` with no `Logs` field at all. A v1, CustomRunner or persistence spec has
+exactly one log channel — the caller's buffer — and reaching for the captured log there yields a
 compile error (persistence) or a nil slice (the rest). The nil slice is the dangerous case: an
 absence check passes for free, because an empty slice contains nothing to find. That looks like a
 passing test.
 
 `LoadObservedTyped` returns the **settled** value only. A claim about a sequence of readings needs
-the store's delta history, because those readings never coexist.
+the store's delta history — the per-change record `DumpScenario` returns — because those readings
+never coexist.
 
 **Why computed state must not come off the log.** `formatValueForLog` (`pkg/cse/storage`) truncates
-every logged value at 97 characters. Messages a customer reads are longer than that — the CPU
-monitor's is 236 — so anything the message appends is simply absent from the log. An assertion
-looking for it **passes in every world**, including the ones where the worker is wrong.
+any logged value over 100 characters, keeping the first 97. Customer-facing messages exceed that:
+`cpuhealth.ComposeMessage` builds the CPU monitor's, and a measured degraded message runs 236
+characters — so anything the message appends is simply absent from the log. An assertion looking
+for it **passes in every world**, including the ones where the worker is wrong.
 
 **Common mistake**: asserting on a line your own driver printed. It tests your printer, not the
 worker, and it cannot fail. This has already shipped once here.
@@ -494,9 +496,8 @@ worker, and it cannot fail. This has already shipped once here.
   run that emitted nothing if `n` happens to be small, and breaks on every unrelated change if it is
   large. Compare against a count taken independently — and assert that count is non-zero, or
   `0 == 0` passes while nothing works.
-- **Asserting only the settled state** when the claim is about a sequence. `LoadObservedTyped`
-  returns the *last* value. A claim like "degraded, then healthy, in that order" is about readings
-  that never coexist, and needs the delta history.
+- **Asserting only the settled state** when the claim is about a sequence. "Degraded, then healthy,
+  in that order" is exactly the claim the settled value cannot answer.
 
 ## Destructive Channel Drain Safety
 

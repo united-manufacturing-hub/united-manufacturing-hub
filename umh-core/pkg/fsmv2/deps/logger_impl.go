@@ -49,14 +49,12 @@ type zapLogger struct {
 // NewFSMLogger creates a new FSMLogger wrapping a zap.SugaredLogger.
 // It wraps the core with message-based sampling as the outermost layer so that
 // hooks like SentryHook (which override Check without delegating inward) cannot
-// bypass the rate limit. Sampling applies below Warn, keyed on the message:
-// within each tick the first occurrences of a message are logged, then every
-// thereafter-th one. logger.NewLevelSampledCore defines the semantics;
-// samplerWrap below holds the tuning. This doc is the sampling contract's
-// single statement — comments that depend on the tuning reference it rather
-// than restating numbers. Callers that must observe every entry, such as test
-// harnesses asserting on the stream or developer tools whose output a person
-// watches, use NewUnsampledFSMLogger instead.
+// bypass the rate limit. logger.NewLevelSampledCore defines the sampling
+// semantics — below Warn, keyed on the message — and samplerWrap holds the
+// tuning. This doc is the sampling contract's single statement. Callers that
+// must observe every entry, such as test harnesses asserting on the stream or
+// developer tools whose output a person watches, use NewUnsampledFSMLogger
+// instead.
 func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 	if sugar == nil {
 		panic("NewFSMLogger: sugar cannot be nil")
