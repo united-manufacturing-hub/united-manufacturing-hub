@@ -24,49 +24,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
 var _ = Describe("CPU blind ScenarioV2", func() {
-	// The configworker deps key is process-global; a run that fails midway
-	// would otherwise leak it into every later spec in this process.
-	BeforeEach(func() {
-		DeferCleanup(func() {
-			register.ClearDeps(configworker.WorkerTypeName)
-		})
-	})
+	clearConfigWorkerDepsEachSpec()
 
 	It("registers cpu-blind in the merged listing the CLI reads", func() {
 		Expect(examples.ListScenarios()).To(HaveKey("cpu-blind"))
 	})
 
 	It("reports a machine it cannot measure as healthy, and a cgroup it cannot read as a poll error", func() {
-		scenario, ok := examples.RegistryV2["cpu-blind"]
-		Expect(ok).To(BeTrue())
-
-		logger := deps.NewNopFSMLogger()
-		store := examples.SetupStore(logger)
-
-		// Machine time advances one second per reading, so the wall cost is
-		// the collector's cadence and a healthy run is about two seconds. On a
-		// machine the worker cannot read at all, machine time never advances,
-		// the holds never finish, and this ctx is what ends the run.
-		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-		defer cancel()
-
-		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
-			Duration:     200 * time.Millisecond,
-			TickInterval: 100 * time.Millisecond,
-			Logger:       logger,
-			Store:        store,
+		// On a machine the worker can read, this story costs about two seconds
+		// of wall time; the ctx budget is many times that.
+		store := runCPUScenario(cpuScenarioRun{
+			Name:       "cpu-blind",
+			CtxBudget:  300 * time.Second,
+			Settle:     200 * time.Millisecond,
+			DoneWithin: 300 * time.Second,
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Eventually(result.Done, "300s").Should(BeClosed())
 
 		history := cpuObservationHistory(store)
 

@@ -24,54 +24,28 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
 var _ = Describe("CPU filling ScenarioV2", func() {
-	// The configworker deps key is process-global; a run that fails midway
-	// would otherwise leak it into every later spec in this process.
-	BeforeEach(func() {
-		DeferCleanup(func() {
-			register.ClearDeps(configworker.WorkerTypeName)
-		})
-	})
+	clearConfigWorkerDepsEachSpec()
 
 	It("registers cpu-filling in the merged listing the CLI reads", func() {
 		Expect(examples.ListScenarios()).To(HaveKey("cpu-filling"))
 	})
 
 	It("moves the remedy from the other software on the machine to this instance's own load", func() {
-		scenario, ok := examples.RegistryV2["cpu-filling"]
-		Expect(ok).To(BeTrue())
-
-		logger := deps.NewNopFSMLogger()
-		store := examples.SetupStore(logger)
-
-		// The ctx bounds the driver, which waits for the worker's first
-		// reading and then holds three conditions for 150 seconds of machine
-		// time between them. Machine time advances one second per reading, so
-		// the wall cost is the collector's cadence and a healthy run is a
-		// couple of seconds; the budget is many times that. On a machine the
-		// worker cannot read, machine time never advances, the holds never
-		// finish, and this ctx is what ends the run.
-		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-		defer cancel()
-
-		// Duration is the settle window after the driver returns, not the
-		// length of the run. The box is frozen through it, so it buys readings
-		// taken after the story ended rather than more of the story.
-		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
-			Duration:     200 * time.Millisecond,
-			TickInterval: 100 * time.Millisecond,
-			Logger:       logger,
-			Store:        store,
+		// This story holds three conditions for 150 seconds of machine time
+		// between them, which on a machine the worker can read costs a couple of
+		// seconds of wall time; the ctx budget is many times that. The box is
+		// frozen through the settle window, so that window buys readings taken
+		// after the story ended.
+		store := runCPUScenario(cpuScenarioRun{
+			Name:       "cpu-filling",
+			CtxBudget:  300 * time.Second,
+			Settle:     200 * time.Millisecond,
+			DoneWithin: 300 * time.Second,
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Eventually(result.Done, "300s").Should(BeClosed())
 
 		// The three readings this scenario turns on do not coexist: each
 		// replaces the one before it, so only the last survives in the

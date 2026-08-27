@@ -24,48 +24,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
 var _ = Describe("CPU latch ScenarioV2", func() {
-	// The configworker deps key is process-global; a run that fails midway
-	// would otherwise leak it into every later spec in this process.
-	BeforeEach(func() {
-		DeferCleanup(func() {
-			register.ClearDeps(configworker.WorkerTypeName)
-		})
-	})
+	clearConfigWorkerDepsEachSpec()
 
 	It("registers cpu-latch in the merged listing the CLI reads", func() {
 		Expect(examples.ListScenarios()).To(HaveKey("cpu-latch"))
 	})
 
 	It("holds the degraded verdict through a reading under the fire mark and releases it under the clear mark", func() {
-		scenario, ok := examples.RegistryV2["cpu-latch"]
-		Expect(ok).To(BeTrue())
-
-		logger := deps.NewNopFSMLogger()
-		store := examples.SetupStore(logger)
-
-		// Machine time advances one second per reading, so the wall cost is
-		// the collector's cadence and a healthy run is about a second. On a
-		// machine the worker cannot read, machine time never advances, the
-		// holds never finish, and this ctx is what ends the run.
-		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-		defer cancel()
-
-		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
-			Duration:     200 * time.Millisecond,
-			TickInterval: 100 * time.Millisecond,
-			Logger:       logger,
-			Store:        store,
+		// On a machine the worker can read, this story costs about a second of
+		// wall time; the ctx budget is many times that.
+		store := runCPUScenario(cpuScenarioRun{
+			Name:       "cpu-latch",
+			CtxBudget:  300 * time.Second,
+			Settle:     200 * time.Millisecond,
+			DoneWithin: 300 * time.Second,
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Eventually(result.Done, "300s").Should(BeClosed())
 
 		// Five readings that do not coexist, checked in order out of the
 		// store's own delta history. Every percentage below is one this driver

@@ -24,52 +24,27 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
 var _ = Describe("CPU pressure ScenarioV2", func() {
-	// The configworker deps key is process-global; a run that fails midway
-	// would otherwise leak it into every later spec in this process.
-	BeforeEach(func() {
-		DeferCleanup(func() {
-			register.ClearDeps(configworker.WorkerTypeName)
-		})
-	})
+	clearConfigWorkerDepsEachSpec()
 
 	It("registers cpu-pressure in the merged listing the CLI reads", func() {
 		Expect(examples.ListScenarios()).To(HaveKey("cpu-pressure"))
 	})
 
 	It("carries the degraded verdict into the store after the machine's pressure crosses its fire mark", func() {
-		scenario, ok := examples.RegistryV2["cpu-pressure"]
-		Expect(ok).To(BeTrue())
-
-		logger := deps.NewNopFSMLogger()
-		store := examples.SetupStore(logger)
-
-		// The ctx bounds the driver, which waits for the worker to read the
-		// machine before it holds either condition. On a machine the worker
-		// cannot read, that wait never finishes and this ctx is what ends the
-		// run, so the budget is well over the two holds the story needs.
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		defer cancel()
-
-		// Duration is the settle window after the driver returns, not the
-		// length of the run. One second is a poll's worth: enough for the
-		// store to hold a reading taken after the driver stopped, and short
-		// enough not to pad the suite.
-		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
-			Duration:     time.Second,
-			TickInterval: 100 * time.Millisecond,
-			Logger:       logger,
-			Store:        store,
+		// This story needs two holds, and the ctx budget is well over what they
+		// cost. The settle window is a poll's worth: enough for the store to
+		// hold a reading taken after the driver stopped, and short enough not to
+		// pad the suite.
+		store := runCPUScenario(cpuScenarioRun{
+			Name:       "cpu-pressure",
+			CtxBudget:  90 * time.Second,
+			Settle:     time.Second,
+			DoneWithin: 90 * time.Second,
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Eventually(result.Done, "90s").Should(BeClosed())
 
 		// Read the worker's own observation back out of CSE, which is the far
 		// end of the path this scenario exists to exercise: a fake machine
