@@ -69,8 +69,10 @@ type CPUConfig struct{}
 
 // CPUStatus is the result of one CPU-health observation by this worker.
 //
-// Nothing outside this package reads a CPUStatus today. Reporting it to the
-// Management Console is a later PR's work.
+// No Go code outside this package reads a CPUStatus today. Its two json tags
+// still name fields in a stored document: simple.Status merges them into the
+// top level of the persisted observation, so renaming one is a storage-format
+// change. Reporting it to the Management Console is a later PR's work.
 type CPUStatus struct {
 	// Verdict is the cpuhealth.State string Decide produced this tick ("healthy"
 	// or "degraded"), and empty when the tick could not measure.
