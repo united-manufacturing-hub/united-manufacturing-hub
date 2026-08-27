@@ -40,9 +40,9 @@ const (
 
 	// FilesystemDepsKey is the register.SetDeps key under which a caller
 	// publishes the filesystem.Service the sampler reads the cgroup files
-	// through. NewDeps looks it up per instance at spawn time and falls back to
-	// the real filesystem when nothing is published, so a caller that meant to
-	// publish a fixture and forgot silently reads the real machine instead.
+	// through. Publish before the instance spawns: a caller that meant to
+	// publish a fixture and forgot gets no error, and that instance silently
+	// reads the real machine instead. NewDeps does the lookup.
 	//
 	// The key is not WorkerType: the typed deps registry keys on the string
 	// alone, so two payloads cannot share one key. Same convention as
