@@ -30,9 +30,12 @@ import (
 // A third steal arm has to carry this same pair. A fired episode releases only
 // against the mark pair it fired under, so an arm with its own pair would hold
 // that episode forever once selection hands over to it.
+//
+// It is also the one home for both numbers: the engine judges against it and
+// the Technical Details table states it.
 var stealMarks = diagnosis.Marks{
 	Fire: diagnosis.Mark{At: 0.10}, Clear: diagnosis.Mark{At: 0.06},
-	Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Worst: 1.0,
+	Polarity: diagnosis.HigherIsWorse, Unit: unitRatio, Worst: 1.0,
 }
 
 // stealSignal is "is something outside this box taking our CPU?" It carries two
