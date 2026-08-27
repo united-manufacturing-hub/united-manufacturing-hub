@@ -78,10 +78,12 @@ type CPUStatus struct {
 	// or "degraded"), and empty when the tick could not measure.
 	Verdict string `json:"verdict"`
 
-	// Message is the human-readable text this tick composed: a headline such as
+	// Message is the human-readable text Poll composed by calling
+	// cpuhealth.ComposeMessage: a headline such as
 	// "CPU healthy. This instance is using 0.0 of 2 cores (0% of its limit) and
-	// can use 1.8 more before it is marked degraded.", then a Technical Details
-	// line.
+	// can use 1.8 more before it is marked degraded.", usually followed by a
+	// Technical Details line. Short forms carry no such line, among them the
+	// "CPU: starting up." message an instance shows for its first two ticks.
 	Message string `json:"message"`
 }
 
