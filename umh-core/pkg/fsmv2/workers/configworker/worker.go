@@ -22,9 +22,11 @@
 // CollectObservedState polls the config manager, then upserts or deletes the
 // historian child in the dynamicchildren registry so live config edits apply
 // without restarting umh-core. It upserts or deletes the CPU monitor child too,
-// following USE_FSMV2_CPU, a flag the worker reads once at construction. Other
-// child specs still reach the registry via fsmv2client and its Writer, and the
-// application's collector reads the registry directly.
+// following USE_FSMV2_CPU. Both reconciles reach the registry through
+// fsmv2client and its Writer, the path every other spec uses as well. What is
+// particular to these two children is that this worker owns the decision to
+// create or remove them, where every other spec exists because whoever called
+// the client wrote it. The application's collector reads the registry directly.
 //
 // TODO(ENG-4400): this worker becomes the config.yaml authority. It reads
 // config.yaml, validates and serializes changes to it, and materializes the
