@@ -77,9 +77,9 @@ const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 
 // CPUEnabledDepsKey is the register.SetDeps key under which parent wiring
 // publishes whether the fsmv2 CPU monitor child should run (USE_FSMV2_CPU). It
-// is a bool, distinct from ConfigManagerDepsKey, so the config worker can gate
-// its CPU child's upsert on a value that is read from the environment in
-// cmd/main.go and never persisted to config.yaml.
+// holds a bool, and is a key of its own rather than a second payload under
+// ConfigManagerDepsKey, for the reason given there. The cpuEnabled field has
+// where the value comes from and how long it lasts.
 const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
 
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
@@ -143,8 +143,7 @@ func (w *ConfigworkerWorker) GetDependenciesAny() any {
 
 // CollectObservedState is the only per-tick hook available: DeriveDesiredState
 // must not touch dependencies (an architecture validator enforces that) and
-// GetInitialState runs once. Reconcile failures are logged rather than
-// returned, so a transient one cannot stall the worker.
+// GetInitialState runs once.
 func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
