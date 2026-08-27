@@ -439,6 +439,65 @@ var _ = Describe("Transport Scenario", func() {
 
 **Common mistake**: Having multiple `RunSpecs()` calls causes "Rerunning Suite" errors in CI.
 
+## Scenario Assertions: Which Channel Carries Which Claim
+
+**Read a computed answer from the store. Read an emitted event from the log. Never assert on what
+your own scenario printed.**
+
+| The claim is about | Read it from | Why |
+|---|---|---|
+| State a worker computed — a verdict, a customer-facing message, a count it published | the store | Complete, ordered, untruncated |
+| An event something emitted — a shutdown began, a transition fired, a warning was raised | `result.Logs` | There is no state to read. The event *is* the fact |
+| What your scenario's own driver printed to describe its stimulus | Nothing | That is the stimulus, not the response |
+
+Emitted events come off `result.Logs`, already parsed — do not capture a buffer and re-parse it
+yourself. The `examples` test files define `logsContainMsg` over the parsed entries:
+
+```go
+result, err := examples.Run(ctx, examples.RunConfig{ScenarioV2: MyScenario, ...})
+Expect(err).NotTo(HaveOccurred())
+<-result.Done
+
+// An emitted event: the log, off the result.
+Expect(logsContainMsg(result.Logs, "supervisor_shutting_down")).To(BeTrue())
+
+// Computed state: the store. The client is env.Client, captured inside the
+// scenario's Driver; Get reads the child's latest observation.
+obs, err := fsmv2client.Get[cpu.CPUStatus](ctx, client, cpu.Ref)
+Expect(err).NotTo(HaveOccurred())
+Expect(obs.Status.Verdict).To(Equal("degraded"))
+```
+
+**Only v2 scenarios have both channels.** `RunResult.Logs` is populated solely by the v2 runner —
+the single assignment sits in `runV2`'s teardown. The v1 YAML and CustomRunner paths emit to the
+caller's logger but capture nothing, so their `RunResult.Logs` is nil, and `RunPersistenceScenario`
+returns a `PersistenceRunResult` with no `Logs` field at all. A v1, CustomRunner or persistence spec
+has exactly one log channel — the caller's buffer — and reaching for the captured log there yields a
+compile error (persistence) or a nil slice (the rest). The nil slice is the dangerous case: an
+absence check passes for free, because an empty slice contains nothing to find. That looks like a
+passing test.
+
+`LoadObservedTyped` returns the **settled** value only. A claim about a sequence of readings needs
+the store's delta history, because those readings never coexist.
+
+**Why computed state must not come off the log.** `formatValueForLog` (`pkg/cse/storage`) truncates
+every logged value at 97 characters. Messages a customer reads are longer than that — the CPU
+monitor's is 236 — so anything the message appends is simply absent from the log. An assertion
+looking for it **passes in every world**, including the ones where the worker is wrong.
+
+**Common mistake**: asserting on a line your own driver printed. It tests your printer, not the
+worker, and it cannot fail. This has already shipped once here.
+
+**Two more traps, both of which produce a green test that proves nothing:**
+
+- **Asserting a bare count.** `Expect(result.Logs).To(HaveLen(n))` with a hardcoded `n` passes on a
+  run that emitted nothing if `n` happens to be small, and breaks on every unrelated change if it is
+  large. Compare against a count taken independently — and assert that count is non-zero, or
+  `0 == 0` passes while nothing works.
+- **Asserting only the settled state** when the claim is about a sequence. `LoadObservedTyped`
+  returns the *last* value. A claim like "degraded, then healthy, in that order" is about readings
+  that never coexist, and needs the delta history.
+
 ## Destructive Channel Drain Safety
 
 `<-chan` reads are destructive — once a message is read from a channel, it's gone. Pre-check all preconditions (token valid, transport exists) BEFORE draining. Use a `pendingMessages` buffer to store failed messages for retry on the next tick.

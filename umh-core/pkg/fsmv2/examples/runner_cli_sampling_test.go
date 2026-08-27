@@ -110,14 +110,12 @@ var _ = Describe("Scenario runner CLI log stream", func() {
 			// count by roughly 20 entries; tick alignment adds a few more.
 			// The tolerance sits well above that spread. It sits well below
 			// what a regression to sampling removes: building the run's
-			// logger with deps.NewFSMLogger again would wrap the console core
-			// in logger.NewLevelSampledCore(time.Second, 5, 100), keeping the
-			// first five entries per message name per second and then one in
-			// a hundred, so the sampled stream would keep about a quarter of
-			// the entries (measured before this change: 70 of 264, the
-			// closest pair observed; the sampler's tuning lives in deps
-			// samplerWrap, so retuning it moves this arithmetic). No
-			// run-to-run variance reaches that far.
+			// logger with deps.NewFSMLogger again would apply the sampling
+			// contract stated at that constructor's doc, and the sampled
+			// stream would keep about a quarter of the entries (measured
+			// before this change: 70 of 264, the closest pair observed;
+			// retuning the sampler moves this arithmetic). No run-to-run
+			// variance reaches that far.
 			samplingTolerance = 80
 		)
 

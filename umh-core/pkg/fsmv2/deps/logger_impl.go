@@ -49,7 +49,14 @@ type zapLogger struct {
 // NewFSMLogger creates a new FSMLogger wrapping a zap.SugaredLogger.
 // It wraps the core with message-based sampling as the outermost layer so that
 // hooks like SentryHook (which override Check without delegating inward) cannot
-// bypass the rate limit.
+// bypass the rate limit. Sampling applies below Warn, keyed on the message:
+// within each tick the first occurrences of a message are logged, then every
+// thereafter-th one. logger.NewLevelSampledCore defines the semantics;
+// samplerWrap below holds the tuning. This doc is the sampling contract's
+// single statement — comments that depend on the tuning reference it rather
+// than restating numbers. Callers that must observe every entry, such as test
+// harnesses asserting on the stream or developer tools whose output a person
+// watches, use NewUnsampledFSMLogger instead.
 func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 	if sugar == nil {
 		panic("NewFSMLogger: sugar cannot be nil")
@@ -63,9 +70,13 @@ func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 }
 
 // NewUnsampledFSMLogger wraps sugar without the message-based sampler that
-// NewFSMLogger applies. Use it only in test harnesses that must observe every
-// log entry (sampling drops entries before they reach an observer core, which
-// breaks log-scraping assertions). Production code must use NewFSMLogger.
+// NewFSMLogger applies. Use it in callers that must observe every log entry:
+// test harnesses that assert on the stream (sampling drops entries before they
+// reach an observer core, which breaks log-scraping assertions) and developer
+// tools whose output a person watches, such as pkg/fsmv2/cmd/runner, which
+// connects no Sentry and so has no log quota to protect. Long-running
+// production code must use NewFSMLogger; its doc states the sampling contract
+// and why the sampler is mandatory there.
 func NewUnsampledFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 	if sugar == nil {
 		panic("NewUnsampledFSMLogger: sugar cannot be nil")
@@ -122,8 +133,10 @@ func (l *zapLogger) With(fields ...Field) FSMLogger {
 	}
 }
 
-// NewJSONFSMLogger creates an FSMLogger that writes JSON to the provided writer.
-// Use this in tests to capture and verify log output without importing zap.
+// NewJSONFSMLogger creates an unsampled FSMLogger that writes every entry as
+// JSON to the provided writer. Use it in callers that capture the stream and
+// parse it back: the scenario runner's capture logger behind RunResult.Logs,
+// and tests that assert on log output. Callers need no zap import.
 func NewJSONFSMLogger(w io.Writer, level LogLevel) FSMLogger {
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "ts",
@@ -139,9 +152,8 @@ func NewJSONFSMLogger(w io.Writer, level LogLevel) FSMLogger {
 		zapcore.Level(level),
 	)
 
-	// No sampling: this logger exists to capture and verify log output in tests,
-	// which needs every entry to be deterministic. Production sampling lives in
-	// NewFSMLogger's samplerWrap.
+	// No sampling: callers capture this stream and parse it back, which needs
+	// every entry. NewFSMLogger's doc states the sampling contract.
 	return NewUnsampledFSMLogger(zap.New(core).Sugar())
 }
 

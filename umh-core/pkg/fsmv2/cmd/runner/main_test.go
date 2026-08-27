@@ -68,9 +68,9 @@ func TestShutdownExitCode(t *testing.T) {
 // developer watching it. The runner binary is a developer tool: it has no
 // Sentry connection and therefore no log quota to protect, so a sampling
 // logger would only hide entries from the person reading them.
-// deps.NewFSMLogger( samples everything below Warn (parameters in
-// deps.samplerWrap), which is why the production binary in cmd/main.go
-// keeps it and why this runner must not build it. The behavioral test in
+// deps.NewFSMLogger( applies the sampling contract stated in its own doc,
+// which is why the production binary in cmd/main.go keeps it and why this
+// runner must not build it. The behavioral test in
 // pkg/fsmv2/examples/runner_cli_sampling_test.go builds the real runner
 // binary but guards only the run logger; the store logger (the SetupStore
 // call in main.go) is guarded only here, by design. This test reads this
