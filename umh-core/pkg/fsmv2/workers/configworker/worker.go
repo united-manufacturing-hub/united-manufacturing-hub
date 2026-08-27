@@ -18,12 +18,13 @@
 // Today the worker anchors the application's children union: once the shared
 // registry is published, every application state emits this kernel child
 // (renderUnion in workers/application/state), so the children list can never
-// become empty. It also reconciles the historian monitor child on every tick:
+// become empty. On every tick it also reconciles two standalone children.
 // CollectObservedState polls the config manager, then upserts or deletes the
 // historian child in the dynamicchildren registry so live config edits apply
-// without restarting umh-core. Other child specs still reach the registry via
-// fsmv2client and its Writer, and the application's collector reads the
-// registry directly.
+// without restarting umh-core. It upserts or deletes the CPU monitor child too,
+// following USE_FSMV2_CPU, a flag the worker reads once at construction. Other
+// child specs still reach the registry via fsmv2client and its Writer, and the
+// application's collector reads the registry directly.
 //
 // TODO(ENG-4400): this worker becomes the config.yaml authority. It reads
 // config.yaml, validates and serializes changes to it, and materializes the
