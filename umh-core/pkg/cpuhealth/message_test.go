@@ -32,6 +32,30 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
+// tableLines returns the Technical Details table's lines, in the order the
+// message printed them, and fails when the message carries no table.
+func tableLines(msg string) []string {
+	_, table, found := strings.Cut(msg, technicalDetailsLabel)
+	Expect(found).To(BeTrue(), "the message carries no Technical Details table: %q", msg)
+
+	return strings.Split(table, "\n")
+}
+
+// tableRules returns the rule each table line reports, in order: the word the
+// line opens with.
+func tableRules(msg string) []string {
+	rules := make([]string, 0, 5)
+	for _, line := range tableLines(msg) {
+		rules = append(rules, strings.SplitN(line, " ", 2)[0])
+	}
+
+	return rules
+}
+
+// allRules is the fixed order the table prints, every slot present in every
+// state that has a table.
+var allRules = []string{"Headroom", "Usage", "Throttling", "Pressure", "Steal"}
+
 // healthyDetails builds a Details bag with every healthy-message input in a
 // usable state, so individual fields can be overridden per assertion.
 func healthyDetails() Details {
@@ -75,7 +99,8 @@ var _ = Describe("the healthy headline", func() {
 		details.AvgUsageCores = 0.3
 		msg := composeHealthy(details)
 		// 2 total - 0.3 used - 0.2 reserved = 1.5, printed exactly.
-		Expect(msg).To(ContainSubstring("Headroom 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degraded below 0)."))
+		Expect(msg).To(ContainSubstring("Headroom 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degrades below %s).",
+			fmtCoresTotal(limitHeadroomMarks(details.CapacityCores).Fire.At)))
 		Expect(msg).To(ContainSubstring("can use 1.5 more before it is marked degraded."))
 	})
 
@@ -187,13 +212,18 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 		details.AvgHostBusyCores = 0.0
 		details.ReserveCores = 1.0
 		details.HostBusyCoresAvailable = false // read failed, window still full
-		Expect(composeHealthy(details)).To(Equal("CPU: starting up."))
+		msg := composeHealthy(details)
+		Expect(msg).To(HavePrefix(cpuStartingUp + technicalDetailsLabel))
+		Expect(msg).To(ContainSubstring("Headroom not available (measuring)."),
+			"the headroom line states no figure either, and says which kind of absence it is")
 	})
 
 	It("should not report the limit-mode usage figure when the container's own window holds too few samples to reduce, even though the reading succeeded", func() {
 		details := healthyDetails()
 		details.UsageRingActive = false
-		Expect(composeHealthy(details)).To(Equal("CPU: starting up."))
+		msg := composeHealthy(details)
+		Expect(msg).To(HavePrefix(cpuStartingUp + technicalDetailsLabel))
+		Expect(msg).To(ContainSubstring("Headroom not available (measuring)."))
 	})
 
 	It("should not report the no-limit usage figure when the host window holds too few samples to reduce, even though the reading succeeded", func() {
@@ -204,16 +234,36 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 		details.ReserveCores = 1.0
 		details.HostBusyCoresAvailable = true
 		details.HostBusyRingActive = false
-		Expect(composeHealthy(details)).To(Equal("CPU: starting up."))
+		msg := composeHealthy(details)
+		Expect(msg).To(HavePrefix(cpuStartingUp + technicalDetailsLabel))
+		Expect(msg).To(ContainSubstring("Headroom not available (measuring)."))
 	})
 
 	It("should render no headline at all on a tick whose usage figure is withheld, returning through the same single-line path the zero-capacity guard uses rather than a headline with a hole in it", func() {
 		details := healthyDetails()
 		details.UsageRingActive = false
 		msg := composeHealthy(details)
-		Expect(msg).To(Equal("CPU: starting up."))
+		Expect(msg).To(HavePrefix("CPU: starting up." + technicalDetailsLabel))
 		Expect(msg).NotTo(ContainSubstring("CPU healthy."))
-		Expect(msg).NotTo(ContainSubstring("Technical Details:"))
+
+		// The table comes with it, and every line says which kind of absence it
+		// is rather than stating a figure nothing measured. On the first ticks
+		// that is what an operator wants: the rules that will be judged, and how
+		// far off each reading is.
+		startup := healthyDetails()
+		startup.UsageRingActive = false
+		startup.HostBusyRingActive = false
+		startup.ThrottleSignalReady = false
+		startup.PressureSignalReady = false
+		startup.StealSignalReady = false
+		lines := tableLines(composeHealthy(startup))
+		Expect(tableRules(composeHealthy(startup))).To(Equal(allRules))
+		for _, line := range lines {
+			Expect(line).To(SatisfyAny(
+				HaveSuffix("not available (measuring)."),
+				HaveSuffix("not available (not possible)."),
+			), "a box that has measured nothing yet may state no figure, and this line does: %q", line)
+		}
 
 		// The floors are per measurement, not one flag: a limit-mode headline uses
 		// the container's usage-cores, so a thin host-busy window must NOT
@@ -224,51 +274,141 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 	})
 })
 
-var _ = Describe("the budget lines", func() {
-	It("should list the headroom budget always, and each of throttle, pressure and steal only when this tick's reading is usable", func() {
+// limitedVisibilityDetails builds the healthy bag of the one box the usage rule
+// runs on: no CPU limit to judge our own budget against, and no pressure
+// statistics to read the harm off, so our own usage over the machine's cores is
+// the last evidence left that the machine is full.
+func limitedVisibilityDetails() Details {
+	d := healthyDetails()
+	d.LimitApplies = false
+	d.LimitedVisibility = true
+	d.CapacityCores = 4
+	d.ReserveCores = 1.0
+	d.AvgHostBusyCores = 1.2
+	d.AvgUsageFraction = 0.30
+	d.ThrottleSignalReady = false
+	d.PressureApplies = false
+	d.PressureSignalReady = false
+
+	return d
+}
+
+// The Technical Details table. Every threshold asserted below is computed from
+// the mark pair the signal declares, never written as a literal. A spec that
+// pinned the literal would stay green after someone moved the mark and the
+// message started stating a rule the code no longer applies, which is the
+// defect this table exists to close: it would pin the duplication rather than
+// the constant.
+var _ = Describe("the Technical Details table", func() {
+	It("should state each rule's own fire mark, read from the signal that owns it, while the rule has not fired", func() {
 		all := healthyDetails()
 		all.ThrottleRatio = 0.02
 		all.PressureAvg60 = 0.05
 		all.StealP95 = 0.30
+		all.PressureApplies = true
+		all.StealApplies = true
 		msg := composeHealthy(all)
-		// Headroom is the only unconditional line.
-		Expect(msg).To(ContainSubstring("Headroom 1.8 cores = 2 total - 0.0 used - 0.2 reserved (degraded below 0)."))
-		Expect(msg).To(ContainSubstring("Throttling 2% (degraded above 5%)."))
-		Expect(msg).To(ContainSubstring("Pressure 5% (degraded above 20%)."))
-		Expect(msg).To(ContainSubstring("Steal 30% (degraded above 10%)."))
+
+		Expect(msg).To(ContainSubstring("Headroom 1.8 cores = 2 total - 0.0 used - 0.2 reserved (degrades below %s).",
+			fmtCoresTotal(limitHeadroomMarks(all.CapacityCores).Fire.At)))
+		Expect(msg).To(ContainSubstring("Throttling 2%% (degrades above %d%%).", toPercent(throttleMarks.Fire.At)))
+		Expect(msg).To(ContainSubstring("Pressure 5%% (degrades above %d%%).", toPercent(pressureMarks.Fire.At)))
+		Expect(msg).To(ContainSubstring("Steal 30%% (degrades above %d%%).", toPercent(stealMarks.Fire.At)))
 	})
 
-	It("should print each budget line from its signal's readiness, never from the capability flag", func() {
+	It("should state the mark that clears a rule once it has latched, because that is the number deciding what happens next", func() {
+		latched := degradedSig()
+		latched.PressureAvg60 = 0.15
+		msg := ComposeMessage(degradedVerdict(CauseKindPressure, instrumentPressureAvg60, 0.15), latched)
+
+		Expect(msg).To(ContainSubstring("Pressure 15%% (recovers below %d%%).", toPercent(pressureMarks.Clear.At)))
+		Expect(msg).NotTo(ContainSubstring("Pressure 15% (degrades"),
+			"the reading has fallen back under the fire mark while the latch holds, so naming the fire mark would read as a contradiction")
+	})
+
+	It("should report the usage rule, the second way a machine can be judged full, so a box degraded by it is not shown a table in which every listed rule looks fine", func() {
+		// The rule fires on our own usage over the machine's cores, and it is
+		// the half the table used to omit: a box degraded by it saw a headroom
+		// line sitting comfortably above its mark and nothing else.
+		quiet := limitedVisibilityDetails()
+		Expect(composeHealthy(quiet)).To(ContainSubstring("Usage 30%% of capacity (degrades at %d%%).",
+			toPercent(usageFractionMarks.Fire.At)),
+			"the mark is inclusive, so 70%% of the machine busy is already a full machine and the line reads \"at\"")
+
+		fired := limitedVisibilityDetails()
+		fired.AvgUsageFraction = 0.75
+		msg := ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentUsageFraction, 0.75), fired)
+		Expect(msg).To(ContainSubstring("Usage 75%% of capacity (recovers below %d%%).",
+			toPercent(usageFractionMarks.Clear.At)))
+
+		// A latch is proof the rule ran on this box, so a fired rule is never
+		// reported as one the box cannot run.
+		Expect(ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentUsageFraction, 0.8), degradedSig())).
+			NotTo(ContainSubstring("Usage not available (not possible)."))
+	})
+
+	It("should carry all five rules, in one order, in every state that has a table", func() {
+		Expect(tableRules(composeHealthy(healthyDetails()))).To(Equal(allRules))
+		Expect(tableRules(ComposeMessage(degradedVerdict(CauseKindSteal, instrumentStealMean, 0.18), degradedSig()))).
+			To(Equal(allRules))
+
+		thin := healthyDetails()
+		thin.UsageRingActive = false
+		Expect(tableRules(composeHealthy(thin))).To(Equal(allRules),
+			"a rule dropped from the table is a rule the reader takes for fine")
+	})
+
+	It("should say which kind of absence a missing reading is, because a kernel that reports no pressure statistics and a window still filling send a reader to different places", func() {
+		bare := healthyDetails()
+		bare.PressureApplies = false
+		bare.PressureSignalReady = false
+		Expect(composeHealthy(bare)).To(ContainSubstring("Pressure not available (not possible)."))
+
+		thin := healthyDetails()
+		thin.PressureApplies = true
+		thin.PressureSignalReady = false
+		Expect(composeHealthy(thin)).To(ContainSubstring("Pressure not available (measuring)."))
+	})
+
+	It("should read each rule's figure from its signal's readiness, and print no figure at all for a rule the box cannot run", func() {
 		// A virtualized box (StealApplies true) whose steal window has no usable
 		// value this tick must not print a confident 0% steal line.
 		vm := healthyDetails()
 		vm.StealApplies = true
 		vm.StealSignalReady = false
 		msg := composeHealthy(vm)
-		Expect(msg).NotTo(ContainSubstring("Steal"))
-		Expect(msg).To(ContainSubstring("Pressure"))
+		Expect(msg).To(ContainSubstring("Steal not available (measuring)."))
+		Expect(msg).NotTo(ContainSubstring("Steal 0%"))
 		Expect(msg).To(ContainSubstring("Headroom"))
 
 		// The throttle gate is readiness, not LimitApplies.
 		noThrottle := healthyDetails()
 		noThrottle.LimitApplies = true
 		noThrottle.ThrottleSignalReady = false
-		Expect(composeHealthy(noThrottle)).NotTo(ContainSubstring("Throttling"))
+		Expect(composeHealthy(noThrottle)).To(ContainSubstring("Throttling not available (measuring)."))
 
-		// The pressure gate is readiness, not PressureApplies.
-		noPressure := healthyDetails()
-		noPressure.PressureApplies = true
-		noPressure.PressureSignalReady = false
-		Expect(composeHealthy(noPressure)).NotTo(ContainSubstring("Pressure"))
+		// The two halves cannot stand in for each other in the other direction
+		// either: bare metal declares no steal instrument, so a steal figure
+		// there would state a rule that can never fire. The readiness flag is
+		// set here anyway, which no real box does, to pin the capability as the
+		// thing withholding the figure.
+		bareMetal := healthyDetails()
+		bareMetal.StealApplies = false
+		bareMetal.StealSignalReady = true
+		bareMetal.StealP95 = 0.30
+		Expect(composeHealthy(bareMetal)).To(ContainSubstring("Steal not available (not possible)."))
+		Expect(composeHealthy(bareMetal)).NotTo(ContainSubstring("Steal 30%"))
+	})
 
-		// Readiness is the gate, not capability: a ready steal signal prints
-		// even when StealApplies is false (they agree on bare metal, but this
-		// pins the gate to the readiness trio).
-		ready := healthyDetails()
-		ready.StealApplies = false
-		ready.StealSignalReady = true
-		ready.StealP95 = 0.30
-		Expect(composeHealthy(ready)).To(ContainSubstring("Steal 30% (degraded above 10%)."))
+	It("should carry no table at all when the cgroup read failed, because nothing on that tick says which rules apply", func() {
+		healthy := healthyDetails()
+		healthy.CapacityCores = 0
+		Expect(composeHealthy(healthy)).To(Equal(cpuMonitoringUnavailable))
+
+		degraded := degradedSig()
+		degraded.CapacityCores = 0
+		Expect(ComposeMessage(degradedVerdict(CauseKindContainerLimitFull, instrumentLimitHeadroom, 0.5), degraded)).
+			NotTo(ContainSubstring("Technical Details:"))
 	})
 })
 
@@ -284,6 +424,15 @@ func degradedSig() Details {
 		ReserveCores:           1.0,
 		LimitApplies:           true,
 		PressureApplies:        true,
+		// A box that has run long enough to degrade has filled its windows, so
+		// the Technical Details table reads figures rather than a column of
+		// "measuring".
+		UsageRingActive:     true,
+		HostBusyRingActive:  true,
+		ThrottleSignalReady: true,
+		PressureSignalReady: true,
+		StealApplies:        true,
+		StealSignalReady:    true,
 	}
 }
 
@@ -319,8 +468,21 @@ var _ = Describe("degraded copy", func() {
 		// the mean is the arm that fires in the first twenty seconds. "At peak"
 		// would be a claim about a percentile, so the sentence makes none.
 		// Asserted whole, because the wording is customer-visible copy.
+		//
+		// The steal line of the table reports the same 18% as the paragraph
+		// above it. Details.StealP95 names the percentile, which reads 0 until
+		// the window holds twenty samples, so a latched episode reports the arm
+		// it fired on instead; the two would otherwise contradict each other
+		// three lines apart.
 		msg := ComposeMessage(degradedVerdict(CauseKindSteal, instrumentStealMean, 0.18), degradedSig())
-		Expect(msg).To(Equal("CPU taken by the server\nTechnical Details: Other virtual machines on the same physical server took 18% of the CPU this instance needed over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server."))
+		Expect(msg).To(Equal("CPU taken by the server\n" +
+			"Other virtual machines on the same physical server took 18% of the CPU this instance needed over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server." +
+			"\nTechnical Details:\n" +
+			"Headroom 2.5 cores = 4 total - 0.5 used - 1.0 reserved (degrades below 0).\n" +
+			"Usage not available (not possible).\n" +
+			"Throttling 0% (degrades above 5%).\n" +
+			"Pressure 0% (degrades above 20%).\n" +
+			"Steal 18% (recovers below 6%)."))
 	})
 
 	It("should render the curated detail paragraph for each fired cause, dominant first", func() {

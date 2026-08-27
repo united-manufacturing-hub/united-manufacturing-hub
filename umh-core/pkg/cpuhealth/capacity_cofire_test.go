@@ -113,12 +113,24 @@ var _ = Describe("two capacity causes on one tick", func() {
 			// One blended sentence, not two paragraphs. Telling a customer to add
 			// CPU to a full machine and also to raise their own limit gives them a
 			// remedy that cannot work.
+			//
+			// The table below it reports the limit's own headroom, because a
+			// limit applies here, and names the mark that CLEARS it: the rule has
+			// fired, so the number deciding what happens next is the clear mark.
+			// 0.1 is 0.05 x the 2.0-core quota, read from the same pair the
+			// engine judged the tick against.
 			Expect(ComposeMessage(verdict, details)).To(Equal(
 				"CPU running near full"+
-					"\nTechnical Details: "+
+					"\n"+
 					"The machine is full and this instance's CPU limit cannot help. "+
 					"Add CPU to the machine, or reduce other software running on it. "+
-					"(This instance is also at its 2-core limit.)"),
+					"(This instance is also at its 2-core limit.)"+
+					"\nTechnical Details:\n"+
+					"Headroom -0.2 cores = 2 total - 2.0 used - 0.2 reserved (recovers above 0.1).\n"+
+					"Usage not available (not possible).\n"+
+					"Throttling not available (measuring).\n"+
+					"Pressure not available (not possible).\n"+
+					"Steal not available (not possible)."),
 				"limit row first: %v", limitFirst)
 			Expect(BlockReason(verdict.Causes, details)).To(Equal(
 				"Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."),
