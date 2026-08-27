@@ -67,18 +67,18 @@ var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 // CPUConfig is empty: the CPU worker takes no configuration.
 type CPUConfig struct{}
 
-// CPUStatus is the result of one CPU-health observation. Verdict and Message
-// fill the Category and the Message of the models.Health a container monitor
-// reports for CPU, which is read by the Management Console frontend and by
-// ProtocolConverterService.IsResourceLimited.
+// CPUStatus is the result of one CPU-health observation by this worker.
+//
+// Nothing outside this package reads a CPUStatus today. Reporting it to the
+// Management Console is a later PR's work.
 type CPUStatus struct {
 	// Verdict is the cpuhealth.State string Decide produced this tick ("healthy"
 	// or "degraded"), and empty when the tick could not measure.
 	Verdict string `json:"verdict"`
 
-	// Message is what the user reads in the frontend: a headline such as "CPU
-	// healthy. This instance is using 0.0 of 2 cores (0% of its limit) and can
-	// use 1.8 more before it is marked degraded.", then a Technical Details
+	// Message is the human-readable text this tick composed: a headline such as
+	// "CPU healthy. This instance is using 0.0 of 2 cores (0% of its limit) and
+	// can use 1.8 more before it is marked degraded.", then a Technical Details
 	// line.
 	Message string `json:"message"`
 }
