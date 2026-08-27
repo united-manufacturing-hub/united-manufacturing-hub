@@ -2,7 +2,7 @@
 
 ## What is an Instance?
 
-An instance is a running UMH Core container - a single Docker container that hosts your entire Unified Namespace. Each instance is identified by its location path (like `enterprise.site.area.line`) which determines where data is organized in your industrial data infrastructure.
+An instance is a running UMH Core container - a single Docker container that hosts your entire Unified Namespace. Each instance has a location path like `enterprise.site.area.line`. The location path determines where data is organized in your industrial data infrastructure. An instance can further be uniquely identified by it's Instance UUID.
 
 ## How an instance connects
 
