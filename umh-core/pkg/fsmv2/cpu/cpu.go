@@ -84,9 +84,11 @@ type CPUStatus struct {
 	// Message is the human-readable text Poll composed by calling
 	// cpuhealth.ComposeMessage: a headline such as
 	// "CPU healthy. This instance is using 0.0 of 2 cores (0% of its limit) and
-	// can use 1.8 more before it is marked degraded.", usually followed by a
-	// Technical Details line. Short forms carry no such line, among them the
-	// "CPU: starting up." message an instance shows for its first two ticks.
+	// can use 1.8 more before it is marked degraded.", then a Technical Details
+	// table of the five rules that can degrade this instance's CPU. The
+	// "CPU: starting up." message an instance shows for its first two ticks
+	// carries the table too, with every line saying why it has no figure yet.
+	// Only a failed cgroup read renders without one.
 	Message string `json:"message"`
 
 	// Details is the measured evidence behind the verdict, filled on every tick
