@@ -36,7 +36,7 @@ limiting memory changes nothing it can see.
 
 ```bash
 ./run.sh                 # no quota, runs until Ctrl+C
-CPUS=0.5 ./run.sh        # half a CPU of quota
+CPUS=2 ./run.sh          # two CPUs of quota
 DURATION=60s ./run.sh    # stop on its own instead
 LOG_LEVEL=info ./run.sh  # only state changes, not every poll
 ```
@@ -82,16 +82,28 @@ of the exercise:
   own:
 
   ```bash
-  CPUS=0.5 ./run.sh --name cpu-host
-  docker exec cpu-host stress-ng --cpu 8 --timeout 60
+  CPUS=2 ./run.sh --name cpu-host
+  docker exec cpu-host stress-ng --cpu 8 --timeout 10
   ```
 
-  Eight workers against half a CPU is a large deliberate overcommit: the
-  container wants sixteen times the CPU it may have, so `nr_throttled` climbs
-  immediately rather than after a wait. `--timeout 60` stops the load on its
-  own, so the readings show the recovery as well as the onset — worth having,
-  since the pressure signal holds its verdict until the clear mark and the
-  release is the half that is easy to miss.
+  Eight workers against two CPUs is a deliberate 4x overcommit, so
+  `nr_throttled` climbs at once rather than after a wait. Ten seconds of load is
+  enough: the throttling ratio is a delta over a 60-second window, so a short
+  burst fires it, and stopping early leaves you watching the half that is easy to
+  miss.
+
+  ⚠️ **The verdict will not go back to healthy, and that is a defect rather than
+  something you are doing wrong.** Throttling decays to 0% about a minute after
+  the load stops, which is the 60-second window draining and is correct. The
+  verdict then stays `degraded` anyway: a latched signal's release is gated on a
+  window-coverage check that a jittered clock never satisfies, so nothing clears
+  it short of a restart. Measured 2026-08-27; the fix is not in this branch.
+
+  Until that lands, read `Throttling 0%` beside a `degraded` verdict as the known
+  bug, not as evidence about your machine.
+
+  Do not use `CPUS=0.5`. It is under umh-core's own minimum, so the reserves the
+  monitor subtracts leave numbers that describe no machine we support.
 
 - **Load on the host** competes for the machine's own CPUs and moves
   host-busy and steal as read from `/proc/stat`, leaving throttling
