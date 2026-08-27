@@ -46,9 +46,13 @@ type Env struct {
 type ScenarioV2 struct {
 	// Driver runs against the started supervisor. After a nil return, the
 	// runner waits RunConfig.Duration (or until ctx is cancelled; 0 means
-	// ctx-only), then shuts the supervisor down. Drivers must honor ctx
-	// cancellation: a cancelled ctx is the only stop signal a driver
-	// receives, and teardown cannot start until the Driver returns.
+	// ctx-only), then shuts the supervisor down. The wait can also end
+	// early if the supervisor stops on its own, which the kernel-only
+	// supervisor a v2 scenario runs never does: for a v2 scenario,
+	// cancelling ctx is the only thing that starts teardown of a
+	// Duration=0 run. Drivers must honor ctx cancellation: a cancelled ctx
+	// is the only stop signal a driver receives, and teardown cannot start
+	// until the Driver returns.
 	Driver func(ctx context.Context, env Env) error
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
@@ -59,7 +63,7 @@ type ScenarioV2 struct {
 }
 
 // NoopScenarioV2 starts the kernel-only supervisor and drives nothing: the
-// application worker spawns only its config worker kernel child.
+// application worker spawns only its kernel child, the configworker.
 //
 // This scenario is kept permanently as the copy-paste template for scenario
 // authors: copy it, rename it, and put your driving logic in Driver.

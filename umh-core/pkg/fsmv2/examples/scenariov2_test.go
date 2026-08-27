@@ -194,30 +194,30 @@ func v2LogKeyFromEntry(entry examples.LogEntry) v2LogKey {
 
 // checkCapturedEntries judges a run's captured entries against the caller's
 // own buffer, with two comparisons. The prefix-containment check demands
-// that every key the buffer holds before the sentinel appear in logs at
+// that every key the buffer holds before the marker appear in logs at
 // least as often; the reverse check demands that no key appear in logs more
 // often than in the whole buffer. It returns nil only when both hold.
 //
-// The sentinel is an entry the calling spec logs through the caller's
-// logger at the moment it begins shutdown: it reaches the caller's buffer
-// alone and never the run's capture, so it marks the shutdown boundary in
-// the buffer instead of claiming capture. It must appear in the buffer
-// exactly once, with at least one entry before it, or the
-// prefix-containment check has no bounded range. A second entry carrying
-// the sentinel's message would bound the range at the first and silently
-// demand less than the caller marked. Every non-empty buffer line must
-// parse, because the runner drops an unparseable line from result.Logs, so
-// an unparseable line in the caller's buffer is a missing entry rather than
-// noise.
+// The shutdown marker is an entry the calling spec logs through the
+// caller's logger at the moment it begins shutdown: it reaches the
+// caller's buffer alone and never result.Logs, so it marks the shutdown
+// boundary in the buffer rather than counting as a run entry. It must
+// appear in the buffer exactly once, with at least one entry before it, or
+// the prefix-containment check has no bounded range. A second entry
+// carrying the marker's message would bound the range at the first and
+// silently demand less than the caller marked. Every non-empty buffer line
+// must parse, because the runner drops an unparseable line from
+// result.Logs, so an unparseable line in the caller's buffer is a missing
+// entry rather than noise.
 //
 // The prefix-containment check treats the buffer as the control: every
-// entry the run emitted through its tee reached it, so a capture that
-// dropped an entry the run emitted before shutdown began is a mismatch.
-// Logs entries carry no position, so the check cannot bound the logs side
-// at the shutdown boundary: it counts each key over all of logs, which
-// makes a dropped copy detectable only when no copy after the sentinel
-// carries an identical full key. A later tick emitting the same fields
-// again stands in for the dropped copy, and the check passes.
+// entry the run emitted reached the buffer through the run's tee logger,
+// so a result.Logs missing an entry the run emitted before shutdown began
+// is a mismatch. Logs entries carry no position, so the check cannot bound
+// the logs side at the shutdown boundary: it counts each key over all of
+// logs, which makes a dropped copy detectable only when no copy after the
+// marker carries an identical full key. A later tick emitting the same
+// fields again stands in for the dropped copy, and the check passes.
 //
 // The reverse check holds because the specs that run this check hand the
 // run a caller logger at the capture's own debug level, unsampled, so every
@@ -228,40 +228,40 @@ func v2LogKeyFromEntry(entry examples.LogEntry) v2LogKey {
 // the runner captured an entry without teeing it to the caller.
 //
 // Both comparisons count entries per key rather than comparing positions,
-// because the tee's two sinks take their locks independently and may order
-// concurrent entries differently. The sentinel bounds only the
+// because the tee's two arms write under separate locks and may order
+// concurrent entries differently. The marker bounds only the
 // prefix-containment check: writes that trail the teardown parse appear in
 // the buffer but never in logs and would fail it on every correct run.
-func checkCapturedEntries(logOutput string, logs []examples.LogEntry, sentinelMsg string) error {
+func checkCapturedEntries(logOutput string, logs []examples.LogEntry, markerMsg string) error {
 	bufferKeys, allParsed := parseV2LogKeys(logOutput)
 	if !allParsed {
 		return errors.New("every line in the caller's buffer must parse, or the runner dropped an unparseable line from result.Logs")
 	}
 
-	sentinelCount := 0
-	sentinelIdx := -1
+	markerCount := 0
+	markerIdx := -1
 	for i, key := range bufferKeys {
-		if key.Msg != sentinelMsg {
+		if key.Msg != markerMsg {
 			continue
 		}
 
-		sentinelCount++
-		if sentinelIdx < 0 {
-			sentinelIdx = i
+		markerCount++
+		if markerIdx < 0 {
+			markerIdx = i
 		}
 	}
 
-	if sentinelCount == 0 {
-		return errors.New("the sentinel must appear in the caller's buffer, or the prefix-containment check has no bounded range")
+	if markerCount == 0 {
+		return errors.New("the shutdown marker must appear in the caller's buffer, or the prefix-containment check has no bounded range")
 	}
 
-	if sentinelCount > 1 {
-		return fmt.Errorf("the sentinel must appear exactly once in the caller's buffer: %d entries carry its message, and the check bounds its range at the first",
-			sentinelCount)
+	if markerCount > 1 {
+		return fmt.Errorf("the shutdown marker must appear exactly once in the caller's buffer: %d entries carry its message, and the check bounds its range at the first",
+			markerCount)
 	}
 
-	if sentinelIdx == 0 {
-		return errors.New("entries must appear in the buffer before the sentinel, or the prefix-containment check is vacuous")
+	if markerIdx == 0 {
+		return errors.New("entries must appear in the buffer before the marker, or the prefix-containment check is vacuous")
 	}
 
 	logsCounts := map[v2LogKey]int{}
@@ -270,13 +270,13 @@ func checkCapturedEntries(logOutput string, logs []examples.LogEntry, sentinelMs
 	}
 
 	prefixCounts := map[v2LogKey]int{}
-	for _, key := range bufferKeys[:sentinelIdx] {
+	for _, key := range bufferKeys[:markerIdx] {
 		prefixCounts[key]++
 	}
 
 	for key, want := range prefixCounts {
 		if have := logsCounts[key]; have < want {
-			return fmt.Errorf("an entry the run emitted before shutdown began is missing from result.Logs: level=%s msg=%s worker=%q appears %d times in the caller's buffer before the sentinel and only %d times in Logs",
+			return fmt.Errorf("an entry the run emitted before shutdown began is missing from result.Logs: level=%s msg=%s worker=%q appears %d times in the caller's buffer before the marker and only %d times in Logs",
 				key.Level, key.Msg, key.Worker, want, have)
 		}
 	}
@@ -305,7 +305,7 @@ func checkCapturedEntries(logOutput string, logs []examples.LogEntry, sentinelMs
 // Running while the reconcile that adds the child is still mid-flight. The
 // added=1 report is written at that reconcile's end, so once it is in the
 // buffer the child is added rather than mid-spawn, and whatever the spec
-// writes next (a sentinel, a cancel) lands after the report in the
+// writes next (a marker, a cancel) lands after the report in the
 // caller's buffer.
 func waitForConfigworkerChildAdded(logOutput func() string, appWorker string) {
 	Eventually(func(g Gomega) {
@@ -470,8 +470,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// Run 1 fails while the supervisor is being built: construction
 		// cannot persist the application worker's initial documents. By
-		// then runV2 has already published the deps key, so this is the
-		// path that leaks it.
+		// then runV2 has already published the deps key.
 		failingConstruction := examples.ScenarioV2{
 			Name:        "construction-fails",
 			Description: "test-local driver for the supervisor-construction failure path",
@@ -481,8 +480,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		}
 
 		// Cancellable so a regression that lets construction succeed still
-		// tears run 1 down: with no Duration, ctx cancellation is the only
-		// teardown trigger.
+		// tears run 1 down: with no Duration, cancelling ctx is what
+		// begins teardown (ScenarioV2.Driver's doc holds the contract).
 		ctx1, cancel1 := context.WithCancel(context.Background())
 		defer cancel1()
 
@@ -571,14 +570,17 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		// The driver logs through Env.Logger: the run hands the driver its
-		// tee logger, so the entry must reach the caller's sink AND
-		// result.Logs. A driver that logs nothing (NoopScenarioV2's) leaves
-		// that routing unobserved. A runner that hands the driver
-		// RunConfig.Logger instead leaves the entry in the caller's sink
-		// but out of Logs, which the prefix-containment check already
-		// fails; the driver-entry check is what catches an entry lost to
-		// both sinks.
+		// The driver-entry check is the only assertion here that catches
+		// an entry that reached neither the caller's buffer nor
+		// result.Logs: checkCapturedEntries counts result.Logs against
+		// the caller's buffer, so an entry missing from both sides is
+		// invisible to it. The driver logs through Env.Logger, which is
+		// the run's tee logger, so the entry must reach the caller's
+		// buffer AND result.Logs. A driver that logs nothing
+		// (NoopScenarioV2's) leaves that routing unobserved; a runner that
+		// hands the driver RunConfig.Logger instead leaves the entry in
+		// the caller's buffer but out of Logs, which the
+		// prefix-containment check already fails.
 		loggingDriver := examples.ScenarioV2{
 			Name:        "logs-complete",
 			Description: "test-local driver that logs one entry through Env.Logger",
@@ -589,9 +591,10 @@ var _ = Describe("ScenarioV2 framework", func() {
 			},
 		}
 
-		// Duration=0 leaves ctx-cancellation as the only teardown trigger
-		// (ScenarioV2.Driver's doc), so this spec decides when shutdown
-		// begins and can mark that moment in the caller's buffer.
+		// Duration=0 means the spec's cancel is what begins teardown
+		// (ScenarioV2.Driver's doc holds the contract), so this spec
+		// decides when shutdown begins and can mark that moment in the
+		// caller's buffer.
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -611,45 +614,46 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// is that output, so wait for it before marking shutdown.
 		waitForConfigworkerChildAdded(logBuf.String, appWorker)
 
-		// The sentinel marks the shutdown boundary in the caller's buffer
+		// The marker records the shutdown boundary in the caller's buffer
 		// (checkCapturedEntries' doc holds its contract), logged right
 		// before the cancel that begins shutdown.
-		logger.Info("spec_sentinel_before_shutdown")
+		logger.Info("spec_marker_before_shutdown")
 
 		cancel()
 		// Once Done closes, result.Logs is final (RunResult.Logs' doc:
 		// teardown parsed the capture first, and trailing writes are that
 		// doc's named exception), which is why the claim below stops at the
-		// sentinel and asserts nothing about what follows it.
+		// marker and asserts nothing about what follows it.
 		Eventually(result.Done, "55s").Should(BeClosed())
 
-		// Completeness, judged against the caller's own sink; the
+		// Completeness, judged against the caller's own buffer; the
 		// checkCapturedEntries doc holds the contract.
-		Expect(checkCapturedEntries(logBuf.String(), result.Logs, "spec_sentinel_before_shutdown")).To(Succeed(),
-			"every entry the caller's buffer holds before the sentinel must appear in result.Logs, and result.Logs must hold no entry the whole buffer lacks")
+		Expect(checkCapturedEntries(logBuf.String(), result.Logs, "spec_marker_before_shutdown")).To(Succeed(),
+			"every entry the caller's buffer holds before the marker must appear in result.Logs, and result.Logs must hold no entry the whole buffer lacks")
 
-		// The driver's entry: proves Env.Logger is the run's tee, so driver
-		// entries reach the caller's sink and Logs alike.
+		// The driver's entry: proves Env.Logger is the run's tee logger,
+		// so driver entries reach the caller's buffer and Logs alike.
 		Expect(logsContainMsg(result.Logs, "driver_logged_entry")).To(BeTrue(),
 			"an entry the driver logs through Env.Logger must reach result.Logs")
 
-		// The store's entry: SetupStore's logger swap points the store at
-		// the run's tee, so the store's identity_created at debug lands in
-		// Logs. The level is what makes the check discriminate: the
-		// supervisor also emits identity_created, at info and through the
-		// tee by construction, so matching the message alone still passes
-		// with the swap disabled; only the level check distinguishes the
-		// store's entry from the supervisor's.
+		// The store's entry: runV2's swapStoreLogger points the store at
+		// the run's tee logger, so the store's identity_created at debug
+		// lands in Logs. The level is what makes the check discriminate:
+		// the supervisor also emits identity_created, at info and through
+		// the run's tee logger by construction, so matching the message
+		// alone still passes with the swap disabled; only the level check
+		// distinguishes the store's entry from the supervisor's.
 		Expect(logsContainMsgAtLevel(result.Logs, "identity_created", "debug")).To(BeTrue(),
 			"the store's identity_created at debug must reach result.Logs through the swapped store logger")
 
-		// One known entry arrives typed. Every run drives the config worker
-		// kernel child through state transitions, and the supervisor logs
-		// each one as a state_transition at info, naming the child in the
-		// worker field and carrying from_state/to_state/reason. The entry
-		// must reach the caller parsed, not merely present: exact level,
-		// exact worker, its transition keys, and no reserved key leaking
-		// into Fields.
+		// One known entry arrives typed. Every run drives the configworker
+		// (the kernel child of the application worker) through state
+		// transitions, and the supervisor logs each one as a
+		// state_transition at info, naming the child in the worker field
+		// and carrying from_state/to_state/reason. The entry must reach
+		// the caller parsed, not merely present: exact level, exact
+		// worker, its transition keys, and no reserved key leaking into
+		// Fields.
 		const configWorkerChild = "scenariov2-logs-complete(application)/config-worker-001(configworker)"
 		var typed *examples.LogEntry
 		for i := range result.Logs {
@@ -678,7 +682,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		}
 	})
 
-	It("detects a dropped entry whose key recurs after the sentinel, and an entry Logs holds that the caller's buffer never received", func() {
+	It("detects a dropped entry whose key recurs after the marker, and an entry Logs holds that the caller's buffer never received", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
@@ -691,9 +695,10 @@ var _ = Describe("ScenarioV2 framework", func() {
 			},
 		}
 
-		// Duration=0 leaves ctx-cancellation as the only teardown trigger
-		// (ScenarioV2.Driver's doc), so this spec decides when shutdown
-		// begins and can mark that moment in the caller's buffer.
+		// Duration=0 means the spec's cancel is what begins teardown
+		// (ScenarioV2.Driver's doc holds the contract), so this spec
+		// decides when shutdown begins and can mark that moment in the
+		// caller's buffer.
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -710,14 +715,14 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// Settle gate: the entry this spec drops is the reconciliation
 		// report for the tick that added the configworker child, so that
-		// report must appear in the caller's buffer before the sentinel,
-		// or the drop removes an entry the sentinel does not bound.
+		// report must appear in the caller's buffer before the marker,
+		// or the drop removes an entry the marker does not bound.
 		waitForConfigworkerChildAdded(logBuf.String, appWorker)
 
-		// The sentinel marks the shutdown boundary in the caller's buffer
+		// The marker records the shutdown boundary in the caller's buffer
 		// (checkCapturedEntries' doc holds its contract): the drop below
 		// must remove an entry that precedes it.
-		logger.Info("spec_sentinel_before_shutdown")
+		logger.Info("spec_marker_before_shutdown")
 
 		cancel()
 		// Once Done closes, result.Logs is final (RunResult.Logs' doc), so
@@ -726,16 +731,16 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// Positive control: the intact pair must pass, or the two
 		// corruptions below cannot prove the check detects them.
-		Expect(checkCapturedEntries(logBuf.String(), result.Logs, "spec_sentinel_before_shutdown")).To(Succeed(),
+		Expect(checkCapturedEntries(logBuf.String(), result.Logs, "spec_marker_before_shutdown")).To(Succeed(),
 			"the intact run must satisfy the captured-entry check")
 
 		// Corruption one: drop the reconciliation entry for the tick that
 		// added the configworker child. Its level, message and worker also
-		// appear after the sentinel: the pre-sentinel copy carries
-		// added=1, while the copies teardown emits after the sentinel
+		// appear after the marker: the pre-marker copy carries
+		// added=1, while the copies teardown emits after the marker
 		// report an updated child instead. Match the entry by its added
 		// field rather than by position, so the drop finds the
-		// pre-sentinel copy whatever order Logs holds.
+		// pre-marker copy whatever order Logs holds.
 		dropped := make([]examples.LogEntry, 0, len(result.Logs))
 		droppedAdded := 0
 		for _, entry := range result.Logs {
@@ -783,9 +788,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(standIns).To(BeNumerically(">=", 1),
 			"the corrupted Logs must still hold an entry matching the dropped one on level, message and worker, or a key without Fields would catch the drop and this spec would not exercise Fields")
 
-		dropErr := checkCapturedEntries(logBuf.String(), dropped, "spec_sentinel_before_shutdown")
+		dropErr := checkCapturedEntries(logBuf.String(), dropped, "spec_marker_before_shutdown")
 		Expect(dropErr).To(HaveOccurred(),
-			"dropping the pre-sentinel reconciliation entry must fail the check, because its structured fields distinguish it from the later copies")
+			"dropping the pre-marker reconciliation entry must fail the check, because its structured fields distinguish it from the later copies")
 		Expect(dropErr.Error()).To(ContainSubstring("child_reconciliation_completed"),
 			"the failure must name the entry the check found missing")
 
@@ -800,44 +805,44 @@ var _ = Describe("ScenarioV2 framework", func() {
 			Msg:    "entry_no_run_emits",
 			Worker: appWorker,
 		})
-		foreignErr := checkCapturedEntries(logBuf.String(), withForeign, "spec_sentinel_before_shutdown")
+		foreignErr := checkCapturedEntries(logBuf.String(), withForeign, "spec_marker_before_shutdown")
 		Expect(foreignErr).To(HaveOccurred(),
 			"an entry Logs holds that the caller's buffer never received must fail the check")
 		Expect(foreignErr.Error()).To(ContainSubstring("entry_no_run_emits"),
 			"the failure must name the entry the caller's buffer never received")
 	})
 
-	It("errors on an unparseable buffer line and on a missing, leading, or duplicated sentinel", func() {
+	It("errors on an unparseable buffer line and on a missing, leading, or duplicated shutdown marker", func() {
 		logs := []examples.LogEntry{{Level: "info", Msg: "real_entry", Worker: "worker"}}
 
 		// One non-JSON line: the runner drops unparseable lines from
 		// result.Logs, so a buffer line that cannot parse is a missing
 		// entry, not noise.
 		unparseable := "{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\nnot json\n"
-		Expect(checkCapturedEntries(unparseable, logs, "spec_sentinel_before_shutdown")).
+		Expect(checkCapturedEntries(unparseable, logs, "spec_marker_before_shutdown")).
 			To(MatchError(ContainSubstring("must parse")))
 
-		// No sentinel: the prefix-containment check has no bound, so the
+		// No marker: the prefix-containment check has no bound, so the
 		// comparison cannot claim anything.
-		noSentinel := "{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n"
-		Expect(checkCapturedEntries(noSentinel, logs, "spec_sentinel_before_shutdown")).
+		noMarker := "{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n"
+		Expect(checkCapturedEntries(noMarker, logs, "spec_marker_before_shutdown")).
 			To(MatchError(ContainSubstring("no bounded range")))
 
-		// Sentinel first: the prefix is empty and the prefix-containment
+		// Marker first: the prefix is empty and the prefix-containment
 		// check is vacuous.
-		sentinelFirst := "{\"level\":\"info\",\"msg\":\"spec_sentinel_before_shutdown\"}\n" +
+		markerFirst := "{\"level\":\"info\",\"msg\":\"spec_marker_before_shutdown\"}\n" +
 			"{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n"
-		Expect(checkCapturedEntries(sentinelFirst, logs, "spec_sentinel_before_shutdown")).
+		Expect(checkCapturedEntries(markerFirst, logs, "spec_marker_before_shutdown")).
 			To(MatchError(ContainSubstring("vacuous")))
 
-		// Two entries carrying the sentinel's message: the check would
+		// Two entries carrying the marker's message: the check would
 		// bound its range at the first and silently demand less than the
 		// caller marked, so a duplicate must fail loudly.
-		duplicateSentinel := "{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n" +
-			"{\"level\":\"info\",\"msg\":\"spec_sentinel_before_shutdown\"}\n" +
+		duplicateMarker := "{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n" +
+			"{\"level\":\"info\",\"msg\":\"spec_marker_before_shutdown\"}\n" +
 			"{\"level\":\"info\",\"msg\":\"real_entry\",\"worker\":\"worker\"}\n" +
-			"{\"level\":\"info\",\"msg\":\"spec_sentinel_before_shutdown\"}\n"
-		Expect(checkCapturedEntries(duplicateSentinel, logs, "spec_sentinel_before_shutdown")).
+			"{\"level\":\"info\",\"msg\":\"spec_marker_before_shutdown\"}\n"
+		Expect(checkCapturedEntries(duplicateMarker, logs, "spec_marker_before_shutdown")).
 			To(MatchError(ContainSubstring("exactly once")))
 	})
 
@@ -983,7 +988,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(clientWasSet).To(BeTrue(),
 			"Env must carry a non-nil fsmv2client for the driver")
 		Expect(loggerWasSet).To(BeTrue(),
-			"Env must carry the run's logger for the driver")
+			"Env must carry the run's tee logger for the driver")
 
 		// Store check: with no YAML children declared, the only child the
 		// application supervisor spawns is the config worker kernel.
@@ -1098,9 +1103,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Caller-ctx cancellation is the only teardown path for a Duration=0
-		// run (ScenarioV2.Driver's doc); a regression here leaves such a run
-		// hanging forever.
+		// For a Duration=0 run, cancelling ctx is what begins teardown
+		// (ScenarioV2.Driver's doc holds the contract); a regression here
+		// leaves such a run hanging forever.
 		cancel()
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the v2 runner must tear down when the context is cancelled")

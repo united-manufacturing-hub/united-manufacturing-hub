@@ -276,8 +276,9 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // ctx, cancelling it would stop ticking before Shutdown runs, and the
 // graceful drain would wait out its full timeout against a stopped loop.
 //
-// After the Driver returns nil, the runner waits RunConfig.Duration (or
-// until ctx is cancelled; 0 means ctx-only), then shuts the supervisor down.
+// After the Driver returns nil, the runner waits RunConfig.Duration —
+// ScenarioV2.Driver's doc states what 0 means and when the wait can end
+// early — then shuts the supervisor down.
 //
 // Because the deps key is process-global, v2 runs must not overlap within a
 // process. The already-published check below catches sequential overlap (a
@@ -290,10 +291,10 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			"so another v2 run is still active in this process", cfg.ScenarioV2.Name)
 	}
 
-	// The run logs through a tee: one arm is the caller's logger, the other
-	// captures every entry the run emits so RunResult.Logs can hold them
-	// parsed. Teeing (rather than replacing the caller's logger) keeps every
-	// entry flowing to whatever sink the caller passed.
+	// runLogger is the run's tee logger: one arm is the caller's logger,
+	// the other captures every entry the run emits so RunResult.Logs can
+	// hold them parsed. Teeing (rather than replacing the caller's logger)
+	// keeps every entry flowing to whatever sink the caller passed.
 	capture := &syncBuffer{}
 	runLogger := teeLogger{
 		a: cfg.Logger,
@@ -314,7 +315,8 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// swap those entries would reach the caller's sink but not Logs. The swap
 	// precedes supervisor construction because construction already saves the
 	// application worker's documents; the restore in teardown runs strictly
-	// after the supervisor stopped, when no store activity is left.
+	// after the supervisor stopped. Store activity is not over by then —
+	// swappableLogger's doc says what makes that overlap safe.
 	restoreStoreLogger := swapStoreLogger(cfg.Store, runLogger)
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
@@ -327,10 +329,12 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
 	if err != nil {
-		// Construction failed before the deferred teardown below was
-		// registered, so nothing else clears the key published above.
+		// This return is reached before the teardown closure below and
+		// the defer that calls it are, so nothing else clears the deps
+		// key that register.SetDeps published above: this ClearDeps is
+		// the failed construction's only cleanup.
 		register.ClearDeps(configworker.WorkerTypeName)
-		return nil, err
+		return nil, fmt.Errorf("scenario %q supervisor construction failed: %w", cfg.ScenarioV2.Name, err)
 	}
 
 	// Detached from the caller's ctx so cancelling the caller's ctx triggers
@@ -555,15 +559,14 @@ func parseLogEntries(lines []string) []LogEntry {
 }
 
 // swappableLogger forwards to a logger that can be exchanged mid-flight, so a
-// store built before a run can log through the run's logger once the run
+// store built before a run can log through the run's tee logger once the run
 // starts. The store calls only the four log methods; a logger derived via With
 // is not swappable, and nothing in pkg/cse/storage derives one.
 //
-// The mutex is what makes the exchange safe to overlap with logging: when a
-// caller-initiated result.Shutdown() runs the supervisor's Phase 4 on the
-// caller's goroutine, the teardown goroutine's own Shutdown call
-// early-returns, so the restore of the store's original logger can overlap a
-// store entry still being logged.
+// The mutex is what makes the exchange safe to overlap with logging: the
+// restore in teardown can run while a straggling store entry is still being
+// logged. The caller-initiated Shutdown that produces that overlap is one of
+// the trailing-write classes runV2's teardown comment names.
 type swappableLogger struct {
 	l  deps.FSMLogger
 	mu sync.RWMutex
