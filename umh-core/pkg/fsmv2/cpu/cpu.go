@@ -222,7 +222,10 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	}
 
 	// A quota change at runtime needs a rebuilt table, which this worker does not
-	// do: both cores and quota are read once, from the startup snapshot.
+	// do: both cores and quota are read once, from the startup snapshot. What the
+	// quota settles is whether a CPU limit exists at all, not how large it is: a
+	// positive value means a limit is set, and zero means unlimited rather than no
+	// CPU to use.
 	cores, quota := startupCapacity(context.Background(), sampler, bd)
 	d.table = cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
