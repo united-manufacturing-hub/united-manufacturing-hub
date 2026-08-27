@@ -440,9 +440,11 @@ func cpuRules(causes []Cause, details Details) []cpuRule {
 // headroomRule builds one headroom line: the subtraction its budget spells out,
 // against the mark pair the signal measuring that ceiling declares.
 //
-// applies is true by construction. The caller appends this line only for a
-// ceiling cpuTable declared a signal for, so the box does run the rule; a
-// ceiling it declared nothing for gets no line at all rather than a slot.
+// applies is true by construction: the caller appends this line only where the
+// declared-ceiling test passed, and a ceiling that fails it gets no line at all
+// rather than an empty slot. That the box then runs the rule is the usual case,
+// not a guarantee - the test runs on this tick, the table was built at startup.
+// hostCpuFullDeclared has the case where they part.
 func headroomRule(label string, b budgetCores, marks diagnosis.Marks, ready, latched, firedHere bool) cpuRule {
 	return cpuRule{
 		label: label,
@@ -466,8 +468,10 @@ func headroomRule(label string, b budgetCores, marks diagnosis.Marks, ready, lat
 // is what no-limit mode means here.
 //
 // Both figures are this tick's read, while cpuTable was handed the startup one.
-// They differ only where a cpuset that read at startup stops reading later, and
-// on that tick the line would have no figure to print anyway.
+// Where a cpuset read at startup and stops reading later the line drops, and it
+// had no figure to print anyway. The other direction is the harmful one: a
+// cpuset that failed at startup and reads later prints a headroom line for a
+// ceiling the table never declared (ENG-5752).
 func tableCeilings(details Details) (cores, quota float64) {
 	if details.LimitApplies {
 		return details.LogicalCpus, details.CapacityCores
