@@ -19,7 +19,6 @@ package fsmv2cpu
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
@@ -87,12 +86,11 @@ type CPUStatus struct {
 	Message string `json:"message"`
 }
 
-// CPUDeps is the per-instance state Poll reads and mutates.
+// CPUDeps is the per-instance state Poll reads.
 //
 // TDeps must be *CPUDeps, never the value: simple.MonitorSpec passes TDeps to
-// Poll by value, so binding CPUDeps would hand each tick its own copy and lose
-// the window anchor and the report latch below, while the map and the pointers
-// kept working across the copy. Nothing enforces this.
+// Poll by value, so state a field holds directly, rather than behind a pointer,
+// would die with that copy. Nothing enforces this.
 type CPUDeps struct {
 	*deps.BaseDependencies
 
@@ -106,19 +104,6 @@ type CPUDeps struct {
 	// that will not build has to surface at the next Poll instead, which reports
 	// it could not measure.
 	engineErr error
-
-	// everMeasured keeps a signal that has measured once counting as measured
-	// through a later read outage. Set the first tick a signal reads Ready, and
-	// never cleared while the worker lives.
-	everMeasured map[string]bool
-
-	// admissionState is the admission window's anchor and its report latch.
-	// admission.go has what the window is for.
-	admissionState admission
-
-	// table is held because engine.Select needs the Signal values, which are
-	// only reachable through the table the engine was built from.
-	table diagnosis.Table[cpuhealth.Sample]
 }
 
 // Poll samples the cgroup once and reports the verdict Decide judged. On a
@@ -138,62 +123,10 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
-	// After Decide, never before it, and on the same env. evidenceCounts says why.
-	capable, measured, unmeasured := d.evidenceCounts(env)
-
-	atDeadline := d.admissionState.shortfallAtDeadline(sample.Timestamp, measured, capable)
-
-	// The message is a FIXED event name, never interpolated: sentry's
-	// BuildFingerprint groups on the log entry's message verbatim, so a Sprintf
-	// carrying signal names and counts would give every distinct combination its
-	// own Sentry issue. Dynamic values ride in the structured fields.
-	if atDeadline && d.admissionState.reportOnce() {
-		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			"cpu_admission_deadline_never_measured_signal",
-			deps.String("never_measured_signals", strings.Join(unmeasured, ", ")),
-			deps.Int("signals_measured", measured),
-			deps.Int("signals_capable", capable),
-			deps.Duration("admission_window", admissionWindow))
-	}
-
 	return CPUStatus{
 		Verdict: string(verdict.State),
 		Message: cpuhealth.ComposeMessage(verdict, details),
 	}, nil
-}
-
-// evidenceCounts answers three questions about this tick: how many signals this
-// box can answer at all (capable — the signal is not NoInstrument), how many of
-// those have ever answered (measured — everMeasured is set, which happens the
-// first tick the signal reads Ready and never reverses), and which capable ones
-// never have.
-//
-// It must run after Decide, on the same tick and the same env. Select reports a
-// window's readiness without ageing it, so its answer is trustworthy only
-// following an Observe on that tick, and Decide is what Observes.
-func (d *CPUDeps) evidenceCounts(env diagnosis.Environment) (capable, measured int, unmeasured []string) {
-	unmeasured = []string{}
-
-	for _, s := range d.table.Signals {
-		_, _, _, availability := d.engine.Select(s, env)
-		if availability == diagnosis.NoInstrument {
-			continue
-		}
-
-		if availability == diagnosis.Ready {
-			d.everMeasured[s.Name] = true
-		}
-
-		if d.everMeasured[s.Name] {
-			measured++
-		} else {
-			unmeasured = append(unmeasured, s.Name)
-		}
-
-		capable++
-	}
-
-	return capable, measured, unmeasured
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
@@ -227,9 +160,8 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	// positive value means a limit is set, and zero means unlimited rather than no
 	// CPU to use.
 	cores, quota := startupCapacity(context.Background(), sampler, bd)
-	d.table = cpuhealth.Table(cores, quota)
-	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
-	d.everMeasured = make(map[string]bool)
+	table := cpuhealth.Table(cores, quota)
+	d.engine, d.engineErr = diagnosis.NewEngine(table)
 
 	return d
 }
