@@ -105,12 +105,11 @@ var _ = Describe("absence of evidence is not health", func() {
 			// never-measured signal into a bad verdict. The intended consumer is
 			// bridge admission, where a degraded verdict stops new bridges from
 			// starting. That consumer is not built: outside this package,
-			// nothing reads Verdict. Once it exists, "the window expired and the
-			// signal still never measured, surely that is degraded" would block
+			// nothing reads Verdict. A degraded verdict here would block
 			// such a box for its whole life, which is what the bounded wait
-			// exists to prevent. It would do so silently, because every other
-			// spec that reads Verdict uses time.Now() timestamps and never
-			// crosses the deadline.
+			// exists to prevent. This spec is the only place that would catch
+			// it: every other spec that reads Verdict uses time.Now()
+			// timestamps and never crosses the deadline.
 			// The inside-window value (index 1) is the reference on both sides.
 			Expect(verdict[1]).NotTo(Equal(string(cpuhealth.StateDegraded)),
 				"the reference tick inside the window is not already degraded, so the comparison below can discriminate")
