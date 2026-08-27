@@ -114,11 +114,12 @@ var _ = Describe("two capacity causes on one tick", func() {
 			// CPU to a full machine and also to raise their own limit gives them a
 			// remedy that cannot work.
 			//
-			// The table below it reports the limit's own headroom, because a
-			// limit applies here, and names the mark that CLEARS it: the rule has
-			// fired, so the number deciding what happens next is the clear mark.
-			// 0.1 is 0.05 x the 2.0-core quota, read from the same pair the
-			// engine judged the tick against.
+			// The table below it reports both ceilings, because both signals are
+			// declared on this box and both fired. Each names the mark that
+			// CLEARS it: the rule has fired, so the number deciding what happens
+			// next is the clear mark. 0.5 is the machine's fixed clear mark and
+			// 0.1 is 0.05 x the 2.0-core quota, each read from the pair the
+			// engine judged that arm against.
 			Expect(ComposeMessage(verdict, details)).To(Equal(
 				"CPU running near full"+
 					"\n"+
@@ -126,7 +127,8 @@ var _ = Describe("two capacity causes on one tick", func() {
 					"Add CPU to the machine, or reduce other software running on it. "+
 					"(This instance is also at its 2-core limit.)"+
 					"\nTechnical Details:\n"+
-					"Headroom -0.2 cores = 2 total - 2.0 used - 0.2 reserved (recovers above 0.1).\n"+
+					"Machine headroom -0.8 cores = 4 total - 3.8 used - 1.0 reserved (recovers above 0.5).\n"+
+					"Instance headroom -0.2 cores = 2 total - 2.0 used - 0.2 reserved (recovers above 0.1).\n"+
 					"Usage not available (not possible).\n"+
 					"Throttling not available (measuring).\n"+
 					"Pressure not available (not possible).\n"+
