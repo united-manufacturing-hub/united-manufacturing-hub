@@ -154,23 +154,28 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 		sampler:          sampler,
 	}
 
-	// A quota change at runtime needs a rebuilt table, which this worker does not
-	// do: both cores and quota are read once, from the startup snapshot. What the
-	// quota settles is whether a CPU limit exists at all, not how large it is: a
-	// positive value means a limit is set, and zero means unlimited rather than no
-	// CPU to use.
-	cores, quota := startupCapacity(context.Background(), sampler, bd)
+	cores, quota := containerOrHostLimit(context.Background(), sampler, bd)
 	table := cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(table)
 
 	return d
 }
 
-// startupCapacity takes the one snapshot cpuhealth.Table is called with, and
-// returns the cores the cgroup may use and its quota. Either is zero when the
-// snapshot did not carry it, which thins the table for the instance's whole
-// lifetime — NewDeps has the consequence.
-func startupCapacity(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
+// containerOrHostLimit decides which limit cpuhealth judges CPU use against:
+// the container's own resource limit, or the host's capacity. cpuhealth needs
+// that answer in advance, because the table is built from it once and never
+// rebuilt.
+//
+// It reads one snapshot and returns the cores the cgroup may use and its quota.
+// A positive quota means the container has a CPU limit, so cpuhealth judges
+// against that limit. A zero quota means the container has no limit of its own,
+// so the host's capacity governs. Zero says unlimited, not that there is no CPU
+// to use.
+//
+// Either return is also zero when the startup snapshot did not carry it, which
+// thins the table for the instance's whole lifetime. NewDeps has the
+// consequence.
+func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
 	smp, err := s.Read(ctx)
 	if err != nil {
 		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
