@@ -41,23 +41,49 @@ func tableLines(msg string) []string {
 	return strings.Split(table, "\n")
 }
 
-// tableRules returns the rule each table line reports, in order: the word the
-// line opens with.
+// tableRules returns the rule each table line reports, in order: the label the
+// line opens with. A line opening with none of the labels the table can print
+// comes back whole, so an unexpected label fails a comparison rather than being
+// silently trimmed to its first word.
 func tableRules(msg string) []string {
-	rules := make([]string, 0, 5)
+	rules := make([]string, 0, len(bothCeilingRules))
 	for _, line := range tableLines(msg) {
-		rules = append(rules, strings.SplitN(line, " ", 2)[0])
+		rules = append(rules, ruleLabel(line))
 	}
 
 	return rules
 }
 
-// allRules is the fixed order the table prints, every slot present in every
-// state that has a table.
-var allRules = []string{"Headroom", "Usage", "Throttling", "Pressure", "Steal"}
+// ruleLabel returns the label one rendered line opens with.
+func ruleLabel(line string) string {
+	for _, label := range bothCeilingRules {
+		if strings.HasPrefix(line, label+" ") {
+			return label
+		}
+	}
+
+	return line
+}
+
+// bothCeilingRules is the fixed order the table prints on a box judged against
+// both ceilings: a container under a CPU limit, on a machine whose core count
+// read. One headroom line per ceiling, then the four slots that are present in
+// every state that has a table.
+var bothCeilingRules = []string{labelMachineHeadroom, labelInstanceHeadroom, "Usage", "Throttling", "Pressure", "Steal"}
+
+// machineOnlyRules is the same order on a box with no CPU limit, where the
+// machine is the only ceiling and the limit line would name a rule nothing is
+// judging.
+var machineOnlyRules = []string{labelMachineHeadroom, "Usage", "Throttling", "Pressure", "Steal"}
 
 // healthyDetails builds a Details bag with every healthy-message input in a
 // usable state, so individual fields can be overridden per assertion.
+//
+// It is a two-core box with a two-core limit, so both ceilings are judged and
+// the table carries both headroom lines. A no-limit assertion overrides
+// LimitApplies, CapacityCores and LogicalCpus together: buildDetails makes
+// CapacityCores the machine's core count where no limit applies, so a bag
+// setting one without the other is a box that cannot exist.
 func healthyDetails() Details {
 	return Details{
 		LimitApplies:           true,
@@ -87,6 +113,7 @@ var _ = Describe("the healthy headline", func() {
 		nolimit := healthyDetails()
 		nolimit.LimitApplies = false
 		nolimit.CapacityCores = 8
+		nolimit.LogicalCpus = 8
 		nolimit.AvgUsageCores = 0
 		nolimit.AvgHostBusyCores = 0.0
 		nolimit.ReserveCores = 1.0
@@ -99,7 +126,7 @@ var _ = Describe("the healthy headline", func() {
 		details.AvgUsageCores = 0.3
 		msg := composeHealthy(details)
 		// 2 total - 0.3 used - 0.2 reserved = 1.5, printed exactly.
-		Expect(msg).To(ContainSubstring("Headroom 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degrades below %s).",
+		Expect(msg).To(ContainSubstring(labelInstanceHeadroom+" 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degrades below %s).",
 			fmtCoresTotal(limitHeadroomMarks(details.CapacityCores).Fire.At)))
 		Expect(msg).To(ContainSubstring("can use 1.5 more before it is marked degraded."))
 	})
@@ -204,17 +231,38 @@ var _ = Describe("the healthy headline", func() {
 	})
 })
 
+// firstTick drives one tick through a fresh engine and returns what a two-core
+// box under a two-core limit, with pressure statistics, reports one second
+// after it starts.
+func firstTick() (Verdict, Details) {
+	engine, err := NewEngine(2, 2.0)
+	Expect(err).NotTo(HaveOccurred())
+
+	return Decide(engine, Sample{
+		Timestamp:    time.Now(),
+		CpuScope:     ScopeHost,
+		Quota:        diagnosis.Known(2.0),
+		HostBusy:     diagnosis.Known(0.4),
+		UsageCores:   diagnosis.Known(0.2),
+		LogicalCpus:  diagnosis.Known(2),
+		HostCpus:     diagnosis.Known(2),
+		PsiAvailable: true,
+		Pressure:     diagnosis.Known(0.01),
+	}, diagnosis.NewEnvironment(HasLimit, HasPressureStats))
+}
+
 var _ = Describe("the healthy message reports only what it measured", func() {
 	It("should not report host usage or headroom when the host reading is absent", func() {
 		details := healthyDetails()
 		details.LimitApplies = false
 		details.CapacityCores = 8
+		details.LogicalCpus = 8
 		details.AvgHostBusyCores = 0.0
 		details.ReserveCores = 1.0
 		details.HostBusyCoresAvailable = false // read failed, window still full
 		msg := composeHealthy(details)
 		Expect(msg).To(HavePrefix(cpuStartingUp + technicalDetailsLabel))
-		Expect(msg).To(ContainSubstring("Headroom not available (measuring)."),
+		Expect(msg).To(ContainSubstring(labelMachineHeadroom+" not available (measuring)."),
 			"the headroom line states no figure either, and says which kind of absence it is")
 	})
 
@@ -223,20 +271,23 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 		details.UsageRingActive = false
 		msg := composeHealthy(details)
 		Expect(msg).To(HavePrefix(cpuStartingUp + technicalDetailsLabel))
-		Expect(msg).To(ContainSubstring("Headroom not available (measuring)."))
+		Expect(msg).To(ContainSubstring(labelInstanceHeadroom + " not available (measuring)."))
+		Expect(msg).To(ContainSubstring(labelMachineHeadroom+" 1.0 cores"),
+			"the two windows are separate: a thin usage window withholds the instance's own figure and not the machine's")
 	})
 
 	It("should not report the no-limit usage figure when the host window holds too few samples to reduce, even though the reading succeeded", func() {
 		details := healthyDetails()
 		details.LimitApplies = false
 		details.CapacityCores = 8
+		details.LogicalCpus = 8
 		details.AvgHostBusyCores = 0.0
 		details.ReserveCores = 1.0
 		details.HostBusyCoresAvailable = true
 		details.HostBusyRingActive = false
 		msg := composeHealthy(details)
 		Expect(msg).To(HavePrefix(cpuStartingUp + technicalDetailsLabel))
-		Expect(msg).To(ContainSubstring("Headroom not available (measuring)."))
+		Expect(msg).To(ContainSubstring(labelMachineHeadroom + " not available (measuring)."))
 	})
 
 	It("should render no headline at all on a tick whose usage figure is withheld, returning through the same single-line path the zero-capacity guard uses rather than a headline with a hole in it", func() {
@@ -246,23 +297,30 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 		Expect(msg).To(HavePrefix("CPU: starting up." + technicalDetailsLabel))
 		Expect(msg).NotTo(ContainSubstring("CPU healthy."))
 
-		// The table comes with it, and every line says which kind of absence it
-		// is rather than stating a figure nothing measured. On the first ticks
-		// that is what an operator wants: the rules that will be judged, and how
-		// far off each reading is.
-		startup := healthyDetails()
-		startup.UsageRingActive = false
-		startup.HostBusyRingActive = false
-		startup.ThrottleSignalReady = false
-		startup.PressureSignalReady = false
-		startup.StealSignalReady = false
-		lines := tableLines(composeHealthy(startup))
-		Expect(tableRules(composeHealthy(startup))).To(Equal(allRules))
-		for _, line := range lines {
+		// The table comes with it, and no line states a figure its own window
+		// has not produced. On the first ticks that is what an operator wants:
+		// the rules that will be judged, and which of them is still filling.
+		//
+		// Driven through one real tick rather than a hand-built bag, because the
+		// windows do not all fill together and a bag can claim they do. Pressure
+		// reduces with Last over PSI's own sixty-second average, so it has a
+		// value on tick 0 while every window that has to average two readings
+		// has none. That asymmetry is the whole point of the per-rule slot.
+		verdict, details := firstTick()
+		Expect(verdict.State).To(Equal(StateHealthy), "a box that has measured nothing cannot have judged itself degraded")
+		msg = ComposeMessage(verdict, details)
+		Expect(msg).To(HavePrefix(cpuStartingUp + technicalDetailsLabel))
+		Expect(tableRules(msg)).To(Equal(bothCeilingRules))
+		Expect(msg).To(ContainSubstring("Pressure 1%% (degrades above %d%%).", toPercent(pressureMarks.Fire.At)),
+			"pressure reads on tick 0, so a table claiming it is still measuring would describe a box that does not exist")
+		for _, line := range tableLines(msg) {
+			if strings.HasPrefix(line, "Pressure ") {
+				continue
+			}
 			Expect(line).To(SatisfyAny(
 				HaveSuffix("not available (measuring)."),
 				HaveSuffix("not available (not possible)."),
-			), "a box that has measured nothing yet may state no figure, and this line does: %q", line)
+			), "no other window has reduced yet, so this line may state no figure: %q", line)
 		}
 
 		// The floors are per measurement, not one flag: a limit-mode headline uses
@@ -283,6 +341,7 @@ func limitedVisibilityDetails() Details {
 	d.LimitApplies = false
 	d.LimitedVisibility = true
 	d.CapacityCores = 4
+	d.LogicalCpus = 4
 	d.ReserveCores = 1.0
 	d.AvgHostBusyCores = 1.2
 	d.AvgUsageFraction = 0.30
@@ -309,7 +368,7 @@ var _ = Describe("the Technical Details table", func() {
 		all.StealApplies = true
 		msg := composeHealthy(all)
 
-		Expect(msg).To(ContainSubstring("Headroom 1.8 cores = 2 total - 0.0 used - 0.2 reserved (degrades below %s).",
+		Expect(msg).To(ContainSubstring(labelInstanceHeadroom+" 1.8 cores = 2 total - 0.0 used - 0.2 reserved (degrades below %s).",
 			fmtCoresTotal(limitHeadroomMarks(all.CapacityCores).Fire.At)))
 		Expect(msg).To(ContainSubstring("Throttling 2%% (degrades above %d%%).", toPercent(throttleMarks.Fire.At)))
 		Expect(msg).To(ContainSubstring("Pressure 5%% (degrades above %d%%).", toPercent(pressureMarks.Fire.At)))
@@ -347,14 +406,14 @@ var _ = Describe("the Technical Details table", func() {
 			NotTo(ContainSubstring("Usage not available (not possible)."))
 	})
 
-	It("should carry all five rules, in one order, in every state that has a table", func() {
-		Expect(tableRules(composeHealthy(healthyDetails()))).To(Equal(allRules))
+	It("should carry every rule the engine is judging, in one order, in every state that has a table", func() {
+		Expect(tableRules(composeHealthy(healthyDetails()))).To(Equal(bothCeilingRules))
 		Expect(tableRules(ComposeMessage(degradedVerdict(CauseKindSteal, instrumentStealMean, 0.18), degradedSig()))).
-			To(Equal(allRules))
+			To(Equal(bothCeilingRules))
 
 		thin := healthyDetails()
 		thin.UsageRingActive = false
-		Expect(tableRules(composeHealthy(thin))).To(Equal(allRules),
+		Expect(tableRules(composeHealthy(thin))).To(Equal(bothCeilingRules),
 			"a rule dropped from the table is a rule the reader takes for fine")
 	})
 
@@ -379,7 +438,7 @@ var _ = Describe("the Technical Details table", func() {
 		msg := composeHealthy(vm)
 		Expect(msg).To(ContainSubstring("Steal not available (measuring)."))
 		Expect(msg).NotTo(ContainSubstring("Steal 0%"))
-		Expect(msg).To(ContainSubstring("Headroom"))
+		Expect(msg).To(ContainSubstring(labelMachineHeadroom))
 
 		// The throttle gate is readiness, not LimitApplies.
 		noThrottle := healthyDetails()
@@ -418,6 +477,7 @@ var _ = Describe("the Technical Details table", func() {
 func degradedSig() Details {
 	return Details{
 		CapacityCores:          4.0,
+		LogicalCpus:            4,
 		AvgUsageCores:          0.5,
 		AvgHostBusyCores:       1.0,
 		HostBusyCoresAvailable: true,
@@ -478,7 +538,8 @@ var _ = Describe("degraded copy", func() {
 		Expect(msg).To(Equal("CPU taken by the server\n" +
 			"Other virtual machines on the same physical server took 18% of the CPU this instance needed over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server." +
 			"\nTechnical Details:\n" +
-			"Headroom 2.5 cores = 4 total - 0.5 used - 1.0 reserved (degrades below 0).\n" +
+			"Machine headroom 2.0 cores = 4 total - 1.0 used - 1.0 reserved (degrades below 0).\n" +
+			"Instance headroom 2.5 cores = 4 total - 0.5 used - 1.0 reserved (degrades below 0).\n" +
 			"Usage not available (not possible).\n" +
 			"Throttling 0% (degrades above 5%).\n" +
 			"Pressure 0% (degrades above 20%).\n" +

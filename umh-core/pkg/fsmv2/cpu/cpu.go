@@ -81,10 +81,13 @@ type CPUStatus struct {
 	// cpuhealth.ComposeMessage: a headline such as
 	// "CPU healthy. This instance is using 0.0 of 2 cores (0% of its limit) and
 	// can use 1.8 more before it is marked degraded.", then a Technical Details
-	// table of the five rules that can degrade this instance's CPU. The
+	// table of the rules that can degrade this instance's CPU. A box under a
+	// CPU limit is judged against two ceilings at once, its own limit and the
+	// machine, and the table carries a headroom line for each. The
 	// "CPU: starting up." message an instance shows for its first two ticks
-	// carries the table too, with every line saying why it has no figure yet.
-	// Only a failed cgroup read renders without one.
+	// carries the table too, and a line whose window has not reduced yet says
+	// so instead of stating a figure. Only a failed cgroup read renders without
+	// a table at all.
 	Message string `json:"message"`
 
 	// Details is the measured evidence behind the verdict, filled on every tick

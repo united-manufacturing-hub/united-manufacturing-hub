@@ -53,16 +53,36 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 			pressureSignal(),
 		},
 	}
-	// Only when the core count was readable. cores <= 0 means the cgroup's
-	// cpuset could not be read, so there is no capacity to be full against.
-	// Why a machine-wide busy time may be subtracted from cores, which is a
-	// container-scoped count: see host_source.go's header.
-	if cores > 0 {
+	if hostCpuFullDeclared(cores) {
 		t.Signals = append(t.Signals, hostCpuFullSignal(cores))
 	}
-	// Only when a positive quota exists; with no limit there is nothing to saturate.
-	if quota > 0 {
+	if containerLimitFullDeclared(quota) {
 		t.Signals = append(t.Signals, containerLimitFullSignal(quota))
 	}
 	return t
+}
+
+// hostCpuFullDeclared reports whether the table holds the machine-full signal.
+// It does only when the core count was readable: cores <= 0 means the cgroup's
+// cpuset could not be read, so there is no capacity to be full against. Why a
+// machine-wide busy time may be subtracted from cores, which is a
+// container-scoped count: see host_source.go's header.
+//
+// message.go reads this too, and that is the point of it being a function. The
+// Technical Details table prints one headroom line per capacity signal the
+// table holds, so a second copy of the condition there could come apart from
+// this one and print a line for a rule nothing is judging.
+func hostCpuFullDeclared(cores float64) bool {
+	return cores > 0
+}
+
+// containerLimitFullDeclared reports whether the table holds the
+// out-of-our-own-limit signal. It does only when a positive quota exists: with
+// no limit there is nothing to saturate, and Fire{At: 0} against
+// Clear{At: 0.05 x 0} is a pair NewEngine rejects.
+//
+// hostCpuFullDeclared's header says why this is a function rather than an
+// inline comparison.
+func containerLimitFullDeclared(quota float64) bool {
+	return quota > 0
 }
