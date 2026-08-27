@@ -25,8 +25,9 @@
 #              signal, only host load.
 #   DURATION   How long the monitor runs after its first reading
 #              (default 60s).
-#   LOG_LEVEL  Runner log level (default debug, the level the monitor's
-#              readings appear at; info shows only supervisor activity).
+#   LOG_LEVEL  Runner log level (default debug, which carries every completed
+#              poll on the cpu_reading line; info carries the verdict and its
+#              message whenever the worker's state changes).
 #
 # Any argument is passed to docker run verbatim, so docker's own options
 # work without this script naming them (e.g. --name, to make the container

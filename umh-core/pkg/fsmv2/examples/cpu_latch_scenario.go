@@ -29,8 +29,8 @@ const (
 	// cpuPressureBase carries the full note on why nothing checks that.
 	cpuLatchBase = "/sys/fs/cgroup"
 
-	// The four pressure levels, against the pressure signal's 0.20 fire mark
-	// and 0.12 clear mark.
+	// The pressure levels this scenario stages, against the pressure signal's
+	// 0.20 fire mark and 0.12 clear mark (pressureMarks in pkg/cpuhealth).
 	//
 	// cpuLatchNoise is the one the story turns on. It is UNDER the fire mark,
 	// so a fresh signal would not fire on it, and OVER the clear mark, so a
@@ -47,8 +47,9 @@ const (
 	//
 	// Capacity has to stay clear throughout, because this story is about one
 	// signal and a second fired signal would take the headline. Four cores at
-	// 30% busy leaves 4 - 1.2 - 1.0 = 1.8 cores of headroom against a mark at
-	// zero, and the machine never moves off it.
+	// 30% busy leaves 4 - 1.2 - 1.0 = 1.8 cores of headroom against a fire mark
+	// at zero, where the 1.0 is the core cpuhealth holds back as reserve
+	// (cpuReserveCores). The machine never moves off that headroom.
 	cpuLatchCores      = 4
 	cpuLatchHostBusy   = 0.30
 	cpuLatchUsageCores = 0.5
@@ -65,14 +66,15 @@ const (
 	//
 	// Measured:
 	//
-	//	the signal releases 1 reading after the calm condition starts — PSI is
-	//	a level the kernel reports rather than a rate this package averages, so
+	//	The signal releases 1 reading after the calm condition starts. PSI is a
+	//	level the kernel reports rather than a rate this package averages, so
 	//	the reduction is the newest reading and the crossing needs no window of
-	//	its own; the window only had to be covered, which it was long before
-	//	the signal fires again exactly 60 readings after that release, which is
-	//	the bar to the reading. By then the machine has been over its fire mark
-	//	for 40 readings, reported healthy, with the technical details printing
-	//	the number that would have fired it
+	//	its own; the window only had to be covered, which it was long before.
+	//
+	//	The signal fires again exactly 60 readings after that release, the span
+	//	the re-fire rule above requires. By then the machine has been over its
+	//	fire mark for 40 readings, reported healthy, with the technical details
+	//	printing the number that would have fired it.
 	cpuLatchFiringHold = 40 * time.Second
 	cpuLatchNoiseHold  = 40 * time.Second
 	cpuLatchCalmHold   = 20 * time.Second
@@ -94,11 +96,12 @@ const (
 //
 // # CLI Usage
 //
-//	go run pkg/fsmv2/cmd/runner/main.go --scenario=cpu-latch --duration=200ms --log-level=debug --dump-store
+//	go run pkg/fsmv2/cmd/runner/main.go --scenario=cpu-latch --duration=200ms --log-level=debug
 //
-// The verdict shows up on the collector's observed_changed line, which is a
-// debug line — the CPU worker declares no Health function, so its verdict never
-// moves the worker's FSM state and nothing about the verdict is logged at info.
+// On every completed poll the cpu_reading debug line carries the verdict and the
+// composed message; a failed poll never reaches it. When the worker's state
+// changes, the message also appears at info in the state_transition line's
+// reason field.
 var CPULatchScenarioV2 = ScenarioV2{
 	Name:        "cpu-latch",
 	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and shows the bar on re-firing (v2)",
@@ -106,9 +109,8 @@ var CPULatchScenarioV2 = ScenarioV2{
 }
 
 // driveCPULatch publishes a fake machine, spawns the CPU monitor onto it
-// through the migration-API client, and walks its pressure through four levels:
-// over the fire mark, back into the band, under the clear mark, over the fire
-// mark again.
+// through the migration-API client, and walks its pressure through the levels
+// the consts above stage.
 //
 // It judges nothing. What the worker made of each level is read back after the
 // run, out of the store's own delta history, by the spec beside this file.
@@ -166,8 +168,8 @@ func driveCPULatch(ctx context.Context, env Env) error {
 }
 
 // cpuLatchMachine is this scenario's machine at the given PSI pressure.
-// Everything except the pressure is the same in all four conditions, so the
-// four calls differ by exactly the one number the story turns on.
+// Everything except the pressure is the same in every condition, so the calls
+// differ by exactly the one number the story turns on.
 func cpuLatchMachine(pressure float64) fakebox.Condition {
 	return fakebox.Condition{
 		Cores:      cpuLatchCores,

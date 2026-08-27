@@ -174,9 +174,8 @@ type Condition struct {
 // the clock the sampler stamps its samples from.
 type Box struct {
 	// clk is the mock the sampler stamps from. It is set once at construction
-	// and only advanced after that: a clock that moved backwards produces a
-	// negative elapsed time in the admission window downstream, and that window
-	// then never opens.
+	// and only advanced after that; shieldedClock says what a backwards step
+	// costs.
 	clk *clock.Mock
 
 	base string
@@ -246,11 +245,13 @@ func (b *Box) FS() filesystem.Service {
 // shieldedClock hides the mock behind a plain clock.Clock. Returning the
 // interface is not on its own enough to hide anything: the dynamic type travels
 // with it, so box.Clock().(*clock.Mock) succeeds and hands the caller Set,
-// which moves the clock BACKWARDS. That is not a style point. The admission
-// window in pkg/fsmv2/cpu subtracts two instants with no lower guard, so one
-// backwards step leaves it refusing for the rest of the process. Embedding the
-// interface in an unexported struct promotes every read method and leaves no
-// way back to the mock.
+// which moves the clock BACKWARDS. cpuhealth publishes a rate only while the
+// gap between two Timestamps is positive: advanceUsageRate in cgroup_source.go
+// and advanceHostRates in host_source.go both guard on it. So a backwards step
+// costs the tick it lands on, which serves no rate at all. The baseline still
+// moves to the backwards instant, so ticking forward restores the rates on the
+// next tick. Embedding the interface in an unexported struct promotes every
+// read method and leaves no way back to the mock.
 type shieldedClock struct{ clock.Clock }
 
 // Clock returns the clock to hand to cpuhealth.NewLinuxSamplerWithClock. Tick
@@ -287,8 +288,11 @@ func (b *Box) Set(c Condition) {
 // delta by the gap between two Sample Timestamps: advancing one without the
 // other would serve a rate nobody asked for.
 //
-// It panics on a non-positive d, because a clock that moves backwards produces
-// a negative elapsed time downstream that no later tick recovers from.
+// It panics on a non-positive d rather than serving it. A zero d accrues
+// nothing and moves nothing, so the next read finds no elapsed time to divide
+// by. A negative d subtracts from counters that only rise, which cpuhealth
+// reads as a cgroup reset. Either way the tick serves no rate, so the condition
+// the caller stated goes missing instead of failing.
 func (b *Box) Tick(d time.Duration) {
 	if d <= 0 {
 		panic(fmt.Sprintf("fakebox: Tick(%s) must advance time; a clock that moves backwards is not recoverable downstream", d))
@@ -303,10 +307,12 @@ func (b *Box) Tick(d time.Duration) {
 	// that increments nr_periods only for a quota'd cgroup, so an unquota'd one
 	// reports nr_periods 0 for its whole life however busy it gets.
 	//
-	// Holding them still here is not only fidelity. A denominator that always
-	// advances cannot express a denominator that never does, and that is a real
-	// suspected defect in this package: a throttle ratio taken over a stalled
-	// nr_periods. A Box with no quota states that machine directly.
+	// Holding them still is also the only way to hand the sampler a denominator
+	// that never advances, and two guards downstream exist for that machine: the
+	// throttling signal requires HasLimit (signal_throttling.go), and
+	// SlidingWindow.Reduce marks a dividing reduction untrusted when the
+	// denominator delta is not positive. A Box with no quota states that machine
+	// directly, so a spec can reach both.
 	if b.cond.QuotaCores > 0 {
 		// Both counters are integers, so a tick producing a fractional count of
 		// either cannot be served: rounding nr_throttled changes the throttle
@@ -385,6 +391,7 @@ func (b *Box) ServablePaths() []string {
 	for path := range b.servers {
 		paths = append(paths, path)
 	}
+
 	sort.Strings(paths)
 
 	return paths
@@ -473,7 +480,7 @@ func (b *Box) procStat() string {
 
 	fmt.Fprintf(&sb, "cpu  %d 0 0 %d 0 0 0 %d 0 0\n", b.jiffiesUser, b.jiffiesIdle, b.jiffiesSteal)
 
-	for i := 0; i < b.cond.Cores; i++ {
+	for i := range b.cond.Cores {
 		fmt.Fprintf(&sb, "cpu%d 0 0 0 0 0 0 0 0 0 0\n", i)
 	}
 
