@@ -744,9 +744,8 @@ children:
 	// config.yaml directly instead of polling the manager.
 	register.SetDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
 
-	// Publish whether the fsmv2 CPU monitor child should run (USE_FSMV2_CPU,
-	// read in main.go from the environment and never persisted). The config
-	// worker reads it at construction so it can gate its CPU child's upsert.
+	// Published before NewApplicationSupervisor, like the keys above: the
+	// config worker reads this key when it is constructed.
 	register.SetDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
 
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
