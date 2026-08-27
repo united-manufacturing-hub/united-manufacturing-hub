@@ -24,13 +24,11 @@
 // No signal threshold is written down here. Every number the Technical Details
 // table states is read from the mark pair its own signal_*.go declares, which
 // is the pair the engine judges against, so the rule the message states and the
-// rule the code applies cannot come apart. That is why each pair is one var:
-// the signal_*.go files declare them and say no more about it.
+// rule the code applies cannot come apart.
 //
-// The one number this file decides for itself is the 0.05 cores at which the
-// healthy headline starts saying a box is close to being marked degraded. It is
-// a display band, not a rule the engine judges, and it is written relative to
-// hostHeadroomMarks.Fire without reading it.
+// One number here is this file's own: the 0.05 cores at which the healthy
+// headline starts calling a box close to degraded. It is a display band, not a
+// rule the engine judges, and it does not read hostHeadroomMarks.
 
 package cpuhealth
 
@@ -231,8 +229,7 @@ func usageMeasured(details Details) bool {
 // applies and ready are the two halves Details keeps apart and forbids reading
 // as each other. applies is whether the box can run the rule at all; ready is
 // whether this tick's window produced a value. An absent line says which of the
-// two it is, because "this kernel reports no pressure statistics" and "the
-// window is still filling" send a reader to different places.
+// two it is.
 type cpuRule struct {
 	// label opens the line, and names the rule rather than the instrument: an
 	// operator reading "Steal" need not know which of the two steal arms
@@ -247,11 +244,8 @@ type cpuRule struct {
 	applies bool
 	ready   bool
 	// latched is whether the SIGNAL this line belongs to has fired and not yet
-	// released. It picks which of the two marks the line states. A signal holds
-	// one latch however many instruments it has, so the two lines a
-	// two-instrument signal prints state the same side of their own pairs: one
-	// question cannot have been answered yes for one of its lines and no for
-	// the other.
+	// released. It picks which of the two marks the line states, and it is read
+	// per signal, so both lines of a two-instrument signal state the same side.
 	latched bool
 	// firedHere is whether THIS line's own instrument produced one of this
 	// tick's causes, which is proof the rule ran on this box whatever the
@@ -261,13 +255,8 @@ type cpuRule struct {
 	firedHere bool
 }
 
-// render writes one line of the table.
-//
-// A rule that has not fired shows the mark that would fire it; a latched rule
-// shows the mark that clears it, because for a latched rule the clear mark is
-// the one that decides what happens next. It also removes an apparent
-// contradiction: a rule still latched while its reading has fallen back under
-// its own fire mark would otherwise be shown a threshold it is already inside.
+// render writes one line of the table: a rule that has not fired shows the mark
+// that would fire it, a latched rule the mark that clears it.
 func (r cpuRule) render() string {
 	switch {
 	case !r.applies && !r.firedHere:
@@ -285,13 +274,10 @@ func (r cpuRule) render() string {
 		r.label, r.measured, verb, markSide(mark, r.marks.Polarity, r.latched), markValue(mark, r.marks.Unit))
 }
 
-// markSide names the side of a mark that crosses it, in the reader's words. A
-// fire mark is crossed toward the worse side and a clear mark toward the better
-// one, so a single polarity reads both ways.
-//
-// An inclusive mark counts landing exactly on it, and reads "at": "degrades at
-// 70%" for the usage rule, where 70% of the machine busy is already a full
-// machine.
+// markSide names the side of a mark in the reader's words. A fire mark is
+// crossed toward the worse side and a clear mark toward the better one, so one
+// polarity reads both ways. An inclusive mark counts landing exactly on it and
+// reads "at" - "degrades at 70%", where 70% busy is already a full machine.
 func markSide(m diagnosis.Mark, p diagnosis.Polarity, clearing bool) string {
 	if m.Inclusive {
 		return "at"
@@ -342,9 +328,6 @@ func technicalDetails(causes []Cause, details Details) string {
 // is absent is what stops a reader taking a missing line for a rule that is
 // fine.
 //
-// Each rule carries the mark pair its own signal_*.go declares, never a copy of
-// the numbers in it.
-//
 // Latchedness is read per SIGNAL and the capability override per INSTRUMENT;
 // cpuRule's two fields say why.
 func cpuRules(causes []Cause, details Details) []cpuRule {
@@ -354,17 +337,10 @@ func cpuRules(causes []Cause, details Details) []cpuRule {
 	_, usageFired := firedCause(causes, CauseKindHostCpuFull, instrumentUsageFraction)
 	_, limitHeadroomFired := firedCause(causes, CauseKindContainerLimitFull, instrumentLimitHeadroom)
 
-	// Headroom is one subtraction against a ceiling, and a box can be judged
-	// against two of them at once: the machine's cores, and this container's
-	// own CPU limit. One line per ceiling the engine is judging, so a machine
-	// that filled while the container sits well inside its limit does not print
-	// the container's comfortable figure under a headline saying the machine is
-	// full.
-	//
-	// Which ceilings those are is decided in exactly one place. table_cpu.go
-	// declares a capacity signal under hostCpuFullDeclared and
-	// containerLimitFullDeclared, and the two lines below are appended under
-	// the same two predicates, read off the figures the table was built from.
+	// A box can be judged against two ceilings at once, the machine's cores and
+	// its own CPU limit, so each gets its own line: a machine that filled while
+	// the container sits well inside its limit must not print the container's
+	// comfortable figure under a headline saying the machine is full.
 	cores, quota := tableCeilings(details)
 
 	rules := make([]cpuRule, 0, 6)
@@ -444,11 +420,10 @@ func cpuRules(causes []Cause, details Details) []cpuRule {
 // headroomRule builds one headroom line: the subtraction its budget spells out,
 // against the mark pair the signal measuring that ceiling declares.
 //
-// applies is true by construction: the caller appends this line only where the
-// declared-ceiling test passed, and a ceiling that fails it gets no line at all
-// rather than an empty slot. That the box then runs the rule is the usual case,
-// not a guarantee - the test runs on this tick, the table was built at startup.
-// hostCpuFullDeclared has the case where they part.
+// applies is true by construction: the caller appends a line only where the
+// declared-ceiling test passed, and a ceiling that fails it gets no slot at
+// all. That the engine then judges the rule is the usual case, not a guarantee
+// - hostCpuFullDeclared has the exception.
 func headroomRule(label string, b budgetCores, marks diagnosis.Marks, ready, latched, firedHere bool) cpuRule {
 	return cpuRule{
 		label: label,
@@ -462,20 +437,17 @@ func headroomRule(label string, b budgetCores, marks diagnosis.Marks, ready, lat
 	}
 }
 
-// tableCeilings returns the two figures cpuTable was built from - the machine's
-// core count and this container's CPU quota - read back off Details, so the
-// table's headroom lines and the engine's capacity signals answer to the same
-// two predicates.
+// tableCeilings reads back the two figures the capacity predicates take: the
+// machine's core count and this container's CPU quota.
 //
-// A quota is on Details only through the mode: CapacityCores is the quota where
-// a limit applies and the machine's core count where none does, so a zero quota
-// is what no-limit mode means here.
+// A quota reaches Details only through the mode: CapacityCores is the quota
+// where a limit applies and the core count where none does, so zero here means
+// no-limit mode.
 //
-// Both figures are this tick's read, while cpuTable was handed the startup one.
-// Where a cpuset read at startup and stops reading later the line drops, and it
-// had no figure to print anyway. The other direction is the harmful one: a
-// cpuset that failed at startup and reads later prints a headroom line for a
-// ceiling the table never declared (ENG-5752).
+// These are this tick's read; cpuTable was handed the startup one. A cpuset
+// that failed at startup and reads later prints a headroom line for a ceiling
+// the table never declared (ENG-5752). The opposite order drops a line that had
+// no figure to print anyway.
 func tableCeilings(details Details) (cores, quota float64) {
 	if details.LimitApplies {
 		return details.LogicalCpus, details.CapacityCores
@@ -557,10 +529,9 @@ func machineWasRead(causes []Cause) bool {
 // customer given both is told to buy CPU for a machine and also to raise a
 // limit that cannot help on it.
 //
-// Where /proc/stat answered, the machine's own reading speaks, and its
-// paragraph names the container's limit in a trailing clause. Where the only
-// reading of the machine is usage-fraction's estimate from our own usage, the
-// container's own limit is the measured ceiling and speaks instead.
+// Where /proc/stat answered, the machine's reading speaks and names the limit
+// in a trailing clause. Where the only reading is usage-fraction's estimate
+// from our own usage, the container's limit is the measured ceiling and speaks.
 func speaksForCapacity(c Cause, causes []Cause) bool {
 	if !isCapacityKind(c.Kind) {
 		return true
@@ -593,12 +564,12 @@ func speakingCause(causes []Cause) Cause {
 }
 
 // causeDetails returns the curated Technical-Details copy for one cause,
-// interpolating the live number from the cause's Value or the derived Details.
-// The two capacity kinds dispatch on the cause's own instrument, and a machine
-// read full asks two further questions: whether the container is also at its
-// limit, which is the case whose two remedies have to be blended into one
-// sentence, and failing that whose load filled the machine, which
-// fullMachineDetail answers.
+// interpolating the live number from the cause's Value or from Details.
+//
+// The two capacity kinds dispatch on the cause's own instrument. A machine read
+// full then asks whether the container is at its limit too, because that case
+// blends two remedies into one sentence; failing that it asks whose load filled
+// the machine, which fullMachineDetail answers.
 func causeDetails(c Cause, causes []Cause, details Details) string {
 	switch c.Kind {
 	case CauseKindThrottling:
@@ -695,13 +666,11 @@ func fullMachineBlock(attribution Attribution, details Details) string {
 	}
 }
 
-// BlockReason returns the per-cause bridge-refusal message shown when bridge
-// creation is refused because the instance's CPU is degraded. It speaks with
-// the cause the Technical Details speak with, both through speakingCause, so
-// the two surfaces cannot hand one customer two contradictory remedies at once.
-// It reads the attribution for the same reason, and asks the ranked causes the
-// same blend question first. An unknown kind falls back to the generic degraded
-// message.
+// BlockReason returns the refusal message shown when a degraded CPU blocks
+// bridge creation. It picks its cause through speakingCause, reads the
+// attribution, and asks the same blend question, all as causeDetails does: the
+// two surfaces must not hand one customer contradictory remedies. An unknown
+// kind falls back to the generic degraded message.
 func BlockReason(causes []Cause, details Details) string {
 	if len(causes) == 0 {
 		return blockPrefix + blockGeneric
