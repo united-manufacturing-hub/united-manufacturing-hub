@@ -29,9 +29,7 @@ import (
 var _ = Describe("the worker never fabricates", func() {
 	It("reports that it could not measure, rather than a healthy zero, when the sample failed", func() {
 		// "The sample failed" means Read returned a non-nil error and nothing
-		// else (e.g. an unreadable cpu.stat fails the whole snapshot). On that
-		// the worker stores no verdict and reports it could not measure — never
-		// a healthy zero.
+		// else (e.g. an unreadable cpu.stat fails the whole snapshot).
 		d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 			return cpuhealth.Sample{}, errors.New("read cpu.stat: permission denied")
 		}}, 4, 2)
