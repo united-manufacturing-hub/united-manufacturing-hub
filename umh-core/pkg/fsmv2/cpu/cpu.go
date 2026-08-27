@@ -256,11 +256,34 @@ func startupCapacity(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDepe
 	return cores, quota
 }
 
+// healthFromStatus turns one poll's status into the worker's own health, so a
+// degraded CPU verdict degrades the worker instead of leaving it reporting
+// healthy. simple calls it after every good poll, and never after a failed one.
+//
+// There are two cases and no third. cpuhealth's verdict builder sets a state on
+// every path, so Verdict is "healthy" or "degraded" whenever a poll succeeded;
+// it is empty only when Poll returned an error, and simple does not call this
+// on a poll error. Message is the composed customer-facing text, which is the
+// reason either way.
+func healthFromStatus(_ CPUConfig, status CPUStatus) simple.Health {
+	if status.Verdict == string(cpuhealth.StateDegraded) {
+		return simple.Degraded(status.Message)
+	}
+
+	return simple.Healthy(status.Message)
+}
+
+// monitorSpec is this worker's whole definition. It is a package value rather
+// than a literal inside init() so a spec can call exactly what the framework
+// calls, wiring included.
+var monitorSpec = simple.MonitorSpec[CPUConfig, CPUStatus, *CPUDeps]{
+	WorkerType: WorkerType,
+	Interval:   pollInterval,
+	NewDeps:    NewDeps,
+	Poll:       Poll,
+	Health:     healthFromStatus,
+}
+
 func init() {
-	simple.Register(simple.MonitorSpec[CPUConfig, CPUStatus, *CPUDeps]{
-		WorkerType: WorkerType,
-		Interval:   pollInterval,
-		NewDeps:    NewDeps,
-		Poll:       Poll,
-	})
+	simple.Register(monitorSpec)
 }
