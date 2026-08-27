@@ -26,6 +26,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
+// This pair is a ratio on a 0..1 scale with capacity 1.0, marking the pressure
+// signal's fire and clear thresholds. It is the one home for both numbers: the
+// engine judges against it and the Technical Details table states it, so the
+// threshold the customer reads is the threshold that fires.
+var pressureMarks = diagnosis.Marks{
+	Fire: diagnosis.Mark{At: 0.20}, Clear: diagnosis.Mark{At: 0.12},
+	Polarity: diagnosis.HigherIsWorse, Unit: unitRatio, Worst: 1.0,
+}
+
 // pressureSignal is "are our tasks waiting for a core?" PSI's avg60 is already
 // a 60-second average, so the reduction is Last and the instrument can fire on
 // tick 0.
@@ -47,13 +56,7 @@ func pressureSignal() diagnosis.Signal[Sample] {
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Last,
 			},
-			Marks: diagnosis.Marks{
-				Fire:     diagnosis.Mark{At: 0.20},
-				Clear:    diagnosis.Mark{At: 0.12},
-				Polarity: diagnosis.HigherIsWorse,
-				Unit:     "ratio",
-				Worst:    1.0,
-			},
+			Marks: pressureMarks,
 		}},
 	}
 }
