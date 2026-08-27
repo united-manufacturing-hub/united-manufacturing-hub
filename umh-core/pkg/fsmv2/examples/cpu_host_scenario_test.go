@@ -41,7 +41,11 @@ var _ = Describe("CPU host ScenarioV2", func() {
 		Expect(examples.ListScenarios()).To(HaveKey("cpu-host"))
 	})
 
-	It("refuses only where the host publishes no cgroup v2 CPU files, naming the tool that provides them", func() {
+	// Label("live") keeps this spec out of CI, because make unit-test filters
+	// live specs out: what this spec asserts depends on the machine it runs
+	// on, and nobody picks the CI machine. Plain go test applies no filter,
+	// so the spec still runs on every developer machine.
+	It("refuses only where the host publishes no cgroup v2 CPU files, naming the tool that provides them", Label("live"), func() {
 		scenario, ok := examples.RegistryV2["cpu-host"]
 		Expect(ok).To(BeTrue())
 
