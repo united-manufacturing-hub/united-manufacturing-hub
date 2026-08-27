@@ -69,21 +69,6 @@ func cpuReadings(l *debugSpyLogger) []debugRecord {
 	return readings
 }
 
-// newDepsWithLogger is newDeps with an explicit logger, so a spec can observe
-// what Poll writes. It lives here rather than beside newDeps because its
-// previous home, cpu_admission_deadline_warning_test.go, was deleted with the
-// admission window, and this spec is its only remaining caller.
-func newDepsWithLogger(log deps.FSMLogger, s cpuhealth.Sampler, cores, quota float64) *CPUDeps {
-	engine, err := diagnosis.NewEngine(cpuhealth.Table(cores, quota))
-	Expect(err).NotTo(HaveOccurred(), "the test table must be buildable")
-
-	return &CPUDeps{
-		BaseDependencies: deps.NewBaseDependencies(log, nil, deps.Identity{ID: "cpu-test", WorkerType: WorkerType}),
-		sampler:          s,
-		engine:           engine,
-	}
-}
-
 var _ = Describe("a completed CPU poll's reading log", func() {
 	It("records the verdict it reached and the message it composed, once per completed poll and never for a failed read", func() {
 		// Presence: a quiet, fully present sample on a 4-cores/2-quota box —
