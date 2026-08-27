@@ -35,11 +35,30 @@ limiting memory changes nothing it can see.
 ## Running
 
 ```bash
-./run.sh                 # no quota, 60 seconds
+./run.sh                 # no quota, runs until Ctrl+C
 CPUS=0.5 ./run.sh        # half a CPU of quota
-DURATION=10m ./run.sh    # watch longer
-LOG_LEVEL=info ./run.sh  # quieter; per-poll readings need debug
+DURATION=60s ./run.sh    # stop on its own instead
+LOG_LEVEL=info ./run.sh  # only state changes, not every poll
 ```
+
+It runs until you stop it, so you can load the machine and watch the readings
+answer while it keeps going.
+
+The runner's log carries the supervisor's own lines as well as the monitor's.
+To watch just the readings:
+
+```bash
+./run.sh --name cpu-host | grep --line-buffered cpu_reading
+```
+
+`--line-buffered` is not optional on an endless run. Without it grep holds
+output in a block buffer and prints nothing until the buffer fills, so a
+working run looks like a dead one.
+
+⚠️ Keep the pipe out of a first run. A machine that never takes a reading has
+nothing matching `cpu_reading` to print, so the filter turns a startup error
+into silence, and an empty result cannot tell you which of the two happened.
+Run it bare once, confirm readings appear, then add the pipe.
 
 Any argument is passed to `docker run` verbatim, so docker's own options
 work without the script naming them. `--name` is the useful one: it makes
@@ -58,18 +77,29 @@ of the exercise:
 
 - **Load inside the container** competes for the container's quota and
   moves the throttling signal (`nr_throttled`) and cgroup pressure (PSI).
-  Run with a quota and a name, then spin from a second terminal:
+  Run with a quota and a name, then load it from a second terminal. The
+  container has `stress-ng` installed, so that terminal needs nothing of its
+  own:
 
   ```bash
   CPUS=0.5 ./run.sh --name cpu-host
-  docker exec cpu-host sh -c 'while :; do :; done'
+  docker exec cpu-host stress-ng --cpu 8 --timeout 60
   ```
+
+  Eight workers against half a CPU is a large deliberate overcommit: the
+  container wants sixteen times the CPU it may have, so `nr_throttled` climbs
+  immediately rather than after a wait. `--timeout 60` stops the load on its
+  own, so the readings show the recovery as well as the onset — worth having,
+  since the pressure signal holds its verdict until the clear mark and the
+  release is the half that is easy to miss.
 
 - **Load on the host** competes for the machine's own CPUs and moves
   host-busy and steal as read from `/proc/stat`, leaving throttling
   untouched. Run the scenario without `CPUS` for this world: an unquota'd
   machine can only be filled by its host.
 
-Stop the in-container load with `docker kill cpu-host`. `Ctrl+C` in the
-second terminal does not do it: the interrupt stops only the `docker exec`
-client, and the load keeps running inside the container.
+A `--timeout` ends the load by itself. Without one, stop it with
+`docker kill cpu-host`: `Ctrl+C` in the second terminal stops only the
+`docker exec` client, and the load keeps running inside the container.
+
+Stop the monitor itself with `Ctrl+C` in the first terminal.
