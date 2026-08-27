@@ -37,9 +37,7 @@ import (
 // Marks are the two thresholds that turn a number into a yes or no: the value
 // at which an instrument starts saying yes, and the value at which it goes back
 // to saying no. They differ on purpose, so a reading sitting on the boundary
-// does not flap. Each pair below is the one home for its two numbers: the
-// engine judges against it and the Technical Details table states it, so the
-// threshold the customer reads is the threshold that fires.
+// does not flap.
 //
 // hostHeadroomMarks is the machine's spare cores. Severity 1 at −Reserve, so
 // Worst is the reserve, not the core count. Headroom is cores − hostBusy −
@@ -238,9 +236,7 @@ func shareRefinements() []diagnosis.Signal[Sample] {
 
 // limitHeadroomMarks is the container's spare cores against its own quota. It
 // is a function rather than a value because both of its lower numbers are
-// denominated in the quota, which varies per box. Like the two pairs above it
-// is the one home for them: the engine judges against it and the Technical
-// Details table states it.
+// denominated in the quota, which varies per box.
 //
 // Same reasoning as host-headroom for Worst: usage cannot exceed the quota the
 // kernel throttles it to, so quota − usage − 0.10 × quota bottoms out at

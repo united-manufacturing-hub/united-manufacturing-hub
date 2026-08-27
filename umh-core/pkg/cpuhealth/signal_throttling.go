@@ -24,9 +24,7 @@ import (
 )
 
 // This pair is a ratio on a 0..1 scale with capacity 1.0, marking the
-// throttling signal's fire and clear thresholds. It is the one home for both
-// numbers: the engine judges against it and the Technical Details table states
-// it, so the threshold the customer reads is the threshold that fires.
+// throttling signal's fire and clear thresholds.
 var throttleMarks = diagnosis.Marks{
 	Fire: diagnosis.Mark{At: 0.05}, Clear: diagnosis.Mark{At: 0.03},
 	Polarity: diagnosis.HigherIsWorse, Unit: unitRatio, Worst: 1.0,

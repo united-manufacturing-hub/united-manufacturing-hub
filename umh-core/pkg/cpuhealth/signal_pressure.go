@@ -27,9 +27,7 @@ import (
 )
 
 // This pair is a ratio on a 0..1 scale with capacity 1.0, marking the pressure
-// signal's fire and clear thresholds. It is the one home for both numbers: the
-// engine judges against it and the Technical Details table states it, so the
-// threshold the customer reads is the threshold that fires.
+// signal's fire and clear thresholds.
 var pressureMarks = diagnosis.Marks{
 	Fire: diagnosis.Mark{At: 0.20}, Clear: diagnosis.Mark{At: 0.12},
 	Polarity: diagnosis.HigherIsWorse, Unit: unitRatio, Worst: 1.0,

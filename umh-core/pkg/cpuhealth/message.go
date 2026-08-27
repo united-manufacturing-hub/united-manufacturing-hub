@@ -15,15 +15,22 @@
 // The customer-facing text: every sentence this package can print, and the
 // rules that pick which one.
 //
-// Every customer-visible string in this file is written down exactly once —
-// the constants below, plus the host-headroom sentence composeHealthy formats
-// inline, and one deliberate duplicate the const block names. A second copy of
-// a sentence is where drift starts.
+// Every customer-visible string in this file is written down exactly once. The
+// const block below holds the whole sentences; the Technical Details lines are
+// assembled from formats at the sites that build them, and the const block
+// names the one deliberate duplicate. A second copy of a sentence is where
+// drift starts.
 //
-// No threshold is written down here at all. Every number the Technical Details
+// No signal threshold is written down here. Every number the Technical Details
 // table states is read from the mark pair its own signal_*.go declares, which
 // is the pair the engine judges against, so the rule the message states and the
-// rule the code applies cannot come apart.
+// rule the code applies cannot come apart. That is why each pair is one var:
+// the signal_*.go files declare them and say no more about it.
+//
+// The one number this file decides for itself is the 0.05 cores at which the
+// healthy headline starts saying a box is close to being marked degraded. It is
+// a display band, not a rule the engine judges, and it is written relative to
+// hostHeadroomMarks.Fire without reading it.
 
 package cpuhealth
 
@@ -81,10 +88,10 @@ func composeHealthy(details Details) string {
 	// is withheld the message has no headline sentence left, so render the
 	// single "CPU: starting up." line over the table, where a line whose own
 	// window has not reduced yet says so rather than stating a figure nothing
-	// measured. It lasts two ticks after each start and
-	// respawn: the sampler derives no rate from its first read, and the mean
-	// over the rates after that needs two of them. It is not the zero-capacity
-	// case (a standing state) - they share a rendering path and nothing else.
+	// measured. It lasts two ticks after each start and respawn: the sampler
+	// derives no rate from its first read, and the mean over the rates after
+	// that needs two of them. It is not the zero-capacity case (a standing
+	// state): that one returns bare, this one carries the table.
 	if !usageMeasured(details) {
 		return cpuStartingUp + technicalDetails(nil, details)
 	}
@@ -133,8 +140,8 @@ func composeHealthy(details Details) string {
 			fmtCoresTotal(details.LogicalCpus), fmtCoresTotal(details.HostCpus))
 	}
 
-	// A healthy tick has no fired cause, so every rule shows the mark that
-	// would fire it.
+	// nil causes: a healthy tick has fired none, so no line states a clear
+	// mark.
 	return msg + technicalDetails(nil, details)
 }
 
@@ -262,9 +269,6 @@ type cpuRule struct {
 // contradiction: a rule still latched while its reading has fallen back under
 // its own fire mark would otherwise be shown a threshold it is already inside.
 func (r cpuRule) render() string {
-	// A fired instrument is proof the rule ran on this box, whatever the
-	// capability flag says, so a fired rule is never reported as one the box
-	// cannot run.
 	switch {
 	case !r.applies && !r.firedHere:
 		return r.label + " not available (not possible)."
@@ -313,8 +317,8 @@ func markValue(m diagnosis.Mark, unit string) string {
 }
 
 // technicalDetails renders the labelled table: the label on its own line, then
-// one line per rule the engine is judging, in a fixed order. causes is this
-// tick's fired list, and is empty on a healthy tick.
+// one line per rule in cpuRules' fixed order, whether or not this box can run
+// the rule. causes is this tick's fired list, and is empty on a healthy tick.
 //
 // A failed cgroup read (CapacityCores == 0) gets no table at all. On that tick
 // we do not know which rules apply, so a table would assert knowledge we do not
@@ -768,9 +772,10 @@ func toPercent(fraction float64) int {
 }
 
 const (
-	// The one line rendered on a tick whose usage figure is withheld (window
-	// below its floor, or the host reading absent): no headline, no advisory,
-	// no technical details.
+	// The line rendered on a tick whose usage figure is withheld (window below
+	// its floor, or the host reading absent): no headline and no advisory. The
+	// Technical Details table follows it, so an operator still sees which rules
+	// will be judged and which windows are still filling.
 	//
 	// Not cpuMonitoringUnavailable ("cgroup read failed"): on this tick the
 	// read succeeded and there is simply one sample, so claiming a read failure
