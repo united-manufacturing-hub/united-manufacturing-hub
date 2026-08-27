@@ -39,8 +39,8 @@ func (s stubSampler) Read(ctx context.Context) (cpuhealth.Sample, error) {
 }
 
 // fixedSampler hands back the same sample on every tick, for a spec that holds
-// the sample in a variable of its own — the evidence counts are only meaningful
-// on an environment derived from the very sample the tick was judged on.
+// the sample in a variable of its own and passes it to countsFor, whose
+// docblock has why that matters.
 func fixedSampler(sample cpuhealth.Sample) stubSampler {
 	return stubSampler{read: func(context.Context) (cpuhealth.Sample, error) { return sample, nil }}
 }
@@ -107,8 +107,7 @@ var _ = Describe("CPU monitor worker", func() {
 
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
-			// The verdict is a state from Decide, not a raw Sample reading such
-			// as usage cores. A quiet, present tick judges healthy.
+			// A quiet, present tick judges healthy.
 			Expect(status.Verdict).To(Equal(string(cpuhealth.StateHealthy)))
 			Expect(status.Message).NotTo(BeEmpty(), "the status carries the composed customer message")
 		})
@@ -118,8 +117,7 @@ var _ = Describe("CPU monitor worker", func() {
 			// surface as a degraded verdict. Without this arm, "report a verdict
 			// from Decide rather than a raw measurement" is satisfied by
 			// Decide-on-nothing, because an all-absent sample also judges healthy
-			// on tick 1. A degraded arm proves the reported state reflects Decide,
-			// not the absence of an engine crash.
+			// on tick 1.
 			d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				return cpuhealth.Sample{
 					Timestamp: time.Now(),
