@@ -40,8 +40,7 @@ type sentryWarnRecord struct {
 
 // sentrySpyLogger wraps NopFSMLogger and records every actual SentryWarn
 // invocation — its message and structured fields — so a test can assert on
-// real call counts rather than a field. Test-local: only this test needs to
-// observe the admission-deadline warning.
+// real call counts rather than a field.
 type sentrySpyLogger struct {
 	deps.FSMLogger
 	sentryWarnMsgs []string
@@ -90,10 +89,9 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			// A PSI box whose only capable signal is pressure, which never
 			// first-measures: cores=0/quota=0 keeps both capacity signals out of
 			// the table and makes the rest NoInstrument, so exactly pressure is
-			// capable and it
-			// stays non-Ready forever — measured 0 < capable 1 on every tick.
-			// Past the 10s window the worker gives up waiting and must raise one
-			// SentryWarn naming "pressure", not one per tick.
+			// capable and it stays non-Ready forever — measured 0 < capable 1 on
+			// every tick. Past the 10s window the worker gives up waiting and
+			// must raise one SentryWarn naming "pressure", not one per tick.
 			start := time.Unix(1_700_000_000, 0).UTC()
 
 			spy := &sentrySpyLogger{FSMLogger: deps.NewNopFSMLogger()}
@@ -129,14 +127,14 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 				counts[i] = len(spy.sentryWarnMsgs)
 			}
 
-			// (a) No SentryWarn before the deadline: every Poll strictly inside
+			// No SentryWarn before the deadline: every Poll strictly inside
 			// the window (deltas 0..9s) stays silent.
 			for i := range boundary {
 				Expect(counts[i]).To(Equal(0),
 					"no SentryWarn while still inside the admission window (delta %ds)", i)
 			}
 
-			// (b) Exactly ONE across all past-deadline Polls — the once-per-worker
+			// Exactly ONE across all past-deadline Polls — the once-per-worker
 			// contract. If the worker raised per tick, the three polls at/after the
 			// deadline (boundary, boundary+1, boundary+2) would accumulate 3, not 1.
 			Expect(counts[boundary]).To(Equal(1),
@@ -144,19 +142,19 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			Expect(counts[len(all)-1]).To(Equal(1),
 				"the SentryWarn fires once per worker, never once per tick")
 
-			// (c) The event name is a FIXED literal — never interpolated. sentry's
+			// The event name is a FIXED literal — never interpolated. sentry's
 			// BuildFingerprint groups on the log message verbatim, so a Sprintf
 			// carrying the signal names would give every distinct combination its
 			// own Sentry issue. A regression that interpolates must fail here.
 			Expect(spy.sentryWarnMsgs[0]).To(Equal("cpu_admission_deadline_never_measured_signal"),
 				"the event name is a fixed grouping key, never instance-varying")
 
-			// (e) The varying data rides in the structured fields — never in the
+			// The varying data rides in the structured fields — never in the
 			// message prose. sentry/hook.go promotes only a fixed tag set; these
 			// fields land in Contexts["umh_context"], which the Sentry issue page
 			// shows per event but does not index for search (sentry/doc.go). What
-			// keeps the occurrences together is the fixed event name asserted in
-			// (c); the fields are what an operator reads once inside that one
+			// keeps the occurrences together is the fixed event name asserted
+			// above; the fields are what an operator reads once inside that one
 			// issue, and what the structured log line carries locally. A
 			// regression that stops emitting the structured fields must fail here.
 			Expect(spy.sentryWarns).To(HaveLen(1), "the warning is recorded once, like the call")
@@ -169,7 +167,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			Expect(spy.sentryWarns[0].fields["admission_window"]).To(Equal(10*time.Second),
 				"the admission window rides in a structured field")
 
-			// (f) The two ROUTING arguments — the ones deps/logger.go requires and
+			// The two ROUTING arguments — the ones deps/logger.go requires and
 			// logger_impl.go emits as the `feature` and `hierarchy_path` fields.
 			// The event name and the payload can be perfect while the warning
 			// lands in another team's alert bucket, or names no instance at all,
@@ -183,7 +181,7 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 			Expect(spy.sentryWarns[0].hierarchyPath).To(Equal(d.GetHierarchyPath()),
 				"and it is read from the deps rather than hardcoded at the call site")
 
-			// (d) A box no instrument can answer fires none at all: on a no-PSI,
+			// A box no instrument can answer fires none at all: on a no-PSI,
 			// no-limit, non-virtualized box pressure is NoInstrument (not capable),
 			// so nothing starts the clock and nothing is ever reported — even past
 			// the window: quiet when expected.
@@ -289,17 +287,17 @@ var _ = Describe("a capable signal that has not first-measured is reported at th
 					"throttling, container-limit-full and host-cpu-full are capable alongside pressure")
 			}
 
-			// (1) Exactly ONE SentryWarn across every past-deadline Poll.
+			// Exactly ONE SentryWarn across every past-deadline Poll.
 			Expect(spy.sentryWarnMsgs).To(HaveLen(1),
 				"the many-capable box raises exactly one SentryWarn, never per tick")
 
-			// (2) The event name stays a FIXED literal even on the plural path — the
+			// The event name stays a FIXED literal even on the plural path — the
 			// names must never reach the message, because sentry fingerprints on it
 			// and a per-instance message fragments the issue into noise.
 			Expect(spy.sentryWarnMsgs[0]).To(Equal("cpu_admission_deadline_never_measured_signal"),
 				"the event name is a fixed grouping key on the plural path too")
 
-			// (3) The full plural name set rides in the structured field — EVERY
+			// The full plural name set rides in the structured field — EVERY
 			// never-measured signal, never the measured one. If the join dropped
 			// all-but-the-first name this fails; this is the plural-path guard.
 			Expect(spy.sentryWarns).To(HaveLen(1))
