@@ -32,8 +32,7 @@ type admission struct {
 }
 
 // shortfallAtDeadline anchors the window on the first tick and answers what it
-// says about this one. at is the tick's sample timestamp; measured and capable
-// are its evidence counts.
+// says about this one. at is the tick's sample timestamp.
 //
 // Elapsed is at minus the anchor, so the window runs on the sample clock rather
 // than the wall clock. Production sample timestamps come from monotonic
@@ -43,7 +42,7 @@ func (a *admission) shortfallAtDeadline(at time.Time, measured, capable int) boo
 		a.startedAt = at
 	}
 
-	return shortfallAtDeadline(at.Sub(a.startedAt), admissionWindow, measured, capable)
+	return deadlineReachedWithShortfall(at.Sub(a.startedAt), admissionWindow, measured, capable)
 }
 
 // reportOnce returns true on its first call and false on every later one, so a
@@ -58,12 +57,12 @@ func (a *admission) reportOnce() bool {
 	return true
 }
 
-// shortfallAtDeadline answers whether one tick has reached the admission
-// deadline with a shortfall still open.
+// deadlineReachedWithShortfall answers whether one tick has reached the
+// admission deadline with a shortfall still open.
 //
-// elapsed is how much sample time has passed since the worker's first sample.
-// capable and measured are the tick's evidence counts. A shortfall is measured
-// below capable — some signal this box can answer has never once answered.
-func shortfallAtDeadline(elapsed, window time.Duration, measured, capable int) bool {
+// elapsed is how much sample time has passed since the worker's first sample. A
+// shortfall is measured below capable, the tick's evidence counts: some signal
+// this box can answer has never once answered.
+func deadlineReachedWithShortfall(elapsed, window time.Duration, measured, capable int) bool {
 	return measured < capable && elapsed >= window
 }

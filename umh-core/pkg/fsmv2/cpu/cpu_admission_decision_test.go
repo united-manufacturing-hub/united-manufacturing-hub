@@ -22,7 +22,7 @@ import (
 )
 
 var _ = Describe("the admission-deadline decision", func() {
-	// shortfallAtDeadline reads only its arguments, so nothing here builds a
+	// deadlineReachedWithShortfall reads only its arguments, so nothing here builds a
 	// worker, a sampler or a clock. Each spec names the condition a worker
 	// would be in and asserts whether it then reports.
 	//
@@ -41,12 +41,12 @@ var _ = Describe("the admission-deadline decision", func() {
 
 	Describe("a box whose capable signal has never measured", func() {
 		It("has not reached the deadline nine seconds in", func() {
-			Expect(shortfallAtDeadline(9*time.Second, window, neverMeasured, oneCapable)).To(BeFalse(),
+			Expect(deadlineReachedWithShortfall(9*time.Second, window, neverMeasured, oneCapable)).To(BeFalse(),
 				"nine seconds has not reached a ten-second deadline, so the worker is still waiting")
 		})
 
 		It("has not reached the deadline at the last instant inside the window", func() {
-			Expect(shortfallAtDeadline(window-time.Nanosecond, window, neverMeasured, oneCapable)).To(BeFalse(),
+			Expect(deadlineReachedWithShortfall(window-time.Nanosecond, window, neverMeasured, oneCapable)).To(BeFalse(),
 				"one nanosecond short of the window is still inside it")
 		})
 
@@ -54,12 +54,12 @@ var _ = Describe("the admission-deadline decision", func() {
 			// The boundary is closed: this single tick decides both directions,
 			// because a worker that waited for elapsed to exceed the window
 			// would still be silent here.
-			Expect(shortfallAtDeadline(window, window, neverMeasured, oneCapable)).To(BeTrue(),
+			Expect(deadlineReachedWithShortfall(window, window, neverMeasured, oneCapable)).To(BeTrue(),
 				"the deadline is the instant the window closes, with the counts unchanged")
 		})
 
 		It("stays at the deadline after the window has closed", func() {
-			Expect(shortfallAtDeadline(11*time.Second, window, neverMeasured, oneCapable)).To(BeTrue(),
+			Expect(deadlineReachedWithShortfall(11*time.Second, window, neverMeasured, oneCapable)).To(BeTrue(),
 				"a shortfall that outlives the window keeps reaching the deadline")
 		})
 
@@ -68,7 +68,7 @@ var _ = Describe("the admission-deadline decision", func() {
 			// are monotonic, but a synthetic clock can step backwards. It reads
 			// as inside the window exactly like zero does, so a backward step
 			// prolongs the wait rather than reaching the deadline early.
-			Expect(shortfallAtDeadline(-3*time.Second, window, neverMeasured, oneCapable)).To(BeFalse(),
+			Expect(deadlineReachedWithShortfall(-3*time.Second, window, neverMeasured, oneCapable)).To(BeFalse(),
 				"a negative elapsed is inside the window, like the anchor tick itself")
 		})
 	})
@@ -79,13 +79,13 @@ var _ = Describe("the admission-deadline decision", func() {
 			// reported here would warn about every box that can never satisfy
 			// it, the deadline included.
 			for _, elapsed := range []time.Duration{0, 9 * time.Second, window, 11 * time.Second} {
-				Expect(shortfallAtDeadline(elapsed, window, 0, 0)).To(BeFalse(),
+				Expect(deadlineReachedWithShortfall(elapsed, window, 0, 0)).To(BeFalse(),
 					"no capable signal means no shortfall, at elapsed %s", elapsed)
 			}
 		})
 
 		It("says nothing when more signals measured than are capable, the deadline included", func() {
-			Expect(shortfallAtDeadline(window, window, 2, oneCapable)).To(BeFalse(),
+			Expect(deadlineReachedWithShortfall(window, window, 2, oneCapable)).To(BeFalse(),
 				"a count above capable is a surplus, never a shortfall")
 		})
 
@@ -95,9 +95,9 @@ var _ = Describe("the admission-deadline decision", func() {
 			// measured everything, and a box with nothing to measure, both
 			// reach it with nothing wrong. Only the box still missing a reading
 			// is worth an operator's attention.
-			measuredBox := shortfallAtDeadline(window, window, allMeasured, oneCapable)
-			emptyBox := shortfallAtDeadline(window, window, 0, 0)
-			shortBox := shortfallAtDeadline(window, window, neverMeasured, oneCapable)
+			measuredBox := deadlineReachedWithShortfall(window, window, allMeasured, oneCapable)
+			emptyBox := deadlineReachedWithShortfall(window, window, 0, 0)
+			shortBox := deadlineReachedWithShortfall(window, window, neverMeasured, oneCapable)
 
 			Expect(measuredBox).To(BeFalse(), "a fully measured box reaches the deadline with nothing to say")
 			Expect(emptyBox).To(BeFalse(), "nor does a box no instrument can answer")
@@ -113,11 +113,11 @@ var _ = Describe("the admission-deadline decision", func() {
 			// have reached the deadline here.
 			const short = 5 * time.Second
 
-			Expect(shortfallAtDeadline(4*time.Second, short, neverMeasured, oneCapable)).To(BeFalse(),
+			Expect(deadlineReachedWithShortfall(4*time.Second, short, neverMeasured, oneCapable)).To(BeFalse(),
 				"four seconds is inside a five-second window")
-			Expect(shortfallAtDeadline(short, short, neverMeasured, oneCapable)).To(BeTrue(),
+			Expect(deadlineReachedWithShortfall(short, short, neverMeasured, oneCapable)).To(BeTrue(),
 				"five seconds closes a five-second window")
-			Expect(shortfallAtDeadline(9*time.Second, short, neverMeasured, oneCapable)).To(BeTrue(),
+			Expect(deadlineReachedWithShortfall(9*time.Second, short, neverMeasured, oneCapable)).To(BeTrue(),
 				"nine seconds is past a five-second window, however long the shipped one is")
 		})
 	})
@@ -128,9 +128,9 @@ var _ = Describe("the admission-deadline decision", func() {
 			// a change to admissionWindow. This one would not: it names the two
 			// seconds either side of ten and hands the decision the constant the
 			// worker actually polls with.
-			Expect(shortfallAtDeadline(9*time.Second, admissionWindow, neverMeasured, oneCapable)).To(BeFalse(),
+			Expect(deadlineReachedWithShortfall(9*time.Second, admissionWindow, neverMeasured, oneCapable)).To(BeFalse(),
 				"the shipped window is still open at nine seconds")
-			Expect(shortfallAtDeadline(10*time.Second, admissionWindow, neverMeasured, oneCapable)).To(BeTrue(),
+			Expect(deadlineReachedWithShortfall(10*time.Second, admissionWindow, neverMeasured, oneCapable)).To(BeTrue(),
 				"the shipped window has closed by ten seconds")
 		})
 	})
