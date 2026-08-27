@@ -59,8 +59,9 @@ func (b BaseState) StateNameFromType(state interface{}) string {
 }
 
 // DeriveStateName derives a state name from the given value's type name.
-// It strips the "State" suffix if present.
-// e.g., RunningState -> "Running", TryingToStartState -> "TryingToStart"
+// It drops any type arguments and then strips the "State" suffix if present.
+// e.g., RunningState -> "Running", TryingToStartState -> "TryingToStart",
+// runningState[pkg.Config,pkg.Status] -> "running"
 //
 // This is a package-level function that can be used directly without
 // needing a BaseState instance.
@@ -71,6 +72,15 @@ func DeriveStateName(state interface{}) string {
 	}
 
 	name := t.Name()
+
+	// A generic type's reflect name carries its type arguments in brackets,
+	// each spelled with its full import path. That makes the name unusable as a
+	// log field or metric label, and the "State" suffix trim below cannot match
+	// while the brackets are still there.
+	if i := strings.IndexByte(name, '['); i >= 0 {
+		name = name[:i]
+	}
+
 	name = strings.TrimSuffix(name, "State")
 
 	return name
