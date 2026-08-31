@@ -22,8 +22,7 @@ import (
 )
 
 var _ = Describe("A latch driven from a real SlidingWindow", func() {
-	// windowSpan and nonDividingInterval come from sliding_window_coverage_test.go,
-	// which also pins the interval against dividing the span.
+	// windowSpan and nonDividingInterval are declared in sliding_window_coverage_test.go.
 	const (
 		ticks   = 120
 		dropsAt = 90

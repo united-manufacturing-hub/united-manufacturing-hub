@@ -33,19 +33,13 @@ import (
 // with, and how long readings have been arriving, capped at that span.
 //
 // A span of TIME is not a span of READINGS: two readings far apart can report Full.
-// The floor on how much evidence a judgement rests on is the reduction's Min, not
-// this type.
-//
-// Coverage is NOT a readability fact and must never be made into one. The latch
-// derives its state from the reduction and from this, never from a readability
-// flag, which is why Coverage is two durations and nothing else.
+// How many readings a judgement needs is the reduction's Min, not this.
 type Coverage struct {
 	span time.Duration
-	// covered is how long readings have been arriving, measured from the window's
-	// first stored reading and capped at span. It is NOT the extent of the readings
-	// currently held: prune removes the early ones, so what remains cannot say how
-	// long collection has been running. sliding_window_coverage_test.go pins both
-	// directions — full after a span of collecting, not full before.
+	// covered is how long readings have been arriving, from the window's first
+	// stored reading, capped at span. NOT the extent of the readings currently
+	// held: prune removes the early ones, so what remains cannot say how long
+	// collection has been running.
 	covered time.Duration
 }
 
@@ -62,9 +56,8 @@ type SlidingWindow struct {
 	demoteSpan time.Duration
 	counter    bool
 	// firstStored is the instant of the first reading stored since the window was
-	// last empty. A prune that empties the window leaves it set, which no reader
-	// sees: the next store re-seeds it, and Coverage reports zero below two
-	// readings.
+	// last empty. A prune that empties the window leaves it set; nothing reads it,
+	// because the next store re-seeds it and Coverage reports zero below two readings.
 	firstStored time.Time
 	// lastAppendStored is whether the most recent appendPoint stored a reading.
 	// age runs before this tick's store, so there it means the previous tick.
@@ -207,7 +200,6 @@ func (w *SlidingWindow) appendPoint(value, against Reading, at time.Time) {
 		}
 	}
 
-	// An empty window is a window that has just started collecting.
 	if len(w.points) == 0 {
 		w.firstStored = at
 	}

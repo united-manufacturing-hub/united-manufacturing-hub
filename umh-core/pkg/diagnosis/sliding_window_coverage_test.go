@@ -21,23 +21,19 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// The span and tick interval the coverage specs here and the latch spec in
-// latch_irregular_interval_test.go both run at. One home, because the interval not
-// dividing the span is the property under test and a shared constant can be pinned
-// once.
+// The span and tick interval used by the coverage specs here and by the latch spec
+// in latch_irregular_interval_test.go.
 const (
 	windowSpan = 60 * time.Second
-	// A constant offset rather than random jitter, so a failure is deterministic:
-	// under random jitter a release still happens, at a random delay, and the
-	// specs flake.
+	// A constant offset, not random jitter: under jitter a release still happens, at
+	// a random delay, and the specs flake.
 	nonDividingInterval = 1001 * time.Millisecond
 )
 
 var _ = Describe("SlidingWindow coverage", func() {
 	It("should run its specs at a tick interval that does not divide the span", func() {
-		// At 1000ms the specs that turn on this interval pass against the defect
-		// they exist to catch. That is a one-character edit, so it is pinned here
-		// rather than trusted.
+		// At 1000ms the specs keyed on this interval pass against the defect they
+		// exist to catch. A one-character edit, so it is pinned rather than trusted.
 		Expect(windowSpan % nonDividingInterval).NotTo(BeZero())
 	})
 
@@ -58,8 +54,8 @@ var _ = Describe("SlidingWindow coverage", func() {
 		w, err := NewSlidingWindow(windowSpan, windowSpan, Last, false)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Two readings: enough that the answer turns on the measurement rather than
-		// on the window holding too little to measure.
+		// Two readings, so the answer turns on the measurement rather than on having
+		// too little to measure.
 		base := time.Unix(1_000_000, 0)
 		w.Observe(Known(0.5), Unknown(), base)
 		w.Observe(Known(0.5), Unknown(), base.Add(nonDividingInterval))
