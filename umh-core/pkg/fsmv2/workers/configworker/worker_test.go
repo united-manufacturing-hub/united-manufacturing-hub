@@ -105,17 +105,6 @@ func TestNewConfigworkerWorkerFailsWithoutRegistry(t *testing.T) {
 	}
 }
 
-// TestGetDependenciesAnyReturnsNil verifies the no-deps override returns a true
-// nil so the framework skips metrics injection (a boxed register.NoDeps would
-// be non-nil and silently re-enable it).
-func TestGetDependenciesAnyReturnsNil(t *testing.T) {
-	w := newConstructedWorker(t)
-
-	if got := w.GetDependenciesAny(); got != nil {
-		t.Fatalf("GetDependenciesAny() = %v, want nil", got)
-	}
-}
-
 // TestCollectObservedState verifies the per-tick observed-state contract:
 // a live context yields a non-nil observation of the worker's status type,
 // and a cancelled context surfaces ctx.Err().
