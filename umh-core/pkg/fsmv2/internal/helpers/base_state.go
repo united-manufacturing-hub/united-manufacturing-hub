@@ -71,17 +71,21 @@ func DeriveStateName(state interface{}) string {
 		t = t.Elem()
 	}
 
-	name := t.Name()
-
-	// A generic type's reflect name carries its type arguments in brackets,
-	// each spelled with its full import path. That makes the name unusable as a
-	// log field or metric label, and the "State" suffix trim below cannot match
-	// while the brackets are still there.
-	if i := strings.IndexByte(name, '['); i >= 0 {
-		name = name[:i]
-	}
+	name := stripTypeArguments(t.Name())
 
 	name = strings.TrimSuffix(name, "State")
+
+	return name
+}
+
+// stripTypeArguments drops the bracketed type arguments a generic type carries
+// in its reflect name, each of which is spelled with its full import path. That
+// makes the raw name unusable as a log field or metric label, and leaves the
+// "State" suffix unreachable behind the closing bracket.
+func stripTypeArguments(name string) string {
+	if i := strings.IndexByte(name, '['); i >= 0 {
+		return name[:i]
+	}
 
 	return name
 }
