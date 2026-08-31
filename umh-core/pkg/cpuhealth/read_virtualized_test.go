@@ -184,7 +184,7 @@ var _ = Describe("CPU virtualisation", func() {
 		// (`return false, true`), distinct from the unreadable-DMI case every
 		// other assertion hits. A regression that treated a resolved false as
 		// unresolved and re-read cpuinfo every tick would break the sticky
-		// contract this test pins: the fact must be resolved once and cached.
+		// contract this test asserts: the fact must be resolved once and cached.
 		s, cpuinfoReads := newVirtSampler(bareMetalCpuinfo, false, "Dell Inc.", false)
 		first, err := s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())

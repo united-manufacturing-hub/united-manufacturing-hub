@@ -120,10 +120,15 @@ type Cause struct {
 // message layer composes it from Verdict and Details. The json tags are the
 // wire key contract with the Management Console's CpuVerdict and CpuCause
 // (ManagementConsole frontend/src/lib/utils/cpu/cpuHealth.ts): the console
-// will read a verdict by key name once the status message carries one —
-// pinned by verdict_json_test.go — so renaming a tag is a wire-format change.
+// will read a verdict by key name once the status message carries one, so
+// renaming a tag is a wire-format change. Key presence is keyed to member
+// emptiness, not to State: Attribution and Causes must stay empty on a
+// healthy verdict, and a non-empty member there is a wire-format break, not
+// a state change. Both shapes are asserted by verdict_json_test.go and
+// verdict_healthy_json_test.go — the degraded document carries state,
+// attribution and causes; a healthy one carries the state alone.
 type Verdict struct {
 	State       State       `json:"state"`
-	Attribution Attribution `json:"attribution"`
-	Causes      []Cause     `json:"causes"`
+	Attribution Attribution `json:"attribution,omitempty"`
+	Causes      []Cause     `json:"causes,omitempty"`
 }
