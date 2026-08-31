@@ -39,12 +39,8 @@ import (
 // to saying no. They differ on purpose, so a reading sitting on the boundary
 // does not flap.
 //
-// hostHeadroomMarks is the machine's spare cores. Severity 1 at −Reserve, so
-// Worst is the reserve, not the core count. Headroom is cores − hostBusy −
-// reserve and hostBusy cannot exceed cores, so the quantity bottoms out at
-// −cpuReserveCores: a wholly consumed box. Worst is negative because it lives
-// on the worse (lower) side of Fire, the same side as the value that reaches
-// it.
+// hostHeadroomMarks is the machine's spare cores, cores − hostBusy − reserve.
+// hostBusy cannot exceed cores, so the floor is −cpuReserveCores.
 var hostHeadroomMarks = diagnosis.Marks{
 	Fire: diagnosis.Mark{At: 0}, Clear: diagnosis.Mark{At: 0.5},
 	Polarity: diagnosis.LowerIsWorse, Unit: unitCores, Worst: -cpuReserveCores,
@@ -234,15 +230,9 @@ func shareRefinements() []diagnosis.Signal[Sample] {
 	}
 }
 
-// limitHeadroomMarks is the container's spare cores against its own quota. It
-// is a function rather than a value because both of its lower numbers are
-// denominated in the quota, which varies per box.
-//
-// Same reasoning as host-headroom for Worst: usage cannot exceed the quota the
-// kernel throttles it to, so quota − usage − 0.10 × quota bottoms out at
-// −0.10 × quota. Worst is negative because it lives on the worse (lower) side
-// of Fire, the same side as the value that reaches it; a container wholly out
-// of its budget scores 1.0.
+// limitHeadroomMarks is the container's spare cores against its own quota. It is
+// a function because every number below is quota-denominated: the floor is
+// −0.10 × quota.
 func limitHeadroomMarks(quota float64) diagnosis.Marks {
 	return diagnosis.Marks{
 		Fire: diagnosis.Mark{At: 0}, Clear: diagnosis.Mark{At: 0.05 * quota},

@@ -70,7 +70,7 @@ func ComposeMessage(verdict Verdict, details Details) string {
 
 // composeHealthy renders the healthy message: the budget headline, any
 // advisory the tick earned, then the Technical Details table. The displayed
-// cores figures come from coresBudget, so the printed headroom arithmetic is
+// cores figures come from effectiveBudget, so the printed headroom arithmetic is
 // exact by construction.
 func composeHealthy(details Details) string {
 	// Zero-capacity guard: when CapacityCores is 0, do not compose the garbled
@@ -94,7 +94,7 @@ func composeHealthy(details Details) string {
 		return cpuStartingUp + technicalDetails(nil, details)
 	}
 
-	b := coresBudget(details)
+	b := effectiveBudget(details)
 	usedStr := fmtCores1(b.used)
 	totalStr := fmtCoresTotal(b.total)
 	headroomStr := fmtCores1(b.headroom)
@@ -143,9 +143,7 @@ func composeHealthy(details Details) string {
 	return msg + technicalDetails(nil, details)
 }
 
-// budgetCores are the four cores figures a headline and a headroom line share:
-// a ceiling, what is being used against it, what is held back, and the spare
-// that leaves.
+// budgetCores are the four cores figures a headline and a headroom line share.
 type budgetCores struct {
 	headroom float64
 	total    float64
@@ -153,11 +151,9 @@ type budgetCores struct {
 	reserve  float64
 }
 
-// newBudget assembles the four figures from a ceiling, a usage and a reserve.
-// Each of the three is rounded to one decimal first, and headroom is then
-// derived as total - used - reserve from the already-rounded three, so the
-// arithmetic the headroom line prints adds up exactly; it never independently
-// rounds Details.HeadroomCores.
+// newBudget derives headroom from the already-rounded three, so the arithmetic
+// the headroom line prints adds up exactly. It never rounds
+// Details.HeadroomCores independently.
 func newBudget(total, used, reserve float64) budgetCores {
 	b := budgetCores{
 		total:   round1(total),
@@ -169,27 +165,22 @@ func newBudget(total, used, reserve float64) budgetCores {
 	return b
 }
 
-// machineBudget is the machine's cores against the machine's busy time, the
-// pair hostCpuFullSignal's host-headroom arm subtracts. Its reserve is the
-// fixed cpuReserveCores rather than Details.ReserveCores, because Details
-// carries one reserve and it follows the mode: on a box under a CPU limit that
-// field holds the limit's own reserve, which says nothing about the machine.
+// machineBudget takes the reserve from the fixed cpuReserveCores, not from
+// Details.ReserveCores: that field follows the mode, so under a CPU limit it
+// holds the limit's reserve, which says nothing about the machine.
 func machineBudget(details Details) budgetCores {
 	return newBudget(details.LogicalCpus, details.AvgHostBusyCores, cpuReserveCores)
 }
 
-// instanceBudget is this container's own CPU limit against its own usage, the
-// pair containerLimitFullSignal's arm subtracts. ReserveCores is read from
-// Details rather than recomputed - buildDetails filled it from the verdict's
-// own reserve, never from the constant.
+// instanceBudget reads ReserveCores from Details rather than recomputing it:
+// buildDetails filled it from the verdict's own reserve, never the constant.
 func instanceBudget(details Details) budgetCores {
 	return newBudget(details.CapacityCores, details.AvgUsageCores, details.ReserveCores)
 }
 
-// coresBudget is the budget the healthy headline speaks in, which is the one
-// the mode makes the customer's ceiling: their own limit where one applies, the
-// machine otherwise.
-func coresBudget(details Details) budgetCores {
+// effectiveBudget is the customer's ceiling: their own limit where one applies,
+// the machine otherwise.
+func effectiveBudget(details Details) budgetCores {
 	if details.LimitApplies {
 		return instanceBudget(details)
 	}
@@ -197,23 +188,18 @@ func coresBudget(details Details) budgetCores {
 	return machineBudget(details)
 }
 
-// machineMeasured reports whether this tick produced the machine's busy figure
-// machineBudget subtracts. It needs both the window and the reading: a thin
-// window and an unreadable /proc/stat both leave the subtraction with no term.
+// machineMeasured needs both the window and the reading: a thin window and an
+// unreadable /proc/stat both leave the subtraction with no term.
 func machineMeasured(details Details) bool {
 	return details.HostBusyRingActive && details.HostBusyCoresAvailable
 }
 
-// instanceMeasured reports whether this tick produced the container's own usage
-// figure instanceBudget subtracts.
 func instanceMeasured(details Details) bool {
 	return details.UsageRingActive
 }
 
-// usageMeasured reports whether this tick produced the usage figure the healthy
-// headline is built on. Two measurement floors, one per mode: an outage can
-// leave one window thin while the other fills, and a limit-mode headline reads
-// the container's own usage, so a thin host-busy window must not withhold it.
+// usageMeasured has one floor per mode, because an outage can leave one window
+// thin while the other fills and a limit-mode headline reads only its own usage.
 func usageMeasured(details Details) bool {
 	if details.LimitApplies {
 		return instanceMeasured(details)
@@ -222,14 +208,12 @@ func usageMeasured(details Details) bool {
 	return machineMeasured(details)
 }
 
-// cpuRule is one line of the Technical Details table: one rule that can degrade
-// this instance's CPU, written as what it measured against the threshold that
-// applies to it right now.
+// cpuRule is one line of the Technical Details table: a rule that can degrade
+// this instance's CPU, against the threshold applying to it now.
 //
-// applies and ready are the two halves Details keeps apart and forbids reading
-// as each other. applies is whether the box can run the rule at all; ready is
-// whether this tick's window produced a value. An absent line says which of the
-// two it is.
+// applies and ready must never be read as each other: applies is whether the box
+// can run the rule at all, ready is whether this tick produced a value. An
+// absent line says which of the two it is.
 type cpuRule struct {
 	// label opens the line, and names the rule rather than the instrument: an
 	// operator reading "Steal" need not know which of the two steal arms
