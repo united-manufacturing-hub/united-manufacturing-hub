@@ -33,7 +33,7 @@ import (
 // judged, stamped beside the marks when the latch fires.
 var _ = Describe("Latch signature", func() {
 	It("should derive its state from the reduction and the window's extent, and from no readability fact of any kind", func() {
-		// Coverage is exactly two time.Duration fields (span, covered) and
+		// Coverage is exactly two time.Duration fields (span, collectedFor) and
 		// nothing else, no bool, no Reading. The clear arm and re-fire arm are
 		// gated on these; a window that has already engaged its freeze (a second
 		// consecutive failed read) still spans its full duration, which is why

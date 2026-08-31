@@ -29,23 +29,17 @@ import (
 	"time"
 )
 
-// Coverage is how much of its span a window has collected: the span it was built
-// with, and how long readings have been arriving, capped at that span.
+// Coverage is how much of its span a window has collected, capped at that span.
 //
 // A span of TIME is not a span of READINGS: two readings far apart can report Full.
 // How many readings a judgement needs is the reduction's Min, not this.
 type Coverage struct {
-	span time.Duration
-	// covered is how long readings have been arriving, from the window's first
-	// stored reading, capped at span. NOT the extent of the readings currently
-	// held: prune removes the early ones, so what remains cannot say how long
-	// collection has been running.
-	covered time.Duration
+	span         time.Duration
+	collectedFor time.Duration
 }
 
-// Full reports whether the window has collected for its whole span: it separates a
-// filled window from one that has only just started.
-func (c Coverage) Full() bool { return c.span > 0 && c.covered >= c.span }
+// Full separates a filled window from one that has only just started.
+func (c Coverage) Full() bool { return c.span > 0 && c.collectedFor >= c.span }
 
 // SlidingWindow accumulates readings for one measured series: a time-ordered
 // slice of Points, pruned from the front once they age past the span.
@@ -255,10 +249,10 @@ func denominatorDelta(points []Point) float64 {
 // Coverage reports the window's span and how long it has been collecting, for the
 // latch arms gated on those rather than on the reduced number.
 func (w *SlidingWindow) Coverage() Coverage {
-	var covered time.Duration
+	var collectedFor time.Duration
 	if len(w.points) >= 2 {
-		covered = min(w.span, w.lastStored().Sub(w.firstStored))
+		collectedFor = min(w.span, w.lastStored().Sub(w.firstStored))
 	}
 
-	return Coverage{span: w.span, covered: covered}
+	return Coverage{span: w.span, collectedFor: collectedFor}
 }

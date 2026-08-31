@@ -43,7 +43,7 @@ import (
 var _ = Describe("Latch release is judged on the pair the episode fired under", func() {
 	const fireSpan = 60 * time.Second
 
-	full := Coverage{span: fireSpan, covered: fireSpan}
+	full := Coverage{span: fireSpan, collectedFor: fireSpan}
 
 	// Two answers to one question, in different units and opposite directions:
 	// spare cores falling is bad (LowerIsWorse), usage fraction rising is bad
