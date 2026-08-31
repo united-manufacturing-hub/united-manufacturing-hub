@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // -----------------------------------------------------------------------------
@@ -99,9 +100,12 @@ var _ = Describe("WorkerManager", func() {
 		return dynamicchildren.Ref{WorkerType: workerType, Name: name}
 	}
 
-	// baseSpec supplies only the required fields plus a no-op logger, leaving the
-	// optional fields (ConfigEqual/CfgFor/IsEnabled/MinRequiredTime) nil so the
-	// defaults apply unless a spec overrides them.
+	// baseSpec supplies the required fields, today's four fsmv1 literals declared
+	// as the vocabulary, and a no-op logger. The optional fields
+	// (ConfigEqual/CfgFor/IsEnabled/MinRequiredTime) are left nil to apply their
+	// defaults. The vocabulary words are inlined, not the package constants, so
+	// the specs see stable values independent of any constant the implementation
+	// may later delete.
 	baseSpec := func() WorkerManagerSpec[mgrConfig, probeStatus] {
 		return WorkerManagerSpec[mgrConfig, probeStatus]{
 			WorkerType:     workerType,
@@ -109,7 +113,13 @@ var _ = Describe("WorkerManager", func() {
 			NameOf:         nameOf,
 			MapFresh:       mapFresh,
 			MapObserved:    mapObserved,
-			Log:            deps.NewNopFSMLogger(),
+			States: StateVocabulary{
+				Starting:       "starting",
+				Degraded:       "degraded",
+				Stopped:        "stopped",
+				DesiredRunning: "running",
+			},
+			Log: deps.NewNopFSMLogger(),
 		}
 	}
 
@@ -149,6 +159,35 @@ var _ = Describe("WorkerManager", func() {
 		spec.MapObserved = nil
 
 		Expect(func() { NewWorkerManager(spec) }).To(PanicWith(ContainSubstring("requires ExtractConfigs")))
+	})
+
+	It("NewWorkerManager panics when the StateVocabulary is incomplete, for each of the four fields", func() {
+		fields := []struct {
+			name  string
+			blank func(*StateVocabulary)
+		}{
+			{"Starting", func(v *StateVocabulary) { v.Starting = "" }},
+			{"Degraded", func(v *StateVocabulary) { v.Degraded = "" }},
+			{"Stopped", func(v *StateVocabulary) { v.Stopped = "" }},
+			{"DesiredRunning", func(v *StateVocabulary) { v.DesiredRunning = "" }},
+		}
+
+		for _, f := range fields {
+			spec := baseSpec()
+			f.blank(&spec.States)
+
+			Expect(func() { NewWorkerManager(spec) }).To(PanicWith(ContainSubstring("StateVocabulary")), "field: %s", f.name)
+		}
+	})
+
+	It("NewWorkerManager panics when the StateVocabulary words are not distinct", func() {
+		// A vocabulary that reuses one word for two exits silently collapses the
+		// adapter-decided states together; reject it at construction.
+		spec := baseSpec()
+		spec.States.Starting = "monitor"
+		spec.States.Degraded = "monitor"
+
+		Expect(func() { NewWorkerManager(spec) }).To(PanicWith(ContainSubstring("distinct")))
 	})
 
 	It("Reconcile adds a new worker: instance registered and ref Upserted", func() {
@@ -382,6 +421,102 @@ var _ = Describe("WorkerManager", func() {
 
 		_, err = mgr.GetLastObservedState("missing")
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("prefixed Starting and Degraded vocabulary words reach all four adapter-decided exits as raw strings", func() {
+		// Vocabulary whose words share no prefix with the current adapter's
+		// literals ("starting"/"degraded"), so the bare constant returning values
+		// cannot satisfy any assertion here.
+		spec := baseSpec()
+		spec.States.Starting = "benthos_monitoring_starting"
+		spec.States.Degraded = "benthos_monitoring_degraded"
+		mgr := NewWorkerManager(spec)
+
+		reconcile := func(name string) {
+			desired = []mgrConfig{{Name: name, State: "running"}}
+			err, _ := mgr.Reconcile(ctx, publicfsm.SystemSnapshot{}, nil)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		stateOf := func(name string) string {
+			inst, ok := mgr.GetInstance(name)
+			Expect(ok).To(BeTrue())
+
+			return inst.GetCurrentFSMState()
+		}
+
+		// (1) BOOTSTRAP (via NeverObserved): reader returns persistence.ErrNotFound
+		// => NeverObserved => the worker's declared Starting word.
+		setupClient(&stubReader{err: persistence.ErrNotFound})
+		reconcile("r1-bootstrap")
+		Expect(stateOf("r1-bootstrap")).To(Equal("benthos_monitoring_starting"))
+
+		// (2) UNKNOWN-WITH-EMPTY-LAST-STATE: reconcile creates the instance, then
+		// the reader errs on the FIRST GetCurrentFSMState read so lastState is
+		// still empty => the worker's declared Starting word.
+		sr := &stubReader{}
+		setupClient(sr)
+		reconcile("r1-unknown")
+		sr.err = errors.New("generic read boom")
+		Expect(stateOf("r1-unknown")).To(Equal("benthos_monitoring_starting"))
+
+		// (3) DEGRADED VERDICT: Fresh observation whose stored status reports
+		// degraded => the worker's declared Degraded word.
+		setupClient(freshReader(probeStatus{PortState: "open", Degraded: true, Reason: "boom"}))
+		reconcile("r1-degraded")
+		Expect(stateOf("r1-degraded")).To(Equal("benthos_monitoring_degraded"))
+
+		// (4) STALE: observation older than the 1s unregistered fallback staleAfter
+		// => the worker's declared Degraded word.
+		setupClient(&stubReader{obs: &fsmv2.Observation[probeStatus]{
+			CollectedAt: time.Now().Add(-5 * time.Second),
+			Status:      probeStatus{PortState: "open"},
+		}})
+		reconcile("r1-stale")
+		Expect(stateOf("r1-stale")).To(Equal("benthos_monitoring_degraded"))
+
+		// (5) FRESH+HEALTHY is outside the vocabulary: it returns the developer's
+		// MapFresh output untouched, not the declared Starting/Degraded words.
+		setupClient(freshReader(probeStatus{PortState: "open"}))
+		reconcile("r1-fresh")
+		Expect(stateOf("r1-fresh")).To(Equal("open"))
+	})
+
+	It("a config whose desired state is the declared Stopped word is disabled, not Upserted", func() {
+		w := setupClient(&stubReader{})
+		spec := baseSpec()
+		spec.States.Stopped = "benthos_monitoring_stopped"
+		mgr := NewWorkerManager(spec)
+
+		desired = []mgrConfig{{Name: "alpha", State: "benthos_monitoring_stopped"}}
+
+		err, changed := mgr.Reconcile(ctx, publicfsm.SystemSnapshot{}, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(changed).To(BeTrue())
+
+		// A disabled worker is not Upserted into the fsmv2 runtime...
+		Expect(w.Registry().Contains(refFor("alpha"))).To(BeFalse())
+
+		// ...but it stays visible, reading as the desired (stopped) state.
+		inst, ok := mgr.GetInstance("alpha")
+		Expect(ok).To(BeTrue())
+		Expect(inst.GetCurrentFSMState()).To(Equal("benthos_monitoring_stopped"))
+	})
+
+	It("a config with an empty desired state reports the declared DesiredRunning word", func() {
+		setupClient(&stubReader{})
+		spec := baseSpec()
+		spec.States.DesiredRunning = "benthos_monitoring_active"
+		mgr := NewWorkerManager(spec)
+
+		desired = []mgrConfig{{Name: "alpha", State: ""}}
+
+		err, _ := mgr.Reconcile(ctx, publicfsm.SystemSnapshot{}, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		inst, ok := mgr.GetInstance("alpha")
+		Expect(ok).To(BeTrue())
+		Expect(inst.GetDesiredFSMState()).To(Equal("benthos_monitoring_active"))
 	})
 })
 

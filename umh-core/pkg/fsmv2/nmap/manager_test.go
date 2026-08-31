@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // stubManagerReader is a deps.StateReader that returns a fixed
@@ -213,5 +214,57 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		Expect(back.NmapServiceConfig.Target).To(Equal(target))
 		Expect(back.NmapServiceConfig.Port).To(Equal(port))
 		Expect(back.Name).To(Equal(name))
+	})
+
+	It("returns nmap's own operational states for the adapter-decided exits (parity)", func() {
+		// One registered client, held across the three reads; only the reader's
+		// observation/error changes, so the ref stays registered and each read is
+		// classified by freshness rather than as Unregistered bootstrap.
+		reader := &stubManagerReader{err: persistence.ErrNotFound}
+		writer := dynamicchildren.NewWriter()
+		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))
+
+		mgr := NewFsmv2NmapManager("test")
+		err, _ := mgr.Reconcile(context.Background(), snapshotWith(nmapConfig("running")), nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		// BOOTSTRAP: no observation yet (NeverObserved) => the starting state.
+		state, gerr := mgr.GetCurrentFSMState(name)
+		Expect(gerr).NotTo(HaveOccurred())
+		Expect(state).To(Equal(nmapfsm.OperationalStateStarting))
+
+		// DEGRADED verdict on a Fresh observation => the degraded state.
+		reader.err = nil
+		reader.obs = &fsmv2.Observation[simple.Status[NmapStatus]]{
+			CollectedAt: time.Now().Add(-100 * time.Millisecond),
+			Status:      simple.Status[NmapStatus]{Result: NmapStatus{PortState: "open"}, Degraded: true, Reason: "poll error"},
+		}
+
+		state, gerr = mgr.GetCurrentFSMState(name)
+		Expect(gerr).NotTo(HaveOccurred())
+		Expect(state).To(Equal(nmapfsm.OperationalStateDegraded))
+
+		// STALE (missed polls) => the degraded state.
+		reader.obs = &fsmv2.Observation[simple.Status[NmapStatus]]{
+			CollectedAt: time.Now().Add(-5 * time.Second),
+			Status:      simple.Status[NmapStatus]{Result: NmapStatus{PortState: "open"}},
+		}
+
+		state, gerr = mgr.GetCurrentFSMState(name)
+		Expect(gerr).NotTo(HaveOccurred())
+		Expect(state).To(Equal(nmapfsm.OperationalStateDegraded))
+	})
+
+	It("falls back to the open desired state when a config leaves it empty", func() {
+		stageClient(freshStatus(NmapStatus{PortState: "open", IsRunning: true, Port: port, LatencyMs: 3}), nil)
+
+		mgr := NewFsmv2NmapManager("test")
+
+		err, _ := mgr.Reconcile(context.Background(), snapshotWith(nmapConfig("")), nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		inst, ok := mgr.GetInstance(name)
+		Expect(ok).To(BeTrue())
+		Expect(inst.GetDesiredFSMState()).To(Equal(nmapfsm.OperationalStateOpen))
 	})
 })
