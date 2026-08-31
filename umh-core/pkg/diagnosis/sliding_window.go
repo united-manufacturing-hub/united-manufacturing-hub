@@ -29,10 +29,11 @@ import (
 	"time"
 )
 
-// Coverage is how much of its span a window has collected, capped at that span.
+// Coverage is what a window can say about its own extent: the span it was built
+// with, and how long it has been collecting.
 //
 // A span of TIME is not a span of READINGS: two readings far apart can report Full.
-// How many readings a judgement needs is the reduction's Min, not this.
+// How many readings a judgement needs is the reduction's Min, not this type.
 type Coverage struct {
 	span         time.Duration
 	collectedFor time.Duration
@@ -129,11 +130,10 @@ func (w *SlidingWindow) prune(cutoff time.Time) {
 	w.points = w.points[i:]
 }
 
-// appendPoint stores one instant's reading; an absent or non-finite value stores
-// nothing, and callers must not pre-filter.
-// appendPoint stores one reading, and REQUIRES at to be no earlier than the
-// newest instant already held. Every reader here assumes points is ascending by
-// At, and nothing enforces it: the caller owns the clock, and Engine.Observe
+// appendPoint stores one instant's reading, and REQUIRES at to be no earlier than
+// the newest instant already held. An absent or non-finite value stores nothing,
+// and callers must not pre-filter. Every reader here assumes points is ascending
+// by At, and nothing enforces it: the caller owns the clock, and Engine.Observe
 // passes whatever instant it was handed.
 //
 // The assumption is load-bearing, so here is what a late reading actually does,
@@ -146,7 +146,7 @@ func (w *SlidingWindow) prune(cutoff time.Time) {
 //	Coverage()    10s -> 1s, so Full() flips true -> false
 //	prune()       stops at the first entry not before its cutoff, so the late
 //	              entry outlives it; and a reading earlier than the window's first
-//	              makes covered negative, which reads as not full
+//	              makes collectedFor negative, which reads as not full
 //
 // The Coverage consequence is the one that reaches behaviour: Latch's clear arm
 // is gated on Coverage.Full(), so a single late reading can withhold a release
@@ -251,7 +251,7 @@ func denominatorDelta(points []Point) float64 {
 func (w *SlidingWindow) Coverage() Coverage {
 	var collectedFor time.Duration
 	if len(w.points) >= 2 {
-		collectedFor = min(w.span, w.lastStored().Sub(w.firstStored))
+		collectedFor = w.lastStored().Sub(w.firstStored)
 	}
 
 	return Coverage{span: w.span, collectedFor: collectedFor}
