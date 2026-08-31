@@ -90,6 +90,21 @@ func (s StateWithFields) String() string {
 	return s.StateNameFromType(s)
 }
 
+// Generic test state types. A generic type's reflect name carries its type
+// arguments, so these cover the bracket-stripping path.
+
+type configArg struct{}
+
+type statusArg struct{}
+
+type genericState[A, B any] struct {
+	helpers.BaseState
+}
+
+type widget[A any] struct {
+	helpers.BaseState
+}
+
 var _ = Describe("BaseState", func() {
 	Describe("String() method", func() {
 		Context("with standard state names ending in 'State'", func() {
@@ -208,6 +223,16 @@ var _ = Describe("BaseState", func() {
 			type MyCustomType struct{}
 			state := MyCustomType{}
 			Expect(helpers.DeriveStateName(state)).To(Equal("MyCustomType"))
+		})
+
+		It("should drop the type arguments of a generic state", func() {
+			state := &genericState[configArg, statusArg]{}
+			Expect(helpers.DeriveStateName(state)).To(Equal("generic"))
+		})
+
+		It("should drop the type arguments of a generic type with no State suffix", func() {
+			state := &widget[configArg]{}
+			Expect(helpers.DeriveStateName(state)).To(Equal("widget"))
 		})
 	})
 })
