@@ -243,7 +243,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: well inside the seam's 3s maxAge
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "degraded",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
 						Message: workerVerdictMessage,
 					},
 				},
@@ -293,7 +293,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: inside the seam's 3s maxAge
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "degraded",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
 						Message: workerVerdictMessage,
 					},
 				},
@@ -352,7 +352,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},
@@ -387,7 +387,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},
@@ -447,7 +447,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},
@@ -495,7 +495,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now(),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},
@@ -519,7 +519,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},
@@ -643,7 +643,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},
@@ -773,7 +773,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-4 * time.Second),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},
@@ -910,7 +910,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "degraded",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
 						Message: workerVerdictMessage,
 					},
 				},
@@ -942,7 +942,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now(),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},
@@ -1067,7 +1067,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "degraded",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
 						Message: workerVerdictMessage,
 					},
 				},
@@ -1098,7 +1098,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: "healthy",
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 						Message: workerHealthyMessage,
 					},
 				},

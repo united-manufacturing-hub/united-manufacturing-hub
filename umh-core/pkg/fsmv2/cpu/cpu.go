@@ -68,14 +68,14 @@ type CPUConfig struct{}
 
 // CPUStatus is the result of one CPU-health observation by this worker.
 //
-// No Go code outside this package reads a CPUStatus today. Its json tags still
-// name fields in a stored document: simple.Status merges them into the top
-// level of the persisted observation, so renaming one is a storage-format
-// change.
+// container_monitor reads it typed through fsmv2client.GetFresh. The json
+// tags also name fields in a stored document, so renaming one is a
+// storage-format change.
 type CPUStatus struct {
-	// Verdict is the cpuhealth.State string Decide produced this tick ("healthy"
-	// or "degraded"), and empty when the tick could not measure.
-	Verdict string `json:"verdict"`
+	// Verdict is everything Decide produced this tick: the state, the
+	// attribution of the dominant cause, and the ranked causes. It is empty
+	// when the tick could not measure.
+	Verdict cpuhealth.Verdict `json:"verdict"`
 
 	// Message is what cpuhealth.ComposeMessage rendered: a headline, then a
 	// Technical Details table with one headroom line per ceiling the instance is
@@ -127,7 +127,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
 	return CPUStatus{
-		Verdict: string(verdict.State),
+		Verdict: verdict,
 		Message: cpuhealth.ComposeMessage(verdict, details),
 		Details: details,
 	}, nil
@@ -185,7 +185,7 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.Bas
 // healthFromStatus turns one poll's verdict into the worker's own health.
 // simple calls it after every good poll, and never after a failed one.
 func healthFromStatus(_ CPUConfig, status CPUStatus) simple.Health {
-	if status.Verdict == string(cpuhealth.StateDegraded) {
+	if status.Verdict.State == cpuhealth.StateDegraded {
 		return simple.Degraded(status.Message)
 	}
 

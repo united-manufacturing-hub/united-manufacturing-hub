@@ -461,7 +461,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 	// A Fresh observation whose framework verdict is not degraded carries the
 	// developer's judgement in Result. The switch maps only the two spelled-out
 	// states, so a rename of either fails the seam tests too.
-	switch cpuhealth.State(workerStatus.Result.Verdict) {
+	switch workerStatus.Result.Verdict.State {
 	case cpuhealth.StateHealthy:
 		return &models.Health{
 			Message:       workerStatus.Result.Message,

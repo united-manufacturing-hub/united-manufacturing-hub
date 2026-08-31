@@ -36,7 +36,7 @@ var _ = Describe("the worker never fabricates", func() {
 
 		status, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).To(HaveOccurred(), "a whole-sample failure must surface as an error")
-		Expect(status.Verdict).To(BeEmpty(),
+		Expect(status.Verdict).To(Equal(cpuhealth.Verdict{}),
 			"no verdict is stored — a healthy zero would fabricate a measurement")
 		Expect(status.Message).To(BeEmpty())
 	})
@@ -61,7 +61,7 @@ var _ = Describe("the worker never fabricates", func() {
 
 		status, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.Verdict).To(Equal(string(cpuhealth.StateHealthy)),
+		Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy),
 			"a nil error with one field absent judges normally, not as a failure")
 	})
 })

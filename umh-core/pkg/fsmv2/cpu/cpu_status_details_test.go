@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
 var _ = Describe("CPUStatus carries the measured evidence", func() {
@@ -78,7 +79,7 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 		// A present zero: the value an implementation could mistake for an absence.
 		filled := func() CPUStatus {
 			return CPUStatus{
-				Verdict: string(cpuhealth.StateHealthy),
+				Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 				Message: "CPU healthy.",
 				Details: cpuhealth.Details{
 					P95UsageCores: diagnosis.Known(0),
@@ -111,6 +112,7 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 			var top map[string]json.RawMessage
 			Expect(json.Unmarshal(b, &top)).To(Succeed())
 			Expect(top).To(HaveKey("details"))
+			Expect(top).To(HaveKey("verdict"))
 			Expect(top).NotTo(HaveKey("p95UsageCores"),
 				"a named field keeps the evidence out of the namespace verdict and message share")
 
@@ -120,5 +122,60 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 			Expect(string(details["p95UsageCores"])).To(Equal("0"),
 				"a present Reading is a JSON number; {} means its value was dropped and null means it was lost as an absence")
 		})
+	})
+})
+
+// The stored document is what simple.Status marshals from a CPUStatus: the
+// result's keys flattened to the top level, alongside the health verdict's
+// reason and degraded. The CPU status reader in container_monitor loads that
+// document back through fsmv2client, so a loader must read back the whole
+// verdict.
+var _ = Describe("the verdict on the stored document", func() {
+	It("carries Decide's whole verdict through a store and load round trip", func() {
+		// Pressure fires above its mark on the first sample, so Decide
+		// returns degraded for this sample on the first tick, with an
+		// attribution and a ranked cause, without any window warm-up. A
+		// quiet sample returns healthy, and a healthy verdict carries no
+		// attribution and no causes to observe.
+		sample := cpuhealth.Sample{
+			Timestamp:    time.Now(),
+			Quota:        diagnosis.Known(0),
+			NrPeriods:    diagnosis.Known(1),
+			Pressure:     diagnosis.Known(0.9),
+			HostBusy:     diagnosis.Known(0.5),
+			Virtualized:  true,
+			PsiAvailable: true,
+		}
+
+		// The expected verdict is what Decide returns for this sample. It
+		// runs on a second engine, not the one Poll feeds, because Decide
+		// advances the windows it reads.
+		twin := newDeps(fixedSampler(sample), 4, 0)
+		expected, _ := cpuhealth.Decide(twin.engine, sample, cpuhealth.DeriveEnvironment(sample))
+		Expect(expected.State).To(Equal(cpuhealth.StateDegraded))
+		Expect(expected.Attribution).NotTo(BeEmpty())
+		Expect(expected.Causes).NotTo(BeEmpty())
+
+		d := newDeps(fixedSampler(sample), 4, 0)
+		status, err := Poll(context.Background(), d, CPUConfig{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Verdict).To(Equal(expected),
+			"after Poll the status carries Decide's whole verdict")
+
+		// Store the poll result as the framework does: wrapped in
+		// simple.Status.
+		health := monitorSpec.Health(CPUConfig{}, status)
+		stored, err := json.Marshal(simple.Status[CPUStatus]{
+			Result:   status,
+			Degraded: health.Degraded,
+			Reason:   health.Reason,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		var back simple.Status[CPUStatus]
+		Expect(json.Unmarshal(stored, &back)).To(Succeed(),
+			"the stored document must load")
+		Expect(back.Result.Verdict).To(Equal(expected),
+			"a loader reads the whole verdict back, not only its state")
 	})
 })

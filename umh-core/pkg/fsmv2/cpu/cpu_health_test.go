@@ -47,7 +47,7 @@ var _ = Describe("the worker's own health", func() {
 
 		status, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.Verdict).To(Equal(string(cpuhealth.StateDegraded)),
+		Expect(status.Verdict.State).To(Equal(cpuhealth.StateDegraded),
 			"this spec needs a degraded verdict to have anything to map")
 
 		health := monitorSpec.Health(CPUConfig{}, status)
@@ -75,7 +75,7 @@ var _ = Describe("the worker's own health", func() {
 
 		status, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.Verdict).To(Equal(string(cpuhealth.StateHealthy)),
+		Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy),
 			"this spec needs a healthy verdict to have anything to map")
 
 		health := monitorSpec.Health(CPUConfig{}, status)
