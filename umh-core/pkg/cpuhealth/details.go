@@ -30,18 +30,12 @@ import (
 type Details struct {
 	// The metrics. ThrottleRatio, PressureAvg60 and StealP95 are filled every
 	// tick, independent of their latch's fired state, so the number stays
-	// observable even when the latch has not fired. The six Readings beside
-	// them are declared for a future frontend projection, and nothing fills any
-	// of them.
-	UsageFraction    diagnosis.Reading `json:"usageFraction"`    // absent in every mode; declared for a future frontend projection
-	P95UsageFraction diagnosis.Reading `json:"p95UsageFraction"` // declared for a future frontend projection; nothing fills it
-	P99UsageFraction diagnosis.Reading `json:"p99UsageFraction"` // declared for a future frontend projection; nothing fills it
-	P95UsageCores    diagnosis.Reading `json:"p95UsageCores"`    // declared for a future frontend projection; nothing fills it
-	P99UsageCores    diagnosis.Reading `json:"p99UsageCores"`    // declared for a future frontend projection; nothing fills it
-	HeadroomCores    diagnosis.Reading `json:"headroomCores"`    // declared for a future frontend projection; nothing fills it
-	ThrottleRatio    float64           `json:"throttleRatio"`    // 60s nr_throttled/nr_periods delta; buildDetails discards State, so absent or untrusted reads 0
-	PressureAvg60    float64           `json:"pressureAvg60"`    // PSI avg60; NaN/±Inf are never stored (rejected at window ingest), and buildDetails discards State, so absent reads 0
-	StealP95         float64           `json:"stealP95"`         // 60s p95; buildDetails discards State, so bare metal or below the reduction's floor of 20 reads 0
+	// observable even when the latch has not fired. Any Reading beside them is
+	// declared for a future frontend projection, and nothing fills it.
+	P95UsageCores diagnosis.Reading `json:"p95UsageCores"` // declared for a future frontend projection; nothing fills it
+	ThrottleRatio float64           `json:"throttleRatio"` // 60s nr_throttled/nr_periods delta; buildDetails discards State, so absent or untrusted reads 0
+	PressureAvg60 float64           `json:"pressureAvg60"` // PSI avg60; NaN/±Inf are never stored (rejected at window ingest), and buildDetails discards State, so absent reads 0
+	StealP95      float64           `json:"stealP95"`      // 60s p95; buildDetails discards State, so bare metal or below the reduction's floor of 20 reads 0
 
 	// Observability only: neither of these two changes a verdict. Both are
 	// filled every tick from their own signal's reduction.

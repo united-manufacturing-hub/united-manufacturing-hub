@@ -61,16 +61,12 @@ var _ = Describe("Decide's whole Details contract", func() {
 		}
 
 		Expect(details).To(Equal(Details{
-			UsageFraction:    diagnosis.Unknown(), // declared for a future projection; never filled
 			ThrottleRatio:    0.02,
 			PressureAvg60:    0.1,
 			StealP95:         0,
 			AvgUsageFraction: 0.049999999999999954,
-			P95UsageFraction: diagnosis.Unknown(),
-			P99UsageFraction: diagnosis.Unknown(),
 			AvgUsageCores:    0.19999999999999982,
 			P95UsageCores:    diagnosis.Unknown(),
-			P99UsageCores:    diagnosis.Unknown(),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -80,7 +76,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       0.5,
-			HeadroomCores:          diagnosis.Unknown(),
 			CapacityCores:          2,
 			ReserveCores:           0.2,
 
@@ -125,16 +120,12 @@ var _ = Describe("Decide's whole Details contract", func() {
 		}
 
 		Expect(details).To(Equal(Details{
-			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0.06,
 			PressureAvg60:    0.1,
 			StealP95:         0,
 			AvgUsageFraction: 0.049999999999999954,
-			P95UsageFraction: diagnosis.Unknown(),
-			P99UsageFraction: diagnosis.Unknown(),
 			AvgUsageCores:    0.19999999999999982,
 			P95UsageCores:    diagnosis.Unknown(),
-			P99UsageCores:    diagnosis.Unknown(),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -144,7 +135,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       0.5,
-			HeadroomCores:          diagnosis.Unknown(),
 			CapacityCores:          2,
 			ReserveCores:           0.2,
 
@@ -189,16 +179,12 @@ var _ = Describe("Decide's whole Details contract", func() {
 		}
 
 		Expect(details).To(Equal(Details{
-			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0.02,
 			PressureAvg60:    0.35,
 			StealP95:         0,
 			AvgUsageFraction: 0.049999999999999954,
-			P95UsageFraction: diagnosis.Unknown(),
-			P99UsageFraction: diagnosis.Unknown(),
 			AvgUsageCores:    0.19999999999999982,
 			P95UsageCores:    diagnosis.Unknown(),
-			P99UsageCores:    diagnosis.Unknown(),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -208,7 +194,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       0.5,
-			HeadroomCores:          diagnosis.Unknown(),
 			CapacityCores:          2,
 			ReserveCores:           0.2,
 
@@ -253,16 +238,12 @@ var _ = Describe("Decide's whole Details contract", func() {
 		}
 
 		Expect(details).To(Equal(Details{
-			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0.02,
 			PressureAvg60:    0.1,
 			StealP95:         0.9,
 			AvgUsageFraction: 0.049999999999999954,
-			P95UsageFraction: diagnosis.Unknown(),
-			P99UsageFraction: diagnosis.Unknown(),
 			AvgUsageCores:    0.19999999999999982,
 			P95UsageCores:    diagnosis.Unknown(),
-			P99UsageCores:    diagnosis.Unknown(),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -272,7 +253,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostHeadroomCores:      2.5,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       0.5,
-			HeadroomCores:          diagnosis.Unknown(),
 			CapacityCores:          2,
 			ReserveCores:           0.2,
 
@@ -321,16 +301,12 @@ var _ = Describe("Decide's whole Details contract", func() {
 		}
 
 		Expect(details).To(Equal(Details{
-			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0,
 			PressureAvg60:    0,
 			StealP95:         0,
 			AvgUsageFraction: 0.4875000000000005,
-			P95UsageFraction: diagnosis.Unknown(),
-			P99UsageFraction: diagnosis.Unknown(),
 			AvgUsageCores:    1.950000000000002,
 			P95UsageCores:    diagnosis.Unknown(),
-			P99UsageCores:    diagnosis.Unknown(),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -340,7 +316,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostHeadroomCores:      -0.7999999999999993,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       3.800000000000004,
-			HeadroomCores:          diagnosis.Unknown(),
 			CapacityCores:          0,
 			ReserveCores:           1,
 
@@ -381,16 +356,12 @@ var _ = Describe("Decide's whole Details contract", func() {
 		}
 
 		Expect(details).To(Equal(Details{
-			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0,
 			PressureAvg60:    0,
 			StealP95:         0,
 			AvgUsageFraction: 0.75,
-			P95UsageFraction: diagnosis.Unknown(),
-			P99UsageFraction: diagnosis.Unknown(),
 			AvgUsageCores:    3,
 			P95UsageCores:    diagnosis.Unknown(),
-			P99UsageCores:    diagnosis.Unknown(),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: false,
@@ -400,7 +371,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostHeadroomCores:      0,
 			HostBusyCoresAvailable: false,
 			AvgHostBusyCores:       0,
-			HeadroomCores:          diagnosis.Unknown(),
 			CapacityCores:          0,
 			ReserveCores:           1,
 
@@ -440,16 +410,12 @@ var _ = Describe("Decide's whole Details contract", func() {
 		}
 
 		Expect(details).To(Equal(Details{
-			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0,
 			PressureAvg60:    0,
 			StealP95:         0,
 			AvgUsageFraction: 0.125,
-			P95UsageFraction: diagnosis.Unknown(),
-			P99UsageFraction: diagnosis.Unknown(),
 			AvgUsageCores:    0.5,
 			P95UsageCores:    diagnosis.Unknown(),
-			P99UsageCores:    diagnosis.Unknown(),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -459,7 +425,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostHeadroomCores:      -0.5,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       3.5,
-			HeadroomCores:          diagnosis.Unknown(),
 			CapacityCores:          0,
 			ReserveCores:           1,
 
@@ -510,16 +475,12 @@ var _ = Describe("Decide's whole Details contract", func() {
 		_, details := Decide(engine, smp, env)
 
 		Expect(details).To(Equal(Details{
-			UsageFraction:    diagnosis.Unknown(),
 			ThrottleRatio:    0,
 			PressureAvg60:    0.1,
 			StealP95:         0,
 			AvgUsageFraction: 0.05,
-			P95UsageFraction: diagnosis.Unknown(),
-			P99UsageFraction: diagnosis.Unknown(),
 			AvgUsageCores:    0.2,
 			P95UsageCores:    diagnosis.Unknown(),
-			P99UsageCores:    diagnosis.Unknown(),
 			UsageRingActive:  false,
 
 			HostBusyRingActive: false,
@@ -529,7 +490,6 @@ var _ = Describe("Decide's whole Details contract", func() {
 			HostHeadroomCores:      0,
 			HostBusyCoresAvailable: true,
 			AvgHostBusyCores:       0.5,
-			HeadroomCores:          diagnosis.Unknown(),
 			CapacityCores:          2,
 			ReserveCores:           0.2,
 

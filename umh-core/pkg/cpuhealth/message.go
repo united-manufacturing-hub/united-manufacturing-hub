@@ -152,8 +152,8 @@ type budgetCores struct {
 }
 
 // newBudget derives headroom from the already-rounded three, so the arithmetic
-// the headroom line prints adds up exactly. It never rounds
-// Details.HeadroomCores independently.
+// the headroom line prints adds up exactly. Details stores no headroom member,
+// so this derived value is the only headroom a line can print.
 func newBudget(total, used, reserve float64) budgetCores {
 	b := budgetCores{
 		total:   round1(total),

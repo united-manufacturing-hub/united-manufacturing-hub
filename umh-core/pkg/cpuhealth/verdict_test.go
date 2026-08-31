@@ -209,11 +209,11 @@ var _ = Describe("verdict assembly", func() {
 		}
 	})
 
-	It("should report the six fields nothing fills as absent rather than as a measured zero", func() {
-		// Six fields are declared for a future frontend projection and Decide has
-		// no assignment for any of them. A float64 could not say so: 0 is a
+	It("should report a Reading nothing fills as absent rather than as a measured zero", func() {
+		// A Reading is declared for a future frontend projection and Decide has
+		// no assignment for it yet. A float64 could not say so: 0 is a
 		// legitimate usage figure, so an unfilled field read as a measurement.
-		// Each must answer through Reading's second return, which a Known(0)
+		// It must answer through Reading's second return, which a Known(0)
 		// would fail — the distinction is the whole point of the type.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
@@ -239,11 +239,6 @@ var _ = Describe("verdict assembly", func() {
 		Expect(details.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9), "the pass must have run for the absences below to mean anything")
 
 		absent := func(r diagnosis.Reading) bool { _, ok := r.Get(); return !ok }
-		Expect(absent(details.UsageFraction)).To(BeTrue(), "UsageFraction")
-		Expect(absent(details.P95UsageFraction)).To(BeTrue(), "P95UsageFraction")
-		Expect(absent(details.P99UsageFraction)).To(BeTrue(), "P99UsageFraction")
 		Expect(absent(details.P95UsageCores)).To(BeTrue(), "P95UsageCores")
-		Expect(absent(details.P99UsageCores)).To(BeTrue(), "P99UsageCores")
-		Expect(absent(details.HeadroomCores)).To(BeTrue(), "HeadroomCores")
 	})
 })

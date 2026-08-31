@@ -75,15 +75,13 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 	// gone with no error. buildDetails fills no Reading today, so Poll cannot
 	// stage that case and these specs build the status directly.
 	Describe("on the wire", func() {
-		// A present value, a present zero and an absence: three things to lose.
+		// A present zero: the value an implementation could mistake for an absence.
 		filled := func() CPUStatus {
 			return CPUStatus{
 				Verdict: string(cpuhealth.StateHealthy),
 				Message: "CPU healthy.",
 				Details: cpuhealth.Details{
-					UsageFraction: diagnosis.Known(0.42),
 					P95UsageCores: diagnosis.Known(0),
-					HeadroomCores: diagnosis.Unknown(),
 					ThrottleRatio: 0.1,
 					LogicalCpus:   4,
 					HostCpus:      8,
@@ -101,16 +99,9 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 
 			Expect(back.Details).To(Equal(filled().Details))
 
-			v, ok := back.Details.UsageFraction.Get()
-			Expect(ok).To(BeTrue(), "a present Reading must survive the round trip")
-			Expect(v).To(Equal(0.42))
-
-			v, ok = back.Details.P95UsageCores.Get()
+			v, ok := back.Details.P95UsageCores.Get()
 			Expect(ok).To(BeTrue(), "a known zero is a value, not an absence")
 			Expect(v).To(Equal(0.0))
-
-			_, ok = back.Details.HeadroomCores.Get()
-			Expect(ok).To(BeFalse(), "an absence must not come back as a zero")
 		})
 
 		It("nests the evidence under details, with a present Reading written as a number", func() {
@@ -120,16 +111,14 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 			var top map[string]json.RawMessage
 			Expect(json.Unmarshal(b, &top)).To(Succeed())
 			Expect(top).To(HaveKey("details"))
-			Expect(top).NotTo(HaveKey("usageFraction"),
+			Expect(top).NotTo(HaveKey("p95UsageCores"),
 				"a named field keeps the evidence out of the namespace verdict and message share")
 
 			var details map[string]json.RawMessage
 			Expect(json.Unmarshal(top["details"], &details)).To(Succeed())
 
-			Expect(string(details["usageFraction"])).To(Equal("0.42"),
+			Expect(string(details["p95UsageCores"])).To(Equal("0"),
 				"a present Reading is a JSON number; {} means its value was dropped and null means it was lost as an absence")
-			Expect(string(details["p95UsageCores"])).To(Equal("0"))
-			Expect(string(details["headroomCores"])).To(Equal("null"))
 		})
 	})
 })
