@@ -32,7 +32,7 @@ import (
 // that episode forever once selection hands over to it.
 var stealMarks = diagnosis.Marks{
 	Fire: diagnosis.Mark{At: 0.10}, Clear: diagnosis.Mark{At: 0.06},
-	Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Worst: 1.0,
+	Polarity: diagnosis.HigherIsWorse, Unit: unitRatio, Worst: 1.0,
 }
 
 // stealSignal is "is something outside this box taking our CPU?" It carries two

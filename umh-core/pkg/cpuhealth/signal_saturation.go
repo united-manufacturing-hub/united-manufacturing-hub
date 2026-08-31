@@ -34,6 +34,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
+// Marks are the two thresholds that turn a number into a yes or no: the value
+// at which an instrument starts saying yes, and the value at which it goes back
+// to saying no. They differ on purpose, so a reading sitting on the boundary
+// does not flap.
+//
+// hostHeadroomMarks is the machine's spare cores, cores − hostBusy − reserve.
+// hostBusy cannot exceed cores, so the floor is −cpuReserveCores.
+var hostHeadroomMarks = diagnosis.Marks{
+	Fire: diagnosis.Mark{At: 0}, Clear: diagnosis.Mark{At: 0.5},
+	Polarity: diagnosis.LowerIsWorse, Unit: unitCores, Worst: -cpuReserveCores,
+}
+
+// usageFractionMarks is our own usage over the CPUs we may run on. 0.70 fires
+// AT the mark: exactly 70% of the machine busy is a full machine, not a
+// 69%-and-waiting one.
+var usageFractionMarks = diagnosis.Marks{
+	Fire: diagnosis.Mark{At: 0.70, Inclusive: true}, Clear: diagnosis.Mark{At: 0.60},
+	Polarity: diagnosis.HigherIsWorse, Unit: unitFraction, Worst: 1.0,
+}
+
 // hostCpuFullSignal asks "is the machine full?".
 //
 // A signal is one question. An instrument is one way to measure the answer,
@@ -86,23 +106,7 @@ func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 					Span:      60 * time.Second,
 					Reduction: diagnosis.Mean,
 				},
-				// Marks are the two thresholds that turn a number into a yes or no: the
-				// value at which this instrument starts saying yes, and the value at which
-				// it goes back to saying no. They differ on purpose, so a reading sitting
-				// on the boundary does not flap.
-				Marks: diagnosis.Marks{
-					Fire:     diagnosis.Mark{At: 0},
-					Clear:    diagnosis.Mark{At: 0.5},
-					Polarity: diagnosis.LowerIsWorse,
-					Unit:     "cores",
-					// Severity 1 at −Reserve, so Worst is the reserve, not
-					// the core count. Headroom is cores − hostBusy − reserve and
-					// hostBusy cannot exceed cores, so the quantity bottoms out
-					// at −cpuReserveCores: a wholly consumed box. Worst is
-					// negative because it lives on the worse (lower) side of
-					// Fire, the same side as the value that reaches it.
-					Worst: -cpuReserveCores,
-				},
+				Marks: hostHeadroomMarks,
 			},
 			{
 				Measurement: diagnosis.Measurement[Sample]{
@@ -134,15 +138,7 @@ func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 					Span:      60 * time.Second,
 					Reduction: diagnosis.Mean,
 				},
-				Marks: diagnosis.Marks{
-					// 0.70 fires AT the mark: exactly 70% of the machine busy is
-					// a full machine, not a 69%-and-waiting one.
-					Fire:     diagnosis.Mark{At: 0.70, Inclusive: true},
-					Clear:    diagnosis.Mark{At: 0.60},
-					Polarity: diagnosis.HigherIsWorse,
-					Unit:     "fraction",
-					Worst:    1.0,
-				},
+				Marks: usageFractionMarks,
 			},
 		},
 	}
@@ -202,7 +198,7 @@ func shareRefinements() []diagnosis.Signal[Sample] {
 					Fire:     diagnosis.Mark{At: 0.49},
 					Clear:    diagnosis.Mark{At: 0.505},
 					Polarity: diagnosis.LowerIsWorse,
-					Unit:     "fraction",
+					Unit:     unitFraction,
 					// Severity 1 where none of the machine's busy time is ours.
 					Worst: 0.0,
 				},
@@ -225,12 +221,22 @@ func shareRefinements() []diagnosis.Signal[Sample] {
 					Fire:     diagnosis.Mark{At: 0.51},
 					Clear:    diagnosis.Mark{At: 0.495},
 					Polarity: diagnosis.HigherIsWorse,
-					Unit:     "fraction",
+					Unit:     unitFraction,
 					// Severity 1 where all of the machine's busy time is ours.
 					Worst: 1.0,
 				},
 			}},
 		},
+	}
+}
+
+// limitHeadroomMarks is the container's spare cores against its own quota. It is
+// a function because every number below is quota-denominated: the floor is
+// −0.10 × quota.
+func limitHeadroomMarks(quota float64) diagnosis.Marks {
+	return diagnosis.Marks{
+		Fire: diagnosis.Mark{At: 0}, Clear: diagnosis.Mark{At: 0.05 * quota},
+		Polarity: diagnosis.LowerIsWorse, Unit: unitCores, Worst: -0.10 * quota,
 	}
 }
 
@@ -266,19 +272,7 @@ func containerLimitFullSignal(quota float64) diagnosis.Signal[Sample] {
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean,
 			},
-			Marks: diagnosis.Marks{
-				Fire:     diagnosis.Mark{At: 0},
-				Clear:    diagnosis.Mark{At: 0.05 * quota},
-				Polarity: diagnosis.LowerIsWorse,
-				Unit:     "cores",
-				// Same reasoning as host-headroom: usage cannot exceed the quota
-				// the kernel throttles it to, so quota − usage − 0.10 × quota
-				// bottoms out at −0.10 × quota. Worst is negative because it
-				// lives on the worse (lower) side of Fire, the same side as the
-				// value that reaches it; a container wholly out of its budget
-				// scores 1.0.
-				Worst: -0.10 * quota,
-			},
+			Marks: limitHeadroomMarks(quota),
 		}},
 	}
 }

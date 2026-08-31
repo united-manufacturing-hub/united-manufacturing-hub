@@ -73,6 +73,15 @@ const (
 // reader of one does not have to go back to the table for it.
 type Unit string
 
+// The three units the CPU mark pairs are denominated in. Each signal_*.go
+// declares one beside its marks, and the Technical Details table reads it to
+// decide whether a threshold is written as a percentage or as a cores figure.
+const (
+	unitRatio    = "ratio"
+	unitFraction = "fraction"
+	unitCores    = "cores"
+)
+
 // cpuReserveCores is the no-limit headroom reserve: one core set aside for
 // Redpanda. It is Redpanda's default maxCores (--smp), not a calibration
 // guess. buildDetails stamps it onto Details.ReserveCores, so the message

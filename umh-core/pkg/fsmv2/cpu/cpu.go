@@ -77,20 +77,15 @@ type CPUStatus struct {
 	// or "degraded"), and empty when the tick could not measure.
 	Verdict string `json:"verdict"`
 
-	// Message is the human-readable text Poll composed by calling
-	// cpuhealth.ComposeMessage: a headline such as
-	// "CPU healthy. This instance is using 0.0 of 2 cores (0% of its limit) and
-	// can use 1.8 more before it is marked degraded.", usually followed by a
-	// Technical Details line. Short forms carry no such line, among them the
-	// "CPU: starting up." message an instance shows for its first two ticks.
+	// Message is what cpuhealth.ComposeMessage rendered: a headline, then a
+	// Technical Details table with one headroom line per ceiling the instance is
+	// judged against. Only a failed cgroup read renders without a table.
 	Message string `json:"message"`
 
 	// Details is the measured evidence behind the verdict, filled on every tick
-	// that could measure. It is a named field, not an embed, so its keys nest
-	// under "details" instead of flattening into the top level simple.Status
-	// merges "reason" and "degraded" into alongside "verdict" and "message".
-	// The wire shape under "details" is cpuhealth.Details' own, so a field added
-	// there reaches the wire with no change in this package.
+	// that could measure. It is a named field rather than an embed, so its keys
+	// nest under "details" instead of colliding with the "reason" and "degraded"
+	// that simple.Status flattens to the top level.
 	Details cpuhealth.Details `json:"details"`
 }
 

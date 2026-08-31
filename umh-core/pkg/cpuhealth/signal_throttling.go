@@ -27,7 +27,7 @@ import (
 // throttling signal's fire and clear thresholds.
 var throttleMarks = diagnosis.Marks{
 	Fire: diagnosis.Mark{At: 0.05}, Clear: diagnosis.Mark{At: 0.03},
-	Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Worst: 1.0,
+	Polarity: diagnosis.HigherIsWorse, Unit: unitRatio, Worst: 1.0,
 }
 
 // throttlingSignal declares the table's one Counter instrument — see below

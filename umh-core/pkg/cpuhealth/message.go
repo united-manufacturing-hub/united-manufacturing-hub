@@ -15,10 +15,20 @@
 // The customer-facing text: every sentence this package can print, and the
 // rules that pick which one.
 //
-// Every customer-visible string in this file is written down exactly once —
-// the constants below, plus the host-headroom sentence composeHealthy formats
-// inline, and one deliberate duplicate the const block names. A second copy of
-// a sentence is where drift starts.
+// Every customer-visible string in this file is written down exactly once. The
+// const block below holds the whole sentences; the Technical Details lines are
+// assembled from formats at the sites that build them, and the const block
+// names the one deliberate duplicate. A second copy of a sentence is where
+// drift starts.
+//
+// No signal threshold is written down here. Every number the Technical Details
+// table states is read from the mark pair its own signal_*.go declares, which
+// is the pair the engine judges against, so the rule the message states and the
+// rule the code applies cannot come apart.
+//
+// One number here is this file's own: the 0.05 cores at which the healthy
+// headline starts calling a box close to degraded. It is a display band, not a
+// rule the engine judges, and it does not read hostHeadroomMarks.
 
 package cpuhealth
 
@@ -27,13 +37,15 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// ComposeMessage turns a Verdict and its derived Details into the two-layer
-// message: a one-line headline naming the dominant cause, then the literal
-// Technical Details separator and the curated per-cause copy (dominant first,
-// joined by a blank line). A healthy verdict yields the budget dashboard from
-// composeHealthy.
+// ComposeMessage turns a Verdict and its derived Details into the message an
+// operator reads: a one-line headline naming the dominant cause, then the
+// curated per-cause copy (dominant first, joined by a blank line), then the
+// Technical Details table. A healthy verdict yields the budget headline from
+// composeHealthy, followed by the same table.
 //
 // One paragraph per cause, except that the two capacity causes share one:
 // speaksForCapacity says which of the pair writes it.
@@ -53,72 +65,50 @@ func ComposeMessage(verdict Verdict, details Details) string {
 	}
 	body := strings.Join(parts, "\n\n")
 
-	return headline + technicalDetails + body
+	return headline + "\n" + body + technicalDetails(verdict.Causes, details)
 }
 
-// composeHealthy renders the two-layer healthy budget message. The displayed
-// components are rounded first, then headroom is derived as
-// total - used - reserve on those ALREADY-ROUNDED values, so the printed
-// arithmetic in the Technical Details headroom line is exact by construction
-// (never independently rounds Details.HeadroomCores). used/headroom/reserve
-// print with one decimal; total prints as an integer when whole. The
-// Technical Details dashboard lists only the budgets it measured: headroom
-// always, then throttle/pressure/steal each only when this tick's reading of it
-// is usable.
+// composeHealthy renders the healthy message: the budget headline, any
+// advisory the tick earned, then the Technical Details table. The displayed
+// cores figures come from effectiveBudget, so the printed headroom arithmetic is
+// exact by construction.
 func composeHealthy(details Details) string {
 	// Zero-capacity guard: when CapacityCores is 0, do not compose the garbled
 	// "0.0 of 0 cores, -1.0 headroom" budget dashboard. Return a safe string
 	// that conveys monitoring-unavailability; the State on the wire stays
-	// healthy per the binary contract. It is an early return, not a prefix.
+	// healthy per the binary contract. It is an early return, not a prefix, and
+	// technicalDetails withholds the table on the same condition.
 	if details.CapacityCores == 0 {
 		return cpuMonitoringUnavailable
 	}
 
-	// The healthy message reports only what it measured. Two measurement floors
-	// (one per mode) and one readability gate; when any withholds the usage
-	// figure the message has no headline sentence left, so render the single
-	// "CPU: starting up." line alone. It lasts two ticks after each start and
-	// respawn: the sampler derives no rate from its first read, and the mean
-	// over the rates after that needs two of them. It is not the zero-capacity
-	// case (a standing state) — they share a rendering path and nothing else.
-	if details.LimitApplies {
-		if !details.UsageRingActive {
-			return cpuStartingUp
-		}
-	} else {
-		if !details.HostBusyRingActive || !details.HostBusyCoresAvailable {
-			return cpuStartingUp
-		}
+	// The healthy message reports only what it measured. When the usage figure
+	// is withheld the message has no headline sentence left, so render the
+	// single "CPU: starting up." line over the table, where a line whose own
+	// window has not reduced yet says so rather than stating a figure nothing
+	// measured. It lasts two ticks after each start and respawn: the sampler
+	// derives no rate from its first read, and the mean over the rates after
+	// that needs two of them. It is not the zero-capacity case (a standing
+	// state): that one returns bare, this one carries the table.
+	if !usageMeasured(details) {
+		return cpuStartingUp + technicalDetails(nil, details)
 	}
 
-	// The display figures. ReserveCores is read from Details in both modes —
-	// buildDetails filled it from the verdict's own reserve, never from the
-	// constant.
-	var usedDisp, reserveDisp float64
-	if details.LimitApplies {
-		usedDisp = round1(details.AvgUsageCores)
-	} else {
-		usedDisp = round1(details.AvgHostBusyCores)
-	}
-	reserveDisp = round1(details.ReserveCores)
-	totalDisp := round1(details.CapacityCores)
-	headroomDisp := round1(totalDisp - usedDisp - reserveDisp) // clears float residue, not an independent rounding
+	b := effectiveBudget(details)
+	usedStr := fmtCores1(b.used)
+	totalStr := fmtCoresTotal(b.total)
+	headroomStr := fmtCores1(b.headroom)
 
-	usedStr := fmtCores1(usedDisp)
-	totalStr := fmtCoresTotal(totalDisp)
-	headroomStr := fmtCores1(headroomDisp)
-	reserveStr := fmtCores1(reserveDisp)
-
-	// A sub-0.05-core quota collapses to totalDisp == 0: suppress the
+	// A sub-0.05-core quota collapses to a displayed total of 0: suppress the
 	// percentage (a division by a displayed zero) and use the no-percentage
 	// variant. The subject follows the MODE, not the column: a tiny quota is
 	// still limit mode, so it reads "This instance".
-	totalTooSmallToPct := totalDisp <= 0
+	totalTooSmallToPct := b.total <= 0
 
 	var headline string
 	if details.LimitApplies && !totalTooSmallToPct {
-		pctOfLimit := toPercent(usedDisp / totalDisp)
-		if headroomDisp < 0.05 {
+		pctOfLimit := toPercent(b.used / b.total)
+		if b.headroom < 0.05 {
 			headline = fmt.Sprintf(headlineLimitClose, usedStr, totalStr, pctOfLimit)
 		} else {
 			headline = fmt.Sprintf(headlineLimitMore, usedStr, totalStr, pctOfLimit, headroomStr)
@@ -128,7 +118,7 @@ func composeHealthy(details Details) string {
 		if details.LimitApplies {
 			subject = subjectThisInstance
 		}
-		if headroomDisp < 0.05 {
+		if b.headroom < 0.05 {
 			headline = fmt.Sprintf(headlineClose, subject, usedStr, totalStr)
 		} else {
 			headline = fmt.Sprintf(headlineMore, subject, usedStr, totalStr, headroomStr)
@@ -148,25 +138,326 @@ func composeHealthy(details Details) string {
 			fmtCoresTotal(details.LogicalCpus), fmtCoresTotal(details.HostCpus))
 	}
 
-	// The budget body. Headroom is unconditional; each of throttle, pressure
-	// and steal prints only when THIS TICK'S reading is usable. The gates
-	// are the per-signal readiness trio, never the capability flags — a
-	// LimitApplies/PressureApplies/StealApplies build prints a confident 0% for a
-	// reading that never happened.
-	budget := []string{
-		fmt.Sprintf(headroomLine, headroomStr, totalStr, usedStr, reserveStr),
+	// nil causes: a healthy tick has fired none, so no line states a clear
+	// mark.
+	return msg + technicalDetails(nil, details)
+}
+
+// budgetCores are the four cores figures a headline and a headroom line share.
+type budgetCores struct {
+	headroom float64
+	total    float64
+	used     float64
+	reserve  float64
+}
+
+// newBudget derives headroom from the already-rounded three, so the arithmetic
+// the headroom line prints adds up exactly. It never rounds
+// Details.HeadroomCores independently.
+func newBudget(total, used, reserve float64) budgetCores {
+	b := budgetCores{
+		total:   round1(total),
+		used:    round1(used),
+		reserve: round1(reserve),
 	}
-	if details.ThrottleSignalReady {
-		budget = append(budget, fmt.Sprintf(throttleLine, toPercent(details.ThrottleRatio)))
-	}
-	if details.PressureSignalReady {
-		budget = append(budget, fmt.Sprintf(pressureLine, toPercent(details.PressureAvg60)))
-	}
-	if details.StealSignalReady {
-		budget = append(budget, fmt.Sprintf(stealLine, toPercent(details.StealP95)))
+	b.headroom = round1(b.total - b.used - b.reserve) // clears float residue, not an independent rounding
+
+	return b
+}
+
+// machineBudget takes the reserve from the fixed cpuReserveCores, not from
+// Details.ReserveCores: that field follows the mode, so under a CPU limit it
+// holds the limit's reserve, which says nothing about the machine.
+func machineBudget(details Details) budgetCores {
+	return newBudget(details.LogicalCpus, details.AvgHostBusyCores, cpuReserveCores)
+}
+
+// instanceBudget reads ReserveCores from Details rather than recomputing it:
+// buildDetails filled it from the verdict's own reserve, never the constant.
+func instanceBudget(details Details) budgetCores {
+	return newBudget(details.CapacityCores, details.AvgUsageCores, details.ReserveCores)
+}
+
+// effectiveBudget is the customer's ceiling: their own limit where one applies,
+// the machine otherwise.
+func effectiveBudget(details Details) budgetCores {
+	if details.LimitApplies {
+		return instanceBudget(details)
 	}
 
-	return msg + technicalDetails + strings.Join(budget, " ")
+	return machineBudget(details)
+}
+
+// machineMeasured needs both the window and the reading: a thin window and an
+// unreadable /proc/stat both leave the subtraction with no term.
+func machineMeasured(details Details) bool {
+	return details.HostBusyRingActive && details.HostBusyCoresAvailable
+}
+
+func instanceMeasured(details Details) bool {
+	return details.UsageRingActive
+}
+
+// usageMeasured has one floor per mode, because an outage can leave one window
+// thin while the other fills and a limit-mode headline reads only its own usage.
+func usageMeasured(details Details) bool {
+	if details.LimitApplies {
+		return instanceMeasured(details)
+	}
+
+	return machineMeasured(details)
+}
+
+// cpuRule is one line of the Technical Details table: a rule that can degrade
+// this instance's CPU, against the threshold applying to it now.
+//
+// applies and ready must never be read as each other: applies is whether the box
+// can run the rule at all, ready is whether this tick produced a value. An
+// absent line says which of the two it is.
+type cpuRule struct {
+	// label opens the line, and names the rule rather than the instrument: an
+	// operator reading "Steal" need not know which of the two steal arms
+	// answered.
+	label string
+	// measured is the reading, already written in the rule's own unit - "18%",
+	// or the whole headroom subtraction.
+	measured string
+	// marks is the pair the engine judged this rule against, carried whole so
+	// the line states the live threshold rather than a copy of it.
+	marks   diagnosis.Marks
+	applies bool
+	ready   bool
+	// latched is whether the SIGNAL this line belongs to has fired and not yet
+	// released. It picks which of the two marks the line states, and it is read
+	// per signal, so both lines of a two-instrument signal state the same side.
+	latched bool
+	// firedHere is whether THIS line's own instrument produced one of this
+	// tick's causes, which is proof the rule ran on this box whatever the
+	// capability flag says. It is the instrument's own firing and never its
+	// signal's: host-cpu-full answering from /proc/stat says nothing about
+	// whether our-usage-over-the-machine can be measured here.
+	firedHere bool
+}
+
+// render writes one line of the table: a rule that has not fired shows the mark
+// that would fire it, a latched rule the mark that clears it.
+func (r cpuRule) render() string {
+	switch {
+	case !r.applies && !r.firedHere:
+		return r.label + " not available (not possible)."
+	case !r.ready:
+		return r.label + " not available (measuring)."
+	}
+
+	mark, verb := r.marks.Fire, "degrades"
+	if r.latched {
+		mark, verb = r.marks.Clear, "recovers"
+	}
+
+	return fmt.Sprintf("%s %s (%s %s %s).",
+		r.label, r.measured, verb, markSide(mark, r.marks.Polarity, r.latched), markValue(mark, r.marks.Unit))
+}
+
+// markSide names the side of a mark in the reader's words. A fire mark is
+// crossed toward the worse side and a clear mark toward the better one, so one
+// polarity reads both ways. An inclusive mark counts landing exactly on it and
+// reads "at" - "degrades at 70%", where 70% busy is already a full machine.
+func markSide(m diagnosis.Mark, p diagnosis.Polarity, clearing bool) string {
+	if m.Inclusive {
+		return "at"
+	}
+	if (p == diagnosis.HigherIsWorse) == clearing {
+		return "below"
+	}
+
+	return "above"
+}
+
+// markValue writes a mark in the unit its own pair declares: a ratio or a
+// fraction as a percentage, cores as a plain cores figure. A unit no signal
+// declares falls through to the plain figure, which states no unit it cannot
+// vouch for.
+func markValue(m diagnosis.Mark, unit string) string {
+	switch unit {
+	case unitRatio, unitFraction:
+		return strconv.Itoa(toPercent(m.At)) + "%"
+	default:
+		return fmtCoresTotal(round1(m.At))
+	}
+}
+
+// technicalDetails renders the labelled table: the label on its own line, then
+// one line per rule in cpuRules' fixed order, whether or not this box can run
+// the rule. causes is this tick's fired list, and is empty on a healthy tick.
+//
+// A failed cgroup read (CapacityCores == 0) gets no table at all. On that tick
+// we do not know which rules apply, so a table would assert knowledge we do not
+// have.
+func technicalDetails(causes []Cause, details Details) string {
+	if details.CapacityCores == 0 {
+		return ""
+	}
+
+	rules := cpuRules(causes, details)
+	lines := make([]string, 0, len(rules))
+	for _, r := range rules {
+		lines = append(lines, r.render())
+	}
+
+	return technicalDetailsLabel + strings.Join(lines, "\n")
+}
+
+// cpuRules lists the rules the table reports, in the order it prints them.
+// Every rule the engine is judging appears in every state: a slot saying why it
+// is absent is what stops a reader taking a missing line for a rule that is
+// fine.
+//
+// Latchedness is read per SIGNAL and the capability override per INSTRUMENT;
+// cpuRule's two fields say why.
+func cpuRules(causes []Cause, details Details) []cpuRule {
+	machineFull := hasKind(causes, CauseKindHostCpuFull)
+	limitFull := hasKind(causes, CauseKindContainerLimitFull)
+	_, hostHeadroomFired := firedCause(causes, CauseKindHostCpuFull, instrumentHostHeadroom)
+	_, usageFired := firedCause(causes, CauseKindHostCpuFull, instrumentUsageFraction)
+	_, limitHeadroomFired := firedCause(causes, CauseKindContainerLimitFull, instrumentLimitHeadroom)
+
+	// A box can be judged against two ceilings at once, the machine's cores and
+	// its own CPU limit, so each gets its own line: a machine that filled while
+	// the container sits well inside its limit must not print the container's
+	// comfortable figure under a headline saying the machine is full.
+	cores, quota := tableCeilings(details)
+
+	rules := make([]cpuRule, 0, 6)
+	if hostCpuFullDeclared(cores) {
+		rules = append(rules, headroomRule(labelMachineHeadroom, machineBudget(details),
+			hostHeadroomMarks, machineMeasured(details), machineFull, hostHeadroomFired))
+	}
+	if containerLimitFullDeclared(quota) {
+		rules = append(rules, headroomRule(labelInstanceHeadroom, instanceBudget(details),
+			limitHeadroomMarks(quota), instanceMeasured(details), limitFull, limitHeadroomFired))
+	}
+
+	// Steal is answered by a percentile arm and a mean arm sharing one pair.
+	// Details.StealP95 names the percentile, which reads 0 until the window
+	// holds twenty samples, so a latched episode reports the arm it fired on -
+	// the number the steal paragraph above the table already prints.
+	stealValue := details.StealP95
+	steal, stealFired := firedCause(causes, CauseKindSteal, instrumentStealP95, instrumentStealMean)
+	if stealFired {
+		stealValue = steal.Value
+	}
+
+	// The three lines below each carry a whole signal, so their signal's latch
+	// and their own instruments' firing are the same fact read twice. Steal has
+	// two instruments, but both of them feed this one line.
+	throttlingFired := hasKind(causes, CauseKindThrottling)
+	pressureFired := hasKind(causes, CauseKindPressure)
+
+	return append(rules,
+		cpuRule{
+			label:    "Usage",
+			measured: fmt.Sprintf("%d%% of capacity", toPercent(details.AvgUsageFraction)),
+			marks:    usageFractionMarks,
+			// usage-fraction is evidence of last resort: it is declared only
+			// where there is no quota to judge our own budget against and no PSI
+			// to read the harm off, which is exactly what
+			// Details.LimitedVisibility holds. A box with a CPU limit therefore
+			// never runs this rule.
+			applies: details.LimitedVisibility,
+			// usage-fraction reduces the same sample field over the same span as
+			// the usage-cores measurement, so one window's state answers for
+			// both.
+			ready:     details.UsageRingActive,
+			latched:   machineFull,
+			firedHere: usageFired,
+		},
+		cpuRule{
+			label:     "Throttling",
+			measured:  fmt.Sprintf("%d%%", toPercent(details.ThrottleRatio)),
+			marks:     throttleMarks,
+			applies:   details.LimitApplies,
+			ready:     details.ThrottleSignalReady,
+			latched:   throttlingFired,
+			firedHere: throttlingFired,
+		},
+		cpuRule{
+			label:     "Pressure",
+			measured:  fmt.Sprintf("%d%%", toPercent(details.PressureAvg60)),
+			marks:     pressureMarks,
+			applies:   details.PressureApplies,
+			ready:     details.PressureSignalReady,
+			latched:   pressureFired,
+			firedHere: pressureFired,
+		},
+		cpuRule{
+			label:     "Steal",
+			measured:  fmt.Sprintf("%d%%", toPercent(stealValue)),
+			marks:     stealMarks,
+			applies:   details.StealApplies,
+			ready:     details.StealSignalReady,
+			latched:   stealFired,
+			firedHere: stealFired,
+		},
+	)
+}
+
+// headroomRule builds one headroom line: the subtraction its budget spells out,
+// against the mark pair the signal measuring that ceiling declares.
+//
+// applies is true by construction: the caller appends a line only where the
+// declared-ceiling test passed, and a ceiling that fails it gets no slot at
+// all. That the engine then judges the rule is the usual case, not a guarantee
+// - hostCpuFullDeclared has the exception.
+func headroomRule(label string, b budgetCores, marks diagnosis.Marks, ready, latched, firedHere bool) cpuRule {
+	return cpuRule{
+		label: label,
+		measured: fmt.Sprintf("%s cores = %s total - %s used - %s reserved",
+			fmtCores1(b.headroom), fmtCoresTotal(b.total), fmtCores1(b.used), fmtCores1(b.reserve)),
+		marks:     marks,
+		applies:   true,
+		ready:     ready,
+		latched:   latched,
+		firedHere: firedHere,
+	}
+}
+
+// tableCeilings reads back the two figures the capacity predicates take: the
+// machine's core count and this container's CPU quota.
+//
+// A quota reaches Details only through the mode: CapacityCores is the quota
+// where a limit applies and the core count where none does, so zero here means
+// no-limit mode.
+//
+// These are this tick's read; cpuTable was handed the startup one. A cpuset
+// that failed at startup and reads later prints a headroom line for a ceiling
+// the table never declared (ENG-5752). The opposite order drops a line that had
+// no figure to print anyway.
+func tableCeilings(details Details) (cores, quota float64) {
+	if details.LimitApplies {
+		return details.LogicalCpus, details.CapacityCores
+	}
+
+	return details.LogicalCpus, 0
+}
+
+// firedCause returns this tick's cause for one instrument, matching the kind
+// AND one of the instruments named. It answers "did this LINE's own instrument
+// fire", which is not the same question as "is the signal latched": hasKind
+// answers that one, and a two-instrument signal holds a single latch its two
+// lines share.
+func firedCause(causes []Cause, kind CauseKind, instruments ...string) (Cause, bool) {
+	for _, c := range causes {
+		if c.Kind != kind {
+			continue
+		}
+		for _, name := range instruments {
+			if c.Instrument == name {
+				return c, true
+			}
+		}
+	}
+
+	return Cause{}, false
 }
 
 // causeHeadline returns the one-line headline naming a cause kind.
@@ -222,10 +513,9 @@ func machineWasRead(causes []Cause) bool {
 // customer given both is told to buy CPU for a machine and also to raise a
 // limit that cannot help on it.
 //
-// Where /proc/stat answered, the machine's own reading speaks, and its
-// paragraph names the container's limit in a trailing clause. Where the only
-// reading of the machine is usage-fraction's estimate from our own usage, the
-// container's own limit is the measured ceiling and speaks instead.
+// Where /proc/stat answered, the machine's reading speaks and names the limit
+// in a trailing clause. Where the only reading is usage-fraction's estimate
+// from our own usage, the container's limit is the measured ceiling and speaks.
 func speaksForCapacity(c Cause, causes []Cause) bool {
 	if !isCapacityKind(c.Kind) {
 		return true
@@ -258,12 +548,12 @@ func speakingCause(causes []Cause) Cause {
 }
 
 // causeDetails returns the curated Technical-Details copy for one cause,
-// interpolating the live number from the cause's Value or the derived Details.
-// The two capacity kinds dispatch on the cause's own instrument, and a machine
-// read full asks two further questions: whether the container is also at its
-// limit, which is the case whose two remedies have to be blended into one
-// sentence, and failing that whose load filled the machine, which
-// fullMachineDetail answers.
+// interpolating the live number from the cause's Value or from Details.
+//
+// The two capacity kinds dispatch on the cause's own instrument. A machine read
+// full then asks whether the container is at its limit too, because that case
+// blends two remedies into one sentence; failing that it asks whose load filled
+// the machine, which fullMachineDetail answers.
 func causeDetails(c Cause, causes []Cause, details Details) string {
 	switch c.Kind {
 	case CauseKindThrottling:
@@ -360,13 +650,11 @@ func fullMachineBlock(attribution Attribution, details Details) string {
 	}
 }
 
-// BlockReason returns the per-cause bridge-refusal message shown when bridge
-// creation is refused because the instance's CPU is degraded. It speaks with
-// the cause the Technical Details speak with, both through speakingCause, so
-// the two surfaces cannot hand one customer two contradictory remedies at once.
-// It reads the attribution for the same reason, and asks the ranked causes the
-// same blend question first. An unknown kind falls back to the generic degraded
-// message.
+// BlockReason returns the refusal message shown when a degraded CPU blocks
+// bridge creation. It picks its cause through speakingCause, reads the
+// attribution, and asks the same blend question, all as causeDetails does: the
+// two surfaces must not hand one customer contradictory remedies. An unknown
+// kind falls back to the generic degraded message.
 func BlockReason(causes []Cause, details Details) string {
 	if len(causes) == 0 {
 		return blockPrefix + blockGeneric
@@ -437,9 +725,10 @@ func toPercent(fraction float64) int {
 }
 
 const (
-	// The one line rendered on a tick whose usage figure is withheld (window
-	// below its floor, or the host reading absent): no headline, no advisory,
-	// no technical details.
+	// The line rendered on a tick whose usage figure is withheld (window below
+	// its floor, or the host reading absent): no headline and no advisory. The
+	// Technical Details table follows it, so an operator still sees which rules
+	// will be judged and which windows are still filling.
 	//
 	// Not cpuMonitoringUnavailable ("cgroup read failed"): on this tick the
 	// read succeeded and there is simply one sample, so claiming a read failure
@@ -466,18 +755,20 @@ const (
 	headlineClose = "CPU healthy. %s is using %s of %s cores and is close to being marked degraded."
 	headlineMore  = "CPU healthy. %s is using %s of %s cores and can use %s more before it is marked degraded."
 
-	// The unconditional headroom budget line.
-	headroomLine = "Headroom %s cores = %s total - %s used - %s reserved (degraded below 0)."
+	// The label above the table, byte-identical on the healthy and the degraded
+	// path, and on its own line in both. The literal "\nTechnical Details:\n".
+	//
+	// The table's own lines are not constants: cpuRule.render assembles each one
+	// from a label, a reading and a threshold read live from the rule's marks.
+	technicalDetailsLabel = "\nTechnical Details:\n"
 
-	// The throttle/pressure/steal budget lines, each gated on that signal's
-	// per-tick readiness.
-	throttleLine = "Throttling %d%% (degraded above 5%%)."
-	pressureLine = "Pressure %d%% (degraded above 20%%)."
-	stealLine    = "Steal %d%% (degraded above 10%%)."
-
-	// The separator, byte-identical on the healthy and the degraded path. The
-	// literal "\nTechnical Details: ".
-	technicalDetails = "\nTechnical Details: "
+	// The two headroom lines' labels. A box under a CPU limit is judged against
+	// both ceilings at once and prints both lines, so each has to name whose
+	// spare cores it is counting. They borrow the two words the headlines above
+	// already use for the same pair of subjects: "This instance" and "The
+	// machine".
+	labelInstanceHeadroom = "Instance headroom"
+	labelMachineHeadroom  = "Machine headroom"
 
 	// The degraded headlines, one per CauseKind. headlineGeneric is the default
 	// arm, unreachable through today's five kinds but still written so the enum
