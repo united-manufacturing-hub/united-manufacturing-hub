@@ -1,6 +1,6 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
-go 1.26.5
+go 1.27.0
 
 require (
 	github.com/99designs/gqlgen v0.17.94
@@ -16,26 +16,26 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/h2non/gock v1.2.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/klauspost/compress v1.19.1
+	github.com/klauspost/compress v1.19.2
 	github.com/looplab/fsm v1.0.3
-	github.com/onsi/ginkgo/v2 v2.32.0
+	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.42.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.70.1
-	github.com/prometheus/prometheus v0.313.1
-	github.com/shirou/gopsutil/v4 v4.26.6
-	github.com/testcontainers/testcontainers-go/modules/redpanda v0.43.0
+	github.com/prometheus/prometheus v0.314.0
+	github.com/shirou/gopsutil/v4 v4.26.7
+	github.com/testcontainers/testcontainers-go/modules/redpanda v0.44.0
 	github.com/tiendc/go-deepcopy v1.7.2
 	github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-00010101000000-000000000000
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/vektah/gqlparser/v2 v2.5.36
 	go.uber.org/zap v1.28.0
-	golang.org/x/crypto v0.54.0
+	golang.org/x/crypto v0.55.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/sys v0.47.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 )
 
