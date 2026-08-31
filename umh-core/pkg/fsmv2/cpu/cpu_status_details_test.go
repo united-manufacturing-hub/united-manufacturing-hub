@@ -28,9 +28,8 @@ import (
 
 var _ = Describe("CPUStatus carries the measured evidence", func() {
 	It("hands Decide's whole Details to the status, not a subset of its fields", func() {
-		// Four numbers that cannot stand in for one another: the container may
-		// use 4 CPUs of the machine's 8, and its quota caps it at 2. A copy that
-		// dropped a field, or crossed two of them, moves at least one of these.
+		// Four numbers that cannot stand in for one another, so a copy that
+		// dropped or crossed a field moves at least one of them.
 		d := newDeps(fixedSampler(cpuhealth.Sample{
 			Timestamp:    time.Now(),
 			Quota:        diagnosis.Known(2),
@@ -71,15 +70,12 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 			"a failed read reports no evidence rather than a zero-valued measurement")
 	})
 
-	// A Details reaches storage inside a CPUStatus, so its fields have to
-	// survive a marshal and a read back. The Reading fields are the risk: both
-	// of a Reading's fields are unexported, so a Reading without its own
-	// marshaller encodes as {} and the number is gone with no error. Poll cannot
-	// stage that case, because buildDetails fills no Reading today, so these
-	// specs build the status directly.
+	// The Reading fields are the risk: both of a Reading's fields are unexported,
+	// so a Reading without its own marshaller encodes as {} and the number is
+	// gone with no error. buildDetails fills no Reading today, so Poll cannot
+	// stage that case and these specs build the status directly.
 	Describe("on the wire", func() {
-		// filled is a status whose Details carries a present value, a present
-		// zero and an absence, so a round trip has all three to lose.
+		// A present value, a present zero and an absence: three things to lose.
 		filled := func() CPUStatus {
 			return CPUStatus{
 				Verdict: string(cpuhealth.StateHealthy),

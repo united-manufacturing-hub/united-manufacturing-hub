@@ -28,9 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 )
 
-// newCPUConstructedWorker publishes a registry and the CPU flag, constructs a
-// config worker through it, and registers teardown. It returns the worker and
-// the registry, mirroring newConstructedWorker but with a controllable flag.
+// newCPUConstructedWorker mirrors newConstructedWorker, but with a controllable
+// CPU flag. It returns the worker and the registry it was given.
 func newCPUConstructedWorker(t *testing.T, cpuEnabled bool) (*configworker.ConfigworkerWorker, *dynamicchildren.Registry) {
 	t.Helper()
 
@@ -50,12 +49,10 @@ func newCPUConstructedWorker(t *testing.T, cpuEnabled bool) (*configworker.Confi
 	return w, shared
 }
 
-// withClient publishes a client backed by a fresh Writer and returns that
-// Writer's registry. That registry is deliberately not the one
-// newCPUConstructedWorker hands the worker.
-// TestCollectObservedStateUpsertsCPUWhenEnabled therefore sees the child only
-// when the worker went through the client. A reconcile that wrote its own
-// registry directly would fail that test.
+// withClient returns the registry behind a freshly published client, which is
+// deliberately NOT the one newCPUConstructedWorker hands the worker. So the
+// child appears there only if the worker went through the client; a reconcile
+// writing its own registry directly would fail the upsert test.
 func withClient(t *testing.T) *dynamicchildren.Registry {
 	t.Helper()
 

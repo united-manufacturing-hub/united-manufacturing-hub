@@ -26,17 +26,15 @@ import (
 )
 
 // These specs read monitorSpec.Health rather than healthFromStatus, because the
-// claim is about what the framework calls. A spec calling the function directly
-// would still pass with the wiring removed, and the worker would report healthy
-// through a degraded verdict.
+// claim is about what the framework calls: calling the function directly would
+// still pass with the wiring removed.
 var _ = Describe("the worker's own health", func() {
 	It("degrades the worker when Decide judged the cgroup degraded", func() {
 		Expect(monitorSpec.Health).NotTo(BeNil(),
 			"the spec must wire a health check, or only a poll error can degrade this worker")
 
-		// The same hostile sample the verdict specs use: pressure fires above
-		// the mark on the first sample, so this tick is degraded without any
-		// window warm-up.
+		// Pressure fires above the mark on the first sample, so this tick is
+		// degraded without any window warm-up.
 		d := newDeps(fixedSampler(cpuhealth.Sample{
 			Timestamp:    time.Now(),
 			Quota:        diagnosis.Known(0),

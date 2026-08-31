@@ -28,8 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// stubSampler is the mock injection seam: a Poll reads through whatever Sampler
-// the deps hold, so a test supplies its own instead of the real cgroup sampler.
+// stubSampler lets a spec supply its own Sampler instead of the real cgroup one.
 type stubSampler struct {
 	read func(ctx context.Context) (cpuhealth.Sample, error)
 }
@@ -38,14 +37,12 @@ func (s stubSampler) Read(ctx context.Context) (cpuhealth.Sample, error) {
 	return s.read(ctx)
 }
 
-// fixedSampler hands back the same sample on every tick, for a spec that drives
-// several ticks off one sample.
+// fixedSampler hands back the same sample on every tick.
 func fixedSampler(sample cpuhealth.Sample) stubSampler {
 	return stubSampler{read: func(context.Context) (cpuhealth.Sample, error) { return sample, nil }}
 }
 
-// newDeps builds a CPUDeps with a stub sampler and a real engine, so a test can
-// drive Poll without the startup snapshot (which reads a real cgroup).
+// newDeps drives Poll without the startup snapshot, which reads a real cgroup.
 func newDeps(s cpuhealth.Sampler, cores, quota float64) *CPUDeps {
 	table := cpuhealth.Table(cores, quota)
 	engine, err := diagnosis.NewEngine(table)
@@ -87,17 +84,13 @@ var _ = Describe("CPU monitor worker", func() {
 
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
-			// A quiet, present tick judges healthy.
 			Expect(status.Verdict).To(Equal(string(cpuhealth.StateHealthy)))
 			Expect(status.Message).NotTo(BeEmpty(), "the status carries the composed customer message")
 		})
 
 		It("reports a degraded verdict, not a healthy one, when Decide judges the cgroup degraded", func() {
-			// A hostile sample — one whose signal fires above the mark — must
-			// surface as a degraded verdict. Without this arm, "report a verdict
-			// from Decide rather than a raw measurement" is satisfied by
-			// Decide-on-nothing, because an all-absent sample also judges healthy
-			// on tick 1.
+			// Without this arm, "report a verdict from Decide" is satisfied by
+			// Decide-on-nothing: an all-absent sample also judges healthy on tick 1.
 			d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 				return cpuhealth.Sample{
 					Timestamp: time.Now(),
@@ -121,10 +114,9 @@ var _ = Describe("CPU monitor worker", func() {
 		})
 
 		It("reports it could not measure when the engine failed to build, rather than panicking on a nil engine", func() {
-			// NewDeps cannot fail, so a table that will not build is surfaced
-			// through Poll: the engine stays nil, engineErr is set, and Poll
-			// returns the error. Without this guard, Decide on a nil engine
-			// panics at the supervisor (simple has no recover around Poll).
+			// NewDeps cannot fail, so a table that will not build surfaces at Poll.
+			// Without this guard, Decide on a nil engine panics at the supervisor:
+			// simple has no recover around Poll.
 			d := &CPUDeps{
 				BaseDependencies: deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, deps.Identity{ID: "cpu-test", WorkerType: WorkerType}),
 				sampler: stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {

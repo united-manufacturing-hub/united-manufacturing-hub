@@ -18,15 +18,11 @@
 // Today the worker anchors the application's children union: once the shared
 // registry is published, every application state emits this kernel child
 // (renderUnion in workers/application/state), so the children list can never
-// become empty. On every tick it also reconciles two standalone children.
-// CollectObservedState polls the config manager, then upserts or deletes the
-// historian child in the dynamicchildren registry so live config edits apply
-// without restarting umh-core. It upserts or deletes the CPU monitor child too,
-// following USE_FSMV2_CPU. Both reconciles reach the registry through
-// fsmv2client and its Writer, the path every other spec uses as well. What is
-// particular to these two children is that this worker owns the decision to
-// create or remove them, where every other spec exists because whoever called
-// the client wrote it. The application's collector reads the registry directly.
+// become empty. On every tick it also reconciles two standalone children: the
+// historian, so live config edits apply without restarting umh-core, and the
+// CPU monitor, following USE_FSMV2_CPU. This worker owns the decision to create
+// or remove those two, where every other spec exists because whoever called the
+// client wrote it.
 //
 // TODO(ENG-4400): this worker becomes the config.yaml authority. It reads
 // config.yaml, validates and serializes changes to it, and materializes the
@@ -75,11 +71,10 @@ const WorkerTypeName = "configworker"
 // cmd/main.go go away.
 const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 
-// CPUEnabledDepsKey is the register.SetDeps key under which parent wiring
-// publishes whether the fsmv2 CPU monitor child should run (USE_FSMV2_CPU). It
-// holds a bool, and is a key of its own rather than a second payload under
-// ConfigManagerDepsKey, for the reason given there. The cpuEnabled field has
-// where the value comes from and how long it lasts.
+// CPUEnabledDepsKey is the register.SetDeps key holding the bool for whether
+// the fsmv2 CPU monitor child should run (USE_FSMV2_CPU). It is a key of its
+// own rather than a second payload under ConfigManagerDepsKey, for the reason
+// given there.
 const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
 
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
@@ -151,18 +146,15 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	default:
 	}
 
-	// Standalone fsmv2 children are reconciled here. nmap and benthos_monitor
-	// are fsmv1 and are not reconciled from this worker.
+	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
 	w.reconcileHistorian(ctx)
 	w.reconcileCPU(ctx)
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil
 }
 
-// reconcileCPU upserts or deletes the CPU monitor child based on the flag the
-// worker was constructed with. It no-ops when the client is not yet set, and
-// logs (rather than returns) the upsert error so a transient failure never
-// fails the tick.
+// reconcileCPU upserts or deletes the CPU monitor child. It logs rather than
+// returns the upsert error, so a transient failure never fails the tick.
 func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
 	_ = ctx
 
@@ -177,12 +169,10 @@ func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
 	}
 }
 
-// syncCPU upserts the CPU monitor child with an empty config when the flag is
-// on, and deletes it when off. The flag cannot change mid-run (see the
-// cpuEnabled field), so a disabled process never upserted the child and the
-// Delete removes nothing. The Delete is kept so that a change which does let
-// the flag flip — registry persistence, a flipped default — cannot leave a CPU
-// child behind.
+// syncCPU upserts the CPU monitor child when the flag is on and deletes it when
+// off. The flag cannot change mid-run, so today the Delete removes nothing; it
+// is kept so that a change which does let the flag flip cannot leave a CPU child
+// behind.
 func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
 	if !enabled {
 		client.Delete(fsmv2cpu.Ref)
