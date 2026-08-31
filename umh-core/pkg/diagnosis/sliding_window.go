@@ -29,15 +29,28 @@ import (
 	"time"
 )
 
-// Coverage is how much of its span a window's readings cover: the span it was
-// built with, and oldest-to-newest of what it holds.
+// Coverage is how much of its span a window has collected: the span it was built
+// with, and how long readings have been arriving, capped at that span.
+//
+// A span of TIME is not a span of READINGS: two readings far apart can report Full.
+// The floor on how much evidence a judgement rests on is the reduction's Min, not
+// this type.
+//
+// Coverage is NOT a readability fact and must never be made into one. The latch
+// derives its state from the reduction and from this, never from a readability
+// flag, which is why Coverage is two durations and nothing else.
 type Coverage struct {
-	span    time.Duration
+	span time.Duration
+	// covered is how long readings have been arriving, measured from the window's
+	// first stored reading and capped at span. It is NOT the extent of the readings
+	// currently held: prune removes the early ones, so what remains cannot say how
+	// long collection has been running. sliding_window_coverage_test.go pins both
+	// directions — full after a span of collecting, not full before.
 	covered time.Duration
 }
 
-// Full reports whether the stored readings span the window's whole duration: it
-// separates a filled window from one that has only just started.
+// Full reports whether the window has collected for its whole span: it separates a
+// filled window from one that has only just started.
 func (c Coverage) Full() bool { return c.span > 0 && c.covered >= c.span }
 
 // SlidingWindow accumulates readings for one measured series: a time-ordered
@@ -48,6 +61,11 @@ type SlidingWindow struct {
 	span       time.Duration
 	demoteSpan time.Duration
 	counter    bool
+	// firstStored is the instant of the first reading stored since the window was
+	// last empty. A prune that empties the window leaves it set, which no reader
+	// sees: the next store re-seeds it, and Coverage reports zero below two
+	// readings.
+	firstStored time.Time
 	// lastAppendStored is whether the most recent appendPoint stored a reading.
 	// age runs before this tick's store, so there it means the previous tick.
 	lastAppendStored bool
@@ -140,8 +158,8 @@ func (w *SlidingWindow) prune(cutoff time.Time) {
 //	                                 oldest-arriving instant, not the newest
 //	Coverage()    10s -> 1s, so Full() flips true -> false
 //	prune()       stops at the first entry not before its cutoff, so the late
-//	              entry outlives it, and the extent goes negative on the very
-//	              next prune: prune(+10s) leaves [10s 1s], reading -9s
+//	              entry outlives it; and a reading earlier than the window's first
+//	              makes covered negative, which reads as not full
 //
 // The Coverage consequence is the one that reaches behaviour: Latch's clear arm
 // is gated on Coverage.Full(), so a single late reading can withhold a release
@@ -187,6 +205,11 @@ func (w *SlidingWindow) appendPoint(value, against Reading, at time.Time) {
 		if restart {
 			w.points = nil
 		}
+	}
+
+	// An empty window is a window that has just started collecting.
+	if len(w.points) == 0 {
+		w.firstStored = at
 	}
 
 	w.points = append(w.points, Point{At: at, Value: v, Against: against})
@@ -237,11 +260,12 @@ func denominatorDelta(points []Point) float64 {
 	return last - first
 }
 
-// Coverage reports how much of its span the stored readings cover.
+// Coverage reports the window's span and how long it has been collecting, for the
+// latch arms gated on those rather than on the reduced number.
 func (w *SlidingWindow) Coverage() Coverage {
 	var covered time.Duration
 	if len(w.points) >= 2 {
-		covered = w.points[len(w.points)-1].At.Sub(w.points[0].At)
+		covered = min(w.span, w.lastStored().Sub(w.firstStored))
 	}
 
 	return Coverage{span: w.span, covered: covered}
