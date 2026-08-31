@@ -51,6 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           filter: blob:none
           sparse-checkout: |
             umh-core
@@ -59,6 +60,24 @@ jobs:
       - name: Compute short SHA
         id: short-sha
         run: echo "sha=$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate token for ManagementConsole checkout
+        id: mc-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        with:
+          app-id: ${{ secrets.PR_APP_ID }}
+          private-key: ${{ secrets.PR_APP_PK }}
+          repositories: ManagementConsole
+          permission-contents: read
+
+      - name: Checkout ManagementConsole
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: united-manufacturing-hub/ManagementConsole
+          ref: staging
+          path: ManagementConsole
+          token: ${{ steps.mc-token.outputs.token }}
+          persist-credentials: false
 
       - name: Setup Depot
         uses: depot/setup-action@15c09a5f77a0840ad4bce955686522a257853461 # v1.7.1
@@ -111,7 +130,8 @@ jobs:
 
           make build-depot \
             VERSION=${{ steps.version.outputs.VERSION }} \
-            TAGS="$TAGS"
+            TAGS="$TAGS" \
+            MC_PATH=${{ github.workspace }}/ManagementConsole
 
       - name: Get image digest
         id: digest

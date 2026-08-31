@@ -134,6 +134,9 @@ const (
 	// Resets to 0 on successful operation.
 	GaugeConsecutiveErrors GaugeName = "consecutive_errors"
 
+	// GaugeCachedCerts tracks the number of subscriber certificates currently cached.
+	GaugeCachedCerts GaugeName = "cached_certs"
+
 	// GaugeBackpressureActive indicates whether the communicator is in backpressure state.
 	// 1 = backpressure active (pulling paused), 0 = normal operation.
 	GaugeBackpressureActive GaugeName = "backpressure_active"

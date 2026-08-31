@@ -71,6 +71,9 @@ const (
 	// writing, backup, and validation.
 	FeatureFSMv1ConfigManager Feature = "fsmv1_config_manager"
 
+	// FeatureGatekeeper covers the gatekeeper and certfetcher workers.
+	FeatureGatekeeper Feature = "gatekeeper"
+
 	// FeatureDisableReadFlows covers errors from the read-flow and write-flow
 	// features (activating/deactivating individual DFCs on protocol converters).
 	// Both features share this tag because they are implemented together and
