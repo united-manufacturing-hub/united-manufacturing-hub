@@ -30,9 +30,8 @@ import (
 type Details struct {
 	// The metrics. ThrottleRatio, PressureAvg60 and StealP95 are filled every
 	// tick, independent of their latch's fired state, so the number stays
-	// observable even when the latch has not fired. Any Reading beside them is
-	// declared for a future frontend projection, and nothing fills it.
-	P95UsageCores diagnosis.Reading `json:"p95UsageCores"` // declared for a future frontend projection; nothing fills it
+	// observable even when the latch has not fired.
+	P95UsageCores diagnosis.Reading `json:"p95UsageCores"` // the usage-cores measurement's 60s p95; 0 is a legitimate usage figure, so below the reduction's floor of 20 readings it answers absent, never a measured zero
 	ThrottleRatio float64           `json:"throttleRatio"` // 60s nr_throttled/nr_periods delta; buildDetails discards State, so absent or untrusted reads 0
 	PressureAvg60 float64           `json:"pressureAvg60"` // PSI avg60; NaN/±Inf are never stored (rejected at window ingest), and buildDetails discards State, so absent reads 0
 	StealP95      float64           `json:"stealP95"`      // 60s p95; buildDetails discards State, so bare metal or below the reduction's floor of 20 reads 0

@@ -16,8 +16,7 @@
 // dominant cause, orders Verdict.Causes through diagnosis.Rank (no local sort),
 // returns healthy with no causes when nothing is fired, and fills the
 // observable metrics, both measurement floors and each signal's readiness from
-// the same pass even when no latch has fired — and leaves the fields it does
-// not fill reporting absent rather than a measured zero.
+// the same tick even when no latch has fired.
 package cpuhealth
 
 import (
@@ -160,10 +159,10 @@ var _ = Describe("verdict assembly", func() {
 		}
 	})
 
-	It("should fill the observable metrics, both measurement floors and each signal's readiness from the same pass, even when no latch has fired", func() {
+	It("should fill the observable metrics, both measurement floors and each signal's readiness from the same tick, even when no latch has fired", func() {
 		// Drive throttle-ratio to a steady 0.02, below its 0.05 fire mark, for a
 		// full window: nothing fires and the verdict is healthy, yet
-		// Details.ThrottleRatio reaches Details as 0.02 — not a confident 0
+		// Details.ThrottleRatio reaches Details as 0.02 — not a measured zero
 		// published because the latch is quiet. The box is bare metal (no
 		// virtualisation), so steal's window fills with legitimate zeros and
 		// reduces to StateValue while Select still reports NoInstrument — and
@@ -190,7 +189,7 @@ var _ = Describe("verdict assembly", func() {
 				Expect(verdict.State).To(Equal(StateHealthy))
 				Expect(verdict.Causes).To(BeEmpty())
 
-				// Metrics, from the same pass, below their marks.
+				// Metrics, from the same tick, below their marks.
 				Expect(details.ThrottleRatio).To(BeNumerically("~", 0.02, 1e-9), "a quiet throttle latch must not publish 0")
 				Expect(details.PressureAvg60).To(BeNumerically("~", 0.1, 1e-9))
 				Expect(details.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9))
@@ -207,38 +206,5 @@ var _ = Describe("verdict assembly", func() {
 				Expect(details.StealSignalReady).To(BeFalse(), "a bare-metal box has no steal answer, whatever its window holds")
 			}
 		}
-	})
-
-	It("should report a Reading nothing fills as absent rather than as a measured zero", func() {
-		// A Reading is declared for a future frontend projection and Decide has
-		// no assignment for it yet. A float64 could not say so: 0 is a
-		// legitimate usage figure, so an unfilled field read as a measurement.
-		// It must answer through Reading's second return, which a Known(0)
-		// would fail — the distinction is the whole point of the type.
-		engine, err := NewEngine(4, 2.0)
-		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasLimit, HasPressureStats)
-		base := time.Now()
-
-		var details Details
-		for i := 0; i <= 65; i++ {
-			_, details = Decide(engine, Sample{
-				Timestamp:   base.Add(time.Duration(i) * time.Second),
-				CpuScope:    ScopeHost,
-				Pressure:    diagnosis.Known(0.1),
-				Steal:       diagnosis.Known(0),
-				HostBusy:    diagnosis.Known(0.5),
-				UsageCores:  diagnosis.Known(0.2),
-				NrPeriods:   diagnosis.Known(0),
-				NrThrottled: diagnosis.Known(0),
-			}, env)
-		}
-
-		// A sibling the same pass DOES fill. Without it this spec would also pass
-		// on a Decide that filled nothing at all.
-		Expect(details.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9), "the pass must have run for the absences below to mean anything")
-
-		absent := func(r diagnosis.Reading) bool { _, ok := r.Get(); return !ok }
-		Expect(absent(details.P95UsageCores)).To(BeTrue(), "P95UsageCores")
 	})
 })

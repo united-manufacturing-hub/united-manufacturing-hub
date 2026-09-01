@@ -41,8 +41,9 @@ const (
 	instrumentStealMean     = "steal-mean"
 	instrumentPressureAvg60 = "pressure-avg60"
 
-	measurementHostBusy   = "host-busy"
-	measurementUsageCores = "usage-cores"
+	measurementHostBusy      = "host-busy"
+	measurementUsageCores    = "usage-cores"
+	measurementUsageCoresP95 = "usage-cores-p95"
 
 	// The refinements of host-cpu-full. Each names its single instrument the
 	// same as itself: a refinement is one narrowing, read one way.

@@ -31,8 +31,8 @@ import (
 func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	t := diagnosis.Table[Sample]{
 		Interval: time.Second,
-		// Read only by buildDetails, which puts each one's mean and window state
-		// on Details for the wire and the healthy message.
+		// Read only by buildDetails, which puts each one's reduced value and
+		// window state on Details for the wire and the healthy message.
 		Measurements: []diagnosis.Measurement[Sample]{
 			{
 				Name:      measurementHostBusy,
@@ -45,6 +45,18 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 				Extract:   func(s Sample) diagnosis.Reading { return s.UsageCores },
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean,
+			},
+			{
+				Name:      measurementUsageCoresP95,
+				Extract:   func(s Sample) diagnosis.Reading { return s.UsageCores },
+				Span:      60 * time.Second,
+				Reduction: diagnosis.P95, // minimum 20 — P95's own sample floor
+				//
+				// No sixty-second p99 row can sit beside this one: a p99 needs
+				// a hundred readings, and a sixty-second window at this table's
+				// one-second interval holds sixty-one, so NewEngine would
+				// refuse the whole table — a p99 row here would need a span of
+				// ninety-nine seconds or more at this interval.
 			},
 		},
 		Signals: []diagnosis.Signal[Sample]{

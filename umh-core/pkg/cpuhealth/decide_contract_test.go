@@ -66,7 +66,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealP95:         0,
 			AvgUsageFraction: 0.049999999999999954,
 			AvgUsageCores:    0.19999999999999982,
-			P95UsageCores:    diagnosis.Unknown(),
+			P95UsageCores:    diagnosis.Known(0.2),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -125,7 +125,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealP95:         0,
 			AvgUsageFraction: 0.049999999999999954,
 			AvgUsageCores:    0.19999999999999982,
-			P95UsageCores:    diagnosis.Unknown(),
+			P95UsageCores:    diagnosis.Known(0.2),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -184,7 +184,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealP95:         0,
 			AvgUsageFraction: 0.049999999999999954,
 			AvgUsageCores:    0.19999999999999982,
-			P95UsageCores:    diagnosis.Unknown(),
+			P95UsageCores:    diagnosis.Known(0.2),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -243,7 +243,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealP95:         0.9,
 			AvgUsageFraction: 0.049999999999999954,
 			AvgUsageCores:    0.19999999999999982,
-			P95UsageCores:    diagnosis.Unknown(),
+			P95UsageCores:    diagnosis.Known(0.2),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,
@@ -306,7 +306,7 @@ var _ = Describe("Decide's whole Details contract", func() {
 			StealP95:         0,
 			AvgUsageFraction: 0.4875000000000005,
 			AvgUsageCores:    1.950000000000002,
-			P95UsageCores:    diagnosis.Unknown(),
+			P95UsageCores:    diagnosis.Known(1.95),
 			UsageRingActive:  true,
 
 			HostBusyRingActive: true,

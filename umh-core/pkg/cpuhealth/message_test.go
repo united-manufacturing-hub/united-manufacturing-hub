@@ -512,7 +512,7 @@ var _ = Describe("the Technical Details table", func() {
 
 	It("should read each rule's figure from its signal's readiness, and print no figure at all for a rule the box cannot run", func() {
 		// A virtualized box (StealApplies true) whose steal window has no usable
-		// value this tick must not print a confident 0% steal line.
+		// value this tick must not print a measured 0% steal line.
 		vm := healthyDetails()
 		vm.StealApplies = true
 		vm.StealSignalReady = false

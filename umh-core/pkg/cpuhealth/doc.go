@@ -142,7 +142,7 @@
 // whether the kernel has ever reported pressure stats. So: a Sample is the whole
 // tick, a Reading is one field of it. The distinction carries the package's main
 // rule — a source that could not be read yields an absent Reading, never a
-// confident zero.
+// measured zero.
 //
 // Why Sample and Details are flat structs: see the note above each declaration.
 package cpuhealth

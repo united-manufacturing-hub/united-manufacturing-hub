@@ -88,7 +88,7 @@ var _ = Describe("usage as a rate", func() {
 		Expect(u1).To(Equal(5000000.0))
 		_, ok = s1.UsageCores.Get()
 		Expect(ok).To(BeFalse(),
-			"the first read after start must publish no usage rate (Unknown), never a confident zero")
+			"the first read after start must publish no usage rate (Unknown), never a measured zero")
 
 		// Read 2: usage_usec has risen to 9s over a known elapsed time. The rate
 		// in cores is the microsecond delta divided by 1e6 (the microsecond

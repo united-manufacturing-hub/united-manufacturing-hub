@@ -153,10 +153,10 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 			Expect(inst.Extract(Sample{Steal: diagnosis.Known(0.9)})).To(Equal(diagnosis.Known(0.9)))
 		}
 
-		// The host-cpu-full signal holds the machine-full question twice: host
-		// headroom from /proc/stat, and usage fraction from our own usage as the
-		// fallback when /proc/stat is unreadable. host-headroom is listed first
-		// so selection prefers it whenever its window can supply a value.
+		// The host-cpu-full signal holds the machine-full question: /proc/stat's
+		// headroom, with our own usage as the fallback when /proc/stat is
+		// unreadable. host-headroom is listed first so selection prefers it
+		// whenever its window can supply a value.
 		hostCpuFull := t.Signals[3]
 		Expect(hostCpuFull.Instruments).To(HaveLen(2))
 		hostHeadroom := hostCpuFull.Instruments[0]
@@ -206,9 +206,9 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		Expect(limitHeadroom.Extract(Sample{UsageCores: diagnosis.Known(0.8)})).To(Equal(diagnosis.Known(1.0)))
 		Expect(limitHeadroom.Extract(Sample{UsageCores: diagnosis.Unknown()})).To(Equal(diagnosis.Unknown()))
 
-		// The measurements, which sit under no instrument: host-busy and
-		// usage-cores, each a 60s mean on every box.
-		Expect(t.Measurements).To(HaveLen(2))
+		// The measurements, asserted below, each span 60 seconds on every
+		// box. Details.P95UsageCores carries the p95 row's reduction.
+		Expect(t.Measurements).To(HaveLen(3))
 		Expect(t.Measurements[0].Name).To(Equal("host-busy"))
 		Expect(t.Measurements[0].Reduction.Name).To(Equal("mean"))
 		Expect(t.Measurements[0].Reduction.Min).To(Equal(2))
