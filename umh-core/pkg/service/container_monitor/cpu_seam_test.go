@@ -286,10 +286,14 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 		It("should keep the real measured numbers on a Fresh degraded worker verdict (a busy box the worker assessed degraded carries its genuine usage, not a nil or 0 absent marker)", func() {
 			setFlag("true")
-			// A measured degraded verdict: the framework is NOT degraded and the
-			// worker's Result carries the judgement "degraded". This is the
-			// StateDegraded switch arm — the worker measured fine and found the
-			// box busy, so the wire must keep the real getCPUMetrics numbers.
+			// A measured degraded verdict as the worker really stores it: the
+			// framework Degraded flag rides along (healthFromStatus degrades
+			// the wrapper on every good degraded poll, and worker.go copies
+			// that verdict into Status.Degraded), with the same composed
+			// message in Reason and Result. The verdict's degraded state —
+			// not the flag alone — is what separates this measured tick from
+			// a failed poll, so the wire must keep the real getCPUMetrics
+			// numbers.
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: inside the seam's 3s maxAge
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
@@ -297,6 +301,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
 						Message: workerVerdictMessage,
 					},
+					Degraded: true,
+					Reason:   workerVerdictMessage,
 				},
 			})
 
@@ -773,7 +779,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// verdict WITH attribution and causes — the console panel's whole
 			// purpose, since without causes no row reddens — beside the Details
 			// it judged, including a present p95 Reading so the optional-member
-			// pass-through is pinned, not just the always-float members.
+			// pass-through is pinned, not just the always-float members. The
+			// framework Degraded flag and Reason ride along too, exactly as
+			// worker.go stores a measured degraded tick, so the staging is the
+			// reachable pairing rather than one no writer produces.
 			stagedVerdict := cpuhealth.Verdict{
 				State:       cpuhealth.StateDegraded,
 				Attribution: cpuhealth.AttributionHost,
@@ -791,22 +800,22 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				PressureAvg60:          0.1,
 				StealP95:               0.2,
 				AvgUsageFraction:       0.4,
-				AvgUsageCores:           3.2,
-				HostHeadroomCores:       -1.5,
-				AvgHostBusyCores:        6.5,
-				CapacityCores:           2,
-				ReserveCores:            1,
-				LogicalCpus:             8,
-				HostCpus:                8,
-				UsageRingActive:         true,
-				HostBusyRingActive:      true,
-				HostBusyCoresAvailable:  true,
-				LimitApplies:            true,
-				PressureApplies:         true,
-				HostHeadroomAvailable:   false,
-				ThrottleSignalReady:     true,
-				PressureSignalReady:     true,
-				StealSignalReady:        false,
+				AvgUsageCores:          3.2,
+				HostHeadroomCores:      -1.5,
+				AvgHostBusyCores:       6.5,
+				CapacityCores:          2,
+				ReserveCores:           1,
+				LogicalCpus:            8,
+				HostCpus:               8,
+				UsageRingActive:        true,
+				HostBusyRingActive:     true,
+				HostBusyCoresAvailable: true,
+				LimitApplies:           true,
+				PressureApplies:        true,
+				HostHeadroomAvailable:  false,
+				ThrottleSignalReady:    true,
+				PressureSignalReady:    true,
+				StealSignalReady:       false,
 			}
 
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
@@ -817,6 +826,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 						Message: workerVerdictMessage,
 						Details: stagedDetails,
 					},
+					Degraded: true,
+					Reason:   workerVerdictMessage,
 				},
 			})
 

@@ -179,9 +179,9 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// a different derivation (strict > on TotalUsageMCpu/effectiveCores vs the
 	// legacy >= on gopsutil usagePercent, and skipped entirely when
 	// effectiveCores is not positive), so a boundary or an asymmetric cgroup
-	// read can mask that verdict for a tick. A Fresh observation whose
-	// framework verdict is not degraded maps its result verdict in the switch
-	// below; an errored poll is not a no-verdict case — the worker persists it
+	// read can mask that verdict for a tick. A Fresh observation
+	// maps its result verdict in the switch below; an errored poll is not a
+	// no-verdict case — the worker persists it
 	// as simple.Status with Degraded and its poll-error reason, and the
 	// framework-verdict branch maps that to Degraded. Only a successful poll
 	// that declared no verdict keeps the legacy health through the switch's
@@ -390,9 +390,12 @@ const cpuWorkerMaxAge = 3 * time.Second
 // ref is not registered (Unregistered is the absence-of-worker fallback, not a
 // degrade), or the Fresh tick left no determination and no framework degraded
 // declaration. The stored observation is simple.Status[CPUStatus] — the
-// developer's poll result plus the framework Degraded/Reason verdict — and the
-// framework verdict maps first: a Degraded observation is the worker declaring
-// it cannot measure (SPEC §2.7), and its Reason is the health message. A
+// developer's poll result plus the framework Degraded/Reason verdict — and
+// the framework flag maps first, split by the result verdict's state: the
+// flag behind an empty verdict is the worker declaring it cannot measure
+// (SPEC §2.7), and its Reason is the health message, while the flag behind a
+// degraded verdict was set by the measurement's own good-poll judgement
+// (healthFromStatus) and the tick maps through the result verdict instead. A
 // healthy verdict maps to Active; when the caller consumes it, the verdict
 // is authoritative and the legacy CPU-usage re-judgement is skipped.
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, cpuHealth *models.CPUHealth, measured bool, ok bool) {
@@ -453,11 +456,15 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 		}
 	}
 
-	// The framework Degraded flag wins: it means the worker could not measure
-	// (the poll-error case arrives Fresh with a nil error), so the result
-	// verdict — empty when the poll failed — is meaningless. Map to Degraded
-	// with Status.Reason as the message.
-	if workerStatus.Degraded {
+	// The framework Degraded flag carries two states, and the result verdict
+	// says which. healthFromStatus degrades the wrapper on every good degraded
+	// poll, so a degraded verdict state means the worker measured fine and
+	// judged the box degraded: that case falls through to the verdict switch
+	// below, which reports it measured and ships the evidence. The flag
+	// behind any other verdict state is a "could not measure" (a failed poll
+	// leaves the verdict empty): map to Degraded with Status.Reason as the
+	// message.
+	if workerStatus.Degraded && workerStatus.Result.Verdict.State != cpuhealth.StateDegraded {
 		return &models.Health{
 			Message:       workerStatus.Reason,
 			ObservedState: models.Degraded.String(),
@@ -466,9 +473,9 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 		}, nil, false, true
 	}
 
-	// A Fresh observation whose framework verdict is not degraded carries the
-	// developer's judgement in Result. The switch maps only the two spelled-out
-	// states, so a rename of either fails the seam tests too.
+	// A Fresh observation carries the developer's judgement in Result. The
+	// switch maps only the two spelled-out states, so a rename of either
+	// fails the seam tests too.
 	switch workerStatus.Result.Verdict.State {
 	case cpuhealth.StateHealthy:
 		return &models.Health{
