@@ -117,9 +117,7 @@ func buildDetails(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Envi
 	d.UsageRingActive = usageState == diagnosis.StateValue
 	d.HostBusyRingActive = hostBusyState == diagnosis.StateValue
 
-	if p95, st := engine.Measurement(measurementUsageCoresP95).Get(); st == diagnosis.StateValue {
-		d.P95UsageCores = diagnosis.Known(p95)
-	}
+	d.P95UsageCores = readingFromReduced(engine.Measurement(measurementUsageCoresP95).Get())
 
 	// The headroom ceiling and reserve mirror exactly what the verdict used, so
 	// the message's headline and headroom line report the same number.
@@ -161,4 +159,15 @@ func buildDetails(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Envi
 	d.StealApplies = env.Has(HasVirtualization)
 
 	return d
+}
+
+// readingFromReduced narrows a reduction's three states to a Reading's two.
+// StateUntrusted narrows to absent rather than publish its partial number:
+// that number is not worth acting on, for the reasons the
+// diagnosis.StateUntrusted declaration lists.
+func readingFromReduced(value float64, state diagnosis.State) diagnosis.Reading {
+	if state != diagnosis.StateValue {
+		return diagnosis.Unknown()
+	}
+	return diagnosis.Known(value)
 }
