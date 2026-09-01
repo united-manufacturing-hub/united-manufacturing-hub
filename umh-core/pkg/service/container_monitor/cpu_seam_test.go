@@ -884,6 +884,144 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		})
 	})
 
+	Context("[cpuhealth-document]", func() {
+		It("should publish one real tick end to end as a cpuHealth object holding verdict.state and every Details member inline", func() {
+			setFlag("true")
+
+			// The tick is real, not staged output: a genuine engine and a
+			// staged sample sequence, the harness pkg/cpuhealth's own specs
+			// drive (decide_contract_test.go's fired-throttling scenario).
+			// Sixty-six one-second samples fill every 60s window past its
+			// floor and hold the throttle ratio at 0.06, so the final Decide
+			// returns a degraded verdict with a throttling cause beside a
+			// Details whose every member carries a measured value.
+			engine, err := cpuhealth.NewEngine(4, 2.0)
+			Expect(err).NotTo(HaveOccurred())
+			env := diagnosis.NewEnvironment(cpuhealth.HasVirtualization, cpuhealth.HasLimit, cpuhealth.HasPressureStats)
+			base := time.Now()
+
+			var verdict cpuhealth.Verdict
+			var details cpuhealth.Details
+			for i := 0; i <= 65; i++ {
+				verdict, details = cpuhealth.Decide(engine, cpuhealth.Sample{
+					Timestamp:    base.Add(time.Duration(i) * time.Second),
+					CpuScope:     cpuhealth.ScopeHost,
+					Virtualized:  true,
+					Pressure:     diagnosis.Known(0.1),
+					PsiAvailable: true,
+					Steal:        diagnosis.Known(0),
+					HostBusy:     diagnosis.Known(0.5),
+					UsageCores:   diagnosis.Known(0.2),
+					NrPeriods:    diagnosis.Known(100 * float64(i)),
+					NrThrottled:  diagnosis.Known(6 * float64(i)), // steady 0.06, above the 0.05 fire mark
+					Quota:        diagnosis.Known(2.0),
+					LogicalCpus:  diagnosis.Known(4),
+					HostCpus:     diagnosis.Known(8),
+				}, env)
+			}
+
+			// The sequence must have earned the degraded verdict the document
+			// below asserts: one that failed to fire would leave this spec
+			// asserting a healthy tick's layout and pass vacuously.
+			Expect(verdict.State).To(Equal(cpuhealth.StateDegraded))
+			Expect(verdict.Causes).NotTo(BeEmpty())
+			_, p95Present := details.P95UsageCores.Get()
+			Expect(p95Present).To(BeTrue(), "a full window's p95 must be present, so the document carries a number rather than a null")
+
+			// Stage the observation exactly as the worker stores a measured
+			// degraded tick: healthFromStatus wraps the poll's CPUStatus in
+			// simple.Degraded with the composed message as the reason.
+			message := cpuhealth.ComposeMessage(verdict, details)
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: inside the seam's 3s maxAge
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: verdict,
+						Message: message,
+						Details: details,
+					},
+					Degraded: true,
+					Reason:   message,
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The verdict and the Details arrive together, from this one tick.
+			Expect(status.CPU.CPUHealth).NotTo(BeNil())
+			Expect(*status.CPU.CPUHealth).To(Equal(models.CPUHealth{Verdict: verdict, Details: details}))
+
+			// The document the console's adapter parses: the whole status.CPU
+			// marshalled, with the key layout asserted here inline because no
+			// committed fixture exists to compare against — a key renamed,
+			// dropped or nested reads to the console's schema as
+			// absent-and-invalid, which nothing downstream distinguishes from a
+			// legitimately-absent optional.
+			data, err := json.Marshal(status.CPU)
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(json.Unmarshal(data, &raw)).To(Succeed())
+			Expect(raw).To(HaveKey("cpuHealth"))
+
+			health, ok := raw["cpuHealth"].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "cpuHealth must be a JSON object")
+
+			// verdict sits BESIDE the Details members and no "details" object
+			// wraps them: the embedded shape the console's discriminated union
+			// parses, not the nested one pkg/fsmv2/cpu.CPUStatus deliberately
+			// uses.
+			Expect(health).To(HaveKey("verdict"))
+			Expect(health).NotTo(HaveKey("details"))
+
+			detailKeys := []string{
+				"p95UsageCores", "throttleRatio", "pressureAvg60", "stealP95",
+				"avgUsageFraction", "avgUsageCores", "hostHeadroomCores",
+				"avgHostBusyCores", "capacityCores", "reserveCores",
+				"logicalCpus", "hostCpus", "usageRingActive",
+				"hostBusyRingActive", "limitedVisibility",
+				"hostBusyCoresAvailable", "limitApplies", "pressureApplies",
+				"stealApplies", "hostHeadroomAvailable", "throttleSignalReady",
+				"pressureSignalReady", "stealSignalReady",
+			}
+			Expect(health).To(HaveLen(len(detailKeys) + 1))
+			for _, key := range detailKeys {
+				Expect(health).To(HaveKey(key))
+			}
+
+			// The verdict object: the degraded state the tick earned, with the
+			// attribution and causes the console's healthy arm forbids and its
+			// degraded arm requires.
+			verdictRaw, ok := health["verdict"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(verdictRaw["state"]).To(Equal("degraded"))
+			Expect(verdictRaw).To(HaveKey("attribution"))
+			causes, ok := verdictRaw["causes"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(causes).NotTo(BeEmpty())
+			firstCause, ok := causes[0].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			for _, key := range []string{"kind", "instrument", "unit", "attribution", "value"} {
+				Expect(firstCause).To(HaveKey(key))
+			}
+			Expect(firstCause["kind"]).To(Equal("throttling"))
+
+			// The inline keys carry this tick's measured values, not just the
+			// names: the numbers Decide produced on the final sample are the
+			// numbers on the wire.
+			Expect(health["throttleRatio"]).To(Equal(0.06))
+			Expect(health["p95UsageCores"]).To(Equal(0.2))
+			Expect(health["logicalCpus"]).To(Equal(float64(4)))
+			Expect(health["hostCpus"]).To(Equal(float64(8)))
+			Expect(health["capacityCores"]).To(Equal(float64(2)))
+			Expect(health["usageRingActive"]).To(BeTrue())
+			Expect(health["throttleSignalReady"]).To(BeTrue())
+		})
+	})
+
 	Context("[freshness]", func() {
 		It("should degrade CPU health when the worker's observation is stale, even though the verdict it carries is healthy", func() {
 			setFlag("true")
