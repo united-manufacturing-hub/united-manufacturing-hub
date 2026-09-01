@@ -67,6 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           ref: ${{ inputs.tag || github.event.release.tag_name }}
           # Full history + tags: the CLI walks the commit range from the previous
           # release, and base_ref may name a tag.

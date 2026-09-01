@@ -86,6 +86,7 @@ jobs:
       - name: Checkout umh-core
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
@@ -104,6 +105,7 @@ jobs:
       - name: Checkout changelog.umh.app
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           repository: united-manufacturing-hub/changelog.umh.app
           token: ${{ steps.app-token.outputs.token }}
           path: changelog-app
