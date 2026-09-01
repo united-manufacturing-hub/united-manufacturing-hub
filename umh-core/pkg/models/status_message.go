@@ -14,6 +14,8 @@
 
 package models
 
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+
 // StatusMessage represents the complete system state including core components and plugins.
 type StatusMessage struct {
 	Plugins map[string]interface{} `json:"plugins"` // Extension point for future plugins
@@ -158,6 +160,18 @@ type CPU struct {
 	CgroupCores   float64 `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
 	ThrottleRatio float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
 	IsThrottled   bool    `json:"isThrottled,omitempty"`   // True if recently throttled
+	// CPUHealth carries the CPU health verdict and its per-tick details; nil
+	// when no CPU health observation exists yet.
+	CPUHealth *CPUHealth `json:"cpuHealth,omitempty"`
+}
+
+// CPUHealth is the wire shape of one CPU health observation: the verdict
+// beside every Details member inline at the same level, with no "details"
+// object wrapping them. The Management Console's adapter reads these exact
+// key names, so a renamed JSON tag is a wire-format change.
+type CPUHealth struct {
+	Verdict cpuhealth.Verdict `json:"verdict"`
+	cpuhealth.Details
 }
 
 type Disk struct {
