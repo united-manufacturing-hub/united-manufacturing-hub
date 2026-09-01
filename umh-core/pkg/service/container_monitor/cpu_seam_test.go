@@ -226,9 +226,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// instance, not fall through to the legacy Active judgement...
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			// ...and, as the CPU arm of OverallHealth, it must degrade the overall
-			// health too. The rung's headline property is that a degraded worker
-			// verdict drives OverallHealth, so it is pinned here explicitly: the
-			// memory/disk arms can only ADD Degraded, never remove it.
+			// health too. This asserts that explicitly: the memory and disk arms can
+			// only ADD Degraded, never remove it.
 			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			// ...and the framework reason must land where the protocol-converter
 			// resource-limit check (IsResourceLimited) reads the block message.
@@ -1192,8 +1191,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		// the sequence of CPUHealth categories the run produced. The observation
 		// ALWAYS carries the same Fresh healthy verdict: only CollectedAt moves
 		// between ticks, so a CPUHealth transition recorded here is a freshness
-		// transition at the seam — exactly what SPEC §9 P4 R5's flicker gate
-		// measures — never a verdict change.
+		// transition at the seam, never a verdict change.
 		flickerRun := func(ages ...time.Duration) []models.HealthCategory {
 			setFlag("true")
 			obs := &fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{

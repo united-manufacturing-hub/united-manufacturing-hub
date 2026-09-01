@@ -24,7 +24,7 @@ import (
 // FSMv2CPUEnabled reports the flag's EFFECTIVE state, not merely whether
 // USE_FSMV2_CPU is set: the flag and every prerequisite the seam needs must be
 // present, or the field reports false and an instance that fell back to legacy
-// never counts as enabled (SPEC §9 P4 R4's deviation).
+// never counts as enabled.
 var _ = Describe("FSMv2CPUEnabled", func() {
 	DescribeTable("reports the effective state of the fsmv2 CPU path",
 		func(flag, transport, apiURLSet, authTokenSet, expected bool) {

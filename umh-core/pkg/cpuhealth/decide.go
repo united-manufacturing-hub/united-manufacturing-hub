@@ -161,10 +161,9 @@ func buildDetails(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Envi
 	return d
 }
 
-// readingFromReduced narrows a reduction's three states to a Reading's two.
-// StateUntrusted narrows to absent rather than publish its partial number:
-// that number is not worth acting on, for the reasons the
-// diagnosis.StateUntrusted declaration lists.
+// readingFromReduced converts a reduction's outcome to a Reading. Only
+// StateValue yields a number; StateUntrusted answers absent rather than publish
+// a partial figure that is not worth acting on (see diagnosis.StateUntrusted).
 func readingFromReduced(value float64, state diagnosis.State) diagnosis.Reading {
 	if state != diagnosis.StateValue {
 		return diagnosis.Unknown()

@@ -83,8 +83,8 @@ type ContainerMonitorService struct {
 	dataPath          string                                     // Path to check for disk metrics and HWID file
 	throttleSnapshots []cgroupSnapshot                           // Sliding window of cgroup counter snapshots
 	wasThrottled      bool                                       // Previous throttle state for transition logging
-	useFSMv2CPU       bool                                       // USE_FSMV2_CPU read once at construction; gates the fsmv2 CPU worker seam
-	cpuWorkerWarned   bool                                       // One-time latch: the flag-on-but-no-client warning fires once, never per tick
+	useFSMv2CPU       bool                                       // when true the fsmv2 CPU worker's verdict replaces the legacy CPU health; read once at construction
+	cpuWorkerWarned   bool                                       // keeps the "flag on, no client" warning to once per process, not once per GetStatus call
 	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
 }
 
@@ -124,11 +124,7 @@ func defaultCPUUsagePercent(ctx context.Context) (float64, error) {
 	return 0, nil
 }
 
-// SetCPUUsageProvider overrides the CPU usage source the aggregate health
-// judgement reads. It is a test seam: the legacy 70% rule fires on the usage
-// percent (derived through getRawCPUMetrics), so a test can stage a >70%
-// reading without a busy host. Defaults to the gopsutil provider; the legacy
-// path is byte-identical when unset.
+// SetCPUUsageProvider overrides the CPU usage source - used for testing only.
 func (c *ContainerMonitorService) SetCPUUsageProvider(fn func(ctx context.Context) (float64, error)) {
 	c.cpuUsageProvider = fn
 }
@@ -163,44 +159,27 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 
 	status.CPU = cpuStat
 
-	// CPU seam: with USE_FSMV2_CPU on at construction and a Fresh, non-empty
-	// verdict from the fsmv2 CPU worker, that verdict fills status.CPU.Health.
-	// status.CPU aliases cpuStat, so the write lands on the record the
-	// aggregate check below reads: a degraded worker judgement — a fresh
-	// degraded verdict, or the fail-closed freshness degrade — reaches
-	// status.CPUHealth and status.OverallHealth through that aggregate. The
-	// override is skipped only for a box the legacy path has judged
-	// throttle-degraded this tick: that throttle record is what the aggregate
-	// check below reads, and the usage-% rule below does not recompute it, so a
-	// healthy worker verdict must not erase it (a genuinely throttled box would
-	// otherwise fall through to the usage rule and can report Active). A
-	// usage-degraded legacy record is overridden in the nested health, and the
-	// usage-% rule below re-derives the verdict from the raw numbers — but via
-	// a different derivation (strict > on TotalUsageMCpu/effectiveCores vs the
-	// legacy >= on gopsutil usagePercent, and skipped entirely when
-	// effectiveCores is not positive), so a boundary or an asymmetric cgroup
-	// read can mask that verdict for a tick. A Fresh observation
-	// maps its result verdict in the switch below; an errored poll is not a
-	// no-verdict case — the worker persists it
-	// as simple.Status with Degraded and its poll-error reason, and the
-	// framework-verdict branch maps that to Degraded. Only a successful poll
-	// that declared no verdict keeps the legacy health through the switch's
-	// default arm; that legacy health may be Active on a low-usage box, but it
-	// is a legacy judgement, never a fabricated healthy report. An observation
-	// that is stale, never-observed, or unreadable fails closed to Degraded
-	// rather than falling back to the legacy Active judgement. A consumed
-	// healthy verdict is authoritative: the legacy CPU-usage rule below does
-	// not re-judge the worker's numbers (a busy host the worker assessed healthy
-	// must not be flipped by the legacy >= rule), so the over-degrading
-	// fail-safe interim is retired. The accepted residual is a busy box the
-	// worker cannot see — the throttle early-window (<2 snapshots) and the
-	// worker's own measurement warm-up — which now reports Active where the
-	// legacy rule used to degrade it. A consumed degraded verdict still degrades
-	// the instance through the aggregate check below. The flag is read once at
-	// construction, so a later toggle does not move the seam.
+	// CPU seam: when USE_FSMV2_CPU was on at construction and the fsmv2 CPU
+	// worker has a fresh verdict, that verdict replaces the legacy CPU health.
+	// status.CPU aliases cpuStat, so the write lands on the record the aggregate
+	// check below reads.
+	//
+	// One exception: a box the legacy path judged throttle-degraded this tick
+	// keeps that judgement, because the usage-% rule below does not recompute
+	// throttling and a healthy worker verdict would erase it.
+	//
+	// A stale, never-observed or unreadable observation fails closed to Degraded
+	// rather than falling back to the legacy Active judgement.
+	//
+	// The two rules disagree at the boundary: the legacy rule below degrades at
+	// >= 70% of gopsutil's usagePercent, the worker's own rule at > 70% of
+	// TotalUsageMCpu/effectiveCores, and the worker's rule is skipped when
+	// effectiveCores is not positive. A busy box the worker cannot yet see, the
+	// throttle window's first two ticks and the worker's own measurement warm-up,
+	// now reports Active where the legacy rule degraded it.
 	workerVerdictAuthoritative := false
 	if c.useFSMv2CPU {
-		if workerHealth, workerCPUHealth, measured, ok := c.readWorkerCPUHealth(ctx); ok && !cpuStat.IsThrottled {
+		if workerHealth, workerCPUHealth, measured := c.readWorkerCPUHealth(ctx); workerHealth != nil && !cpuStat.IsThrottled {
 			status.CPU.Health = workerHealth
 			// The measured tick's verdict and Details ship as the wire's
 			// cpuHealth record; an unmeasured tick returns nil, so the wire
@@ -370,35 +349,24 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 const cpuWorkerMaxAge = 3 * time.Second
 
 // readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a
-// models.Health. Freshness is judged first: a Fresh observation maps its
-// verdict; a Stale, NeverObserved, or unreadable (Unknown) one fails closed to
-// Degraded, because an old or absent measurement is not a healthy one and the
-// protocol-converter resource-limit check (IsResourceLimited) reads the message
-// as its bridge-block reason. The second return, cpuHealth, is the measured
-// tick's evidence for the wire's cpuHealth key: the verdict beside the Details
-// it judged. It is non-nil only on the two measured arms and nil on every arm
-// that measured nothing, so the wire omits the key. The third return, measured,
-// reports whether the
-// mapped health rests on a genuinely-measured Result verdict: it is true only
-// on the Fresh healthy-verdict and Fresh degraded-verdict arms, and false on
-// every fail-closed Degraded arm (read error, Stale, NeverObserved, and the
-// framework Degraded "could not measure" declaration) — the caller uses it to
-// decide whether the legacy numeric fields describe the same measurement the
-// verdict judged (keep them) or an absent measurement it must omit. The fourth
-// return is false when the caller must keep the legacy getCPUMetrics health: no
-// client is reachable (warned once per service lifetime, never per tick), the
-// ref is not registered (Unregistered is the absence-of-worker fallback, not a
-// degrade), or the Fresh tick left no determination and no framework degraded
-// declaration. The stored observation is simple.Status[CPUStatus] — the
-// developer's poll result plus the framework Degraded/Reason verdict — and
-// the framework flag maps first, split by the result verdict's state: the
-// flag behind an empty verdict is the worker declaring it cannot measure
-// (SPEC §2.7), and its Reason is the health message, while the flag behind a
-// degraded verdict was set by the measurement's own good-poll judgement
-// (healthFromStatus) and the tick maps through the result verdict instead. A
-// healthy verdict maps to Active; when the caller consumes it, the verdict
-// is authoritative and the legacy CPU-usage re-judgement is skipped.
-func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, cpuHealth *models.CPUHealth, measured bool, ok bool) {
+// models.Health. A nil health means the caller must keep the legacy
+// getCPUMetrics health: no client is reachable, the ref was never registered, or
+// a fresh tick produced no verdict.
+//
+// Freshness is judged before the verdict. A stale, never-observed or unreadable
+// observation fails closed to Degraded, because an old or absent measurement is
+// not a healthy one, and the protocol-converter resource-limit check
+// (IsResourceLimited) uses the message as its bridge-block reason.
+//
+// cpuHealth is the verdict beside the Details it judged. It is non-nil only on
+// the two arms that measured, so an unmeasured tick omits the wire key instead
+// of shipping an empty one.
+//
+// measured reports whether the health rests on a real measurement. The caller
+// reads it to decide whether the legacy numeric fields describe the same
+// measurement the verdict judged and may be kept, or an absent one it must
+// omit.
+func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, cpuHealth *models.CPUHealth, measured bool) {
 	client := fsmv2client.GetClient()
 	if client == nil {
 		if !c.cpuWorkerWarned {
@@ -406,7 +374,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			c.logger.Warn(c.cpuSeamClientUnavailableMessage())
 		}
 
-		return nil, nil, false, false
+		return nil, nil, false
 	}
 
 	// Read the simple.Status wrapper, never the bare CPUStatus: a Poll error
@@ -428,7 +396,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, nil, false, true
+		}, nil, false
 	}
 
 	// A non-Fresh observation without a read error is Stale, NeverObserved, or
@@ -443,16 +411,16 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 				ObservedState: models.Degraded.String(),
 				DesiredState:  models.Active.String(),
 				Category:      models.Degraded,
-			}, nil, false, true
+			}, nil, false
 		case fsmv2client.NeverObserved:
 			return &models.Health{
 				Message:       "CPU worker has never observed; no measurement to judge",
 				ObservedState: models.Degraded.String(),
 				DesiredState:  models.Active.String(),
 				Category:      models.Degraded,
-			}, nil, false, true
+			}, nil, false
 		default:
-			return nil, nil, false, false
+			return nil, nil, false
 		}
 	}
 
@@ -470,7 +438,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, nil, false, true
+		}, nil, false
 	}
 
 	// A Fresh observation carries the developer's judgement in Result. The
@@ -486,7 +454,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			}, &models.CPUHealth{
 				Verdict: workerStatus.Result.Verdict,
 				Details: workerStatus.Result.Details,
-			}, true, true
+			}, true
 	case cpuhealth.StateDegraded:
 		return &models.Health{
 				Message:       workerStatus.Result.Message,
@@ -496,12 +464,12 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			}, &models.CPUHealth{
 				Verdict: workerStatus.Result.Verdict,
 				Details: workerStatus.Result.Details,
-			}, true, true
+			}, true
 	default:
 		// Empty result verdict AND Degraded == false is a genuine "no
 		// determination" — a successful poll produced no verdict. Keep the
 		// legacy health; do not read it as healthy.
-		return nil, nil, false, false
+		return nil, nil, false
 	}
 }
 
@@ -662,10 +630,6 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	}
 
 	// Get actual CPU usage through the injectable source (gopsutil by default).
-	// The constructor initializes cpuUsageProvider, so it is non-nil on a service
-	// built through the public constructors; the nil-guard below still protects
-	// the read path against a nil installed through the SetCPUUsageProvider seam,
-	// falling back to the default source rather than panicking.
 	provider := c.cpuUsageProvider
 	if provider == nil {
 		provider = defaultCPUUsagePercent

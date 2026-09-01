@@ -118,43 +118,29 @@ type Cause struct {
 }
 
 // Verdict is what Decide returns: the state, the attribution of the dominant
-// cause, and the ranked cause list. The message is NOT a field on it — the
-// message layer composes it from Verdict and Details. The json tags are the
-// wire key contract with the Management Console's CpuVerdict and CpuCause
-// (ManagementConsole frontend/src/lib/utils/cpu/cpuHealth.ts): the console
-// will read a verdict by key name once the status message carries one, so
-// renaming a tag is a wire-format change. Key presence is keyed to member
-// emptiness, not to State: Attribution and Causes must stay empty on a
-// healthy verdict, and a non-empty member there is a wire-format break, not
-// a state change. Both shapes are asserted by verdict_json_test.go and
-// verdict_healthy_json_test.go — the degraded document carries state,
-// attribution and causes; a healthy one carries the state alone.
+// cause, and the ranked cause list. The message is NOT a field on it; the
+// message layer composes it from Verdict and Details.
+//
+// The json tags are the wire key contract with the Management Console's
+// CpuVerdict and CpuCause (ManagementConsole
+// frontend/src/lib/utils/cpu/cpuHealth.ts), so renaming a tag is a wire-format
+// change. Attribution and Causes must stay empty on a healthy verdict: a
+// non-empty member there is a wire-format break, not a state change.
+// verdict_json_test.go and verdict_healthy_json_test.go assert both shapes.
 type Verdict struct {
 	State       State       `json:"state"`
 	Attribution Attribution `json:"attribution,omitempty"`
 	Causes      []Cause     `json:"causes,omitempty"`
 }
 
-// UnmarshalJSON reads both shapes a stored CPU status document (the JSON an
-// fsmv2 CPU worker persists and the container_monitor CPU seam loads back)
-// may hold in its verdict key: the object this build writes, and the bare
-// state string an older build stored before the verdict was widened beyond
-// the state. A bare string of any spelling decodes as the empty Verdict —
-// an old document is whatever its build stored, not one of the state words —
-// and JSON null lands in the same branch, because unmarshalling null into a
-// State is a no-op that returns no error. Every other value fails the
-// decode, and that failure is what the reader fails closed on instead of
-// silently keeping its legacy CPU-usage judgement.
-//
-// A degraded old document keeps its judgement in simple.Status's Degraded
-// flag, not in the verdict; how that flag and the verdict are read is
-// readWorkerCPUHealth's contract, in pkg/service/container_monitor. An old
-// healthy document has the flag unset, and an empty verdict beside an unset
-// flag is no determination: the reader keeps the legacy health and re-judges.
-//
-// The object branch decodes through a defined type with Verdict's fields —
-// not a Go alias — which carries none of Verdict's methods, so this method
-// is not re-entered.
+// UnmarshalJSON reads both shapes a stored CPU status document may hold in its
+// verdict key: the object this build writes, and the bare state string an older
+// build stored before the verdict was widened beyond the state. A bare string of
+// any spelling, and JSON null, decodes as the empty Verdict, which
+// readWorkerCPUHealth (pkg/service/container_monitor) reads as "no
+// determination". Every other value fails the decode, and that failure is what
+// the reader fails closed on instead of silently keeping its legacy CPU-usage
+// judgement.
 func (v *Verdict) UnmarshalJSON(data []byte) error {
 	var state State
 	if err := json.Unmarshal(data, &state); err == nil {
@@ -167,6 +153,8 @@ func (v *Verdict) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
+	// A defined type, not an alias: it carries none of Verdict's methods, so
+	// this one is not re-entered.
 	type verdict Verdict
 	return json.Unmarshal(data, (*verdict)(v))
 }

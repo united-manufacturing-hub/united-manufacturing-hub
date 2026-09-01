@@ -239,11 +239,11 @@ type cpuRule struct {
 	firedHere bool
 }
 
-// render writes one line of the table: a rule that has not fired shows the mark
-// that would fire it, a latched rule the mark that clears it. A rule with no
-// reading this tick says why it states no figure instead, and the latch splits
-// that sentence: a signal that has fired and not yet released is not a window
-// still filling.
+// render writes one line of the table. A rule that has not fired shows the mark
+// that would fire it; a rule that has fired shows the mark that would clear it.
+// A rule with no reading says which kind of absence it is: "measuring" while its
+// window is still filling, "held" once it has fired and not yet cleared. An
+// operator is then never told that a fired signal is still warming up.
 func (r cpuRule) render() string {
 	switch {
 	case !r.applies && !r.firedHere:

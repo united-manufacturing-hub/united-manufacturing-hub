@@ -152,23 +152,26 @@ type Container struct {
 	Architecture ContainerArchitecture `json:"architecture"` // Processor architecture
 }
 
+// CPU carries two generations of CPU reporting side by side during the
+// USE_FSMV2_CPU rollout. TotalUsageMCpu, CoreCount, CgroupCores, ThrottleRatio
+// and IsThrottled are the legacy numbers the container monitor computes itself,
+// and every Management Console build reads them today. CPUHealth is the fsmv2
+// CPU worker's verdict and the evidence behind it, present only on instances
+// where that worker ran. Both ship until the console reads CPUHealth everywhere.
 type CPU struct {
 	Health         *Health  `json:"health"`
 	TotalUsageMCpu *float64 `json:"totalUsageMCpu,omitempty"` // Total usage in milli-cores (1000m = 1 core); nil when not measured this tick
 	CoreCount      *int     `json:"coreCount,omitempty"`      // Number of CPU cores; nil when not measured this tick
 	// Cgroup-specific fields for container resource limits
-	CgroupCores   float64 `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
-	ThrottleRatio float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
-	IsThrottled   bool    `json:"isThrottled,omitempty"`   // True if recently throttled
-	// CPUHealth carries the CPU health verdict and its per-tick details; nil
-	// when no CPU health observation exists yet.
-	CPUHealth *CPUHealth `json:"cpuHealth,omitempty"`
+	CgroupCores   float64    `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
+	ThrottleRatio float64    `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
+	IsThrottled   bool       `json:"isThrottled,omitempty"`   // True if recently throttled
+	CPUHealth     *CPUHealth `json:"cpuHealth,omitempty"`     // nil when the fsmv2 CPU worker produced no observation this tick
 }
 
-// CPUHealth is the wire shape of one CPU health observation: the verdict
-// beside every Details member inline at the same level, with no "details"
-// object wrapping them. The Management Console's adapter reads these exact
-// key names, so a renamed JSON tag is a wire-format change.
+// CPUHealth is the wire shape of one CPU health observation: the verdict beside
+// every Details member inline at the same level, with no "details" object
+// wrapping them. The json tags are a wire contract; see Verdict in pkg/cpuhealth.
 type CPUHealth struct {
 	Verdict cpuhealth.Verdict `json:"verdict"`
 	cpuhealth.Details
