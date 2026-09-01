@@ -124,8 +124,8 @@ func defaultCPUUsagePercent(ctx context.Context) (float64, error) {
 	return 0, nil
 }
 
-// SetCPUUsageProvider overrides the CPU usage source - used for testing only.
-func (c *ContainerMonitorService) SetCPUUsageProvider(fn func(ctx context.Context) (float64, error)) {
+// setCPUUsageProvider overrides the CPU usage source - used for testing only.
+func (c *ContainerMonitorService) setCPUUsageProvider(fn func(ctx context.Context) (float64, error)) {
 	c.cpuUsageProvider = fn
 }
 
