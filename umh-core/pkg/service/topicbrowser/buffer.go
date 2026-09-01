@@ -30,12 +30,13 @@
 //    parseBufferPool, decodes the hex directly into a *BufferItem* obtained
 //    from bufferItemPool, then hands that BufferItem to the ring buffer.
 // 2. The ring buffer owns the BufferItem until it is overwritten.
-// 3. GetSnapshot exposes *read‑only* pointers; consumers must call
-//    PutBufferItems once they are finished so the structs can be reused.
+// 3. GetSnapshot exposes read-only pointers. The ring buffer keeps its own
+//    reference to every item, so a consumer must neither modify nor recycle
+//    them.
 //
 //  ▸ BufferItem is **immutable** after creation.
-//  ▸ Overwritten items are **not** returned automatically to the pool to
-//    avoid use‑after‑free while snapshots might still be in flight.
+//  ▸ Items are never returned to bufferItemPool. A snapshot may still be in
+//    flight, and nothing tracks when the last consumer is finished.
 //  ▸ parseBufferPool buffers are always returned immediately.
 //
 // Concurrency guarantees: Add and GetSnapshot are mutex‑protected and safe to
@@ -71,8 +72,34 @@ type Ringbuffer struct {
 
 // RingBufferSnapshot provides a consistent view of the ring buffer state.
 type RingBufferSnapshot struct {
-	Items           []*BufferItem // Current buffer contents, newest-to-oldest
-	LastSequenceNum uint64        // Latest sequence number
+	// Items holds the buffer contents oldest first, the order they were added.
+	// Whatever fills this field keeps that order, and a reader that wants the
+	// most recent N items takes them from the end.
+	Items           []*BufferItem
+	LastSequenceNum uint64 // Latest sequence number
+}
+
+// NewestN returns up to n entries, the most recently added ones, in the order
+// they arrived. Fewer are returned when the snapshot holds fewer than n.
+//
+// Callers use this instead of slicing Items, so which end is newest is stated
+// once here rather than at each call site.
+func (s RingBufferSnapshot) NewestN(n int) []*BufferItem {
+	if n <= 0 {
+		return nil
+	}
+
+	if n >= len(s.Items) {
+		return s.Items
+	}
+
+	return s.Items[len(s.Items)-n:]
+}
+
+// AppendNewest adds item as the most recently arrived entry. Producers that
+// build a snapshot by hand use this so the call site never states an order.
+func (s *RingBufferSnapshot) AppendNewest(item *BufferItem) {
+	s.Items = append(s.Items, item)
 }
 
 // NewRingbufferWithDefaultCapacity creates a ring buffer with the standard production capacity.
@@ -121,18 +148,6 @@ var bufferItemPool = sync.Pool{
 	},
 }
 
-// PutBufferItems must be called by every consumer of GetSnapshot() when
-// finished. It zeroes the structs and returns them to bufferItemPool.
-func PutBufferItems(items []*BufferItem) {
-	for _, item := range items {
-		// Clear the item and return to pool
-		item.Payload = nil
-		item.Timestamp = time.Time{}
-		item.SequenceNum = 0
-		bufferItemPool.Put(item)
-	}
-}
-
 func (rb *Ringbuffer) Len() int {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
@@ -147,28 +162,34 @@ func (rb *Ringbuffer) Cap() int {
 	return len(rb.buf)
 }
 
-// GetSnapshot returns a consistent snapshot of the ring buffer state
-// This is the primary interface for consumers to get ring buffer data.
+// GetSnapshot returns the ring's items as a flat slice, oldest first, so a
+// caller can read them after the lock is released.
 func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 
-	return RingBufferSnapshot{
+	snapshot := RingBufferSnapshot{
 		LastSequenceNum: rb.sequenceNum,
-		Items:           rb.getBuffersInternal(),
+		Items:           make([]*BufferItem, 0, rb.count),
 	}
-}
 
-// getBuffersInternal returns shared references to buffer items (newest to oldest)
-// This is used internally by GetSnapshot and assumes mutex is already held.
-func (rb *Ringbuffer) getBuffersInternal() []*BufferItem {
-	result := make([]*BufferItem, 0, rb.count)
-	for i := range rb.count {
-		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
-		if b := rb.buf[idx]; b != nil {
-			result = append(result, b) // Share the reference, no copying
+	// The oldest live item sits count places behind the next write slot.
+	idx := rb.writePos - rb.count
+	if idx < 0 {
+		idx += len(rb.buf)
+	}
+
+	// Go through the ring oldest to newest, adding each item to the snapshot.
+	for range rb.count {
+		// Only the pointer is copied; the item stays owned by the ring.
+		snapshot.AppendNewest(rb.buf[idx])
+
+		// Step forward, wrapping at the end of the array.
+		idx++
+		if idx == len(rb.buf) {
+			idx = 0
 		}
 	}
 
-	return result
+	return snapshot
 }

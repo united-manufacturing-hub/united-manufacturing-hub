@@ -20,7 +20,6 @@ import (
 	"time"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -115,7 +114,6 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 	}
 
 	snapshot := obs.ServiceInfo.Status.BufferSnapshot
-	buffers := snapshot.Items
 	lastSequenceNum := snapshot.LastSequenceNum
 
 	result := &ProcessingResult{}
@@ -131,22 +129,14 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 
 	newItemCount := lastSequenceNum - c.lastProcessedSequenceNum
 
-	// Check for data loss (gap larger than buffer capacity)
-	dataLost := false
+	// NewestN clamps, so a gap larger than the ring returns everything it still
+	// holds. That is the data-loss case, reported below.
+	itemsToProcess := snapshot.NewestN(int(newItemCount))
 
-	var itemsToProcess []*topicbrowserservice.BufferItem
-
-	if newItemCount > uint64(constants.RingBufferCapacity) {
-		// Data loss: we can only process what's in the buffer
-		dataLost = true
-		availableItems := len(buffers)
-		itemsToProcess = buffers[:availableItems] // Process all available items
-		lostCount := newItemCount - uint64(availableItems)
+	dataLost := newItemCount > uint64(len(itemsToProcess))
+	if dataLost {
 		log.Warnf("Data loss detected: gap of %d sequences, lost %d buffers, processing all %d available",
-			newItemCount, lostCount, availableItems)
-	} else {
-		// Normal case: process first newItemCount items (they're newest-to-oldest)
-		itemsToProcess = buffers[:newItemCount]
+			newItemCount, newItemCount-uint64(len(itemsToProcess)), len(itemsToProcess))
 	}
 
 	// Process the selected buffers

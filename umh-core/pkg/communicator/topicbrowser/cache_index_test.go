@@ -46,7 +46,7 @@ var _ = Describe("Cache Sequence-Based Processing", func() {
 				ServiceInfo: topicbrowserservice.ServiceInfo{
 					Status: topicbrowserservice.Status{
 						BufferSnapshot: topicbrowserservice.RingBufferSnapshot{
-							Items:           []*topicbrowserservice.BufferItem{buffer3, buffer2, buffer1}, // Newest-to-oldest
+							Items:           []*topicbrowserservice.BufferItem{buffer1, buffer2, buffer3}, // Oldest-to-newest
 							LastSequenceNum: 3,
 						},
 					},
@@ -69,7 +69,7 @@ var _ = Describe("Cache Sequence-Based Processing", func() {
 				ServiceInfo: topicbrowserservice.ServiceInfo{
 					Status: topicbrowserservice.Status{
 						BufferSnapshot: topicbrowserservice.RingBufferSnapshot{
-							Items:           []*topicbrowserservice.BufferItem{buffer4, buffer3, buffer2, buffer1}, // Newest-to-oldest
+							Items:           []*topicbrowserservice.BufferItem{buffer1, buffer2, buffer3, buffer4}, // Oldest-to-newest
 							LastSequenceNum: 4,
 						},
 					},
@@ -98,7 +98,7 @@ var _ = Describe("Cache Sequence-Based Processing", func() {
 				ServiceInfo: topicbrowserservice.ServiceInfo{
 					Status: topicbrowserservice.Status{
 						BufferSnapshot: topicbrowserservice.RingBufferSnapshot{
-							Items:           []*topicbrowserservice.BufferItem{buffer3, buffer2, buffer1}, // Newest-to-oldest
+							Items:           []*topicbrowserservice.BufferItem{buffer1, buffer2, buffer3}, // Oldest-to-newest
 							LastSequenceNum: 3,
 						},
 					},
@@ -141,7 +141,7 @@ var _ = Describe("Cache Sequence-Based Processing", func() {
 				ServiceInfo: topicbrowserservice.ServiceInfo{
 					Status: topicbrowserservice.Status{
 						BufferSnapshot: topicbrowserservice.RingBufferSnapshot{
-							Items:           []*topicbrowserservice.BufferItem{buffer2, buffer1}, // Newest-to-oldest
+							Items:           []*topicbrowserservice.BufferItem{buffer1, buffer2}, // Oldest-to-newest
 							LastSequenceNum: 2,
 						},
 					},
@@ -170,7 +170,7 @@ var _ = Describe("Cache Sequence-Based Processing", func() {
 				ServiceInfo: topicbrowserservice.ServiceInfo{
 					Status: topicbrowserservice.Status{
 						BufferSnapshot: topicbrowserservice.RingBufferSnapshot{
-							Items: []*topicbrowserservice.BufferItem{buffer3, buffer2, buffer1}, // Newest-to-oldest
+							Items: []*topicbrowserservice.BufferItem{buffer1, buffer2, buffer3}, // Oldest-to-newest
 						},
 					},
 				},
@@ -182,8 +182,8 @@ var _ = Describe("Cache Sequence-Based Processing", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(pendingBuffers).To(HaveLen(2))        // buffer2 and buffer3
-			Expect(pendingBuffers[0]).To(Equal(buffer3)) // Newest first
-			Expect(pendingBuffers[1]).To(Equal(buffer2))
+			Expect(pendingBuffers[0]).To(Equal(buffer2)) // Filtering keeps the input order
+			Expect(pendingBuffers[1]).To(Equal(buffer3))
 		})
 	})
 })
