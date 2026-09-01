@@ -240,13 +240,18 @@ type cpuRule struct {
 }
 
 // render writes one line of the table: a rule that has not fired shows the mark
-// that would fire it, a latched rule the mark that clears it.
+// that would fire it, a latched rule the mark that clears it. A rule with no
+// reading this tick says why it states no figure instead, and the latch splits
+// that sentence: a signal that has fired and not yet released is not a window
+// still filling.
 func (r cpuRule) render() string {
 	switch {
 	case !r.applies && !r.firedHere:
 		return r.label + " not available (not possible)."
-	case !r.ready:
+	case !r.ready && !r.latched:
 		return r.label + " not available (measuring)."
+	case !r.ready:
+		return r.label + " not available (held)."
 	}
 
 	mark, verb := r.marks.Fire, "degrades"
