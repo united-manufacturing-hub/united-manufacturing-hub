@@ -78,7 +78,7 @@ var workerHealthyMessage = cpuhealth.ComposeMessage(
 // seamTransportOffWarning, seamCredentialsWarning, and seamStillStartingWarning
 // mirror the three diagnostic warnings readWorkerCPUHealth emits when the flag
 // is on but the fsmv2 supervisor cannot run or its client is not published yet.
-// The warn-once specs pin message content, not just a count, because the warning
+// The warn-once specs assert message content, not just a count, because the warning
 // must name the missing prerequisite.
 const seamTransportOffWarning = "USE_FSMV2_CPU is enabled but USE_FSMV2_TRANSPORT is off, so the fsmv2 supervisor never runs and no CPU worker client is published; falling back to legacy CPU metrics"
 
@@ -371,7 +371,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			// A real healthy verdict fills the nested health record. status.CPUHealth
 			// is deliberately NOT asserted here: the authoritative-rule sibling below
-			// pins that a consumed healthy verdict skips the legacy 70% re-judgement,
+			// asserts that a consumed healthy verdict skips the legacy 70% re-judgement,
 			// so this spec stays limited to the nested record.
 			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
 			Expect(status.CPU.Health.Category).To(Equal(models.Active))
@@ -490,13 +490,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// above the 2-snapshot arming threshold but below
 			// CPUThrottleRatioThreshold, so isThrottled stays false and the
 			// healthy verdict remains authoritative. The 90% injection would trip
-			// the legacy 70% rule if it ran, so CPUHealth staying Active pins that
+			// the legacy 70% rule if it ran, so CPUHealth staying Active shows that
 			// the authoritative skip is deliberate on an armed window too, not an
 			// accident of the cold-start tick.
 			// Re-publish the worker observation with a fresh CollectedAt so tick 2
 			// cannot age the -500ms observation past the seam's 3s maxAge on a slow
 			// host and fail closed to Stale, which would spuriously fail the Active
-			// assertions below. The healthy verdict is what pins the behaviour.
+			// assertions below. The healthy verdict is what those assertions rest on.
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now(),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
@@ -606,7 +606,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// stays Active: getRawCPUMetrics clamps the quota to 0.1 for TotalUsageMCpu,
 			// but the rule below divides by the raw 0.05 quota (CgroupCores), so a 40%
 			// host reads as 80% to the rule. The rule is therefore the ONLY degradation
-			// source, pinning the else-if body against the worker verdict path.
+			// source, which separates the else-if body from the worker verdict path.
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
 				case "/sys/fs/cgroup/cpu.max":
@@ -778,7 +778,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// verdict WITH attribution and causes — the console panel's whole
 			// purpose, since without causes no row reddens — beside the Details
 			// it judged, including a present p95 Reading so the optional-member
-			// pass-through is pinned, not just the always-float members. The
+			// pass-through is asserted too, not just the always-float members. The
 			// framework Degraded flag and Reason ride along too, exactly as
 			// worker.go stores a measured degraded tick, so the staging is the
 			// reachable pairing rather than one no writer produces.
@@ -836,7 +836,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// The seam fills the wire record from that one tick: the staged
-			// observation is the only source of these values, so equality pins
+			// observation is the only source of these values, so equality asserts
 			// that the verdict (state, attribution, causes) AND every Details
 			// member travel together — not a re-derivation and not a subset.
 			Expect(status.CPU.CPUHealth).NotTo(BeNil())
@@ -1073,7 +1073,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			publishWorkerClientWithStub(&cpuStubStateReader{err: persistence.ErrNotFound})
 
 			// Stage host-independent cgroup data so the cgroup read succeeds
-			// and the throttle path stays benign. What pins the branch is the
+			// and the throttle path stays benign. What identifies the branch is the
 			// message assertions: the legacy path and the read-error branch can
 			// never emit "never observed", so the spec discriminates on any host
 			// (without them, a busy CI host's legacy usage rule alone would
@@ -1112,7 +1112,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			publishWorkerClientWithStub(&cpuStubStateReader{err: errors.New("cpu store read failed")})
 
 			// Stage host-independent cgroup data so the cgroup read succeeds
-			// and the throttle path stays benign. What pins the branch is the
+			// and the throttle path stays benign. What identifies the branch is the
 			// message assertions: the legacy path and the never-observed branch
 			// can never emit the read-error message, so the spec discriminates
 			// on any host.
@@ -1337,7 +1337,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// A worker observation exists and is Fresh-degraded, yet the off
 			// path must ignore it: the worker's message is a value the legacy
 			// path can never emit, so its absence proves the worker was not
-			// consulted. The positive control pins that the legacy path really
+			// consulted. The positive control asserts that the legacy path really
 			// produced its own message: a negative-only check would also pass
 			// on a blank fallback, which is the seam's whole safety property
 			// to lose.
