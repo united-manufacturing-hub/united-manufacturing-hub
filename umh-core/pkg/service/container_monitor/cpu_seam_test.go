@@ -28,6 +28,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -761,6 +762,114 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(data)).NotTo(ContainSubstring("totalUsageMCpu"))
 			Expect(string(data)).NotTo(ContainSubstring("coreCount"))
+		})
+	})
+
+	Context("[cpuhealth-evidence]", func() {
+		It("should fill status.CPU.CPUHealth from one worker tick's verdict and details, and omit the key entirely on a tick that measured nothing", func() {
+			setFlag("true")
+
+			// The fills arm stages what one measured tick stores: a degraded
+			// verdict WITH attribution and causes — the console panel's whole
+			// purpose, since without causes no row reddens — beside the Details
+			// it judged, including a present p95 Reading so the optional-member
+			// pass-through is pinned, not just the always-float members.
+			stagedVerdict := cpuhealth.Verdict{
+				State:       cpuhealth.StateDegraded,
+				Attribution: cpuhealth.AttributionHost,
+				Causes: []cpuhealth.Cause{{
+					Kind:        cpuhealth.CauseKindThrottling,
+					Instrument:  "cpu.stat",
+					Unit:        "ratio",
+					Attribution: cpuhealth.AttributionHost,
+					Value:       0.5,
+				}},
+			}
+			stagedDetails := cpuhealth.Details{
+				P95UsageCores:          diagnosis.Known(1.25),
+				ThrottleRatio:          0.5,
+				PressureAvg60:          0.1,
+				StealP95:               0.2,
+				AvgUsageFraction:       0.4,
+				AvgUsageCores:           3.2,
+				HostHeadroomCores:       -1.5,
+				AvgHostBusyCores:        6.5,
+				CapacityCores:           2,
+				ReserveCores:            1,
+				LogicalCpus:             8,
+				HostCpus:                8,
+				UsageRingActive:         true,
+				HostBusyRingActive:      true,
+				HostBusyCoresAvailable:  true,
+				LimitApplies:            true,
+				PressureApplies:         true,
+				HostHeadroomAvailable:   false,
+				ThrottleSignalReady:     true,
+				PressureSignalReady:     true,
+				StealSignalReady:        false,
+			}
+
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: inside the seam's 3s maxAge
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: stagedVerdict,
+						Message: workerVerdictMessage,
+						Details: stagedDetails,
+					},
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The seam fills the wire record from that one tick: the staged
+			// observation is the only source of these values, so equality pins
+			// that the verdict (state, attribution, causes) AND every Details
+			// member travel together — not a re-derivation and not a subset.
+			Expect(status.CPU.CPUHealth).NotTo(BeNil())
+			Expect(*status.CPU.CPUHealth).To(Equal(models.CPUHealth{
+				Verdict: stagedVerdict,
+				Details: stagedDetails,
+			}))
+
+			// Wire contract: the measured tick ships the cpuHealth key.
+			data, err := json.Marshal(status.CPU)
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(json.Unmarshal(data, &raw)).To(Succeed())
+			Expect(raw).To(HaveKey("cpuHealth"))
+
+			// The omits arm: a tick that measured nothing. The framework-
+			// Degraded observation (a poll error arrives Fresh with a zero
+			// result) fails closed to a Degraded models.Health on CPU.Health,
+			// but there is no Details behind such a verdict — so cpuHealth
+			// must be absent, never a fabricated empty or zero-filled one.
+			// Absence of cpuHealth never means health: it means nothing was
+			// measured, and Health keeps carrying the judgement either way.
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: inside the seam's 3s maxAge
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result:   fsmv2cpu.CPUStatus{}, // zero result: the failed Poll preserved no verdict and no details
+					Degraded: true,
+					Reason:   "poll error: cgroup cpu.stat read failed",
+				},
+			})
+
+			status, err = service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(status.CPU.CPUHealth).To(BeNil())
+
+			dataNil, err := json.Marshal(status.CPU)
+			Expect(err).NotTo(HaveOccurred())
+
+			var rawNil map[string]interface{}
+			Expect(json.Unmarshal(dataNil, &rawNil)).To(Succeed())
+			Expect(rawNil).NotTo(HaveKey("cpuHealth"))
 		})
 	})
 

@@ -200,8 +200,12 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// construction, so a later toggle does not move the seam.
 	workerVerdictAuthoritative := false
 	if c.useFSMv2CPU {
-		if workerHealth, measured, ok := c.readWorkerCPUHealth(ctx); ok && !cpuStat.IsThrottled {
+		if workerHealth, workerCPUHealth, measured, ok := c.readWorkerCPUHealth(ctx); ok && !cpuStat.IsThrottled {
 			status.CPU.Health = workerHealth
+			// The measured tick's verdict and Details ship as the wire's
+			// cpuHealth record; an unmeasured tick returns nil, so the wire
+			// omits the key instead of fabricating an empty one.
+			status.CPU.CPUHealth = workerCPUHealth
 			// A degraded verdict that rests on a real measurement (the worker
 			// measured fine and judged the box degraded) keeps the real numbers
 			// getCPUMetrics produced — a busy box carries its genuine usage
@@ -370,13 +374,17 @@ const cpuWorkerMaxAge = 3 * time.Second
 // verdict; a Stale, NeverObserved, or unreadable (Unknown) one fails closed to
 // Degraded, because an old or absent measurement is not a healthy one and the
 // protocol-converter resource-limit check (IsResourceLimited) reads the message
-// as its bridge-block reason. The second return, measured, reports whether the
+// as its bridge-block reason. The second return, cpuHealth, is the measured
+// tick's evidence for the wire's cpuHealth key: the verdict beside the Details
+// it judged. It is non-nil only on the two measured arms and nil on every arm
+// that measured nothing, so the wire omits the key. The third return, measured,
+// reports whether the
 // mapped health rests on a genuinely-measured Result verdict: it is true only
 // on the Fresh healthy-verdict and Fresh degraded-verdict arms, and false on
 // every fail-closed Degraded arm (read error, Stale, NeverObserved, and the
 // framework Degraded "could not measure" declaration) — the caller uses it to
 // decide whether the legacy numeric fields describe the same measurement the
-// verdict judged (keep them) or an absent measurement it must omit. The third
+// verdict judged (keep them) or an absent measurement it must omit. The fourth
 // return is false when the caller must keep the legacy getCPUMetrics health: no
 // client is reachable (warned once per service lifetime, never per tick), the
 // ref is not registered (Unregistered is the absence-of-worker fallback, not a
@@ -387,7 +395,7 @@ const cpuWorkerMaxAge = 3 * time.Second
 // it cannot measure (SPEC §2.7), and its Reason is the health message. A
 // healthy verdict maps to Active; when the caller consumes it, the verdict
 // is authoritative and the legacy CPU-usage re-judgement is skipped.
-func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, measured bool, ok bool) {
+func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, cpuHealth *models.CPUHealth, measured bool, ok bool) {
 	client := fsmv2client.GetClient()
 	if client == nil {
 		if !c.cpuWorkerWarned {
@@ -395,7 +403,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			c.logger.Warn(c.cpuSeamClientUnavailableMessage())
 		}
 
-		return nil, false, false
+		return nil, nil, false, false
 	}
 
 	// Read the simple.Status wrapper, never the bare CPUStatus: a Poll error
@@ -417,7 +425,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, false, true
+		}, nil, false, true
 	}
 
 	// A non-Fresh observation without a read error is Stale, NeverObserved, or
@@ -432,16 +440,16 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 				ObservedState: models.Degraded.String(),
 				DesiredState:  models.Active.String(),
 				Category:      models.Degraded,
-			}, false, true
+			}, nil, false, true
 		case fsmv2client.NeverObserved:
 			return &models.Health{
 				Message:       "CPU worker has never observed; no measurement to judge",
 				ObservedState: models.Degraded.String(),
 				DesiredState:  models.Active.String(),
 				Category:      models.Degraded,
-			}, false, true
+			}, nil, false, true
 		default:
-			return nil, false, false
+			return nil, nil, false, false
 		}
 	}
 
@@ -455,7 +463,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, false, true
+		}, nil, false, true
 	}
 
 	// A Fresh observation whose framework verdict is not degraded carries the
@@ -464,23 +472,29 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 	switch workerStatus.Result.Verdict.State {
 	case cpuhealth.StateHealthy:
 		return &models.Health{
-			Message:       workerStatus.Result.Message,
-			ObservedState: models.Active.String(),
-			DesiredState:  models.Active.String(),
-			Category:      models.Active,
-		}, true, true
+				Message:       workerStatus.Result.Message,
+				ObservedState: models.Active.String(),
+				DesiredState:  models.Active.String(),
+				Category:      models.Active,
+			}, &models.CPUHealth{
+				Verdict: workerStatus.Result.Verdict,
+				Details: workerStatus.Result.Details,
+			}, true, true
 	case cpuhealth.StateDegraded:
 		return &models.Health{
-			Message:       workerStatus.Result.Message,
-			ObservedState: models.Degraded.String(),
-			DesiredState:  models.Active.String(),
-			Category:      models.Degraded,
-		}, true, true
+				Message:       workerStatus.Result.Message,
+				ObservedState: models.Degraded.String(),
+				DesiredState:  models.Active.String(),
+				Category:      models.Degraded,
+			}, &models.CPUHealth{
+				Verdict: workerStatus.Result.Verdict,
+				Details: workerStatus.Result.Details,
+			}, true, true
 	default:
 		// Empty result verdict AND Degraded == false is a genuine "no
 		// determination" — a successful poll produced no verdict. Keep the
 		// legacy health; do not read it as healthy.
-		return nil, false, false
+		return nil, nil, false, false
 	}
 }
 
