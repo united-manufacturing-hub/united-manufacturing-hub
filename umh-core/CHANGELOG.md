@@ -6,6 +6,11 @@
 
 - CPU health, usage, and core-count readings in the Management Console now come from the new CPU monitor when the feature is enabled (for users testing this preview)
 - A CPU reading that cannot be measured no longer shows as 0; it is instead reported as not measured (for users testing this preview)
+- The Management Console receives the evidence behind a CPU verdict — the per-signal readings and thresholds it was judged on — so a future release can show why an instance is degraded rather than only that it is (for users testing this preview)
+
+### Fixes
+
+- An instance judged degraded on CPU now keeps its usage and core-count figures instead of showing nothing. Previously the readings were dropped for exactly the busy instances they describe (for users testing this preview)
 
 ### Fixes
 
