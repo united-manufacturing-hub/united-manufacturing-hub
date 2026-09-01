@@ -19,7 +19,7 @@
 // engine's per-signal latch to the CPU table's two steal arms sharing one mark
 // pair: the swap must move the instrument, not the latch, and must judge on the
 // p95's own value from the tick it becomes usable. What the swap must NOT move
-// is the arm a held episode reports, which the last spec here asserts.
+// is the arm a held episode reports, which the last spec here pins.
 package cpuhealth
 
 import (

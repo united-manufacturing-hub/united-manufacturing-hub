@@ -15,7 +15,7 @@
 // The two capacity signals firing on one tick. The machine can be full while
 // this container is also out of its own CPU limit. That is two causes and one
 // paragraph: the remedies contradict each other, so the message speaks with one
-// of the pair. This spec asserts which one, that both causes still reach the
+// of the pair. This spec pins which one, that both causes still reach the
 // verdict, and that neither depends on the order the two rows were declared in.
 //
 // The machine cannot be ESTIMATED full beside a limit. usage-fraction requires
