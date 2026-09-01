@@ -85,8 +85,11 @@ type SubscriberData struct {
 // The per-topic metadata map is dropped on the way in, so the payload differs
 // from the ring-buffer item it came from.
 type queuedBundle struct {
-	Timestamp time.Time // ingest timestamp, copied from the ring-buffer item
-	Payload   []byte    // re-encoded UnsBundle, allocated here
+	// Emission time parsed from the benthos log block, copied from
+	// topicbrowserservice.BufferItem.Timestamp. It trails wall clock by the
+	// pipeline lag, so a wall-clock value must never be compared against it.
+	Timestamp time.Time
+	Payload   []byte // re-encoded UnsBundle, allocated here
 }
 
 // TopicBrowserCommunicator manages topic browser data flow from ring buffer to UI subscribers
@@ -128,7 +131,7 @@ func NewTopicBrowserCommunicator(logger *zap.SugaredLogger) *TopicBrowserCommuni
 		unsMap:                &tbproto.TopicMap{Entries: make(map[string]*tbproto.TopicInfo)},
 		lastProcessedSequence: 0, // Start from beginning
 		pendingToSend:         make([]queuedBundle, 0),
-		sentWatermark:     time.Time{},
+		sentWatermark:         time.Time{},
 		simulator:             nil,
 		simulatorEnabled:      false,
 		maxPendingBuffers:     100, // Default cleanup threshold
@@ -387,8 +390,7 @@ func (tbc *TopicBrowserCommunicator) ingestBuffer(buf *topicbrowserservice.Buffe
 // For new subscribers (isBootstrapped=false): includes complete cache + incremental data
 // For existing subscribers (isBootstrapped=true): includes only incremental data.
 func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*SubscriberData, error) {
-	// A write lock, not a read lock: this records what it handed out so the
-	// acknowledgement does not have to be told.
+	// Write lock: this advances pendingWatermark below.
 	tbc.mu.Lock()
 	defer tbc.mu.Unlock()
 
@@ -434,13 +436,13 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 	return data, nil
 }
 
-// MarkDataAsSent marks everything handed to subscribers so far as delivered.
+// MarkDataAsSent promotes pendingWatermark, so every bundle GetSubscriberData
+// has put in a subscriber message stops being selected.
 //
-// It takes no timestamp on purpose. Only GetSubscriberData knows which buffers
-// went out, and the notify loop that acknowledges them builds its messages
-// through the status collector and never sees that answer. A caller-supplied
-// clock is therefore always wrong, and asking for one invited the bug this
-// replaced.
+// It takes no timestamp because no caller holds one. GetSubscriberData returns
+// the value in SubscriberData.LatestTimestamp, and the status collector drops
+// it when building models.TopicBrowser, so the notify loop that calls this has
+// no access to it.
 func (tbc *TopicBrowserCommunicator) MarkDataAsSent() {
 	tbc.mu.Lock()
 	defer tbc.mu.Unlock()
@@ -487,10 +489,8 @@ func removeMetadata(ub *tbproto.UnsBundle) {
 	}
 }
 
-// getUnsentBundles returns the queued bundles a subscriber has not received
-// yet, in ingest order. It reads pendingToSend and sentWatermark without
-// locking; GetSubscriberData holds the read lock, as it does for
-// getCacheBundle.
+// getUnsentBundles returns the queued bundles above sentWatermark, in ingest
+// order. Caller must hold tbc.mu.
 func (tbc *TopicBrowserCommunicator) getUnsentBundles() []queuedBundle {
 	unsent := make([]queuedBundle, 0, len(tbc.pendingToSend))
 

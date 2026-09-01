@@ -62,13 +62,12 @@ func deliveredTopics(data *topicbrowser.SubscriberData) []string {
 	return names
 }
 
-var _ = Describe("Delivery acknowledgement", func() {
+var _ = Describe("Delivery watermark", func() {
 	It("still delivers a buffer that arrived while a send was in flight, and does not deliver it twice", func() {
 		comm := topicbrowser.NewTopicBrowserCommunicator(zap.NewNop().Sugar())
 
-		// Buffer timestamps are EMISSION times parsed from the benthos log block,
-		// so they always trail wall clock by the pipeline lag. That gap is the
-		// defect: stamping these with time.Now() would not reproduce it.
+		// These must be in the past: the gap between a buffer's emission time and
+		// wall clock is what the defect turns on. See queuedBundle.Timestamp.
 		emittedFirst := time.Now().Add(-10 * time.Second)
 		emittedSecond := time.Now().Add(-5 * time.Second)
 
@@ -83,26 +82,24 @@ var _ = Describe("Delivery acknowledgement", func() {
 		sent, err := comm.GetSubscriberData(true)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(deliveredTopics(sent)).To(ConsistOf("topic-first"),
-			"the first tick must deliver the first buffer, or the rest of this spec is vacuous")
+			"the first tick must deliver the first buffer")
 
-		// The second buffer arrives BEFORE delivery of the first is acknowledged.
+		// The second buffer arrives before the first is marked sent.
 		// Items are oldest-first, so the new buffer is last.
 		_, err = comm.ProcessRealData(createMockObservedStateSnapshot(
 			[]*topicbrowserservice.BufferItem{first, second}))
 		Expect(err).NotTo(HaveOccurred())
 
-		// Acknowledge exactly the way notify() does. The call takes no timestamp,
-		// so this spec cannot accidentally hand it the right answer.
+		// Mark exactly the way notify() does.
 		comm.MarkDataAsSent()
 
 		// Tick 2 must deliver the buffer that arrived in between...
 		sent, err = comm.GetSubscriberData(true)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(deliveredTopics(sent)).To(ContainElement("topic-second"),
-			"a buffer that arrived before the acknowledgement must still be delivered")
+			"a buffer that arrived before the mark must still be delivered")
 
-		// ...and must not re-deliver what tick 1 already sent. Without this, an
-		// implementation that never advances the watermark would pass.
+		// ...and must not re-deliver what tick 1 already sent.
 		Expect(deliveredTopics(sent)).ToNot(ContainElement("topic-first"),
 			"an already-delivered buffer must not be delivered twice")
 	})
