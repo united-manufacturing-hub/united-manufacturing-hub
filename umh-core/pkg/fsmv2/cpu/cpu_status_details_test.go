@@ -178,4 +178,69 @@ var _ = Describe("the verdict on the stored document", func() {
 		Expect(back.Result.Verdict).To(Equal(expected),
 			"a loader reads the whole verdict back, not only its state")
 	})
+
+	// The old bytes are written out literally because no code path still
+	// produces them. This Describe block's opening comment says how the keys
+	// are flattened.
+	It("loads an older build's document whose verdict key holds the bare state string", func() {
+		old := []byte(`{"verdict":"healthy","message":"CPU healthy.","details":{},"reason":"CPU healthy.","degraded":false}`)
+
+		var back simple.Status[CPUStatus]
+		Expect(json.Unmarshal(old, &back)).To(Succeed(),
+			"a stored document written by an older build must still load")
+
+		Expect(back.Result.Verdict).To(Equal(cpuhealth.Verdict{}),
+			"a bare string carries no attribution and no causes, so the old document decodes as no verdict at all")
+		Expect(back.Result.Message).To(Equal("CPU healthy."),
+			"the rest of the document loads too")
+	})
+
+	// The degraded sibling of the same old shape: an older build stored a
+	// degraded tick with simple.Status's Degraded flag set, and that flag —
+	// not the verdict — carried the judgement.
+	It("loads an older build's degraded document with an empty verdict, the framework Degraded flag carrying the degraded state", func() {
+		old := []byte(`{"verdict":"degraded","message":"CPU degraded.","details":{},"reason":"CPU degraded.","degraded":true}`)
+
+		var back simple.Status[CPUStatus]
+		Expect(json.Unmarshal(old, &back)).To(Succeed(),
+			"a stored document written by an older build must still load")
+
+		Expect(back.Result.Verdict).To(Equal(cpuhealth.Verdict{}),
+			"the degraded bare string decodes as no verdict at all, like every bare string")
+		Expect(back.Degraded).To(BeTrue(),
+			"the degraded case is carried by the framework Degraded flag, not by the verdict")
+	})
+
+	It("fails the document's load only when the verdict key holds a value that is neither a string, nor null, nor an object", func() {
+		document := func(verdictKey string) []byte {
+			return []byte(`{"verdict":` + verdictKey + `,"message":"CPU healthy.","details":{},"reason":"CPU healthy.","degraded":false}`)
+		}
+
+		garbage := document(`"bogus"`)
+		var backGarbage simple.Status[CPUStatus]
+		Expect(json.Unmarshal(garbage, &backGarbage)).To(Succeed(),
+			"a bare string is the old shape whatever it spells")
+		Expect(backGarbage.Result.Verdict).To(Equal(cpuhealth.Verdict{}),
+			"nothing reads the string back in: no state is kept from it")
+
+		null := document(`null`)
+		var backNull simple.Status[CPUStatus]
+		Expect(json.Unmarshal(null, &backNull)).To(Succeed(),
+			"unmarshalling null into a State is a no-op that returns no error, so the bare-string branch takes it too")
+		Expect(backNull.Result.Verdict).To(Equal(cpuhealth.Verdict{}),
+			"null decodes as no verdict at all, like a bare string")
+
+		for _, bad := range []struct {
+			name  string
+			value string
+		}{
+			{"number", `3`},
+			{"bool", `true`},
+			{"array", `[]`},
+		} {
+			var backBad simple.Status[CPUStatus]
+			Expect(json.Unmarshal(document(bad.value), &backBad)).NotTo(Succeed(),
+				"a "+bad.name+" is no shape a stored document holds in its verdict key")
+		}
+	})
 })

@@ -445,7 +445,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 		}
 	}
 
-	// The framework verdict wins: Degraded means the worker could not measure
+	// The framework Degraded flag wins: it means the worker could not measure
 	// (the poll-error case arrives Fresh with a nil error), so the result
 	// verdict — empty when the poll failed — is meaningless. Map to Degraded
 	// with Status.Reason as the message.

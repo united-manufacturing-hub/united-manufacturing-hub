@@ -17,6 +17,8 @@
 
 package cpuhealth
 
+import "encoding/json"
+
 // State is the customer-visible health state of the CPU verdict. Two values and
 // no third: limited visibility is an annotation on a healthy verdict, never a
 // state.
@@ -131,4 +133,40 @@ type Verdict struct {
 	State       State       `json:"state"`
 	Attribution Attribution `json:"attribution,omitempty"`
 	Causes      []Cause     `json:"causes,omitempty"`
+}
+
+// UnmarshalJSON reads both shapes a stored CPU status document (the JSON an
+// fsmv2 CPU worker persists and the container_monitor CPU seam loads back)
+// may hold in its verdict key: the object this build writes, and the bare
+// state string an older build stored before the verdict was widened beyond
+// the state. A bare string of any spelling decodes as the empty Verdict —
+// an old document is whatever its build stored, not one of the state words —
+// and JSON null lands in the same branch, because unmarshalling null into a
+// State is a no-op that returns no error. Every other value fails the
+// decode, and that failure is what the reader fails closed on instead of
+// silently keeping its legacy CPU-usage judgement.
+//
+// A degraded old document keeps its judgement in simple.Status's Degraded
+// flag, not in the verdict; how that flag and the verdict are read is
+// readWorkerCPUHealth's contract, in pkg/service/container_monitor. An old
+// healthy document has the flag unset, and an empty verdict beside an unset
+// flag is no determination: the reader keeps the legacy health and re-judges.
+//
+// The object branch decodes through a defined type with Verdict's fields —
+// not a Go alias — which carries none of Verdict's methods, so this method
+// is not re-entered.
+func (v *Verdict) UnmarshalJSON(data []byte) error {
+	var state State
+	if err := json.Unmarshal(data, &state); err == nil {
+		// An older build stored the verdict as a bare state string. That
+		// document carries no attribution and no causes, so it cannot be
+		// reconstructed as a verdict this package would emit. Decode it as no
+		// verdict at all: the seam's default arm already reads an empty verdict
+		// as "no determination — keep the legacy health".
+		*v = Verdict{}
+		return nil
+	}
+
+	type verdict Verdict
+	return json.Unmarshal(data, (*verdict)(v))
 }
