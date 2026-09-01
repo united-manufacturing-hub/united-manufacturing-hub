@@ -29,16 +29,18 @@ import (
 	"time"
 )
 
-// Coverage is how much of its span a window's readings cover: the span it was
-// built with, and oldest-to-newest of what it holds.
+// Coverage is what a window can say about its own extent: the span it was built
+// with, and how long it has been collecting.
+//
+// A span of TIME is not a span of READINGS: two readings far apart can report Full.
+// How many readings a judgement needs is the reduction's Min, not this type.
 type Coverage struct {
-	span    time.Duration
-	covered time.Duration
+	span         time.Duration
+	collectedFor time.Duration
 }
 
-// Full reports whether the stored readings span the window's whole duration: it
-// separates a filled window from one that has only just started.
-func (c Coverage) Full() bool { return c.span > 0 && c.covered >= c.span }
+// Full separates a filled window from one that has only just started.
+func (c Coverage) Full() bool { return c.span > 0 && c.collectedFor >= c.span }
 
 // SlidingWindow accumulates readings for one measured series: a time-ordered
 // slice of Points, pruned from the front once they age past the span.
@@ -48,6 +50,10 @@ type SlidingWindow struct {
 	span       time.Duration
 	demoteSpan time.Duration
 	counter    bool
+	// firstStored is the instant of the first reading stored since the window was
+	// last empty. A prune that empties the window leaves it set; nothing reads it,
+	// because the next store re-seeds it and Coverage reports zero below two readings.
+	firstStored time.Time
 	// lastAppendStored is whether the most recent appendPoint stored a reading.
 	// age runs before this tick's store, so there it means the previous tick.
 	lastAppendStored bool
@@ -124,11 +130,10 @@ func (w *SlidingWindow) prune(cutoff time.Time) {
 	w.points = w.points[i:]
 }
 
-// appendPoint stores one instant's reading; an absent or non-finite value stores
-// nothing, and callers must not pre-filter.
-// appendPoint stores one reading, and REQUIRES at to be no earlier than the
-// newest instant already held. Every reader here assumes points is ascending by
-// At, and nothing enforces it: the caller owns the clock, and Engine.Observe
+// appendPoint stores one instant's reading, and REQUIRES at to be no earlier than
+// the newest instant already held. An absent or non-finite value stores nothing,
+// and callers must not pre-filter. Every reader here assumes points is ascending
+// by At, and nothing enforces it: the caller owns the clock, and Engine.Observe
 // passes whatever instant it was handed.
 //
 // The assumption is load-bearing, so here is what a late reading actually does,
@@ -140,8 +145,8 @@ func (w *SlidingWindow) prune(cutoff time.Time) {
 //	                                 oldest-arriving instant, not the newest
 //	Coverage()    10s -> 1s, so Full() flips true -> false
 //	prune()       stops at the first entry not before its cutoff, so the late
-//	              entry outlives it, and the extent goes negative on the very
-//	              next prune: prune(+10s) leaves [10s 1s], reading -9s
+//	              entry outlives it; and a reading earlier than the window's first
+//	              makes collectedFor negative, which reads as not full
 //
 // The Coverage consequence is the one that reaches behaviour: Latch's clear arm
 // is gated on Coverage.Full(), so a single late reading can withhold a release
@@ -187,6 +192,10 @@ func (w *SlidingWindow) appendPoint(value, against Reading, at time.Time) {
 		if restart {
 			w.points = nil
 		}
+	}
+
+	if len(w.points) == 0 {
+		w.firstStored = at
 	}
 
 	w.points = append(w.points, Point{At: at, Value: v, Against: against})
@@ -237,12 +246,13 @@ func denominatorDelta(points []Point) float64 {
 	return last - first
 }
 
-// Coverage reports how much of its span the stored readings cover.
+// Coverage reports the window's span and how long it has been collecting, for the
+// latch arms gated on those rather than on the reduced number.
 func (w *SlidingWindow) Coverage() Coverage {
-	var covered time.Duration
+	var collectedFor time.Duration
 	if len(w.points) >= 2 {
-		covered = w.points[len(w.points)-1].At.Sub(w.points[0].At)
+		collectedFor = w.lastStored().Sub(w.firstStored)
 	}
 
-	return Coverage{span: w.span, covered: covered}
+	return Coverage{span: w.span, collectedFor: collectedFor}
 }
