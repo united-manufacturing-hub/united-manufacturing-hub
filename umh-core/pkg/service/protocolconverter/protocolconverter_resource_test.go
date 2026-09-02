@@ -182,7 +182,8 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			// capacity is fetched from, rather than one source winning by
 			// preference. Both stage the identical record — the fsmv2 evidence
 			// says 2 usable cores, the legacy field says 8 — and only the flag
-			// differs. Five bridges is over the fsmv2 ceiling of (2-1)x5 and
+			// differs. Five bridges reaches the fsmv2 ceiling of (2-1)x5, which
+			// IsResourceLimited blocks on with bridgeCount >= maxBridges, and stays
 			// under the legacy one of (8-1)x5, so the outcome names the source.
 			//
 			// Getting this wrong is expensive in one direction: a build that

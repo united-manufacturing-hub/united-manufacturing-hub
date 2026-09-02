@@ -362,7 +362,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Message).To(Equal(workerVerdictMessage))
-			// ...and NONE of the five legacy fields is filled. The staged legacy
+			// ...and NONE of the legacy fields is filled. The staged legacy
 			// fixture would have produced 1000 mCPU on this same tick, so a build
 			// that let getCPUMetrics fill them fails here.
 			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
@@ -525,16 +525,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				return 90.0, nil
 			})
 
-			// Tick 1 seeds the throttle window.
+			// Two ticks, because the legacy throttle window needs two samples
+			// before it computes a ratio. Under the flag nothing reads them.
 			_, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			// Tick 2 computes a real delta (1000 periods, 25 throttled = 2.5%) —
-			// above the 2-snapshot arming threshold but below
-			// CPUThrottleRatioThreshold, so isThrottled stays false. The 90%
-			// injection would trip
-			// the legacy 70% rule if it ran, so CPUHealth staying Active shows that
-			// the legacy rule is skipped on a second tick too, not only on the
-			// cold-start one.
+			// The discriminator is the injected 90% host: it would trip the legacy
+			// 70% rule if that rule ran, so CPUHealth staying Active shows the rule
+			// is skipped on a second tick too, not only on the cold-start one.
 			// Re-publish the worker observation with a fresh CollectedAt so tick 2
 			// cannot age the -500ms observation past the seam's 3s maxAge on a slow
 			// host and fail closed to Stale, which would spuriously fail the Active
@@ -625,8 +622,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-			// Two ticks, because the throttle window the legacy path keeps needs
-			// two samples to see a delta. Both must reach the same answer.
+			// Two ticks, because the legacy throttle window needs two samples
+			// before it computes a ratio. Under the flag nothing reads them, so
+			// the message below is the worker's absence reason, not the legacy
+			// "CPU throttled" one.
 			_, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			cpuStat = []byte("nr_periods 2000\nnr_throttled 1000\nthrottled_usec 50000000\n")
@@ -741,7 +740,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				return 50.0, nil
 			})
 
-			// Tick 1 seeds the throttle window; tick 2 sees the throttled delta.
+			// Two ticks, because the legacy throttle window needs two samples
+			// before it computes a ratio. Under the flag nothing reads them, and
+			// nothing writes IsThrottled at all.
 			_, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			cpuStat = []byte("nr_periods 2000\nnr_throttled 1000\nthrottled_usec 50000000\n")
@@ -760,9 +761,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// OverallHealth is deliberately not asserted here: this fixture stages
 			// no disk data, so DiskHealth degrades the overall regardless of what
 			// the CPU verdict says.
-			// The throttled cgroup is not read at all, so isThrottled follows the
-			// verdict and a healthy verdict reports false. The record can no
-			// longer say healthy and throttled at once.
+			// Nothing under the flag writes IsThrottled or ThrottleRatio, so they
+			// stay zero whatever the verdict says. The record can no longer
+			// report healthy and throttled at once.
 			Expect(status.CPU.IsThrottled).To(BeFalse())
 			Expect(status.CPU.ThrottleRatio).To(BeZero())
 			// The legacy fields stay empty even though the staged legacy fixture
