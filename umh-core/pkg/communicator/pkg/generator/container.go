@@ -16,10 +16,12 @@ package generator
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"go.uber.org/zap"
 )
 
@@ -59,7 +61,7 @@ func buildContainer(
 	out := defaultContainer() // start with defaults, then override
 
 	out.Health = &models.Health{
-		Message:       getContainerHealthMessage(status.OverallHealth),
+		Message:       containerHealthMessage(status),
 		ObservedState: instance.CurrentState,
 		DesiredState:  instance.DesiredState,
 		Category:      status.OverallHealth,
@@ -144,6 +146,67 @@ func defaultContainer() models.Container {
 		Hwid:         "unknown",
 		Architecture: models.ArchitectureAmd64,
 	}
+}
+
+// containerHealthMessage says what the components themselves said, so the
+// container badge repeats the specific reason instead of a category name.
+//
+// A degraded component names itself and carries its own message, in the words
+// IsResourceLimited builds its bridge-block reason from, so a refused bridge
+// and the badge describe one condition once rather than twice. Several
+// degraded components stack, one per line.
+//
+// With nothing degraded the CPU message stands alone. Memory and disk only
+// ever say "utilization normal" on a healthy tick, which repeats what the
+// badge colour already shows, while the CPU message is a composed sentence
+// about actual headroom.
+//
+// getContainerHealthMessage below is the fallback for a tick that produced no
+// component message at all.
+func containerHealthMessage(status container_monitor.ServiceInfo) string {
+	var cpu, memory, disk *models.Health
+
+	if status.CPU != nil {
+		cpu = status.CPU.Health
+	}
+
+	if status.Memory != nil {
+		memory = status.Memory.Health
+	}
+
+	if status.Disk != nil {
+		disk = status.Disk.Health
+	}
+
+	components := []struct {
+		health   *models.Health
+		label    string
+		category models.HealthCategory
+	}{
+		{cpu, "CPU", status.CPUHealth},
+		{memory, "Memory", status.MemoryHealth},
+		{disk, "Disk", status.DiskHealth},
+	}
+
+	lines := make([]string, 0, len(components))
+
+	for _, c := range components {
+		if c.category != models.Degraded || c.health == nil || c.health.Message == "" {
+			continue
+		}
+
+		lines = append(lines, c.label+" degraded: "+c.health.Message)
+	}
+
+	if len(lines) > 0 {
+		return strings.Join(lines, "\n")
+	}
+
+	if status.OverallHealth == models.Active && cpu != nil && cpu.Message != "" {
+		return cpu.Message
+	}
+
+	return getContainerHealthMessage(status.OverallHealth)
 }
 
 // getHealthMessage is container-specific.
