@@ -2,8 +2,6 @@
 
 Admins lose access. People leave, addresses get disabled, permissions get set wrong. Fallback access is what you arrange in advance so that a company is never locked out of its own instances.
 
-Two things to arrange: set up your break-glass account deliberately, and nominate someone who can get you back in.
-
 ## The break-glass account
 
 ### What is a break-glass account?
@@ -23,23 +21,6 @@ The Account Owner cannot be recovered either, so decide before you register whic
 - Switch on multi-factor authentication for it.
 - Do not work with it day to day. Invite ordinary admin accounts from it and use those.
 
-## Nominating UMH staff as emergency access
-
-We recommend keeping at least one UMH team member in your company, so there is someone who can restore your access if your own admins cannot. The same access lets us do longer pieces of setup work for you, such as building bridges or data models, which a call cannot cover.
-
-To nominate someone:
-
-1. Ask your account executive which UMH team member to invite.
-2. Invite them through the normal invitation flow, using their `@umh.app` address. Grant Admin at your enterprise location, because permissions inherit downward and access granted lower down will not help if the problem is lower down.
-3. Remove them when you no longer want the access in place.
-
-You don't need to add UMH team members to your single-sign on solution. When adding UMH team members to your account, we use our own identity provider.
-
-Control stays on both sides:
-
-- UMH staff reach your company only through an invitation you issue, and only for as long as you leave it in place.
-- UMH manages `@umh.app` identities centrally, so access is tied to employment. When someone leaves UMH, their identity is disabled and their access to your company goes with it. If UMH is ever compromised, the same central control lets us cut all of those accounts at once.
-
 ## Reviewing it
 
-Check your fallback access when you review permissions. Two things drift: the address on the Account Owner stops being monitored, and UMH staff invited for one piece of work stay invited afterwards. Decide each time whether the access should stay.
+Check your fallback access when you review permissions. Two things drift: the address on the Account Owner stops being monitored. Decide each time whether the access should stay.
