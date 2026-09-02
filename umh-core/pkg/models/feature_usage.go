@@ -53,6 +53,11 @@ type FeatureUsage struct {
 // USE_FSMV2_CPU falls back to legacy without its prerequisites, so counting the
 // env var alone would report an instance as enabled where GetClient() returns nil
 // and no fsmv2 code runs at all.
+//
+// The credentials are a prerequisite only while the fsmv2 supervisor needs them
+// to start. PR #2698 decouples the runtime from the Management Console
+// credentials; once it lands an instance without them still runs the fsmv2 CPU
+// path, and this condition would report it as disabled while it is enabled.
 func FSMv2CPUEnabled(flag, transport, apiURLSet, authTokenSet bool) bool {
 	return flag && transport && apiURLSet && authTokenSet
 }

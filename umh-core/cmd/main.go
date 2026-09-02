@@ -182,10 +182,6 @@ func main() {
 
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled: configBackupEnabled,
-		// FSMv2CPUEnabled is the flag's EFFECTIVE state, computed by the same
-		// condition the seam switches on (transport on and backend credentials set);
-		// it deliberately reports more than whether USE_FSMV2_CPU is set, so an
-		// instance that falls back to legacy never counts as enabled.
 		FSMv2CPUEnabled: models.FSMv2CPUEnabled(
 			cpuMonitorEnabled,
 			configData.Agent.UseFSMv2Transport,
