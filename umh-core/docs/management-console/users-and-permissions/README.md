@@ -32,5 +32,3 @@ Permissions are enforced in the Management Console rather than propagated into e
 Keeping permission logic in the Management Console keeps `umh-core` instances independent of it. This is by design, because it allows you to run `umh-core` fully local, without depending on our cloud-based Management Console. 
 
 The `AUTH_TOKEN` authorizes an instance to connect to the Management Console; once that connection is authorized, who may act on the instance is governed by the Management Console's permission model. See [Access Control and Authentication](../../production/security/umh-core/deployment-security.md#access-control-and-authentication).
-
-Inside the console, the boundary that holds is read-only against write access, so Viewer is the role to give someone who should not change anything.
