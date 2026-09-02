@@ -197,43 +197,13 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// Update last collected timestamp
 	c.lastCollectedAt = time.Now()
 
-	// Assess CPU health
-	// Check if CPU is already marked as degraded (e.g., due to throttling)
+	// Assess CPU health. Whoever judged this tick has written its verdict onto
+	// cpuStat.Health; the legacy usage rule runs only when nobody did.
 	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
 		status.CPUHealth = models.Degraded
 		status.OverallHealth = models.Degraded
 	} else if !fsmv2Judged {
-		// A consumed worker verdict is authoritative: skip the legacy CPU-usage
-		// rule, which would otherwise re-judge a busy host the worker assessed.
-		// Calculate CPU percentage against effective cores (cgroup limit if available)
-		//
-		// NOTE: CPU percentage is fundamentally misleading for understanding performance:
-		// 1. In containers, throttling matters more than usage percentage
-		// 2. CPU % doesn't scale linearly due to hyperthreading, turbo boost, etc.
-		// 3. Users need to know throttling status, not just usage
-		//
-		// See ENG-3423 for planned improvements to show mCPU instead of percentage
-		// See https://www.brendanlong.com/cpu-utilization-is-a-lie.html for why CPU % is misleading
-		//
-		// We maintain percentage calculation for API compatibility, but throttling
-		// detection (handled elsewhere) is the more important health signal.
-		effectiveCores := cpuStat.CgroupCores
-		if effectiveCores <= 0 && cpuStat.CoreCount != nil {
-			// Fall back to host cores if cgroup info unavailable
-			effectiveCores = float64(*cpuStat.CoreCount)
-		}
-
-		// A nil TotalUsageMCpu/CoreCount records an unmeasured tick, whose
-		// degraded verdict already failed closed in the seam above — the
-		// usage rule must not fabricate a percentage from absent numbers.
-		if effectiveCores > 0 && cpuStat.TotalUsageMCpu != nil {
-			cpuPercent := (*cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
-
-			if cpuPercent > constants.CPUHighThresholdPercent {
-				status.CPUHealth = models.Degraded
-				status.OverallHealth = models.Degraded
-			}
-		}
+		judgeLegacyCPUUsage(status, cpuStat)
 	}
 
 	// Assess memory health
@@ -304,6 +274,40 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // (pollInterval in pkg/fsmv2/cpu), so one slow or missed poll cannot flip the
 // seam to the legacy path.
 const cpuWorkerMaxAge = 3 * time.Second
+
+// judgeLegacyCPUUsage is the CPU rule that ran before the fsmv2 CPU worker
+// existed: degrade the instance above CPUHighThresholdPercent of the cores it
+// may use. GetStatus calls it only when the worker did not judge this tick,
+// which is every tick when USE_FSMV2_CPU is off.
+//
+// NOTE: CPU percentage is fundamentally misleading for understanding performance:
+// 1. In containers, throttling matters more than usage percentage
+// 2. CPU % doesn't scale linearly due to hyperthreading, turbo boost, etc.
+// 3. Users need to know throttling status, not just usage
+//
+// See ENG-3423 for planned improvements to show mCPU instead of percentage
+// See https://www.brendanlong.com/cpu-utilization-is-a-lie.html for why CPU % is misleading
+//
+// We maintain percentage calculation for API compatibility, but throttling
+// detection (handled elsewhere) is the more important health signal.
+func judgeLegacyCPUUsage(status *ServiceInfo, cpuStat *models.CPU) {
+	effectiveCores := cpuStat.CgroupCores
+	if effectiveCores <= 0 && cpuStat.CoreCount != nil {
+		// Fall back to host cores if cgroup info unavailable
+		effectiveCores = float64(*cpuStat.CoreCount)
+	}
+
+	// A nil TotalUsageMCpu records a tick nothing measured, so there is no
+	// percentage to compute.
+	if effectiveCores > 0 && cpuStat.TotalUsageMCpu != nil {
+		cpuPercent := (*cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
+
+		if cpuPercent > constants.CPUHighThresholdPercent {
+			status.CPUHealth = models.Degraded
+			status.OverallHealth = models.Degraded
+		}
+	}
+}
 
 // applyFSMv2CPUVerdict lets the fsmv2 CPU worker judge this tick's CPU health,
 // and reports whether it did. When it reports true the worker is the only judge:
