@@ -25,7 +25,7 @@ To nominate someone:
 2. Invite them through the normal invitation flow, using their `@umh.app` address. Grant Admin at your enterprise location, because permissions inherit downward and access granted lower down will not help if the problem is lower down.
 3. Remove them when you no longer want the access in place.
 
-Those invitations are issued against UMH's own single sign-on rather than your default connection, because UMH staff do not have accounts in your identity provider.
+You don't need to add UMH team members to your single-sign on solution. When adding UMH team members to your account, we use our own identity provider.
 
 Control stays on both sides:
 
