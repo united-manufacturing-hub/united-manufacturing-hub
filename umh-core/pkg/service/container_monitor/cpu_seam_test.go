@@ -370,9 +370,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// A real healthy verdict fills the nested health record. status.CPUHealth
-			// is deliberately NOT asserted here: the authoritative-rule sibling below
-			// asserts that a consumed healthy verdict skips the legacy 70% re-judgement,
-			// so this spec stays limited to the nested record.
+			// is deliberately NOT asserted here: the spec that stages a busy host
+			// beside a healthy verdict covers the legacy rule being skipped, so
+			// this one stays limited to the nested record.
 			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
 			Expect(status.CPU.Health.Category).To(Equal(models.Active))
 			Expect(status.CPU.Health.ObservedState).To(Equal("active"))
@@ -387,7 +387,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(string(data)).To(ContainSubstring("coreCount"))
 		})
 
-		It("should not let the legacy 70% CPU-usage rule re-judge a fresh healthy worker verdict when USE_FSMV2_CPU is on (the consumed verdict is authoritative on a busy host)", func() {
+		It("should not run the legacy 70% CPU-usage rule at all when the worker judged this tick, even on a busy host", func() {
 			setFlag("true")
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
@@ -421,8 +421,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 			// Inject a synthetic 90% usage: a host the legacy rule WOULD judge
-			// degraded. The worker's fresh healthy verdict is authoritative under
-			// flag-on, so neither the aggregate CPU health nor the overall health
+			// degraded. Under the flag the worker judged this tick, so that rule
+			// does not run, and neither the aggregate CPU health nor the overall
 			// may be flipped to Degraded by the legacy 70% re-judgement.
 			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
 				return 90.0, nil
@@ -433,21 +433,17 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			// The verdict was consumed by the seam...
 			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
-			// ...and it is authoritative: the legacy 70% rule must NOT re-judge
-			// the worker's numbers and flip a busy host to Degraded. Only
+			// ...and the legacy 70% rule did not run: it must not re-judge the
+			// worker's numbers and flip a busy host to Degraded. Only
 			// status.CPUHealth is asserted here (not status.OverallHealth): the
 			// disk arm below reads the real host disk through gopsutil, which the
 			// mock filesystem cannot stage, so OverallHealth would depend on the
 			// CI host's disk state. The CPUHealth assertion is the discriminator —
 			// the legacy rule sets it too, so any firing of the rule fails here.
-			// This single-tick spec also exercises the throttle early-window (<2
-			// snapshots): isThrottled cannot fire on the first tick, so a 90% host
-			// with a healthy verdict is judged purely by the authoritative rule —
-			// the accepted residual for a just-restarted host.
 			Expect(status.CPUHealth).To(Equal(models.Active))
 		})
 
-		It("should keep the healthy verdict authoritative once the throttle window is armed, not only during the cold-start tick (a 2nd-tick window with a sub-threshold ratio must not let the legacy 70% rule flip the busy host)", func() {
+		It("should still skip the legacy 70% rule on a second tick, not only on the first", func() {
 			setFlag("true")
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
@@ -459,9 +455,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				},
 			})
 
-			// Same benign cgroup staging as the cold-start spec, plus a cpu.stat
-			// the test advances across the 2nd tick so the throttle window is
-			// armed with a real 2-snapshot delta — not the <2-snapshot warm-up.
+			// Same benign cgroup staging as the cold-start spec, with cpu.stat
+			// advanced across the second tick so this is a genuine second tick
+			// carrying state, rather than a repeat of the first.
 			cpuStat := []byte("nr_periods 1000\nnr_throttled 75\nthrottled_usec 5000000\n")
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
@@ -488,11 +484,11 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(err).NotTo(HaveOccurred())
 			// Tick 2 computes a real delta (1000 periods, 25 throttled = 2.5%) —
 			// above the 2-snapshot arming threshold but below
-			// CPUThrottleRatioThreshold, so isThrottled stays false and the
-			// healthy verdict remains authoritative. The 90% injection would trip
+			// CPUThrottleRatioThreshold, so isThrottled stays false. The 90%
+			// injection would trip
 			// the legacy 70% rule if it ran, so CPUHealth staying Active shows that
-			// the authoritative skip is deliberate on an armed window too, not an
-			// accident of the cold-start tick.
+			// the legacy rule is skipped on a second tick too, not only on the
+			// cold-start one.
 			// Re-publish the worker observation with a fresh CollectedAt so tick 2
 			// cannot age the -500ms observation past the seam's 3s maxAge on a slow
 			// host and fail closed to Stale, which would spuriously fail the Active
@@ -511,8 +507,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The verdict was consumed... and it is still authoritative: the armed
-			// (but sub-threshold) throttle window must not hand the 90% host back
+			// The verdict was consumed... and the legacy rule still did not run:
+			// the second-tick throttle window must not hand the 90% host back
 			// to the legacy rule. Only status.CPUHealth is asserted, for the same
 			// real-host-disk reason as the cold-start spec.
 			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
@@ -591,13 +587,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
 		})
 
-		It("should let the legacy usage rule degrade CPU health when the worker's Fresh observation carries no determination (a no-verdict tick is not authoritative, so a hot host the rule sees stays degraded)", func() {
+		It("should let the legacy usage rule degrade CPU health when the worker's Fresh observation carries no determination (the worker did not judge, so a hot host the rule sees stays degraded)", func() {
 			setFlag("true")
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				// Genuine "no determination": an empty result verdict and no framework
-				// degraded declaration. The worker made no judgement, so the tick is
-				// not authoritative and the legacy usage rule below still runs.
+				// degraded declaration. The worker made no judgement, so it did not
+				// judge this tick and the legacy usage rule below still runs.
 				Status: simple.Status[fsmv2cpu.CPUStatus]{Result: fsmv2cpu.CPUStatus{}},
 			})
 
@@ -632,7 +628,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// A no-determination tick is not authoritative: the legacy usage rule still
+			// The worker did not judge this tick, so the legacy usage rule still
 			// runs and degrades a host it computes as >70% effective usage.
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.OverallHealth).To(Equal(models.Degraded))
@@ -671,9 +667,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			})
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
-			// Inject a deterministic non-zero usage so the preservation
-			// assertions discriminate the throttle bypass from an idle host that
-			// naturally reads 0 mCPU.
+			// Inject a deterministic non-zero usage so the assertions below
+			// discriminate a real reading kept on the record from an idle host
+			// that naturally reads 0 mCPU.
 			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
 				return 50.0, nil
 			})
@@ -1256,8 +1252,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		It("should not flicker CPUHealth across a single missed poll (a one-interval-old observation stays Fresh inside the seam's 3s maxAge)", func() {
 			// The worker polls every 1s and the seam's maxAge is 3x that. A
 			// single missed poll leaves the observation one interval (1s) old —
-			// still inside maxAge, so GetFresh maps it Fresh and the healthy
-			// verdict stays authoritative. Alternating on-time and one-poll-behind
+			// still inside maxAge, so GetFresh maps it Fresh and the worker keeps
+			// judging. Alternating on-time and one-poll-behind
 			// observations must therefore hold CPUHealth Active for the whole
 			// run: zero transitions.
 			categories := flickerRun(
