@@ -66,6 +66,7 @@ DLV_VERSION = v1.25.1
 
 # Default values for build arguments
 NMAP_VERSION = 7.99-r0
+OPENSSL_VERSION = 3.5.8-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
@@ -185,6 +186,7 @@ download-docker-binaries:
 # Used by both local builds (make build) and CI builds (make build-depot)
 VERSION_ARGS = \
 	--build-arg NMAP_VERSION=$(NMAP_VERSION) \
+	--build-arg OPENSSL_VERSION=$(OPENSSL_VERSION) \
 	--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
 	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 	--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
@@ -437,6 +439,7 @@ update-go-dependencies:
 # Print version variables for use in other scripts/tools
 print-versions:
 	@echo "NMAP_VERSION=$(NMAP_VERSION)"
+	@echo "OPENSSL_VERSION=$(OPENSSL_VERSION)"
 	@echo "S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION)"
 	@echo "BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION)"
 	@echo "REDPANDA_VERSION=$(REDPANDA_VERSION)"
