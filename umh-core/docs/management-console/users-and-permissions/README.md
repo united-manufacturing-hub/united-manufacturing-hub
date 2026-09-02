@@ -8,7 +8,11 @@ What you may do inside a company depends on the role you hold and where in the c
 
 ## How to determine your permission setup
 
-Permission models differ between accounts, so the roles you have are not necessarily the roles a colleague at another company has. Open the account menu, then **Settings**, then the **Permissions** tab, and compare what you see:
+{% hint style="warning" %}
+User and Permission Management is part of the **Enterprise Plan**. If you're using the Community Plan, your account can only have one user, which is automatically the Account Owner with full CRUD permissions.
+{% endhint %}
+
+Permission models differ between accounts, so the roles you have are not necessarily the roles a colleague at another company has. Open the account menu, click **Settings**, select the **Permissions** tab, and compare what you see:
 
 - **One role for the whole company.** **Current Role** names a single role (`Account Owner`), and a matrix below it ticks off the permission groups that role covers.
 - **Roles per location.** Your roles are listed against locations, so you can hold one role at one part of the company and a different role at another.
