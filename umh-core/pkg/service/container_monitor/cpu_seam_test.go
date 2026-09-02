@@ -1499,6 +1499,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Expect(status.CPU).NotTo(BeNil())
 				Expect(status.CPUHealth).To(Equal(models.Degraded))
 				Expect(status.CPU.Health.Message).To(Equal(seamTransportOffWarning))
+				// The state pair is asserted HERE and only here. Every other arm
+				// has it pinned through status.CPUHealth, which is derived from
+				// Category; this arm is the one where a hand-written Health could
+				// carry a state that disagrees with its own category and nothing
+				// would notice.
+				Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
+				Expect(status.CPU.Health.DesiredState).To(Equal("active"))
 			}
 
 			transportWarns := logs.Filter(func(entry observer.LoggedEntry) bool {
