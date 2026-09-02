@@ -2,6 +2,8 @@
 
 Regardless of which [authentication method](README.md) your account uses, session timeouts apply the same way.
 
+## Session Durations & Renewal
+
 Your session is managed by the Management Console itself, independently of the identity provider.
 
 | Session rule | Value |
