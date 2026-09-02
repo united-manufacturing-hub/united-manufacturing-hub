@@ -86,7 +86,12 @@ type ContainerMonitorService struct {
 	wasThrottled      bool                         // Previous throttle state for transition logging
 	useFSMv2CPU       bool                         // when true the fsmv2 CPU worker's verdict replaces the legacy CPU health; read once at construction
 	cpuWorkerWarnOnce sync.Once
-	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
+	// cpuUsageProvider is the LEGACY path's CPU usage source, overridable for
+	// tests. It is wired unconditionally but read only when useFSMv2CPU is
+	// false, so under the flag it is inert. Not gated at construction on
+	// purpose: that would be a second place the flag is read, to remove
+	// something nothing calls.
+	cpuUsageProvider func(ctx context.Context) (float64, error)
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -110,8 +115,18 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 	}
 }
 
-// defaultCPUUsagePercent reads the host CPU usage through gopsutil, matching
-// the legacy source: the first element of the non-per-CPU percentage slice.
+// defaultCPUUsagePercent reads the HOST's CPU usage through gopsutil: the first
+// element of the non-per-CPU percentage slice.
+//
+// This is the legacy CPU path's only usage source and it runs ONLY when
+// USE_FSMV2_CPU is off. The gate is three frames up, in GetStatus, so it is not
+// visible from here: GetStatus picks collectCPULegacy, which is the sole caller
+// of getCPUMetrics, which is the sole caller of getRawCPUMetrics, which is the
+// sole caller of this. A spec asserts the call count is zero under the flag.
+//
+// It survives only because the flag defaults off and an instance still has to
+// report CPU. Removing the flag removes this function with the rest of the
+// legacy path; nothing smaller than that makes it dead.
 func defaultCPUUsagePercent(ctx context.Context) (float64, error) {
 	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
 	if err != nil {
