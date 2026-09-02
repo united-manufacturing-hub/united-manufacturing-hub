@@ -60,19 +60,30 @@ var workerVerdictMessage = cpuhealth.ComposeMessage(
 	cpuhealth.Details{ThrottleRatio: 0.5},
 )
 
+// workerHealthyDetails is one healthy tick's Details on the no-limit budget
+// dashboard. Specs stage it as the observation's own Details and compose
+// workerHealthyMessage from it, so the sentence and the numbers beside it can
+// never drift apart. The usage members are set because a box healthy enough to
+// be judged has measured its usage; without them the wire would carry no usage
+// at all.
+var workerHealthyDetails = cpuhealth.Details{
+	CapacityCores:          8,
+	LimitApplies:           false,
+	HostBusyRingActive:     true,
+	HostBusyCoresAvailable: true,
+	AvgHostBusyCores:       2,
+	ReserveCores:           1,
+	AvgUsageCores:          1.5,
+	UsageRingActive:        true,
+	LogicalCpus:            8,
+}
+
 // workerHealthyMessage is cpuhealth.ComposeMessage's output for a healthy
-// verdict on the no-limit budget dashboard, staged from the same source and
-// discriminating the two paths exactly like workerVerdictMessage.
+// verdict, sourced from the same Details and discriminating the two paths
+// exactly like workerVerdictMessage.
 var workerHealthyMessage = cpuhealth.ComposeMessage(
 	cpuhealth.Verdict{State: cpuhealth.StateHealthy},
-	cpuhealth.Details{
-		CapacityCores:          8,
-		LimitApplies:           false,
-		HostBusyRingActive:     true,
-		HostBusyCoresAvailable: true,
-		AvgHostBusyCores:       2,
-		ReserveCores:           1,
-	},
+	workerHealthyDetails,
 )
 
 // seamTransportOffWarning, seamCredentialsWarning, and seamStillStartingWarning
@@ -80,11 +91,11 @@ var workerHealthyMessage = cpuhealth.ComposeMessage(
 // is on but the fsmv2 supervisor cannot run or its client is not published yet.
 // The warn-once specs assert message content, not just a count, because the warning
 // must name the missing prerequisite.
-const seamTransportOffWarning = "USE_FSMV2_CPU is enabled but USE_FSMV2_TRANSPORT is off, so the fsmv2 supervisor never runs and no CPU worker client is published; falling back to legacy CPU metrics"
+const seamTransportOffWarning = "USE_FSMV2_CPU is enabled but USE_FSMV2_TRANSPORT is off, so the fsmv2 supervisor never runs and no CPU worker client is published; no CPU measurement is available"
 
-const seamCredentialsWarning = "USE_FSMV2_CPU is enabled but API_URL or AUTH_TOKEN is unset, so the fsmv2 supervisor never runs and no CPU worker client is published; falling back to legacy CPU metrics"
+const seamCredentialsWarning = "USE_FSMV2_CPU is enabled but API_URL or AUTH_TOKEN is unset, so the fsmv2 supervisor never runs and no CPU worker client is published; no CPU measurement is available"
 
-const seamStillStartingWarning = "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); falling back to legacy CPU metrics"
+const seamStillStartingWarning = "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no CPU measurement is available"
 
 // cpuStubStateReader is the cpuStubReader harness pattern from
 // pkg/fsmv2/fsmv2client/freshness_test.go: a deps.StateReader that serves a
@@ -291,13 +302,23 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// that verdict into Status.Degraded), with the same composed
 			// message in Reason and Result. The verdict's degraded state —
 			// not the flag alone — is what separates this measured tick from
-			// a failed poll, so the wire must keep the real getCPUMetrics
-			// numbers.
+			// a failed poll, so the wire must carry the numbers it judged.
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: inside the seam's 3s maxAge
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
-						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
+						Verdict: cpuhealth.Verdict{
+							State:  cpuhealth.StateDegraded,
+							Causes: []cpuhealth.Cause{{Kind: cpuhealth.CauseKindThrottling, Value: 0.5}},
+						},
+						Details: cpuhealth.Details{
+							AvgUsageCores:   3.5,
+							UsageRingActive: true,
+							LogicalCpus:     6,
+							CapacityCores:   4,
+							LimitApplies:    true,
+							ThrottleRatio:   0.5,
+						},
 						Message: workerVerdictMessage,
 					},
 					Degraded: true,
@@ -305,9 +326,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				},
 			})
 
-			// Same benign cgroup + memory staging as the framework-Degraded spec,
-			// so the legacy getCPUMetrics path succeeds with a deterministic real
-			// number: 50% of the 2-core quota = 1000 mCPU; CoreCount is host cores.
+			// The legacy collector is staged to succeed with a DIFFERENT number:
+			// 50% of a 2-core quota is 1000 mCPU against the worker's 3500. The
+			// disagreement is the point — it is what makes the assertions below
+			// name a source rather than merely a value.
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
 				case "/sys/fs/cgroup/cpu.max":
@@ -336,14 +358,18 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Message).To(Equal(workerVerdictMessage))
-			// ...but the numbers it judged are genuine measurements: the seam
-			// must NOT nil them (that is for the cannot-measure arms) and must
-			// NOT zero them. The injected 50% usage makes the value deterministic:
-			// 0.5 * 2.0 quota * 1000 = 1000 mCPU.
+			// ...and the numbers it judged ship with it, read from Details. 3500
+			// is the worker's 3.5 cores, not the legacy collector's 1000, so a
+			// build that let getCPUMetrics fill these fails here.
 			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(*status.CPU.TotalUsageMCpu).To(BeNumerically(">", 0))
+			Expect(*status.CPU.TotalUsageMCpu).To(Equal(3500.0))
 			Expect(status.CPU.CoreCount).NotTo(BeNil())
-			Expect(*status.CPU.CoreCount).To(BeNumerically(">", 0))
+			Expect(*status.CPU.CoreCount).To(Equal(6))
+			Expect(status.CPU.CgroupCores).To(Equal(4.0))
+			Expect(status.CPU.ThrottleRatio).To(Equal(0.5))
+			// A throttling cause is what IsThrottled means under the flag, and
+			// admission reads that flag without knowing which path set it.
+			Expect(status.CPU.IsThrottled).To(BeTrue())
 
 			// Wire contract: the real measurement ships with both keys present.
 			data, err := json.Marshal(status.CPU)
@@ -359,6 +385,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
@@ -377,10 +404,17 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Category).To(Equal(models.Active))
 			Expect(status.CPU.Health.ObservedState).To(Equal("active"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
-			// A healthy verdict was measured: the legacy numerics stay real and
-			// non-nil (getCPUMetrics always sets them), shipping on the wire.
+			// A healthy verdict measured its own numbers, so they ship: 1.5 cores
+			// is 1500 mCPU.
 			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
+			Expect(*status.CPU.TotalUsageMCpu).To(Equal(1500.0))
 			Expect(status.CPU.CoreCount).NotTo(BeNil())
+			Expect(*status.CPU.CoreCount).To(Equal(8))
+			// No quota applies on this box, so no quota is reported — even though
+			// CapacityCores is 8, because it falls back to the logical CPU count
+			// when unlimited. Admission sizes its bridge ceiling from this field,
+			// so publishing 8 here would state a limit that does not exist.
+			Expect(status.CPU.CgroupCores).To(BeZero())
 			data, err := json.Marshal(status.CPU)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(data)).To(ContainSubstring("totalUsageMCpu"))
@@ -394,6 +428,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
@@ -450,6 +485,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
@@ -498,6 +534,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
@@ -515,33 +552,40 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPUHealth).To(Equal(models.Active))
 		})
 
-		It("should fail GetStatus with the usage provider's error rather than swallow it as a 0% reading (a broken usage source must not report Active)", func() {
+		It("should never consult the legacy usage source under the flag, so a source that always errors cannot fail GetStatus", func() {
 			setFlag("true")
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
 			})
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			// A usage source that fails on every call. Under USE_FSMV2_CPU
+			// nothing calls it, so its error cannot reach GetStatus. Calling it
+			// once would surface here as the "failed to get CPU metrics" wrapper,
+			// which is what this spec exists to rule out: it is the executable
+			// form of "with the flag on, no legacy CPU code runs".
+			calls := 0
 			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				calls++
+
 				return 0, errors.New("usage source failed")
 			})
 
-			// The usage source fails before the seam runs: the error must
-			// propagate as the "failed to get CPU metrics" wrapper — even over a
-			// Fresh healthy worker verdict — so a broken source can never be
-			// swallowed as a 0% usage that reads as a healthy box.
-			_, err := service.GetStatus(ctx)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to get CPU metrics"))
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(calls).To(Equal(0))
+			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
 		})
 
-		It("should keep the legacy throttled health when the worker's Fresh observation carries no determination (an empty result verdict with the framework not degraded must not erase legacy health)", func() {
+		It("should degrade with the worker's no-verdict reason when its Fresh observation carries no determination, without consulting the throttled cgroup the legacy path would have read", func() {
 			setFlag("true")
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
@@ -553,9 +597,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{Result: fsmv2cpu.CPUStatus{}},
 			})
 
-			// Stage a throttled cgroup so the legacy path judges the box degraded:
-			// the worker can fail to measure while legacy throttling detection still
-			// works (they read different sources).
+			// A throttled cgroup, which the legacy path would read and call
+			// degraded with a "CPU throttled" message. Under the flag nothing
+			// reads it, so the message below discriminates: a build that ran
+			// getCPUMetrics here would report throttling instead of the absence.
 			cpuStat := []byte("nr_periods 1000\nnr_throttled 500\nthrottled_usec 50000000\n")
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
@@ -570,39 +615,51 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-			// Tick 1 seeds the throttle window; tick 2 sees the throttled delta.
+			// Two ticks, because the throttle window the legacy path keeps needs
+			// two samples to see a delta. Both must reach the same answer.
 			_, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			cpuStat = []byte("nr_periods 2000\nnr_throttled 1000\nthrottled_usec 50000000\n")
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The worker's missing verdict must not erase the legacy degraded
-			// health of a genuinely throttled box.
+			// A successful poll that produced no verdict is an absence, not a
+			// healthy box, and with no second opinion left it degrades and says
+			// which absence it was.
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
-			Expect(status.CPU.Health.Message).To(ContainSubstring("CPU throttled"))
+			Expect(status.CPU.Health.Message).To(Equal("CPU worker produced no verdict for its last observation"))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+			// Nothing measured, so no measurement ships.
+			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
+			Expect(status.CPU.CPUHealth).To(BeNil())
 		})
 
-		It("should let the legacy usage rule degrade CPU health when the worker's Fresh observation carries no determination (the worker did not judge, so a hot host the rule sees stays degraded)", func() {
-			setFlag("true")
+		It("should let the legacy usage rule degrade CPU health on its own when USE_FSMV2_CPU is off", func() {
+			setFlag("false")
+			// A healthy worker observation is published and must be ignored: with
+			// the flag off the legacy path is the whole CPU path.
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
-				// Genuine "no determination": an empty result verdict and no framework
-				// degraded declaration. The worker made no judgement, so it did not
-				// judge this tick and the legacy usage rule below still runs.
-				Status: simple.Status[fsmv2cpu.CPUStatus]{Result: fsmv2cpu.CPUStatus{}},
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
+						Message: workerHealthyMessage,
+					},
+				},
 			})
 
-			// Stage a fractional cgroup quota (cpu.max 5000/100000 = 0.05 cores) so the
-			// legacy usage rule fires on the mCpu math while the nested health record
-			// stays Active: getRawCPUMetrics clamps the quota to 0.1 for TotalUsageMCpu,
-			// but the rule below divides by the raw 0.05 quota (CgroupCores), so a 40%
-			// host reads as 80% to the rule. The rule is therefore the ONLY degradation
-			// source, which separates the else-if body from the worker verdict path.
+			// A fractional cgroup quota (cpu.max 5000/100000 = 0.05 cores) is the
+			// only shape where judgeLegacyCPUUsage can degrade a box getCPUMetrics
+			// called Active: getRawCPUMetrics clamps the quota to 0.1 for
+			// TotalUsageMCpu, while the rule divides by the raw 0.05 quota
+			// (CgroupCores), so a 40% host reads as 80% to the rule. Everywhere
+			// else the two apply the same threshold to the same percentage and
+			// the rule adds nothing. That makes this the one spec covering the
+			// rule's independent behaviour.
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
 				case "/sys/fs/cgroup/cpu.max":
@@ -628,12 +685,11 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The worker did not judge this tick, so the legacy usage rule still
-			// runs and degrades a host it computes as >70% effective usage.
+			// The legacy rule degrades a host it computes as >70% effective usage.
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			// The rule only drives the service-level aggregates, not the nested record:
-			// the 40% host read stays Active there, proving the else-if body — not the
+			// the 40% host read stays Active there, proving the rule — not the
 			// nested health — did the degradation.
 			Expect(status.CPU.Health.Category).To(Equal(models.Active))
 			Expect(status.CPU.Health.Message).To(Equal("CPU utilization normal"))
@@ -646,6 +702,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
@@ -693,22 +750,22 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// OverallHealth is deliberately not asserted here: this fixture stages
 			// no disk data, so DiskHealth degrades the overall regardless of what
 			// the CPU verdict says.
-			// The legacy throttle READING stays on the record: getCPUMetrics
-			// still measures even though it no longer judges. So the wire can
-			// carry isThrottled true beside a healthy verdict, which is what the
-			// flag means rather than a contradiction.
-			Expect(status.CPU.IsThrottled).To(BeTrue())
-			// A healthy verdict measured its own numbers, so the legacy readings
-			// stay on the record rather than being nil-ed.
+			// The throttled cgroup is not read at all, so isThrottled follows the
+			// verdict and a healthy verdict reports false. The record can no
+			// longer say healthy and throttled at once.
+			Expect(status.CPU.IsThrottled).To(BeFalse())
+			Expect(status.CPU.ThrottleRatio).To(BeZero())
+			// The numbers come from Details: 1.5 cores is 1500 mCPU, against the
+			// 1000 the staged legacy fixture would have produced.
 			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(*status.CPU.TotalUsageMCpu).To(BeNumerically(">", 0))
+			Expect(*status.CPU.TotalUsageMCpu).To(Equal(1500.0))
 			Expect(status.CPU.CoreCount).NotTo(BeNil())
-			Expect(*status.CPU.CoreCount).To(BeNumerically(">", 0))
+			Expect(*status.CPU.CoreCount).To(Equal(8))
 		})
 	})
 
-	Context("[unmeasured-keeps-legacy-numbers]", func() {
-		It("should keep the legacy usage numbers on a worker tick that could not measure (the collector measured them on this same tick, whatever the worker did)", func() {
+	Context("[unmeasured-ships-no-numbers]", func() {
+		It("should ship no usage numbers on a worker tick that could not measure, rather than the reading a legacy collector would have taken", func() {
 			setFlag("true")
 			// An unmeasurable tick: the worker stored a Degraded framework
 			// verdict with an empty result (zero numeric measurements), because
@@ -723,11 +780,11 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				},
 			})
 
-			// Stage benign cgroup + memory files so the legacy getCPUMetrics
-			// path SUCCEEDS (GetStatus must not early-return) and would
-			// otherwise fill a real usage number. The injected 50% usage provider
-			// makes that real number deterministic: 0.5 * effectiveCores * 1000
-			// > 0, and CoreCount is runtime.NumCPU() from the legacy path.
+			// Benign cgroup + memory files and a 50% usage provider: everything
+			// the legacy collector would need to produce a real 1000 mCPU on this
+			// same tick. It is staged precisely so its absence below is a
+			// statement about the flag, not about a fixture that could not have
+			// measured anyway.
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
 				case "/sys/fs/cgroup/cpu.max":
@@ -751,19 +808,19 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The worker could not measure, but the legacy collector ran on this
-			// same tick and its numbers are real. Nothing in the fsmv2 path
-			// blanks them: the verdict is the worker's, the figures are the
-			// collector's, and both are true. A build that nils them fails here.
+			// The worker could not measure and nothing else measures under the
+			// flag, so the tick reports the worker's reason and no figures. Both
+			// keys are omitempty, so an unmeasured tick omits them rather than
+			// shipping a zero a reader would take for an idle box.
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
-			Expect(status.CPU.Health.Message).NotTo(BeEmpty())
-			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(status.CPU.CoreCount).NotTo(BeNil())
+			Expect(status.CPU.Health.Message).To(Equal("cpu.stat unreadable"))
+			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
+			Expect(status.CPU.CoreCount).To(BeNil())
 
 			data, err := json.Marshal(status.CPU)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(data)).To(ContainSubstring("totalUsageMCpu"))
-			Expect(string(data)).To(ContainSubstring("coreCount"))
+			Expect(string(data)).NotTo(ContainSubstring("totalUsageMCpu"))
+			Expect(string(data)).NotTo(ContainSubstring("coreCount"))
 		})
 	})
 
@@ -1028,6 +1085,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
@@ -1056,10 +1114,11 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).NotTo(Equal(workerHealthyMessage))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
-			// The stale verdict is the worker's; the numbers beside it are the
-			// legacy collector's reading of this tick, and stay.
-			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(status.CPU.CoreCount).NotTo(BeNil())
+			// A stale observation is not a measurement, so nothing numeric ships
+			// with it. The verdict it carried is withheld too.
+			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
+			Expect(status.CPU.CoreCount).To(BeNil())
+			Expect(status.CPU.CPUHealth).To(BeNil())
 		})
 
 		It("should degrade CPU health when the worker is running but has never observed (the store returns ErrNotFound)", func() {
@@ -1140,17 +1199,17 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).NotTo(ContainSubstring("never observed"))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
-			// The read error is the worker's; the collector still measured this
-			// tick, so its numbers stay on the record.
-			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(status.CPU.CoreCount).NotTo(BeNil())
+			// An unreadable observation is not a measurement, so no figures ship
+			// with the diagnosis.
+			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
+			Expect(status.CPU.CoreCount).To(BeNil())
 			data, err := json.Marshal(status.CPU)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(data)).To(ContainSubstring("totalUsageMCpu"))
-			Expect(string(data)).To(ContainSubstring("coreCount"))
+			Expect(string(data)).NotTo(ContainSubstring("totalUsageMCpu"))
+			Expect(string(data)).NotTo(ContainSubstring("coreCount"))
 		})
 
-		It("should keep the legacy CPU health when the worker ref is not registered, falling back rather than degrading", func() {
+		It("should degrade, naming the missing registration, when the worker ref is not registered", func() {
 			setFlag("true")
 			// A client exists but cpu.Ref was never Upserted into its writer,
 			// so GetFresh maps the ref to Unregistered before it ever reads.
@@ -1172,11 +1231,17 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Absence of the worker is a legacy fallback, not a degrade: the
-			// health record comes from getCPUMetrics, whose message only the
-			// legacy path can emit and the worker-degraded path cannot.
-			Expect(status.CPU.Health.Message).To(ContainSubstring("CPU utilization"))
+			// Absence of the worker used to fall back to legacy. With the legacy
+			// path off under the flag there is nothing to fall back to, so the
+			// absence is reported as one. The message names registration
+			// specifically, so this branch cannot collapse into never-observed,
+			// and it is neither the staged worker verdict (never consulted) nor
+			// anything getCPUMetrics could emit.
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Message).To(ContainSubstring("not registered"))
 			Expect(status.CPU.Health.Message).NotTo(Equal(workerVerdictMessage))
+			Expect(status.CPU.Health.Message).NotTo(ContainSubstring("CPU utilization"))
 		})
 	})
 
@@ -1193,6 +1258,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
@@ -1349,6 +1415,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: workerHealthyDetails,
 						Message: workerHealthyMessage,
 					},
 				},
@@ -1417,14 +1484,17 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-			// The legacy fallback must keep serving a status (the flag-on-but-
-			// cannot-run case is not an error), and the diagnostic warning must
-			// fire once and name the transport prerequisite, not a generic
+			// A flag-on box whose supervisor cannot run is not an error, but with
+			// the legacy path off there is nothing left to measure it: the CPU
+			// record degrades and carries the diagnosis. The warning must fire
+			// once and name the transport prerequisite, not a generic
 			// unreachable-client.
 			for i := 0; i < 3; i++ {
 				status, err := service.GetStatus(ctx)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.CPU).NotTo(BeNil())
+				Expect(status.CPUHealth).To(Equal(models.Degraded))
+				Expect(status.CPU.Health.Message).To(Equal(seamTransportOffWarning))
 			}
 
 			transportWarns := logs.Filter(func(entry observer.LoggedEntry) bool {
@@ -1472,6 +1542,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				status, err := service.GetStatus(ctx)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.CPU).NotTo(BeNil())
+				Expect(status.CPUHealth).To(Equal(models.Degraded))
+				Expect(status.CPU.Health.Message).To(Equal(seamCredentialsWarning))
 			}
 
 			credentialsWarns := logs.Filter(func(entry observer.LoggedEntry) bool {
@@ -1523,6 +1595,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				status, err := service.GetStatus(ctx)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.CPU).NotTo(BeNil())
+				Expect(status.CPUHealth).To(Equal(models.Degraded))
+				Expect(status.CPU.Health.Message).To(Equal(seamStillStartingWarning))
 			}
 
 			stillStartingWarns := logs.Filter(func(entry observer.LoggedEntry) bool {
