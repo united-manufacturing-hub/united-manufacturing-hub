@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -79,12 +80,12 @@ type ContainerMonitorService struct {
 	instanceName      string
 	lastCollectedAt   time.Time
 	hwid              string
-	architecture      models.ContainerArchitecture               //nolint:unused // will be used in the future
-	dataPath          string                                     // Path to check for disk metrics and HWID file
-	throttleSnapshots []cgroupSnapshot                           // Sliding window of cgroup counter snapshots
-	wasThrottled      bool                                       // Previous throttle state for transition logging
-	useFSMv2CPU       bool                                       // when true the fsmv2 CPU worker's verdict replaces the legacy CPU health; read once at construction
-	cpuWorkerWarned   bool                                       // keeps the "flag on, no client" warning to once per process, not once per GetStatus call
+	architecture      models.ContainerArchitecture //nolint:unused // will be used in the future
+	dataPath          string                       // Path to check for disk metrics and HWID file
+	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
+	wasThrottled      bool                         // Previous throttle state for transition logging
+	useFSMv2CPU       bool                         // when true the fsmv2 CPU worker's verdict replaces the legacy CPU health; read once at construction
+	cpuWorkerWarnOnce sync.Once
 	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
 }
 
@@ -369,10 +370,9 @@ const cpuWorkerMaxAge = 3 * time.Second
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, cpuHealth *models.CPUHealth, measured bool) {
 	client := fsmv2client.GetClient()
 	if client == nil {
-		if !c.cpuWorkerWarned {
-			c.cpuWorkerWarned = true
+		c.cpuWorkerWarnOnce.Do(func() {
 			c.logger.Warn(c.cpuSeamClientUnavailableMessage())
-		}
+		})
 
 		return nil, nil, false
 	}

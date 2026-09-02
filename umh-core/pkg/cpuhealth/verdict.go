@@ -124,23 +124,16 @@ type Cause struct {
 // The json tags are the wire key contract with the Management Console's
 // CpuVerdict and CpuCause (ManagementConsole
 // frontend/src/lib/utils/cpu/cpuHealth.ts), so renaming a tag is a wire-format
-// change. Attribution and Causes must stay empty on a healthy verdict: a
-// non-empty member there is a wire-format break, not a state change.
-// verdict_json_test.go and verdict_healthy_json_test.go assert both shapes.
+// change.
 type Verdict struct {
 	State       State       `json:"state"`
 	Attribution Attribution `json:"attribution,omitempty"`
 	Causes      []Cause     `json:"causes,omitempty"`
 }
 
-// UnmarshalJSON reads both shapes a stored CPU status document may hold in its
-// verdict key: the object this build writes, and the bare state string an older
-// build stored before the verdict was widened beyond the state. A bare string of
-// any spelling, and JSON null, decodes as the empty Verdict, which
-// readWorkerCPUHealth (pkg/service/container_monitor) reads as "no
-// determination". Every other value fails the decode, and that failure is what
-// the reader fails closed on instead of silently keeping its legacy CPU-usage
-// judgement.
+// UnmarshalJSON accepts the object this build writes and the bare state string an
+// older build stored, so a document written before the verdict grew past its state
+// still loads.
 func (v *Verdict) UnmarshalJSON(data []byte) error {
 	var state State
 	if err := json.Unmarshal(data, &state); err == nil {
