@@ -306,7 +306,9 @@ func judgeLegacyCPUUsage(status *ServiceInfo, cpuStat *models.CPU) {
 
 // collectCPULegacy runs the pre-fsmv2 CPU path whole: the gopsutil reading and
 // both of the rules that judged it. USE_FSMV2_CPU off is the only way to reach
-// it, so it is unchanged from the code that shipped before the worker existed.
+// it. The usage rule moved here from GetStatus and now runs before the health
+// check rather than in its else branch, which cannot change an outcome because
+// both only ever set Degraded and neither clears it.
 func (c *ContainerMonitorService) collectCPULegacy(ctx context.Context, status *ServiceInfo) error {
 	cpuStat, err := c.getCPUMetrics(ctx)
 	if err != nil {
@@ -324,10 +326,16 @@ func (c *ContainerMonitorService) collectCPULegacy(ctx context.Context, status *
 // file is read and no legacy rule runs, so a field it cannot fill stays empty
 // rather than borrowing a legacy reading.
 //
-// The measurements come from Details, which reports 60-second reductions, so
-// TotalUsageMCpu is a windowed mean here where the legacy path reported an
-// instantaneous sample. Each is set only when its own source says it was
-// measured, because 0 is a legitimate value for all of them.
+// TotalUsageMCpu changes in two ways here, and the second one is the larger.
+// It is a 60-second mean rather than an instantaneous sample, and it measures
+// THIS CONTAINER — the cpu.stat usage_usec delta — where the legacy path scaled
+// gopsutil's host-wide percentage by the container's quota. A busy neighbour
+// used to raise this number and no longer does. The new figure is the one the
+// field name claims; treat a comparison across the flag as meaningless rather
+// than as a change in load.
+//
+// Each measurement is set only when its own source says it was measured,
+// because 0 is a legitimate value for all of them.
 //
 // Most signals need two samples before they can fire, so a throttled box reports
 // Active for its first tick and a merely busy one for its first two, where the
@@ -363,15 +371,22 @@ func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) *mod
 		cpuStat.CgroupCores = details.CapacityCores
 	}
 
-	cpuStat.ThrottleRatio = details.ThrottleRatio
-	cpuStat.IsThrottled = verdictBlamesThrottling(cpuHealth.Verdict)
+	// ThrottleSignalReady is the throttle reading's own readability flag. Bare
+	// metal has no instrument and a thin window has no delta; both would
+	// otherwise publish 0 as a measured "not throttled".
+	if details.ThrottleSignalReady {
+		cpuStat.ThrottleRatio = details.ThrottleRatio
+		cpuStat.IsThrottled = verdictBlamesThrottling(cpuHealth.Verdict)
+	}
 
 	return cpuStat
 }
 
-// verdictBlamesThrottling reports whether the worker's throttling signal fired,
-// which is what the legacy IsThrottled flag meant: both read nr_throttled over
-// nr_periods across 60 seconds and both fire at 0.05.
+// verdictBlamesThrottling reports whether the worker's throttling signal fired.
+// It fires at the same 0.05 ratio over the same 60 seconds as the legacy
+// IsThrottled flag, but it does NOT clear the same way: the worker latches, so
+// it holds until the ratio falls below 0.03 over a full window, where the legacy
+// reading dropped as soon as one sample came back under 0.05.
 func verdictBlamesThrottling(verdict cpuhealth.Verdict) bool {
 	for _, cause := range verdict.Causes {
 		if cause.Kind == cpuhealth.CauseKindThrottling {

@@ -152,12 +152,17 @@ type Container struct {
 	Architecture ContainerArchitecture `json:"architecture"` // Processor architecture
 }
 
-// CPU carries two generations of CPU reporting side by side during the
-// USE_FSMV2_CPU rollout. TotalUsageMCpu, CoreCount, CgroupCores, ThrottleRatio
-// and IsThrottled are the legacy numbers the container monitor computes itself,
-// and every Management Console build reads them today. CPUHealth is the fsmv2
-// CPU worker's verdict and the evidence behind it, present only on instances
-// where that worker ran. Both ship until the console reads CPUHealth everywhere.
+// CPU is the interface between the two CPU generations, and the only one.
+// USE_FSMV2_CPU selects which of them fills this struct; nothing that reads it
+// can tell, and every Management Console build reads the five numeric fields
+// today. CPUHealth is the fsmv2 worker's verdict and the evidence behind it,
+// present only on ticks that worker measured.
+//
+// The five numeric fields keep their names and types across the flag but not
+// their definitions. Under the flag TotalUsageMCpu is a 60-second mean of THIS
+// CONTAINER's usage; without it, an instantaneous sample of the HOST's usage
+// scaled by the quota. IsThrottled latches under the flag and does not without
+// it. Comparing either across the flag compares two different quantities.
 type CPU struct {
 	Health         *Health  `json:"health"`
 	TotalUsageMCpu *float64 `json:"totalUsageMCpu,omitempty"` // Total usage in milli-cores (1000m = 1 core); nil when not measured this tick

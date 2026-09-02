@@ -318,6 +318,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 							CapacityCores:   4,
 							LimitApplies:    true,
 							ThrottleRatio:   0.5,
+							// A verdict cannot blame throttling unless the
+							// throttle signal was readable, so a fixture that
+							// omits this stages a state the worker never emits.
+							ThrottleSignalReady: true,
 						},
 						Message: workerVerdictMessage,
 					},
@@ -376,6 +380,58 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(data)).To(ContainSubstring("totalUsageMCpu"))
 			Expect(string(data)).To(ContainSubstring("coreCount"))
+		})
+
+		It("should publish neither throttle field when the throttle signal was not readable, rather than a 0 that reads as not throttled", func() {
+			setFlag("true")
+			// Bare metal has no throttle instrument and a window too thin has no
+			// delta. Details carries 0 in both cases, indistinguishable from a
+			// measured "not throttled" — ThrottleSignalReady is the only thing
+			// that separates them. The staged ratio is deliberately non-zero and
+			// deliberately unready: a build that copies the number without
+			// consulting the flag publishes 0.9 here.
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+						Details: cpuhealth.Details{
+							AvgUsageCores:       1.5,
+							UsageRingActive:     true,
+							LogicalCpus:         8,
+							ThrottleRatio:       0.9,
+							ThrottleSignalReady: false,
+						},
+						Message: workerHealthyMessage,
+					},
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(status.CPU.ThrottleRatio).To(BeZero())
+			Expect(status.CPU.IsThrottled).To(BeFalse())
+
+			// Both are omitempty, so the flat legacy keys are absent. The check
+			// is on the top-level object, not a substring: the nested cpuHealth
+			// evidence still carries throttleRatio 0.9, correctly, because it
+			// ships the raw Details with throttleSignalReady false beside them.
+			// Two contracts — the flat fields assert a measurement, the evidence
+			// reports a reading and its trustworthiness.
+			data, err := json.Marshal(status.CPU)
+			Expect(err).NotTo(HaveOccurred())
+
+			var wire map[string]json.RawMessage
+			Expect(json.Unmarshal(data, &wire)).To(Succeed())
+			Expect(wire).NotTo(HaveKey("throttleRatio"))
+			Expect(wire).NotTo(HaveKey("isThrottled"))
+			Expect(wire).To(HaveKey("cpuHealth"))
+			// The usage numbers, whose own source WAS readable, still ship.
+			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
+			Expect(*status.CPU.TotalUsageMCpu).To(Equal(1500.0))
 		})
 
 		It("should fill status.CPU.Health from a Fresh healthy worker verdict with the Active category", func() {
