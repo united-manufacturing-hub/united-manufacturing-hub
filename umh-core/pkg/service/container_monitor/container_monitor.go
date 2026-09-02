@@ -155,9 +155,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 		Architecture:  models.ContainerArchitecture(runtime.GOARCH),
 	}
 
-	// Get CPU stats. USE_FSMV2_CPU chooses the CPU path here and nowhere else:
-	// each branch fills status.CPU by itself, and nothing downstream can tell
-	// which one ran.
+	// Get CPU stats.
 	if c.useFSMv2CPU {
 		status.CPU = c.collectCPUFromWorker(ctx)
 	} else if err := c.collectCPULegacy(ctx, status); err != nil {
@@ -269,25 +267,13 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // instance to degraded.
 const cpuWorkerMaxAge = 3 * time.Second
 
-// judgeLegacyCPUUsage degrades the instance above CPUHighThresholdPercent of
-// the cores it may use. Only collectCPULegacy calls it, so it never runs under
+// judgeLegacyCPUUsage degrades the instance above CPUHighThresholdPercent of the
+// cores it may use, and only collectCPULegacy calls it, so it never runs under
 // USE_FSMV2_CPU.
 //
-// getCPUMetrics already applies the same threshold to the same percentage, at
-// >= where this uses >, so this changes the outcome only when the two compute
-// different core counts. That happens for a quota below 0.1 cores, which
-// getCPUMetrics clamps and this does not. Kept as it shipped; see ENG-5384.
-//
-// NOTE: CPU percentage is fundamentally misleading for understanding performance:
-// 1. In containers, throttling matters more than usage percentage
-// 2. CPU % doesn't scale linearly due to hyperthreading, turbo boost, etc.
-// 3. Users need to know throttling status, not just usage
-//
-// See ENG-3423 for planned improvements to show mCPU instead of percentage
-// See https://www.brendanlong.com/cpu-utilization-is-a-lie.html for why CPU % is misleading
-//
-// We maintain percentage calculation for API compatibility, but throttling
-// detection (handled elsewhere) is the more important health signal.
+// getCPUMetrics already degrades on that same threshold, so this changes an
+// outcome only where the two compute different core counts: a quota below 0.1
+// cores, which getCPUMetrics clamps and this does not. See ENG-5384.
 func judgeLegacyCPUUsage(status *ServiceInfo, cpuStat *models.CPU) {
 	effectiveCores := cpuStat.CgroupCores
 	if effectiveCores <= 0 && cpuStat.CoreCount != nil {
@@ -307,11 +293,7 @@ func judgeLegacyCPUUsage(status *ServiceInfo, cpuStat *models.CPU) {
 	}
 }
 
-// collectCPULegacy runs the pre-fsmv2 CPU path whole: the gopsutil reading and
-// both of the rules that judged it. USE_FSMV2_CPU off is the only way to reach
-// it. The usage rule moved here from GetStatus and now runs before the health
-// check rather than in its else branch, which cannot change an outcome because
-// both only ever set Degraded and neither clears it.
+// collectCPULegacy runs the pre-fsmv2 CPU path.
 func (c *ContainerMonitorService) collectCPULegacy(ctx context.Context, status *ServiceInfo) error {
 	cpuStat, err := c.getCPUMetrics(ctx)
 	if err != nil {
@@ -325,21 +307,9 @@ func (c *ContainerMonitorService) collectCPULegacy(ctx context.Context, status *
 }
 
 // collectCPUFromWorker builds the whole CPU record from the fsmv2 CPU worker's
-// last observation. Under USE_FSMV2_CPU it is the only CPU source: no cgroup
-// file is read and no legacy rule runs, so a field it cannot fill stays empty
-// rather than borrowing a legacy reading.
-//
-// The legacy fields stay EMPTY here. They are the pre-fsmv2
-// generation's own measurements and this path does not take those readings, so
-// filling them would mean re-deriving a legacy-shaped number from worker data
-// and shipping it under a name whose definition it no longer matches. Consumers
-// that need a figure read it from CPUHealth instead, each gated on the flag at
-// the point it fetches.
-//
-// Most signals need two samples before they can fire, so a throttled box reports
-// Active for its first tick and a merely busy one for its first two, where the
-// legacy rules degraded it immediately. Nothing waits for a window to fill: a
-// full window is required to RECOVER, never to degrade.
+// last observation. The legacy fields stay empty on purpose: old and new
+// reporting stay cleanly separated, so nothing here re-derives a legacy-named
+// number from worker data. models.CPU says what each generation carries.
 func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) *models.CPU {
 	health, cpuHealth := c.readWorkerCPUHealth(ctx)
 
@@ -347,17 +317,12 @@ func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) *mod
 }
 
 // readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a
-// models.Health. It always returns a health. Under USE_FSMV2_CPU there is no
-// legacy reading left to fall back to, so every way of not getting a verdict
-// fails closed to Degraded naming the reason, rather than reporting nothing and
-// being read as healthy. The protocol-converter resource-limit check
-// (IsResourceLimited) uses that message as its bridge-block reason.
-//
-// cpuHealth is the verdict beside the Details it judged. It is nil on every arm
-// that did not measure, so an unmeasured tick omits the wire key instead of
-// shipping an empty one.
+// models.Health. It always returns a health, and the protocol converter's
+// IsResourceLimited reads that message as its bridge-block reason.
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, cpuHealth *models.CPUHealth) {
 	client := fsmv2client.GetClient()
+	// Fallback for a misconfiguration: USE_FSMV2_CPU is on but nothing published
+	// a client, so the fsmv2 supervisor never started (or has not yet).
 	if client == nil {
 		message := c.cpuSeamClientUnavailableMessage()
 
@@ -373,18 +338,10 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 		}, nil
 	}
 
-	// Read the simple.Status wrapper, never the bare CPUStatus: a Poll error
-	// does not surface as a GetFresh error. The simple worker persists
-	// Status{Degraded: true, Reason: "poll error: ..."} with a nil error and a
-	// zero result verdict, and decoding that flat JSON into CPUStatus alone
-	// drops the Degraded/Reason keys, so the worker's "cannot measure"
-	// declaration would never reach the verdict mapping. GetFresh maps the
-	// stored observation to a Freshness reason; a read error returns Unknown
-	// alongside the verbatim error, so check err before reading Freshness or
-	// the status, which are only meaningful when err is nil.
+	// Get the latest poll result from the worker.
 	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
 	if err != nil {
-		// Unknown: the read failure prevented the observation from being
+		// GetFresh returns Unknown here: the read failure prevented it from being
 		// classified, so it cannot be called healthy. Fail closed with the
 		// verbatim store error as the message.
 		return &models.Health{
@@ -395,14 +352,8 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 		}, nil
 	}
 
-	// A non-Fresh observation without a read error is Stale, NeverObserved, or
-	// Unregistered. All three are absences of a usable measurement, and each
-	// names its own absence so the bridge-block reason says which one happened.
+	// If it is not fresh, handle these cases here.
 	if freshness != fsmv2client.Fresh {
-		// Fresh is excluded above and Unknown only accompanies a non-nil error,
-		// which returned already, so the default arm is unreachable today. It
-		// still names an absence rather than staying silent, because a new
-		// Freshness value must not arrive here as a healthy CPU.
 		message := "CPU worker observation could not be classified; no measurement to judge"
 
 		switch freshness {
@@ -422,14 +373,8 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 		}, nil
 	}
 
-	// The framework Degraded flag carries two states, and the result verdict
-	// says which. healthFromStatus degrades the wrapper on every good degraded
-	// poll, so a degraded verdict state means the worker measured fine and
-	// judged the box degraded: that case falls through to the verdict switch
-	// below, which reports it measured and ships the evidence. The flag
-	// behind any other verdict state is a "could not measure" (a failed poll
-	// leaves the verdict empty): map to Degraded with Status.Reason as the
-	// message.
+	// Degraded without a degraded verdict means the poll failed, not that the box
+	// is degraded.
 	if workerStatus.Degraded && workerStatus.Result.Verdict.State != cpuhealth.StateDegraded {
 		return &models.Health{
 			Message:       workerStatus.Reason,
@@ -476,11 +421,9 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 	}
 }
 
-// cpuSeamClientUnavailableMessage names the prerequisite that stopped the fsmv2
-// supervisor from publishing the CPU worker client, so the once-per-lifetime
-// warning reads as a diagnosis rather than "no client". The CPU monitor child
-// only exists inside the fsmv2 supervisor tree (gated by USE_FSMV2_TRANSPORT),
-// which is never built without backend credentials (API_URL and AUTH_TOKEN).
+// cpuSeamClientUnavailableMessage says which prerequisite is missing when
+// USE_FSMV2_CPU is on but no CPU worker client was published, or that the
+// supervisor may still be starting.
 func (c *ContainerMonitorService) cpuSeamClientUnavailableMessage() string {
 	transportOn, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
 	if !transportOn {

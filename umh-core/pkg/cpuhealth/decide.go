@@ -105,10 +105,10 @@ func buildDetails(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Envi
 	d.StealP95, _ = engine.Reduction(signalSteal, instrumentStealP95).Get()
 	d.HostHeadroomCores, _ = engine.Reduction(signalHostCpuFull, instrumentHostHeadroom).Get()
 
-	// The measurements, declared in table_cpu.go. The two means' state says
-	// whether the window reduced to a value, and message.go's healthy headline
-	// reads UsageRingActive and HostBusyRingActive, so a thin window is not
-	// reported as a measured zero. P95UsageCores is a Reading for the same
+	// The measurements, declared in table_cpu.go. Each mean measurement's state
+	// says whether the window reduced to a value, and message.go's healthy
+	// headline reads UsageRingActive and HostBusyRingActive, so a thin window is
+	// not reported as a measured zero. P95UsageCores is a Reading for the same
 	// reason.
 	hostBusyMean, hostBusyState := engine.Measurement(measurementHostBusy).Get()
 	usageMean, usageState := engine.Measurement(measurementUsageCores).Get()

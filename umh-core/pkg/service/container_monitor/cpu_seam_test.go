@@ -1362,12 +1362,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		})
 
 		It("positive control: the same Fresh/behind alternation flips CPUHealth on every tick once the behind observations cross the freshness boundary", func() {
-			// The SPEC's positive control narrows maxAge to the poll interval so
-			// the one-interval-lagged observation becomes not-Fresh and the
-			// missed-poll run flips. The seam reads maxAge as its package
-			// constant (3s), so this spec realizes the same boundary-crossing by
-			// pushing the behind observations past it (age 4s > 3s maxAge): the
-			// alternation now straddles the classification boundary and must flip
+			// The seam reads maxAge as its package constant (3s), so this spec
+			// pushes the behind observations past it (age 4s > 3s maxAge): the
+			// alternation straddles the classification boundary and must flip
 			// CPUHealth on every tick. A gate that reported zero here AND zero in
 			// the missed-poll spec would be measuring nothing.
 			categories := flickerRun(

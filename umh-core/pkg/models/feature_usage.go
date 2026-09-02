@@ -49,11 +49,6 @@ type FeatureUsage struct {
 // on, API_URL and AUTH_TOKEN set). cmd/main.go calls it with the same values the
 // FSMv2 supervisor gate reads.
 //
-// It deviates from the sibling flags on purpose. They report "env var set", but
-// without its prerequisites USE_FSMV2_CPU leaves the CPU path with no source at
-// all: GetClient() returns nil and every tick reports the missing prerequisite.
-// Counting the env var alone would report that instance as enabled.
-//
 // The credentials are a prerequisite only while the fsmv2 supervisor needs them
 // to start. PR #2698 decouples the runtime from the Management Console
 // credentials; once it lands an instance without them still runs the fsmv2 CPU

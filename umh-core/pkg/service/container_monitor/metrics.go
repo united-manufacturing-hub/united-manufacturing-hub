@@ -113,7 +113,7 @@ var (
 	}, []string{"instance", "component"})
 )
 
-// cpuGaugeInputs returns the usage and core figures for the three CPU gauges,
+// cpuGaugeInputs returns the usage and core figures for the CPU gauges,
 // and whether both were measured this tick. useFSMv2CPU says which generation
 // filled the record, because only one of them ever does: under the flag the
 // figures come from the worker's evidence and the flat fields are empty, and
