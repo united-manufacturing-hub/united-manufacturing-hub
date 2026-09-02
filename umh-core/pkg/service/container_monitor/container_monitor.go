@@ -169,14 +169,9 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// CPU seam: when USE_FSMV2_CPU was on at construction and the fsmv2 CPU
 	// worker has a fresh verdict, that verdict replaces the legacy CPU health.
 	// status.CPU aliases cpuStat, so the write lands on the record the aggregate
-	// check below reads.
-	//
-	// One exception: a box the legacy path judged throttle-degraded this tick
-	// keeps that judgement, because the usage-% rule below does not recompute
-	// throttling and a healthy worker verdict would erase it.
-	//
-	// A stale, never-observed or unreadable observation fails closed to Degraded
-	// rather than falling back to the legacy Active judgement.
+	// check below reads. A box the legacy path judged throttle-degraded keeps
+	// that judgement: the usage rule below does not recompute throttling, so a
+	// healthy worker verdict would erase it.
 	//
 	// The two rules disagree at the boundary: the legacy rule below degrades at
 	// >= 70% of gopsutil's usagePercent, the worker's own rule at > 70% of
@@ -188,32 +183,16 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	if c.useFSMv2CPU {
 		if workerHealth, workerCPUHealth, measured := c.readWorkerCPUHealth(ctx); workerHealth != nil && !cpuStat.IsThrottled {
 			status.CPU.Health = workerHealth
-			// The measured tick's verdict and Details ship as the wire's
-			// cpuHealth record; an unmeasured tick returns nil, so the wire
-			// omits the key instead of fabricating an empty one.
 			status.CPU.CPUHealth = workerCPUHealth
-			// A degraded verdict that rests on a real measurement (the worker
-			// measured fine and judged the box degraded) keeps the real numbers
-			// getCPUMetrics produced — a busy box carries its genuine usage
-			// beside the verdict. The genuinely-unmeasured arms — a read error,
-			// a stale or never-observed observation, or the framework Degraded
-			// "could not measure" declaration — nil both fields, so the wire
-			// omits totalUsageMCpu and coreCount instead of shipping a
-			// fabricated 0. status.CPU aliases cpuStat, so the write lands on
-			// the record the cpuStat.Health==Degraded aggregate check below
-			// reads. The legacy throttle arm (cpuStat.IsThrottled) bypasses
-			// this block and keeps its real numbers; every other
-			// worker-degraded verdict is nil-ed.
-			if workerHealth.Category == models.Degraded && !measured {
+
+			// The legacy figures come from a tick the worker did not measure, so
+			// they would sit beside a verdict drawn from different numbers.
+			degradedWithoutMeasurement := workerHealth.Category == models.Degraded && !measured
+			if degradedWithoutMeasurement {
 				status.CPU.TotalUsageMCpu = nil
 				status.CPU.CoreCount = nil
 			}
-			// Only a genuinely healthy verdict is authoritative over the legacy
-			// rule. A degraded verdict (read-error, stale, never-observed,
-			// framework-Degraded, worker-Degraded) is caught by the aggregate
-			// check below before the else-if runs, so gating on Category keeps
-			// the flag name truthful: it means "the worker assessed the box
-			// healthy", never "the worker was consulted".
+
 			workerVerdictAuthoritative = workerHealth.Category == models.Active
 		}
 	}
