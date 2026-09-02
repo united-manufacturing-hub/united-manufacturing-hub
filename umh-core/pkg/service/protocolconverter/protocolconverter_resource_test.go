@@ -15,6 +15,7 @@
 package protocolconverter_test
 
 import (
+	"fmt"
 	"runtime"
 	"time"
 
@@ -226,6 +227,57 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(ContainSubstring("5 bridges maximum"))
 				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
+			})
+
+			It("should fall back to the host core count while USE_FSMV2_CPU is on and the worker has not published yet", func() {
+				// ENG-5384 item 9, the fresh-worker window. The health half of
+				// admission is unaffected: with no worker observation the seam
+				// leaves the legacy judge in charge, so CPUHealth is a real
+				// verdict. Only the capacity figure has no fsmv2 source yet, and
+				// it takes the same runtime.NumCPU() fallback the legacy branch
+				// takes when cgroup data is unreadable.
+				hostCeiling := (runtime.NumCPU() - 1) * constants.MaxBridgesPerCPUCore
+
+				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "active",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Active,
+									CPUHealth:     models.Active,
+									MemoryHealth:  models.Active,
+									DiskHealth:    models.Active,
+									CPU:           &models.CPU{CgroupCores: 2.0},
+								},
+							},
+						},
+					},
+				}
+
+				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
+				for i := range hostCeiling {
+					instances[fmt.Sprintf("bridge-%d", i)] = &pkgfsm.FSMInstanceSnapshot{
+						ID:           fmt.Sprintf("bridge-%d", i),
+						CurrentState: "active",
+						DesiredState: "active",
+					}
+				}
+
+				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
+					Instances: instances,
+				}
+
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				// The ceiling is the host's, not the 2.0 legacy figure staged
+				// above: a build that read CgroupCores here would allow only
+				// (2-1)*5 and block much earlier.
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(ContainSubstring(fmt.Sprintf("%d bridges maximum", hostCeiling)))
 			})
 
 			It("should size the bridge ceiling from the legacy cgroup figure when USE_FSMV2_CPU is off", func() {
