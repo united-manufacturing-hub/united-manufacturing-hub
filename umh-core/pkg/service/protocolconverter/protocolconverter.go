@@ -1267,30 +1267,41 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 		}
 	}
 
-	// How many cores this instance may use. The fsmv2 CPU worker's CapacityCores
-	// is preferred where present: it is the quota when one is set and the CPUs
-	// this process may use when none is, so it never reports the whole machine
-	// to a container that only has a slice of it. CgroupCores is the same figure
-	// from the legacy collector, and is what an instance running without
-	// USE_FSMV2_CPU reports.
-	var cpuCores float64
+	// How many cores this instance may use. USE_FSMV2_CPU picks the source and
+	// there is no crossing between them: with the flag on the figure comes from
+	// the fsmv2 CPU worker, with it off from the legacy cgroup read.
+	var observedCPU *models.CPU
 
 	if containerInstance.LastObservedState != nil {
 		if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			cpu := containerObserved.ServiceInfoSnapshot.CPU
-			switch {
-			case cpu == nil:
-			case cpu.CPUHealth != nil && cpu.CPUHealth.CapacityCores > 0:
-				cpuCores = cpu.CPUHealth.CapacityCores
-			case cpu.CgroupCores > 0:
-				cpuCores = cpu.CgroupCores
-			}
+			observedCPU = containerObserved.ServiceInfoSnapshot.CPU
 		}
 	}
 
-	// Fall back to runtime.NumCPU if cgroup info not available
-	if cpuCores == 0 {
-		cpuCores = float64(runtime.NumCPU())
+	var cpuCores float64
+
+	if snapshot.CurrentConfig.Agent.UseFSMv2CPU {
+		if observedCPU != nil && observedCPU.CPUHealth != nil {
+			cpuCores = observedCPU.CPUHealth.CapacityCores
+		}
+
+		// The worker has not published a capacity yet, which happens for the
+		// first ticks after start. Block rather than guess: the only figure
+		// available without it is the host's core count, and sizing a
+		// container's bridge budget from the whole machine admits bridges it
+		// cannot run.
+		if cpuCores <= 0 {
+			return true, "CPU capacity not reported yet"
+		}
+	} else {
+		if observedCPU != nil {
+			cpuCores = observedCPU.CgroupCores
+		}
+
+		// Fall back to runtime.NumCPU if cgroup info not available
+		if cpuCores == 0 {
+			cpuCores = float64(runtime.NumCPU())
+		}
 	}
 
 	// Calculate max bridges based on available CPU
