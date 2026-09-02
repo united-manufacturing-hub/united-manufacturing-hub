@@ -711,8 +711,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		})
 	})
 
-	Context("[unmeasured-omits]", func() {
-		It("should omit TotalUsageMCpu and CoreCount from the wire on a worker tick that could not measure (a framework-Degraded observation with no result verdict ships nil, not 0)", func() {
+	Context("[unmeasured-keeps-legacy-numbers]", func() {
+		It("should keep the legacy usage numbers on a worker tick that could not measure (the collector measured them on this same tick, whatever the worker did)", func() {
 			setFlag("true")
 			// An unmeasurable tick: the worker stored a Degraded framework
 			// verdict with an empty result (zero numeric measurements), because
@@ -755,21 +755,19 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The genuinely-unmeasured framework-Degraded arm must NOT keep the
-			// legacy real numbers and must NOT fabricate a 0: both fields are
-			// nil, so the wire omits totalUsageMCpu and coreCount entirely.
-			// This is the departure's core assertion — a build that leaves the
-			// legacy real CoreCount/TotalUsageMCpu, or ships a 0, fails here.
+			// The worker could not measure, but the legacy collector ran on this
+			// same tick and its numbers are real. Nothing in the fsmv2 path
+			// blanks them: the verdict is the worker's, the figures are the
+			// collector's, and both are true. A build that nils them fails here.
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Message).NotTo(BeEmpty())
-			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
-			Expect(status.CPU.CoreCount).To(BeNil())
+			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
+			Expect(status.CPU.CoreCount).NotTo(BeNil())
 
-			// Wire contract: nil measurements omit both keys from the JSON.
 			data, err := json.Marshal(status.CPU)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(data)).NotTo(ContainSubstring("totalUsageMCpu"))
-			Expect(string(data)).NotTo(ContainSubstring("coreCount"))
+			Expect(string(data)).To(ContainSubstring("totalUsageMCpu"))
+			Expect(string(data)).To(ContainSubstring("coreCount"))
 		})
 	})
 
@@ -1062,13 +1060,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).NotTo(Equal(workerHealthyMessage))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
-			// The freshness fail-closed verdict nils the numerics in the same write
-			// as the Degraded category, exactly like the framework-Degraded arm:
-			// a stale record must not ship a legacy real number beside its
-			// verdict, nor fabricate a 0 (the injected 50% usage would otherwise
-			// read non-zero here).
-			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
-			Expect(status.CPU.CoreCount).To(BeNil())
+			// The stale verdict is the worker's; the numbers beside it are the
+			// legacy collector's reading of this tick, and stay.
+			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
+			Expect(status.CPU.CoreCount).NotTo(BeNil())
 		})
 
 		It("should degrade CPU health when the worker is running but has never observed (the store returns ErrNotFound)", func() {
@@ -1149,14 +1144,14 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).NotTo(ContainSubstring("never observed"))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
-			// The read-error arm is a genuinely-unmeasured tick: the numerics
-			// are nil, so the wire omits them instead of shipping a fabricated 0.
-			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
-			Expect(status.CPU.CoreCount).To(BeNil())
+			// The read error is the worker's; the collector still measured this
+			// tick, so its numbers stay on the record.
+			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
+			Expect(status.CPU.CoreCount).NotTo(BeNil())
 			data, err := json.Marshal(status.CPU)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(data)).NotTo(ContainSubstring("totalUsageMCpu"))
-			Expect(string(data)).NotTo(ContainSubstring("coreCount"))
+			Expect(string(data)).To(ContainSubstring("totalUsageMCpu"))
+			Expect(string(data)).To(ContainSubstring("coreCount"))
 		})
 
 		It("should keep the legacy CPU health when the worker ref is not registered, falling back rather than degrading", func() {

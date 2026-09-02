@@ -328,21 +328,13 @@ func (c *ContainerMonitorService) applyFSMv2CPUVerdict(ctx context.Context, cpuS
 		return false
 	}
 
-	workerHealth, workerCPUHealth, measured := c.readWorkerCPUHealth(ctx)
+	workerHealth, workerCPUHealth := c.readWorkerCPUHealth(ctx)
 	if workerHealth == nil {
 		return false
 	}
 
 	cpuStat.Health = workerHealth
 	cpuStat.CPUHealth = workerCPUHealth
-
-	// The legacy figures come from a tick the worker did not measure, so they
-	// would sit beside a verdict drawn from different numbers.
-	degradedWithoutMeasurement := workerHealth.Category == models.Degraded && !measured
-	if degradedWithoutMeasurement {
-		cpuStat.TotalUsageMCpu = nil
-		cpuStat.CoreCount = nil
-	}
 
 	return true
 }
@@ -360,19 +352,14 @@ func (c *ContainerMonitorService) applyFSMv2CPUVerdict(ctx context.Context, cpuS
 // cpuHealth is the verdict beside the Details it judged. It is non-nil only on
 // the two arms that measured, so an unmeasured tick omits the wire key instead
 // of shipping an empty one.
-//
-// measured reports whether the health rests on a real measurement. The caller
-// reads it to decide whether the legacy numeric fields describe the same
-// measurement the verdict judged and may be kept, or an absent one it must
-// omit.
-func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, cpuHealth *models.CPUHealth, measured bool) {
+func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, cpuHealth *models.CPUHealth) {
 	client := fsmv2client.GetClient()
 	if client == nil {
 		c.cpuWorkerWarnOnce.Do(func() {
 			c.logger.Warn(c.cpuSeamClientUnavailableMessage())
 		})
 
-		return nil, nil, false
+		return nil, nil
 	}
 
 	// Read the simple.Status wrapper, never the bare CPUStatus: a Poll error
@@ -394,7 +381,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, nil, false
+		}, nil
 	}
 
 	// A non-Fresh observation without a read error is Stale, NeverObserved, or
@@ -409,16 +396,16 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 				ObservedState: models.Degraded.String(),
 				DesiredState:  models.Active.String(),
 				Category:      models.Degraded,
-			}, nil, false
+			}, nil
 		case fsmv2client.NeverObserved:
 			return &models.Health{
 				Message:       "CPU worker has never observed; no measurement to judge",
 				ObservedState: models.Degraded.String(),
 				DesiredState:  models.Active.String(),
 				Category:      models.Degraded,
-			}, nil, false
+			}, nil
 		default:
-			return nil, nil, false
+			return nil, nil
 		}
 	}
 
@@ -436,7 +423,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, nil, false
+		}, nil
 	}
 
 	// A Fresh observation carries the developer's judgement in Result. The
@@ -452,7 +439,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			}, &models.CPUHealth{
 				Verdict: workerStatus.Result.Verdict,
 				Details: workerStatus.Result.Details,
-			}, true
+			}
 	case cpuhealth.StateDegraded:
 		return &models.Health{
 				Message:       workerStatus.Result.Message,
@@ -462,12 +449,12 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (heal
 			}, &models.CPUHealth{
 				Verdict: workerStatus.Result.Verdict,
 				Details: workerStatus.Result.Details,
-			}, true
+			}
 	default:
 		// Empty result verdict AND Degraded == false is a genuine "no
 		// determination" — a successful poll produced no verdict. Keep the
 		// legacy health; do not read it as healthy.
-		return nil, nil, false
+		return nil, nil
 	}
 }
 
