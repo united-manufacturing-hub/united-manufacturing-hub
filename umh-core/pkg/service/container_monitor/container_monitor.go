@@ -326,13 +326,10 @@ func (c *ContainerMonitorService) collectCPULegacy(ctx context.Context, status *
 // file is read and no legacy rule runs, so a field it cannot fill stays empty
 // rather than borrowing a legacy reading.
 //
-// TotalUsageMCpu changes in two ways here, and the second one is the larger.
-// It is a 60-second mean rather than an instantaneous sample, and it measures
-// THIS CONTAINER — the cpu.stat usage_usec delta — where the legacy path scaled
-// gopsutil's host-wide percentage by the container's quota. A busy neighbour
-// used to raise this number and no longer does. The new figure is the one the
-// field name claims; treat a comparison across the flag as meaningless rather
-// than as a change in load.
+// The numeric fields keep their names across the flag but not their
+// definitions; models.CPU's doc says how each one differs. Nothing here can
+// preserve the old definitions, because the readings they were computed from
+// are not taken any more.
 //
 // Each measurement is set only when its own source says it was measured,
 // because 0 is a legitimate value for all of them.
