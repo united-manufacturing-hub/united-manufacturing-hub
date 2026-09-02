@@ -25,6 +25,12 @@ Not every company is on the same setup, and moving between them is something we 
 
 All permission logic lives in the Management Console, so your role governs what you can do there, and access to the instances a company runs is governed through that same permission model.
 
-Permissions are enforced in the Management Console rather than propagated into each umh-core instance. This is by design: keeping permission logic in the Management Console keeps umh-core instances independent of it, so anyone running the open-source, fully local umh-core on its own is never coupled to the Management Console. The AUTH_TOKEN authorizes an instance to connect to the Management Console; once that connection is authorized, who may act on the instance is governed by the Management Console's permission model. See [Access Control and Authentication](../../production/security/umh-core/deployment-security.md#access-control-and-authentication).
+Permissions are enforced in the Management Console rather than propagated into each `umh-core` instance. 
+
+### Separation of concerns between `umh-core` and Management Console
+
+Keeping permission logic in the Management Console keeps `umh-core` instances independent of it. This is by design, because it allows you to run `umh-core` fully local, without depending on our cloud-based Management Console. 
+
+The `AUTH_TOKEN` authorizes an instance to connect to the Management Console; once that connection is authorized, who may act on the instance is governed by the Management Console's permission model. See [Access Control and Authentication](../../production/security/umh-core/deployment-security.md#access-control-and-authentication).
 
 Inside the console, the boundary that holds is read-only against write access, so Viewer is the role to give someone who should not change anything.
