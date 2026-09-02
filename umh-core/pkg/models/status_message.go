@@ -157,20 +157,7 @@ type Container struct {
 //
 // With the flag OFF, the legacy fields below are this generation's measurements
 // and CPUHealth is absent. With it ON, CPUHealth holds the worker's verdict and
-// the evidence behind it, and **the legacy fields stay empty** — they belong to
-// the other generation and this one does not take those readings. A consumer
-// that needs a figure under the flag reads it from CPUHealth, gated on the flag
-// where it fetches.
-//
-// The two generations do not measure the same thing, which is why nothing
-// re-derives one from the other: the worker reports a 60-second mean of THIS
-// CONTAINER's usage, the legacy path an instantaneous sample of the HOST's usage
-// scaled by the quota.
-//
-// ⚠️ The console has its own flag for reading CPUHealth, and the two are a
-// matched pair that nothing enforces. A console build that reads only the legacy
-// fields finds nothing to render against a flagged instance, and neither side
-// can detect the mismatch.
+// the evidence behind it, and **the legacy fields stay empty**.
 type CPU struct {
 	Health         *Health  `json:"health"`
 	TotalUsageMCpu *float64 `json:"totalUsageMCpu,omitempty"` // Total usage in milli-cores (1000m = 1 core); nil when not measured this tick
