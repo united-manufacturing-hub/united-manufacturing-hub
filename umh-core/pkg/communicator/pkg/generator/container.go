@@ -148,21 +148,10 @@ func defaultContainer() models.Container {
 	}
 }
 
-// containerHealthMessage says what the components themselves said, so the
-// container badge repeats the specific reason instead of a category name.
-//
-// A degraded component names itself and carries its own message, in the words
-// IsResourceLimited builds its bridge-block reason from, so a refused bridge
-// and the badge describe one condition once rather than twice. Several
-// degraded components stack, one per line.
-//
-// With nothing degraded the CPU message stands alone. Memory and disk only
-// ever say "utilization normal" on a healthy tick, which repeats what the
-// badge colour already shows, while the CPU message is a composed sentence
-// about actual headroom.
-//
-// getContainerHealthMessage below is the fallback for a tick that produced no
-// component message at all.
+// containerHealthMessage gives the badge the components' own words. Degraded
+// components use the composition IsResourceLimited builds its bridge-block
+// reason from, so a refused bridge and the badge say the same thing. Memory
+// and disk are skipped when healthy: they only ever say "utilization normal".
 func containerHealthMessage(status container_monitor.ServiceInfo) string {
 	var cpu, memory, disk *models.Health
 
