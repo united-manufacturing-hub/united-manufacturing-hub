@@ -23,12 +23,6 @@ Not every company is on the same setup, and moving between them is something we 
 
 ### Where these roles apply
 
-All permission logic lives in the Management Console, so your role governs what you can do there, and access to the instances a company runs is governed through that same permission model.
+Your role governs what you can do in the Management Console, where permissions are managed centrally for your account and for the instances your company connects.
 
-Permissions are enforced in the Management Console rather than propagated into each `umh-core` instance. 
-
-### Separation of concerns between `umh-core` and Management Console
-
-Keeping permission logic in the Management Console keeps `umh-core` instances independent of it. This is by design, because it allows you to run `umh-core` fully local, without depending on our cloud-based Management Console. 
-
-The `AUTH_TOKEN` authorizes an instance to connect to the Management Console; once that connection is authorized, who may act on the instance is governed by the Management Console's permission model. See [Access Control and Authentication](../../production/security/umh-core/deployment-security.md#access-control-and-authentication).
+`umh-core` connects to the Management Console through its `AUTH_TOKEN`, and can also run locally. For how instances connect and authenticate, see [Access Control and Authentication](../../production/security/umh-core/deployment-security.md#access-control-and-authentication).
