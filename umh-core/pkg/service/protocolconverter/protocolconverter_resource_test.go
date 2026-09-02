@@ -15,7 +15,6 @@
 package protocolconverter_test
 
 import (
-	"fmt"
 	"runtime"
 	"time"
 
@@ -24,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -178,157 +176,6 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(ContainSubstring("1 core reserved for Redpanda"))
 			})
 
-			It("should size the bridge ceiling from the fsmv2 worker's capacity when USE_FSMV2_CPU is on", func() {
-				// The two figures disagree on purpose: the worker reports 2 usable
-				// cores and the legacy collector 8. Five bridges is over the
-				// worker's ceiling of (2-1)*5 and under the legacy one of (8-1)*5,
-				// so the outcome names which figure was used. Its twin below runs
-				// the identical fixture with the flag off and expects the opposite.
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
-				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
-					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
-						constants.CoreInstanceName: {
-							ID:           constants.CoreInstanceName,
-							CurrentState: "active",
-							DesiredState: "active",
-							LastObservedState: &container.ContainerObservedStateSnapshot{
-								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									OverallHealth: models.Active,
-									CPUHealth:     models.Active,
-									MemoryHealth:  models.Active,
-									DiskHealth:    models.Active,
-									CPU: &models.CPU{
-										CgroupCores: 8.0,
-										CPUHealth: &models.CPUHealth{
-											Details: cpuhealth.Details{CapacityCores: 2.0},
-										},
-									},
-								},
-							},
-						},
-					},
-				}
-
-				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				for i := range (2 - 1) * constants.MaxBridgesPerCPUCore {
-					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
-						ID:           string(rune('a' + i)),
-						CurrentState: "active",
-						DesiredState: "active",
-					}
-				}
-
-				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
-					Instances: instances,
-				}
-
-				limited, reason := service.IsResourceLimited(snapshot)
-
-				Expect(limited).To(BeTrue())
-				Expect(reason).To(ContainSubstring("5 bridges maximum"))
-				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
-			})
-
-			It("should fall back to the host core count while USE_FSMV2_CPU is on and the worker has not published yet", func() {
-				// ENG-5384 item 9, the fresh-worker window. The health half of
-				// admission is unaffected: with no worker observation the seam
-				// leaves the legacy judge in charge, so CPUHealth is a real
-				// verdict. Only the capacity figure has no fsmv2 source yet, and
-				// it takes the same runtime.NumCPU() fallback the legacy branch
-				// takes when cgroup data is unreadable.
-				hostCeiling := (runtime.NumCPU() - 1) * constants.MaxBridgesPerCPUCore
-
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
-				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
-					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
-						constants.CoreInstanceName: {
-							ID:           constants.CoreInstanceName,
-							CurrentState: "active",
-							DesiredState: "active",
-							LastObservedState: &container.ContainerObservedStateSnapshot{
-								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									OverallHealth: models.Active,
-									CPUHealth:     models.Active,
-									MemoryHealth:  models.Active,
-									DiskHealth:    models.Active,
-									CPU:           &models.CPU{CgroupCores: 2.0},
-								},
-							},
-						},
-					},
-				}
-
-				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				for i := range hostCeiling {
-					instances[fmt.Sprintf("bridge-%d", i)] = &pkgfsm.FSMInstanceSnapshot{
-						ID:           fmt.Sprintf("bridge-%d", i),
-						CurrentState: "active",
-						DesiredState: "active",
-					}
-				}
-
-				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
-					Instances: instances,
-				}
-
-				limited, reason := service.IsResourceLimited(snapshot)
-
-				// The ceiling is the host's, not the 2.0 legacy figure staged
-				// above: a build that read CgroupCores here would allow only
-				// (2-1)*5 and block much earlier.
-				Expect(limited).To(BeTrue())
-				Expect(reason).To(ContainSubstring(fmt.Sprintf("%d bridges maximum", hostCeiling)))
-			})
-
-			It("should size the bridge ceiling from the legacy cgroup figure when USE_FSMV2_CPU is off", func() {
-				// The identical fixture to the spec above, flag off. The legacy
-				// figure of 8 cores gives a ceiling of (8-1)*5, so the same five
-				// bridges are allowed. The pair is what proves the flag selects a
-				// source rather than one source winning by preference.
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = false
-				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
-					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
-						constants.CoreInstanceName: {
-							ID:           constants.CoreInstanceName,
-							CurrentState: "active",
-							DesiredState: "active",
-							LastObservedState: &container.ContainerObservedStateSnapshot{
-								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									OverallHealth: models.Active,
-									CPUHealth:     models.Active,
-									MemoryHealth:  models.Active,
-									DiskHealth:    models.Active,
-									CPU: &models.CPU{
-										CgroupCores: 8.0,
-										CPUHealth: &models.CPUHealth{
-											Details: cpuhealth.Details{CapacityCores: 2.0},
-										},
-									},
-								},
-							},
-						},
-					},
-				}
-
-				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				for i := range (2 - 1) * constants.MaxBridgesPerCPUCore {
-					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
-						ID:           string(rune('a' + i)),
-						CurrentState: "active",
-						DesiredState: "active",
-					}
-				}
-
-				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
-					Instances: instances,
-				}
-
-				limited, reason := service.IsResourceLimited(snapshot)
-
-				Expect(limited).To(BeFalse())
-				Expect(reason).To(BeEmpty())
-			})
-
 			It("should not count removing/removed bridges", func() {
 				// Mix of active and removing bridges
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
@@ -430,43 +277,6 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 
 					Expect(limited).To(BeTrue())
 					Expect(reason).To(Equal("CPU degraded: CPU throttled (15.0% periods throttled)"))
-				})
-
-				It("should not block on the legacy throttle reading when USE_FSMV2_CPU is on", func() {
-					// Under the flag the worker judges throttling itself and its
-					// verdict is read above, so admission must not consult the
-					// legacy reading as well. Ungating the throttle branch returns
-					// true here, because that branch runs before the bridge-count
-					// check.
-					snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
-					snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
-						Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
-							constants.CoreInstanceName: {
-								ID:           constants.CoreInstanceName,
-								CurrentState: "active",
-								DesiredState: "active",
-								LastObservedState: &container.ContainerObservedStateSnapshot{
-									ServiceInfoSnapshot: container_monitor.ServiceInfo{
-										OverallHealth: models.Active,
-										CPUHealth:     models.Active,
-										MemoryHealth:  models.Active,
-										DiskHealth:    models.Active,
-										CPU: &models.CPU{
-											Health:        &models.Health{Message: "CPU healthy"},
-											IsThrottled:   true,
-											ThrottleRatio: 0.15,
-											CgroupCores:   2.0,
-										},
-									},
-								},
-							},
-						},
-					}
-
-					limited, reason := service.IsResourceLimited(snapshot)
-
-					Expect(limited).To(BeFalse())
-					Expect(reason).To(BeEmpty())
 				})
 			})
 

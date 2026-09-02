@@ -1236,12 +1236,8 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				return true, "Disk resources degraded"
 			}
 
-			// The legacy throttle reading gets its own block reason, but only
-			// when the legacy path is judging. Under USE_FSMV2_CPU the worker
-			// assesses throttling itself and its verdict has already been read
-			// above, so consulting this flag as well would let a healthy verdict
-			// be overruled by the reading it was drawn from.
-			if !snapshot.CurrentConfig.Agent.UseFSMv2CPU && serviceInfo.CPU != nil && serviceInfo.CPU.IsThrottled {
+			// Also check for CPU throttling specifically with improved message
+			if serviceInfo.CPU != nil && serviceInfo.CPU.IsThrottled {
 				// Provide detailed throttling message as per ENG-3423
 				throttlePercent := serviceInfo.CPU.ThrottleRatio * 100
 				cgroupCores := serviceInfo.CPU.CgroupCores
@@ -1285,29 +1281,21 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 		}
 	}
 
-	// Get CPU core count and calculate max bridges.
-	// USE_FSMV2_CPU selects which reading of the same figure is used: the fsmv2
-	// CPU worker's CapacityCores, or the legacy cgroup quota. Everything else
-	// about this calculation is unchanged.
+	// Get CPU core count and calculate max bridges
+	// Use cgroup CPU quota if available as it's more accurate for containerized environments
 	var cpuCores float64
 
+	// Try to get cgroup CPU limit from container observed state if available
 	if containerInstance.LastObservedState != nil {
 		if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			cpu := containerObserved.ServiceInfoSnapshot.CPU
-			switch {
-			case cpu == nil:
-			case snapshot.CurrentConfig.Agent.UseFSMv2CPU:
-				if cpu.CPUHealth != nil {
-					cpuCores = cpu.CPUHealth.CapacityCores
-				}
-			default:
-				cpuCores = cpu.CgroupCores
+			if containerObserved.ServiceInfoSnapshot.CPU != nil && containerObserved.ServiceInfoSnapshot.CPU.CgroupCores > 0 {
+				cpuCores = containerObserved.ServiceInfoSnapshot.CPU.CgroupCores
 			}
 		}
 	}
 
-	// Fall back to runtime.NumCPU if no reading is available
-	if cpuCores <= 0 {
+	// Fall back to runtime.NumCPU if cgroup info not available
+	if cpuCores == 0 {
 		cpuCores = float64(runtime.NumCPU())
 	}
 
