@@ -1125,12 +1125,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			setFlag("true")
 			publishWorkerClientWithStub(&cpuStubStateReader{err: persistence.ErrNotFound})
 
-			// Stage host-independent cgroup data so the cgroup read succeeds
-			// and the throttle path stays benign. What identifies the branch is the
-			// message assertions: the legacy path and the read-error branch can
-			// never emit "never observed", so the spec discriminates on any host
-			// (without them, a busy CI host's legacy usage rule alone would
-			// satisfy the degraded assertions on the legacy fallback).
+			// What identifies the branch is the message: no other arm emits
+			// "never observed", so a build that collapsed this case into the
+			// read-error arm fails here rather than passing on a shared
+			// Degraded category.
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
 				case "/sys/fs/cgroup/cpu.max":
@@ -1231,12 +1229,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Absence of the worker used to fall back to legacy. With the legacy
-			// path off under the flag there is nothing to fall back to, so the
-			// absence is reported as one. The message names registration
-			// specifically, so this branch cannot collapse into never-observed,
-			// and it is neither the staged worker verdict (never consulted) nor
-			// anything getCPUMetrics could emit.
+			// An absent worker is reported as an absence, not papered over. The
+			// message names registration specifically, so this branch cannot
+			// collapse into never-observed, and it is neither the staged worker
+			// verdict (never consulted) nor anything getCPUMetrics could emit.
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Message).To(ContainSubstring("not registered"))

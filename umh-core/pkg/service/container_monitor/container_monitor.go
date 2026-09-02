@@ -263,7 +263,7 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // cpuWorkerMaxAge is how old the fsmv2 CPU worker's observation may be and still
 // count as Fresh for the seam. It is 3x the worker's 1s poll interval
 // (pollInterval in pkg/fsmv2/cpu), so one slow or missed poll cannot flip the
-// seam to the legacy path.
+// instance to degraded.
 const cpuWorkerMaxAge = 3 * time.Second
 
 // judgeLegacyCPUUsage degrades the instance above CPUHighThresholdPercent of

@@ -141,7 +141,7 @@ func (v *Verdict) UnmarshalJSON(data []byte) error {
 		// document carries no attribution and no causes, so it cannot be
 		// reconstructed as a verdict this package would emit. Decode it as no
 		// verdict at all: the seam's default arm already reads an empty verdict
-		// as "no determination — keep the legacy health".
+		// as "no determination", which it reports rather than trusts.
 		*v = Verdict{}
 		return nil
 	}

@@ -50,9 +50,9 @@ type FeatureUsage struct {
 // FSMv2 supervisor gate reads.
 //
 // It deviates from the sibling flags on purpose. They report "env var set", but
-// USE_FSMV2_CPU falls back to legacy without its prerequisites, so counting the
-// env var alone would report an instance as enabled where GetClient() returns nil
-// and no fsmv2 code runs at all.
+// without its prerequisites USE_FSMV2_CPU leaves the CPU path with no source at
+// all: GetClient() returns nil and every tick reports the missing prerequisite.
+// Counting the env var alone would report that instance as enabled.
 //
 // The credentials are a prerequisite only while the fsmv2 supervisor needs them
 // to start. PR #2698 decouples the runtime from the Management Console
