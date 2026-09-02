@@ -1281,15 +1281,28 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 		}
 	}
 
-	// Get CPU core count and calculate max bridges
-	// Use cgroup CPU quota if available as it's more accurate for containerized environments
+	// Get CPU core count and calculate max bridges.
+	// USE_FSMV2_CPU decides where the figure is fetched from, because the two
+	// generations do not both fill the same field: with the flag on the CPU
+	// record carries only the fsmv2 evidence, and CgroupCores is empty.
 	var cpuCores float64
 
-	// Try to get cgroup CPU limit from container observed state if available
 	if containerInstance.LastObservedState != nil {
 		if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			if containerObserved.ServiceInfoSnapshot.CPU != nil && containerObserved.ServiceInfoSnapshot.CPU.CgroupCores > 0 {
-				cpuCores = containerObserved.ServiceInfoSnapshot.CPU.CgroupCores
+			cpu := containerObserved.ServiceInfoSnapshot.CPU
+
+			switch {
+			case cpu == nil:
+			case snapshot.CurrentConfig.Agent.UseFSMv2CPU:
+				// CapacityCores is the quota when one applies and the usable
+				// core count when none does, which is what this ceiling wants
+				// in both cases. It is absent on a tick the worker did not
+				// measure, and the fallback below covers that.
+				if cpu.CPUHealth != nil {
+					cpuCores = cpu.CPUHealth.CapacityCores
+				}
+			case cpu.CgroupCores > 0:
+				cpuCores = cpu.CgroupCores
 			}
 		}
 	}

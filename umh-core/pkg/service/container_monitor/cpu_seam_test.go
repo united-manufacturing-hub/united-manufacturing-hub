@@ -362,76 +362,34 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Message).To(Equal(workerVerdictMessage))
-			// ...and the numbers it judged ship with it, read from Details. 3500
-			// is the worker's 3.5 cores, not the legacy collector's 1000, so a
-			// build that let getCPUMetrics fill these fails here.
-			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(*status.CPU.TotalUsageMCpu).To(Equal(3500.0))
-			Expect(status.CPU.CoreCount).NotTo(BeNil())
-			Expect(*status.CPU.CoreCount).To(Equal(6))
-			Expect(status.CPU.CgroupCores).To(Equal(4.0))
-			Expect(status.CPU.ThrottleRatio).To(Equal(0.5))
-			// A throttling cause is what IsThrottled means under the flag, and
-			// admission reads that flag without knowing which path set it.
-			Expect(status.CPU.IsThrottled).To(BeTrue())
-
-			// Wire contract: the real measurement ships with both keys present.
-			data, err := json.Marshal(status.CPU)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(data)).To(ContainSubstring("totalUsageMCpu"))
-			Expect(string(data)).To(ContainSubstring("coreCount"))
-		})
-
-		It("should publish neither throttle field when the throttle signal was not readable, rather than a 0 that reads as not throttled", func() {
-			setFlag("true")
-			// Bare metal has no throttle instrument and a window too thin has no
-			// delta. Details carries 0 in both cases, indistinguishable from a
-			// measured "not throttled" — ThrottleSignalReady is the only thing
-			// that separates them. The staged ratio is deliberately non-zero and
-			// deliberately unready: a build that copies the number without
-			// consulting the flag publishes 0.9 here.
-			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
-				CollectedAt: time.Now().Add(-500 * time.Millisecond),
-				Status: simple.Status[fsmv2cpu.CPUStatus]{
-					Result: fsmv2cpu.CPUStatus{
-						Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
-						Details: cpuhealth.Details{
-							AvgUsageCores:       1.5,
-							UsageRingActive:     true,
-							LogicalCpus:         8,
-							ThrottleRatio:       0.9,
-							ThrottleSignalReady: false,
-						},
-						Message: workerHealthyMessage,
-					},
-				},
-			})
-
-			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
-
-			status, err := service.GetStatus(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
+			// ...and NONE of the five legacy fields is filled. The staged legacy
+			// fixture would have produced 1000 mCPU on this same tick, so a build
+			// that let getCPUMetrics fill them fails here.
+			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
+			Expect(status.CPU.CoreCount).To(BeNil())
+			Expect(status.CPU.CgroupCores).To(BeZero())
 			Expect(status.CPU.ThrottleRatio).To(BeZero())
 			Expect(status.CPU.IsThrottled).To(BeFalse())
 
-			// Both are omitempty, so the flat legacy keys are absent. The check
-			// is on the top-level object, not a substring: the nested cpuHealth
-			// evidence still carries throttleRatio 0.9, correctly, because it
-			// ships the raw Details with throttleSignalReady false beside them.
-			// Two contracts — the flat fields assert a measurement, the evidence
-			// reports a reading and its trustworthiness.
+			// The numbers live in the evidence, which is where a consumer under
+			// the flag fetches them.
+			Expect(status.CPU.CPUHealth).NotTo(BeNil())
+			Expect(status.CPU.CPUHealth.AvgUsageCores).To(Equal(3.5))
+			Expect(status.CPU.CPUHealth.LogicalCpus).To(Equal(6.0))
+			Expect(status.CPU.CPUHealth.CapacityCores).To(Equal(4.0))
+			Expect(status.CPU.CPUHealth.ThrottleRatio).To(Equal(0.5))
+
+			// The wire carries exactly two keys under the flag. This is the
+			// executable form of "with the FF on, stop filling the old data":
+			// adding any legacy field back fails here.
 			data, err := json.Marshal(status.CPU)
 			Expect(err).NotTo(HaveOccurred())
 
 			var wire map[string]json.RawMessage
 			Expect(json.Unmarshal(data, &wire)).To(Succeed())
-			Expect(wire).NotTo(HaveKey("throttleRatio"))
-			Expect(wire).NotTo(HaveKey("isThrottled"))
+			Expect(wire).To(HaveLen(2))
+			Expect(wire).To(HaveKey("health"))
 			Expect(wire).To(HaveKey("cpuHealth"))
-			// The usage numbers, whose own source WAS readable, still ship.
-			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(*status.CPU.TotalUsageMCpu).To(Equal(1500.0))
 		})
 
 		It("should fill status.CPU.Health from a Fresh healthy worker verdict with the Active category", func() {
@@ -460,21 +418,17 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Category).To(Equal(models.Active))
 			Expect(status.CPU.Health.ObservedState).To(Equal("active"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
-			// A healthy verdict measured its own numbers, so they ship: 1.5 cores
-			// is 1500 mCPU.
-			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(*status.CPU.TotalUsageMCpu).To(Equal(1500.0))
-			Expect(status.CPU.CoreCount).NotTo(BeNil())
-			Expect(*status.CPU.CoreCount).To(Equal(8))
-			// No quota applies on this box, so no quota is reported — even though
-			// CapacityCores is 8, because it falls back to the logical CPU count
-			// when unlimited. Admission sizes its bridge ceiling from this field,
-			// so publishing 8 here would state a limit that does not exist.
+			// A healthy verdict carries its numbers in the evidence, and the
+			// legacy fields stay empty there as everywhere under the flag.
+			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
+			Expect(status.CPU.CoreCount).To(BeNil())
 			Expect(status.CPU.CgroupCores).To(BeZero())
+			Expect(status.CPU.CPUHealth.AvgUsageCores).To(Equal(1.5))
+			Expect(status.CPU.CPUHealth.LogicalCpus).To(Equal(8.0))
 			data, err := json.Marshal(status.CPU)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(data)).To(ContainSubstring("totalUsageMCpu"))
-			Expect(string(data)).To(ContainSubstring("coreCount"))
+			Expect(string(data)).NotTo(ContainSubstring("totalUsageMCpu"))
+			Expect(string(data)).NotTo(ContainSubstring("coreCount"))
 		})
 
 		It("should not run the legacy 70% CPU-usage rule at all when the worker judged this tick, even on a busy host", func() {
@@ -811,12 +765,12 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// longer say healthy and throttled at once.
 			Expect(status.CPU.IsThrottled).To(BeFalse())
 			Expect(status.CPU.ThrottleRatio).To(BeZero())
-			// The numbers come from Details: 1.5 cores is 1500 mCPU, against the
-			// 1000 the staged legacy fixture would have produced.
-			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
-			Expect(*status.CPU.TotalUsageMCpu).To(Equal(1500.0))
-			Expect(status.CPU.CoreCount).NotTo(BeNil())
-			Expect(*status.CPU.CoreCount).To(Equal(8))
+			// The legacy fields stay empty even though the staged legacy fixture
+			// would have produced 1000 mCPU on this tick. The numbers are in the
+			// evidence instead.
+			Expect(status.CPU.TotalUsageMCpu).To(BeNil())
+			Expect(status.CPU.CoreCount).To(BeNil())
+			Expect(status.CPU.CPUHealth.AvgUsageCores).To(Equal(1.5))
 		})
 	})
 

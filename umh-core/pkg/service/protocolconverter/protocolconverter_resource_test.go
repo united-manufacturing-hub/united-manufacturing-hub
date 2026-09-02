@@ -15,6 +15,7 @@
 package protocolconverter_test
 
 import (
+	"fmt"
 	"runtime"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -174,6 +176,110 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(ContainSubstring("5 bridges maximum"))
 				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
 				Expect(reason).To(ContainSubstring("1 core reserved for Redpanda"))
+			})
+
+			// The pair below is what proves USE_FSMV2_CPU selects WHERE the
+			// capacity is fetched from, rather than one source winning by
+			// preference. Both stage the identical record — the fsmv2 evidence
+			// says 2 usable cores, the legacy field says 8 — and only the flag
+			// differs. Five bridges is over the fsmv2 ceiling of (2-1)x5 and
+			// under the legacy one of (8-1)x5, so the outcome names the source.
+			//
+			// Getting this wrong is expensive in one direction: a build that
+			// ignored the fsmv2 figure on a quota-limited container would fall
+			// through to runtime.NumCPU() and admit roughly 31x too many bridges
+			// on a 32-core host.
+			cpuRecordForBothSources := &models.CPU{
+				CgroupCores: 8.0,
+				CPUHealth: &models.CPUHealth{
+					Details: cpuhealth.Details{CapacityCores: 2.0},
+				},
+			}
+
+			stageContainerWithCPU := func(cpu *models.CPU) {
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "active",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Active,
+									CPUHealth:     models.Active,
+									MemoryHealth:  models.Active,
+									DiskHealth:    models.Active,
+									CPU:           cpu,
+								},
+							},
+						},
+					},
+				}
+
+				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
+				for i := range (2 - 1) * constants.MaxBridgesPerCPUCore {
+					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
+						ID:           string(rune('a' + i)),
+						CurrentState: "active",
+						DesiredState: "active",
+					}
+				}
+
+				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
+					Instances: instances,
+				}
+			}
+
+			It("should fetch the bridge ceiling from the fsmv2 evidence when USE_FSMV2_CPU is on", func() {
+				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
+				stageContainerWithCPU(cpuRecordForBothSources)
+
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(ContainSubstring("5 bridges maximum"))
+				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
+			})
+
+			It("should fetch the bridge ceiling from the legacy cgroup field when USE_FSMV2_CPU is off", func() {
+				snapshot.CurrentConfig.Agent.UseFSMv2CPU = false
+				stageContainerWithCPU(cpuRecordForBothSources)
+
+				// The legacy figure of 8 cores allows (8-1)x5, so the same five
+				// bridges are permitted where the flag-on twin blocked them.
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				Expect(limited).To(BeFalse())
+				Expect(reason).To(BeEmpty())
+			})
+
+			It("should fall back to the host core count when the flag is on and the worker has not measured", func() {
+				// Under the flag the legacy field is never filled, so a tick with
+				// no evidence leaves admission with no reading at all. It takes
+				// the same runtime.NumCPU() fallback the legacy branch takes when
+				// cgroup data is unreadable.
+				hostCeiling := (runtime.NumCPU() - 1) * constants.MaxBridgesPerCPUCore
+
+				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
+				stageContainerWithCPU(&models.CPU{})
+
+				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
+				for i := range hostCeiling {
+					instances[fmt.Sprintf("bridge-%d", i)] = &pkgfsm.FSMInstanceSnapshot{
+						ID:           fmt.Sprintf("bridge-%d", i),
+						CurrentState: "active",
+						DesiredState: "active",
+					}
+				}
+
+				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
+					Instances: instances,
+				}
+
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(ContainSubstring(fmt.Sprintf("%d bridges maximum", hostCeiling)))
 			})
 
 			It("should not count removing/removed bridges", func() {

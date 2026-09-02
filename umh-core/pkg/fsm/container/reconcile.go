@@ -183,13 +183,26 @@ func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 		"disk_health", healthCategoryToString(status.DiskHealth),
 	)
 
+	// Only one generation ever fills a CPU record, and USE_FSMV2_CPU decides
+	// which: the fsmv2 evidence, or the flat legacy fields. This reads whichever
+	// arrived rather than taking the flag, because it is a debug line and the
+	// record already says which shape it is.
 	if status.CPU != nil {
-		if status.CPU.TotalUsageMCpu != nil && status.CPU.CoreCount != nil {
+		switch {
+		case status.CPU.CPUHealth != nil:
+			kv = append(kv,
+				"cpu_mcpu", status.CPU.CPUHealth.AvgUsageCores*1000,
+				"cpu_cores", status.CPU.CPUHealth.LogicalCpus,
+				"cgroup_cores", status.CPU.CPUHealth.CapacityCores,
+				"throttle_ratio", status.CPU.CPUHealth.ThrottleRatio,
+			)
+		case status.CPU.TotalUsageMCpu != nil && status.CPU.CoreCount != nil:
 			kv = append(kv, "cpu_mcpu", *status.CPU.TotalUsageMCpu, "cpu_cores", *status.CPU.CoreCount)
-		} else {
+		default:
 			kv = append(kv, "cpu_mcpu", "unmeasured", "cpu_cores", "unmeasured")
 		}
-		if status.CPU.CgroupCores > 0 {
+
+		if status.CPU.CPUHealth == nil && status.CPU.CgroupCores > 0 {
 			kv = append(kv,
 				"cgroup_cores", status.CPU.CgroupCores,
 				"throttle_ratio", status.CPU.ThrottleRatio,

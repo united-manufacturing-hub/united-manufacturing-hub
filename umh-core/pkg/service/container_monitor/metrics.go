@@ -20,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 const (
@@ -112,8 +113,37 @@ var (
 	}, []string{"instance", "component"})
 )
 
+// cpuGaugeInputs returns the usage and core figures for the three CPU gauges,
+// and whether both were measured this tick. useFSMv2CPU says which generation
+// filled the record, because only one of them ever does: under the flag the
+// figures come from the worker's evidence and the flat fields are empty, and
+// without it the reverse.
+//
+// The two generations do not measure the same thing. The worker reports a
+// 60-second mean of THIS CONTAINER's usage; the legacy path an instantaneous
+// sample of the HOST's usage scaled by the quota. These gauges therefore change
+// meaning when the flag flips, and an alert on them has to be re-based.
+func cpuGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float64, ok bool) {
+	if useFSMv2CPU {
+		// UsageRingActive and a positive LogicalCpus are the evidence's own
+		// readability flags; 0 is a legitimate value for both figures, so
+		// without them an unmeasured tick would record an idle box.
+		if cpu.CPUHealth == nil || !cpu.CPUHealth.UsageRingActive || cpu.CPUHealth.LogicalCpus <= 0 {
+			return 0, 0, false
+		}
+
+		return cpu.CPUHealth.AvgUsageCores * 1000, cpu.CPUHealth.LogicalCpus, true
+	}
+
+	if cpu.TotalUsageMCpu == nil || cpu.CoreCount == nil || *cpu.CoreCount == 0 {
+		return 0, 0, false
+	}
+
+	return *cpu.TotalUsageMCpu, float64(*cpu.CoreCount), true
+}
+
 // RecordContainerStatus updates Prometheus metrics based on the new ContainerStatus type.
-func RecordContainerStatus(status *ServiceInfo, instanceName string) {
+func RecordContainerStatus(status *ServiceInfo, instanceName string, useFSMv2CPU bool) {
 	if status == nil {
 		return
 	}
@@ -135,22 +165,14 @@ func RecordContainerStatus(status *ServiceInfo, instanceName string) {
 	containerHealthStatus.WithLabelValues(instanceName, "memory").Set(float64(status.MemoryHealth))
 	containerHealthStatus.WithLabelValues(instanceName, "disk").Set(float64(status.DiskHealth))
 
-	// CPU metrics
+	// CPU metrics. A nil measurement (an unmeasured tick) leaves each gauge
+	// untouched: the previous value stays, and no fabricated number is recorded.
 	if status.CPU != nil {
-		// A nil measurement (an unmeasured tick) leaves each gauge untouched:
-		// the previous value stays, and no fabricated number is recorded.
-		if status.CPU.TotalUsageMCpu != nil {
-			containerCPUUsageMCores.WithLabelValues(instanceName).Set(*status.CPU.TotalUsageMCpu)
-		}
-
-		if status.CPU.CoreCount != nil {
-			containerCPUCoreCount.WithLabelValues(instanceName).Set(float64(*status.CPU.CoreCount))
-		}
-
-		// CPU load percent is only computed from a real measurement pair.
-		if status.CPU.TotalUsageMCpu != nil && status.CPU.CoreCount != nil {
-			cpuLoadPercent := (*status.CPU.TotalUsageMCpu / 1000.0) / float64(*status.CPU.CoreCount) * 100.0
-			containerCPULoadPercent.WithLabelValues(instanceName).Set(cpuLoadPercent)
+		usageMCores, cores, ok := cpuGaugeInputs(status.CPU, useFSMv2CPU)
+		if ok {
+			containerCPUUsageMCores.WithLabelValues(instanceName).Set(usageMCores)
+			containerCPUCoreCount.WithLabelValues(instanceName).Set(cores)
+			containerCPULoadPercent.WithLabelValues(instanceName).Set((usageMCores / 1000.0) / cores * 100.0)
 		}
 	}
 

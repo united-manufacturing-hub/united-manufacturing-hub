@@ -218,7 +218,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	}
 
 	// Record metrics
-	RecordContainerStatus(status, c.instanceName)
+	RecordContainerStatus(status, c.instanceName, c.useFSMv2CPU)
 
 	return status, nil
 }
@@ -326,13 +326,12 @@ func (c *ContainerMonitorService) collectCPULegacy(ctx context.Context, status *
 // file is read and no legacy rule runs, so a field it cannot fill stays empty
 // rather than borrowing a legacy reading.
 //
-// The numeric fields keep their names across the flag but not their
-// definitions; models.CPU's doc says how each one differs. Nothing here can
-// preserve the old definitions, because the readings they were computed from
-// are not taken any more.
-//
-// Each measurement is set only when its own source says it was measured,
-// because 0 is a legitimate value for all of them.
+// The five legacy numeric fields stay EMPTY here. They are the pre-fsmv2
+// generation's own measurements and this path does not take those readings, so
+// filling them would mean re-deriving a legacy-shaped number from worker data
+// and shipping it under a name whose definition it no longer matches. Consumers
+// that need a figure read it from CPUHealth instead, each gated on the flag at
+// the point it fetches.
 //
 // Most signals need two samples before they can fire, so a throttled box reports
 // Active for its first tick and a merely busy one for its first two, where the
@@ -341,57 +340,7 @@ func (c *ContainerMonitorService) collectCPULegacy(ctx context.Context, status *
 func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) *models.CPU {
 	health, cpuHealth := c.readWorkerCPUHealth(ctx)
 
-	cpuStat := &models.CPU{Health: health, CPUHealth: cpuHealth}
-	if cpuHealth == nil {
-		return cpuStat
-	}
-
-	details := cpuHealth.Details
-
-	// UsageRingActive is the usage measurement's own readability flag; without
-	// it an unmeasured tick would publish 0 mCPU as if the box were idle.
-	if details.UsageRingActive {
-		usageMCpu := details.AvgUsageCores * 1000
-		cpuStat.TotalUsageMCpu = &usageMCpu
-	}
-
-	// LogicalCpus is absent, and so zero, when the cpuset read failed. Publishing
-	// that would divide by zero in the cpu-load metric.
-	if details.LogicalCpus > 0 {
-		coreCount := int(details.LogicalCpus)
-		cpuStat.CoreCount = &coreCount
-	}
-
-	// CgroupCores means the quota, and CapacityCores falls back to LogicalCpus
-	// when no quota applies, so it may only be copied where one does.
-	if details.LimitApplies {
-		cpuStat.CgroupCores = details.CapacityCores
-	}
-
-	// ThrottleSignalReady is the throttle reading's own readability flag. Bare
-	// metal has no instrument and a thin window has no delta; both would
-	// otherwise publish 0 as a measured "not throttled".
-	if details.ThrottleSignalReady {
-		cpuStat.ThrottleRatio = details.ThrottleRatio
-		cpuStat.IsThrottled = verdictBlamesThrottling(cpuHealth.Verdict)
-	}
-
-	return cpuStat
-}
-
-// verdictBlamesThrottling reports whether the worker's throttling signal fired.
-// It fires at the same 0.05 ratio over the same 60 seconds as the legacy
-// IsThrottled flag, but it does NOT clear the same way: the worker latches, so
-// it holds until the ratio falls below 0.03 over a full window, where the legacy
-// reading dropped as soon as one sample came back under 0.05.
-func verdictBlamesThrottling(verdict cpuhealth.Verdict) bool {
-	for _, cause := range verdict.Causes {
-		if cause.Kind == cpuhealth.CauseKindThrottling {
-			return true
-		}
-	}
-
-	return false
+	return &models.CPU{Health: health, CPUHealth: cpuHealth}
 }
 
 // readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a

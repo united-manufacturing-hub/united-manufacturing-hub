@@ -152,17 +152,23 @@ type Container struct {
 	Architecture ContainerArchitecture `json:"architecture"` // Processor architecture
 }
 
-// CPU is the interface between the two CPU generations, and the only one.
-// USE_FSMV2_CPU selects which of them fills this struct; nothing that reads it
-// can tell, and every Management Console build reads the five numeric fields
-// today. CPUHealth is the fsmv2 worker's verdict and the evidence behind it,
-// present only on ticks that worker measured.
+// CPU carries exactly one generation's CPU reporting, and USE_FSMV2_CPU decides
+// which. Never both, and never a mix.
 //
-// The five numeric fields keep their names and types across the flag but not
-// their definitions. Under the flag TotalUsageMCpu is a 60-second mean of THIS
-// CONTAINER's usage; without it, an instantaneous sample of the HOST's usage
-// scaled by the quota. IsThrottled latches under the flag and does not without
-// it. Comparing either across the flag compares two different quantities.
+// With the flag OFF, the five numeric fields below hold the pre-fsmv2
+// measurements and CPUHealth is absent. With it ON, CPUHealth holds the worker's
+// verdict and the evidence behind it, and **the five numeric fields stay empty** —
+// they are the other generation's measurements and this one does not take those
+// readings. A consumer that needs a figure under the flag reads it from
+// CPUHealth, gated on the flag where it fetches.
+//
+// The two generations do not measure the same thing, which is why nothing
+// re-derives one from the other: the worker reports a 60-second mean of THIS
+// CONTAINER's usage, the legacy path an instantaneous sample of the HOST's usage
+// scaled by the quota.
+//
+// ⚠️ A Management Console build that reads only the five numeric fields shows no
+// CPU data at all against a flagged instance. The two flags are a matched pair.
 type CPU struct {
 	Health         *Health  `json:"health"`
 	TotalUsageMCpu *float64 `json:"totalUsageMCpu,omitempty"` // Total usage in milli-cores (1000m = 1 core); nil when not measured this tick

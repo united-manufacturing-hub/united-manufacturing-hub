@@ -14,10 +14,21 @@
 
 package container_monitor
 
-import "context"
+import (
+	"context"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+)
 
 // SetCPUUsageProvider exposes the test seam to the external test package. It
 // compiles only under `go test`, so the production API does not carry it.
 func (c *ContainerMonitorService) SetCPUUsageProvider(fn func(ctx context.Context) (float64, error)) {
 	c.setCPUUsageProvider(fn)
+}
+
+// CPUGaugeInputs exposes the gauge-source selection to the external test
+// package. It decides which generation the three CPU Prometheus series are read
+// from, so it needs a test of its own.
+func CPUGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float64, ok bool) {
+	return cpuGaugeInputs(cpu, useFSMv2CPU)
 }
