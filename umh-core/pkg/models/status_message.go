@@ -167,8 +167,11 @@ type Container struct {
 // CONTAINER's usage, the legacy path an instantaneous sample of the HOST's usage
 // scaled by the quota.
 //
-// ⚠️ A Management Console build that reads only the five numeric fields shows no
-// CPU data at all against a flagged instance. The two flags are a matched pair.
+// ⚠️ The console has its own flag for reading CPUHealth, and the two are a
+// matched pair that nothing enforces. A console build that reads only the five
+// numeric fields renders a permanent "N/A" against a flagged instance: it takes
+// the defined-record-without-figures branch, so it degrades rather than breaking,
+// and neither side can detect the mismatch.
 type CPU struct {
 	Health         *Health  `json:"health"`
 	TotalUsageMCpu *float64 `json:"totalUsageMCpu,omitempty"` // Total usage in milli-cores (1000m = 1 core); nil when not measured this tick
