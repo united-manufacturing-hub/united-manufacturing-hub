@@ -19,5 +19,5 @@ This is intentional. Most work in the Management Console is a one-off change, of
 
 
 {% hint style="warning" %}
-There is no automatic sign-out after a period of inactivity. A session stays valid until the 14 day token expires or the 30 day limit is reached, whichever comes first. Sign out when you leave your workstation. If you need shorter sessions than that, use single sign-on and set the policy in your own identity provider.
+There is no automatic sign-out after a period of inactivity. A session stays valid until the 14 day token expires or the 30 day limit is reached, whichever comes first. Sign out when you leave your workstation.
 {% endhint %}
