@@ -112,6 +112,15 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 
 // defaultCPUUsagePercent reads the host CPU usage through gopsutil, matching
 // the legacy source: the first element of the non-per-CPU percentage slice.
+//
+// The legacy judgement this feeds is not dead code behind USE_FSMV2_CPU.
+// ProtocolConverterService.IsResourceLimited blocks bridge creation on the CPU
+// health category and message produced from this reading, and sizes the bridge
+// ceiling from CPU.CgroupCores. Dropping either while the flag is on does not
+// fail loudly: the ceiling falls back to runtime.NumCPU(), which is the host's
+// core count rather than this container's quota, and admits bridges the box
+// cannot run. The legacy path stays until admission reads the fsmv2 evidence
+// instead, which is ENG-5265.
 func defaultCPUUsagePercent(ctx context.Context) (float64, error) {
 	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
 	if err != nil {
