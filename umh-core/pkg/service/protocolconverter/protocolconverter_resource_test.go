@@ -277,41 +277,6 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(BeEmpty())
 			})
 
-			It("should block rather than guess when USE_FSMV2_CPU is on and the worker has not reported a capacity", func() {
-				// The first ticks after start, before the worker publishes. The
-				// only other figure available is the host's core count, and
-				// sizing a container's budget from the whole machine admits
-				// bridges it cannot run, so this blocks instead.
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
-				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
-					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
-						constants.CoreInstanceName: {
-							ID:           constants.CoreInstanceName,
-							CurrentState: "active",
-							DesiredState: "active",
-							LastObservedState: &container.ContainerObservedStateSnapshot{
-								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									OverallHealth: models.Active,
-									CPUHealth:     models.Active,
-									MemoryHealth:  models.Active,
-									DiskHealth:    models.Active,
-									CPU:           &models.CPU{CgroupCores: 8.0},
-								},
-							},
-						},
-					},
-				}
-
-				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
-					Instances: make(map[string]*pkgfsm.FSMInstanceSnapshot),
-				}
-
-				limited, reason := service.IsResourceLimited(snapshot)
-
-				Expect(limited).To(BeTrue())
-				Expect(reason).To(Equal("CPU capacity not reported yet"))
-			})
-
 			It("should not count removing/removed bridges", func() {
 				// Mix of active and removing bridges
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
@@ -415,13 +380,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Expect(reason).To(Equal("CPU degraded: CPU throttled (15.0% periods throttled)"))
 				})
 
-				It("should not block when the CPU verdict is healthy, whatever the legacy throttle flag says", func() {
-					// The fsmv2 CPU worker judges throttling itself, so a healthy
-					// verdict beside a legacy IsThrottled reading means the worker
-					// looked and found no problem. Admission must not overrule it.
-					// This assertion is reachable: the removed throttle branch ran
-					// BEFORE the bridge-count check, so a build that restores it
-					// returns true here.
+				It("should not block on the legacy throttle reading when USE_FSMV2_CPU is on", func() {
+					// Under the flag the worker judges throttling itself and its
+					// verdict is read above, so admission must not consult the
+					// legacy reading as well. Ungating the throttle branch returns
+					// true here, because that branch runs before the bridge-count
+					// check.
+					snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
 					snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 						Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
 							constants.CoreInstanceName: {

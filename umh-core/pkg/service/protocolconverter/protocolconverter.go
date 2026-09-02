@@ -1236,6 +1236,24 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				return true, "Disk resources degraded"
 			}
 
+			// The legacy throttle reading gets its own block reason, but only
+			// when the legacy path is judging. Under USE_FSMV2_CPU the worker
+			// assesses throttling itself and its verdict has already been read
+			// above, so consulting this flag as well would let a healthy verdict
+			// be overruled by the reading it was drawn from.
+			if !snapshot.CurrentConfig.Agent.UseFSMv2CPU && serviceInfo.CPU != nil && serviceInfo.CPU.IsThrottled {
+				// Provide detailed throttling message as per ENG-3423
+				throttlePercent := serviceInfo.CPU.ThrottleRatio * 100
+				cgroupCores := serviceInfo.CPU.CgroupCores
+				hostCores := runtime.NumCPU()
+
+				// Base message explaining the impact
+				message := fmt.Sprintf("CPU throttled (%.0f%% of time). Container limited to %.1f cores, needs more during peaks (host has %d cores available)",
+					throttlePercent, cgroupCores, hostCores)
+
+				return true, message
+			}
+
 			// Check overall health as a fallback
 			if serviceInfo.OverallHealth == models.Degraded {
 				return true, "Overall system resources degraded"
@@ -1267,41 +1285,30 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 		}
 	}
 
-	// How many cores this instance may use. USE_FSMV2_CPU picks the source and
-	// there is no crossing between them: with the flag on the figure comes from
-	// the fsmv2 CPU worker, with it off from the legacy cgroup read.
-	var observedCPU *models.CPU
+	// Get CPU core count and calculate max bridges.
+	// USE_FSMV2_CPU selects which reading of the same figure is used: the fsmv2
+	// CPU worker's CapacityCores, or the legacy cgroup quota. Everything else
+	// about this calculation is unchanged.
+	var cpuCores float64
 
 	if containerInstance.LastObservedState != nil {
 		if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			observedCPU = containerObserved.ServiceInfoSnapshot.CPU
+			cpu := containerObserved.ServiceInfoSnapshot.CPU
+			switch {
+			case cpu == nil:
+			case snapshot.CurrentConfig.Agent.UseFSMv2CPU:
+				if cpu.CPUHealth != nil {
+					cpuCores = cpu.CPUHealth.CapacityCores
+				}
+			default:
+				cpuCores = cpu.CgroupCores
+			}
 		}
 	}
 
-	var cpuCores float64
-
-	if snapshot.CurrentConfig.Agent.UseFSMv2CPU {
-		if observedCPU != nil && observedCPU.CPUHealth != nil {
-			cpuCores = observedCPU.CPUHealth.CapacityCores
-		}
-
-		// The worker has not published a capacity yet, which happens for the
-		// first ticks after start. Block rather than guess: the only figure
-		// available without it is the host's core count, and sizing a
-		// container's bridge budget from the whole machine admits bridges it
-		// cannot run.
-		if cpuCores <= 0 {
-			return true, "CPU capacity not reported yet"
-		}
-	} else {
-		if observedCPU != nil {
-			cpuCores = observedCPU.CgroupCores
-		}
-
-		// Fall back to runtime.NumCPU if cgroup info not available
-		if cpuCores == 0 {
-			cpuCores = float64(runtime.NumCPU())
-		}
+	// Fall back to runtime.NumCPU if no reading is available
+	if cpuCores <= 0 {
+		cpuCores = float64(runtime.NumCPU())
 	}
 
 	// Calculate max bridges based on available CPU
