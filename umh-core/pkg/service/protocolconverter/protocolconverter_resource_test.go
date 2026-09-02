@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -176,6 +177,56 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(ContainSubstring("1 core reserved for Redpanda"))
 			})
 
+			It("should size the bridge ceiling from the fsmv2 worker's capacity, not the legacy cgroup figure", func() {
+				// The two disagree on purpose: the worker reports 2 usable cores
+				// and the legacy collector 8. Five bridges is over the worker's
+				// ceiling of (2-1)*5 and under the legacy one of (8-1)*5, so the
+				// outcome names which figure was used. A build that prefers
+				// CgroupCores allows this and fails here.
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "active",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Active,
+									CPUHealth:     models.Active,
+									MemoryHealth:  models.Active,
+									DiskHealth:    models.Active,
+									CPU: &models.CPU{
+										CgroupCores: 8.0,
+										CPUHealth: &models.CPUHealth{
+											Details: cpuhealth.Details{CapacityCores: 2.0},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
+				for i := range (2 - 1) * constants.MaxBridgesPerCPUCore {
+					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
+						ID:           string(rune('a' + i)),
+						CurrentState: "active",
+						DesiredState: "active",
+					}
+				}
+
+				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
+					Instances: instances,
+				}
+
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(ContainSubstring("5 bridges maximum"))
+				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
+			})
+
 			It("should not count removing/removed bridges", func() {
 				// Mix of active and removing bridges
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
@@ -244,7 +295,48 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Expect(reason).To(Equal("CPU degraded: CPU usage at 85%"))
 				})
 
-				It("should block when CPU is throttled with detailed message", func() {
+				It("should block a throttled box through its degraded CPU health, not through a throttle check of its own", func() {
+					// Throttling reaches admission the same way any other CPU
+					// problem does: whoever judged CPU health said degraded, and
+					// the reason carries their message. Admission holds no
+					// opinion about throttling.
+					snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+						Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+							constants.CoreInstanceName: {
+								ID:           constants.CoreInstanceName,
+								CurrentState: "active",
+								DesiredState: "active",
+								LastObservedState: &container.ContainerObservedStateSnapshot{
+									ServiceInfoSnapshot: container_monitor.ServiceInfo{
+										OverallHealth: models.Degraded,
+										CPUHealth:     models.Degraded,
+										MemoryHealth:  models.Active,
+										DiskHealth:    models.Active,
+										CPU: &models.CPU{
+											Health:        &models.Health{Message: "CPU throttled (15.0% periods throttled)"},
+											IsThrottled:   true,
+											ThrottleRatio: 0.15,
+											CgroupCores:   2.0,
+										},
+									},
+								},
+							},
+						},
+					}
+
+					limited, reason := service.IsResourceLimited(snapshot)
+
+					Expect(limited).To(BeTrue())
+					Expect(reason).To(Equal("CPU degraded: CPU throttled (15.0% periods throttled)"))
+				})
+
+				It("should not block when the CPU verdict is healthy, whatever the legacy throttle flag says", func() {
+					// The fsmv2 CPU worker judges throttling itself, so a healthy
+					// verdict beside a legacy IsThrottled reading means the worker
+					// looked and found no problem. Admission must not overrule it.
+					// This assertion is reachable: the removed throttle branch ran
+					// BEFORE the bridge-count check, so a build that restores it
+					// returns true here.
 					snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 						Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
 							constants.CoreInstanceName: {
@@ -258,9 +350,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										MemoryHealth:  models.Active,
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
+											Health:        &models.Health{Message: "CPU healthy"},
 											IsThrottled:   true,
-											ThrottleRatio: 0.15, // 15% throttled
-											CgroupCores:   2.0,  // Limited to 2 cores
+											ThrottleRatio: 0.15,
+											CgroupCores:   2.0,
 										},
 									},
 								},
@@ -270,11 +363,8 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 
 					limited, reason := service.IsResourceLimited(snapshot)
 
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(ContainSubstring("CPU throttled (15% of time)"))
-					Expect(reason).To(ContainSubstring("Container limited to 2.0 cores"))
-					Expect(reason).To(ContainSubstring("needs more during peaks"))
-					Expect(reason).To(MatchRegexp(`host has \d+ cores available`))
+					Expect(limited).To(BeFalse())
+					Expect(reason).To(BeEmpty())
 				})
 			})
 
@@ -493,12 +583,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									OverallHealth: models.Active,
-									CPUHealth:     models.Active,
+									OverallHealth: models.Degraded,
+									CPUHealth:     models.Degraded,
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
-										IsThrottled:   true, // CPU is throttled
+										Health:        &models.Health{Message: "CPU throttled (20.0% periods throttled)"},
+										IsThrottled:   true,
 										ThrottleRatio: 0.20,
 										CgroupCores:   2.0,
 									},

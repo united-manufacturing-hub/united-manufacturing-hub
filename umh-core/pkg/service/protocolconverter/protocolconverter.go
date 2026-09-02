@@ -1236,20 +1236,6 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				return true, "Disk resources degraded"
 			}
 
-			// Also check for CPU throttling specifically with improved message
-			if serviceInfo.CPU != nil && serviceInfo.CPU.IsThrottled {
-				// Provide detailed throttling message as per ENG-3423
-				throttlePercent := serviceInfo.CPU.ThrottleRatio * 100
-				cgroupCores := serviceInfo.CPU.CgroupCores
-				hostCores := runtime.NumCPU()
-
-				// Base message explaining the impact
-				message := fmt.Sprintf("CPU throttled (%.0f%% of time). Container limited to %.1f cores, needs more during peaks (host has %d cores available)",
-					throttlePercent, cgroupCores, hostCores)
-
-				return true, message
-			}
-
 			// Check overall health as a fallback
 			if serviceInfo.OverallHealth == models.Degraded {
 				return true, "Overall system resources degraded"
@@ -1281,15 +1267,23 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 		}
 	}
 
-	// Get CPU core count and calculate max bridges
-	// Use cgroup CPU quota if available as it's more accurate for containerized environments
+	// How many cores this instance may use. The fsmv2 CPU worker's CapacityCores
+	// is preferred where present: it is the quota when one is set and the CPUs
+	// this process may use when none is, so it never reports the whole machine
+	// to a container that only has a slice of it. CgroupCores is the same figure
+	// from the legacy collector, and is what an instance running without
+	// USE_FSMV2_CPU reports.
 	var cpuCores float64
 
-	// Try to get cgroup CPU limit from container observed state if available
 	if containerInstance.LastObservedState != nil {
 		if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			if containerObserved.ServiceInfoSnapshot.CPU != nil && containerObserved.ServiceInfoSnapshot.CPU.CgroupCores > 0 {
-				cpuCores = containerObserved.ServiceInfoSnapshot.CPU.CgroupCores
+			cpu := containerObserved.ServiceInfoSnapshot.CPU
+			switch {
+			case cpu == nil:
+			case cpu.CPUHealth != nil && cpu.CPUHealth.CapacityCores > 0:
+				cpuCores = cpu.CPUHealth.CapacityCores
+			case cpu.CgroupCores > 0:
+				cpuCores = cpu.CgroupCores
 			}
 		}
 	}
