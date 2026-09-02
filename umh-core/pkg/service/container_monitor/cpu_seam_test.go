@@ -643,7 +643,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).To(Equal("CPU utilization normal"))
 		})
 
-		It("should keep the legacy throttled health when a Fresh healthy verdict cannot erase it (the seam supersedes legacy only in the degraded direction)", func() {
+		It("should let a Fresh healthy verdict replace the legacy throttled health (with the flag on the worker is the only judge, throttling included)", func() {
 			setFlag("true")
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
@@ -656,9 +656,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			})
 
 			// Same throttled cgroup staging as the no-verdict spec: the legacy
-			// path judges the box degraded by throttling while the worker's
-			// Fresh healthy verdict claims otherwise. A healthy verdict must not
-			// overwrite the throttle record the aggregate check below reads.
+			// path would judge the box degraded by throttling while the worker's
+			// Fresh healthy verdict says otherwise. The worker wins.
 			cpuStat := []byte("nr_periods 1000\nnr_throttled 500\nthrottled_usec 50000000\n")
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
@@ -686,21 +685,25 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The worker's healthy verdict must not erase the legacy degraded
-			// health of a genuinely throttled box, in the record, the aggregate
-			// CPU health, or the overall health.
-			Expect(status.CPUHealth).To(Equal(models.Degraded))
-			Expect(status.OverallHealth).To(Equal(models.Degraded))
-			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
-			Expect(status.CPU.Health.Message).To(ContainSubstring("CPU throttled"))
-			Expect(status.CPU.Health.Message).NotTo(Equal(workerHealthyMessage))
-			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
+			// The worker's healthy verdict replaces the legacy throttled health
+			// rather than being vetoed by it. The worker assesses throttling
+			// itself, so the legacy finding is not a second opinion the seam
+			// honours. A build that restores the veto fails here.
+			Expect(status.CPU.Health.Category).To(Equal(models.Active))
+			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
+			Expect(status.CPU.Health.ObservedState).To(Equal("active"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
-			// The legacy throttle bypass preserves the real numerics: the worker
-			// block is skipped on a legacy-throttled tick, so TotalUsageMCpu and
-			// CoreCount keep the legacy getCPUMetrics readings instead of being
-			// nil-ed or zeroed as absent markers (a build that nils or zeroes
-			// under the throttle gate fails here).
+			Expect(status.CPUHealth).To(Equal(models.Active))
+			// OverallHealth is deliberately not asserted here: this fixture stages
+			// no disk data, so DiskHealth degrades the overall regardless of what
+			// the CPU verdict says.
+			// The legacy throttle READING stays on the record: getCPUMetrics
+			// still measures even though it no longer judges. So the wire can
+			// carry isThrottled true beside a healthy verdict, which is what the
+			// flag means rather than a contradiction.
+			Expect(status.CPU.IsThrottled).To(BeTrue())
+			// A healthy verdict measured its own numbers, so the legacy readings
+			// stay on the record rather than being nil-ed.
 			Expect(status.CPU.TotalUsageMCpu).NotTo(BeNil())
 			Expect(*status.CPU.TotalUsageMCpu).To(BeNumerically(">", 0))
 			Expect(status.CPU.CoreCount).NotTo(BeNil())

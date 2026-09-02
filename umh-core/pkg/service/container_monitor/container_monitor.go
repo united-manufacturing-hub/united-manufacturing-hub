@@ -166,36 +166,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 
 	status.CPU = cpuStat
 
-	// CPU seam: when USE_FSMV2_CPU was on at construction and the fsmv2 CPU
-	// worker has a fresh verdict, that verdict replaces the legacy CPU health.
-	// status.CPU aliases cpuStat, so the write lands on the record the aggregate
-	// check below reads. A box the legacy path judged throttle-degraded keeps
-	// that judgement: the usage rule below does not recompute throttling, so a
-	// healthy worker verdict would erase it.
-	//
-	// The two rules disagree at the boundary: the legacy rule below degrades at
-	// >= 70% of gopsutil's usagePercent, the worker's own rule at > 70% of
-	// TotalUsageMCpu/effectiveCores, and the worker's rule is skipped when
-	// effectiveCores is not positive. A busy box the worker cannot yet see, the
-	// throttle window's first two ticks and the worker's own measurement warm-up,
-	// now reports Active where the legacy rule degraded it.
-	workerVerdictAuthoritative := false
-	if c.useFSMv2CPU {
-		if workerHealth, workerCPUHealth, measured := c.readWorkerCPUHealth(ctx); workerHealth != nil && !cpuStat.IsThrottled {
-			status.CPU.Health = workerHealth
-			status.CPU.CPUHealth = workerCPUHealth
-
-			// The legacy figures come from a tick the worker did not measure, so
-			// they would sit beside a verdict drawn from different numbers.
-			degradedWithoutMeasurement := workerHealth.Category == models.Degraded && !measured
-			if degradedWithoutMeasurement {
-				status.CPU.TotalUsageMCpu = nil
-				status.CPU.CoreCount = nil
-			}
-
-			workerVerdictAuthoritative = workerHealth.Category == models.Active
-		}
-	}
+	fsmv2Judged := c.applyFSMv2CPUVerdict(ctx, cpuStat)
 
 	// Get memory stats
 	memStat, err := c.getMemoryMetrics(ctx)
@@ -231,7 +202,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
 		status.CPUHealth = models.Degraded
 		status.OverallHealth = models.Degraded
-	} else if !workerVerdictAuthoritative {
+	} else if !fsmv2Judged {
 		// A consumed worker verdict is authoritative: skip the legacy CPU-usage
 		// rule, which would otherwise re-judge a busy host the worker assessed.
 		// Calculate CPU percentage against effective cores (cgroup limit if available)
@@ -333,6 +304,44 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // (pollInterval in pkg/fsmv2/cpu), so one slow or missed poll cannot flip the
 // seam to the legacy path.
 const cpuWorkerMaxAge = 3 * time.Second
+
+// applyFSMv2CPUVerdict lets the fsmv2 CPU worker judge this tick's CPU health,
+// and reports whether it did. When it reports true the worker is the only judge:
+// GetStatus runs none of its legacy CPU rules, including throttling, which the
+// worker assesses itself.
+//
+// It reports false when USE_FSMV2_CPU was off at construction, or when the fsmv2
+// runtime is not answering at all - no client published, the worker ref never
+// registered, or a fresh observation that produced no verdict. Those are the
+// only cases where the legacy rules still decide.
+//
+// The worker's own windows need up to a minute to fill, so a box that is busy or
+// throttled inside that minute reports Active where the legacy rules degraded
+// it. That gap is accepted: the flag means the worker judges, and a worker that
+// has not measured yet has nothing to say.
+func (c *ContainerMonitorService) applyFSMv2CPUVerdict(ctx context.Context, cpuStat *models.CPU) bool {
+	if !c.useFSMv2CPU {
+		return false
+	}
+
+	workerHealth, workerCPUHealth, measured := c.readWorkerCPUHealth(ctx)
+	if workerHealth == nil {
+		return false
+	}
+
+	cpuStat.Health = workerHealth
+	cpuStat.CPUHealth = workerCPUHealth
+
+	// The legacy figures come from a tick the worker did not measure, so they
+	// would sit beside a verdict drawn from different numbers.
+	degradedWithoutMeasurement := workerHealth.Category == models.Degraded && !measured
+	if degradedWithoutMeasurement {
+		cpuStat.TotalUsageMCpu = nil
+		cpuStat.CoreCount = nil
+	}
+
+	return true
+}
 
 // readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a
 // models.Health. A nil health means the caller must keep the legacy
