@@ -319,10 +319,10 @@ func judgeLegacyCPUUsage(status *ServiceInfo, cpuStat *models.CPU) {
 // registered, or a fresh observation that produced no verdict. Those are the
 // only cases where the legacy rules still decide.
 //
-// The worker's own windows need up to a minute to fill, so a box that is busy or
-// throttled inside that minute reports Active where the legacy rules degraded
-// it. That gap is accepted: the flag means the worker judges, and a worker that
-// has not measured yet has nothing to say.
+// Most signals need two samples before they can fire, so a throttled box reports
+// Active for its first tick and a merely busy one for its first two, where the
+// legacy rules degraded it immediately. Nothing waits for a window to fill: a
+// full window is required to RECOVER, never to degrade.
 func (c *ContainerMonitorService) applyFSMv2CPUVerdict(ctx context.Context, cpuStat *models.CPU) bool {
 	if !c.useFSMv2CPU {
 		return false
