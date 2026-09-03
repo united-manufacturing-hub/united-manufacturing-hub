@@ -49,7 +49,7 @@ func (c *ContainerMonitorService) setCPUUsageProvider(fn func(ctx context.Contex
 }
 
 // judgeLegacyCPUUsage degrades the instance above CPUHighThresholdPercent of the
-// cores it may use, and only collectCPULegacy calls it, so it never runs under
+// cores it may use, and only the legacy arm of GetStatus calls it, so it never runs under
 // USE_FSMV2_CPU.
 //
 // getCPUMetrics already degrades on that same threshold, so this changes an
@@ -72,19 +72,6 @@ func judgeLegacyCPUUsage(status *ServiceInfo, cpuStat *models.CPU) {
 			status.OverallHealth = models.Degraded
 		}
 	}
-}
-
-// collectCPULegacy runs the pre-fsmv2 CPU path.
-func (c *ContainerMonitorService) collectCPULegacy(ctx context.Context, status *ServiceInfo) error {
-	cpuStat, err := c.getCPUMetrics(ctx)
-	if err != nil {
-		return err
-	}
-
-	status.CPU = cpuStat
-	judgeLegacyCPUUsage(status, cpuStat)
-
-	return nil
 }
 
 // getCPUMetrics collects CPU metrics using gopsutil.

@@ -126,11 +126,23 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 		Architecture:  models.ContainerArchitecture(runtime.GOARCH),
 	}
 
-	// Get CPU stats.
+	// Get CPU stats. Both arms return the record and abort the tick on a
+	// cancelled ctx; only the legacy arm judges usage a second time (ENG-5384).
 	if c.useFSMv2CPU {
-		status.CPU = c.collectCPUFromWorker(ctx)
-	} else if err := c.collectCPULegacy(ctx, status); err != nil {
-		return nil, fmt.Errorf("failed to get CPU metrics: %w", err)
+		cpuStat, err := c.collectCPUFromWorker(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CPU metrics: %w", err)
+		}
+
+		status.CPU = cpuStat
+	} else {
+		cpuStat, err := c.getCPUMetrics(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CPU metrics: %w", err)
+		}
+
+		status.CPU = cpuStat
+		judgeLegacyCPUUsage(status, cpuStat)
 	}
 
 	// Get memory stats

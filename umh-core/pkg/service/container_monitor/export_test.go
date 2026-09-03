@@ -32,3 +32,9 @@ func (c *ContainerMonitorService) SetCPUUsageProvider(fn func(ctx context.Contex
 func CPUGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float64, ok bool) {
 	return cpuGaugeInputs(cpu, useFSMv2CPU)
 }
+
+// CollectCPUFromWorker exposes the worker arm of GetStatus to the external test
+// package so its cancelled-tick arm is reachable without a full GetStatus.
+func (c *ContainerMonitorService) CollectCPUFromWorker(ctx context.Context) (*models.CPU, error) {
+	return c.collectCPUFromWorker(ctx)
+}

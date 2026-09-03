@@ -36,10 +36,16 @@ const cpuWorkerMaxAge = 3 * fsmv2cpu.PollInterval
 // last observation. The legacy fields stay empty on purpose: old and new
 // reporting stay cleanly separated, so nothing here re-derives a legacy-named
 // number from worker data. models.CPU says what each generation carries.
-func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) *models.CPU {
-	health, cpuHealth := c.readWorkerCPUHealth(ctx)
+//
+// It errors only when the tick was cancelled, matching getCPUMetrics: a
+// cancelled tick measured nothing, so it has no verdict to report.
+func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) (*models.CPU, error) {
+	health, cpuHealth, err := c.readWorkerCPUHealth(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	return &models.CPU{Health: health, CPUHealth: cpuHealth}
+	return &models.CPU{Health: health, CPUHealth: cpuHealth}, nil
 }
 
 // cpuVerdict is the seam's judgement about the CPU worker's last observation:
@@ -140,7 +146,7 @@ func judgeWorkerCPU(
 // readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a
 // models.Health. It always returns a health, and the protocol converter's
 // IsResourceLimited reads that message as its bridge-block reason.
-func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, *models.CPUHealth) {
+func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, *models.CPUHealth, error) {
 	client := fsmv2client.GetClient()
 	// Fallback for a misconfiguration: USE_FSMV2_CPU is on but nothing published
 	// a client, so the fsmv2 supervisor never started (or has not yet).
@@ -151,15 +157,22 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 			c.logger.Warn(message)
 		})
 
-		return degradedCPU(message).health(), nil
+		return degradedCPU(message).health(), nil, nil
 	}
 
 	// Get the latest poll result from the worker.
 	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
 
+	// A cancelled tick is not a degraded box. getCPUMetrics checks ctx the same
+	// way after its cgroup read, so both arms abort the tick rather than
+	// publishing a verdict nothing measured.
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
+
 	verdict := judgeWorkerCPU(workerStatus, freshness, err)
 
-	return verdict.health(), verdict.cpuHealth
+	return verdict.health(), verdict.cpuHealth, nil
 }
 
 // cpuSeamClientUnavailableMessage says which prerequisite is missing when
