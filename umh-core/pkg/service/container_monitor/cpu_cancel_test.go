@@ -16,12 +16,15 @@ package container_monitor_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -38,12 +41,12 @@ func (cpuPanicStateReader) LoadObservedTyped(_ context.Context, _, _ string, _ i
 }
 
 var _ = Describe("the CPU seam on a cancelled tick", func() {
-	// Neither spec stages an observation. The seam decides a cancelled tick
-	// before it reads anything, so a staged verdict would sit there unread and
-	// suggest the outcome depended on it. What the two specs do vary is whether
-	// a client was ever published, because the no-client arm is the one the
-	// check has to come before: it reports a missing prerequisite, and a
-	// cancelled tick has not established that anything is missing.
+	// Three shapes a cancelled tick can arrive in: with a client published,
+	// with none, and with a store that serves its observation successfully
+	// despite the cancellation. The last is the only shape production can
+	// produce -- no store in this repo consults ctx on a read, so a cancelled
+	// context never comes back as a read error -- and it is the one a check
+	// conjoined with the read error would miss.
 	newService := func() *container_monitor.ContainerMonitorService {
 		// The path is never read: the seam returns before it touches the
 		// filesystem.
@@ -74,6 +77,31 @@ var _ = Describe("the CPU seam on a cancelled tick", func() {
 
 		Expect(err).To(MatchError(context.Canceled))
 		Expect(cpu).To(BeNil())
+	})
+
+	It("should abort when the store serves its observation despite the cancellation", func() {
+		// The shape production actually produces. No store here consults ctx on
+		// a read, so the read succeeds and returns a healthy verdict while the
+		// context is already cancelled. Nothing but ctx.Err() on its own can
+		// catch that, which is why this spec stages a successful read rather
+		// than a read error: a check that also required a read error would
+		// report the healthy verdict and ship it.
+		writer := dynamicchildren.NewWriter()
+		Expect(writer.Upsert(fsmv2cpu.Ref, map[string]any{})).To(Succeed())
+
+		serving := &cpuStubStateReader{obs: &fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+			CollectedAt: time.Now(),
+			Status:      healthyWorkerStatus(),
+		}}
+
+		previous := fsmv2client.GetClient()
+		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, serving))
+		DeferCleanup(func() { fsmv2client.SetClient(previous) })
+
+		cpu, err := newService().CollectCPUFromWorker(cancelledContext())
+
+		Expect(err).To(MatchError(context.Canceled))
+		Expect(cpu).To(BeNil(), "a cancelled tick reports nothing, healthy or otherwise")
 	})
 
 	It("should abort with no client published, rather than blame a missing prerequisite", func() {
