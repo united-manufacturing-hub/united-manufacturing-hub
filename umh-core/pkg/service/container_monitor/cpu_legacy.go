@@ -48,9 +48,9 @@ func (c *ContainerMonitorService) setCPUUsageProvider(fn func(ctx context.Contex
 	c.cpuUsageProvider = fn
 }
 
-// judgeLegacyCPUUsage degrades the instance above CPUHighThresholdPercent of the
-// cores it may use, and only the legacy arm of GetStatus calls it, so it never runs under
-// USE_FSMV2_CPU.
+// judgeLegacyCPUUsage degrades the instance above CPUHighThresholdPercent of
+// the cores it may use, and only the legacy arm of GetStatus calls it, so it
+// never runs under USE_FSMV2_CPU.
 //
 // getCPUMetrics already degrades on that same threshold, so this changes an
 // outcome only where the two compute different core counts: a quota below 0.1
@@ -117,7 +117,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	case usagePercent >= constants.CPUHighThresholdPercent || isThrottled:
 		category = models.Degraded
 
-		if isThrottled && cgroupInfo != nil {
+		if isThrottled {
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
 			message = "CPU utilization critical"
