@@ -21,6 +21,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/benbjohnson/clock"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -47,6 +49,14 @@ const (
 	// alone, so two payloads cannot share one key. Same convention as
 	// configworker.ConfigManagerDepsKey.
 	FilesystemDepsKey = WorkerType + ".filesystem"
+
+	// ClockDepsKey is the register.SetDeps key under which a caller publishes
+	// the clock.Clock the sampler stamps every Sample from. NewDeps looks it up
+	// per instance at spawn time — the instance then samples on that clock for
+	// the rest of its life, so a publish after the spawn reaches nothing — and
+	// falls back to the real clock when nothing is published. Same key
+	// convention as FilesystemDepsKey.
+	ClockDepsKey = WorkerType + ".clock"
 
 	// cgroupBase is the cgroup v2 mount point whose CPU controller files the
 	// sampler reads (cpu.stat, cpu.max, cpu.pressure, cpuset.cpus.effective).
@@ -126,9 +136,18 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
+	message := cpuhealth.ComposeMessage(verdict, details)
+
+	// Same fixed-event-name rule as the SentryWarn above: dynamic values ride
+	// in the structured fields, never in the message.
+	d.GetLogger().Debug("cpu_reading",
+		deps.String("verdict", string(verdict.State)),
+		deps.String("message", message),
+	)
+
 	return CPUStatus{
 		Verdict: string(verdict.State),
-		Message: cpuhealth.ComposeMessage(verdict, details),
+		Message: message,
 		Details: details,
 	}, nil
 }
@@ -140,13 +159,22 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 // A failed startup read yields cores=0, quota=0, which drops the two capacity
 // signals from this instance's table for its whole lifetime; a later
 // successful read does not restore them (ENG-5752).
+//
+// The sampler reads through the filesystem.Service published under
+// FilesystemDepsKey and stamps from the clock.Clock published under
+// ClockDepsKey; each key's doc states the lookup timing and the fallback.
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
 		fs = filesystem.NewDefaultService()
 	}
 
-	sampler := cpuhealth.NewLinuxSampler(fs, cgroupBase)
+	clk := register.GetDeps[clock.Clock](ClockDepsKey)
+	if clk == nil {
+		clk = clock.New()
+	}
+
+	sampler := cpuhealth.NewLinuxSamplerWithClock(fs, cgroupBase, clk)
 
 	d := &CPUDeps{
 		BaseDependencies: bd,

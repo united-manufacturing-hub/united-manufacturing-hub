@@ -75,6 +75,11 @@ var NoopScenarioV2 = ScenarioV2{
 // (enforced by the disjointness test in scenariov2_test.go, which documents
 // what breaks on a collision).
 var RegistryV2 = map[string]ScenarioV2{
-	"noop":    NoopScenarioV2,
-	"dynamic": DynamicScenarioV2,
+	"noop":         NoopScenarioV2,
+	"dynamic":      DynamicScenarioV2,
+	"cpu-pressure": CPUPressureScenarioV2,
+	"cpu-filling":  CPUFillingScenarioV2,
+	"cpu-latch":    CPULatchScenarioV2,
+	"cpu-blind":    CPUBlindScenarioV2,
+	"cpu-host":     CPUHostScenarioV2,
 }
