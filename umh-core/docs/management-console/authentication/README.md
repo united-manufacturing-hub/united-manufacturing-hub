@@ -11,15 +11,15 @@ Sign-in runs through a third-party identity provider rather than the Management 
 
 | Method | Who it applies to |
 | --- | --- |
-| A one-time code sent to your email address | The default where your company has configured nothing else |
-| Username and password | Accounts that were set up with a password |
+| A one-time code sent to your email address | The default for Community & Enterprise Plan users |
+| Username and password | Accounts that were set up with a password in the past |
 | Single sign-on through your company's own identity provider | Enterprise, as an add-on that is paid for separately |
 
 The sign-in screen also offers **Continue with Google** and **Continue with LinkedIn**, which sign you in with the address held by that provider.
 
 Which of these you are offered depends on the connections enabled for your company, see below. Once your company has a default connection, everyone on your team signs in through it.
 
-Depending on your account, the console can ask you for two different secrets: a password and a passphrase. They do different jobs, and only the password can be reset. See [Passwords and Passphrases](passwords-and-passphrases.md).
+Depending on your account, the Management Console can ask you for two different secrets: a password and a passphrase. They do different jobs, and only the password can be reset. See [Passwords and Passphrases](passwords-and-passphrases.md).
 
 ## Which company you sign in to
 
