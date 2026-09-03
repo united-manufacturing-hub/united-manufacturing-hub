@@ -76,21 +76,24 @@ func degradedCPU(message string) cpuVerdict {
 	return cpuVerdict{message: message, category: models.Degraded}
 }
 
-// judgeWorkerCPU turns what fsmv2client.GetFresh returned into a verdict. It
-// reads nothing outside its arguments, so every arm is reachable from a test
+// judgeWorkerCPUReadError is the verdict for an observation the store could not
+// return. GetFresh reports Unknown freshness in that case: the read failure
+// prevented the observation from being classified, so it cannot be called
+// healthy. Fail closed with the verbatim store error as the message.
+//
+// It reads nothing outside its argument, so the arm is reachable from a test
 // without a published fsmv2 client.
+func judgeWorkerCPUReadError(err error) cpuVerdict {
+	return degradedCPU(fmt.Sprintf("CPU worker observation could not be read: %v", err))
+}
+
+// judgeWorkerCPU turns the observation fsmv2client.GetFresh returned into a
+// verdict. It reads nothing outside its arguments, so every arm is reachable
+// from a test without a published fsmv2 client.
 func judgeWorkerCPU(
 	status simple.Status[fsmv2cpu.CPUStatus],
 	freshness fsmv2client.Freshness,
-	err error,
 ) cpuVerdict {
-	if err != nil {
-		// GetFresh returns Unknown here: the read failure prevented it from being
-		// classified, so it cannot be called healthy. Fail closed with the
-		// verbatim store error as the message.
-		return degradedCPU(fmt.Sprintf("CPU worker observation could not be read: %v", err))
-	}
-
 	// If it is not fresh, handle these cases here.
 	if freshness != fsmv2client.Fresh {
 		message := "CPU worker observation could not be classified; no measurement to judge"
@@ -170,9 +173,15 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 		return nil, nil, ctx.Err()
 	}
 
-	verdict := judgeWorkerCPU(workerStatus, freshness, err)
+	if err != nil {
+		v := judgeWorkerCPUReadError(err)
 
-	return verdict.health(), verdict.cpuHealth, nil
+		return v.health(), v.cpuHealth, nil
+	}
+
+	v := judgeWorkerCPU(workerStatus, freshness)
+
+	return v.health(), v.cpuHealth, nil
 }
 
 // cpuSeamClientUnavailableMessage says which prerequisite is missing when
