@@ -18,7 +18,7 @@ Sign-in runs through our IdP rather than the Management Console itself. The prov
 
 The sign-in screen also offers **Continue with Google** and **Continue with LinkedIn**, which sign you in with the address held by that provider.
 
-As an Enterprise Plan customer, your account executive will help you get with started with the SSO package. By default, your account's login method will be username and password.
+As an Enterprise Plan customer, your account executive will help you get with started with the SSO package. By default, your account's login method will be username and password. Our [Enterprise Single-Sign On](enterprise-sso.md) page explains this in detail. 
 
 Depending on your account, the Management Console can ask you for two different secrets: a password and a passphrase. They do different jobs, and only the password can be reset. See [Passwords and Passphrases](passwords-and-passphrases.md).
 
