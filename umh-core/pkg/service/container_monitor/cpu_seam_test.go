@@ -1618,3 +1618,72 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		})
 	})
 })
+
+// The seam's two judgement functions, called directly. Every arm below is
+// reachable through GetStatus too, but only with a published fsmv2 client and a
+// staged store. Calling them directly is what shows they depend on nothing
+// else, which is the property the split into two functions was made for.
+var _ = Describe("the CPU seam's judgement, called without a client", func() {
+	// The window the stale message quotes, derived the way production derives
+	// it, so a change to the worker's poll interval moves both together.
+	maxAge := 3 * fsmv2cpu.PollInterval
+
+	It("keeps the store's own error in the message of a failed read", func() {
+		health, cpuHealth := container_monitor.JudgeWorkerCPUReadError(errors.New("boltdb: bucket not found"))
+
+		Expect(health).NotTo(BeNil())
+		Expect(health.Message).To(Equal("CPU worker observation could not be read: boltdb: bucket not found"))
+		Expect(health.Category).To(Equal(models.Degraded))
+		Expect(health.ObservedState).To(Equal(models.Degraded.String()))
+		Expect(health.DesiredState).To(Equal(models.Active.String()))
+		Expect(cpuHealth).To(BeNil(), "a failed read produced no measurement to attach")
+	})
+
+	DescribeTable("an observation it cannot trust",
+		func(freshness fsmv2client.Freshness, expectedMessage string) {
+			// A healthy verdict is staged on purpose: no arm here may read it,
+			// so a build that fell through to the verdict would report Active
+			// and redden this table rather than pass quietly.
+			health, cpuHealth := container_monitor.JudgeWorkerCPU(healthyWorkerStatus(), freshness)
+
+			Expect(health).NotTo(BeNil())
+			Expect(health.Message).To(Equal(expectedMessage))
+			Expect(health.Category).To(Equal(models.Degraded))
+			Expect(cpuHealth).To(BeNil(), "no arm here judged a measurement")
+		},
+		Entry("stale", fsmv2client.Stale,
+			"CPU worker observation is stale (older than "+maxAge.String()+"); cannot trust the verdict it carries"),
+		Entry("never observed", fsmv2client.NeverObserved,
+			"CPU worker has never observed; no measurement to judge"),
+		Entry("not registered", fsmv2client.Unregistered,
+			"CPU worker is not registered with the fsmv2 runtime; no measurement to judge"),
+		Entry("unknown freshness with no read error", fsmv2client.Unknown,
+			"CPU worker observation could not be classified; no measurement to judge"),
+	)
+
+	It("passes a fresh healthy verdict through with its evidence attached", func() {
+		// The contrast that gives the nil assertions above their meaning: on
+		// the one arm that did judge a measurement, the evidence travels with
+		// it.
+		health, cpuHealth := container_monitor.JudgeWorkerCPU(healthyWorkerStatus(), fsmv2client.Fresh)
+
+		Expect(health).NotTo(BeNil())
+		Expect(health.Message).To(Equal(workerHealthyMessage))
+		Expect(health.Category).To(Equal(models.Active))
+		Expect(cpuHealth).NotTo(BeNil())
+		Expect(cpuHealth.Verdict.State).To(Equal(cpuhealth.StateHealthy))
+		Expect(cpuHealth.Details).To(Equal(workerHealthyDetails))
+	})
+})
+
+// healthyWorkerStatus is one healthy tick as the framework hands it to the
+// seam: the developer's CPUStatus inside simple.Status, with Degraded unset.
+func healthyWorkerStatus() simple.Status[fsmv2cpu.CPUStatus] {
+	return simple.Status[fsmv2cpu.CPUStatus]{
+		Result: fsmv2cpu.CPUStatus{
+			Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+			Details: workerHealthyDetails,
+			Message: workerHealthyMessage,
+		},
+	}
+}

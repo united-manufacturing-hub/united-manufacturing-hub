@@ -17,6 +17,9 @@ package container_monitor
 import (
 	"context"
 
+	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -37,4 +40,22 @@ func CPUGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float
 // package so its cancelled-tick arm is reachable without a full GetStatus.
 func (c *ContainerMonitorService) CollectCPUFromWorker(ctx context.Context) (*models.CPU, error) {
 	return c.collectCPUFromWorker(ctx)
+}
+
+// JudgeWorkerCPUReadError and JudgeWorkerCPU expose the seam's two judgement
+// arms to the external test package. Both underlying functions read nothing
+// beyond their arguments, which is what lets a spec reach every arm without
+// publishing an fsmv2 client or standing up a store; these hooks are what make
+// that property exercised rather than merely true. Each returns the pair
+// readWorkerCPUHealth returns, so a spec sees what the seam reports.
+func JudgeWorkerCPUReadError(err error) (*models.Health, *models.CPUHealth) {
+	v := judgeWorkerCPUReadError(err)
+
+	return v.health(), v.cpuHealth
+}
+
+func JudgeWorkerCPU(status simple.Status[fsmv2cpu.CPUStatus], freshness fsmv2client.Freshness) (*models.Health, *models.CPUHealth) {
+	v := judgeWorkerCPU(status, freshness)
+
+	return v.health(), v.cpuHealth
 }
