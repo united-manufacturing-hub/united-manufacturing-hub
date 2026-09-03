@@ -99,8 +99,13 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		isThrottled   bool
 	)
 	// Every nil-error return from getCgroupCPUInfo carries a non-nil info, so
-	// cgroupErr == nil is the whole check. getRawCPUMetrics dereferences
+	// cgroupErr == nil proves the pointer. getRawCPUMetrics dereferences
 	// cgroupInfo on that same rule.
+	//
+	// The throttled-message branch below keeps an explicit nil term instead,
+	// because it gates on isThrottled. That bool implies cgroupErr == nil -- it
+	// is assigned only inside this block -- but the implication is transitive
+	// and Nilaway cannot follow it, so dropping the term fails the analysis.
 	if cgroupErr == nil {
 		windowedRatio, isThrottled = c.updateThrottleWindow(cgroupInfo)
 		cgroupInfo.ThrottleRatio = windowedRatio
@@ -117,7 +122,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	case usagePercent >= constants.CPUHighThresholdPercent || isThrottled:
 		category = models.Degraded
 
-		if isThrottled {
+		if isThrottled && cgroupInfo != nil {
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
 			message = "CPU utilization critical"
