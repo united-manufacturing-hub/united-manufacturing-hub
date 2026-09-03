@@ -11,8 +11,9 @@ Sign-in runs through a third-party identity provider rather than the Management 
 
 | Method | Who it applies to |
 | --- | --- |
-| A one-time code sent to your email address | The default for Community & Enterprise Plan users |
-| Username and password | Accounts that were set up with a password in the past |
+| A one-time code sent to your email address | The default for all Community users |
+| Community username and password | Accounts that were set up with a password in the past |
+| Enterprise Username and password | Enterprise accounts without custom SSO |
 | Single sign-on through your company's own identity provider | Enterprise, as an add-on that is paid for separately |
 
 The sign-in screen also offers **Continue with Google** and **Continue with LinkedIn**, which sign you in with the address held by that provider.
