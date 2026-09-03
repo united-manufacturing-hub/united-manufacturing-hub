@@ -167,24 +167,16 @@ func containerHealthMessage(status container_monitor.ServiceInfo) string {
 		disk = status.Disk.Health
 	}
 
-	components := []struct {
-		health   *models.Health
-		label    string
-		category models.HealthCategory
-	}{
-		{cpu, "CPU", status.CPUHealth},
-		{memory, "Memory", status.MemoryHealth},
-		{disk, "Disk", status.DiskHealth},
-	}
+	lines := make([]string, 0, 3)
 
-	lines := make([]string, 0, len(components))
-
-	for _, c := range components {
-		if c.category != models.Degraded || c.health == nil || c.health.Message == "" {
-			continue
+	for _, line := range []string{
+		degradedLine("CPU", status.CPUHealth, cpu),
+		degradedLine("Memory", status.MemoryHealth, memory),
+		degradedLine("Disk", status.DiskHealth, disk),
+	} {
+		if line != "" {
+			lines = append(lines, line)
 		}
-
-		lines = append(lines, c.label+" degraded: "+c.health.Message)
 	}
 
 	if len(lines) > 0 {
@@ -196,6 +188,15 @@ func containerHealthMessage(status container_monitor.ServiceInfo) string {
 	}
 
 	return getContainerHealthMessage(status.OverallHealth)
+}
+
+// degradedLine renders one component's line, or "" when it is not degraded.
+func degradedLine(label string, cat models.HealthCategory, h *models.Health) string {
+	if cat != models.Degraded || h == nil || h.Message == "" {
+		return ""
+	}
+
+	return label + " degraded: " + h.Message
 }
 
 // getHealthMessage is container-specific.
