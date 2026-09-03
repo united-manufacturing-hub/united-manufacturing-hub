@@ -35,7 +35,8 @@ const cpuWorkerMaxAge = 3 * fsmv2cpu.PollInterval
 // collectCPUFromWorker builds the whole CPU record from the fsmv2 CPU worker's
 // last observation. The legacy fields stay empty on purpose: old and new
 // reporting stay cleanly separated, so nothing here re-derives a legacy-named
-// number from worker data. models.CPU says what each generation carries.
+// number from worker data. models.CPU says which fields the worker fills and
+// which the legacy path does.
 //
 // It errors only when the tick was cancelled, matching getCPUMetrics: a
 // cancelled tick measured nothing, so it has no verdict to report.

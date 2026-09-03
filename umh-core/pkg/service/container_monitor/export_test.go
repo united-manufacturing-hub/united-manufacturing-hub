@@ -27,8 +27,8 @@ func (c *ContainerMonitorService) SetCPUUsageProvider(fn func(ctx context.Contex
 }
 
 // CPUGaugeInputs exposes the gauge-source selection to the external test
-// package. It decides which generation the three CPU Prometheus series are read
-// from, so it needs a test of its own.
+// package. It decides whether the three CPU Prometheus series are read from the
+// worker's evidence or the legacy fields, so it needs a test of its own.
 func CPUGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float64, ok bool) {
 	return cpuGaugeInputs(cpu, useFSMv2CPU)
 }

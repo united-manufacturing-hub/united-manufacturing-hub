@@ -113,16 +113,16 @@ var (
 	}, []string{"instance", "component"})
 )
 
-// cpuGaugeInputs returns the usage and core figures for the CPU gauges,
-// and whether both were measured this tick. useFSMv2CPU says which generation
-// filled the record, because only one of them ever does: under the flag the
-// figures come from the worker's evidence and the flat fields are empty, and
-// without it the reverse.
+// cpuGaugeInputs returns the usage and core figures for the CPU gauges, and
+// whether both were measured this tick. useFSMv2CPU says whether the worker or
+// the legacy path filled the record, because only one ever does: under the flag
+// the figures come from the worker's evidence and the flat fields are empty,
+// and without it the reverse.
 //
-// The two generations do not measure the same thing. The worker reports a
-// 60-second mean of THIS CONTAINER's usage; the legacy path an instantaneous
-// sample of the HOST's usage scaled by the quota. These gauges therefore change
-// meaning when the flag flips, and an alert on them has to be re-based.
+// The two do not measure the same thing. The worker reports a 60-second mean of
+// THIS CONTAINER's usage; the legacy path an instantaneous sample of the HOST's
+// usage scaled by the quota. These gauges therefore change meaning when the
+// flag flips, and an alert on them has to be re-based.
 func cpuGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float64, ok bool) {
 	if useFSMv2CPU {
 		// UsageRingActive and a positive LogicalCpus are the evidence's own

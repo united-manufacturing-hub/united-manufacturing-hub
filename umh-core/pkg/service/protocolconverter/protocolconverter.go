@@ -1282,8 +1282,8 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 	}
 
 	// Get CPU core count and calculate max bridges.
-	// USE_FSMV2_CPU decides where the figure is fetched from, because the two
-	// generations do not both fill the same field: with the flag on the CPU
+	// USE_FSMV2_CPU decides where the figure is fetched from, because the worker
+	// and the legacy path do not fill the same field: with the flag on the CPU
 	// record carries only the fsmv2 evidence, and CgroupCores is empty.
 	var cpuCores float64
 

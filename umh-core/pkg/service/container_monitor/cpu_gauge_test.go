@@ -23,16 +23,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
 
-// The three CPU Prometheus series are read from whichever generation filled the
-// record, and USE_FSMV2_CPU says which. Only one of them is ever populated, so a
+// The three CPU Prometheus series are read from whichever of the two filled the
+// record -- the worker's evidence or the legacy fields -- and USE_FSMV2_CPU says
+// which. Only one of them is ever populated, so a
 // gate that read the wrong one publishes nothing rather than a wrong number —
 // which is why these specs assert the ok flag as well as the values.
 var _ = Describe("the CPU gauge source", func() {
-	// Both generations staged on one record, disagreeing on purpose. The legacy
+	// Both sources staged on one record, disagreeing on purpose. The legacy
 	// fields say 1000 mCPU over 4 cores; the evidence says 3.5 cores over 8.
 	// Production never produces this record: the point is that each spec below
 	// names which half it read.
-	bothGenerations := func() *models.CPU {
+	bothSourcesStaged := func() *models.CPU {
 		usage, cores := 1000.0, 4
 
 		return &models.CPU{
@@ -49,7 +50,7 @@ var _ = Describe("the CPU gauge source", func() {
 	}
 
 	It("reads the fsmv2 evidence when the flag is on", func() {
-		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothGenerations(), true)
+		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothSourcesStaged(), true)
 
 		Expect(ok).To(BeTrue())
 		Expect(usageMCores).To(Equal(3500.0))
@@ -57,7 +58,7 @@ var _ = Describe("the CPU gauge source", func() {
 	})
 
 	It("reads the legacy fields when the flag is off", func() {
-		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothGenerations(), false)
+		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothSourcesStaged(), false)
 
 		Expect(ok).To(BeTrue())
 		Expect(usageMCores).To(Equal(1000.0))
@@ -66,7 +67,7 @@ var _ = Describe("the CPU gauge source", func() {
 
 	It("reports nothing measured when the flag is on and no evidence arrived", func() {
 		// The legacy fields are populated and must NOT be read: under the flag
-		// they are not this generation's measurement.
+		// they are not the measurement in use.
 		usage, cores := 1000.0, 4
 		_, _, ok := container_monitor.CPUGaugeInputs(&models.CPU{
 			TotalUsageMCpu: &usage,
