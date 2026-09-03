@@ -98,7 +98,10 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		windowedRatio float64
 		isThrottled   bool
 	)
-	if cgroupErr == nil && cgroupInfo != nil {
+	// Every nil-error return from getCgroupCPUInfo carries a non-nil info, so
+	// cgroupErr == nil is the whole check. getRawCPUMetrics dereferences
+	// cgroupInfo on that same rule.
+	if cgroupErr == nil {
 		windowedRatio, isThrottled = c.updateThrottleWindow(cgroupInfo)
 		cgroupInfo.ThrottleRatio = windowedRatio
 		cgroupInfo.IsThrottled = isThrottled
