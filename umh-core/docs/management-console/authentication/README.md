@@ -13,7 +13,7 @@ Sign-in runs through our IdP rather than the Management Console itself. The prov
 | --- | --- |
 | A one-time code sent to your email address | The default for all Community users |
 | Community username and password | Accounts that were set up with a password in the past |
-| Enterprise Username and password | The default for Enterprise accounts without the SSO add-on|
+| Enterprise username and password | The default for Enterprise accounts without the SSO add-on|
 | Single sign-on through your company's own identity provider | Enterprise, as an add-on that is paid for separately |
 
 The sign-in screen also offers **Continue with Google** and **Continue with LinkedIn**, which sign you in with the address held by that provider.
