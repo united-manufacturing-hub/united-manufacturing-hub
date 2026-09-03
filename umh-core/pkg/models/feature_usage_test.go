@@ -67,3 +67,21 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).To(HaveKeyWithValue("historianBridgeCount", float64(3)))
 	})
 })
+
+// FSMv2CPUEnabled reports the flag's EFFECTIVE state, not merely whether
+// USE_FSMV2_CPU is set: the flag and every prerequisite the seam needs must be
+// present, or the field reports false and an instance that fell back to legacy
+// never counts as enabled.
+var _ = Describe("FSMv2CPUEnabled", func() {
+	DescribeTable("reports the effective state of the fsmv2 CPU path",
+		func(flag, transport, apiURLSet, authTokenSet, expected bool) {
+			Expect(models.FSMv2CPUEnabled(flag, transport, apiURLSet, authTokenSet)).
+				To(Equal(expected))
+		},
+		Entry("flag on, transport on, API_URL and AUTH_TOKEN present", true, true, true, true, true),
+		Entry("flag on but transport off (the rollout inflation case)", true, false, true, true, false),
+		Entry("flag on, transport on, API_URL missing", true, true, false, true, false),
+		Entry("flag on, transport on, AUTH_TOKEN missing", true, true, true, false, false),
+		Entry("flag off even with every prerequisite present", false, true, true, true, false),
+	)
+})
