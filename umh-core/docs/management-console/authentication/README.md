@@ -7,7 +7,7 @@ Access to the Management Console works in two layers:
 
 ## How you sign in
 
-Sign-in runs through our IdP rather than the Management Console itself. The provider stores any passwords, verifies each method below, and adds the protections in [What the identity provider protects against](#what-the-identity-provider-protects-against).
+Sign-in runs through our IdP. The provider stores any passwords, verifies each method below, and adds the protections in [What the identity provider protects against](#what-the-identity-provider-protects-against). It also lets us tailor access per company: each company can be linked to its own organization with a default connection, and Enterprise customers can connect their own identity provider through [single sign-on](enterprise-sso.md).
 
 | Method | Who it applies to |
 | --- | --- |
