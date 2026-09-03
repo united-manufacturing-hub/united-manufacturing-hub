@@ -13,12 +13,12 @@ Sign-in runs through our IdP rather than the Management Console itself. The prov
 | --- | --- |
 | A one-time code sent to your email address | The default for all Community users |
 | Community username and password | Accounts that were set up with a password in the past |
-| Enterprise Username and password | Enterprise accounts without custom SSO |
+| Enterprise Username and password | The default for Enterprise accounts without the SSO add-on|
 | Single sign-on through your company's own identity provider | Enterprise, as an add-on that is paid for separately |
 
 The sign-in screen also offers **Continue with Google** and **Continue with LinkedIn**, which sign you in with the address held by that provider.
 
-Which of these you are offered depends on the connections enabled for your company, see below. Once your company has a default connection, everyone on your team signs in through it.
+As an Enterprise Plan customer, your account executive will help you get with started with the SSO package. By default, your account's login method will be username and password.
 
 Depending on your account, the Management Console can ask you for two different secrets: a password and a passphrase. They do different jobs, and only the password can be reset. See [Passwords and Passphrases](passwords-and-passphrases.md).
 
