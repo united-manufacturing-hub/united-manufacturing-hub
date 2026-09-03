@@ -7,7 +7,7 @@ Access to the Management Console works in two layers:
 
 ## How you sign in
 
-Sign-in runs through a third-party identity provider rather than the Management Console itself. The provider stores any passwords, verifies each method below, and adds the protections in [What the identity provider protects against](#what-the-identity-provider-protects-against).
+Sign-in runs through our IdP rather than the Management Console itself. The provider stores any passwords, verifies each method below, and adds the protections in [What the identity provider protects against](#what-the-identity-provider-protects-against).
 
 | Method | Who it applies to |
 | --- | --- |
