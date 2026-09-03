@@ -60,7 +60,7 @@ var _ = Describe("CPU monitor worker", func() {
 		It("registers a simple monitor worker with a declared observation interval", func() {
 			iv, ok := fsmv2.ObservationIntervalFor(WorkerType)
 			Expect(ok).To(BeTrue(), "init() must call simple.Register, which records the observation interval")
-			Expect(iv).To(Equal(pollInterval))
+			Expect(iv).To(Equal(PollInterval))
 
 			Expect(fsmv2.LookupInitialState(WorkerType)).NotTo(BeNil(),
 				"Register records an initial state for the worker type")

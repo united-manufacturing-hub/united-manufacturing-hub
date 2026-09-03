@@ -52,10 +52,10 @@ const (
 	// sampler reads (cpu.stat, cpu.max, cpu.pressure, cpuset.cpus.effective).
 	cgroupBase = "/sys/fs/cgroup"
 
-	// pollInterval is how often the worker samples the cgroup. simple.Register
+	// PollInterval is how often the worker samples the cgroup. simple.Register
 	// also publishes it as this worker's observation interval, and
 	// pkg/fsmv2/adapter calls an observation stale at three times it.
-	pollInterval = 1 * time.Second
+	PollInterval = 1 * time.Second
 )
 
 // Ref is the pair the configworker upserts this child under behind
@@ -197,7 +197,7 @@ func healthFromStatus(_ CPUConfig, status CPUStatus) simple.Health {
 // calls, wiring included.
 var monitorSpec = simple.MonitorSpec[CPUConfig, CPUStatus, *CPUDeps]{
 	WorkerType: WorkerType,
-	Interval:   pollInterval,
+	Interval:   PollInterval,
 	NewDeps:    NewDeps,
 	Poll:       Poll,
 	Health:     healthFromStatus,

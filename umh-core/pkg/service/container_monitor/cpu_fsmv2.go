@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
@@ -29,10 +28,9 @@ import (
 )
 
 // cpuWorkerMaxAge is how old the fsmv2 CPU worker's observation may be and still
-// count as Fresh for the seam. It is 3x the worker's 1s poll interval
-// (pollInterval in pkg/fsmv2/cpu), so one slow or missed poll cannot flip the
-// instance to degraded.
-const cpuWorkerMaxAge = 3 * time.Second
+// count as Fresh for the seam. It is 3x the worker's poll interval, so one slow
+// or missed poll cannot flip the instance to degraded.
+const cpuWorkerMaxAge = 3 * fsmv2cpu.PollInterval
 
 // collectCPUFromWorker builds the whole CPU record from the fsmv2 CPU worker's
 // last observation. The legacy fields stay empty on purpose: old and new
