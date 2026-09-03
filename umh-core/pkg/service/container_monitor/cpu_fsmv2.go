@@ -158,6 +158,12 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	// -- including the no-client arm, which reports a missing prerequisite that
 	// a cancelled tick has not established. getCPUMetrics likewise aborts on a
 	// cancelled ctx rather than reporting.
+	//
+	// It catches a ctx already cancelled on entry, not one cancelled during the
+	// store read below. That window is deliberately uncovered: no store in this
+	// repo fails a read on a cancelled ctx (persistence/memory's validateContext
+	// rejects only a nil ctx), so a second check after GetFresh could not fire,
+	// and no test against a real store could prove it did.
 	if ctx.Err() != nil {
 		return nil, nil, ctx.Err()
 	}
