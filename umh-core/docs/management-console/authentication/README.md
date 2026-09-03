@@ -32,8 +32,6 @@ An organization accepts sign-ins through one or more **connections**. A connecti
 
 On an Enterprise plan you pick a **default connection** for your team. Everyone signs in through it, and invitations go through it too. Point it at your own identity provider and your usual single sign-on, multi-factor and offboarding rules decide who gets in. Pointing a default connection at your own identity provider is the single sign-on add-on, which is paid for on top of the Enterprise plan. Contact your account executive to enable it.
 
-UMH staff are the one exception. You do not create accounts for them in your identity provider, their invitations use UMH's own single sign-on instead. See [Emergency Access](../users-and-permissions/fallback-access.md).
-
 ## What the identity provider protects against
 
 Sign-in itself is handled by our identity provider, which provides:
