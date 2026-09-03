@@ -147,6 +147,10 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Install coreutils (this allows date resolution beyond seconds)
 RUN apk add --no-cache coreutils
 
+# Added manually for an Aikido finding: the alpine base image still ships openssl 3.5.7-r0.
+# Must stay after the COPY --from=downloader, which replaces this stage's root.
+RUN apk add --no-cache --upgrade libcrypto3 libssl3
+
 # Create non-root user and set ownership at build-time
 RUN adduser -D -u 1000 -s /bin/sh umhuser && \
     mkdir -p /data/logs /data/logs/umh-core /data/services /data/benthos /data/redpanda/coredump && \
