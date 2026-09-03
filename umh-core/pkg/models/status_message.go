@@ -152,12 +152,10 @@ type Container struct {
 	Architecture ContainerArchitecture `json:"architecture"` // Processor architecture
 }
 
-// CPU carries exactly one generation's CPU reporting, and USE_FSMV2_CPU decides
-// which. Never both, and never a mix.
-//
-// With the flag OFF, the legacy fields below are this generation's measurements
-// and CPUHealth is absent. With it ON, CPUHealth holds the worker's verdict and
-// the evidence behind it, and **the legacy fields stay empty**.
+// CPU carries either the fsmv2 CPU worker's reporting or the legacy reporting,
+// never both. With USE_FSMV2_CPU on, CPUHealth holds the worker's verdict and
+// the evidence behind it, and the legacy measurement fields below stay empty.
+// With the flag off, they carry the measurements and CPUHealth is nil.
 type CPU struct {
 	Health         *Health  `json:"health"`
 	TotalUsageMCpu *float64 `json:"totalUsageMCpu,omitempty"` // Total usage in milli-cores (1000m = 1 core); nil when not measured this tick
