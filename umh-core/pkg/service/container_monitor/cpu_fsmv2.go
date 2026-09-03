@@ -147,9 +147,20 @@ func judgeWorkerCPU(
 }
 
 // readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a
-// models.Health. It always returns a health, and the protocol converter's
-// IsResourceLimited reads that message as its bridge-block reason.
+// models.Health. Every outcome it can judge produces one, and the protocol
+// converter's IsResourceLimited reads that message as its bridge-block reason.
+// A cancelled tick is the one case with nothing to judge: it returns the ctx
+// error and no health.
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, *models.CPUHealth, error) {
+	// A cancelled tick is not a degraded box. This is the first thing the
+	// function does, so no arm below it can publish a verdict nothing measured
+	// -- including the no-client arm, which reports a missing prerequisite that
+	// a cancelled tick has not established. getCPUMetrics likewise aborts on a
+	// cancelled ctx rather than reporting.
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
+
 	client := fsmv2client.GetClient()
 	// Fallback for a misconfiguration: USE_FSMV2_CPU is on but nothing published
 	// a client, so the fsmv2 supervisor never started (or has not yet).
@@ -165,13 +176,6 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 
 	// Get the latest poll result from the worker.
 	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
-
-	// A cancelled tick is not a degraded box. getCPUMetrics checks ctx the same
-	// way after its cgroup read, so both arms abort the tick rather than
-	// publishing a verdict nothing measured.
-	if ctx.Err() != nil {
-		return nil, nil, ctx.Err()
-	}
 
 	if err != nil {
 		v := judgeWorkerCPUReadError(err)
