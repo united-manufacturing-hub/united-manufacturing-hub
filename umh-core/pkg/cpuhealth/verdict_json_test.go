@@ -71,18 +71,34 @@ var _ = Describe("verdict JSON", func() {
 		var causes []map[string]json.RawMessage
 		Expect(json.Unmarshal(document["causes"], &causes)).To(Succeed())
 
-		kinds := make([]string, len(causes))
-		attributions := make([]string, len(causes))
-		units := make([]string, len(causes))
+		// instrument is the string the console labels the row with, so it is
+		// decoded and asserted beside kind rather than only checked for
+		// presence. Asserting the four together fixes the whole per-cause
+		// mapping: a renamed instrument, a re-blamed attribution or a changed
+		// unit each fail here on their own kind.
+		type wireCause struct {
+			kind        string
+			instrument  string
+			attribution string
+			unit        string
+		}
+
+		decoded := make([]wireCause, len(causes))
 		for i, cause := range causes {
 			Expect(slices.Sorted(maps.Keys(cause))).To(Equal([]string{"attribution", "instrument", "kind", "unit", "value"}),
 				"the wire key contract on the Verdict doc fixes a cause's key names")
-			Expect(json.Unmarshal(cause["kind"], &kinds[i])).To(Succeed())
-			Expect(json.Unmarshal(cause["attribution"], &attributions[i])).To(Succeed())
-			Expect(json.Unmarshal(cause["unit"], &units[i])).To(Succeed())
+			Expect(json.Unmarshal(cause["kind"], &decoded[i].kind)).To(Succeed())
+			Expect(json.Unmarshal(cause["instrument"], &decoded[i].instrument)).To(Succeed())
+			Expect(json.Unmarshal(cause["attribution"], &decoded[i].attribution)).To(Succeed())
+			Expect(json.Unmarshal(cause["unit"], &decoded[i].unit)).To(Succeed())
 		}
-		Expect(kinds).To(ConsistOf("host-cpu-full", "container-limit-full", "throttling", "pressure", "steal"))
-		Expect(attributions).To(ContainElements("host", "container", "unknown"))
-		Expect(units).To(ContainElements("ratio", "fraction", "cores"))
+
+		Expect(decoded).To(ConsistOf(
+			wireCause{kind: "steal", instrument: "steal-p95", attribution: "host", unit: "ratio"},
+			wireCause{kind: "pressure", instrument: "pressure-avg60", attribution: "unknown", unit: "ratio"},
+			wireCause{kind: "throttling", instrument: "throttle-ratio", attribution: "container", unit: "ratio"},
+			wireCause{kind: "host-cpu-full", instrument: "host-share", attribution: "host", unit: "fraction"},
+			wireCause{kind: "container-limit-full", instrument: "limit-headroom", attribution: "container", unit: "cores"},
+		))
 	})
 })
