@@ -162,8 +162,9 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	// It catches a ctx already cancelled on entry, not one cancelled during the
 	// store read below. That window is deliberately uncovered: no store in this
 	// repo fails a read on a cancelled ctx (persistence/memory's validateContext
-	// rejects only a nil ctx), so a second check after GetFresh could not fire,
-	// and no test against a real store could prove it did.
+	// rejects only a nil ctx), so a second check after GetFresh would never fire
+	// in a real run. A test stub can be made to return that error, which is how
+	// the mutation controls in cpu_cancel_test.go reach the path.
 	if ctx.Err() != nil {
 		return nil, nil, ctx.Err()
 	}
