@@ -4,10 +4,6 @@
 
 Any Admin and Account Owner is able to manage users. However, an admin can grant permissions only for locations where they are an admin themselves, which stops anyone from inviting their way to more access than they have.
 
-Instance creation is not restricted that way: any admin can create an instance at any location. Create instances inside a location where you hold admin access, because you cannot change one you created outside it. If that happens, an admin whose locations cover it, or the Account Owner, can change it for you.
-
-For who should hold the Account Owner, and who to nominate for emergency access, see [Emergency Access](fallback-access.md).
-
 ### Inviting a user
 
 1. The admin enters the email address, the role, and the locations it applies to.
