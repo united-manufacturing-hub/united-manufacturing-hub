@@ -84,7 +84,7 @@ type Sample struct {
 	// microsecond divisor) and by the elapsed seconds between the reads'
 	// Timestamps. It is Unknown on the first read (no previous edge to subtract
 	// from) and when usage_usec falls (a cumulative counter that falls has been
-	// reset) — never a confident zero from no measurement.
+	// reset) — never a measured zero from no measurement.
 	UsageCores diagnosis.Reading
 
 	// HostBusy is the host's busy cores as an instantaneous rate: the delta of

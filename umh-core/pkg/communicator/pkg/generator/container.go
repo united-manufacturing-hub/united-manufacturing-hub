@@ -16,10 +16,12 @@ package generator
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"go.uber.org/zap"
 )
 
@@ -59,7 +61,7 @@ func buildContainer(
 	out := defaultContainer() // start with defaults, then override
 
 	out.Health = &models.Health{
-		Message:       getContainerHealthMessage(status.OverallHealth),
+		Message:       containerHealthMessage(status),
 		ObservedState: instance.CurrentState,
 		DesiredState:  instance.DesiredState,
 		Category:      status.OverallHealth,
@@ -144,6 +146,63 @@ func defaultContainer() models.Container {
 		Hwid:         "unknown",
 		Architecture: models.ArchitectureAmd64,
 	}
+}
+
+// containerHealthMessage builds the string on the container's own Health, which
+// the Management Console shows as its overall status.
+//
+// Each degraded component contributes one line, "CPU degraded: <its message>",
+// joined by newlines. With nothing degraded, an Active container reports the CPU
+// message alone: memory and disk are at "utilization normal" or "warning" then,
+// which tells a reader nothing the category has not already said. Any other
+// state falls back to getContainerHealthMessage.
+func containerHealthMessage(status container_monitor.ServiceInfo) string {
+	var cpu, memory, disk *models.Health
+
+	if status.CPU != nil {
+		cpu = status.CPU.Health
+	}
+
+	if status.Memory != nil {
+		memory = status.Memory.Health
+	}
+
+	if status.Disk != nil {
+		disk = status.Disk.Health
+	}
+
+	lines := make([]string, 0, 3)
+
+	for _, line := range []string{
+		degradedLine("CPU", status.CPUHealth, cpu),
+		degradedLine("Memory", status.MemoryHealth, memory),
+		degradedLine("Disk", status.DiskHealth, disk),
+	} {
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+
+	if len(lines) > 0 {
+		return strings.Join(lines, "\n")
+	}
+
+	if status.OverallHealth == models.Active && cpu != nil && cpu.Message != "" {
+		return cpu.Message
+	}
+
+	return getContainerHealthMessage(status.OverallHealth)
+}
+
+// degradedLine renders one component's line. It returns "" when the component
+// is not degraded, and also when it carries no health or an empty message,
+// because there is then nothing for the badge to quote.
+func degradedLine(label string, cat models.HealthCategory, h *models.Health) string {
+	if cat != models.Degraded || h == nil || h.Message == "" {
+		return ""
+	}
+
+	return label + " degraded: " + h.Message
 }
 
 // getHealthMessage is container-specific.

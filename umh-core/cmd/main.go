@@ -181,11 +181,16 @@ func main() {
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
 
 	featureUsage := &models.FeatureUsage{
-		ConfigBackupEnabled:           configBackupEnabled,
+		ConfigBackupEnabled: configBackupEnabled,
+		FSMv2CPUEnabled: models.FSMv2CPUEnabled(
+			cpuMonitorEnabled,
+			configData.Agent.UseFSMv2Transport,
+			configData.Agent.APIURL != "",
+			configData.Agent.AuthToken != "",
+		),
 		FSMv2TransportEnabled:         configData.Agent.UseFSMv2Transport,
 		FSMv2MemoryCleanupEnabled:     configData.Agent.UseFSMv2MemoryCleanup,
 		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
-		FSMv2CPUEnabled:               configData.Agent.UseFSMv2CPU,
 		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
 		HistorianConfigured:           configData.Historian != nil,
 		HistorianBridgeCount:          countHistorianBridges(configData),

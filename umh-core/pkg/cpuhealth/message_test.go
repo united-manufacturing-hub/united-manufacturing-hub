@@ -510,9 +510,28 @@ var _ = Describe("the Technical Details table", func() {
 		Expect(composeHealthy(thin)).To(ContainSubstring("Pressure not available (measuring)."))
 	})
 
+	// A rule with no reading this tick is one of three things: the box cannot
+	// run the rule, its window is still filling, or its signal has fired and
+	// the engine is holding the verdict. This test exercises the last two,
+	// which only the latch separates. The rules below are copies differing in
+	// that one field.
+	It("should tell a held rule from one still filling when this tick produced no reading, because a reader told \"measuring\" about a rule the engine is already holding is told the opposite of the truth", func() {
+		held := cpuRule{
+			label:   "Pressure",
+			applies: true,
+			ready:   false,
+			latched: true,
+		}
+		unlatched := held
+		unlatched.latched = false
+
+		Expect(held.render()).To(Equal("Pressure not available (held)."))
+		Expect(unlatched.render()).To(Equal("Pressure not available (measuring)."))
+	})
+
 	It("should read each rule's figure from its signal's readiness, and print no figure at all for a rule the box cannot run", func() {
 		// A virtualized box (StealApplies true) whose steal window has no usable
-		// value this tick must not print a confident 0% steal line.
+		// value this tick must not print a measured 0% steal line.
 		vm := healthyDetails()
 		vm.StealApplies = true
 		vm.StealSignalReady = false
@@ -667,12 +686,14 @@ var _ = Describe("degraded copy", func() {
 		Expect(msg).To(ContainSubstring(" Host stats are unavailable, so host-side contention is not visible."))
 
 		// The machine read full with no limit in force and the host reading
-		// gone, entry 35.
+		// gone, entry 35. The latch holds through the failed read, so the
+		// machine's line in the table states the rule is held.
 		nl6 := degradedSig()
 		nl6.LimitApplies = false
 		nl6.HostBusyCoresAvailable = false
 		msg = ComposeMessage(degradedVerdict(CauseKindHostCpuFull, instrumentHostHeadroom, 0.5), nl6)
 		Expect(msg).To(ContainSubstring("CPU is degraded. Host CPU usage is not readable right now (host stats temporarily unavailable), so the host-busy percentage cannot be shown. Add CPU capacity, or reduce the load on it."))
+		Expect(msg).To(ContainSubstring(labelMachineHeadroom + " not available (held)."))
 
 		// The same with the host reading present, entry 36, with entry 37
 		// appended when LimitedVisibility.

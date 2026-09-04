@@ -95,26 +95,29 @@ func buildDetails(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Envi
 		d.LimitedVisibility = !s.PsiAvailable
 	}
 
-	// The instrument readings come out of the same Observe pass that judged
+	// The instrument readings come out of the same Observe tick that judged
 	// them, and they are read whatever the latch did, so a signal sitting below
 	// its mark still reaches Details. Observe returns fired latches only, so
-	// without these reads a confident 0 would be published on every healthy
+	// without these reads a measured zero would be published on every healthy
 	// tick.
 	d.ThrottleRatio, _ = engine.Reduction(signalThrottling, instrumentThrottleRatio).Get()
 	d.PressureAvg60, _ = engine.Reduction(signalPressure, instrumentPressureAvg60).Get()
 	d.StealP95, _ = engine.Reduction(signalSteal, instrumentStealP95).Get()
 	d.HostHeadroomCores, _ = engine.Reduction(signalHostCpuFull, instrumentHostHeadroom).Get()
 
-	// The two measurements, each a plain 60-second average declared in
-	// table_cpu.go. The state says whether the window reduced to a value, and
-	// the healthy headline gates on it so a thin window is not reported as a
-	// confident 0.
+	// The measurements, declared in table_cpu.go. Each mean measurement's state
+	// says whether the window reduced to a value, and message.go's healthy
+	// headline reads UsageRingActive and HostBusyRingActive, so a thin window is
+	// not reported as a measured zero. P95UsageCores is a Reading for the same
+	// reason.
 	hostBusyMean, hostBusyState := engine.Measurement(measurementHostBusy).Get()
 	usageMean, usageState := engine.Measurement(measurementUsageCores).Get()
 	d.AvgUsageCores = usageMean
 	d.AvgHostBusyCores = hostBusyMean
 	d.UsageRingActive = usageState == diagnosis.StateValue
 	d.HostBusyRingActive = hostBusyState == diagnosis.StateValue
+
+	d.P95UsageCores = readingFromReduced(engine.Measurement(measurementUsageCoresP95).Get())
 
 	// The headroom ceiling and reserve mirror exactly what the verdict used, so
 	// the message's headline and headroom line report the same number.
@@ -132,7 +135,7 @@ func buildDetails(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Envi
 		d.HostBusyCoresAvailable = true
 	}
 
-	// The per-signal readiness trio, out of the same pass that judged them.
+	// The per-signal readiness trio, out of the same tick that judged them.
 	// Ready and nothing else: NoInstrument on a bare-metal box and NoneReady on
 	// a thin window both mean this tick has no usable reading, and printing a
 	// confident number for either states a figure that was never measured.
@@ -156,4 +159,14 @@ func buildDetails(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Envi
 	d.StealApplies = env.Has(HasVirtualization)
 
 	return d
+}
+
+// readingFromReduced converts a reduction's outcome to a Reading. Only
+// StateValue yields a number; StateUntrusted answers absent rather than publish
+// a partial figure that is not worth acting on (see diagnosis.StateUntrusted).
+func readingFromReduced(value float64, state diagnosis.State) diagnosis.Reading {
+	if state != diagnosis.StateValue {
+		return diagnosis.Unknown()
+	}
+	return diagnosis.Known(value)
 }

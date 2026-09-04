@@ -17,6 +17,8 @@
 
 package cpuhealth
 
+import "encoding/json"
+
 // State is the customer-visible health state of the CPU verdict. Two values and
 // no third: limited visibility is an annotation on a healthy verdict, never a
 // state.
@@ -27,15 +29,16 @@ const (
 	StateDegraded State = "degraded"
 )
 
-// Attribution names the dominant cause class when degraded. Three members:
-// host for contention outside this container, container for a cause inside it,
-// and unknown when the evidence does not place the cause on either side.
-// ENG-5264 widens this to host, workload, software and unknown.
+// Attribution names the dominant cause class when degraded; the members below
+// declare the set. ENG-5264 widens it to host, workload, software and unknown.
 type Attribution string
 
 const (
-	AttributionUnknown   Attribution = "unknown"
-	AttributionHost      Attribution = "host"
+	// AttributionUnknown: the evidence does not place the cause on either side.
+	AttributionUnknown Attribution = "unknown"
+	// AttributionHost: contention outside this container.
+	AttributionHost Attribution = "host"
+	// AttributionContainer: a cause inside this container.
 	AttributionContainer Attribution = "container"
 )
 
@@ -73,7 +76,7 @@ const (
 // reader of one does not have to go back to the table for it.
 type Unit string
 
-// The three units the CPU mark pairs are denominated in. Each signal_*.go
+// The units the CPU mark pairs are denominated in. Each signal_*.go
 // declares one beside its marks, and the Technical Details table reads it to
 // decide whether a threshold is written as a percentage or as a cores figure.
 const (
@@ -96,28 +99,55 @@ const limitReserveFraction = 0.10
 
 // Cause is one entry in a degraded verdict, ordered by diagnosis.Rank. It says
 // what kind of trouble it is, how much, in what unit, and what measured it, so
-// the message layer can choose a sentence from the cause alone.
+// the message layer can choose a sentence from the cause alone. Its json tags
+// join the wire key contract the Verdict doc defines.
 type Cause struct {
-	Kind CauseKind
+	Kind CauseKind `json:"kind"`
 	// Instrument names the instrument that produced this cause, copied from
 	// the latch that fired. A signal measured two ways needs it: host-cpu-full
 	// read from /proc/stat and host-cpu-full estimated from our own usage earn
 	// different sentences.
-	Instrument string
-	Unit       Unit
+	Instrument string `json:"instrument"`
+	Unit       Unit   `json:"unit"`
 	// Attribution is the blame the table declared for the signal that produced
 	// this cause, or for the refinement narrowing it. Each cause carries its
 	// own: Rank puts starvation ahead of saturation, so the verdict's blame can
 	// come from a different signal than the one a paragraph is rendering.
-	Attribution Attribution
-	Value       float64
+	Attribution Attribution `json:"attribution"`
+	Value       float64     `json:"value"`
 }
 
 // Verdict is what Decide returns: the state, the attribution of the dominant
-// cause, and the ranked cause list. The message is NOT a field on it — the
+// cause, and the ranked cause list. The message is NOT a field on it; the
 // message layer composes it from Verdict and Details.
+//
+// The json tags are the wire key contract with the Management Console's
+// CpuVerdict and CpuCause (ManagementConsole
+// frontend/src/lib/utils/cpu/cpuHealth.ts), so renaming a tag is a wire-format
+// change.
 type Verdict struct {
-	State       State
-	Attribution Attribution
-	Causes      []Cause
+	State       State       `json:"state"`
+	Attribution Attribution `json:"attribution,omitempty"`
+	Causes      []Cause     `json:"causes,omitempty"`
+}
+
+// UnmarshalJSON accepts the object this build writes and the bare state string an
+// older build stored, so a document written before the verdict grew past its state
+// still loads.
+func (v *Verdict) UnmarshalJSON(data []byte) error {
+	var state State
+	if err := json.Unmarshal(data, &state); err == nil {
+		// An older build stored the verdict as a bare state string. That
+		// document carries no attribution and no causes, so it cannot be
+		// reconstructed as a verdict this package would emit. Decode it as no
+		// verdict at all: the seam's default arm already reads an empty verdict
+		// as "no determination", which it reports rather than trusts.
+		*v = Verdict{}
+		return nil
+	}
+
+	// A defined type, not an alias: it carries none of Verdict's methods, so
+	// this one is not re-entered.
+	type verdict Verdict
+	return json.Unmarshal(data, (*verdict)(v))
 }

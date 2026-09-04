@@ -152,8 +152,8 @@ type budgetCores struct {
 }
 
 // newBudget derives headroom from the already-rounded three, so the arithmetic
-// the headroom line prints adds up exactly. It never rounds
-// Details.HeadroomCores independently.
+// the headroom line prints adds up exactly. No stored field can serve: a
+// headroom read from Details would not be the difference of these three.
 func newBudget(total, used, reserve float64) budgetCores {
 	b := budgetCores{
 		total:   round1(total),
@@ -239,14 +239,19 @@ type cpuRule struct {
 	firedHere bool
 }
 
-// render writes one line of the table: a rule that has not fired shows the mark
-// that would fire it, a latched rule the mark that clears it.
+// render writes one line of the table. A rule that has not fired shows the mark
+// that would fire it; a rule that has fired shows the mark that would clear it.
+// A rule with no reading says which kind of absence it is: "measuring" while its
+// window is still filling, "held" once it has fired and not yet cleared. An
+// operator is then never told that a fired signal is still warming up.
 func (r cpuRule) render() string {
 	switch {
 	case !r.applies && !r.firedHere:
 		return r.label + " not available (not possible)."
-	case !r.ready:
+	case !r.ready && !r.latched:
 		return r.label + " not available (measuring)."
+	case !r.ready:
+		return r.label + " not available (held)."
 	}
 
 	mark, verb := r.marks.Fire, "degrades"

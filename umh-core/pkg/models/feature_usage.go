@@ -34,10 +34,25 @@ type FeatureUsage struct {
 	FSMv2MemoryCleanupEnabled bool `json:"fsmv2MemoryCleanupEnabled"`
 	// FSMv2ProtocolConverterEnabled reports whether USE_FSMV2_PROTOCOL_CONVERTER is set.
 	FSMv2ProtocolConverterEnabled bool `json:"fsmv2ProtocolConverterEnabled"`
-	// FSMv2CPUEnabled reports whether USE_FSMV2_CPU is set.
+	// FSMv2CPUEnabled reports whether the fsmv2 CPU path is effectively running,
+	// which is not the same as USE_FSMV2_CPU being set. The FSMv2CPUEnabled
+	// function below computes it and says why the two differ.
 	FSMv2CPUEnabled bool `json:"fsmv2CpuEnabled"`
 	// ResourceLimitBlockingEnabled reports the value of agent.enableResourceLimitBlocking in config.yaml (defaults to true).
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.
 	HistorianConfigured bool `json:"historianConfigured"`
+}
+
+// FSMv2CPUEnabled reports the effective state of the fsmv2 CPU path: the flag must
+// be on and every prerequisite the seam needs must be present (USE_FSMV2_TRANSPORT
+// on, API_URL and AUTH_TOKEN set). cmd/main.go calls it with the same values the
+// FSMv2 supervisor gate reads.
+//
+// The credentials are a prerequisite only while the fsmv2 supervisor needs them
+// to start. PR #2698 decouples the runtime from the Management Console
+// credentials; once it lands an instance without them still runs the fsmv2 CPU
+// path, and this condition would report it as disabled while it is enabled.
+func FSMv2CPUEnabled(flag, transport, apiURLSet, authTokenSet bool) bool {
+	return flag && transport && apiURLSet && authTokenSet
 }

@@ -60,7 +60,7 @@ var _ = Describe("CPU monitor worker", func() {
 		It("registers a simple monitor worker with a declared observation interval", func() {
 			iv, ok := fsmv2.ObservationIntervalFor(WorkerType)
 			Expect(ok).To(BeTrue(), "init() must call simple.Register, which records the observation interval")
-			Expect(iv).To(Equal(pollInterval))
+			Expect(iv).To(Equal(PollInterval))
 
 			Expect(fsmv2.LookupInitialState(WorkerType)).NotTo(BeNil(),
 				"Register records an initial state for the worker type")
@@ -84,7 +84,7 @@ var _ = Describe("CPU monitor worker", func() {
 
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(status.Verdict).To(Equal(string(cpuhealth.StateHealthy)))
+			Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy))
 			Expect(status.Message).NotTo(BeEmpty(), "the status carries the composed customer message")
 		})
 
@@ -108,7 +108,7 @@ var _ = Describe("CPU monitor worker", func() {
 
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(status.Verdict).To(Equal(string(cpuhealth.StateDegraded)),
+			Expect(status.Verdict.State).To(Equal(cpuhealth.StateDegraded),
 				"a hostile sample must judge degraded, proving the verdict reflects Decide")
 			Expect(status.Message).NotTo(BeEmpty())
 		})
@@ -128,7 +128,7 @@ var _ = Describe("CPU monitor worker", func() {
 			status, err := Poll(context.Background(), d, CPUConfig{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("cpu table will not build"))
-			Expect(status.Verdict).To(BeEmpty(), "no verdict is fabricated from an unbuilt engine")
+			Expect(status.Verdict).To(Equal(cpuhealth.Verdict{}), "no verdict is fabricated from an unbuilt engine")
 		})
 	})
 })

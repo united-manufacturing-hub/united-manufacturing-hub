@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
 var _ = Describe("CPUStatus carries the measured evidence", func() {
@@ -75,15 +76,13 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 	// gone with no error. buildDetails fills no Reading today, so Poll cannot
 	// stage that case and these specs build the status directly.
 	Describe("on the wire", func() {
-		// A present value, a present zero and an absence: three things to lose.
+		// A present zero: the value an implementation could mistake for an absence.
 		filled := func() CPUStatus {
 			return CPUStatus{
-				Verdict: string(cpuhealth.StateHealthy),
+				Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
 				Message: "CPU healthy.",
 				Details: cpuhealth.Details{
-					UsageFraction: diagnosis.Known(0.42),
 					P95UsageCores: diagnosis.Known(0),
-					HeadroomCores: diagnosis.Unknown(),
 					ThrottleRatio: 0.1,
 					LogicalCpus:   4,
 					HostCpus:      8,
@@ -101,16 +100,9 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 
 			Expect(back.Details).To(Equal(filled().Details))
 
-			v, ok := back.Details.UsageFraction.Get()
-			Expect(ok).To(BeTrue(), "a present Reading must survive the round trip")
-			Expect(v).To(Equal(0.42))
-
-			v, ok = back.Details.P95UsageCores.Get()
+			v, ok := back.Details.P95UsageCores.Get()
 			Expect(ok).To(BeTrue(), "a known zero is a value, not an absence")
 			Expect(v).To(Equal(0.0))
-
-			_, ok = back.Details.HeadroomCores.Get()
-			Expect(ok).To(BeFalse(), "an absence must not come back as a zero")
 		})
 
 		It("nests the evidence under details, with a present Reading written as a number", func() {
@@ -120,16 +112,135 @@ var _ = Describe("CPUStatus carries the measured evidence", func() {
 			var top map[string]json.RawMessage
 			Expect(json.Unmarshal(b, &top)).To(Succeed())
 			Expect(top).To(HaveKey("details"))
-			Expect(top).NotTo(HaveKey("usageFraction"),
+			Expect(top).To(HaveKey("verdict"))
+			Expect(top).NotTo(HaveKey("p95UsageCores"),
 				"a named field keeps the evidence out of the namespace verdict and message share")
 
 			var details map[string]json.RawMessage
 			Expect(json.Unmarshal(top["details"], &details)).To(Succeed())
 
-			Expect(string(details["usageFraction"])).To(Equal("0.42"),
+			Expect(string(details["p95UsageCores"])).To(Equal("0"),
 				"a present Reading is a JSON number; {} means its value was dropped and null means it was lost as an absence")
-			Expect(string(details["p95UsageCores"])).To(Equal("0"))
-			Expect(string(details["headroomCores"])).To(Equal("null"))
 		})
+	})
+})
+
+// The stored document is what simple.Status marshals from a CPUStatus: the
+// result's keys flattened to the top level, alongside the health verdict's
+// reason and degraded. The CPU status reader in container_monitor loads that
+// document back through fsmv2client, so a loader must read back the whole
+// verdict.
+var _ = Describe("the verdict on the stored document", func() {
+	It("carries Decide's whole verdict through a store and load round trip", func() {
+		// Pressure fires above its mark on the first sample, so Decide
+		// returns degraded for this sample on the first tick, with an
+		// attribution and a ranked cause, without any window warm-up. A
+		// quiet sample returns healthy, and a healthy verdict carries no
+		// attribution and no causes to observe.
+		sample := cpuhealth.Sample{
+			Timestamp:    time.Now(),
+			Quota:        diagnosis.Known(0),
+			NrPeriods:    diagnosis.Known(1),
+			Pressure:     diagnosis.Known(0.9),
+			HostBusy:     diagnosis.Known(0.5),
+			Virtualized:  true,
+			PsiAvailable: true,
+		}
+
+		// The expected verdict is what Decide returns for this sample. It
+		// runs on a second engine, not the one Poll feeds, because Decide
+		// advances the windows it reads.
+		twin := newDeps(fixedSampler(sample), 4, 0)
+		expected, _ := cpuhealth.Decide(twin.engine, sample, cpuhealth.DeriveEnvironment(sample))
+		Expect(expected.State).To(Equal(cpuhealth.StateDegraded))
+		Expect(expected.Attribution).NotTo(BeEmpty())
+		Expect(expected.Causes).NotTo(BeEmpty())
+
+		d := newDeps(fixedSampler(sample), 4, 0)
+		status, err := Poll(context.Background(), d, CPUConfig{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Verdict).To(Equal(expected),
+			"after Poll the status carries Decide's whole verdict")
+
+		// Store the poll result as the framework does: wrapped in
+		// simple.Status.
+		health := monitorSpec.Health(CPUConfig{}, status)
+		stored, err := json.Marshal(simple.Status[CPUStatus]{
+			Result:   status,
+			Degraded: health.Degraded,
+			Reason:   health.Reason,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		var back simple.Status[CPUStatus]
+		Expect(json.Unmarshal(stored, &back)).To(Succeed(),
+			"the stored document must load")
+		Expect(back.Result.Verdict).To(Equal(expected),
+			"a loader reads the whole verdict back, not only its state")
+	})
+
+	// The old bytes are written out literally because no code path still
+	// produces them. This Describe block's opening comment says how the keys
+	// are flattened.
+	It("loads an older build's document whose verdict key holds the bare state string", func() {
+		old := []byte(`{"verdict":"healthy","message":"CPU healthy.","details":{},"reason":"CPU healthy.","degraded":false}`)
+
+		var back simple.Status[CPUStatus]
+		Expect(json.Unmarshal(old, &back)).To(Succeed(),
+			"a stored document written by an older build must still load")
+
+		Expect(back.Result.Verdict).To(Equal(cpuhealth.Verdict{}),
+			"a bare string carries no attribution and no causes, so the old document decodes as no verdict at all")
+		Expect(back.Result.Message).To(Equal("CPU healthy."),
+			"the rest of the document loads too")
+	})
+
+	// The degraded sibling of the same old shape: an older build stored a
+	// degraded tick with simple.Status's Degraded flag set, and that flag —
+	// not the verdict — carried the judgement.
+	It("loads an older build's degraded document with an empty verdict, the framework Degraded flag carrying the degraded state", func() {
+		old := []byte(`{"verdict":"degraded","message":"CPU degraded.","details":{},"reason":"CPU degraded.","degraded":true}`)
+
+		var back simple.Status[CPUStatus]
+		Expect(json.Unmarshal(old, &back)).To(Succeed(),
+			"a stored document written by an older build must still load")
+
+		Expect(back.Result.Verdict).To(Equal(cpuhealth.Verdict{}),
+			"the degraded bare string decodes as no verdict at all, like every bare string")
+		Expect(back.Degraded).To(BeTrue(),
+			"the degraded case is carried by the framework Degraded flag, not by the verdict")
+	})
+
+	It("fails the document's load only when the verdict key holds a value that is neither a string, nor null, nor an object", func() {
+		document := func(verdictKey string) []byte {
+			return []byte(`{"verdict":` + verdictKey + `,"message":"CPU healthy.","details":{},"reason":"CPU healthy.","degraded":false}`)
+		}
+
+		garbage := document(`"bogus"`)
+		var backGarbage simple.Status[CPUStatus]
+		Expect(json.Unmarshal(garbage, &backGarbage)).To(Succeed(),
+			"a bare string is the old shape whatever it spells")
+		Expect(backGarbage.Result.Verdict).To(Equal(cpuhealth.Verdict{}),
+			"nothing reads the string back in: no state is kept from it")
+
+		null := document(`null`)
+		var backNull simple.Status[CPUStatus]
+		Expect(json.Unmarshal(null, &backNull)).To(Succeed(),
+			"unmarshalling null into a State is a no-op that returns no error, so the bare-string branch takes it too")
+		Expect(backNull.Result.Verdict).To(Equal(cpuhealth.Verdict{}),
+			"null decodes as no verdict at all, like a bare string")
+
+		for _, bad := range []struct {
+			name  string
+			value string
+		}{
+			{"number", `3`},
+			{"bool", `true`},
+			{"array", `[]`},
+		} {
+			var backBad simple.Status[CPUStatus]
+			Expect(json.Unmarshal(document(bad.value), &backBad)).NotTo(Succeed(),
+				"a "+bad.name+" is no shape a stored document holds in its verdict key")
+		}
 	})
 })
