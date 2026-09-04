@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- Preview: the CPU health metrics are now exposed on the `/metrics` endpoint
+- Preview: `USE_FSMV2_CPU` now publishes CPU health metrics on `/metrics`
 
 ## [0.44.38]
 

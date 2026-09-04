@@ -137,38 +137,17 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 // recordGauges publishes the measured evidence for the framework's worker-metrics
 // exporter, which turns each name into umh_fsmv2_worker_<name>.
-//
-// This does not run on a tick that could not measure, because Poll returns
-// first. That does NOT mean the gauges go absent on a failed read: the
-// collector still runs (simple.CollectObservedState reports a poll failure as
-// a degraded observation, not as an error), so it reloads the previous gauge
-// map from CSE and re-publishes every value. A persistent read failure
-// therefore freezes this whole family at its last reading, and the worker's own
-// state metric is what reveals it — not anything here.
 func recordGauges(m *deps.MetricsRecorder, det cpuhealth.Details) {
-	// Every gauge is set on every measured tick, including one where a signal
-	// was not ready, and the flags below are what say which reading to trust.
-	// Skipping the set would be worse than publishing a 0: the exporter creates
-	// gauges lazily and never deletes one (ExportWorkerMetrics only ever writes
-	// the drained map), so an omitted gauge keeps being scraped at its previous
-	// value, with nothing to mark it stale.
 	m.SetGauge(deps.GaugeCPUAvgUsageCores, det.AvgUsageCores)
 	m.SetGauge(deps.GaugeCPUAvgUsageFraction, det.AvgUsageFraction)
 	m.SetGauge(deps.GaugeCPUThrottleRatio, det.ThrottleRatio)
 	m.SetGauge(deps.GaugeCPUPressureAvg60, det.PressureAvg60)
 	m.SetGauge(deps.GaugeCPUHostHeadroomCores, det.HostHeadroomCores)
 	m.SetGauge(deps.GaugeCPUAvgHostBusyCores, det.AvgHostBusyCores)
-	// These three carry no companion flag and need none: capacity and the host
-	// CPU count are 0 only on a read that never reaches here, and 0 is not a
-	// value either can legitimately take; the reserve is a fixed fraction of
-	// capacity, so it is readable whenever capacity is.
 	m.SetGauge(deps.GaugeCPUCapacityCores, det.CapacityCores)
 	m.SetGauge(deps.GaugeCPUReserveCores, det.ReserveCores)
 	m.SetGauge(deps.GaugeCPUHostCpus, det.HostCpus)
 
-	// The readability half. cpu_throttle_ratio, cpu_pressure_avg60 and the two
-	// usage gauges all report 0 for an absent or untrusted signal, so a consumer
-	// needs these to tell "not throttled" from "no throttle signal".
 	m.SetGauge(deps.GaugeCPUUsageRingActive, gaugeBool(det.UsageRingActive))
 	m.SetGauge(deps.GaugeCPUHostBusyRingActive, gaugeBool(det.HostBusyRingActive))
 	m.SetGauge(deps.GaugeCPUHostHeadroomAvailable, gaugeBool(det.HostHeadroomAvailable))
@@ -176,9 +155,6 @@ func recordGauges(m *deps.MetricsRecorder, det cpuhealth.Details) {
 	m.SetGauge(deps.GaugeCPUPressureSignalReady, gaugeBool(det.PressureSignalReady))
 }
 
-// gaugeBool is the flag encoding each flag gauge's own doc comment states: 1
-// for true, 0 for false. It is not carried in the exported Help string, which
-// the framework hardcodes to "Worker metric: <name>".
 func gaugeBool(b bool) float64 {
 	if b {
 		return 1
