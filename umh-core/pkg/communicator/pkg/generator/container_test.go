@@ -24,8 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
 
-// health builds a component health carrying just the message and category the
-// container-level message reads.
 func health(message string, category models.HealthCategory) *models.Health {
 	return &models.Health{
 		Message:       message,
