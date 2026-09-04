@@ -129,6 +129,25 @@ type Sample struct {
 	// of /sys/class/dmi/id/product_name naming a known hypervisor. An unreadable
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
+
+	// The files behind the evidence reads, byte for byte, so a raw string shows
+	// a failure shape nobody predicted. Empty means its own read did not
+	// succeed, and its entry in Reads carries the reason.
+	ControllersRaw    string // cgroup.controllers, under the sampler's base
+	CPUMaxRaw         string // cpu.max, under the sampler's base
+	CPUStatRaw        string // cpu.stat, under the sampler's base
+	ProcSelfCgroupRaw string // /proc/self/cgroup
+
+	// BaseEntryCount is -1 when the directory was not read. Zero is a real
+	// reading, of a directory that exists and is empty.
+	BaseEntryCount int
+
+	// Reads is one entry per member of allReadOps, in that order, so its length
+	// is len(allReadOps) on any Sample a linuxSampler produced and zero on one it
+	// did not. Read seeds each entry to ReadNotAttempted and overwrites in place:
+	// appending could carry no entry for a read that never ran, and a cpu.stat
+	// failure returns before the reads below it.
+	Reads []ReadResult
 }
 
 // Sampler reads one tick of CPU health signals: a cgroup's own accounting

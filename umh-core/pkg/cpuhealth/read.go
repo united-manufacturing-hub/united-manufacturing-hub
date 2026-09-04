@@ -76,6 +76,25 @@ type linuxSampler struct {
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
+	// Sample.Reads says why this is seeded here rather than appended below.
+	smp.Reads = seedReads()
+
+	// Evidence first: a cpu.stat failure returns before every read below it, so
+	// gathering these later would lose them in the one case they exist for.
+	// They precede the timestamp because they are cheap, and it stays close to
+	// the measurement reads.
+	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
+	smp.ControllersRaw = controllers
+	smp.record(OpCgroupControllers, controllersOutcome)
+
+	procSelf, procSelfOutcome := s.cgroup.readProcSelfCgroup(ctx)
+	smp.ProcSelfCgroupRaw = procSelf
+	smp.record(OpProcSelfCgroup, procSelfOutcome)
+
+	baseEntries, baseDirOutcome := s.cgroup.countBaseEntries(ctx)
+	smp.BaseEntryCount = baseEntries
+	smp.record(OpBaseDir, baseDirOutcome)
+
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
 	// calls time.Now() itself, so both rate derivations divide by the same
 	// elapsed time and Decide never compares a machine-wide mean against a
@@ -85,24 +104,29 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
-	if frac, ok := s.cgroup.readPSI(ctx); ok {
+	frac, psiErr := s.cgroup.readPSI(ctx)
+	if psiErr == nil {
 		s.cgroup.psiAvailable = true
 		smp.Pressure = diagnosis.Known(frac)
 	} else {
 		smp.Pressure = diagnosis.Unknown()
 	}
+	smp.record(OpCPUPressure, classifyRead(psiErr))
 	smp.PsiAvailable = s.cgroup.psiAvailable
 
-	usage, periods, throttled, statErr := s.cgroup.readStat(ctx)
+	stat, statErr := s.cgroup.readStat(ctx)
+	// Before the early return: text that would not parse is why it would not.
+	smp.CPUStatRaw = stat.Raw
+	smp.record(OpCPUStat, statOutcome(stat, statErr))
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
 		// never a silent drop of the throttle counters as absent no-signal.
 		return smp, fmt.Errorf("read %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
-	smp.NrPeriods = periods
-	smp.NrThrottled = throttled
-	smp.UsageUsec = usage
-	smp.UsageCores = s.cgroup.advanceUsageRate(ts, usage)
+	smp.NrPeriods = stat.Periods
+	smp.NrThrottled = stat.Throttled
+	smp.UsageUsec = stat.Usage
+	smp.UsageCores = s.cgroup.advanceUsageRate(ts, stat.Usage)
 
 	// Host signals: the first /proc/stat read fixes a baseline and publishes
 	// neither; a read after that publishes this tick's instantaneous host-busy
@@ -111,7 +135,9 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// reset: the baseline is re-established and nothing is published this tick.
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
-	if busy, steal, denom, machine, ok := s.host.readHost(ctx); ok {
+	busy, steal, denom, machine, hostErr := s.host.readHost(ctx)
+	smp.record(OpProcStat, classifyRead(hostErr))
+	if hostErr == nil {
 		smp.HostCpus = diagnosis.Known(machine)
 		// CPU scope compares the container's allowed cpuset against the machine's
 		// count (kept on the snapshot as HostCpus): a readable, covering cpuset
@@ -121,7 +147,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// LogicalCpus absent: never a silent ScopeHost on a known machine count.
 		// Comparing the two sources' reads is the composer's job — a cross-seam
 		// fact neither source can derive holding only its own read.
-		if allowed, aok := s.cgroup.readCpuset(ctx); aok {
+		//
+		// Nesting it here is also why it stays not_attempted on a tick whose
+		// /proc/stat read failed: the cpuset file was never opened, and recording
+		// a failure for it would name the wrong file.
+		allowed, cpusetErr := s.cgroup.readCpuset(ctx)
+		smp.record(OpCpusetCPUs, classifyRead(cpusetErr))
+		if cpusetErr == nil {
 			smp.LogicalCpus = diagnosis.Known(float64(allowed))
 			if allowed == int(machine) {
 				smp.CpuScope = ScopeHost
@@ -140,8 +172,51 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		smp.CpuScope = ScopeUnknown
 	}
 
-	smp.Virtualized = s.host.readVirtualized(ctx)
+	var cpuinfo ReadOutcome
+	smp.Virtualized, cpuinfo = s.host.readVirtualized(ctx)
+	smp.record(OpProcCpuinfo, cpuinfo)
 
-	smp.Quota = s.cgroup.readQuota(ctx)
+	quota, cpuMax := s.cgroup.readQuota(ctx)
+	smp.Quota = quota.Limit
+	smp.CPUMaxRaw = quota.Raw
+	smp.record(OpCPUMax, cpuMax)
 	return smp, nil
+}
+
+// statOutcome reports a successful read with no usage figure as ReadEmpty,
+// because ReadOK would claim a value never produced. A zero-byte file and a
+// valueless usage_usec line both land there, since parseCounter reports an
+// absent key as absent rather than an error; the raw text on the event separates
+// them.
+func statOutcome(stat statRead, err error) ReadOutcome {
+	if err != nil {
+		return classifyRead(err)
+	}
+
+	if _, ok := stat.Usage.Get(); !ok {
+		return ReadEmpty
+	}
+
+	return ReadOK
+}
+
+// seedReads returns one ReadNotAttempted entry per op, in allReadOps order.
+func seedReads() []ReadResult {
+	reads := make([]ReadResult, len(allReadOps))
+	for i, op := range allReadOps {
+		reads[i] = ReadResult{Op: op, Outcome: ReadNotAttempted}
+	}
+	return reads
+}
+
+// record overwrites op's seeded entry. An op absent from allReadOps has none to
+// overwrite and records nothing; read_record_test.go asserts every declared op
+// is present exactly once, so no call site here can reach that.
+func (s *Sample) record(op ReadOp, outcome ReadOutcome) {
+	for i := range s.Reads {
+		if s.Reads[i].Op == op {
+			s.Reads[i].Outcome = outcome
+			return
+		}
+	}
 }
