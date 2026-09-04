@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.37]
+
 ### Fixes
 
 - Topics no longer go missing from the Topic Browser when several updates arrive in quick succession
