@@ -54,7 +54,7 @@ func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) (*mo
 
 // cpuVerdict is the seam's judgement about the CPU worker's last observation:
 // what to say, how to classify it, and the measurement it was drawn from.
-// cpuHealth is nil on every arm that had no measurement to judge.
+// cpuHealth is nil whenever there was no measurement to judge.
 type cpuVerdict struct {
 	cpuHealth *models.CPUHealth
 	message   string
@@ -64,7 +64,7 @@ type cpuVerdict struct {
 // health renders the verdict as the models.Health the seam reports. It is the
 // one place the seam builds that struct, so ObservedState tracking Category and
 // DesiredState being Active hold by construction rather than by agreement
-// between separate arms.
+// between the places that build it.
 func (v cpuVerdict) health() *models.Health {
 	return &models.Health{
 		Message:       v.message,
@@ -75,7 +75,7 @@ func (v cpuVerdict) health() *models.Health {
 }
 
 // degradedCPU is the fail-closed verdict: degraded, with no measurement behind
-// it. Every arm that could not measure or could not classify uses it.
+// it. Used wherever the seam could not measure or could not classify.
 func degradedCPU(message string) cpuVerdict {
 	return cpuVerdict{message: message, category: models.Degraded}
 }
@@ -84,16 +84,12 @@ func degradedCPU(message string) cpuVerdict {
 // return. GetFresh reports Unknown freshness in that case: the read failure
 // prevented the observation from being classified, so it cannot be called
 // healthy. Fail closed with the verbatim store error as the message.
-//
-// It reads nothing outside its argument, so the arm is reachable from a test
-// without a published fsmv2 client.
 func judgeWorkerCPUReadError(err error) cpuVerdict {
 	return degradedCPU(fmt.Sprintf("CPU worker observation could not be read: %v", err))
 }
 
 // judgeWorkerCPU turns the observation fsmv2client.GetFresh returned into a
-// verdict. It reads nothing outside its arguments, so every arm is reachable
-// from a test without a published fsmv2 client.
+// verdict.
 func judgeWorkerCPU(
 	status simple.Status[fsmv2cpu.CPUStatus],
 	freshness fsmv2client.Freshness,
@@ -157,10 +153,10 @@ func judgeWorkerCPU(
 // error and no health.
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, *models.CPUHealth, error) {
 	// A cancelled tick is not a degraded box. This is the first thing the
-	// function does, so no arm below it can publish a verdict nothing measured
-	// -- including the no-client arm, which reports a missing prerequisite that
-	// a cancelled tick has not established. getCPUMetrics likewise aborts on a
-	// cancelled ctx rather than reporting.
+	// function does, so nothing below it can publish a verdict nothing
+	// measured -- including the missing-client case, which reports an absent
+	// prerequisite that a cancelled tick has not established. getCPUMetrics
+	// likewise aborts on a cancelled ctx rather than reporting.
 	//
 	// It catches a ctx already cancelled on entry, not one cancelled during the
 	// store read below. That window is deliberately uncovered: no store in this

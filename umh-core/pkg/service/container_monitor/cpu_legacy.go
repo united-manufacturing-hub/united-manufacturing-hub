@@ -49,7 +49,7 @@ func (c *ContainerMonitorService) setCPUUsageProvider(fn func(ctx context.Contex
 }
 
 // judgeLegacyCPUUsage degrades the instance above CPUHighThresholdPercent of
-// the cores it may use, and only the legacy arm of GetStatus calls it, so it
+// the cores it may use, and only GetStatus's legacy CPU path calls it, so it
 // never runs under USE_FSMV2_CPU.
 //
 // getCPUMetrics already degrades on that same threshold, so this changes an

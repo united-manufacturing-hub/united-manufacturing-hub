@@ -236,9 +236,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// The worker's "cannot measure" declaration must degrade the
 			// instance, not fall through to the legacy Active judgement...
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
-			// ...and, as the CPU arm of OverallHealth, it must degrade the overall
-			// health too. This asserts that explicitly: the memory and disk arms can
-			// only ADD Degraded, never remove it.
+			// ...and, because OverallHealth reads CPU, it must degrade too. This
+			// asserts that explicitly: memory and disk can only ADD Degraded,
+			// never remove it.
 			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			// ...and the framework reason must land where the protocol-converter
 			// resource-limit check (IsResourceLimited) reads the block message.
@@ -273,9 +273,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			// The worker's verdict drives the service-level CPU health...
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
-			// ...and, as the CPU arm of OverallHealth, it drives the overall
-			// health too (the memory/disk arms can only add to a degraded
-			// CPU verdict, never pull it back to Active).
+			// ...and, because OverallHealth reads CPU, it drives the overall
+			// health too (memory and disk can only add to a degraded CPU
+			// verdict, never pull it back to Active).
 			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			// ...the worker's message lands where the protocol-converter
 			// resource-limit check (IsResourceLimited) reads it...
@@ -445,7 +445,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			})
 
 			// Stage host-independent cgroup data: a benign memory usage so the
-			// memory arm cannot degrade the aggregate, and a throttle-free
+			// memory reading cannot degrade the aggregate, and a throttle-free
 			// cpu.stat + a 2-core quota so the throttle path stays benign and the
 			// CPU-percentage maths below is deterministic. The injected usage
 			// provider is what trips the legacy 70% rule.
@@ -481,7 +481,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// ...and the legacy 70% rule did not run: it must not re-judge the
 			// worker's numbers and flip a busy host to Degraded. Only
 			// status.CPUHealth is asserted here (not status.OverallHealth): the
-			// disk arm below reads the real host disk through gopsutil, which the
+			// disk reading below comes from the real host disk through gopsutil, which the
 			// mock filesystem cannot stage, so OverallHealth would depend on the
 			// CI host's disk state. The CPUHealth assertion is the discriminator —
 			// the legacy rule sets it too, so any firing of the rule fails here.
@@ -839,7 +839,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		It("should fill status.CPU.CPUHealth from one worker tick's verdict and details, and omit the key entirely on a tick that measured nothing", func() {
 			setFlag("true")
 
-			// The fills arm stages what one measured tick stores: a degraded
+			// The fills case stages what one measured tick stores: a degraded
 			// verdict WITH attribution and causes — the console panel's whole
 			// purpose, since without causes no row reddens — beside the Details
 			// it judged, including a present p95 Reading so the optional-member
@@ -918,7 +918,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(json.Unmarshal(data, &raw)).To(Succeed())
 			Expect(raw).To(HaveKey("cpuHealth"))
 
-			// The omits arm: a tick that measured nothing. The framework-
+			// The omits case: a tick that measured nothing. The framework-
 			// Degraded observation (a poll error arrives Fresh with a zero
 			// result) fails closed to a Degraded models.Health on CPU.Health,
 			// but there is no Details behind such a verdict — so cpuHealth
@@ -1057,8 +1057,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			}
 
 			// The verdict object: the degraded state the tick earned, with the
-			// attribution and causes the console's healthy arm forbids and its
-			// degraded arm requires.
+			// attribution and causes the console forbids when healthy and
+			// requires when degraded.
 			verdictRaw, ok := health["verdict"].(map[string]interface{})
 			Expect(ok).To(BeTrue())
 			Expect(verdictRaw["state"]).To(Equal("degraded"))
@@ -1136,9 +1136,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			setFlag("true")
 			publishWorkerClientWithStub(&cpuStubStateReader{err: persistence.ErrNotFound})
 
-			// What identifies the branch is the message: no other arm emits
+			// What identifies the branch is the message: nothing else emits
 			// "never observed", so a build that collapsed this case into the
-			// read-error arm fails here rather than passing on a shared
+			// read-error one fails here rather than passing on a shared
 			// Degraded category.
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				switch path {
@@ -1499,9 +1499,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Expect(status.CPU).NotTo(BeNil())
 				Expect(status.CPUHealth).To(Equal(models.Degraded))
 				Expect(status.CPU.Health.Message).To(Equal(seamTransportOffWarning))
-				// The state pair is asserted HERE and only here. Every other arm
-				// has it pinned through status.CPUHealth, which is derived from
-				// Category; this arm is the one where a hand-written Health could
+				// The state pair is asserted HERE and only here. Everywhere else
+				// it is pinned through status.CPUHealth, which is derived from
+				// Category; this is the one case where a hand-written Health could
 				// carry a state that disagrees with its own category and nothing
 				// would notice.
 				Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
@@ -1619,7 +1619,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 	})
 })
 
-// The seam's two judgement functions, called directly. Every arm below is
+// The seam's two judgement functions, called directly. Everything below is
 // reachable through GetStatus too, but only with a published fsmv2 client and a
 // staged store.
 var _ = Describe("the CPU seam's judgement, called without a client", func() {
@@ -1640,7 +1640,7 @@ var _ = Describe("the CPU seam's judgement, called without a client", func() {
 
 	DescribeTable("an observation it cannot trust",
 		func(freshness fsmv2client.Freshness, expectedMessage string) {
-			// A healthy verdict is staged on purpose: no arm here may read it,
+			// A healthy verdict is staged on purpose: nothing here may read it,
 			// so a build that fell through to the verdict would report Active
 			// and fail this table rather than pass quietly.
 			health, cpuHealth := container_monitor.JudgeWorkerCPU(healthyWorkerStatus(), freshness)
@@ -1661,7 +1661,7 @@ var _ = Describe("the CPU seam's judgement, called without a client", func() {
 	)
 
 	It("passes a fresh healthy verdict through with its evidence attached", func() {
-		// On the one arm that did judge a measurement, the evidence travels
+		// On the one verdict that did judge a measurement, the evidence travels
 		// with it.
 		health, cpuHealth := container_monitor.JudgeWorkerCPU(healthyWorkerStatus(), fsmv2client.Fresh)
 
