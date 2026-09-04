@@ -198,22 +198,18 @@ const (
 )
 
 // CPU worker gauge names for the evidence behind a CPU health verdict.
-//
-// Three of these measure "how busy" on different scales — absolute cores, a
-// 0..1 fraction, and a 0..1 ratio — so each of those three names says which.
-// The remaining names state their range in the doc comment instead.
 const (
 	// GaugeCPUAvgUsageCores tracks this container's own 60s mean usage, in absolute cores.
 	GaugeCPUAvgUsageCores GaugeName = "cpu_avg_usage_cores"
 
-	// GaugeCPUAvgUsageFraction tracks the 60s mean usage as a 0..1 fraction of capacity.
+	// GaugeCPUAvgUsageFraction tracks the 60s mean usage as a 0..1 fraction of the CPUs this container may run on.
 	GaugeCPUAvgUsageFraction GaugeName = "cpu_avg_usage_fraction"
 
 	// GaugeCPUThrottleRatio tracks the 60s nr_throttled/nr_periods delta, 0..1.
 	GaugeCPUThrottleRatio GaugeName = "cpu_throttle_ratio"
 
-	// GaugeCPUPressureAvg60 tracks PSI cpu-some avg60 as a 0..1 fraction, which
-	// is the kernel's percentage divided by 100 — not the kernel's own number.
+	// GaugeCPUPressureAvg60 tracks PSI cpu-some avg60 as a 0..1 fraction: the
+	// kernel's percentage divided by 100.
 	GaugeCPUPressureAvg60 GaugeName = "cpu_pressure_avg60"
 
 	// GaugeCPUHostHeadroomCores tracks cores free on the host after the reserve.
@@ -227,35 +223,27 @@ const (
 	// quota when one applies, else the CPU count.
 	GaugeCPUCapacityCores GaugeName = "cpu_capacity_cores"
 
-	// GaugeCPUReserveCores tracks the headroom held back from CapacityCores.
+	// GaugeCPUReserveCores tracks the headroom held back from cpu_capacity_cores.
 	GaugeCPUReserveCores GaugeName = "cpu_reserve_cores"
 
-	// GaugeCPUHostCpus tracks the machine's CPU count, which exceeds the count
-	// this container may use whenever it is pinned to a subset.
+	// GaugeCPUHostCpus tracks the machine's CPU count, which exceeds this container's when it is pinned to a subset.
 	GaugeCPUHostCpus GaugeName = "cpu_host_cpus"
 )
 
 // CPU worker readability flags, 1 for true and 0 for false.
 //
-// Each one says whether the measurement it names was readable on that tick.
-// They are not optional decoration: several of the gauges above report 0 when
-// their signal was absent or untrusted, so without the matching flag a
-// consumer cannot tell "not throttled" from "no throttle signal".
+// Several of the gauges above report 0 when their signal was absent or
+// untrusted, so without the matching flag a consumer cannot tell "not
+// throttled" from "no throttle signal".
 const (
-	// GaugeCPUUsageRingActive qualifies cpu_avg_usage_cores and cpu_avg_usage_fraction.
+	// GaugeCPUUsageRingActive qualifies cpu_avg_usage_cores.
 	GaugeCPUUsageRingActive GaugeName = "cpu_usage_ring_active"
 
 	// GaugeCPUHostBusyRingActive qualifies cpu_avg_host_busy_cores.
 	GaugeCPUHostBusyRingActive GaugeName = "cpu_host_busy_ring_active"
 
 	// GaugeCPUHostHeadroomAvailable reports whether this container sees the whole
-	// machine, reading 0 when it is pinned to a subset of CPUs. That is a scope
-	// check, NOT the readability of cpu_host_headroom_cores, so it is a weaker
-	// companion than the two above: require cpu_host_busy_ring_active == 1
-	// alongside it before trusting a headroom figure. Neither flag covers an
-	// instance whose startup snapshot failed, which drops the host-capacity
-	// signal for that instance's lifetime and pins the headroom figure at 0
-	// (ENG-5752).
+	// machine, reading 0 when it is pinned to a subset of CPUs.
 	GaugeCPUHostHeadroomAvailable GaugeName = "cpu_host_headroom_available"
 
 	// GaugeCPUThrottleSignalReady qualifies cpu_throttle_ratio.

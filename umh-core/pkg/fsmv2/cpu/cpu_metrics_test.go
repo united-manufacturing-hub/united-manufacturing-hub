@@ -28,12 +28,7 @@ import (
 
 // richSample stages a tick whose Details carry a different number in every
 // published field, so a mapping that crossed two fields moves at least one of
-// them. UsageCores and Steal are rate fields the sampler computes, not
-// cumulative counters, so a single tick can set them directly.
-//
-// cpu_throttle_ratio is the one field that stays 0: it reduces a delta between
-// two counter reads, which one tick cannot produce. Nothing else reads 0, so it
-// has no partner to be swapped with.
+// them.
 func richSample() cpuhealth.Sample {
 	return cpuhealth.Sample{
 		Timestamp:    time.Now(),
@@ -71,9 +66,6 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 			deps.GaugeCPUHostCpus:          status.Details.HostCpus,
 		}
 
-		// Comparing each gauge to its own Details field says nothing where two
-		// fields hold the same number: a mapping that crossed them would still
-		// pass. Assert the staged evidence is all-distinct first, so it cannot.
 		seen := make(map[float64]deps.GaugeName, len(want))
 		for name, v := range want {
 			Expect(seen).NotTo(HaveKey(v),
@@ -104,9 +96,8 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 			deps.GaugeCPUPressureSignalReady:   status.Details.PressureSignalReady,
 		}
 
-		// An implementation that wrote 1 everywhere, or 0 everywhere, would pass
-		// the per-flag assertions below if this tick happened to be unanimous.
 		var trues, falses int
+
 		for _, v := range flags {
 			if v {
 				trues++
@@ -114,6 +105,7 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 				falses++
 			}
 		}
+
 		Expect(trues).To(BeNumerically(">", 0), "this spec needs at least one ready signal to have anything to distinguish")
 		Expect(falses).To(BeNumerically(">", 0), "and at least one unready signal")
 
@@ -133,9 +125,7 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 	It("publishes an unready signal as a zero measurement beside a zero flag, rather than omitting it", func() {
 		// The exporter creates gauges lazily and never deletes one, so a skipped
 		// SetGauge leaves the previous value being scraped as though it were
-		// current. Publishing 0 and saying so in the flag is the contract; this
-		// spec is what fails if someone later skips the set to "avoid a
-		// misleading zero".
+		// current.
 		d := newDeps(fixedSampler(richSample()), 4, 2)
 
 		status, err := Poll(context.Background(), d, CPUConfig{})
@@ -160,9 +150,8 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).To(HaveOccurred())
 
-		// This is a statement about the recorder, not about what a scrape sees:
-		// the collector re-publishes the previous values from CSE on a failed
-		// poll. See recordGauges' own comment.
+		// A statement about the recorder, not about what a scrape sees: the
+		// collector re-publishes the previous values from CSE on a failed poll.
 		Expect(d.MetricsRecorder().Drain().Gauges).To(BeEmpty(),
 			"a failed read publishes no gauge rather than a zero-valued measurement")
 	})
