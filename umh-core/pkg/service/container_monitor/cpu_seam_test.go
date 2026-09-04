@@ -1621,8 +1621,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 // The seam's two judgement functions, called directly. Every arm below is
 // reachable through GetStatus too, but only with a published fsmv2 client and a
-// staged store. Calling them directly is what shows they depend on nothing
-// else, which is the property the split into two functions was made for.
+// staged store.
 var _ = Describe("the CPU seam's judgement, called without a client", func() {
 	// The window the stale message quotes, derived the way production derives
 	// it, so a change to the worker's poll interval moves both together.
@@ -1662,9 +1661,8 @@ var _ = Describe("the CPU seam's judgement, called without a client", func() {
 	)
 
 	It("passes a fresh healthy verdict through with its evidence attached", func() {
-		// The contrast that gives the nil assertions above their meaning: on
-		// the one arm that did judge a measurement, the evidence travels with
-		// it.
+		// On the one arm that did judge a measurement, the evidence travels
+		// with it.
 		health, cpuHealth := container_monitor.JudgeWorkerCPU(healthyWorkerStatus(), fsmv2client.Fresh)
 
 		Expect(health).NotTo(BeNil())

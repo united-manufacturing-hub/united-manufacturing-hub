@@ -152,10 +152,8 @@ type budgetCores struct {
 }
 
 // newBudget derives headroom from the already-rounded three, so the arithmetic
-// the headroom line prints adds up exactly. Details stores no headroom for the
-// instance budget, and its HostHeadroomCores is the raw 60s reduction rather
-// than the difference of these rounded three, so this derived value is the
-// only headroom a line can print.
+// the headroom line prints adds up exactly. No stored field can serve: a
+// headroom read from Details would not be the difference of these three.
 func newBudget(total, used, reserve float64) budgetCores {
 	b := budgetCores{
 		total:   round1(total),

@@ -32,21 +32,18 @@ import (
 
 // cpuPanicStateReader panics if the seam reads the observation store. A
 // cancelled tick has to be decided before that read, so reaching this method is
-// itself the defect, and a panic reports it at the offending call rather than as
-// a mismatched return value two frames later.
+// itself the defect.
 type cpuPanicStateReader struct{}
 
 func (cpuPanicStateReader) LoadObservedTyped(_ context.Context, _, _ string, _ interface{}) error {
 	panic("the CPU seam read the fsmv2 observation store on a cancelled tick")
 }
 
+// Every shape a cancelled tick can arrive in. Add one below and it is covered.
+// The shape with a store that serves its observation successfully is the only
+// one production can produce, and it is the one a check conjoined with the read
+// error would miss.
 var _ = Describe("the CPU seam on a cancelled tick", func() {
-	// Three shapes a cancelled tick can arrive in: with a client published,
-	// with none, and with a store that serves its observation successfully
-	// despite the cancellation. The last is the only shape production can
-	// produce -- no store in this repo consults ctx on a read, so a cancelled
-	// context never comes back as a read error -- and it is the one a check
-	// conjoined with the read error would miss.
 	newService := func() *container_monitor.ContainerMonitorService {
 		// The path is never read: the seam returns before it touches the
 		// filesystem.
@@ -63,10 +60,10 @@ var _ = Describe("the CPU seam on a cancelled tick", func() {
 
 	It("should abort without reading the store, even with a client published", func() {
 		writer := dynamicchildren.NewWriter()
-		// Registering the ref is what gives the reader below its reach:
-		// GetFresh returns Unregistered without consulting the store when the
-		// ref is absent, so without this line the panic could not fire and the
-		// spec would assert nothing about read ordering.
+		// Registering the ref is what makes this spec able to fail. Remove the
+		// ctx check in readWorkerCPUHealth and the seam reaches GetFresh, which
+		// consults the store only for a registered ref -- so without this line
+		// the panic could not fire and nothing here would notice.
 		Expect(writer.Upsert(fsmv2cpu.Ref, map[string]any{})).To(Succeed())
 
 		previous := fsmv2client.GetClient()
@@ -82,10 +79,7 @@ var _ = Describe("the CPU seam on a cancelled tick", func() {
 	It("should abort when the store serves its observation despite the cancellation", func() {
 		// The shape production actually produces. No store here consults ctx on
 		// a read, so the read succeeds and returns a healthy verdict while the
-		// context is already cancelled. Nothing but ctx.Err() on its own can
-		// catch that, which is why this spec stages a successful read rather
-		// than a read error: a check that also required a read error would
-		// report the healthy verdict and ship it.
+		// context is already cancelled, and only ctx.Err() catches it.
 		writer := dynamicchildren.NewWriter()
 		Expect(writer.Upsert(fsmv2cpu.Ref, map[string]any{})).To(Succeed())
 

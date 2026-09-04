@@ -126,8 +126,6 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 		Architecture:  models.ContainerArchitecture(runtime.GOARCH),
 	}
 
-	// Get CPU stats. Both arms return the record and abort the tick on a
-	// cancelled ctx; only the legacy arm judges usage a second time (ENG-5384).
 	if c.useFSMv2CPU {
 		cpuStat, err := c.collectCPUFromWorker(ctx)
 		if err != nil {

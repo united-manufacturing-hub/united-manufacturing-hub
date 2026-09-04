@@ -37,17 +37,16 @@ func CPUGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float
 }
 
 // CollectCPUFromWorker exposes the worker arm of GetStatus to the external test
-// package so its cancelled-tick arm is reachable without a full GetStatus.
+// package, so a spec can reach its cancelled-tick return without a full
+// GetStatus.
 func (c *ContainerMonitorService) CollectCPUFromWorker(ctx context.Context) (*models.CPU, error) {
 	return c.collectCPUFromWorker(ctx)
 }
 
-// JudgeWorkerCPUReadError and JudgeWorkerCPU expose the seam's two judgement
-// arms to the external test package. Both underlying functions read nothing
-// beyond their arguments, which is what lets a spec reach every arm without
-// publishing an fsmv2 client or standing up a store. Each returns the health
-// and the evidence its verdict renders, which is what the seam reports for
-// that arm. Neither judgement can fail, so neither hook carries the error
+// JudgeWorkerCPUReadError exposes to the external test package the seam's
+// verdict on an observation the store could not return. It returns the health
+// and the evidence that verdict renders, which is what the seam reports for
+// that arm. The judgement cannot fail, so the hook does not carry the error
 // readWorkerCPUHealth returns for a cancelled tick.
 func JudgeWorkerCPUReadError(err error) (*models.Health, *models.CPUHealth) {
 	v := judgeWorkerCPUReadError(err)
@@ -55,6 +54,10 @@ func JudgeWorkerCPUReadError(err error) (*models.Health, *models.CPUHealth) {
 	return v.health(), v.cpuHealth
 }
 
+// JudgeWorkerCPU exposes to the external test package the seam's verdict on an
+// observation the store did return. It returns the same pair as
+// JudgeWorkerCPUReadError, for whichever arm the freshness and the status
+// select.
 func JudgeWorkerCPU(status simple.Status[fsmv2cpu.CPUStatus], freshness fsmv2client.Freshness) (*models.Health, *models.CPUHealth) {
 	v := judgeWorkerCPU(status, freshness)
 

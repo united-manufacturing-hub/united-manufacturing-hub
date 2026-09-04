@@ -29,7 +29,9 @@ import (
 
 // cpuWorkerMaxAge is how old the fsmv2 CPU worker's observation may be and still
 // count as Fresh for the seam. It leaves enough slack that one slow or missed
-// poll cannot flip the instance to degraded.
+// poll cannot flip the instance to degraded. The seam is the code path that
+// reports CPU from the fsmv2 worker instead of the legacy sampler, selected at
+// construction by USE_FSMV2_CPU.
 const cpuWorkerMaxAge = 3 * fsmv2cpu.PollInterval
 
 // collectCPUFromWorker builds the whole CPU record from the fsmv2 CPU worker's
@@ -38,8 +40,9 @@ const cpuWorkerMaxAge = 3 * fsmv2cpu.PollInterval
 // number from worker data. models.CPU says which fields the worker fills and
 // which the legacy path does.
 //
-// It errors only when the tick was cancelled, matching getCPUMetrics: a
-// cancelled tick measured nothing, so it has no verdict to report.
+// It errors only when the tick was cancelled: a cancelled tick measured
+// nothing, so it has no verdict to report. getCPUMetrics aborts on a cancelled
+// ctx the same way.
 func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) (*models.CPU, error) {
 	health, cpuHealth, err := c.readWorkerCPUHealth(ctx)
 	if err != nil {

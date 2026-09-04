@@ -33,7 +33,7 @@ var _ = Describe("the CPU gauge source", func() {
 	// fields say 1000 mCPU over 4 cores; the evidence says 3.5 cores over 8.
 	// Production never produces this record: the point is that each spec below
 	// names which half it read.
-	bothSourcesStaged := func() *models.CPU {
+	bothSourcesRecord := func() *models.CPU {
 		usage, cores := 1000.0, 4
 
 		return &models.CPU{
@@ -50,7 +50,7 @@ var _ = Describe("the CPU gauge source", func() {
 	}
 
 	It("reads the fsmv2 evidence when the flag is on", func() {
-		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothSourcesStaged(), true)
+		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothSourcesRecord(), true)
 
 		Expect(ok).To(BeTrue())
 		Expect(usageMCores).To(Equal(3500.0))
@@ -58,7 +58,7 @@ var _ = Describe("the CPU gauge source", func() {
 	})
 
 	It("reads the legacy fields when the flag is off", func() {
-		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothSourcesStaged(), false)
+		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothSourcesRecord(), false)
 
 		Expect(ok).To(BeTrue())
 		Expect(usageMCores).To(Equal(1000.0))
