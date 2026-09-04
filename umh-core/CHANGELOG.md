@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Improvements
+
+- The `/metrics` endpoint now exposes the evidence behind a CPU health verdict as `umh_fsmv2_worker_cpu_*` gauges: mean usage in cores and as a fraction, throttle ratio, PSI pressure, steal, host headroom, host busy time, capacity and reserve cores, and the host CPU count. Previously only mean usage and the CPU count reached Prometheus, so an alert could see that CPU health had degraded but not which signal caused it
+- Each CPU measurement that can be unreadable ships a companion flag gauge (`cpu_throttle_signal_ready`, `cpu_steal_signal_ready`, `cpu_usage_ring_active` and the rest), reading 1 or 0. The measurements report 0 when their signal is absent or untrusted, so the flag is what distinguishes an idle CPU from a missing reading
+
 ## [0.44.38]
 
 ### Improvements
