@@ -2,7 +2,7 @@
 
 ## Managing users
 
-Admins can invite users and add instances. Where a company has an Account Owner, that account can do both everywhere. An admin can grant permissions only for locations where they are an admin themselves, which stops anyone from inviting their way to more access than they have.
+Any Admin and Account Owner is able to manage users. However, an admin can grant permissions only for locations where they are an admin themselves, which stops anyone from inviting their way to more access than they have.
 
 Instance creation is not restricted that way: any admin can create an instance at any location. Create instances inside a location where you hold admin access, because you cannot change one you created outside it. If that happens, an admin whose locations cover it, or the Account Owner, can change it for you.
 
