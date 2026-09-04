@@ -121,6 +121,27 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 		}
 	})
 
+	It("publishes an unready signal as a zero measurement beside a zero flag, rather than omitting it", func() {
+		// The exporter creates gauges lazily and never deletes one, so a skipped
+		// SetGauge leaves the previous value being scraped as though it were
+		// current. Publishing 0 and saying so in the flag is the contract; this
+		// spec is what fails if someone later skips the set to "avoid a
+		// misleading zero".
+		d := newDeps(fixedSampler(richSample()), 4, 2)
+
+		status, err := Poll(context.Background(), d, CPUConfig{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Details.StealSignalReady).To(BeFalse(),
+			"this spec needs an unready signal; steal p95 needs a window this tick cannot have filled")
+
+		gauges := d.MetricsRecorder().Drain().Gauges
+
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeCPUStealP95), 0.0),
+			"the measurement is published even though it was not readable")
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeCPUStealSignalReady), 0.0),
+			"and the flag beside it says the zero is not a measurement")
+	})
+
 	It("records nothing on a tick that could not measure", func() {
 		d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 			return cpuhealth.Sample{}, context.DeadlineExceeded
