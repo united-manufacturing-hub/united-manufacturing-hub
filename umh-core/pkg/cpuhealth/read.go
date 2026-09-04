@@ -123,7 +123,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// Copied before the early return: a cpu.stat that read but would not parse
 	// has text, and that text is the evidence for why it would not.
 	smp.CPUStatRaw = stat.Raw
-	smp.record(OpCPUStat, classifyRead(statErr))
+	smp.record(OpCPUStat, statOutcome(stat, statErr))
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
 		// never a silent drop of the throttle counters as absent no-signal.
@@ -187,6 +187,28 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.CPUMaxRaw = quota.Raw
 	smp.record(OpCPUMax, cpuMax)
 	return smp, nil
+}
+
+// statOutcome names what one cpu.stat read produced. A read that succeeded and
+// carried no usage figure is ReadEmpty rather than ReadOK: the sample survives,
+// but there is no usage rate, and reporting a good read there would claim a
+// value that was never produced.
+//
+// A zero-byte cpu.stat and a usage_usec line with no value both reach ReadEmpty
+// under that one reason, because parseCounter treats a missing key as absent
+// rather than malformed, so neither returns an error. They are not told apart
+// here: diagnosis.Reading carries a single presence bit, and the raw cpu.stat
+// text travels on the event, so a reader still sees which of the two it was.
+func statOutcome(stat statRead, err error) ReadOutcome {
+	if err != nil {
+		return classifyRead(err)
+	}
+
+	if _, ok := stat.Usage.Get(); !ok {
+		return ReadEmpty
+	}
+
+	return ReadOK
 }
 
 // seedReads returns one entry per reported read, each ReadNotAttempted, in

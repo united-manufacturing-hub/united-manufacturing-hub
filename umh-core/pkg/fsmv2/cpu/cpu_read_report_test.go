@@ -121,47 +121,73 @@ func (f reportFS) ReadDir(_ context.Context, _ string) ([]os.DirEntry, error) {
 	return nil, nil
 }
 
+// buildReport wires the real construction path: a published fixture, a
+// hook-wrapped logger, and NewDeps. Nothing pre-sets a "read failed" state —
+// the condition arrives the way production produces it, through a filesystem
+// that refuses.
+func buildReport(overrides map[string]error, fileOverrides map[string][]byte) (*[]recorded, *fsmv2sentry.SentryHook, *int) {
+	events := &[]recorded{}
+	reads := 0
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(io.Discard), zapcore.DebugLevel)
+	hook := fsmv2sentry.NewSentryHook(5 * 60 * 1e9)
+	// Mirror cmd/main.go: the hook wraps the core, NewFSMLogger sits outside.
+	hooked := deps.NewFSMLogger(zap.New(core).WithOptions(zap.WrapCore(hook.Wrap)).Sugar())
+
+	var svc filesystem.Service = reportFS{files: withFiles(fileOverrides), overrides: overrides, reads: &reads}
+	register.SetDeps[filesystem.Service](FilesystemDepsKey, svc)
+	DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+
+	id := deps.Identity{ID: "cpu-report", WorkerType: WorkerType}
+	bd := deps.NewBaseDependencies(recordingLogger{FSMLogger: hooked, events: events}, nil, id)
+
+	_ = NewDeps(id, bd)
+
+	// Without this the whole suite is host-dependent: NewDeps silently falls
+	// back to the real filesystem when nothing was published, and cpu.go's
+	// own comment warns about exactly that.
+	Expect(reads).To(BeNumerically(">", 0), "the published fixture was never consulted")
+
+	return events, hook, &reads
+}
+
+// withFiles starts from the healthy container and replaces named files, for
+// cases where a read succeeds but its CONTENT is the problem.
+func withFiles(fileOverrides map[string][]byte) map[string][]byte {
+	files := healthyContainer()
+	for path, content := range fileOverrides {
+		files[path] = content
+	}
+
+	return files
+}
+
+func build(overrides map[string]error) (*[]recorded, *fsmv2sentry.SentryHook, *int) {
+	return buildReport(overrides, nil)
+}
+
+func buildWithFiles(fileOverrides map[string][]byte) *[]recorded {
+	events, _, _ := buildReport(nil, fileOverrides)
+
+	return events
+}
+
+func msgs(events *[]recorded) []string {
+	out := []string{}
+	for _, e := range *events {
+		out = append(out, e.Msg)
+	}
+
+	return out
+}
+
 var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	// build wires the real construction path: a published failing filesystem, a
 	// hook-wrapped logger, and NewDeps. Nothing here pre-sets a "read failed"
 	// state — the condition arrives the way production produces it, through a
 	// filesystem that refuses.
-	build := func(overrides map[string]error) (*[]recorded, *fsmv2sentry.SentryHook, *int) {
-		events := &[]recorded{}
-		reads := 0
-
-		core := zapcore.NewCore(
-			zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
-			zapcore.AddSync(io.Discard), zapcore.DebugLevel)
-		hook := fsmv2sentry.NewSentryHook(5 * 60 * 1e9)
-		// Mirror cmd/main.go: the hook wraps the core, NewFSMLogger sits outside.
-		hooked := deps.NewFSMLogger(zap.New(core).WithOptions(zap.WrapCore(hook.Wrap)).Sugar())
-
-		var svc filesystem.Service = reportFS{files: healthyContainer(), overrides: overrides, reads: &reads}
-		register.SetDeps[filesystem.Service](FilesystemDepsKey, svc)
-		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
-
-		id := deps.Identity{ID: "cpu-report", WorkerType: WorkerType}
-		bd := deps.NewBaseDependencies(recordingLogger{FSMLogger: hooked, events: events}, nil, id)
-
-		_ = NewDeps(id, bd)
-
-		// Without this the whole suite is host-dependent: NewDeps silently falls
-		// back to the real filesystem when nothing was published, and cpu.go's
-		// own comment warns about exactly that.
-		Expect(reads).To(BeNumerically(">", 0), "the published fixture was never consulted")
-
-		return events, hook, &reads
-	}
-
-	msgs := func(events *[]recorded) []string {
-		out := []string{}
-		for _, e := range *events {
-			out = append(out, e.Msg)
-		}
-
-		return out
-	}
 
 	It("reports nothing at all from a healthy container", func() {
 		events, _, _ := build(nil)

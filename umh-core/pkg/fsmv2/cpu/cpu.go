@@ -166,10 +166,6 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 // rebuilt.
 func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
 	smp, err := s.Read(ctx)
-	if err != nil {
-		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
-			"cpu: startup cgroup snapshot failed; quota signals omitted", deps.Err(err))
-	}
 
 	if lc, ok := smp.LogicalCpus.Get(); ok {
 		cores = lc
@@ -179,7 +175,7 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.Bas
 		quota = q
 	}
 
-	reportFailedReads(smp, cores, quota, bd)
+	reportFailedReads(smp, err, cores, quota, bd)
 
 	return cores, quota
 }
@@ -189,13 +185,11 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.Bas
 // measurement missing.
 //
 // The three evidence ops are deliberately absent. They exist to be carried on
-// an event, never to produce one. OpCPUStat is absent for a different reason: a
-// cpu.stat failure fails the whole sample, so containerOrHostLimit's own
-// warning below already reports it, and minting a second event here would split
-// one cause across two Sentry issues.
+// an event, never to produce one.
 var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
 	cpuhealth.OpProcStat:    {},
 	cpuhealth.OpProcCpuinfo: {},
+	cpuhealth.OpCPUStat:     {},
 	cpuhealth.OpCPUMax:      {},
 	cpuhealth.OpCPUPressure: {},
 	cpuhealth.OpCpusetCPUs:  {},
@@ -218,17 +212,26 @@ var excusedReads = map[cpuhealth.ReadResult]struct{}{
 var readOpPaths = map[cpuhealth.ReadOp]string{
 	cpuhealth.OpProcStat:    "/proc/stat",
 	cpuhealth.OpProcCpuinfo: "/proc/cpuinfo",
+	cpuhealth.OpCPUStat:     cgroupBase + "/cpu.stat",
 	cpuhealth.OpCPUMax:      cgroupBase + "/cpu.max",
 	cpuhealth.OpCPUPressure: cgroupBase + "/cpu.pressure",
 	cpuhealth.OpCpusetCPUs:  cgroupBase + "/cpuset.cpus.effective",
 }
 
 const (
-	// readFailedPrefix opens the message of every failed-read event. The whole
-	// message is this prefix, the op and the outcome, joined by readFailedSep
-	// and nothing else: the message is a Sentry grouping component, so a path,
-	// an error text or a count in it would mint a new issue per distinct value.
+	// readFailedPrefix opens the message when the sample survived the failure:
+	// one signal is missing and the measurement is still usable.
+	//
+	// The whole message is a prefix, the op and the outcome, joined by
+	// readFailedSep and nothing else: the message is a Sentry grouping
+	// component, so a path, an error text or a count in it would mint a new
+	// issue per distinct value.
 	readFailedPrefix = "cpu::read_failed::"
+	// sampleFailedPrefix opens the message when the failure voided the whole
+	// sample, so there is no measurement at all. The verb is in the message
+	// rather than a field, so a reader can tell the two apart from the Sentry
+	// issue title without opening an event.
+	sampleFailedPrefix = "cpu::sample_failed::"
 	// readFailedSep joins the op and the outcome in that message.
 	readFailedSep = "::"
 )
@@ -240,7 +243,17 @@ const (
 // ReadNotAttempted never reports. A read that did not happen has no failure to
 // name, and one failure stops several later reads — a cpu.stat failure stops
 // four — so reporting those would turn one root cause into five issues.
-func reportFailedReads(smp cpuhealth.Sample, cores, quota float64, bd *deps.BaseDependencies) {
+//
+// readErr is what Read returned. It picks the verb, because whether any
+// measurement exists is a fact about the sample and not about the op that
+// failed. Only cpu.stat can make it non-nil, since it is the only read whose
+// failure returns from Read.
+func reportFailedReads(smp cpuhealth.Sample, readErr error, cores, quota float64, bd *deps.BaseDependencies) {
+	prefix := readFailedPrefix
+	if readErr != nil {
+		prefix = sampleFailedPrefix
+	}
+
 	for _, r := range smp.Reads {
 		if _, reported := reportedReadOps[r.Op]; !reported {
 			continue
@@ -255,7 +268,7 @@ func reportFailedReads(smp cpuhealth.Sample, cores, quota float64, bd *deps.Base
 		}
 
 		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
-			readFailedPrefix+string(r.Op)+readFailedSep+string(r.Outcome),
+			prefix+string(r.Op)+readFailedSep+string(r.Outcome),
 			readFailureFields(smp, r.Op, cores, quota)...)
 	}
 }
