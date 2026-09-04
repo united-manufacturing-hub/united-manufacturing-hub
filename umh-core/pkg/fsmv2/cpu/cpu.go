@@ -179,7 +179,129 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.Bas
 		quota = q
 	}
 
+	reportFailedReads(smp, cores, quota, bd)
+
 	return cores, quota
+}
+
+// reportedReadOps are the reads whose failure mints a Sentry event: each one
+// carries a fact the verdict is computed from, so a failed read of it leaves a
+// measurement missing.
+//
+// The three evidence ops are deliberately absent. They exist to be carried on
+// an event, never to produce one. OpCPUStat is absent for a different reason: a
+// cpu.stat failure fails the whole sample, so containerOrHostLimit's own
+// warning below already reports it, and minting a second event here would split
+// one cause across two Sentry issues.
+var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
+	cpuhealth.OpProcStat:    {},
+	cpuhealth.OpProcCpuinfo: {},
+	cpuhealth.OpCPUMax:      {},
+	cpuhealth.OpCPUPressure: {},
+	cpuhealth.OpCpusetCPUs:  {},
+}
+
+// excusedReads are the (op, outcome) pairs that report nothing even though the
+// read yielded no value, because that pair is a normal platform difference
+// rather than a fault.
+//
+// A kernel built without PSI serves no cpu.pressure at all, so its absence is
+// the expected state on those machines. (OpCPUPressure, ReadEACCES) is
+// deliberately not excused: a cpu.pressure that exists and cannot be opened is
+// a real failure.
+var excusedReads = map[cpuhealth.ReadResult]struct{}{
+	{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadENOENT}: {},
+}
+
+// readOpPaths is the file each reported read opens. The path is reported as a
+// field: in the message it would mint one Sentry issue per distinct path.
+var readOpPaths = map[cpuhealth.ReadOp]string{
+	cpuhealth.OpProcStat:    "/proc/stat",
+	cpuhealth.OpProcCpuinfo: "/proc/cpuinfo",
+	cpuhealth.OpCPUMax:      cgroupBase + "/cpu.max",
+	cpuhealth.OpCPUPressure: cgroupBase + "/cpu.pressure",
+	cpuhealth.OpCpusetCPUs:  cgroupBase + "/cpuset.cpus.effective",
+}
+
+const (
+	// readFailedPrefix opens the message of every failed-read event. The whole
+	// message is this prefix, the op and the outcome, joined by readFailedSep
+	// and nothing else: the message is a Sentry grouping component, so a path,
+	// an error text or a count in it would mint a new issue per distinct value.
+	readFailedPrefix = "cpu::read_failed::"
+	// readFailedSep joins the op and the outcome in that message.
+	readFailedSep = "::"
+)
+
+// reportFailedReads emits one Sentry event per read that failed, carrying the
+// evidence needed to tell one failure shape from another without logging into
+// the machine.
+//
+// ReadNotAttempted never reports. A read that did not happen has no failure to
+// name, and one failure stops several later reads — a cpu.stat failure stops
+// four — so reporting those would turn one root cause into five issues.
+func reportFailedReads(smp cpuhealth.Sample, cores, quota float64, bd *deps.BaseDependencies) {
+	for _, r := range smp.Reads {
+		if _, reported := reportedReadOps[r.Op]; !reported {
+			continue
+		}
+
+		if r.Outcome == cpuhealth.ReadOK || r.Outcome == cpuhealth.ReadNotAttempted {
+			continue
+		}
+
+		if _, excused := excusedReads[r]; excused {
+			continue
+		}
+
+		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
+			readFailedPrefix+string(r.Op)+readFailedSep+string(r.Outcome),
+			readFailureFields(smp, r.Op, cores, quota)...)
+	}
+}
+
+// readFailureFields is the evidence carried on one failed-read event: the file
+// that failed, the raw text of every evidence read, what each other read
+// produced this tick, and the two numbers the failure has consequences for.
+func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quota float64) []deps.Field {
+	fields := []deps.Field{
+		deps.String("path", readOpPaths[failed]),
+		deps.String("cgroup_base", cgroupBase),
+		deps.String("cgroup_controllers_raw", smp.ControllersRaw),
+		deps.String("cpu_max_raw", smp.CPUMaxRaw),
+		deps.String("cpu_stat_raw", smp.CPUStatRaw),
+		deps.String("proc_self_cgroup_raw", smp.ProcSelfCgroupRaw),
+		deps.Int("cgroup_base_entry_count", smp.BaseEntryCount),
+	}
+
+	// What every OTHER read produced on the same tick. One outcome on its own
+	// rarely says which shape a machine is in; the pattern across the reads
+	// does, which is why a sibling that was never attempted is reported too.
+	for _, r := range smp.Reads {
+		if r.Op == failed {
+			continue
+		}
+
+		fields = append(fields, deps.String(string(r.Op)+"_read", string(r.Outcome)))
+	}
+
+	if hostCpus, ok := smp.HostCpus.Get(); ok {
+		fields = append(fields, deps.Float64("host_cpus", hostCpus))
+	}
+
+	// capacity_cores is what the table would be built against: the quota when
+	// it names a positive limit, else the cpuset's count. Zero means neither
+	// read answered, so it is omitted rather than reported as a measured zero.
+	capacity := cores
+	if quota > 0 {
+		capacity = quota
+	}
+
+	if capacity > 0 {
+		fields = append(fields, deps.Float64("capacity_cores", capacity))
+	}
+
+	return fields
 }
 
 // healthFromStatus turns one poll's verdict into the worker's own health.
