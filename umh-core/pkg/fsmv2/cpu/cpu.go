@@ -126,11 +126,41 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
+	recordGauges(d.MetricsRecorder(), details)
+
 	return CPUStatus{
 		Verdict: verdict,
 		Message: cpuhealth.ComposeMessage(verdict, details),
 		Details: details,
 	}, nil
+}
+
+// recordGauges publishes the measured evidence for the framework's worker-metrics
+// exporter, which turns each name into umh_fsmv2_worker_<name>.
+func recordGauges(m *deps.MetricsRecorder, det cpuhealth.Details) {
+	m.SetGauge(deps.GaugeCPUAvgUsageCores, det.AvgUsageCores)
+	m.SetGauge(deps.GaugeCPUAvgUsageFraction, det.AvgUsageFraction)
+	m.SetGauge(deps.GaugeCPUThrottleRatio, det.ThrottleRatio)
+	m.SetGauge(deps.GaugeCPUPressureAvg60, det.PressureAvg60)
+	m.SetGauge(deps.GaugeCPUHostHeadroomCores, det.HostHeadroomCores)
+	m.SetGauge(deps.GaugeCPUAvgHostBusyCores, det.AvgHostBusyCores)
+	m.SetGauge(deps.GaugeCPUCapacityCores, det.CapacityCores)
+	m.SetGauge(deps.GaugeCPUReserveCores, det.ReserveCores)
+	m.SetGauge(deps.GaugeCPUHostCpus, det.HostCpus)
+
+	m.SetGauge(deps.GaugeCPUUsageRingActive, gaugeBool(det.UsageRingActive))
+	m.SetGauge(deps.GaugeCPUHostBusyRingActive, gaugeBool(det.HostBusyRingActive))
+	m.SetGauge(deps.GaugeCPUHostHeadroomAvailable, gaugeBool(det.HostHeadroomAvailable))
+	m.SetGauge(deps.GaugeCPUThrottleSignalReady, gaugeBool(det.ThrottleSignalReady))
+	m.SetGauge(deps.GaugeCPUPressureSignalReady, gaugeBool(det.PressureSignalReady))
+}
+
+func gaugeBool(b bool) float64 {
+	if b {
+		return 1
+	}
+
+	return 0
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
