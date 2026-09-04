@@ -20,7 +20,3 @@ Keep it somewhere you can find it again, such as your password manager. If it is
 ## Why every sign-in still asks for it
 
 Proving who you are and decrypting the certificate are two separate steps. Signing in covers the first; the passphrase covers the second. So every sign-in method still needs the passphrase, whichever way you proved your identity. Even an email code, which involves no password at all, prompts for the passphrase so the console can decrypt the certificate.
-
-{% hint style="info" %}
-Accounts created with the older username-and-password method use one secret for both jobs: the password you sign in with is also the passphrase that decrypts the certificate. See [Username and Password](username-and-password.md).
-{% endhint %}
