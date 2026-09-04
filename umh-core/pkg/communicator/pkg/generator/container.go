@@ -190,7 +190,9 @@ func containerHealthMessage(status container_monitor.ServiceInfo) string {
 	return getContainerHealthMessage(status.OverallHealth)
 }
 
-// degradedLine renders one component's line, or "" when it is not degraded.
+// degradedLine renders one component's line. It returns "" when the component
+// is not degraded, and also when it carries no health or an empty message,
+// because there is then nothing for the badge to quote.
 func degradedLine(label string, cat models.HealthCategory, h *models.Health) string {
 	if cat != models.Degraded || h == nil || h.Message == "" {
 		return ""

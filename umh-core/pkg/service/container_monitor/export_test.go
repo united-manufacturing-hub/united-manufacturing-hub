@@ -45,9 +45,10 @@ func (c *ContainerMonitorService) CollectCPUFromWorker(ctx context.Context) (*mo
 // JudgeWorkerCPUReadError and JudgeWorkerCPU expose the seam's two judgement
 // arms to the external test package. Both underlying functions read nothing
 // beyond their arguments, which is what lets a spec reach every arm without
-// publishing an fsmv2 client or standing up a store; these hooks are what make
-// that property exercised rather than merely true. Each returns the pair
-// readWorkerCPUHealth returns, so a spec sees what the seam reports.
+// publishing an fsmv2 client or standing up a store. Each returns the health
+// and the evidence its verdict renders, which is what the seam reports for
+// that arm. Neither judgement can fail, so neither hook carries the error
+// readWorkerCPUHealth returns for a cancelled tick.
 func JudgeWorkerCPUReadError(err error) (*models.Health, *models.CPUHealth) {
 	v := judgeWorkerCPUReadError(err)
 
