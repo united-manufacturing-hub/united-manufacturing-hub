@@ -197,6 +197,44 @@ const (
 	GaugePendingMessages GaugeName = "pending_messages"
 )
 
+// CPU worker gauge names for the evidence behind a CPU health verdict.
+// Each name carries its unit, because three of these measure "how busy" on
+// three different scales: absolute cores, a 0..1 fraction, and a 0..1 ratio.
+const (
+	// GaugeCPUAvgUsageCores tracks this container's own 60s mean usage, in absolute cores.
+	GaugeCPUAvgUsageCores GaugeName = "cpu_avg_usage_cores"
+
+	// GaugeCPUAvgUsageFraction tracks the 60s mean usage as a 0..1 fraction of capacity.
+	GaugeCPUAvgUsageFraction GaugeName = "cpu_avg_usage_fraction"
+
+	// GaugeCPUThrottleRatio tracks the 60s nr_throttled/nr_periods delta, 0..1.
+	GaugeCPUThrottleRatio GaugeName = "cpu_throttle_ratio"
+
+	// GaugeCPUPressureAvg60 tracks the PSI cpu some avg60 value.
+	GaugeCPUPressureAvg60 GaugeName = "cpu_pressure_avg60"
+
+	// GaugeCPUStealP95 tracks the 60s p95 of steal time, 0..1.
+	GaugeCPUStealP95 GaugeName = "cpu_steal_p95"
+
+	// GaugeCPUHostHeadroomCores tracks cores free on the host after the reserve.
+	// Unclamped: a full box reports a negative number rather than 0.
+	GaugeCPUHostHeadroomCores GaugeName = "cpu_host_headroom_cores"
+
+	// GaugeCPUAvgHostBusyCores tracks the whole machine's 60s mean busy time, in cores.
+	GaugeCPUAvgHostBusyCores GaugeName = "cpu_avg_host_busy_cores"
+
+	// GaugeCPUCapacityCores tracks the ceiling the verdict judged against: the
+	// quota when one applies, else the CPU count.
+	GaugeCPUCapacityCores GaugeName = "cpu_capacity_cores"
+
+	// GaugeCPUReserveCores tracks the headroom held back from CapacityCores.
+	GaugeCPUReserveCores GaugeName = "cpu_reserve_cores"
+
+	// GaugeCPUHostCpus tracks the machine's CPU count, which exceeds the count
+	// this container may use whenever it is pinned to a subset.
+	GaugeCPUHostCpus GaugeName = "cpu_host_cpus"
+)
+
 // =============================================================================
 // METRICS INFRASTRUCTURE
 // =============================================================================
