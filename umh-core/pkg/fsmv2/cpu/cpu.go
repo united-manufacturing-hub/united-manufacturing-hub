@@ -126,11 +126,36 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
+	recordGauges(d.MetricsRecorder(), details)
+
 	return CPUStatus{
 		Verdict: verdict,
 		Message: cpuhealth.ComposeMessage(verdict, details),
 		Details: details,
 	}, nil
+}
+
+// recordGauges publishes the measured evidence for the framework's worker-metrics
+// exporter, which turns each name into umh_fsmv2_worker_<name>.
+//
+// Poll returns before this on a read error, so nothing here runs on a tick that
+// could not measure.
+func recordGauges(m *deps.MetricsRecorder, det cpuhealth.Details) {
+	// Every gauge is set on every measured tick, including one where a signal
+	// was not ready. Skipping the set would leave the previous value being
+	// scraped as though it were current, because the exporter creates gauges
+	// lazily and never deletes one: ExportWorkerMetrics only ever writes the
+	// drained map. A stale number that looks live is worse than a zero.
+	m.SetGauge(deps.GaugeCPUAvgUsageCores, det.AvgUsageCores)
+	m.SetGauge(deps.GaugeCPUAvgUsageFraction, det.AvgUsageFraction)
+	m.SetGauge(deps.GaugeCPUThrottleRatio, det.ThrottleRatio)
+	m.SetGauge(deps.GaugeCPUPressureAvg60, det.PressureAvg60)
+	m.SetGauge(deps.GaugeCPUStealP95, det.StealP95)
+	m.SetGauge(deps.GaugeCPUHostHeadroomCores, det.HostHeadroomCores)
+	m.SetGauge(deps.GaugeCPUAvgHostBusyCores, det.AvgHostBusyCores)
+	m.SetGauge(deps.GaugeCPUCapacityCores, det.CapacityCores)
+	m.SetGauge(deps.GaugeCPUReserveCores, det.ReserveCores)
+	m.SetGauge(deps.GaugeCPUHostCpus, det.HostCpus)
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
