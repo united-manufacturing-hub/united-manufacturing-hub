@@ -76,6 +76,11 @@ type linuxSampler struct {
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
+	// Every read in allReadOps starts out not_attempted and is overwritten as
+	// it happens. An early return therefore leaves the reads below it saying
+	// that nothing was read, rather than blaming a file nobody opened.
+	// Sample.Reads says why this is seeded here rather than appended below.
+	smp.Reads = seedReads()
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
 	// calls time.Now() itself, so both rate derivations divide by the same
 	// elapsed time and Decide never compares a machine-wide mean against a
@@ -85,15 +90,18 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
-	if frac, psiErr := s.cgroup.readPSI(ctx); psiErr == nil {
+	frac, psiErr := s.cgroup.readPSI(ctx)
+	if psiErr == nil {
 		s.cgroup.psiAvailable = true
 		smp.Pressure = diagnosis.Known(frac)
 	} else {
 		smp.Pressure = diagnosis.Unknown()
 	}
+	smp.record(OpCPUPressure, classifyRead(psiErr))
 	smp.PsiAvailable = s.cgroup.psiAvailable
 
 	usage, periods, throttled, statErr := s.cgroup.readStat(ctx)
+	smp.record(OpCPUStat, classifyRead(statErr))
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
 		// never a silent drop of the throttle counters as absent no-signal.
@@ -111,7 +119,9 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// reset: the baseline is re-established and nothing is published this tick.
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
-	if busy, steal, denom, machine, hostErr := s.host.readHost(ctx); hostErr == nil {
+	busy, steal, denom, machine, hostErr := s.host.readHost(ctx)
+	smp.record(OpProcStat, classifyRead(hostErr))
+	if hostErr == nil {
 		smp.HostCpus = diagnosis.Known(machine)
 		// CPU scope compares the container's allowed cpuset against the machine's
 		// count (kept on the snapshot as HostCpus): a readable, covering cpuset
@@ -121,7 +131,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// LogicalCpus absent: never a silent ScopeHost on a known machine count.
 		// Comparing the two sources' reads is the composer's job — a cross-seam
 		// fact neither source can derive holding only its own read.
-		if allowed, cpusetErr := s.cgroup.readCpuset(ctx); cpusetErr == nil {
+		//
+		// Nesting it here is also why it stays not_attempted on a tick whose
+		// /proc/stat read failed: the cpuset file was never opened, and recording
+		// a failure for it would name the wrong file.
+		allowed, cpusetErr := s.cgroup.readCpuset(ctx)
+		smp.record(OpCpusetCPUs, classifyRead(cpusetErr))
+		if cpusetErr == nil {
 			smp.LogicalCpus = diagnosis.Known(float64(allowed))
 			if allowed == int(machine) {
 				smp.CpuScope = ScopeHost
@@ -140,8 +156,34 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		smp.CpuScope = ScopeUnknown
 	}
 
-	smp.Virtualized, _ = s.host.readVirtualized(ctx)
+	var cpuinfo, cpuMax ReadOutcome
+	smp.Virtualized, cpuinfo = s.host.readVirtualized(ctx)
+	smp.record(OpProcCpuinfo, cpuinfo)
 
-	smp.Quota, _ = s.cgroup.readQuota(ctx)
+	smp.Quota, cpuMax = s.cgroup.readQuota(ctx)
+	smp.record(OpCPUMax, cpuMax)
 	return smp, nil
+}
+
+// seedReads returns one entry per reported read, each ReadNotAttempted, in
+// allReadOps order.
+func seedReads() []ReadResult {
+	reads := make([]ReadResult, len(allReadOps))
+	for i, op := range allReadOps {
+		reads[i] = ReadResult{Op: op, Outcome: ReadNotAttempted}
+	}
+	return reads
+}
+
+// record overwrites op's seeded entry with what its read produced. An op
+// absent from allReadOps has no entry to overwrite and records nothing;
+// read_record_test.go asserts every declared op is present exactly once, so no
+// call site here can hit that case.
+func (s *Sample) record(op ReadOp, outcome ReadOutcome) {
+	for i := range s.Reads {
+		if s.Reads[i].Op == op {
+			s.Reads[i].Outcome = outcome
+			return
+		}
+	}
 }

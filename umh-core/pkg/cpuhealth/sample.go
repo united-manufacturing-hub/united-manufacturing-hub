@@ -129,6 +129,21 @@ type Sample struct {
 	// of /sys/class/dmi/id/product_name naming a known hypervisor. An unreadable
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
+
+	// Reads is what each reported read produced this tick: exactly one entry
+	// per member of allReadOps, always, in that order. Length is therefore
+	// len(allReadOps) on every Sample a linuxSampler produced, and zero only on
+	// one it did not — a hand-built Sample in a test, or the zero Sample a
+	// failed read returns from a different sampler.
+	//
+	// Read seeds all of them to ReadNotAttempted and overwrites each in place,
+	// rather than appending as each read happens. Appending could not carry an
+	// entry for a read that never ran: a cpu.stat failure returns from Read
+	// before four of the six reads, and those four have an outcome to report,
+	// namely that nothing was read. An empty appended slice would also mean two
+	// opposite things at once — every read succeeded, and nothing populated
+	// this field at all.
+	Reads []ReadResult
 }
 
 // Sampler reads one tick of CPU health signals: a cgroup's own accounting

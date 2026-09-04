@@ -77,3 +77,48 @@ func classifyRead(err error) ReadOutcome {
 		return ReadError
 	}
 }
+
+// ReadOp names one read the sampler performs and reports on. It is a string so
+// the value can be reported as-is, and it names the file rather than the
+// function, since the file is what an operator would go and look at.
+type ReadOp string
+
+const (
+	// OpProcStat is the /proc/stat read: the machine's busy, steal and CPU count.
+	OpProcStat ReadOp = "proc_stat"
+	// OpProcCpuinfo is the /proc/cpuinfo read behind the virtualisation fact.
+	OpProcCpuinfo ReadOp = "proc_cpuinfo"
+	// OpCPUStat is the cgroup's cpu.stat read: usage and both throttle counters.
+	OpCPUStat ReadOp = "cpu_stat"
+	// OpCPUMax is the cgroup's cpu.max read, the container's CPU limit.
+	OpCPUMax ReadOp = "cpu_max"
+	// OpCPUPressure is the cgroup's cpu.pressure read, this tick's PSI fraction.
+	OpCPUPressure ReadOp = "cpu_pressure"
+	// OpCpusetCPUs is the cgroup's cpuset.cpus.effective read, the CPUs this
+	// container may run on.
+	OpCpusetCPUs ReadOp = "cpuset_cpus_effective"
+)
+
+// allReadOps is every read that is reported on, in the order Read performs
+// them.
+//
+// The two DMI reads (/sys/class/dmi/id/product_name and sys_vendor) are
+// deliberately absent. They are excluded from reporting, because a missing
+// product_name inside a container is the normal case and an event about it
+// would be alerting on correct absence. So there is no outcome to put here:
+// recording one would mean either inventing it, or claiming not_attempted for
+// a read that did happen.
+var allReadOps = []ReadOp{
+	OpCPUPressure,
+	OpCPUStat,
+	OpProcStat,
+	OpCpusetCPUs,
+	OpProcCpuinfo,
+	OpCPUMax,
+}
+
+// ReadResult pairs one read with what it produced.
+type ReadResult struct {
+	Op      ReadOp
+	Outcome ReadOutcome
+}
