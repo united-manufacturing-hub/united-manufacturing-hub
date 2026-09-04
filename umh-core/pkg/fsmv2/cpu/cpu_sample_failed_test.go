@@ -23,10 +23,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// cpu.stat is the one read whose failure voids the whole sample: the other five
-// drop a single signal and leave the measurement usable. The verb says which
-// happened, so a reader knows from the issue title whether there is any
-// measurement at all.
+// cpu.stat is the one read whose failure voids the whole sample; the others drop
+// one signal and leave the measurement usable. The verb says which, so the issue
+// title tells a reader whether any measurement exists.
 var _ = Describe("cpu.stat reports under a verb that says what its failure cost", func() {
 	statPath := cgroupBase + "/cpu.stat"
 
@@ -39,10 +38,9 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 			"one event: the four reads after cpu.stat never happened, so they have nothing to report")
 	})
 
-	It("retires the prose warning that used to cover this", func() {
-		// The old message was a sentence, which grouped separately from every
-		// other event under this feature tag and told a reader nothing the
-		// structured event does not.
+	It("emits a fixed token, never a prose sentence", func() {
+		// A sentence in the message groups separately from every other event
+		// under this feature tag, and adds nothing the structured event lacks.
 		events, _, _ := build(map[string]error{
 			statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT},
 		})
@@ -55,10 +53,9 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 	})
 
 	It("uses read_failed when the file read fine but carried no usage figure", func() {
-		// A zero-byte cpu.stat returns no error: parseCounter treats a missing
-		// key as absent rather than malformed. So the sample survives, there is
-		// no usage rate, and the verb must say the read failed rather than that
-		// the sample did.
+		// A zero-byte cpu.stat returns no error, since parseCounter treats a
+		// missing key as absent rather than malformed. The sample survives with
+		// no usage rate, so the verb must blame the read, not the sample.
 		events, _, _ := build(map[string]error{})
 		Expect(msgs(events)).To(BeEmpty(), "precondition: the healthy fixture is quiet")
 
@@ -67,9 +64,8 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 	})
 
 	It("uses the same reason for a key with no value, and lets the raw text tell them apart", func() {
-		// One token for both, because diagnosis.Reading carries a single
-		// presence bit and cannot distinguish them. The raw text on the event
-		// is what shows which case it was.
+		// One token for both: diagnosis.Reading carries a single presence bit and
+		// cannot distinguish them. The raw text on the event shows which.
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec\n")})
 
 		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpu_stat::empty"))
@@ -78,9 +74,9 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 	})
 })
 
-// The acceptance test for the whole change. ENG-5810's bar: a real failure
-// produces one Sentry event carrying enough to name the failing file and rule
-// out the alternatives, with nobody running a command on the machine.
+// The acceptance test. ENG-5810's bar: a real failure produces one Sentry event
+// naming the failing file and ruling out the alternatives, with nobody running a
+// command on the machine.
 var _ = Describe("one event is enough to diagnose the machine", func() {
 	It("names the failure and rules out every alternative cause", func() {
 		cpuset := cgroupBase + "/cpuset.cpus.effective"
@@ -104,15 +100,14 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		Expect(e.Fields).To(HaveKeyWithValue("cgroup_base", cgroupBase))
 
 		By("carrying the controller list, which is the conclusion")
-		// A missing cpuset token here is the delegation finding. It ships raw
-		// because the failing shape has never been observed: a parsed boolean
-		// would answer only the question we thought to ask.
+		// A missing cpuset token is the delegation finding. It ships raw because
+		// the failing shape has never been observed, and a parsed boolean answers
+		// only the question we thought to ask.
 		Expect(e.Fields).To(HaveKeyWithValue("cgroup_controllers_raw", evidenceControllers))
 
 		By("ruling out a permission problem and a parse bug")
-		// enoent rather than eacces is what excludes both, and it is in the
-		// message, so it is visible in the Sentry issue list without opening
-		// the event.
+		// enoent rather than eacces excludes both, and sits in the message, so
+		// the Sentry issue list shows it without opening the event.
 		Expect(e.Msg).To(HaveSuffix("::enoent"))
 
 		By("keeping every variable value out of the grouping key")
@@ -121,8 +116,8 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 	})
 
 	It("emits nothing at all from a healthy container", func() {
-		// Paired with the case above deliberately: a zero-event assertion is
-		// vacuous on its own, and passes against no implementation.
+		// Paired with the case above: a zero-event assertion is vacuous alone,
+		// passing against no implementation.
 		events, _, _ := build(nil)
 
 		Expect(msgs(events)).To(BeEmpty())

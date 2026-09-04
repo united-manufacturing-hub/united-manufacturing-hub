@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Read outcomes: the vocabulary for WHY one file read failed. Every reader in
-// this package returns its cause — an errno-carrying error from the
-// filesystem, or one of the two sentinels here for the failures that have no
-// errno — so a caller can report the reason instead of only the fact that a
-// read did not work.
+// Read outcomes: the vocabulary for WHY one file read failed. Every reader here
+// returns its cause — an errno, or a sentinel below where there is none.
 
 package cpuhealth
 
@@ -25,8 +22,7 @@ import (
 	"io/fs"
 )
 
-// ReadOutcome names the cause of a single file read. It is a string so the
-// value can be reported as-is.
+// ReadOutcome names one read's cause, as a string so it reports as-is.
 type ReadOutcome string
 
 const (
@@ -40,27 +36,23 @@ const (
 	ReadEmpty ReadOutcome = "empty"
 	// ReadUnparsable means content was present but did not parse.
 	ReadUnparsable ReadOutcome = "unparsable"
-	// ReadError means the read failed for a reason none of the others name. It
-	// is never a guess: an error that does not match a known cause classifies
-	// here rather than to the nearest-looking one.
+	// ReadError means no other outcome names the cause — see classifyRead.
 	ReadError ReadOutcome = "error"
-	// ReadNotAttempted means no read happened, so there is no outcome to
-	// report — a cached sticky fact republished without re-reading its file.
+	// ReadNotAttempted means no read happened: a cached fact, republished.
 	ReadNotAttempted ReadOutcome = "not_attempted"
 )
 
-// The two failures that carry no errno. A zero-byte cpuset and a cpu.pressure
-// whose avg60 will not parse both read successfully at the syscall layer, so
-// neither has a filesystem error to return, and returning nil would report a
-// failed read as a good one.
+// The failures that carry no errno: a zero-byte cpuset, a cpu.pressure whose
+// avg60 will not parse. Both succeed at the syscall layer, so returning nil
+// would report a failed read as a good one.
 var (
 	errEmptyRead      = errors.New("cpuhealth: file empty")
 	errUnparsableRead = errors.New("cpuhealth: content did not parse")
 )
 
-// classifyRead names the cause of err. It is total: every error classifies,
-// and one it does not recognise classifies as ReadError rather than as the
-// closest-looking cause.
+// classifyRead is total: every error classifies, and an unrecognised one
+// reaches ReadError rather than the closest-looking cause. Readers hand it the
+// error unwrapped, since wrapping hides the errno it reads.
 func classifyRead(err error) ReadOutcome {
 	switch {
 	case err == nil:
@@ -78,9 +70,8 @@ func classifyRead(err error) ReadOutcome {
 	}
 }
 
-// ReadOp names one read the sampler performs and reports on. It is a string so
-// the value can be reported as-is, and it names the file rather than the
-// function, since the file is what an operator would go and look at.
+// ReadOp names one reported read. The value names the file, not the function,
+// because the file is what an operator goes and looks at.
 type ReadOp string
 
 const (
@@ -94,37 +85,24 @@ const (
 	OpCPUMax ReadOp = "cpu_max"
 	// OpCPUPressure is the cgroup's cpu.pressure read, this tick's PSI fraction.
 	OpCPUPressure ReadOp = "cpu_pressure"
-	// OpCpusetCPUs is the cgroup's cpuset.cpus.effective read, the CPUs this
-	// container may run on.
+	// OpCpusetCPUs is cpuset.cpus.effective: the CPUs this container may use.
 	OpCpusetCPUs ReadOp = "cpuset_cpus_effective"
 
-	// The three ops below are evidence, not measurement. Their reads carry the
-	// surrounding facts a reader needs to tell one failure shape from another —
-	// the controller list, this process's own cgroup path, and how many entries
-	// the base directory holds. None of them ever mints a report identifier: a
-	// report exists because a measurement read failed, and these say what the
-	// machine looked like when it did.
+	// Evidence, not measurement: these tell one failure shape from another, and
+	// mint no report (see reportedReadOps).
 
-	// OpCgroupControllers is the base directory's cgroup.controllers read, the
-	// list of controllers delegated to this cgroup.
+	// OpCgroupControllers is cgroup.controllers: what was delegated here.
 	OpCgroupControllers ReadOp = "cgroup_controllers"
-	// OpProcSelfCgroup is the /proc/self/cgroup read, the cgroup path this
-	// process is in.
+	// OpProcSelfCgroup is /proc/self/cgroup: the path this process is in.
 	OpProcSelfCgroup ReadOp = "proc_self_cgroup"
-	// OpBaseDir is the listing of the cgroup base directory, from which only the
-	// entry count is kept.
+	// OpBaseDir is the base directory listing, kept only as an entry count.
 	OpBaseDir ReadOp = "cgroup_base_dir"
 )
 
-// allReadOps is every read that is reported on, in the order Read performs
-// them.
-//
-// The two DMI reads (/sys/class/dmi/id/product_name and sys_vendor) are
-// deliberately absent. They are excluded from reporting, because a missing
-// product_name inside a container is the normal case and an event about it
-// would be alerting on correct absence. So there is no outcome to put here:
-// recording one would mean either inventing it, or claiming not_attempted for
-// a read that did happen.
+// allReadOps is every reported read, in the order Read performs them. The DMI
+// reads (/sys/class/dmi/id/product_name, sys_vendor) are deliberately absent:
+// a missing product_name in a container is normal, so an event would alert on
+// correct absence.
 var allReadOps = []ReadOp{
 	OpCgroupControllers,
 	OpProcSelfCgroup,

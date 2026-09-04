@@ -31,9 +31,9 @@ import (
 // filesystem words a failure this way.
 var errRefusedByStub = errors.New("stub filesystem: every read refused")
 
-// stubFilesystem refuses every read. The embedded Service is left nil so that a
-// sampler which grew a second kind of call would panic here rather than pass
-// quietly on a method this stub never meant to answer.
+// stubFilesystem refuses every read. The embedded Service is nil so a sampler
+// growing a second kind of call panics here rather than passing quietly on a
+// method this stub never meant to answer.
 type stubFilesystem struct {
 	filesystem.Service
 }
@@ -42,11 +42,8 @@ func (stubFilesystem) ReadFile(context.Context, string) ([]byte, error) {
 	return nil, errRefusedByStub
 }
 
-// ReadDir was added when the sampler grew a directory listing. The nil embed
-// above is a tripwire for exactly that, and it fired: before this method the
-// new call panicked here rather than passing quietly, which is what the comment
-// on stubFilesystem promises. Refusing the listing keeps the stub's contract —
-// every access fails, and it fails in a way no real filesystem words.
+// ReadDir refuses the sampler's directory listing, keeping the contract: every
+// access fails, in a way no real filesystem words.
 func (stubFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, error) {
 	return nil, errRefusedByStub
 }
@@ -60,7 +57,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 
 	It("samples through a published filesystem rather than the real one", func() {
 		// The registry outlives the spec and SetDeps overwrites, so publishing
-		// without clearing would hand this stub to every later spec here.
+		// without clearing hands this stub to every later spec.
 		register.SetDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
 		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
 
@@ -84,11 +81,10 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		Expect(d.sampler).NotTo(BeNil(), "an unpublished filesystem still yields a sampler")
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")
 
-		// errors.Is rather than NotTo(MatchError), because MatchError rejects a
-		// nil actual even under NotTo: Poll returns nil on a host with a cgroup
-		// v2 mount and an error on one without, and this must hold for both.
-		// The assertion has teeth only against a fallback that kept serving a
-		// previously published filesystem.
+		// errors.Is rather than NotTo(MatchError): MatchError rejects a nil actual
+		// even under NotTo, and Poll returns nil with a cgroup v2 mount and an
+		// error without one, so this must hold for both. It has teeth only
+		// against a fallback still serving a previously published filesystem.
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(errors.Is(err, errRefusedByStub)).To(BeFalse(),
 			"with nothing published the sampler must reach the real filesystem")

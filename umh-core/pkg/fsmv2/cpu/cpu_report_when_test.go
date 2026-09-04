@@ -23,9 +23,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// A read can start failing at any point, not only at startup: a cgroup can be
-// remounted, a container reconfigured, or a read can fail once and recover.
-// Reporting only at construction leaves all of that silent.
+// A read can start failing at any point, not only at startup — a remount, a
+// reconfiguration, a failure that recovers. Construction-only reporting leaves
+// all of it silent.
 var _ = Describe("a read that starts failing later is reported too", func() {
 	cpuset := cgroupBase + "/cpuset.cpus.effective"
 	ctx := context.Background()
@@ -53,12 +53,12 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 	})
 
 	It("reports a repeating failure once, not once per measurement", func() {
-		// The worker samples once a second. Reporting per measurement would be
+		// The worker samples once a second, so per-measurement reporting is
 		// 86,400 events a day per instance per file, and the five-minute
-		// debouncer would still let 288 through.
-		// The failure must begin AFTER construction. Failing from the first
-		// read would let construction emit the one event this asserts, and the
-		// spec would pass with no per-tick reporting at all.
+		// debouncer still lets 288 through.
+		// The failure must begin AFTER construction: failing from the first read
+		// lets construction emit the one event this asserts, and the spec passes
+		// with no per-tick reporting at all.
 		broken := false
 		events, d := buildPollable(func(p string) error {
 			if broken && p == cpuset {
@@ -79,8 +79,8 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 	})
 
 	It("does not report the same cause twice when construction already saw it", func() {
-		// Construction and the tick loop share one gate. Two gates would report
-		// a startup failure again on the first tick.
+		// Construction and the tick loop share one gate; two would re-report a
+		// startup failure on the first tick.
 		events, d := buildPollable(func(p string) error {
 			if p == cpuset {
 				return enoent(p)
@@ -96,8 +96,8 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 	})
 
 	It("reports again when the cause changes on the same file", func() {
-		// A machine whose situation changes is worth a new event: the pair is
-		// new, so the gate does not hold it.
+		// A changed situation is worth a new event: the pair is new, so the gate
+		// does not hold it.
 		eacces := false
 		events, d := buildPollable(func(p string) error {
 			if p != cpuset {
@@ -121,10 +121,9 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 	})
 
 	It("stays silent while shutting down", func() {
-		// A cancelled context makes every in-flight read fail, and those errors
-		// classify as `error` because they are neither missing nor unreadable
-		// files. Reporting them would emit up to six events on every graceful
-		// shutdown of every instance.
+		// A cancelled context fails every in-flight read, classifying as `error`
+		// since they are neither missing nor unreadable files. Reporting them
+		// emits an event per reported read on every graceful shutdown.
 		events, d := buildPollable(nil)
 		Expect(msgs(events)).To(BeEmpty())
 

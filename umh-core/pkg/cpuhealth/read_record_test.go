@@ -25,9 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// healthyFiles is the content a working container serves, measured on a live
-// box on 2026-09-03. Using real content rather than invented content means the
-// healthy control is a machine we have actually seen, not one we imagined.
+// healthyFiles is what a working container serves, measured on a live box on
+// 2026-09-03, so the healthy control is a machine we have seen.
 func healthyFiles(base string) map[string][]byte {
 	return map[string][]byte{
 		base + "/cpu.stat":              []byte("usage_usec 11457863754\nuser_usec 9083319081\nsystem_usec 2374544673\nnr_periods 338962\nnr_throttled 903\nthrottled_usec 191447776\n"),
@@ -39,9 +38,9 @@ func healthyFiles(base string) map[string][]byte {
 	}
 }
 
-// fsServing serves files, applying overrides first. An override to nil-with-error
-// simulates a failed read; a path absent from both maps returns ENOENT, so a
-// reader that consulted an unexpected path fails rather than passing quietly.
+// fsServing serves files, overrides first. An override to nil-with-error is a
+// failed read; a path in neither map returns ENOENT, so a reader that consulted
+// an unexpected path fails rather than passing quietly.
 func fsServing(files map[string][]byte, overrides map[string]error) filesystem.Service {
 	mfs := filesystem.NewMockFileSystem()
 	mfs.ReadFileFunc = func(_ context.Context, p string) ([]byte, error) {
@@ -78,9 +77,8 @@ var _ = Describe("the sample records what each read produced", func() {
 		return smp
 	}
 
-	// Structural, not a hand-written length. A new read operation added to
-	// allReadOps without being recorded fails here, which a `len == 8` literal
-	// would not.
+	// Structural, not a hand-written length: a new read operation added to
+	// allReadOps without being recorded fails here.
 	It("records exactly one entry per declared read operation", func() {
 		smp := read(nil)
 
@@ -105,11 +103,9 @@ var _ = Describe("the sample records what each read produced", func() {
 	})
 
 	It("does not record the DMI reads at all", func() {
-		// The two DMI files are excluded from reporting: a missing product_name
-		// inside a container is the normal case, so an event about it would be
-		// alerting on correct absence. readVirtualized therefore reports only
-		// its /proc/cpuinfo read, and recording a DMI outcome would mean either
-		// inventing one or claiming not_attempted for a read that did happen.
+		// The DMI files are excluded from reporting: a missing product_name in a
+		// container is normal, so an event would alert on correct absence.
+		// readVirtualized therefore reports only its /proc/cpuinfo read.
 		for _, op := range allReadOps {
 			Expect(string(op)).NotTo(ContainSubstring("dmi"),
 				"DMI reads are excluded from reporting, so they must not be recorded")
@@ -126,9 +122,9 @@ var _ = Describe("the sample records what each read produced", func() {
 	})
 
 	It("marks the cpuset read not_attempted when /proc/stat failed first", func() {
-		// read.go nests the cpuset read inside the host read's success branch,
-		// so a failed /proc/stat means the cpuset file was never opened.
-		// Recording it as a failure would name the wrong file.
+		// read.go nests the cpuset read inside the host read's success branch, so
+		// a failed /proc/stat never opens the cpuset file. Recording a failure
+		// for it would name the wrong file.
 		smp := read(map[string]error{"/proc/stat": &fs.PathError{Op: "open", Path: "/proc/stat", Err: syscall.EACCES}})
 
 		Expect(outcomeFor(smp, OpProcStat)).To(Equal(ReadEACCES))
@@ -136,9 +132,8 @@ var _ = Describe("the sample records what each read produced", func() {
 	})
 
 	It("marks every downstream read not_attempted when cpu.stat failed", func() {
-		// cpu.stat is the one read whose failure returns from Read, so the four
-		// reads after it never happen. This is the case that would produce five
-		// Sentry events instead of one if not_attempted minted an identifier.
+		// cpu.stat is the one read whose failure returns from Read, so the reads
+		// after it never happen — an event each, if not_attempted minted one.
 		statPath := base + "/cpu.stat"
 		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}})
 
@@ -151,7 +146,7 @@ var _ = Describe("the sample records what each read produced", func() {
 
 	It("records pressure before cpu.stat, since it is read first", func() {
 		// readPSI runs ahead of readStat, so a cpu.stat failure must NOT mark
-		// pressure not_attempted — it was already read.
+		// pressure not_attempted: it was already read.
 		statPath := base + "/cpu.stat"
 		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}})
 

@@ -76,18 +76,13 @@ type linuxSampler struct {
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
-	// Every read in allReadOps starts out not_attempted and is overwritten as
-	// it happens. An early return therefore leaves the reads below it saying
-	// that nothing was read, rather than blaming a file nobody opened.
 	// Sample.Reads says why this is seeded here rather than appended below.
 	smp.Reads = seedReads()
 
-	// The evidence reads come first, before anything measured. They are most
-	// needed exactly when a measurement read failed, and a cpu.stat failure
-	// returns from Read before every read below it — so gathering them later
-	// would lose them in the one case they exist for. They are also cheap
-	// enough to sit ahead of the timestamp, which stays stamped as close to the
-	// measurement reads as it can be.
+	// Evidence first: a cpu.stat failure returns before every read below it, so
+	// gathering these later would lose them in the one case they exist for.
+	// They precede the timestamp because they are cheap, and it stays close to
+	// the measurement reads.
 	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
 	smp.ControllersRaw = controllers
 	smp.record(OpCgroupControllers, controllersOutcome)
@@ -120,8 +115,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.PsiAvailable = s.cgroup.psiAvailable
 
 	stat, statErr := s.cgroup.readStat(ctx)
-	// Copied before the early return: a cpu.stat that read but would not parse
-	// has text, and that text is the evidence for why it would not.
+	// Before the early return: text that would not parse is why it would not.
 	smp.CPUStatRaw = stat.Raw
 	smp.record(OpCPUStat, statOutcome(stat, statErr))
 	if statErr != nil {
@@ -189,16 +183,11 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	return smp, nil
 }
 
-// statOutcome names what one cpu.stat read produced. A read that succeeded and
-// carried no usage figure is ReadEmpty rather than ReadOK: the sample survives,
-// but there is no usage rate, and reporting a good read there would claim a
-// value that was never produced.
-//
-// A zero-byte cpu.stat and a usage_usec line with no value both reach ReadEmpty
-// under that one reason, because parseCounter treats a missing key as absent
-// rather than malformed, so neither returns an error. They are not told apart
-// here: diagnosis.Reading carries a single presence bit, and the raw cpu.stat
-// text travels on the event, so a reader still sees which of the two it was.
+// statOutcome reports a successful read with no usage figure as ReadEmpty,
+// because ReadOK would claim a value never produced. A zero-byte file and a
+// valueless usage_usec line both land there, since parseCounter reports an
+// absent key as absent rather than an error; the raw text on the event separates
+// them.
 func statOutcome(stat statRead, err error) ReadOutcome {
 	if err != nil {
 		return classifyRead(err)
@@ -211,8 +200,7 @@ func statOutcome(stat statRead, err error) ReadOutcome {
 	return ReadOK
 }
 
-// seedReads returns one entry per reported read, each ReadNotAttempted, in
-// allReadOps order.
+// seedReads returns one ReadNotAttempted entry per op, in allReadOps order.
 func seedReads() []ReadResult {
 	reads := make([]ReadResult, len(allReadOps))
 	for i, op := range allReadOps {
@@ -221,10 +209,9 @@ func seedReads() []ReadResult {
 	return reads
 }
 
-// record overwrites op's seeded entry with what its read produced. An op
-// absent from allReadOps has no entry to overwrite and records nothing;
-// read_record_test.go asserts every declared op is present exactly once, so no
-// call site here can hit that case.
+// record overwrites op's seeded entry. An op absent from allReadOps has none to
+// overwrite and records nothing; read_record_test.go asserts every declared op
+// is present exactly once, so no call site here can reach that.
 func (s *Sample) record(op ReadOp, outcome ReadOutcome) {
 	for i := range s.Reads {
 		if s.Reads[i].Op == op {

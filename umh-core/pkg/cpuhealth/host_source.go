@@ -128,8 +128,6 @@ func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) 
 func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine float64, err error) {
 	data, err := h.fs.ReadFile(ctx, "/proc/stat")
 	if err != nil {
-		// Returned unwrapped: the caller classifies it, and wrapping would hide
-		// the errno behind this package's own text.
 		return 0, 0, 0, 0, err
 	}
 	if strings.TrimSpace(string(data)) == "" {

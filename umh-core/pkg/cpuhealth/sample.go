@@ -130,36 +130,23 @@ type Sample struct {
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
 
-	// The raw text of the files behind the evidence reads, byte for byte as the
-	// file served it: unparsed, untokenised, and not trimmed to meaning. A raw
-	// string says whether a failure is a shape nobody predicted, which a boolean
-	// computed from it could not. A raw is the empty string when its own read
-	// did not succeed, and Reads carries the reason — so an empty raw is read
-	// together with its ReadResult, never on its own.
+	// The files behind the evidence reads, byte for byte, so a raw string shows
+	// a failure shape nobody predicted. Empty means its own read did not
+	// succeed, and its entry in Reads carries the reason.
 	ControllersRaw    string // cgroup.controllers, under the sampler's base
 	CPUMaxRaw         string // cpu.max, under the sampler's base
 	CPUStatRaw        string // cpu.stat, under the sampler's base
 	ProcSelfCgroupRaw string // /proc/self/cgroup
 
-	// BaseEntryCount is how many entries the cgroup base directory holds, and
-	// -1 when the directory was not read. It is -1 rather than 0 because zero
-	// entries is a real reading of a directory that exists and is empty, which
-	// must not look like a directory nobody could list.
+	// BaseEntryCount is -1 when the directory was not read. Zero is a real
+	// reading, of a directory that exists and is empty.
 	BaseEntryCount int
 
-	// Reads is what each reported read produced this tick: exactly one entry
-	// per member of allReadOps, always, in that order. Length is therefore
-	// len(allReadOps) on every Sample a linuxSampler produced, and zero only on
-	// one it did not — a hand-built Sample in a test, or the zero Sample a
-	// failed read returns from a different sampler.
-	//
-	// Read seeds all of them to ReadNotAttempted and overwrites each in place,
-	// rather than appending as each read happens. Appending could not carry an
-	// entry for a read that never ran: a cpu.stat failure returns from Read
-	// before four of the six reads, and those four have an outcome to report,
-	// namely that nothing was read. An empty appended slice would also mean two
-	// opposite things at once — every read succeeded, and nothing populated
-	// this field at all.
+	// Reads is one entry per member of allReadOps, in that order, so its length
+	// is len(allReadOps) on any Sample a linuxSampler produced and zero on one it
+	// did not. Read seeds each entry to ReadNotAttempted and overwrites in place:
+	// appending could carry no entry for a read that never ran, and a cpu.stat
+	// failure returns before the reads below it.
 	Reads []ReadResult
 }
 

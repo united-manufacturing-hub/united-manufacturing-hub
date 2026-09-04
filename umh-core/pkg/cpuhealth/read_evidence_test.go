@@ -26,10 +26,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// The controller list a working container serves. The token that matters is
-// "cpuset": its absence is the conclusion the whole report exists to deliver,
-// so this is the positive control for a discriminator whose failing shape
-// nobody has observed yet.
+// The controller list a working container serves. "cpuset" is the token that
+// matters: its absence is what the report exists to deliver, so this is the
+// positive control for a discriminator whose failing shape nobody has seen.
 const healthyControllers = "cpuset cpu io memory hugetlb pids rdma\n"
 
 // dirEntries fakes a ReadDir result of n entries. Only the count is read.
@@ -49,8 +48,8 @@ func (fakeDirEntry) IsDir() bool                { return false }
 func (fakeDirEntry) Type() os.FileMode          { return 0 }
 func (fakeDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
-// evidenceFS serves the healthy files plus the three evidence sources, with
-// per-path overrides for failure cases.
+// evidenceFS serves the healthy files plus the evidence sources, with per-path
+// overrides for failure cases.
 func evidenceFS(base string, overrides map[string]error, entryCount int, dirErr error) filesystem.Service {
 	files := healthyFiles(base)
 	files[base+"/cgroup.controllers"] = []byte(healthyControllers)
@@ -93,9 +92,8 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 		Expect(allReadOps).To(ContainElements(OpCgroupControllers, OpProcSelfCgroup, OpBaseDir))
 	})
 
-	// Provable property 8. These fields have no consumer until the report
-	// exists, so without this they would be untested by construction: wrong
-	// from the first commit, and trusted by whoever reads them in an incident.
+	// These fields have no consumer until the report exists, so without this they
+	// are untested by construction — and trusted by whoever reads an incident.
 	It("records every raw value byte for byte as the file served it", func() {
 		smp := read(nil, 85, nil)
 
@@ -133,9 +131,8 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 			"zero entries is a real reading; an unread directory must not look like an empty one")
 	})
 
-	// The whole point of the discriminator: a controller list that has been read
-	// successfully and simply lacks cpuset. Reporting it parsed would throw away
-	// the shape, so the field must stay the raw string.
+	// The discriminator's whole point: a controller list read successfully that
+	// simply lacks cpuset. Parsing it would throw the shape away.
 	It("keeps a controller list with no cpuset token exactly as served", func() {
 		files := base + "/cgroup.controllers"
 		mfs := filesystem.NewMockFileSystem()
@@ -161,8 +158,8 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 	})
 
 	It("still gathers the evidence when cpu.stat returned early", func() {
-		// The evidence is most needed exactly when a read failed, so it must not
-		// sit behind the early return that a cpu.stat failure takes.
+		// Most needed when a read failed, so it must not sit behind the early
+		// return a cpu.stat failure takes.
 		statPath := base + "/cpu.stat"
 		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}}, 85, nil)
 

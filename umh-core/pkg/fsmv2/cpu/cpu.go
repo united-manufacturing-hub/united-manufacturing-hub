@@ -108,17 +108,11 @@ type CPUDeps struct {
 	// that will not build has to surface at the next Poll instead, which reports
 	// it could not measure.
 	engineErr error
-	// reportedReads holds every (op, outcome) pair this instance has already
-	// reported, so a failure that repeats on every tick reports once. The
-	// startup snapshot and the tick loop share this one gate: two gates would
-	// report a startup failure again on the first tick.
-	//
-	// A changed outcome on the same file is a different pair, so it reports
-	// again. That is the intent: the machine's situation changed.
-	//
-	// A sync.Map rather than a plain map because Poll writes it on every tick
-	// and construction writes it too. Precedent for the shape: reportedToSentry
-	// in pkg/config/benthosserviceconfig/canonicalize_walk.go.
+	// reportedReads holds the pairs already reported, so a failure repeating
+	// every tick reports once. Startup and the tick loop share this one gate; two
+	// would re-report a startup failure on the first tick. A changed outcome is a
+	// new pair and reports again. sync.Map because Poll and construction both
+	// write it, as reportedToSentry does in pkg/config/benthosserviceconfig.
 	reportedReads sync.Map // map[cpuhealth.ReadResult]struct{}
 }
 
@@ -133,11 +127,9 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	sample, err := d.sampler.Read(ctx)
 
-	// Reported before the early return, exactly as the startup snapshot does:
-	// Read fills Sample.Reads even when it returns an error, so the read that
-	// broke is named either way. Reporting only at construction would leave a
-	// read that starts failing later silent for the life of the instance
-	// (ENG-5810).
+	// Before the early return: Read fills Sample.Reads even when it errors, so
+	// the read that broke is named either way. Reporting only at construction
+	// leaves a read that starts failing later silent for the instance (ENG-5810).
 	cores, quota := limitsFromSample(sample)
 	reportFailedReads(ctx, sample, err, cores, quota, d)
 
@@ -187,10 +179,8 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 // that answer in advance, because the table is built from it once and never
 // rebuilt.
 //
-// It takes the whole *CPUDeps rather than the BaseDependencies inside it,
-// because the report gate lives on CPUDeps and both reporting paths share it.
-// NewDeps calls this after building d and before setting d.engine, so engine is
-// still nil here; nothing on this path touches it.
+// It takes *CPUDeps for the report gate both paths share. NewDeps calls this
+// before setting d.engine, so engine is nil here; nothing on this path reads it.
 func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
 	smp, err := s.Read(ctx)
 	cores, quota = limitsFromSample(smp)
@@ -200,9 +190,8 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) 
 	return cores, quota
 }
 
-// limitsFromSample reads the two capacity figures off one sample. Both callers
-// need them: the startup snapshot to build the table, and Poll to report the
-// numbers a failed read has consequences for.
+// limitsFromSample reads the capacity figures off one sample: startup builds
+// the table from them, Poll reports them as what a failed read costs.
 func limitsFromSample(smp cpuhealth.Sample) (cores, quota float64) {
 	if lc, ok := smp.LogicalCpus.Get(); ok {
 		cores = lc
@@ -215,12 +204,9 @@ func limitsFromSample(smp cpuhealth.Sample) (cores, quota float64) {
 	return cores, quota
 }
 
-// reportedReadOps are the reads whose failure mints a Sentry event: each one
-// carries a fact the verdict is computed from, so a failed read of it leaves a
-// measurement missing.
-//
-// The three evidence ops are deliberately absent. They exist to be carried on
-// an event, never to produce one.
+// reportedReadOps are the reads whose failure mints a Sentry event: each
+// carries a fact the verdict needs, so failing it leaves a measurement missing.
+// The evidence ops are absent — they ride on an event, never produce one.
 var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
 	cpuhealth.OpProcStat:    {},
 	cpuhealth.OpProcCpuinfo: {},
@@ -230,20 +216,14 @@ var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
 	cpuhealth.OpCpusetCPUs:  {},
 }
 
-// excusedReads are the (op, outcome) pairs that report nothing even though the
-// read yielded no value, because that pair is a normal platform difference
-// rather than a fault.
-//
-// A kernel built without PSI serves no cpu.pressure at all, so its absence is
-// the expected state on those machines. (OpCPUPressure, ReadEACCES) is
-// deliberately not excused: a cpu.pressure that exists and cannot be opened is
-// a real failure.
+// excusedReads report nothing despite yielding no value, being a platform
+// difference not a fault: a kernel without PSI serves no cpu.pressure. EACCES is
+// not excused — a cpu.pressure that exists and will not open is a real failure.
 var excusedReads = map[cpuhealth.ReadResult]struct{}{
 	{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadENOENT}: {},
 }
 
-// readOpPaths is the file each reported read opens. The path is reported as a
-// field: in the message it would mint one Sentry issue per distinct path.
+// readOpPaths is the file each reported read opens, a field not a message part.
 var readOpPaths = map[cpuhealth.ReadOp]string{
 	cpuhealth.OpProcStat:    "/proc/stat",
 	cpuhealth.OpProcCpuinfo: "/proc/cpuinfo",
@@ -254,45 +234,31 @@ var readOpPaths = map[cpuhealth.ReadOp]string{
 }
 
 const (
-	// readFailedPrefix opens the message when the sample survived the failure:
-	// one signal is missing and the measurement is still usable.
-	//
-	// The whole message is a prefix, the op and the outcome, joined by
-	// readFailedSep and nothing else: the message is a Sentry grouping
-	// component, so a path, an error text or a count in it would mint a new
-	// issue per distinct value.
+	// readFailedPrefix opens the message when the sample survived: one signal
+	// missing, the measurement still usable. The message is this prefix, the op
+	// and the outcome, joined by readFailedSep and nothing else — it is a Sentry
+	// grouping component, so a path or count in it mints an issue per value.
 	readFailedPrefix = "cpu::read_failed::"
-	// sampleFailedPrefix opens the message when the failure voided the whole
-	// sample, so there is no measurement at all. The verb is in the message
-	// rather than a field, so a reader can tell the two apart from the Sentry
-	// issue title without opening an event.
+	// sampleFailedPrefix opens it when the failure voided the whole sample. In
+	// the message, so the Sentry issue title alone tells the two apart.
 	sampleFailedPrefix = "cpu::sample_failed::"
 	// readFailedSep joins the op and the outcome in that message.
 	readFailedSep = "::"
 )
 
-// reportFailedReads emits one Sentry event per read that failed, carrying the
-// evidence needed to tell one failure shape from another without logging into
-// the machine.
+// reportFailedReads emits one Sentry event per failed read, carrying enough
+// evidence to tell one failure shape from another without logging into the
+// machine. reportedReads says why a repeating failure reports once.
 //
-// ReadNotAttempted never reports. A read that did not happen has no failure to
-// name, and one failure stops several later reads — a cpu.stat failure stops
-// four — so reporting those would turn one root cause into five issues.
-//
-// readErr is what Read returned. It picks the verb, because whether any
-// measurement exists is a fact about the sample and not about the op that
-// failed. Only cpu.stat can make it non-nil, since it is the only read whose
-// failure returns from Read.
-//
-// It reports one (op, outcome) pair once per instance. A read that fails on
-// every tick is one fact, and the worker samples once a second.
+// ReadNotAttempted never reports: it names no failure, and one failure stops
+// several later reads, so reporting those turns one root cause into several
+// issues. readErr picks the verb — a fact about the sample, not the failing op —
+// and only cpu.stat can set it, being the only failure that returns from Read.
 func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error, cores, quota float64, d *CPUDeps) {
-	// Shutdown is not a failure to report. filesystem.DefaultService.ReadFile
-	// checks the context, so once it is done every in-flight read fails, and
-	// those errors classify as `error` rather than as a missing or unreadable
-	// file. Without this guard a graceful shutdown would emit up to six events
-	// on every instance. The context is checked rather than the error value
-	// because that catches every cancellation-derived failure however wrapped.
+	// Shutdown is not a failure. filesystem.DefaultService.ReadFile checks the
+	// context, so once done every in-flight read fails as `error`, and a graceful
+	// shutdown would emit an event per reported read on every instance. Checked
+	// on the context, catching every cancellation-derived failure, wrapped or not.
 	if ctx.Err() != nil {
 		return
 	}
@@ -325,9 +291,8 @@ func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error,
 	}
 }
 
-// readFailureFields is the evidence carried on one failed-read event: the file
-// that failed, the raw text of every evidence read, what each other read
-// produced this tick, and the two numbers the failure has consequences for.
+// readFailureFields is one failed-read event's evidence: the file that failed,
+// the machine's shape when it did, and what the failure costs.
 func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quota float64) []deps.Field {
 	fields := []deps.Field{
 		deps.String("path", readOpPaths[failed]),
@@ -339,9 +304,8 @@ func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quo
 		deps.Int("cgroup_base_entry_count", smp.BaseEntryCount),
 	}
 
-	// What every OTHER read produced on the same tick. One outcome on its own
-	// rarely says which shape a machine is in; the pattern across the reads
-	// does, which is why a sibling that was never attempted is reported too.
+	// One outcome rarely says which shape a machine is in; the pattern across
+	// the reads does, so a sibling never attempted is reported too.
 	for _, r := range smp.Reads {
 		if r.Op == failed {
 			continue
@@ -354,9 +318,8 @@ func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quo
 		fields = append(fields, deps.Float64("host_cpus", hostCpus))
 	}
 
-	// capacity_cores is what the table would be built against: the quota when
-	// it names a positive limit, else the cpuset's count. Zero means neither
-	// read answered, so it is omitted rather than reported as a measured zero.
+	// capacity_cores is what the table would be built against: the quota if
+	// positive, else the cpuset count. Zero means neither read answered.
 	capacity := cores
 	if quota > 0 {
 		capacity = quota

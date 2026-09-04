@@ -26,14 +26,14 @@ import (
 )
 
 // pathErr is what a real filesystem returns, and the shape errors.Is needs to
-// tell a missing file from an unreadable one. An opaque errors.New would
-// classify as ReadError and the distinction under test would vanish.
+// tell missing from unreadable. An opaque errors.New classifies as ReadError,
+// and the distinction under test vanishes.
 func pathErr(path string, errno syscall.Errno) error {
 	return &fs.PathError{Op: "open", Path: path, Err: errno}
 }
 
-// oneFile serves content/err for path and refuses everything else, so a reader
-// that consulted the wrong file fails rather than passing on a neighbour's data.
+// oneFile serves one path and refuses the rest, so a reader that consulted the
+// wrong file fails rather than passing on a neighbour's data.
 func oneFile(path string, content []byte, err error) filesystem.Service {
 	mfs := filesystem.NewMockFileSystem()
 	mfs.ReadFileFunc = func(_ context.Context, p string) ([]byte, error) {
@@ -47,9 +47,8 @@ func oneFile(path string, content []byte, err error) filesystem.Service {
 	return mfs
 }
 
-// Each reader must say WHICH of the four causes it hit, not merely that it
-// failed. Asserting only "an error occurred" would pass on a reader that
-// returned errEmptyRead for a missing file.
+// Each reader must say WHICH cause it hit, not merely that it failed: "an error
+// occurred" passes on a reader returning errEmptyRead for a missing file.
 var _ = Describe("a failed read reports its cause", func() {
 	const base = "/sys/fs/cgroup"
 	ctx := context.Background()
@@ -123,9 +122,8 @@ var _ = Describe("a failed read reports its cause", func() {
 		})
 	})
 
-	// readQuota and readVirtualized return a ReadOutcome rather than an error:
-	// neither has an `ok bool` to replace, so the outcome carries the reason
-	// while the existing return carries presence. See the spec's R2 override.
+	// readQuota and readVirtualized return a ReadOutcome, not an error: neither
+	// has an `ok bool` to replace, so presence stays on the existing return.
 	Describe("readQuota", func() {
 		maxPath := base + "/cpu.max"
 
@@ -148,10 +146,8 @@ var _ = Describe("a failed read reports its cause", func() {
 		})
 	})
 
-	// These four classifications had to be chosen during implementation and no
-	// assertion covered them: deleting both sentinel cases from classifyRead's
-	// switch left the whole suite green. Locked here so the mapping cannot be
-	// silently rewired.
+	// Nothing else covers these: deleting the sentinel cases from classifyRead
+	// leaves the rest of the suite green. Locked here against a silent rewiring.
 	Describe("readQuota's non-errno causes", func() {
 		maxPath := base + "/cpu.max"
 
@@ -178,10 +174,10 @@ var _ = Describe("a failed read reports its cause", func() {
 
 	Describe("readVirtualized", func() {
 		It("reports not_attempted once the fact is already resolved", func() {
-			// virtResolved short-circuits before any ReadFile, so the second
-			// call opens nothing. This is the only producer of ReadNotAttempted
-			// in the sampler today; without it the value would be declared and
-			// never produced.
+			// virtResolved short-circuits before any ReadFile, so the second call
+			// opens nothing. It is the sampler's only producer of
+			// ReadNotAttempted, which would otherwise be declared and never
+			// produced.
 			h := newHostSource(oneFile("/proc/cpuinfo", []byte("flags\t\t: fpu hypervisor\n"), nil))
 
 			virt, first := h.readVirtualized(ctx)
