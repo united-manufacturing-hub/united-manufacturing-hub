@@ -11,7 +11,7 @@ Sign-in runs through our IdP. The provider stores any passwords, verifies each m
 
 | Method | Who it applies to |
 | --- | --- |
-| A one-time code sent to your email address | The default for all Community users |
+| An email code | The default for all Community users |
 | Community username and password | Accounts that were set up with a password in the past |
 | Enterprise username and password | The default for Enterprise accounts without the SSO add-on|
 | Single sign-on through your company's own identity provider | Enterprise, as an add-on that is paid for separately |
@@ -28,7 +28,7 @@ Companies are separated at sign-in, and one email address can belong to more tha
 
 A company can be linked to its own organization with our identity provider. Where that link exists, you can only join the company through that organization, which is checked when your account is created and every time you accept an invitation. A company that is not linked yet, which happens for a while after an upgrade from Community, is not separated this way.
 
-An organization accepts sign-ins through one or more **connections**. A connection is an identity source: your corporate SAML or OIDC provider, a social login, or an emailed one-time code.
+An organization accepts sign-ins through one or more **connections**. A connection is an identity source: your corporate SAML or OIDC provider, a social login, or an email code.
 
 On an Enterprise plan you pick a **default connection** for your team. Everyone signs in through it, and invitations go through it too. Point it at your own identity provider and your usual single sign-on, multi-factor and offboarding rules decide who gets in. Pointing a default connection at your own identity provider is the single sign-on add-on, which is paid for on top of the Enterprise plan. Contact your account executive to enable it.
 
