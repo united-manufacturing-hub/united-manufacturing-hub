@@ -5,6 +5,7 @@
 ### Fixes
 
 - Topics no longer go missing from the Topic Browser when several updates arrive in quick succession
+- The Topic Browser now updates as data arrives instead of in bursts roughly every 10 seconds
 
 ## [0.44.36]
 

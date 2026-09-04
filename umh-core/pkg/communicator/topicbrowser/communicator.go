@@ -85,14 +85,25 @@ type SubscriberData struct {
 // The per-topic metadata map is dropped on the way in, so the payload differs
 // from the ring-buffer item it came from.
 type queuedBundle struct {
-	Timestamp time.Time // ingest timestamp, copied from the ring-buffer item
-	Payload   []byte    // re-encoded UnsBundle, allocated here
+	// Emission time parsed from the benthos log block, copied from
+	// topicbrowserservice.BufferItem.Timestamp. It trails wall clock by the
+	// pipeline lag, so a wall-clock value must never be compared against it.
+	Timestamp time.Time
+	Payload   []byte // re-encoded UnsBundle, allocated here
 }
 
 // TopicBrowserCommunicator manages topic browser data flow from ring buffer to UI subscribers
 // It handles both the internal cache state and the communication/subscriber management.
 type TopicBrowserCommunicator struct {
-	lastSentTimestamp time.Time // Last timestamp sent to subscribers
+	// sentWatermark is the position below which bundles are never sent again.
+	// MarkDataAsSent advances it, once per notify tick.
+	sentWatermark time.Time
+
+	// pendingWatermark is the highest bundle timestamp GetSubscriberData has put
+	// into a subscriber message. MarkDataAsSent promotes it to sentWatermark.
+	//
+	// Both are bundle emission times, never wall clock. See queuedBundle.Timestamp.
+	pendingWatermark time.Time
 
 	// 📊 INTERNAL CACHE STATE: The actual topic browser data storage
 	eventMap map[string]*tbproto.EventTableEntry // Latest event per topic (key = UnsTreeId)
@@ -120,7 +131,7 @@ func NewTopicBrowserCommunicator(logger *zap.SugaredLogger) *TopicBrowserCommuni
 		unsMap:                &tbproto.TopicMap{Entries: make(map[string]*tbproto.TopicInfo)},
 		lastProcessedSequence: 0, // Start from beginning
 		pendingToSend:         make([]queuedBundle, 0),
-		lastSentTimestamp:     time.Time{},
+		sentWatermark:         time.Time{},
 		simulator:             nil,
 		simulatorEnabled:      false,
 		maxPendingBuffers:     100, // Default cleanup threshold
@@ -379,8 +390,9 @@ func (tbc *TopicBrowserCommunicator) ingestBuffer(buf *topicbrowserservice.Buffe
 // For new subscribers (isBootstrapped=false): includes complete cache + incremental data
 // For existing subscribers (isBootstrapped=true): includes only incremental data.
 func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*SubscriberData, error) {
-	tbc.mu.RLock()
-	defer tbc.mu.RUnlock()
+	// Write lock: this advances pendingWatermark below.
+	tbc.mu.Lock()
+	defer tbc.mu.Unlock()
 
 	data := &SubscriberData{
 		UnsBundles: make(map[int][]byte),
@@ -414,22 +426,30 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 		}
 	}
 
+	if data.LatestTimestamp.After(tbc.pendingWatermark) {
+		tbc.pendingWatermark = data.LatestTimestamp
+	}
+
 	data.Summary += fmt.Sprintf("%d incremental buffers", len(unsent))
 	tbc.logger.Debugf("TopicBrowserCommunicator: %s", data.Summary)
 
 	return data, nil
 }
 
-// MarkDataAsSent marks data as delivered to subscribers and updates the last sent timestamp
-// This is used for tracking what data has been successfully delivered.
-func (tbc *TopicBrowserCommunicator) MarkDataAsSent(timestamp time.Time) {
+// MarkDataAsSent promotes pendingWatermark, so every bundle GetSubscriberData
+// has put in a subscriber message stops being selected.
+//
+// It takes no timestamp because no caller holds one. GetSubscriberData returns
+// the value in SubscriberData.LatestTimestamp, and the status collector drops
+// it when building models.TopicBrowser, so the notify loop that calls this has
+// no access to it.
+func (tbc *TopicBrowserCommunicator) MarkDataAsSent() {
 	tbc.mu.Lock()
 	defer tbc.mu.Unlock()
 
-	// Update the last sent timestamp for tracking purposes
-	if timestamp.After(tbc.lastSentTimestamp) {
-		tbc.lastSentTimestamp = timestamp
-		tbc.logger.Debugf("Marked data as sent up to timestamp: %s", timestamp.Format(time.RFC3339))
+	if tbc.pendingWatermark.After(tbc.sentWatermark) {
+		tbc.sentWatermark = tbc.pendingWatermark
+		tbc.logger.Debugf("Marked data as sent up to timestamp: %s", tbc.sentWatermark.Format(time.RFC3339))
 	}
 
 	// Cleanup old pending buffers to prevent memory growth
@@ -445,7 +465,7 @@ func (tbc *TopicBrowserCommunicator) cleanupOldPendingBuffers() {
 	filtered := make([]queuedBundle, 0, len(tbc.pendingToSend))
 
 	for _, bundle := range tbc.pendingToSend {
-		if bundle.Timestamp.After(tbc.lastSentTimestamp) {
+		if bundle.Timestamp.After(tbc.sentWatermark) {
 			filtered = append(filtered, bundle)
 		}
 	}
@@ -469,15 +489,13 @@ func removeMetadata(ub *tbproto.UnsBundle) {
 	}
 }
 
-// getUnsentBundles returns the queued bundles a subscriber has not received
-// yet, in ingest order. It reads pendingToSend and lastSentTimestamp without
-// locking; GetSubscriberData holds the read lock, as it does for
-// getCacheBundle.
+// getUnsentBundles returns the queued bundles above sentWatermark, in ingest
+// order. Caller must hold tbc.mu.
 func (tbc *TopicBrowserCommunicator) getUnsentBundles() []queuedBundle {
 	unsent := make([]queuedBundle, 0, len(tbc.pendingToSend))
 
 	for _, bundle := range tbc.pendingToSend {
-		if bundle.Timestamp.After(tbc.lastSentTimestamp) {
+		if bundle.Timestamp.After(tbc.sentWatermark) {
 			unsent = append(unsent, bundle)
 		}
 	}
