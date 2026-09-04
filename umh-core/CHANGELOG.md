@@ -4,8 +4,7 @@
 
 ### Improvements
 
-- The `/metrics` endpoint now exposes the evidence behind a CPU health verdict as `umh_fsmv2_worker_cpu_*` gauges: mean usage in cores and as a fraction, throttle ratio, PSI pressure, host headroom, host busy time, capacity and reserve cores, and the host CPU count. The CPU health worker previously published no metric of its own, so an alert could see that CPU health had degraded but not which signal caused it
-- Each of those CPU measurements that can be unreadable ships a companion flag gauge reading 1 or 0 — `cpu_usage_ring_active`, `cpu_host_busy_ring_active`, `cpu_throttle_signal_ready`, `cpu_pressure_signal_ready`, and `cpu_host_headroom_available`. The measurements report 0 when their signal is absent or untrusted, so the flag is what distinguishes an idle CPU from a missing reading. `cpu_host_headroom_available` is the weakest of the five: it reports CPU scope rather than readability, so pair it with `cpu_host_busy_ring_active`
+- Preview: the CPU health metrics are now exposed on the `/metrics` endpoint
 
 ## [0.44.38]
 
