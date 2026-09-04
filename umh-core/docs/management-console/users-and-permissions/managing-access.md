@@ -25,7 +25,7 @@ Both halves are needed on purpose. The link proves the person controls the email
 | What you do | What happens |
 | --- | --- |
 | Remove a user | Their session ends immediately and they can no longer sign in |
-| Change a user's permissions | Applied while they are signed in, within a few minutes. A user who is offline keeps their previous permissions until they sign in again |
+| Change a user's permissions | Applied while they are signed in, within a few seconds. A user who is offline keeps their previous permissions until they sign in again |
 | Remove an instance | The instance can no longer communicate with the console |
 
 To take access away straight away, remove the user rather than lowering their role, then invite them again with the permissions you want. What they built stays: their bridges, data models and the users they invited belong to the company, not to them.
