@@ -156,6 +156,26 @@ func recordGauges(m *deps.MetricsRecorder, det cpuhealth.Details) {
 	m.SetGauge(deps.GaugeCPUCapacityCores, det.CapacityCores)
 	m.SetGauge(deps.GaugeCPUReserveCores, det.ReserveCores)
 	m.SetGauge(deps.GaugeCPUHostCpus, det.HostCpus)
+
+	// The readability half. Several gauges above report 0 for an absent or
+	// untrusted signal, so a consumer needs these to tell "not throttled" from
+	// "no throttle signal".
+	m.SetGauge(deps.GaugeCPUUsageRingActive, gaugeBool(det.UsageRingActive))
+	m.SetGauge(deps.GaugeCPUHostBusyRingActive, gaugeBool(det.HostBusyRingActive))
+	m.SetGauge(deps.GaugeCPUHostHeadroomAvailable, gaugeBool(det.HostHeadroomAvailable))
+	m.SetGauge(deps.GaugeCPUThrottleSignalReady, gaugeBool(det.ThrottleSignalReady))
+	m.SetGauge(deps.GaugeCPUPressureSignalReady, gaugeBool(det.PressureSignalReady))
+	m.SetGauge(deps.GaugeCPUStealSignalReady, gaugeBool(det.StealSignalReady))
+}
+
+// gaugeBool is the flag encoding the gauge Help strings document: 1 for true,
+// 0 for false.
+func gaugeBool(b bool) float64 {
+	if b {
+		return 1
+	}
+
+	return 0
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler

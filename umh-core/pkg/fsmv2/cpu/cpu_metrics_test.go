@@ -79,6 +79,48 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeCPUStealP95), status.Details.StealP95))
 	})
 
+	It("records each readability flag as 1 or 0, so a consumer can tell an unready signal from a quiet one", func() {
+		d := newDeps(fixedSampler(richSample()), 4, 2)
+
+		status, err := Poll(context.Background(), d, CPUConfig{})
+		Expect(err).NotTo(HaveOccurred())
+
+		flags := map[deps.GaugeName]bool{
+			deps.GaugeCPUUsageRingActive:       status.Details.UsageRingActive,
+			deps.GaugeCPUHostBusyRingActive:    status.Details.HostBusyRingActive,
+			deps.GaugeCPUHostHeadroomAvailable: status.Details.HostHeadroomAvailable,
+			deps.GaugeCPUThrottleSignalReady:   status.Details.ThrottleSignalReady,
+			deps.GaugeCPUPressureSignalReady:   status.Details.PressureSignalReady,
+			deps.GaugeCPUStealSignalReady:      status.Details.StealSignalReady,
+		}
+
+		// An implementation that wrote 1 everywhere, or 0 everywhere, would pass
+		// the per-flag assertions below if this tick happened to be unanimous.
+		// Assert the staged evidence is mixed, so it cannot be.
+		var trues, falses int
+		for _, v := range flags {
+			if v {
+				trues++
+			} else {
+				falses++
+			}
+		}
+		Expect(trues).To(BeNumerically(">", 0), "this spec needs at least one ready signal to have anything to distinguish")
+		Expect(falses).To(BeNumerically(">", 0), "and at least one unready signal")
+
+		gauges := d.MetricsRecorder().Drain().Gauges
+
+		for name, want := range flags {
+			expected := 0.0
+			if want {
+				expected = 1.0
+			}
+
+			Expect(gauges).To(HaveKeyWithValue(string(name), expected),
+				"flag %s must publish %v as %v", name, want, expected)
+		}
+	})
+
 	It("records nothing on a tick that could not measure", func() {
 		d := newDeps(stubSampler{read: func(context.Context) (cpuhealth.Sample, error) {
 			return cpuhealth.Sample{}, context.DeadlineExceeded
