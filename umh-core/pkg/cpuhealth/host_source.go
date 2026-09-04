@@ -121,11 +121,19 @@ func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) 
 
 // readHost yields /proc/stat's busy, steal and denominator jiffy totals, plus
 // machine, the machine's CPU count. The totals stay raw: this function divides
-// by nothing, so the caller can take interval deltas off them.
-func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine float64, ok bool) {
+// by nothing, so the caller can take interval deltas off them. A non-nil error
+// is why there are no totals: the filesystem's own error where /proc/stat could
+// not be read, and one of this package's two sentinels where it read but held
+// no usable aggregate line.
+func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine float64, err error) {
 	data, err := h.fs.ReadFile(ctx, "/proc/stat")
 	if err != nil {
-		return 0, 0, 0, 0, false
+		// Returned unwrapped: the caller classifies it, and wrapping would hide
+		// the errno behind this package's own text.
+		return 0, 0, 0, 0, err
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return 0, 0, 0, 0, errEmptyRead
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		// One per-CPU line per CPU, so counting them counts the machine's CPUs.
@@ -143,43 +151,51 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine 
 		}
 		fields := strings.Fields(line) // fields[0] == "cpu"
 		if len(fields) < 9 {
-			return 0, 0, 0, machine, false
+			return 0, 0, 0, machine, errUnparsableRead
 		}
 		values := make([]float64, len(fields))
 		for i := 1; i < len(fields); i++ {
-			v, err := strconv.ParseFloat(fields[i], 64)
-			if err != nil {
-				return 0, 0, 0, machine, false
+			v, parseErr := strconv.ParseFloat(fields[i], 64)
+			if parseErr != nil {
+				return 0, 0, 0, machine, errUnparsableRead
 			}
 			values[i] = v
 		}
 		// Busy is user, nice, system, irq and softirq. Idle and iowait are not
 		// busy, and steal is time this machine did not get at all.
-		busy := values[1] + values[2] + values[3] + values[6] + values[7]
+		hostBusy := values[1] + values[2] + values[3] + values[6] + values[7]
 		// The steal denominator runs from user through steal. The kernel already
 		// counts guest inside user and guest_nice inside nice, so adding those
 		// two fields would count the same time twice.
-		denom := values[1] + values[2] + values[3] + values[4] + values[5] + values[6] + values[7] + values[8]
-		return busy, values[8], denom, machine, true
+		total := values[1] + values[2] + values[3] + values[4] + values[5] + values[6] + values[7] + values[8]
+		return hostBusy, values[8], total, machine, nil
 	}
-	return 0, 0, 0, machine, false
+	// The file was there and the aggregate "cpu " line was not.
+	return 0, 0, 0, machine, errUnparsableRead
 }
 
 // readVirtualized resolves the sticky virtualisation fact this source owns.
 // /proc/cpuinfo answers for an x86 guest; DMI answers for an ARM64 one, whose
 // cpuinfo has no flags line to carry the answer. It caches false only off a
 // source that was readable and could have proved a guest.
-func (h *hostSource) readVirtualized(ctx context.Context) bool {
+//
+// The returned ReadOutcome describes the /proc/cpuinfo read alone, and is
+// ReadNotAttempted on a tick that republished the cached fact without reading
+// anything. The two DMI reads are not reported: each has its own resolved flag
+// already, and this function's own contract is that a failure on one never
+// breaks the other.
+func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpuinfo ReadOutcome) {
 	if h.virtResolved {
-		return h.virtualized
+		return h.virtualized, ReadNotAttempted
 	}
 	// The x86 route. The "hypervisor" flag is the guest's own evidence, so a
 	// match settles the fact without reading DMI at all.
 	data, err := h.fs.ReadFile(ctx, "/proc/cpuinfo")
+	cpuinfo = classifyRead(err)
 	if err == nil && cpuinfoHasHypervisorFlag(data) {
 		h.virtualized = true
 		h.virtResolved = true
-		return true
+		return true, cpuinfo
 	}
 	// ARM64 route. A successful DMI read resolves the fact either way; a failed
 	// DMI read leaves it unresolved so the next tick retries. The DMI identity
@@ -191,14 +207,14 @@ func (h *hostSource) readVirtualized(ctx context.Context) bool {
 	if (pok && pv) || (vok && vv) {
 		h.virtualized = true
 		h.virtResolved = true
-		return true
+		return true, cpuinfo
 	}
 	// Neither DMI source was readable — there is no evidence of a guest or of a
 	// bare-metal identity at all, so keep the fact open and let the next tick
 	// re-read rather than caching Virtualized=false for the process lifetime
 	// off a momentary read failure.
 	if !pok && !vok {
-		return false
+		return false, cpuinfo
 	}
 	// product_name read resolved the fact. On a platform whose /proc/cpuinfo
 	// has a flags line (x86) product_name alone is authoritative and the result
@@ -209,11 +225,11 @@ func (h *hostSource) readVirtualized(ctx context.Context) bool {
 	// waits for sys_vendor: caching false off a momentary read failure would
 	// cost this host steal attribution until the process restarts.
 	if (err != nil || !cpuinfoHasFlagsLine(data)) && !vok {
-		return false
+		return false, cpuinfo
 	}
 	h.virtualized = false
 	h.virtResolved = true
-	return false
+	return false, cpuinfo
 }
 
 // cpuinfoHasFlagsLine reports whether /proc/cpuinfo carries a "flags" line at

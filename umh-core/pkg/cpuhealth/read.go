@@ -85,7 +85,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
-	if frac, ok := s.cgroup.readPSI(ctx); ok {
+	if frac, psiErr := s.cgroup.readPSI(ctx); psiErr == nil {
 		s.cgroup.psiAvailable = true
 		smp.Pressure = diagnosis.Known(frac)
 	} else {
@@ -111,7 +111,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// reset: the baseline is re-established and nothing is published this tick.
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
-	if busy, steal, denom, machine, ok := s.host.readHost(ctx); ok {
+	if busy, steal, denom, machine, hostErr := s.host.readHost(ctx); hostErr == nil {
 		smp.HostCpus = diagnosis.Known(machine)
 		// CPU scope compares the container's allowed cpuset against the machine's
 		// count (kept on the snapshot as HostCpus): a readable, covering cpuset
@@ -121,7 +121,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// LogicalCpus absent: never a silent ScopeHost on a known machine count.
 		// Comparing the two sources' reads is the composer's job — a cross-seam
 		// fact neither source can derive holding only its own read.
-		if allowed, aok := s.cgroup.readCpuset(ctx); aok {
+		if allowed, cpusetErr := s.cgroup.readCpuset(ctx); cpusetErr == nil {
 			smp.LogicalCpus = diagnosis.Known(float64(allowed))
 			if allowed == int(machine) {
 				smp.CpuScope = ScopeHost
@@ -140,8 +140,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		smp.CpuScope = ScopeUnknown
 	}
 
-	smp.Virtualized = s.host.readVirtualized(ctx)
+	smp.Virtualized, _ = s.host.readVirtualized(ctx)
 
-	smp.Quota = s.cgroup.readQuota(ctx)
+	smp.Quota, _ = s.cgroup.readQuota(ctx)
 	return smp, nil
 }
