@@ -4,6 +4,17 @@
 
 An instance is a running UMH Core container - a single Docker container that hosts your entire Unified Namespace. Each instance is identified by its location path (like `enterprise.site.area.line`) which determines where data is organized in your industrial data infrastructure.
 
+## How an instance connects
+
+An instance authenticates with an `AUTH_TOKEN`, not with a user account. The Management Console generates the token while you create the instance and shows it once. Copy it then and configure it on the instance.
+
+The token does two things:
+
+- It proves the instance's identity, so the console accepts its status and hands it the configuration meant for it.
+- It encrypts the credentials the instance stores, such as PLC passwords. The key is derived from the token, so the instance can decrypt its own credentials and the console cannot.
+
+Keep the token somewhere you can find it again, such as your password manager. For storage and rotation on the instance, see [AUTH_TOKEN in Environment Variable](../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
+
 ## Instance Overview Page
 
 ![Instance Overview](./images/instance-overview.png)
