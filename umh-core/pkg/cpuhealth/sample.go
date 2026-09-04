@@ -130,6 +130,23 @@ type Sample struct {
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
 
+	// The raw text of the files behind the evidence reads, byte for byte as the
+	// file served it: unparsed, untokenised, and not trimmed to meaning. A raw
+	// string says whether a failure is a shape nobody predicted, which a boolean
+	// computed from it could not. A raw is the empty string when its own read
+	// did not succeed, and Reads carries the reason — so an empty raw is read
+	// together with its ReadResult, never on its own.
+	ControllersRaw    string // cgroup.controllers, under the sampler's base
+	CPUMaxRaw         string // cpu.max, under the sampler's base
+	CPUStatRaw        string // cpu.stat, under the sampler's base
+	ProcSelfCgroupRaw string // /proc/self/cgroup
+
+	// BaseEntryCount is how many entries the cgroup base directory holds, and
+	// -1 when the directory was not read. It is -1 rather than 0 because zero
+	// entries is a real reading of a directory that exists and is empty, which
+	// must not look like a directory nobody could list.
+	BaseEntryCount int
+
 	// Reads is what each reported read produced this tick: exactly one entry
 	// per member of allReadOps, always, in that order. Length is therefore
 	// len(allReadOps) on every Sample a linuxSampler produced, and zero only on

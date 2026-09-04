@@ -142,7 +142,7 @@ var _ = Describe("a failed read reports its cause", func() {
 		It("reports a readable no-limit file as ok, never as a failure", func() {
 			r, outcome := newCgroupSource(oneFile(maxPath, []byte("max 100000\n"), nil), base).readQuota(ctx)
 			Expect(outcome).To(Equal(ReadOK), "content 'max' is a present no-limit, not a failed read")
-			v, ok := r.Get()
+			v, ok := r.Limit.Get()
 			Expect(ok).To(BeTrue())
 			Expect(v).To(Equal(0.0))
 		})

@@ -81,6 +81,25 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// that nothing was read, rather than blaming a file nobody opened.
 	// Sample.Reads says why this is seeded here rather than appended below.
 	smp.Reads = seedReads()
+
+	// The evidence reads come first, before anything measured. They are most
+	// needed exactly when a measurement read failed, and a cpu.stat failure
+	// returns from Read before every read below it — so gathering them later
+	// would lose them in the one case they exist for. They are also cheap
+	// enough to sit ahead of the timestamp, which stays stamped as close to the
+	// measurement reads as it can be.
+	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
+	smp.ControllersRaw = controllers
+	smp.record(OpCgroupControllers, controllersOutcome)
+
+	procSelf, procSelfOutcome := s.cgroup.readProcSelfCgroup(ctx)
+	smp.ProcSelfCgroupRaw = procSelf
+	smp.record(OpProcSelfCgroup, procSelfOutcome)
+
+	baseEntries, baseDirOutcome := s.cgroup.countBaseEntries(ctx)
+	smp.BaseEntryCount = baseEntries
+	smp.record(OpBaseDir, baseDirOutcome)
+
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
 	// calls time.Now() itself, so both rate derivations divide by the same
 	// elapsed time and Decide never compares a machine-wide mean against a
@@ -100,17 +119,20 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.record(OpCPUPressure, classifyRead(psiErr))
 	smp.PsiAvailable = s.cgroup.psiAvailable
 
-	usage, periods, throttled, statErr := s.cgroup.readStat(ctx)
+	stat, statErr := s.cgroup.readStat(ctx)
+	// Copied before the early return: a cpu.stat that read but would not parse
+	// has text, and that text is the evidence for why it would not.
+	smp.CPUStatRaw = stat.Raw
 	smp.record(OpCPUStat, classifyRead(statErr))
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
 		// never a silent drop of the throttle counters as absent no-signal.
 		return smp, fmt.Errorf("read %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
-	smp.NrPeriods = periods
-	smp.NrThrottled = throttled
-	smp.UsageUsec = usage
-	smp.UsageCores = s.cgroup.advanceUsageRate(ts, usage)
+	smp.NrPeriods = stat.Periods
+	smp.NrThrottled = stat.Throttled
+	smp.UsageUsec = stat.Usage
+	smp.UsageCores = s.cgroup.advanceUsageRate(ts, stat.Usage)
 
 	// Host signals: the first /proc/stat read fixes a baseline and publishes
 	// neither; a read after that publishes this tick's instantaneous host-busy
@@ -156,11 +178,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		smp.CpuScope = ScopeUnknown
 	}
 
-	var cpuinfo, cpuMax ReadOutcome
+	var cpuinfo ReadOutcome
 	smp.Virtualized, cpuinfo = s.host.readVirtualized(ctx)
 	smp.record(OpProcCpuinfo, cpuinfo)
 
-	smp.Quota, cpuMax = s.cgroup.readQuota(ctx)
+	quota, cpuMax := s.cgroup.readQuota(ctx)
+	smp.Quota = quota.Limit
+	smp.CPUMaxRaw = quota.Raw
 	smp.record(OpCPUMax, cpuMax)
 	return smp, nil
 }

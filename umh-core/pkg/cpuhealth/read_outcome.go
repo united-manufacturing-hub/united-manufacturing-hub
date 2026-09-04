@@ -97,6 +97,23 @@ const (
 	// OpCpusetCPUs is the cgroup's cpuset.cpus.effective read, the CPUs this
 	// container may run on.
 	OpCpusetCPUs ReadOp = "cpuset_cpus_effective"
+
+	// The three ops below are evidence, not measurement. Their reads carry the
+	// surrounding facts a reader needs to tell one failure shape from another —
+	// the controller list, this process's own cgroup path, and how many entries
+	// the base directory holds. None of them ever mints a report identifier: a
+	// report exists because a measurement read failed, and these say what the
+	// machine looked like when it did.
+
+	// OpCgroupControllers is the base directory's cgroup.controllers read, the
+	// list of controllers delegated to this cgroup.
+	OpCgroupControllers ReadOp = "cgroup_controllers"
+	// OpProcSelfCgroup is the /proc/self/cgroup read, the cgroup path this
+	// process is in.
+	OpProcSelfCgroup ReadOp = "proc_self_cgroup"
+	// OpBaseDir is the listing of the cgroup base directory, from which only the
+	// entry count is kept.
+	OpBaseDir ReadOp = "cgroup_base_dir"
 )
 
 // allReadOps is every read that is reported on, in the order Read performs
@@ -109,6 +126,9 @@ const (
 // recording one would mean either inventing it, or claiming not_attempted for
 // a read that did happen.
 var allReadOps = []ReadOp{
+	OpCgroupControllers,
+	OpProcSelfCgroup,
+	OpBaseDir,
 	OpCPUPressure,
 	OpCPUStat,
 	OpProcStat,

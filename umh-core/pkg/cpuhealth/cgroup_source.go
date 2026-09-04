@@ -92,62 +92,106 @@ func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) d
 // reason: an absent Reading says only that there is no quota to judge against,
 // and the outcome says whether cpu.max was missing, unreadable or unparsable.
 // A readable "max" is ReadOK — a present no-limit is not a failed read.
-func (c *cgroupSource) readQuota(ctx context.Context) (diagnosis.Reading, ReadOutcome) {
+//
+// The Reading travels inside a quotaRead, together with the text it was parsed
+// out of, for the reason statRead gives: the two come from one open of one file
+// and are never independently available.
+func (c *cgroupSource) readQuota(ctx context.Context) (quotaRead, ReadOutcome) {
 	data, err := c.fs.ReadFile(ctx, c.base+"/cpu.max")
 	if err != nil {
-		// An unreadable cpu.max is no-signal: Quota stays absent.
-		return diagnosis.Unknown(), classifyRead(err)
+		// An unreadable cpu.max is no-signal: Quota stays absent, and there are
+		// no bytes to report.
+		return quotaRead{Limit: diagnosis.Unknown()}, classifyRead(err)
 	}
-	if strings.TrimSpace(string(data)) == "" {
-		return diagnosis.Unknown(), classifyRead(errEmptyRead)
+	raw := string(data)
+	if strings.TrimSpace(raw) == "" {
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errEmptyRead)
 	}
 
-	fields := strings.Fields(string(data))
+	fields := strings.Fields(raw)
 	if len(fields) < 2 {
-		return diagnosis.Unknown(), classifyRead(errUnparsableRead)
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead)
 	}
 
 	if fields[0] == "max" {
 		// Uncapped is a definite no-limit: present, but never a positive capacity.
-		return diagnosis.Known(0.0), ReadOK
+		return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK
 	}
 
 	quota, err := strconv.ParseInt(fields[0], 10, 64)
 	if err != nil {
-		return diagnosis.Unknown(), classifyRead(errUnparsableRead)
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead)
 	}
 	period, err := strconv.ParseInt(fields[1], 10, 64)
 	if err != nil || period <= 0 {
-		return diagnosis.Unknown(), classifyRead(errUnparsableRead)
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead)
 	}
 
 	if quota > 0 {
-		return diagnosis.Known(float64(quota) / float64(period)), ReadOK
+		return quotaRead{Limit: diagnosis.Known(float64(quota) / float64(period)), Raw: raw}, ReadOK
 	}
 	// A non-positive limit is never a positive capacity/denominator.
-	return diagnosis.Known(0.0), ReadOK
+	return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK
 }
 
-// readStat reads cpu.stat once and yields the raw usage total and both throttle
-// counters. A non-nil error reports a read OR parse failure of cpu.stat, either
-// of which fails the whole sample; each value's Reading is independently present
-// or unavailable on success.
-func (c *cgroupSource) readStat(ctx context.Context) (usage, periods, throttled diagnosis.Reading, err error) {
-	var data []byte
-	data, err = c.fs.ReadFile(ctx, c.base+"/cpu.stat")
+// quotaRead is one cpu.max read: the CPU limit it yields and the text that
+// limit was parsed out of.
+type quotaRead struct {
+	// Limit is the container's CPU limit in cores — see readQuota for when it
+	// is present and what a present 0.0 means.
+	Limit diagnosis.Reading
+
+	// Raw is the file's text, verbatim. It is set whenever the read itself
+	// succeeded, including when the parse then failed, since the text is what
+	// says which content would not parse. It is the empty string when cpu.max
+	// could not be read at all.
+	Raw string
+}
+
+// statRead is one cpu.stat read: the three counters it yields and the text they
+// were parsed out of. The four travel together because they come from a single
+// open of a single file, and returning them separately made a caller thread
+// four values that are never independently available.
+type statRead struct {
+	Usage     diagnosis.Reading
+	Periods   diagnosis.Reading
+	Throttled diagnosis.Reading
+
+	// Raw is the file's text, verbatim. It is set whenever the read itself
+	// succeeded, including when the parse then failed: the text is what says
+	// which value was malformed, which the error's message alone does not.
+	Raw string
+}
+
+// readStat reads cpu.stat once and yields the raw usage total, both throttle
+// counters, and the text all three came from. A non-nil error reports a read OR
+// parse failure of cpu.stat, either of which fails the whole sample; each
+// value's Reading is independently present or unavailable on success.
+func (c *cgroupSource) readStat(ctx context.Context) (statRead, error) {
+	// What a failure yields: no counter is trusted, and the zero Reading is an
+	// absent one.
+	failed := statRead{Usage: diagnosis.Unknown(), Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
+
+	data, err := c.fs.ReadFile(ctx, c.base+"/cpu.stat")
 	if err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+		return failed, err
 	}
-	if usage, err = parseCounter(data, "usage_usec"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	failed.Raw = string(data)
+
+	usage, err := parseCounter(data, "usage_usec")
+	if err != nil {
+		return failed, err
 	}
-	if periods, err = parseCounter(data, "nr_periods"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	periods, err := parseCounter(data, "nr_periods")
+	if err != nil {
+		return failed, err
 	}
-	if throttled, err = parseCounter(data, "nr_throttled"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	throttled, err := parseCounter(data, "nr_throttled")
+	if err != nil {
+		return failed, err
 	}
-	return usage, periods, throttled, nil
+
+	return statRead{Usage: usage, Periods: periods, Throttled: throttled, Raw: string(data)}, nil
 }
 
 // parseCounter reads one key's numeric value out of cpu.stat bytes. An absent
@@ -244,4 +288,50 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 		}
 	}
 	return count, nil
+}
+
+// The three evidence readers. Each returns exactly what its source gave and
+// the outcome of the read, and none of them parses, tokenises, trims to
+// meaning, or judges: a raw string still says whether a failure is a shape
+// nobody predicted, and a value derived from it would already have decided
+// that question. Sample's raw fields say how an empty string reads.
+
+// readControllers reads cgroup.controllers, the list of controllers the parent
+// delegated to this cgroup. The token that matters is "cpuset", but which
+// tokens matter is the reader's question, not this function's.
+func (c *cgroupSource) readControllers(ctx context.Context) (string, ReadOutcome) {
+	data, err := c.fs.ReadFile(ctx, c.base+"/cgroup.controllers")
+	if err != nil {
+		return "", classifyRead(err)
+	}
+
+	return string(data), ReadOK
+}
+
+// readProcSelfCgroup reads /proc/self/cgroup, the cgroup path this process is
+// in. It is machine-wide by path and cgroup-specific by content, which is why
+// it sits here: it is the fact that says whether base is the cgroup we are
+// actually running in.
+func (c *cgroupSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome) {
+	data, err := c.fs.ReadFile(ctx, "/proc/self/cgroup")
+	if err != nil {
+		return "", classifyRead(err)
+	}
+
+	return string(data), ReadOK
+}
+
+// countBaseEntries lists the cgroup base directory and keeps only how many
+// entries it holds — a mounted cgroup v2 tree serves dozens of files, and a
+// bind mount that served almost none is the shape worth seeing. The names
+// themselves are not reported, since the count is what distinguishes those two.
+// An unlistable directory yields -1: zero entries is a real reading, and
+// Sample.BaseEntryCount says why the two must not look alike.
+func (c *cgroupSource) countBaseEntries(ctx context.Context) (int, ReadOutcome) {
+	entries, err := c.fs.ReadDir(ctx, c.base)
+	if err != nil {
+		return -1, classifyRead(err)
+	}
+
+	return len(entries), ReadOK
 }

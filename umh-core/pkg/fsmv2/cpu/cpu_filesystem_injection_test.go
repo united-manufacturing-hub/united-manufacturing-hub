@@ -17,6 +17,7 @@ package fsmv2cpu
 import (
 	"context"
 	"errors"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -38,6 +39,15 @@ type stubFilesystem struct {
 }
 
 func (stubFilesystem) ReadFile(context.Context, string) ([]byte, error) {
+	return nil, errRefusedByStub
+}
+
+// ReadDir was added when the sampler grew a directory listing. The nil embed
+// above is a tripwire for exactly that, and it fired: before this method the
+// new call panicked here rather than passing quietly, which is what the comment
+// on stubFilesystem promises. Refusing the listing keeps the stub's contract —
+// every access fails, and it fails in a way no real filesystem words.
+func (stubFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, error) {
 	return nil, errRefusedByStub
 }
 
