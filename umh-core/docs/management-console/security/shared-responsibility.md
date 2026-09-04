@@ -14,7 +14,7 @@ Securing the account layer is split between UMH and you. The instance has its ow
 | UMH staff accounts | Identity, authentication and offboarding of the `@umh.app` accounts you invite. UMH staff reach your company only through an invitation you issue |
 
 {% hint style="info" %}
-Audit logging is recorded but not yet available to you. Logs with retention settings you control, and forwarding into a SIEM, are planned and not built. If you need an audit trail today, ask UMH support what can be provided in the meantime.
+Audit logging is recorded but not yet available for self-service. Logs with retention settings you control, and forwarding into a SIEM, are planned and not built. Get in touch with your Account Executive if you need an audit trail.
 {% endhint %}
 
 ## Yours

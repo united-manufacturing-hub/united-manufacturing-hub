@@ -2,6 +2,8 @@
 
 Regardless of which [authentication method](README.md) your account uses, session timeouts apply the same way.
 
+## Session Durations & Renewal
+
 Your session is managed by the Management Console itself, independently of the identity provider.
 
 | Session rule | Value |
@@ -11,8 +13,13 @@ Your session is managed by the Management Console itself, independently of the i
 | Hard limit | 30 days after you first signed in, you sign in again regardless of activity |
 | Ends on | Sign-out, the 30 day limit, or removal from the company |
 
-Each device keeps its own session. Signing in from several devices at once is allowed, but the connection to your instances can become unreliable when you do. Devices that need to be connected at the same time should get their own accounts.
+## One session per account
+
+Each account has one active session at a time. When you sign in from another device, the existing session is invalidated and you are signed out of the Management Console everywhere else.
+
+This is intentional. Most work in the Management Console is a one-off change, often to a single umh-core instance. Allowing several sessions at once would let the same account push concurrent, conflicting changes to your umh-core instances.
+
 
 {% hint style="warning" %}
-There is no automatic sign-out after a period of inactivity. A session stays valid until the 14 day token expires or the 30 day limit is reached, whichever comes first. Sign out when you leave your workstation. If you need shorter sessions than that, use single sign-on and set the policy in your own identity provider.
+There is no automatic sign-out after a period of inactivity. A session stays valid until the 14 day token expires or the 30 day limit is reached, whichever comes first. Sign out when you leave your workstation.
 {% endhint %}

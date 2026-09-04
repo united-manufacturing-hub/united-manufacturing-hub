@@ -46,5 +46,6 @@ Everything you build with the console is documented under [Usage](../usage/READM
 Open the account menu at the bottom of the sidebar, then **Settings**, for three tabs:
 
 - **Account** shows your name, email, company, and licence state.
-- **Settings** holds **Advanced Mode**, which reveals options for power users, and **Early Access Features**, which switches on features that are still being finished. Early access features can change or break without notice.
-- **Permissions** shows your current role and what it allows, see [Users and Permissions](users-and-permissions/README.md).
+- **Settings** holds **Advanced Mode**, which reveals options for power users, and **Early Access Features**, which switches on features that are still being finished. Early access features can change or break without notice. 
+- In addition, **Settings** lets you set up a Demo-Environment with a single click, allowing you to see our Management Console in action.
+- **Permissions** (only available for Enterprise) shows your current role and what it allows, see [Users and Permissions](users-and-permissions/README.md).
