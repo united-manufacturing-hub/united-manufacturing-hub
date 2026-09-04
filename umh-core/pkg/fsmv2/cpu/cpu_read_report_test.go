@@ -100,11 +100,29 @@ type reportFS struct {
 
 	files     map[string][]byte
 	overrides map[string]error
-	reads     *int
+	// errFn is consulted before overrides, so a spec can start failing a read
+	// partway through a run rather than only from the first read.
+	errFn func(path string) error
+	reads *int
 }
 
-func (f reportFS) ReadFile(_ context.Context, p string) ([]byte, error) {
+func (f reportFS) ReadFile(ctx context.Context, p string) ([]byte, error) {
 	*f.reads++
+
+	// Honour the context, because filesystem.DefaultService does: it calls
+	// checkContext before reading, so on shutdown every in-flight read fails.
+	// A fixture that ignored the context could not distinguish a shutdown from
+	// a healthy container, and the shutdown spec would assert nothing.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if f.errFn != nil {
+		if err := f.errFn(p); err != nil {
+			return nil, err
+		}
+	}
+
 	if err, ok := f.overrides[p]; ok {
 		return nil, err
 	}
@@ -125,7 +143,7 @@ func (f reportFS) ReadDir(_ context.Context, _ string) ([]os.DirEntry, error) {
 // hook-wrapped logger, and NewDeps. Nothing pre-sets a "read failed" state —
 // the condition arrives the way production produces it, through a filesystem
 // that refuses.
-func buildReport(overrides map[string]error, fileOverrides map[string][]byte) (*[]recorded, *fsmv2sentry.SentryHook, *int) {
+func buildReport(overrides map[string]error, fileOverrides map[string][]byte, errFn func(string) error) (*[]recorded, *fsmv2sentry.SentryHook, *int, *CPUDeps) {
 	events := &[]recorded{}
 	reads := 0
 
@@ -136,21 +154,21 @@ func buildReport(overrides map[string]error, fileOverrides map[string][]byte) (*
 	// Mirror cmd/main.go: the hook wraps the core, NewFSMLogger sits outside.
 	hooked := deps.NewFSMLogger(zap.New(core).WithOptions(zap.WrapCore(hook.Wrap)).Sugar())
 
-	var svc filesystem.Service = reportFS{files: withFiles(fileOverrides), overrides: overrides, reads: &reads}
+	var svc filesystem.Service = reportFS{files: withFiles(fileOverrides), overrides: overrides, errFn: errFn, reads: &reads}
 	register.SetDeps[filesystem.Service](FilesystemDepsKey, svc)
 	DeferCleanup(register.ClearDeps, FilesystemDepsKey)
 
 	id := deps.Identity{ID: "cpu-report", WorkerType: WorkerType}
 	bd := deps.NewBaseDependencies(recordingLogger{FSMLogger: hooked, events: events}, nil, id)
 
-	_ = NewDeps(id, bd)
+	d := NewDeps(id, bd)
 
 	// Without this the whole suite is host-dependent: NewDeps silently falls
 	// back to the real filesystem when nothing was published, and cpu.go's
 	// own comment warns about exactly that.
 	Expect(reads).To(BeNumerically(">", 0), "the published fixture was never consulted")
 
-	return events, hook, &reads
+	return events, hook, &reads, d
 }
 
 // withFiles starts from the healthy container and replaces named files, for
@@ -165,11 +183,21 @@ func withFiles(fileOverrides map[string][]byte) map[string][]byte {
 }
 
 func build(overrides map[string]error) (*[]recorded, *fsmv2sentry.SentryHook, *int) {
-	return buildReport(overrides, nil)
+	events, hook, reads, _ := buildReport(overrides, nil, nil)
+
+	return events, hook, reads
+}
+
+// buildPollable hands back the deps as well, for specs that drive Poll rather
+// than only construction.
+func buildPollable(errFn func(string) error) (*[]recorded, *CPUDeps) {
+	events, _, _, d := buildReport(nil, nil, errFn)
+
+	return events, d
 }
 
 func buildWithFiles(fileOverrides map[string][]byte) *[]recorded {
-	events, _, _ := buildReport(nil, fileOverrides)
+	events, _, _, _ := buildReport(nil, fileOverrides, nil)
 
 	return events
 }

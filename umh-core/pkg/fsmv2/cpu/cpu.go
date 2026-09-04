@@ -19,6 +19,7 @@ package fsmv2cpu
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
@@ -107,6 +108,18 @@ type CPUDeps struct {
 	// that will not build has to surface at the next Poll instead, which reports
 	// it could not measure.
 	engineErr error
+	// reportedReads holds every (op, outcome) pair this instance has already
+	// reported, so a failure that repeats on every tick reports once. The
+	// startup snapshot and the tick loop share this one gate: two gates would
+	// report a startup failure again on the first tick.
+	//
+	// A changed outcome on the same file is a different pair, so it reports
+	// again. That is the intent: the machine's situation changed.
+	//
+	// A sync.Map rather than a plain map because Poll writes it on every tick
+	// and construction writes it too. Precedent for the shape: reportedToSentry
+	// in pkg/config/benthosserviceconfig/canonicalize_walk.go.
+	reportedReads sync.Map // map[cpuhealth.ReadResult]struct{}
 }
 
 // Poll samples the cgroup once and reports the verdict Decide judged. On a
@@ -119,6 +132,15 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}
 
 	sample, err := d.sampler.Read(ctx)
+
+	// Reported before the early return, exactly as the startup snapshot does:
+	// Read fills Sample.Reads even when it returns an error, so the read that
+	// broke is named either way. Reporting only at construction would leave a
+	// read that starts failing later silent for the life of the instance
+	// (ENG-5810).
+	cores, quota := limitsFromSample(sample)
+	reportFailedReads(ctx, sample, err, cores, quota, d)
+
 	if err != nil {
 		return CPUStatus{}, err
 	}
@@ -153,7 +175,7 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 		sampler:          sampler,
 	}
 
-	cores, quota := containerOrHostLimit(context.Background(), sampler, bd)
+	cores, quota := containerOrHostLimit(context.Background(), sampler, d)
 	table := cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(table)
 
@@ -164,9 +186,24 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 // the container's own resource limit, or the host's capacity. cpuhealth needs
 // that answer in advance, because the table is built from it once and never
 // rebuilt.
-func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
+//
+// It takes the whole *CPUDeps rather than the BaseDependencies inside it,
+// because the report gate lives on CPUDeps and both reporting paths share it.
+// NewDeps calls this after building d and before setting d.engine, so engine is
+// still nil here; nothing on this path touches it.
+func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
 	smp, err := s.Read(ctx)
+	cores, quota = limitsFromSample(smp)
 
+	reportFailedReads(ctx, smp, err, cores, quota, d)
+
+	return cores, quota
+}
+
+// limitsFromSample reads the two capacity figures off one sample. Both callers
+// need them: the startup snapshot to build the table, and Poll to report the
+// numbers a failed read has consequences for.
+func limitsFromSample(smp cpuhealth.Sample) (cores, quota float64) {
 	if lc, ok := smp.LogicalCpus.Get(); ok {
 		cores = lc
 	}
@@ -174,8 +211,6 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.Bas
 	if q, ok := smp.Quota.Get(); ok && q > 0 {
 		quota = q
 	}
-
-	reportFailedReads(smp, err, cores, quota, bd)
 
 	return cores, quota
 }
@@ -248,7 +283,20 @@ const (
 // measurement exists is a fact about the sample and not about the op that
 // failed. Only cpu.stat can make it non-nil, since it is the only read whose
 // failure returns from Read.
-func reportFailedReads(smp cpuhealth.Sample, readErr error, cores, quota float64, bd *deps.BaseDependencies) {
+//
+// It reports one (op, outcome) pair once per instance. A read that fails on
+// every tick is one fact, and the worker samples once a second.
+func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error, cores, quota float64, d *CPUDeps) {
+	// Shutdown is not a failure to report. filesystem.DefaultService.ReadFile
+	// checks the context, so once it is done every in-flight read fails, and
+	// those errors classify as `error` rather than as a missing or unreadable
+	// file. Without this guard a graceful shutdown would emit up to six events
+	// on every instance. The context is checked rather than the error value
+	// because that catches every cancellation-derived failure however wrapped.
+	if ctx.Err() != nil {
+		return
+	}
+
 	prefix := readFailedPrefix
 	if readErr != nil {
 		prefix = sampleFailedPrefix
@@ -267,7 +315,11 @@ func reportFailedReads(smp cpuhealth.Sample, readErr error, cores, quota float64
 			continue
 		}
 
-		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
+		if _, reportedBefore := d.reportedReads.LoadOrStore(r, struct{}{}); reportedBefore {
+			continue
+		}
+
+		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
 			prefix+string(r.Op)+readFailedSep+string(r.Outcome),
 			readFailureFields(smp, r.Op, cores, quota)...)
 	}
