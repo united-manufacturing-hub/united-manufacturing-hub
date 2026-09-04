@@ -235,6 +235,34 @@ const (
 	GaugeCPUHostCpus GaugeName = "cpu_host_cpus"
 )
 
+// CPU worker readability flags, 1 for true and 0 for false.
+//
+// Each one says whether the measurement it names was readable on that tick.
+// They are not optional decoration: several of the gauges above report 0 when
+// their signal was absent or untrusted, so without the matching flag a
+// consumer cannot tell "not throttled" from "no throttle signal".
+const (
+	// GaugeCPUUsageRingActive qualifies cpu_avg_usage_cores and cpu_avg_usage_fraction.
+	GaugeCPUUsageRingActive GaugeName = "cpu_usage_ring_active"
+
+	// GaugeCPUHostBusyRingActive qualifies cpu_avg_host_busy_cores.
+	GaugeCPUHostBusyRingActive GaugeName = "cpu_host_busy_ring_active"
+
+	// GaugeCPUHostHeadroomAvailable qualifies cpu_host_headroom_cores. It reads 0
+	// when the scope is not the host, which is a withholding rather than a failure.
+	GaugeCPUHostHeadroomAvailable GaugeName = "cpu_host_headroom_available"
+
+	// GaugeCPUThrottleSignalReady qualifies cpu_throttle_ratio.
+	GaugeCPUThrottleSignalReady GaugeName = "cpu_throttle_signal_ready"
+
+	// GaugeCPUPressureSignalReady qualifies cpu_pressure_avg60.
+	GaugeCPUPressureSignalReady GaugeName = "cpu_pressure_signal_ready"
+
+	// GaugeCPUStealSignalReady qualifies cpu_steal_p95. It reads 0 on bare metal
+	// and inside any VM whose hypervisor does not expose steal.
+	GaugeCPUStealSignalReady GaugeName = "cpu_steal_signal_ready"
+)
+
 // =============================================================================
 // METRICS INFRASTRUCTURE
 // =============================================================================
