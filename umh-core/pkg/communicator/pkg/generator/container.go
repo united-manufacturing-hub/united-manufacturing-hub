@@ -148,10 +148,14 @@ func defaultContainer() models.Container {
 	}
 }
 
-// containerHealthMessage gives the badge the components' own words. Degraded
-// components use the composition IsResourceLimited builds its bridge-block
-// reason from, so a refused bridge and the badge say the same thing. Memory
-// and disk are skipped when healthy: they only ever say "utilization normal".
+// containerHealthMessage builds the string on the container's own Health, which
+// the Management Console shows as its overall status.
+//
+// Each degraded component contributes one line, "CPU degraded: <its message>",
+// joined by newlines. With nothing degraded, an Active container reports the CPU
+// message alone: memory and disk are at "utilization normal" or "warning" then,
+// which tells a reader nothing the category has not already said. Any other
+// state falls back to getContainerHealthMessage.
 func containerHealthMessage(status container_monitor.ServiceInfo) string {
 	var cpu, memory, disk *models.Health
 
