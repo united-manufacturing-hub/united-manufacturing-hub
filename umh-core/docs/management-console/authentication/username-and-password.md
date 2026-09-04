@@ -6,7 +6,7 @@ You enter your email address and a password to sign in. Two kinds of account use
 
 **Enterprise accounts** sign in with username and password by default. The password is stored by our identity provider, and the sign-in form is the [default connection](README.md#which-company-you-sign-in-to) of your company's organization. Enterprise customers with the [single sign-on add-on](enterprise-sso.md) sign in through their own identity provider instead.
 
-**Community accounts created with a password** keep signing in with that password. The same password is also your [passphrase](passwords-and-passphrases.md). New Community accounts use [Magic Link](magic-link.md). <!-- Commented out on purpose, because this feature is not fully rolled out yet. Will be removed once live. --> <!-- and an existing account can be moved across from the Management Console, see [Moving a Community account to Magic Link](#moving-a-community-account-to-magic-link). -->
+**Community accounts created with a password** keep signing in with that password. The same password is also your [passphrase](passwords-and-passphrases.md). New Community accounts use an [email code](email-code.md). <!-- Commented out on purpose, because this feature is not fully rolled out yet. Will be removed once live. --> <!-- and an existing account can be moved across from the Management Console, see [Moving a Community account to email codes](#moving-a-community-account-to-email-codes). -->
 
 ## Signing in
 
@@ -27,11 +27,11 @@ For old Community accounts created with a password, the password is also the pas
 Commented out on purpose: The Community upgrade feature is currently being rolled out.
 This is OK to exist as repository context, but shouldn't be mentioned in . This section will be made visible once the feature is fully rolled out
 
-## Moving a Community account to Magic Link
+## Moving a Community account to email codes
 
 {% hint style="info" %}
 Community accounts created with a password use an older sign-in method. When you are signed in, a banner on the home page opens a short wizard that moves your account to the current method. Have your current password ready, it becomes your passphrase.
 {% endhint %}
 
-After the move you sign in with [Magic Link](magic-link.md), Google or LinkedIn, and the console asks for your former password as the passphrase. If you can no longer remember it, contact `support@umh.app`.
+After the move you sign in with an [email code](email-code.md), Google or LinkedIn, and the console asks for your former password as the passphrase. If you can no longer remember it, contact `support@umh.app`.
 -->
