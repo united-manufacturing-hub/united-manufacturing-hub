@@ -28,8 +28,8 @@ import (
 )
 
 // cpuWorkerMaxAge is how old the fsmv2 CPU worker's observation may be and still
-// count as Fresh for the seam. It is 3x the worker's poll interval, so one slow
-// or missed poll cannot flip the instance to degraded.
+// count as Fresh for the seam. It leaves enough slack that one slow or missed
+// poll cannot flip the instance to degraded.
 const cpuWorkerMaxAge = 3 * fsmv2cpu.PollInterval
 
 // collectCPUFromWorker builds the whole CPU record from the fsmv2 CPU worker's

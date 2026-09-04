@@ -74,7 +74,7 @@ var _ = Describe("verdict JSON", func() {
 		// instrument is the string the console labels the row with, so it is
 		// decoded and asserted beside kind rather than only checked for
 		// presence. Asserting the four together fixes the whole per-cause
-		// mapping: a renamed instrument, a re-blamed attribution or a changed
+		// mapping: a renamed instrument, a changed attribution or a changed
 		// unit each fail here on their own kind.
 		type wireCause struct {
 			kind        string

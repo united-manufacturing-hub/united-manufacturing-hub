@@ -1643,7 +1643,7 @@ var _ = Describe("the CPU seam's judgement, called without a client", func() {
 		func(freshness fsmv2client.Freshness, expectedMessage string) {
 			// A healthy verdict is staged on purpose: no arm here may read it,
 			// so a build that fell through to the verdict would report Active
-			// and redden this table rather than pass quietly.
+			// and fail this table rather than pass quietly.
 			health, cpuHealth := container_monitor.JudgeWorkerCPU(healthyWorkerStatus(), freshness)
 
 			Expect(health).NotTo(BeNil())
