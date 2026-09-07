@@ -562,24 +562,12 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 	// the two would never match, burn the whole timeout and roll back a healthy
 	// edit.
 	//
-	// A render failure falls back to the payload endpoint and is recorded in
-	// lastRenderErr so the timeout message names the real cause: the agent
-	// renders the same spec, so a spec that fails here cannot roll out either.
-	wantTarget := a.connectionIP
-	wantPort := a.connectionPort
-
-	if a.dfcType == DFCTypeEmpty && desiredPCState != protocolconverter.OperationalStateStopped {
-		resolved, renderErr := a.resolvedConnectionEndpoint(newSpec)
-		if renderErr != nil {
-			a.actionLogger.Warnf("Failed to resolve the connection endpoint for the rollout gate, falling back to the payload endpoint %s:%s: %v", a.connectionIP, a.connectionPort, renderErr)
-			a.lastRenderErr = renderErr
-		} else {
-			wantTarget = resolved.Target
-			wantPort = strconv.FormatUint(uint64(resolved.Port), 10)
-		}
-	}
-
-	wantEndpoint := wantTarget + ":" + wantPort
+	// The endpoint is resolved on every tick rather than once up front. Reading
+	// the config can fail transiently, and a single failure used to fall back to
+	// the payload endpoint — which for a templated bridge is an unresolved target
+	// on port 0, an endpoint no scan can ever match, so a healthy edit waited out
+	// the whole timeout and rolled back. Resolving per tick lets a transient
+	// failure heal; a deterministic one repeats and the timeout message names it.
 
 	var (
 		logs     []s6.LogEntry
@@ -686,6 +674,25 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 					// because a stopped bridge stops its nmap service too and
 					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
+						resolved, renderErr := a.resolvedConnectionEndpoint(newSpec)
+						if renderErr != nil {
+							a.lastRenderErr = renderErr
+							currentStateReason = "waiting to resolve the bridge's connection endpoint"
+							SendActionReply(
+								a.instanceUUID,
+								a.userEmail,
+								a.actionUUID,
+								models.ActionExecuting,
+								RemainingPrefixSec(remainingSeconds)+currentStateReason,
+								a.outboundChannel,
+								models.EditProtocolConverter,
+							)
+
+							continue
+						}
+
+						wantEndpoint := resolved.Target + ":" + strconv.FormatUint(uint64(resolved.Port), 10)
+
 						nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
 						scannedEndpoint := nmapObs.ObservedNmapServiceConfig.Target + ":" +
 							strconv.FormatUint(uint64(nmapObs.ObservedNmapServiceConfig.Port), 10)
