@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- A connection edit to a port that does not answer no longer completes. The rollout waits for a scan of the new port that finds it open
+- Editing a bridge's connection to a port that does not answer now fails and restores the previous configuration, instead of reporting a successful deploy. The deploy waits for a scan that finds the new port open, so a port that is closed or filtered is no longer accepted
 
 ## [0.44.34]
 
