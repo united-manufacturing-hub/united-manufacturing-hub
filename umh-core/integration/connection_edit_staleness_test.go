@@ -29,11 +29,11 @@ package integration_test
 //  2. Wait for the bridge to settle into an accepted state.
 //  3. Send an edit-protocol-converter ACTION (via the REAL ManagementConsole
 //     backend+router) that re-points the connection at a KNOWN-BAD target
-//     (127.0.0.1:65000, a closed port).
+//     (an unrouted TEST-NET-2 address).
 //  4. Observe the terminal action-reply the agent pushes back.
 //
 // CORRECT behavior (fsmv1): editing the target restarts the S6 nmap service, the
-// probe of the bad target reports the port closed, the connection goes down, the
+// probe of the bad target reports the port unreachable, the connection goes down, the
 // bridge leaves the accepted state, awaitRollout times out and rolls back →
 // terminal reply = action-failure.
 //
@@ -95,9 +95,13 @@ const (
 	stalenessGoodIP   = "127.0.0.1"
 	stalenessGoodPort = uint32(8080)
 
-	// BAD target: a closed port on loopback.
-	stalenessBadIP   = "127.0.0.1"
-	stalenessBadPort = uint32(65000)
+	// BAD target: TEST-NET-2 (RFC 5737), which is not routed, so the dial is
+	// dropped rather than refused and blocks until the observation timeout. A
+	// closed loopback port instead refuses instantly, which closes the stale
+	// window before the rollout can sample it.
+	// https://datatracker.ietf.org/doc/html/rfc5737#section-3
+	stalenessBadIP   = "198.51.100.1"
+	stalenessBadPort = uint32(445)
 
 	// stalenessTagProcessorJS is the read DFC's tag_processor body. Static (no
 	// template variables) so the deployed template and the edit action's readDFC
@@ -419,7 +423,7 @@ func runConnectionEditStalenessSpec(nmapBackend string) {
 			"edit must reach awaitRollout (the connection-health poll); a terminal reply without a "+
 				"'Waiting for bridge' reply is an early/spurious failure, not a real rollout result")
 
-		// CORRECT behavior: a connection edit to a closed port must NOT report
+		// CORRECT behavior: a connection edit to an unreachable target must NOT report
 		// success. fsmv1 satisfies this (green). fsmv2 currently reports
 		// action-success (RED) because the adapter serves the stale "open" scan
 		// of the OLD target across the edit — this spec reproduces the bug and
