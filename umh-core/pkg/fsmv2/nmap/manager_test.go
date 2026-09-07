@@ -168,6 +168,50 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.Port).To(Equal(port))
 	})
 
+	It("reports the scan's own time, so a leftover scan cannot read as fresh", func() {
+		scannedAt := time.Now().Add(-42 * time.Minute)
+
+		stageClient(freshStatus(NmapStatus{
+			Target:    target,
+			PortState: "open",
+			IsRunning: true,
+			Port:      port,
+			ScannedAt: scannedAt,
+		}), nil)
+
+		mgr := NewFsmv2NmapManager("test")
+
+		err, _ := mgr.Reconcile(context.Background(), snapshotWith(nmapConfig("running")), nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		observed, err := mgr.GetLastObservedState(name)
+		Expect(err).NotTo(HaveOccurred())
+
+		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+
+		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.Timestamp).To(BeTemporally("==", scannedAt),
+			"the observed timestamp must come from the scan, not from the moment it was mapped")
+	})
+
+	It("reports a zero scan time for a worker that has never polled", func() {
+		stageClient(freshStatus(NmapStatus{}), nil)
+
+		mgr := NewFsmv2NmapManager("test")
+
+		err, _ := mgr.Reconcile(context.Background(), snapshotWith(nmapConfig("running")), nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		observed, err := mgr.GetLastObservedState(name)
+		Expect(err).NotTo(HaveOccurred())
+
+		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+
+		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.Timestamp).To(BeZero(),
+			"a never-polled worker must not report a usable scan time")
+	})
+
 	It("reports the config the scan actually dialed, not the requested config", func() {
 		// Stage a scan reported at 10.0.0.1:502 while the snapshot asks for
 		// 10.0.0.2:445. mapObserved must reflect what the scan dialed, so a

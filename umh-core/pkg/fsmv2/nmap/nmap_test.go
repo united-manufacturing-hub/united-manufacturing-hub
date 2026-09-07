@@ -90,6 +90,55 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(st.Port).To(Equal(uint16(p)), "Poll must record the port it dialed") //nolint:unconvert // keep the explicit uint16 to match the scan's port type
 	})
 
+	It("records the scan start time and the target on the open, refused and cancelled paths", func() {
+		openListener, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() { _ = openListener.Close() }()
+
+		openHost, openPort := hostPort(openListener.Addr().String())
+
+		refusedListener, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		refusedHost, refusedPort := hostPort(refusedListener.Addr().String())
+		Expect(refusedListener.Close()).To(Succeed())
+
+		before := time.Now()
+
+		openCtx, cancelOpen := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancelOpen()
+
+		openStatus, err := fsmv2nmap.Poll(openCtx, struct{}{}, newNmapConfig(openHost, openPort))
+		Expect(err).NotTo(HaveOccurred())
+
+		refusedCtx, cancelRefused := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancelRefused()
+
+		refusedStatus, err := fsmv2nmap.Poll(refusedCtx, struct{}{}, newNmapConfig(refusedHost, refusedPort))
+		Expect(err).NotTo(HaveOccurred())
+
+		cancelledCtx, cancelNow := context.WithCancel(context.Background())
+		cancelNow()
+
+		cancelledStatus, err := fsmv2nmap.Poll(cancelledCtx, struct{}{}, newNmapConfig(openHost, openPort))
+		Expect(err).To(HaveOccurred())
+
+		after := time.Now()
+
+		paths := map[string]fsmv2nmap.NmapStatus{
+			"open":      openStatus,
+			"refused":   refusedStatus,
+			"cancelled": cancelledStatus,
+		}
+
+		for path, status := range paths {
+			Expect(status.ScannedAt).To(BeTemporally(">=", before), "%s path must record when the dial started", path)
+			Expect(status.ScannedAt).To(BeTemporally("<=", after), "%s path must record when the dial started", path)
+			Expect(status.Target).NotTo(BeEmpty(), "%s path must record the target it dialed", path)
+		}
+	})
+
 	It("reports a closed port without an error when the connection is refused", func() {
 		// Bind a listener to grab a free loopback port, then close it so the
 		// kernel answers the dial with a TCP RST (connection refused). A refused
