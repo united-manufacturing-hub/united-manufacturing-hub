@@ -109,7 +109,7 @@ type EditProtocolConverterAction struct {
 	fsmLogger deps.FSMLogger
 	// lastRenderErr holds the most recent render error — from
 	// renderDesiredDFCConfig, or from the connection render that resolves the
-	// nmap gate's expected port — so the awaitRollout timeout message can
+	// rollout gate's expected port — so the awaitRollout timeout message can
 	// surface the real cause instead of just "did not become active in time".
 	// It is sticky: compareSingleDFCConfig clears it only when a later render
 	// succeeds, so ticks that never reach a render (for example while Benthos
@@ -276,8 +276,6 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	// Validate read DFC state — validate independently of whether config was provided,
-	// so state-only edits (readDFCSvcCfg == nil) are also checked.
 	if a.readDFCState != "" {
 		if err := ValidateDataFlowComponentState(a.readDFCState); err != nil {
 			return fmt.Errorf("invalid read DFC state: %w", err)
@@ -509,10 +507,10 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
 //
-// pcConfig is the pre-edit configuration, used to roll back on failure. newSpec is
+// previousConfig is the pre-edit configuration, used to roll back on failure. newSpec is
 // the specification this edit just persisted, used to resolve the endpoint the nmap
 // gate expects the scan to dial.
-func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConverterConfig, newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, desiredPCState string) (string, error) {
+func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.ProtocolConverterConfig, newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, desiredPCState string) (string, error) {
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
@@ -589,12 +587,12 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 		select {
 		case <-timeout:
 			// rollback to previous configuration
-			rollbackErr := a.rollbackEdit(pcConfig)
+			rollbackErr := a.rollbackEdit(previousConfig)
 			if rollbackErr != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", rollbackErr)
 				stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, rollbackErr)
 				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_rollback_failed",
-					deps.String("pcConfig", pcConfig.String()))
+					deps.String("previousConfig", previousConfig.String()))
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
@@ -605,7 +603,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 			}
 
 			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout",
-				deps.String("pcConfig", pcConfig.String()),
+				deps.String("previousConfig", previousConfig.String()),
 				deps.String("desiredPCState", desiredPCState),
 			)
 
@@ -659,9 +657,10 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				currentStateReason := "current state: " + instance.CurrentState
 
 				if a.dfcType == DFCTypeEmpty {
-					// For empty DFC type (connection/location/state update only)
-					// Only check the nmap port when activating; when stopping, nmap is also
-					// stopped so it will never update to the new port.
+					// Unreachable today: applyMutation forces the bridge to
+					// active, so desiredPCState is never stopped here. Kept
+					// because a stopped bridge stops its nmap service too and
+					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
 						nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
 						nmapPort := strconv.FormatUint(
@@ -669,14 +668,11 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 							10,
 						)
 
-						// A scanned-and-open port is the only guarantee that the
-						// edit converged. The observed config merely echoes what
-						// the scan was asked to dial, so port equality alone
-						// cannot tell a live port from a refused one. Requiring
-						// open matches the connection FSM, which defines up as
-						// open and counts every other state as down. Do NOT use
-						// IsRunning: it is overloaded across backends (open on
-						// fsmv2, "scanner process up" on fsmv1).
+						// Port equality alone cannot tell a live port from a
+						// refused one, so require the scan to report open. Do not
+						// use IsRunning: it means the port accepted the connection
+						// on fsmv2 and "the scanner process is up" on fsmv1, so on
+						// fsmv1 it is true for a port that never answered.
 						portIsOpen := nmapObs.ServiceInfo.NmapStatus.LastScan != nil &&
 							nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapfsm.PortStateOpen)
 
@@ -830,7 +826,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 								models.EditProtocolConverter,
 							)
 
-							rollbackErr := a.rollbackEdit(pcConfig)
+							rollbackErr := a.rollbackEdit(previousConfig)
 							if rollbackErr != nil {
 								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, rollbackErr)
 								a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_render_failure_rollback_failed",
@@ -976,19 +972,19 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						models.EditProtocolConverter,
 					)
 
-					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", pcConfig.ProtocolConverterServiceConfig.Variables.User)
+					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", previousConfig.ProtocolConverterServiceConfig.Variables.User)
 
-					err := a.rollbackEdit(pcConfig)
+					err := a.rollbackEdit(previousConfig)
 					if err != nil {
 						a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
-							deps.String("pcConfig", pcConfig.String()))
+							deps.String("previousConfig", previousConfig.String()))
 
 						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 					}
 
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
-						deps.String("pcConfig", pcConfig.String()))
+						deps.String("previousConfig", previousConfig.String()))
 
 					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 				}
@@ -1223,7 +1219,7 @@ func (a *EditProtocolConverterAction) resolvedConnectionPort(newSpec protocolcon
 	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
 		newSpec,
 		agentLocation,
-		nil, // TODO: add global vars
+		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
 		runtime_config.BridgedByPlaceholder,
 		a.name,
@@ -1303,7 +1299,7 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
 		modifiedSpec,
 		agentLocation,
-		nil, // TODO: add global vars
+		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
 		runtime_config.BridgedByPlaceholder,
 		pcName,

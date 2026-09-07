@@ -40,7 +40,7 @@ import (
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
-var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", func() {
+var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 	const (
 		probeName    = "awaitrollout-bridge"
 		port         = uint16(445)
@@ -58,7 +58,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 
 	// stageSnapshotOnPort writes a protocol-converter snapshot with an explicit
 	// desired connection config (the rendered config the bridge should be
-	// running, i.e. the "system of truth"), an explicit observed nmap config
+	// running), an explicit observed nmap config
 	// (what the scan has actually dialed), the port the scan ran against, the
 	// port state the last scan reported (open/closed/filtered), and the PC FSM
 	// state. Giving the desired and observed sides independently is what lets a
@@ -225,6 +225,63 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
 			"a scanned-but-closed port must not be reported as a successful rollout")
+	})
+
+	It("reports failure when the scanner is running but the port is not open", func() {
+		// IsRunning means different things per backend: the port accepted the
+		// connection on fsmv2, but only "the scanner process is up" on fsmv1.
+		// A gate keyed on it would pass on fsmv1 for a port that never answered,
+		// and the other specs cannot catch that swap because they leave
+		// IsRunning false, so the healthy spec would be the only one to redden.
+		observed := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ServiceInfo: protocolconvertersvc.ServiceInfo{
+				ConnectionObservedState: connfsm.ConnectionObservedState{
+					ObservedConnectionConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "dest.example.com",
+							Port:   port,
+						},
+					},
+					ServiceInfo: connsvc.ServiceInfo{
+						NmapObservedState: nmapfsm.NmapObservedState{
+							ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+								Target: "dest.example.com",
+								Port:   port,
+							},
+							ServiceInfo: nmapsvc.ServiceInfo{
+								NmapStatus: nmapsvc.NmapServiceInfo{
+									IsRunning: true,
+									LastScan: &nmapsvc.NmapScanResult{
+										PortResult: nmapsvc.PortResult{
+											State: string(nmapfsm.PortStateClosed),
+											Port:  port,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		snapMgr.UpdateSnapshot(&fsm.SystemSnapshot{
+			Managers: map[string]fsm.ManagerSnapshot{
+				constants.ProtocolConverterManagerName: &actions.MockManagerSnapshot{
+					Instances: map[string]*fsm.FSMInstanceSnapshot{
+						probeName: {
+							ID:                probeName,
+							CurrentState:      protocolconverter.OperationalStateStartingFailedDFCMissing,
+							DesiredState:      protocolconverter.OperationalStateActive,
+							LastObservedState: observed,
+						},
+					},
+				},
+			},
+		})
+
+		_, err := runAwaitRollout("dest.example.com")
+		Expect(err).To(HaveOccurred(),
+			"a running scanner reporting a closed port must not be reported as a successful rollout")
 	})
 
 	It("reports failure when the port was scanned but found filtered", func() {

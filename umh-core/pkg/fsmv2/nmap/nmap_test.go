@@ -87,7 +87,7 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(st.Target).To(Equal(host), "Poll must record the target it dialed")
-		Expect(st.Port).To(Equal(uint16(p)), "Poll must record the port it dialed") //nolint:unconvert // keep the explicit uint16 to match the scan's port type
+		Expect(st.Port).To(Equal(p), "Poll must record the port it dialed")
 	})
 
 	It("records the scan start time and the target on the open, refused and cancelled paths", func() {

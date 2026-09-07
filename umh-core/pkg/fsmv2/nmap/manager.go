@@ -92,12 +92,13 @@ func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 	}
 }
 
-// mapObserved builds a nmapfsm.NmapObservedState from the stored status. Both
-// Target and Port come from the status (what the scan actually dialed), with
-// no echo of the requested config. A requested edit that has not yet been
-// dialed therefore reads as unobserved, so a target-diffing consumer (the
-// deploy gate) keeps waiting for a genuine scan. The ServiceInfo mirrors the
-// last scan (port state, port, latency, running).
+// mapObserved builds a nmapfsm.NmapObservedState from the stored status. Target
+// and Port come from the status, so they name the endpoint the most recent poll
+// dialed rather than the one the config asked for. Until a poll of an edited
+// endpoint completes, the observed values are the previous endpoint's, which is
+// what lets awaitRollout in the edit action tell a converged edit from a pending
+// one. Timestamp is the scan's own start time, so an old poll cannot read as
+// fresh.
 func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
 	return nmapfsm.NmapObservedState{
 		ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
