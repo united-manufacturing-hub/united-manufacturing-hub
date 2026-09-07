@@ -16,7 +16,6 @@ package fsmv2nmap
 
 import (
 	"fmt"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -109,7 +108,7 @@ func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.Obs
 			NmapStatus: nmapservice.NmapServiceInfo{
 				IsRunning: s.Result.IsRunning,
 				LastScan: &nmapservice.NmapScanResult{
-					Timestamp: time.Now(),
+					Timestamp: s.Result.ScannedAt,
 					PortResult: nmapservice.PortResult{
 						State:     s.Result.PortState,
 						LatencyMs: s.Result.LatencyMs,
