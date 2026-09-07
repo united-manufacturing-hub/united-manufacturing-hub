@@ -145,7 +145,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		Expect(state).To(Equal(nmapfsm.OperationalStateDegraded))
 	})
 
-	It("builds a NmapObservedState reflecting the status and config", func() {
+	It("builds a NmapObservedState reflecting the scan, not the requested config", func() {
 		stageClient(freshStatus(NmapStatus{Target: target, PortState: "open", IsRunning: true, Port: port, LatencyMs: 7}), nil)
 
 		mgr := NewFsmv2NmapManager("test")
@@ -214,9 +214,8 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 
 	It("reports the config the scan actually dialed, not the requested config", func() {
 		// Stage a scan reported at 10.0.0.1:502 while the snapshot asks for
-		// 10.0.0.2:445. mapObserved must reflect what the scan dialed, so a
-		// consumer (the deploy gate) can see that a requested edit has not yet
-		// taken effect.
+		// 10.0.0.2:445. mapObserved must reflect what the scan dialed, so
+		// awaitRollout can see that a requested edit has not yet taken effect.
 		stageClient(freshStatus(NmapStatus{
 			PortState: "open",
 			IsRunning: true,
