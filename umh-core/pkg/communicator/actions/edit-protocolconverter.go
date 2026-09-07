@@ -166,6 +166,13 @@ type EditProtocolConverterAction struct {
 	// Parsed request payload (only populated after Parse)
 	protocolConverterUUID uuid.UUID
 
+	// persistedAt is when the edit reached config.yaml. The rollout gate needs
+	// it because a scan is only evidence about the new endpoint if it started
+	// after the config changed: nmap's observed endpoint is re-read from the
+	// generated scan script, which is rewritten at persist time, so it names the
+	// new endpoint several ticks before anything dials it.
+	persistedAt time.Time
+
 	// rolloutSentryReported tells Execute to skip the generic rollout_failed
 	// Sentry event for this abort. Every awaitRollout abort path fires its own
 	// dedicated event; only the render-failure paths (added for ENG-5103) set
@@ -482,6 +489,8 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to update protocol converter: %w", err)
 	}
 
+	a.persistedAt = time.Now()
+
 	// deep copy the old config therefore setup a full config
 	// this may seem hacky but like that we can reuse the Clone() function
 	// and we do not need to implement a custom Clone() function for the ProtocolConverterConfig
@@ -688,8 +697,10 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 						// use IsRunning: it means the port accepted the connection
 						// on fsmv2 and "the scanner process is up" on fsmv1, so on
 						// fsmv1 it is true for a port that never answered.
-						portIsOpen := nmapObs.ServiceInfo.NmapStatus.LastScan != nil &&
-							nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapservice.PortStateOpen)
+						lastScan := nmapObs.ServiceInfo.NmapStatus.LastScan
+						scanIsPostEdit := lastScan != nil && lastScan.Timestamp.After(a.persistedAt)
+						portIsOpen := lastScan != nil &&
+							lastScan.PortResult.State == string(nmapservice.PortStateOpen)
 
 						// Both halves must match. The port alone accepts a move
 						// to a different host on the same port: the number
@@ -697,6 +708,27 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 						// and nothing has dialed the new host (ENG-5586).
 						if scannedEndpoint != wantEndpoint {
 							currentStateReason = "waiting for nmap to scan " + wantEndpoint
+							SendActionReply(
+								a.instanceUUID,
+								a.userEmail,
+								a.actionUUID,
+								models.ActionExecuting,
+								RemainingPrefixSec(remainingSeconds)+currentStateReason,
+								a.outboundChannel,
+								models.EditProtocolConverter,
+							)
+
+							continue
+						}
+
+						// The observed endpoint is re-read from the generated
+						// scan script, which is rewritten when the edit is
+						// persisted, so it names the new endpoint before the
+						// scanner has been rebuilt and dialed it. Requiring the
+						// scan to have started after the persist is what makes
+						// the endpoint match evidence rather than an echo.
+						if !scanIsPostEdit {
+							currentStateReason = "waiting for a scan of " + wantEndpoint + " taken after the edit"
 							SendActionReply(
 								a.instanceUUID,
 								a.userEmail,

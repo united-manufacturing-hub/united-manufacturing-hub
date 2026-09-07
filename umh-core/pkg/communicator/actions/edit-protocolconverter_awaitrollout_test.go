@@ -68,7 +68,11 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 	// awaitRollout must treat differently. Staging the scanned port separately
 	// from the payload port is what lets a test stage a templated connection,
 	// whose resolved port is not the one the payload carries.
-	stageSnapshotOnPort := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16) {
+	// stageSnapshotOnPort stamps the staged scan ahead of the edit, because a
+	// spec stages its snapshot before Execute persists the config and the gate
+	// requires a scan taken after that persist. stageSnapshotScannedAt takes the
+	// scan time explicitly, for specs about a scan that predates the edit.
+	stageSnapshotScannedAt := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16, scannedAt time.Time) {
 		observed := &protocolconverter.ProtocolConverterObservedStateSnapshot{
 			ServiceInfo: protocolconvertersvc.ServiceInfo{
 				ConnectionObservedState: connfsm.ConnectionObservedState{
@@ -87,6 +91,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 							ServiceInfo: nmapsvc.ServiceInfo{
 								NmapStatus: nmapsvc.NmapServiceInfo{
 									LastScan: &nmapsvc.NmapScanResult{
+										Timestamp: scannedAt,
 										PortResult: nmapsvc.PortResult{
 											State: portState,
 											Port:  scannedPort,
@@ -113,6 +118,10 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 				},
 			},
 		})
+	}
+
+	stageSnapshotOnPort := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16) {
+		stageSnapshotScannedAt(desiredTarget, observedTarget, pcState, portState, scannedPort, time.Now().Add(time.Minute))
 	}
 
 	// stageSnapshot stages a scan of the port the payload asks for, the case
@@ -225,6 +234,27 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
 			"a scanned-but-closed port must not be reported as a successful rollout")
+	})
+
+	It("reports failure when the only open scan on record predates the edit", func() {
+		// nmap's observed endpoint is re-read from the generated scan script,
+		// which is rewritten when the edit is persisted, so it names the new
+		// endpoint before the scanner has been rebuilt and dialed it. Staging an
+		// open scan from before the edit reproduces that window: both halves of
+		// the endpoint match and the scan says open, yet nothing has dialed the
+		// new endpoint.
+		stageSnapshotScannedAt(
+			"dest.example.com",
+			"dest.example.com",
+			protocolconverter.OperationalStateStartingFailedDFCMissing,
+			string(nmapsvc.PortStateOpen),
+			port,
+			time.Now().Add(-time.Hour),
+		)
+
+		_, err := runAwaitRollout("dest.example.com")
+		Expect(err).To(HaveOccurred(),
+			"a scan taken before the edit is not evidence about the new endpoint")
 	})
 
 	It("reports failure when the scanner is running but the port is not open", func() {
