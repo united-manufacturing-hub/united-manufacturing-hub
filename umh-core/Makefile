@@ -233,7 +233,7 @@ else
     INTEGRATION_REPORT_FLAG :=
 endif
 
-UNIT_LABEL_FILTER := !integration && !redpanda-extended && !tls && !live
+UNIT_LABEL_FILTER := !integration && !redpanda-extended && !tls && !live && !connection-edit-rollback
 # Explicit list: excludes integration/ (requires Docker; has its own make target)
 UNIT_TEST_PKGS := ./cmd/... ./internal/... ./pkg/... ./test/...
 # Package that runs its Ginkgo suite in parallel (--procs); must be kept separate
@@ -428,6 +428,49 @@ redpanda-extended-test: pre-test
 
 badssl-test: pre-test
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --label-filter='tls' --fail-fast ./...
+
+###############################################################################
+# ManagementConsole integration dependencies
+#
+# The connection-edit-rollback specs drive umh-core through the *real*
+# ManagementConsole backend + router, run as local Go processes exactly the way
+# ManagementConsole's own Playwright e2e suite runs them. That source lives in
+# the private united-manufacturing-hub/ManagementConsole repo, so we pull only
+# the folders needed to build the two binaries using the developer's `gh`
+# credentials. Access to that repo is therefore required to run these tests.
+###############################################################################
+MC_REPO ?= united-manufacturing-hub/ManagementConsole
+MC_REF ?= staging
+MC_DIR := $(SRC_ROOT)/umh-core/integration/managementconsole
+
+.PHONY: pull-managementconsole connection-rollback-test
+
+pull-managementconsole: ## Pull backend+router source from the private ManagementConsole repo (needs `gh` access)
+	@command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI not found — install https://cli.github.com"; exit 1; }
+	@gh auth status >/dev/null 2>&1 || { echo "❌ Not logged in to GitHub — run: gh auth login"; exit 1; }
+	@echo "📥 Pulling ManagementConsole ($(MC_REF)) backend+router into $(MC_DIR) ..."
+	@rm -rf "$(MC_DIR)"
+	@mkdir -p "$(MC_DIR)"
+	@TOKEN=$$(gh auth token) && \
+	  git clone --quiet --no-checkout --filter=blob:none --depth 1 --branch "$(MC_REF)" \
+	    "https://x-access-token:$$TOKEN@github.com/$(MC_REPO).git" "$(MC_DIR)" && \
+	  git -C "$(MC_DIR)" sparse-checkout init --no-cone && \
+	  printf '%s\n' '/backend/' '!/backend/backend' '/router/' '/shared/' '/cryptolib/' '/frontend/static/requirements.json' \
+	    > "$(MC_DIR)/.git/info/sparse-checkout" && \
+	  git -C "$(MC_DIR)" checkout --quiet && \
+	  git -C "$(MC_DIR)" remote set-url origin "https://github.com/$(MC_REPO).git"
+	@rm -f "$(MC_DIR)/backend/backend"
+	@printf '✅ ManagementConsole source ready (commit %s)\n' "$$(git -C '$(MC_DIR)' rev-parse --short HEAD)"
+
+# Runs the fsmv1+fsmv2 connection-edit rollback specs against the real
+# ManagementConsole backend+router. Pulls the source first (idempotent).
+# --skip-package keeps ginkgo's -r discovery out of the pulled ManagementConsole
+# tree, whose packages do not compile under the test runner.
+connection-rollback-test: pull-managementconsole build-protobuf
+	FORCE_DOCKER=true VERSION=$(VERSION) MC_DIR="$(MC_DIR)" \
+	  go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test \
+	  --skip-package=managementconsole \
+	  --label-filter='connection-edit-rollback' --timeout=30m ./integration/...
 
 update-go-dependencies:
 	go get -u ./...
