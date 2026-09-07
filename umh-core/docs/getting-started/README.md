@@ -62,9 +62,9 @@ Then re-run the `docker run` command.
 For advanced users needing bind mounts (custom data locations), see the [Container Layout reference](../reference/container-layout.md#advanced-custom-data-location).
 
 **Corporate firewall/proxy issues**
-If your corporate network intercepts TLS traffic, see the [Corporate Firewalls Guide](../production/corporate-firewalls.md) to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml` or use `-e ALLOW_INSECURE_TLS=true` in your docker run command.
+If your corporate network intercepts TLS traffic, see [Network Configuration](../production/security/umh-core/network-configuration.md#tls-inspection-mitm) to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml` or use `-e ALLOW_INSECURE_TLS=true` in your docker run command.
 
-For proxy configuration, see the [Corporate Firewalls Guide](../production/corporate-firewalls.md) or add these arguments to your docker run:
+For proxy configuration, see [Network Configuration](../production/security/umh-core/network-configuration.md#proxy-configuration) or add these arguments to your docker run:
 
 ```bash
 -e HTTP_PROXY=http://proxy.company.com:8080 \
