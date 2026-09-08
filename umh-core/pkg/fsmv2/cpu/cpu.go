@@ -108,9 +108,9 @@ type CPUDeps struct {
 	// that will not build has to surface at the next Poll instead, which reports
 	// it could not measure.
 	engineErr error
-	// reportedReads holds the pairs already reported, so a failure repeating
-	// every tick reports once. Startup and Poll share this one gate; two would
-	// re-report a startup failure on the first tick.
+	// reportedReads holds every {op, outcome} already reported, so a failure
+	// repeating each tick reports once. Startup and Poll share this one map;
+	// two maps would re-report a startup failure on the first tick.
 	reportedReads sync.Map // map[cpuhealth.ReadResult]struct{}
 }
 
@@ -199,9 +199,9 @@ func limitsFromSample(smp cpuhealth.Sample) (cores, quota float64) {
 	return cores, quota
 }
 
-// reportedReadOps are the reads whose failure mints a Sentry event: each
-// carries a fact the verdict needs. The evidence ops are absent, since they
-// ride on an event and produce none.
+// reportedReadOps are the reads that get a Sentry event when they fail: each
+// one carries a fact the verdict needs. The other three ops are listed as
+// fields on somebody else's event and never get one of their own.
 var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
 	cpuhealth.OpProcStat:    {},
 	cpuhealth.OpProcCpuinfo: {},
@@ -211,9 +211,10 @@ var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
 	cpuhealth.OpCpusetCPUs:  {},
 }
 
-// excusedReads report nothing despite yielding no value, being a platform
-// difference rather than a fault: a kernel without PSI serves no cpu.pressure.
-// EACCES is not excused, since that file exists and will not open.
+// excusedReads are the failures that report nothing, because the file is
+// legitimately absent on some kernels: a kernel without PSI serves no
+// cpu.pressure at all. A cpu.pressure that exists and will not open does
+// report.
 var excusedReads = map[cpuhealth.ReadResult]struct{}{
 	{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadENOENT}: {},
 }

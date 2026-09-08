@@ -130,8 +130,8 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 			"zero entries is a real reading; an unread directory must not look like an empty one")
 	})
 
-	// A controller list that read fine and simply lacks cpuset. Parsing it
-	// would throw that shape away.
+	// A controller list that read fine and simply lacks cpuset. Parsing the
+	// list into a boolean would discard the evidence of which are present.
 	It("keeps a controller list with no cpuset token exactly as served", func() {
 		files := base + "/cgroup.controllers"
 		mfs := filesystem.NewMockFileSystem()

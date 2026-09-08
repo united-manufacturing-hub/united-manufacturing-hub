@@ -88,7 +88,9 @@ func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) d
 // no-limit (a present 0.0), and an unreadable or unparsable cpu.max reads as
 // absent no-signal.
 //
-// A readable "max" is ReadOK: a present no-limit is not a failed read.
+// A cpu.max holding the word "max" returns ReadOK, so an uncapped container
+// reports nothing to Sentry: the limit is missing because there is none, not
+// because the file could not be read.
 func (c *cgroupSource) readQuota(ctx context.Context) (quotaRead, ReadOutcome) {
 	data, err := c.fs.ReadFile(ctx, c.base+"/cpu.max")
 	if err != nil {
@@ -140,7 +142,7 @@ type statRead struct {
 	Periods   diagnosis.Reading
 	Throttled diagnosis.Reading
 
-	// Raw is set on quotaRead.Raw's terms.
+	// Raw is the file's text, set whenever the read succeeded.
 	Raw string
 }
 
@@ -286,9 +288,9 @@ func (c *cgroupSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutc
 	return string(data), ReadOK
 }
 
-// countBaseEntries keeps only the entry count: a mounted cgroup v2 tree serves
-// dozens of files, and a bind mount serving almost none is the shape worth
-// seeing. An unlistable directory yields -1, never 0.
+// countBaseEntries keeps only the entry count. A mounted cgroup v2 tree holds
+// dozens of files, so a directory holding two or three says the mount is not
+// the one we expect. An unlistable directory yields -1, never 0.
 func (c *cgroupSource) countBaseEntries(ctx context.Context) (int, ReadOutcome) {
 	entries, err := c.fs.ReadDir(ctx, c.base)
 	if err != nil {
