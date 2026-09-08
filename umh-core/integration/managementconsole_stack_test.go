@@ -27,13 +27,9 @@ package integration_test
 //	   login/pull/push        strips /api          v2/instance/*, v2/user/*
 //
 // The backend is a passthrough relay for the message Content, so umh-core keeps
-// using its own corev1 codec (base64(JSON), no encryption) — the same wire the
-// old fakeBackend used. What is now REAL: instance login against a DB row,
-// JWT-scoped user auth, and the v3 Redis message queue routing.
-//
-// mcStack mirrors the method surface of the old fakeBackend
-// (apiURL/loginSeen/enqueueEditProtocolConverter/terminalReplyState/replyDump)
-// so the staleness spec is unchanged apart from the constructor.
+// using its own corev1 codec (base64(JSON), no encryption). What is real here
+// and cannot be faked: instance login against a DB row, JWT-scoped user auth,
+// and the v3 Redis message queue routing.
 
 import (
 	"context"
@@ -64,9 +60,9 @@ import (
 )
 
 const (
-	// mcAuthToken is the raw auth token; it MUST match the AuthToken set in
-	// buildStalenessConfig. umh-core sends LoginHash(mcAuthToken) as the Bearer
-	// token, so that hash is what we seed into instances.auth_token.
+	// mcAuthToken is the raw auth token; it MUST match the AuthToken in the
+	// container config a spec builds. umh-core sends LoginHash(mcAuthToken) as
+	// the Bearer token, so that hash is what we seed into instances.auth_token.
 	mcAuthToken = "test-token"
 
 	// mcUserEmail is the seeded user's email. The edit action carries it, the
@@ -81,7 +77,7 @@ const (
 )
 
 // mcBuild* memoize the one-time build of the backend + router binaries so both
-// staleness specs (fsmv1, fsmv2) reuse them instead of rebuilding per spec.
+// backend specs (fsmv1, fsmv2) reuse them instead of rebuilding per spec.
 var (
 	mcBuildOnce  sync.Once
 	mcBackendBin string
@@ -721,7 +717,7 @@ func (s *mcStack) loginSeen() bool {
 }
 
 // stop tears down the poller, the two processes and the two containers, and
-// surfaces the backend/router logs on failure.
+// prints the backend and router logs on failure.
 func (s *mcStack) stop() {
 	if s.stopPoll != nil {
 		close(s.stopPoll)

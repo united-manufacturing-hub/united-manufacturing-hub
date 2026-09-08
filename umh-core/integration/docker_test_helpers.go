@@ -184,7 +184,7 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 
 	// WriteFile's mode is reduced by the process umask (typically 0022 → 0644).
 	// Force 0666 so the container user (uid 1000) can rewrite the docker-cp'd
-	// config on startup — the agent persists the env-merged config on load
+	// config on startup: the agent persists the env-merged config on load
 	// (LoadConfigWithEnvOverrides), and a 0644 root-owned copy would fail that
 	// write and crash-loop the agent before the communicator logs in.
 	if err := os.Chmod(configPath, 0o666); err != nil {
