@@ -202,9 +202,7 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 			return fmt.Errorf("failed to write temp config file: %w", err)
 		}
 
-		// Force 0666 (WriteFile is umask-reduced); docker cp preserves the mode,
-		// so the container's config.yaml lands world-writable and the agent (uid
-		// 1000) can rewrite it without waiting for the post-start chmod.
+		// Same umask reason as above; docker cp preserves the mode.
 		if err := os.Chmod(tmpFile, 0o666); err != nil {
 			return fmt.Errorf("failed to chmod temp config file: %w", err)
 		}
@@ -410,8 +408,6 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		"-v", tmpRedpandaDir + ":/data/redpanda",
 		"-v", tmpLogsDir + ":/data/logs",
 	}
-	// Inject any test-supplied extra create args (extra env, --add-host, ...)
-	// immediately before the image name. Empty slice → unchanged behavior.
 	createArgs = append(createArgs, extraCreateArgs...)
 	createArgs = append(createArgs, getImageName())
 

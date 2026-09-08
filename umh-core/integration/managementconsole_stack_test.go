@@ -145,7 +145,7 @@ func mcFreePort() (int, error) {
 }
 
 // buildMCBinaries builds the backend and router binaries once from the pulled
-// source. It fails with an actionable message if the source is missing.
+// source.
 func buildMCBinaries() (string, string, error) {
 	mcBuildOnce.Do(func() {
 		dir, err := mcDir()
