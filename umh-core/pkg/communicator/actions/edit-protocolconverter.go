@@ -659,93 +659,8 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 					// because a stopped bridge stops its nmap service too and
 					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
-						// The endpoint comes from the spec this edit persisted, not from the
-						// action payload: a templated connection resolves only at render
-						// time, and get-protocolconverter hands the raw template back when
-						// the spec carries no IP/PORT variables, so the payload can name a
-						// target and port 0 that no scan will ever report. Re-rendered every
-						// tick, so a transient config-read failure heals instead of failing
-						// the edit; a deterministic one repeats and the timeout names it.
-						resolved, renderErr := a.resolvedConnectionEndpoint(newConfig.ProtocolConverterServiceConfig)
-						if renderErr != nil {
-							a.lastRenderErr = renderErr
-							currentStateReason = "waiting to resolve the bridge's connection endpoint"
-							SendActionReply(
-								a.instanceUUID,
-								a.userEmail,
-								a.actionUUID,
-								models.ActionExecuting,
-								RemainingPrefixSec(remainingSeconds)+currentStateReason,
-								a.outboundChannel,
-								models.EditProtocolConverter,
-							)
-
-							continue
-						}
-
-						wantEndpoint := resolved.Target + ":" + strconv.FormatUint(uint64(resolved.Port), 10)
-
-						nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
-						scannedEndpoint := nmapObs.ObservedNmapServiceConfig.Target + ":" +
-							strconv.FormatUint(uint64(nmapObs.ObservedNmapServiceConfig.Port), 10)
-
-						// Port equality alone cannot tell a live port from a
-						// refused one, so require the scan to report open. Do not
-						// use IsRunning: it means the port accepted the connection
-						// on fsmv2 and "the scanner process is up" on fsmv1, so on
-						// fsmv1 it is true for a port that never answered.
-						lastScan := nmapObs.ServiceInfo.NmapStatus.LastScan
-						scanIsPostEdit := lastScan != nil && lastScan.Timestamp.After(a.persistedAt)
-						portIsOpen := lastScan != nil &&
-							lastScan.PortResult.State == string(nmapservice.PortStateOpen)
-
-						// Both halves must match. The port alone accepts a move
-						// to a different host on the same port: the number
-						// agrees, the old host's scan says that port is open,
-						// and nothing has dialed the new host (ENG-5586).
-						if scannedEndpoint != wantEndpoint {
-							currentStateReason = "waiting for nmap to scan " + wantEndpoint
-							SendActionReply(
-								a.instanceUUID,
-								a.userEmail,
-								a.actionUUID,
-								models.ActionExecuting,
-								RemainingPrefixSec(remainingSeconds)+currentStateReason,
-								a.outboundChannel,
-								models.EditProtocolConverter,
-							)
-
-							continue
-						}
-
-						// The observed endpoint is re-read from the generated
-						// scan script, which is rewritten when the edit is
-						// persisted, so it names the new endpoint before the
-						// scanner has been rebuilt and dialed it. Requiring the
-						// scan to have started after the persist is what makes
-						// the endpoint match evidence rather than an echo.
-						if !scanIsPostEdit {
-							currentStateReason = "waiting for a scan of " + wantEndpoint + " taken after the edit"
-							SendActionReply(
-								a.instanceUUID,
-								a.userEmail,
-								a.actionUUID,
-								models.ActionExecuting,
-								RemainingPrefixSec(remainingSeconds)+currentStateReason,
-								a.outboundChannel,
-								models.EditProtocolConverter,
-							)
-
-							continue
-						}
-
-						if !portIsOpen {
-							lastState := "no scan yet"
-							if nmapObs.ServiceInfo.NmapStatus.LastScan != nil {
-								lastState = nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State
-							}
-
-							currentStateReason = "waiting for nmap to report " + wantEndpoint + " open (last scan: " + lastState + ")"
+						if waitingFor := a.connectionCheckWait(newConfig, pcSnapshot); waitingFor != "" {
+							currentStateReason = waitingFor
 							SendActionReply(
 								a.instanceUUID,
 								a.userEmail,
@@ -1240,6 +1155,60 @@ func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any, in
 	}
 
 	return merged
+}
+
+// connectionCheckWait reports what the connection check is still waiting for,
+// or "" when the scan agrees with the endpoint this edit persisted.
+//
+// The endpoint comes from the persisted spec, not from the action payload: a
+// templated connection resolves only at render time, and get-protocolconverter
+// hands the raw template back when the spec carries no IP/PORT variables, so
+// the payload can name a target and port 0 that no scan will ever report.
+// Called once per tick, so a transient config-read failure heals instead of
+// failing the edit; a deterministic one repeats and the timeout names it.
+func (a *EditProtocolConverterAction) connectionCheckWait(
+	newConfig config.ProtocolConverterConfig,
+	pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot,
+) string {
+	resolved, renderErr := a.resolvedConnectionEndpoint(newConfig.ProtocolConverterServiceConfig)
+	if renderErr != nil {
+		a.lastRenderErr = renderErr
+
+		return "waiting to resolve the bridge's connection endpoint"
+	}
+
+	wantEndpoint := resolved.Target + ":" + strconv.FormatUint(uint64(resolved.Port), 10)
+
+	nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
+	scannedEndpoint := nmapObs.ObservedNmapServiceConfig.Target + ":" +
+		strconv.FormatUint(uint64(nmapObs.ObservedNmapServiceConfig.Port), 10)
+
+	// Both halves must match. The port alone accepts a move to a different host
+	// on the same port: the number agrees, the old host's scan says that port is
+	// open, and nothing has dialed the new host (ENG-5586).
+	if scannedEndpoint != wantEndpoint {
+		return "waiting for nmap to scan " + wantEndpoint
+	}
+
+	// The observed endpoint is re-read from the generated scan script, which is
+	// rewritten when the edit is persisted, so it names the new endpoint before
+	// the scanner has been rebuilt and dialed it. Requiring the scan to have
+	// started after the persist is what makes the endpoint match evidence rather
+	// than an echo. A bridge with no scan at all fails here too.
+	lastScan := nmapObs.ServiceInfo.NmapStatus.LastScan
+	if lastScan == nil || !lastScan.Timestamp.After(a.persistedAt) {
+		return "waiting for a scan of " + wantEndpoint + " taken after the edit"
+	}
+
+	// Endpoint equality alone cannot tell a live port from a refused one, so
+	// require the scan to report open. Do not use IsRunning: it means the port
+	// accepted the connection on fsmv2 and "the scanner process is up" on fsmv1,
+	// so on fsmv1 it is true for a port that never answered.
+	if lastScan.PortResult.State != string(nmapservice.PortStateOpen) {
+		return "waiting for nmap to report " + wantEndpoint + " open (last scan: " + lastScan.PortResult.State + ")"
+	}
+
+	return ""
 }
 
 // resolvedConnectionEndpoint renders the connection template of the
