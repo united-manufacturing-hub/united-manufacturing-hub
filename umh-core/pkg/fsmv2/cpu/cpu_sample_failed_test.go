@@ -38,6 +38,22 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 			"one event: the four reads after cpu.stat never happened, so they have nothing to report")
 	})
 
+	It("leaves a failed PSI read under read_failed when cpu.stat voided the sample", func() {
+		// Only cpu.stat can void the sample. A cpu.pressure that fails in the same
+		// tick cost one signal, so its own event must not claim the sample died
+		// with it: the verb belongs to the read it is reported under.
+		pressurePath := cgroupBase + "/cpu.pressure"
+		events, _, _ := build(map[string]error{
+			pressurePath: &fs.PathError{Op: "open", Path: pressurePath, Err: syscall.EACCES},
+			statPath:     &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT},
+		})
+
+		Expect(msgs(events)).To(ConsistOf(
+			"cpu::read_failed::cpu_pressure::eacces",
+			"cpu::sample_failed::cpu_stat::enoent",
+		))
+	})
+
 	It("emits a fixed token, never a prose sentence", func() {
 		// A sentence in the message groups separately from every other event
 		// under this feature tag, and adds nothing the structured event lacks.

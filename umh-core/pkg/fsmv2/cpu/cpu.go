@@ -252,8 +252,9 @@ const (
 //
 // ReadNotAttempted never reports: it names no failure, and one failure stops
 // several later reads, so reporting those turns one root cause into several
-// issues. readErr picks the verb — a fact about the sample, not the failing op —
-// and only cpu.stat can set it, being the only failure that returns from Read.
+// issues. The verb belongs to the read it is reported under: cpu.stat is the
+// only read that can void the sample, so a cpu.pressure failing in the same tick
+// stays read_failed rather than claiming the sample died with it.
 func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error, cores, quota float64, d *CPUDeps) {
 	// Shutdown is not a failure. filesystem.DefaultService.ReadFile checks the
 	// context, so once done every in-flight read fails as `error`, and a graceful
@@ -261,11 +262,6 @@ func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error,
 	// on the context, catching every cancellation-derived failure, wrapped or not.
 	if ctx.Err() != nil {
 		return
-	}
-
-	prefix := readFailedPrefix
-	if readErr != nil {
-		prefix = sampleFailedPrefix
 	}
 
 	for _, r := range smp.Reads {
@@ -283,6 +279,11 @@ func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error,
 
 		if _, reportedBefore := d.reportedReads.LoadOrStore(r, struct{}{}); reportedBefore {
 			continue
+		}
+
+		prefix := readFailedPrefix
+		if r.Op == cpuhealth.OpCPUStat && readErr != nil {
+			prefix = sampleFailedPrefix
 		}
 
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
