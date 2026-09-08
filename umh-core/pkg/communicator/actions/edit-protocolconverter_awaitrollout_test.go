@@ -36,7 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	connsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
-	nmapsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
@@ -79,11 +79,11 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 								Target: observedTarget,
 								Port:   scannedPort,
 							},
-							ServiceInfo: nmapsvc.ServiceInfo{
-								NmapStatus: nmapsvc.NmapServiceInfo{
-									LastScan: &nmapsvc.NmapScanResult{
+							ServiceInfo: nmapservice.ServiceInfo{
+								NmapStatus: nmapservice.NmapServiceInfo{
+									LastScan: &nmapservice.NmapScanResult{
 										Timestamp: scannedAt,
-										PortResult: nmapsvc.PortResult{
+										PortResult: nmapservice.PortResult{
 											State: portState,
 											Port:  scannedPort,
 										},
@@ -208,7 +208,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// first tick rather than wait out the timeout. This guards the opposite
 		// error: a check that never matches would fail every healthy edit after
 		// 30s, which is worse than the bug it replaces.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateOpen))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateOpen))
 
 		elapsed, err := runAwaitRollout("dest.example.com")
 		Expect(err).NotTo(HaveOccurred(),
@@ -222,7 +222,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// stamps the requested port onto a closed result too, so one poll after
 		// the edit the numbers match regardless of whether anything answered. A
 		// confirmed-closed port must not report a successful rollout.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateClosed))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateClosed))
 
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
@@ -240,7 +240,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 			"dest.example.com",
 			"dest.example.com",
 			protocolconverter.OperationalStateStartingFailedDFCMissing,
-			string(nmapsvc.PortStateOpen),
+			string(nmapservice.PortStateOpen),
 			port,
 			time.Now().Add(-time.Hour),
 		)
@@ -271,12 +271,12 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 								Target: "dest.example.com",
 								Port:   port,
 							},
-							ServiceInfo: nmapsvc.ServiceInfo{
-								NmapStatus: nmapsvc.NmapServiceInfo{
+							ServiceInfo: nmapservice.ServiceInfo{
+								NmapStatus: nmapservice.NmapServiceInfo{
 									IsRunning: true,
-									LastScan: &nmapsvc.NmapScanResult{
-										PortResult: nmapsvc.PortResult{
-											State: string(nmapsvc.PortStateClosed),
+									LastScan: &nmapservice.NmapScanResult{
+										PortResult: nmapservice.PortResult{
+											State: string(nmapservice.PortStateClosed),
 											Port:  port,
 										},
 									},
@@ -311,7 +311,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// The connection FSM defines up as open and counts filtered (and all
 		// five non-open states) as down. Requiring open here makes the check
 		// agree with that definition rather than inventing a second one.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateFiltered))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateFiltered))
 
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
@@ -324,7 +324,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// accepted by the OLD host's scan: the number matches, that port is
 		// open, and nothing has dialled the new host. If the new host refuses
 		// the connection the edit still reported success.
-		stageSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateOpen))
+		stageSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateOpen))
 
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
@@ -390,7 +390,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		})
 
 		It("reports a scanned-and-open resolved endpoint as a successful rollout, promptly", func() {
-			stageSnapshotOnPort(timescaleHost, timescaleHost, protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateOpen), timescalePort)
+			stageSnapshotOnPort(timescaleHost, timescaleHost, protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateOpen), timescalePort)
 
 			elapsed, err := runAwaitRolloutOnPort("{{ .historian.timescale.host }}", 0)
 			Expect(err).NotTo(HaveOccurred(),

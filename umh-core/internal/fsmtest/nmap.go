@@ -25,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -46,16 +46,16 @@ func CreateNmapTestConfig(name string, desiredState string) config.NmapConfig {
 
 // SetupNmapServiceState configures the mock service state for Nmap instance tests
 func SetupNmapServiceState(
-	mockService *nmap.MockNmapService,
+	mockService *nmapservice.MockNmapService,
 	serviceName string,
-	flags nmap.ServiceStateFlags,
+	flags nmapservice.ServiceStateFlags,
 ) {
 	// Ensure service exists in mock
 	mockService.ExistingServices[serviceName] = true
 
 	// Create service info if it doesn't exist
 	if mockService.ServiceStates[serviceName] == nil {
-		mockService.ServiceStates[serviceName] = &nmap.ServiceInfo{}
+		mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{}
 	}
 
 	// Set S6 FSM state
@@ -84,8 +84,8 @@ func SetupNmapServiceState(
 	}
 
 	if flags.PortState != "" {
-		mockService.ServiceStates[serviceName].NmapStatus.LastScan = &nmap.NmapScanResult{
-			PortResult: nmap.PortResult{
+		mockService.ServiceStates[serviceName].NmapStatus.LastScan = &nmapservice.NmapScanResult{
+			PortResult: nmapservice.PortResult{
 				State: flags.PortState,
 			},
 		}
@@ -96,7 +96,7 @@ func SetupNmapServiceState(
 }
 
 // ConfigureNmapServiceConfig configures the mock service with a default Nmap config
-func ConfigureNmapServiceConfig(mockService *nmap.MockNmapService) {
+func ConfigureNmapServiceConfig(mockService *nmapservice.MockNmapService) {
 	mockService.GetConfigResult = nmapserviceconfig.NmapServiceConfig{
 		Target: "localhost",
 		Port:   443,
@@ -104,16 +104,16 @@ func ConfigureNmapServiceConfig(mockService *nmap.MockNmapService) {
 }
 
 // TransitionToNmapState is a helper to configure a service for a given high-level state
-func TransitionToNmapState(mockService *nmap.MockNmapService, serviceName string, state string) {
+func TransitionToNmapState(mockService *nmapservice.MockNmapService, serviceName string, state string) {
 	switch state {
 	case nmapfsm.OperationalStateStopped,
 		nmapfsm.OperationalStateStarting:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: false,
 			S6FSMState:  s6fsm.OperationalStateStopped,
 		})
 	case nmapfsm.OperationalStateDegraded:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   false,
 			S6FSMState:  s6fsm.OperationalStateRunning,
@@ -121,49 +121,49 @@ func TransitionToNmapState(mockService *nmap.MockNmapService, serviceName string
 			PortState:   "",
 		})
 	case nmapfsm.OperationalStateOpen:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmap.PortStateOpen),
+			PortState:   string(nmapservice.PortStateOpen),
 		})
 	case nmapfsm.OperationalStateOpenFiltered:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmap.PortStateOpenFiltered),
+			PortState:   string(nmapservice.PortStateOpenFiltered),
 		})
 	case nmapfsm.OperationalStateFiltered:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmap.PortStateFiltered),
+			PortState:   string(nmapservice.PortStateFiltered),
 		})
 	case nmapfsm.OperationalStateUnfiltered:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmap.PortStateUnfiltered),
+			PortState:   string(nmapservice.PortStateUnfiltered),
 		})
 	case nmapfsm.OperationalStateClosed:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmap.PortStateClosed),
+			PortState:   string(nmapservice.PortStateClosed),
 		})
 	case nmapfsm.OperationalStateClosedFiltered:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmap.PortStateClosedFiltered),
+			PortState:   string(nmapservice.PortStateClosedFiltered),
 		})
 	case nmapfsm.OperationalStateStopping:
-		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: false,
 			IsRunning:   false,
 			S6FSMState:  s6fsm.OperationalStateStopping,
@@ -173,22 +173,22 @@ func TransitionToNmapState(mockService *nmap.MockNmapService, serviceName string
 
 // SetupNmapInstance creates and configures a Nmap instance for testing.
 // Returns the instance, the mock service, and the config used to create it.
-func SetupNmapInstance(serviceName string, desiredState string) (*nmapfsm.NmapInstance, *nmap.MockNmapService, config.NmapConfig) {
+func SetupNmapInstance(serviceName string, desiredState string) (*nmapfsm.NmapInstance, *nmapservice.MockNmapService, config.NmapConfig) {
 	// Create test config
 	cfg := CreateNmapTestConfig(serviceName, desiredState)
 
 	// Create mock service
-	mockService := nmap.NewMockNmapService()
+	mockService := nmapservice.NewMockNmapService()
 
 	// Set up initial service states
 	mockService.ExistingServices = make(map[string]bool)
-	mockService.ServiceStates = make(map[string]*nmap.ServiceInfo)
+	mockService.ServiceStates = make(map[string]*nmapservice.ServiceInfo)
 
 	// Configure service with default config
 	ConfigureNmapServiceConfig(mockService)
 
 	// Add default service info
-	mockService.ServiceStates[serviceName] = &nmap.ServiceInfo{}
+	mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{}
 
 	// Create new instance directly using the specialized constructor
 	instance := setUpMockNmapInstance(cfg, mockService)
@@ -197,7 +197,7 @@ func SetupNmapInstance(serviceName string, desiredState string) (*nmapfsm.NmapIn
 }
 
 // setUpMockNmapInstance creates a NmapInstance with a mock service
-func setUpMockNmapInstance(cfg config.NmapConfig, mockService *nmap.MockNmapService) *nmapfsm.NmapInstance {
+func setUpMockNmapInstance(cfg config.NmapConfig, mockService *nmapservice.MockNmapService) *nmapfsm.NmapInstance {
 	// First create the instance normally
 	instance := nmapfsm.NewNmapInstance(cfg)
 
@@ -212,7 +212,7 @@ func setUpMockNmapInstance(cfg config.NmapConfig, mockService *nmap.MockNmapServ
 func TestNmapStateTransition(
 	ctx context.Context,
 	instance *nmapfsm.NmapInstance,
-	mockService *nmap.MockNmapService,
+	mockService *nmapservice.MockNmapService,
 	services serviceregistry.Provider,
 	serviceName string,
 	fromState string,
@@ -254,7 +254,7 @@ func VerifyNmapStableState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *nmapfsm.NmapInstance,
-	mockService *nmap.MockNmapService,
+	mockService *nmapservice.MockNmapService,
 	services serviceregistry.Provider,
 	serviceName string,
 	expectedState string,
@@ -286,7 +286,7 @@ func VerifyNmapStableState(
 }
 
 // ResetNmapInstanceError resets the error and backoff state of a NmapInstance.
-func ResetNmapInstanceError(mockService *nmap.MockNmapService) {
+func ResetNmapInstanceError(mockService *nmapservice.MockNmapService) {
 	mockService.AddServiceError = nil
 	mockService.StartServiceError = nil
 	mockService.StopServiceError = nil
@@ -299,7 +299,7 @@ func ResetNmapInstanceError(mockService *nmap.MockNmapService) {
 // Note: This creates a standard instance without replacing the service component.
 // In actual tests, the pattern is to use the manager's functionality rather than
 // working with individual instances.
-func CreateMockNmapInstance(serviceName string, mockService nmap.INmapService, desiredState string) *nmapfsm.NmapInstance {
+func CreateMockNmapInstance(serviceName string, mockService nmapservice.INmapService, desiredState string) *nmapfsm.NmapInstance {
 	cfg := CreateNmapTestConfig(serviceName, desiredState)
 	return nmapfsm.NewNmapInstance(cfg)
 }
@@ -309,7 +309,7 @@ func StabilizeNmapInstance(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *nmapfsm.NmapInstance,
-	mockService *nmap.MockNmapService,
+	mockService *nmapservice.MockNmapService,
 	services serviceregistry.Provider,
 	serviceName string,
 	targetState string,
@@ -374,7 +374,7 @@ func ReconcileNmapUntilError(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *nmapfsm.NmapInstance,
-	mockService *nmap.MockNmapService,
+	mockService *nmapservice.MockNmapService,
 	services serviceregistry.Provider,
 	serviceName string,
 	maxAttempts int,

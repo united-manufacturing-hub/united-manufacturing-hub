@@ -19,7 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // These are the nmap-monitor operational states, in addition
@@ -35,7 +35,7 @@ const (
 	OperationalStateDegraded = "degraded"
 
 	// Running phase states
-	// See nmap-states here: https://nmap.org/book/man-port-scanning-basics.html
+	// See nmap-states here: https://nmapservice.org/book/man-port-scanning-basics.html
 	// active means nmap is running and it shows port filtered.
 	OperationalStateFiltered = "filtered"
 	// active means nmap is running and it shows port down.
@@ -118,7 +118,7 @@ type NmapObservedState struct {
 	// ObservedNmapServiceConfig contains the observed Nmap service config
 	ObservedNmapServiceConfig nmapserviceconfig.NmapServiceConfig
 	// We store the nmap data from nmap_monitor.GetStatus
-	ServiceInfo nmap.ServiceInfo
+	ServiceInfo nmapservice.ServiceInfo
 	// LastStateChange is the timestamp of the last observed state change
 	LastStateChange int64
 }
@@ -133,7 +133,7 @@ var _ publicfsm.FSMInstance = (*NmapInstance)(nil)
 type NmapInstance struct {
 
 	// The nmap service used to gather metrics
-	monitorService nmap.INmapService
+	monitorService nmapservice.INmapService
 
 	// This embeds the "BaseFSMInstance" which handles lifecycle states,
 	// desired state, removal, etc.
@@ -153,7 +153,7 @@ func (n *NmapInstance) GetLastObservedState() publicfsm.ObservedState {
 
 // SetService sets the Nmap service implementation
 // This is a testing-only utility to access the private field.
-func (n *NmapInstance) SetService(service nmap.INmapService) {
+func (n *NmapInstance) SetService(service nmapservice.INmapService) {
 	n.monitorService = service
 }
 
