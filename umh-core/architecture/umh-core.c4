@@ -122,6 +122,18 @@ model {
         loop and the cloud transport. Runs as the s6 service named umh-core.
       '''
 
+      entrypoint = component 'Process entrypoint' {
+        technology 'Go'
+        description '''
+          Builds the dependency graph at startup and starts both drivers: the
+          FSMv1 reconcile loop, and the FSMv2 application supervisor on its own
+          goroutine with a 100 ms tick. The two never call each other.
+        '''
+        metadata {
+          package 'cmd/main.go'
+        }
+      }
+
       communicator = component 'Communicator' {
         technology 'Go'
         description '''
@@ -383,6 +395,10 @@ model {
 
   // ---- components of the agent ----
 
+  umhCore.agent.entrypoint -> umhCore.agent.communicator 'starts'
+  umhCore.agent.entrypoint -> umhCore.agent.controlLoop 'starts'
+  umhCore.agent.entrypoint -> umhCore.agent.fsmv2Runtime 'starts on its own goroutine' '100 ms tick'
+
   umhCore.agent.communicator -> managementConsole 'logs in, pulls, pushes' 'HTTPS'
   umhCore.agent.communicator -> umhCore.agent.actions 'hands off one queued action'
   umhCore.agent.communicator -> umhCore.agent.fsmv1 'reads snapshots to build the status push'
@@ -478,13 +494,17 @@ views {
   view agentComponents of umhCore.agent {
     title 'L3 - Inside the agent process'
     description '''
-      How the single Go process is organised, in four groups: what talks to the
-      cloud, what owns the configuration, what decides, and what writes to disk.
-      The FSMv1 tree and the FSMv2 runtime sit side by side in the third group,
-      with the adapter between them. That split is invisible at L2.
+      How the single Go process is organised. The shape to notice is two
+      independent drivers: the FSMv1 reconcile loop, and the FSMv2 supervisor on
+      its own goroutine at a 100 ms tick. Neither calls the other. They meet
+      only at the triangular store, which the adapter reads on FSMv1's behalf.
+      The entrypoint and the config manager sit outside both, because both
+      drivers use them.
     '''
 
     include managementConsole, umhCore.configFile, umhCore.s6Logs
+
+    include umhCore.agent.entrypoint, umhCore.agent.configManager
 
     group 'Cloud transport' {
       include
@@ -492,17 +512,16 @@ views {
         umhCore.agent.actions
     }
 
-    group 'Configuration' {
+    group 'Driver one: the FSMv1 reconcile loop' {
       include
-        umhCore.agent.configManager,
-        umhCore.agent.controlLoop
+        umhCore.agent.controlLoop,
+        umhCore.agent.fsmv1
     }
 
-    group 'State machines' {
+    group 'Driver two: the FSMv2 supervisor' {
       include
-        umhCore.agent.fsmv1,
-        umhCore.agent.fsmv1Adapter,
         umhCore.agent.fsmv2Runtime,
+        umhCore.agent.fsmv1Adapter,
         umhCore.agent.triangularStore
     }
 
