@@ -582,10 +582,10 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// as open. Correct behaviour is to withhold acceptance until the requested
 		// target has actually been scanned.
 		//
-		// Today this FAILS: the read branch reads only CurrentState, so it accepts
-		// on the first tick against the pre-edit snapshot. That failure is the
-		// point — it is the deterministic form of a race the container harness
-		// reproduces only intermittently, and it depends on no log capture.
+		// Without the check above the DFC comparison, the read branch reads only
+		// CurrentState and accepts on the first tick against the pre-edit
+		// snapshot. This is the deterministic form of a race the container
+		// harness reproduces only intermittently, and it needs no log capture.
 		stageReadDFCSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateActive, string(nmapservice.PortStateOpen))
 
 		elapsed, err, replies := runAwaitRolloutRead("dest.example.com")
@@ -603,9 +603,9 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// PLACEMENT GUARD. The spec above cannot tell where the connection check
 		// sits: staged below the DFC config comparison it would still pass, because
 		// that comparison matches in that spec's case and the check then runs
-		// anyway. This spec stages the case that separates the two positions — the
+		// anyway. This spec stages the case that separates the two positions: the
 		// observed read DFC has not started (nil Input, which the comparison reads
-		// as "Benthos is still starting") AND the scan still shows the previous
+		// as "Benthos is still starting") and the scan still shows the previous
 		// target.
 		//
 		// With the connection check above the comparison, the operator is told the
@@ -627,7 +627,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 				},
 			},
 			ServiceInfo: protocolconvertersvc.ServiceInfo{
-				ConnectionObservedState:       observedConnection("dest.example.com", "src.example.com", string(nmapsvc.PortStateOpen), port, time.Now().Add(time.Minute)),
+				ConnectionObservedState:       observedConnection("dest.example.com", "src.example.com", "src.example.com", string(nmapservice.PortStateOpen), port, time.Now().Add(time.Minute)),
 				DataflowComponentReadFSMState: protocolconverter.OperationalStateActive,
 			},
 		})
@@ -635,7 +635,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		_, err, replies := runAwaitRolloutRead("dest.example.com")
 
 		Expect(err).To(HaveOccurred(), "neither the scan nor the dataflow component has caught up")
-		Expect(replies).To(ContainElement(ContainSubstring("waiting for nmap to scan dest.example.com")),
+		Expect(replies).To(ContainElement(ContainSubstring("checking dest.example.com:445")),
 			"the connection check must run before the dataflow component comparison, or a bridge whose "+
 				"target was never dialed is reported as a dataflow component problem")
 	})
@@ -646,10 +646,10 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// the connection: otherwise a bridge whose target is unreachable can never
 		// be edited at all, including the edit that stops its flows.
 		//
-		// The scan here still shows the PREVIOUS target — the same staging the
-		// ENG-5580 spec above rejects. The only difference is that this payload
+		// The scan here still shows the previous target, the same staging the
+		// read-path spec above rejects. The only difference is that this payload
 		// carries no connection.
-		stageReadDFCSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateActive, string(nmapsvc.PortStateOpen))
+		stageReadDFCSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateActive, string(nmapservice.PortStateOpen))
 
 		elapsed, err, replies := runAwaitRolloutRead("")
 
