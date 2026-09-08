@@ -225,6 +225,20 @@ model {
         }
       }
 
+      containerHealth = component 'Container health' {
+        technology 'Go'
+        description '''
+          Reads the container's cgroup CPU counters, judges pressure and
+          saturation, and ranks the likely causes. The verdict reaches the
+          console in the status push, and blocks new bridges while resources are
+          limited. Has an FSMv2 worker too, the same dual-backend pattern as
+          nmap.
+        '''
+        metadata {
+          package 'pkg/cpuhealth, pkg/diagnosis, pkg/service/container_monitor, pkg/fsmv2/cpu'
+        }
+      }
+
       serviceLayer = component 'Service layer' {
         technology 'Go'
         description '''
@@ -233,7 +247,7 @@ model {
           observed state.
         '''
         metadata {
-          package 'pkg/service'
+          package 'pkg/service (except container_monitor)'
         }
       }
 
@@ -418,6 +432,9 @@ model {
   umhCore.agent.fsmv2Runtime -> umhCore.agent.triangularStore 'writes Observed, reads Desired'
   umhCore.agent.fsmv2Runtime -> device 'dials the target port' 'nmap worker Poll'
 
+  umhCore.agent.fsmv1 -> umhCore.agent.containerHealth 'reconciles the container monitor'
+  umhCore.agent.communicator -> umhCore.agent.containerHealth 'reads the CPU verdict for the status push'
+
   umhCore.agent.serviceLayer -> umhCore.agent.s6Manager 'asks for service directories'
   umhCore.agent.serviceLayer -> umhCore.agent.registry 'allocates ports, reaches the filesystem'
   umhCore.agent.serviceLayer -> umhCore.s6Logs 'reads and parses monitor output'
@@ -504,7 +521,10 @@ views {
 
     include managementConsole, umhCore.configFile, umhCore.s6Logs
 
-    include umhCore.agent.entrypoint, umhCore.agent.configManager
+    include
+      umhCore.agent.entrypoint,
+      umhCore.agent.configManager,
+      umhCore.agent.containerHealth
 
     group 'Cloud transport' {
       include

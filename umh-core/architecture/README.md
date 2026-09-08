@@ -38,7 +38,7 @@ per-bridge group is drawn once and instantiated sixteen times. The nmap scanner
 carries an `fsmv1-only` tag because it does not exist on the fsmv2 backend,
 where the agent dials the target itself.
 
-### `agentComponents` — level 3, 15 boxes in four groups
+### `agentComponents` — level 3, 16 boxes in four groups
 
 How the single Go process is organised, plus ManagementConsole, `config.yaml`
 and the s6 log directories at the edges to show what the process reads and
@@ -46,13 +46,14 @@ writes.
 
 The shape to notice is two independent drivers. The FSMv1 reconcile loop and the
 FSMv2 supervisor each run on their own clock, the supervisor on its own
-goroutine at a 100 ms tick (`cmd/main.go:311`), and neither calls the other.
+goroutine (`cmd/main.go:311`) at a 100 ms tick (`:808`), and neither calls the
+other.
 They meet only at the triangular store, which the adapter reads on FSMv1's
 behalf. That is the hardest thing to discover from the code and it is invisible
 at level 2.
 
-The entrypoint and the config manager sit outside both groups, because both
-drivers use them.
+The entrypoint, the config manager and container health sit outside both
+groups, because both drivers use them.
 
 ### Level 4
 
