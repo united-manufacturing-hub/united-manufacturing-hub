@@ -110,10 +110,10 @@ type EditProtocolConverterAction struct {
 	configManager config.ConfigManager
 
 	fsmLogger deps.FSMLogger
-	// lastRenderErr holds the most recent render error — from
-	// renderDesiredDFCConfig, or from the connection render that resolves the
-	// connection check's expected port — so the awaitRollout timeout message can
-	// surface the real cause instead of just "did not become active in time".
+	// lastRenderErr holds the most recent render error, from
+	// renderDesiredDFCConfig or from the connection render that resolves the
+	// connection check's expected port, so the awaitRollout timeout message can
+	// name the real cause instead of just "did not become active in time".
 	// It is sticky: compareSingleDFCConfig clears it only when a later render
 	// succeeds, so ticks that never reach a render (for example while Benthos
 	// restarts) keep the captured cause.
@@ -1215,10 +1215,10 @@ func (a *EditProtocolConverterAction) connectionCheckWait(
 // just-persisted spec and returns the endpoint the nmap scan is expected to
 // dial, in the same type the observed scan config carries.
 //
-// It renders with the same inputs the agent uses — the persisted spec (which
-// already carries the edit's merged variables), the agent location and the
-// historian section read from the config manager — so the endpoint returned
-// here is the endpoint the control loop will make the scanner dial.
+// It renders with the same inputs the agent uses: the persisted spec (which
+// already carries the edit's merged variables), the agent location, and the
+// historian section read from the config manager. So the endpoint returned here
+// is the endpoint the control loop will make the scanner dial.
 func (a *EditProtocolConverterAction) resolvedConnectionEndpoint(newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec) (nmapserviceconfig.NmapServiceConfig, error) {
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)

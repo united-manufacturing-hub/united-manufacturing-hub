@@ -56,22 +56,13 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		mu        sync.Mutex
 	)
 
-	// stageSnapshotOnPort writes a protocol-converter snapshot with an explicit
-	// desired connection config (the rendered config the bridge should be
-	// running), an explicit observed nmap config
-	// (what the scan has actually dialed), the port the scan ran against, the
-	// port state the last scan reported (open/closed/filtered), and the PC FSM
-	// state. Giving the desired and observed sides independently is what lets a
-	// test stage the anomaly: a connection edited to a new target whose nmap
-	// scan has not yet caught up. Staging PortResult.State is what distinguishes
-	// "not yet scanned" from "scanned and found closed" — the two reasons
-	// awaitRollout must treat differently. Staging the scanned port separately
-	// from the payload port is what lets a test stage a templated connection,
-	// whose resolved port is not the one the payload carries.
-	// stageSnapshotOnPort stamps the staged scan ahead of the edit, because a
-	// spec stages its snapshot before Execute persists the config and the check
-	// requires a scan taken after that persist. stageSnapshotScannedAt takes the
-	// scan time explicitly, for specs about a scan that predates the edit.
+	// stageSnapshotScannedAt stages the desired connection config and the
+	// observed scan separately, so a spec can stage a connection edited to a new
+	// target whose scan has not caught up yet. portState distinguishes "not yet
+	// scanned" from "scanned and found closed", which awaitRollout treats
+	// differently; scannedPort can differ from the payload port, which is how a
+	// templated connection is staged; scannedAt is explicit because a spec
+	// stages its snapshot before Execute persists the config.
 	stageSnapshotScannedAt := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16, scannedAt time.Time) {
 		observed := &protocolconverter.ProtocolConverterObservedStateSnapshot{
 			ServiceInfo: protocolconvertersvc.ServiceInfo{
@@ -120,6 +111,8 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		})
 	}
 
+	// stageSnapshotOnPort stamps the scan after the edit, the case every spec
+	// about a converged rollout is in.
 	stageSnapshotOnPort := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16) {
 		stageSnapshotScannedAt(desiredTarget, observedTarget, pcState, portState, scannedPort, time.Now().Add(time.Minute))
 	}
