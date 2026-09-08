@@ -230,7 +230,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 
 	It("reports failure when the port was scanned but found filtered", func() {
 		// The connection FSM defines up as open and counts filtered (and all
-		// five non-open states) as down. Requiring open here makes the gate
+		// five non-open states) as down. Requiring open here makes the check
 		// agree with that definition rather than inventing a second one.
 		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateFiltered))
 
@@ -519,7 +519,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		mu.Lock()
 		defer mu.Unlock()
 
-		// The replies are the only record of WHETHER the gate accepted and on
+		// The replies are the only record of WHETHER the check accepted and on
 		// which tick, so they are decoded to text rather than counted.
 		out := make([]string, 0, len(msgs))
 
@@ -538,7 +538,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	It("POSITIVE CONTROL: a read-DFC edit whose scan has caught up is accepted", func() {
 		// Establishes that this harness can reach the read path's acceptance at
 		// all. Without it the next spec's "was not accepted" could be satisfied by
-		// the DFC config comparison blocking the gate for an unrelated reason, and
+		// the DFC config comparison blocking the check for an unrelated reason, and
 		// would pass while proving nothing. The two specs differ in exactly one
 		// value: the observed nmap target.
 		stageReadDFCSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateActive, string(nmapservice.PortStateOpen))
@@ -549,7 +549,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		Expect(replies).To(ContainElement(ContainSubstring("read DFC configuration verified")),
 			"the read path's acceptance must be reachable in this harness, or the next spec proves nothing")
 		Expect(elapsed).To(BeNumerically("<", 4*time.Second),
-			"against a 6s budget: a gate that withholds acceptance from a healthy read-DFC edit is worse "+
+			"against a 6s budget: a check that withholds acceptance from a healthy read-DFC edit is worse "+
 				"than the bug it replaces, so this must not creep towards the timeout")
 	})
 
