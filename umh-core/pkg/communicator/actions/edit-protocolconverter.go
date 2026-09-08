@@ -1142,6 +1142,12 @@ func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any, in
 	return merged
 }
 
+// formatEndpoint renders a scan config as target:port, the form the connection
+// check compares and the reply messages carry.
+func formatEndpoint(config nmapserviceconfig.NmapServiceConfig) string {
+	return config.Target + ":" + strconv.FormatUint(uint64(config.Port), 10)
+}
+
 // connectionCheckWait reports what the connection check is still waiting for,
 // or "" when the scan agrees with the endpoint this edit persisted.
 //
@@ -1160,11 +1166,10 @@ func (a *EditProtocolConverterAction) connectionCheckWait(
 		return "waiting to resolve the bridge's connection endpoint"
 	}
 
-	wantEndpoint := resolved.Target + ":" + strconv.FormatUint(uint64(resolved.Port), 10)
+	wantEndpoint := formatEndpoint(resolved)
 
 	nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
-	scannedEndpoint := nmapObs.ObservedNmapServiceConfig.Target + ":" +
-		strconv.FormatUint(uint64(nmapObs.ObservedNmapServiceConfig.Port), 10)
+	scannedEndpoint := formatEndpoint(nmapObs.ObservedNmapServiceConfig)
 
 	// Comparing the port alone accepts a move to a different host on the same
 	// port: the old host's scan reports it open and nothing dialed the new host.
