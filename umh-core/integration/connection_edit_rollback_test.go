@@ -38,6 +38,9 @@ import (
 const (
 	rollbackBridgeName = "bridge-conn"
 
+	// 8080 is the agent's own metrics port (see buildRollbackConfig), which is
+	// what makes this endpoint answer inside the container. Change one and the
+	// pre-edit wait below fails naming the bridge, not the port.
 	rollbackReachableIP   = "127.0.0.1"
 	rollbackReachablePort = uint32(8080)
 
@@ -179,10 +182,10 @@ func buildRollbackConfig(apiURL string) string {
 	return string(out)
 }
 
-func lastBridgeState() string {
+func lastBridgeState() (string, error) {
 	out, err := runDockerCommand("exec", getContainerName(), "cat", "/data/logs/umh-core/current")
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("failed to read the agent log from the container: %w", err)
 	}
 
 	marker := rollbackBridgeName + ": "
@@ -205,7 +208,7 @@ func lastBridgeState() string {
 		state = fields[0]
 	}
 
-	return state
+	return state, nil
 }
 
 func runConnectionEditRollbackSpec(nmapBackend string) {
@@ -241,6 +244,7 @@ func runConnectionEditRollbackSpec(nmapBackend string) {
 
 	AfterAll(func() {
 		PrintLogsAndStopContainer()
+		CleanupDockerBuildCache()
 
 		if backend != nil {
 			backend.stop()
@@ -274,14 +278,19 @@ func runConnectionEditRollbackSpec(nmapBackend string) {
 		)).To(Succeed())
 
 		By("waiting for a terminal action-reply")
+
+		var finalState models.ActionReplyState
+
 		Eventually(func() bool {
-			_, terminal := backend.terminalReplyState(actionUUID)
+			state, terminal := backend.lastReplyState(actionUUID)
+			if terminal {
+				finalState = state
+			}
 
 			return terminal
 		}, 150*time.Second, 1*time.Second).Should(BeTrue(),
 			"the edit must produce a terminal action-reply")
 
-		finalState, _ := backend.terminalReplyState(actionUUID)
 		replies := backend.replyDump(actionUUID)
 
 		AddReportEntry(fmt.Sprintf("NMAP_BACKEND=%s reply history", nmapBackend), strings.Join(replies, "\n"))
@@ -291,7 +300,48 @@ func runConnectionEditRollbackSpec(nmapBackend string) {
 				"at parse/validate/persist, and says nothing about the connection")
 
 		Expect(finalState).To(Equal(models.ActionFinishedWithFailure),
-			"an edit to an unreachable target must fail and roll back")
+			"an edit to an unreachable target must fail")
+
+		// A terminal failure alone does not say the previous configuration came
+		// back: awaitRollout reports the same state when the rollback itself
+		// fails, and when it aborts on a render error without dialling anything.
+		// Only the message separates them.
+		Expect(replies).To(ContainElement(ContainSubstring("Rolled back to previous configuration")),
+			"the previous configuration must be restored, and the reply must say so")
+		Expect(replies).NotTo(ContainElement(ContainSubstring("Rolling back to previous configuration failed")),
+			"the rollback itself must succeed")
+
+		By("editing back to the reachable target")
+
+		goodActionUUID := uuid.New()
+
+		Expect(backend.enqueueEditProtocolConverter(
+			goodActionUUID, bridgeUUID, rollbackBridgeName,
+			rollbackReachableIP, rollbackReachablePort,
+			rollbackReadDFCPayload(),
+		)).To(Succeed())
+
+		// The positive control. Without it, a harness that fails every edit for
+		// its own reasons satisfies everything above.
+		var goodState models.ActionReplyState
+
+		Eventually(func() bool {
+			state, terminal := backend.lastReplyState(goodActionUUID)
+			if terminal {
+				goodState = state
+			}
+
+			return terminal
+		}, 150*time.Second, 1*time.Second).Should(BeTrue(),
+			"the second edit must produce a terminal action-reply")
+
+		goodReplies := backend.replyDump(goodActionUUID)
+
+		AddReportEntry(fmt.Sprintf("NMAP_BACKEND=%s reply history (edit back)", nmapBackend), strings.Join(goodReplies, "\n"))
+
+		Expect(goodState).To(Equal(models.ActionFinishedSuccessfull),
+			"an edit to a reachable target must succeed, or the check rejects everything and the "+
+				"assertions above prove nothing")
 	})
 }
 
