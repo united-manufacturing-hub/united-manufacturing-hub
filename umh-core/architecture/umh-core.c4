@@ -419,7 +419,7 @@ model {
 
 views {
 
-  view context of umhCore {
+  view index of umhCore {
     title 'L1 - System context'
     description '''
       Who talks to umh-core, and which side opens the connection. The engineer
@@ -440,15 +440,37 @@ views {
   view containers of umhCore {
     title 'L2 - Containers'
     description '''
-      The s6 supervision tree. Every box except the three stores is a real
-      service directory under /run/service. Bridge-scoped processes are drawn
-      once; in practice there is one read flow, one write flow and two monitors
-      per bridge.
+      The s6 supervision tree, grouped by how many of each exist. Every box
+      except the three stores is a real service directory under /run/service.
+      The per-bridge group is drawn once but instantiated per bridge, which is
+      how sixteen bridges become seventy-three processes.
     '''
 
-    include
-      managementConsole, device, externalSink,
-      umhCore.*
+    include managementConsole, device, externalSink
+
+    group 'One per bridge' {
+      include
+        umhCore.benthosRead,
+        umhCore.benthosWrite,
+        umhCore.benthosMonitor,
+        umhCore.nmapScanner
+    }
+
+    group 'One per instance' {
+      include
+        umhCore.agent,
+        umhCore.agentLog,
+        umhCore.topicBrowser,
+        umhCore.redpanda,
+        umhCore.redpandaMonitor
+    }
+
+    group 'On disk' {
+      include
+        umhCore.configFile,
+        umhCore.s6Logs,
+        umhCore.redpandaStorage
+    }
 
     autoLayout TopBottom
   }

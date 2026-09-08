@@ -12,7 +12,12 @@ be listed in its `SUMMARY.md`.
 
 Three views, one per C4 level. Open them all with `npx likec4 start`.
 
-### `context` — level 1, 5 boxes
+The level-1 view is named `index`, which makes it the landing view. LikeC4
+auto-generates a landscape view when a model declares no `index`, and for a
+model with a single system in focus that landscape and the C4 context diagram
+are the same picture.
+
+### `index` — level 1, 5 boxes
 
 Who talks to umh-core and which side opens the connection. The OT engineer,
 ManagementConsole, the industrial device, and whatever external system a bridge
@@ -21,17 +26,17 @@ writes to.
 Read it for one thing: every arrow to the cloud points outward. The engineer
 reaches the gateway through the console, never by connecting to it.
 
-### `containers` — level 2, 15 boxes
+### `containers` — level 2, 15 boxes in three groups
 
-What actually runs inside the Docker container. Twelve boxes inside the system
-boundary: the agent, the benthos read and write flows, the topic browser, the
-monitors, the nmap scanner, Redpanda, and the three stores. Plus the three
-external systems, for context.
+What actually runs inside the Docker container, grouped by how many of each
+exist: one per bridge, one per instance, and the three things on disk.
 
 This is the view to show someone new. "One Docker container" and "one process"
 sound like the same thing until you see this, and the answer is 73 processes on
-a 16-bridge instance. The nmap scanner carries an `fsmv1-only` tag because it
-does not exist on the fsmv2 backend, where the agent dials the target itself.
+a 16-bridge instance. The grouping is where that number comes from: the
+per-bridge group is drawn once and instantiated sixteen times. The nmap scanner
+carries an `fsmv1-only` tag because it does not exist on the fsmv2 backend,
+where the agent dials the target itself.
 
 ### `agentComponents` — level 3, 14 boxes
 
