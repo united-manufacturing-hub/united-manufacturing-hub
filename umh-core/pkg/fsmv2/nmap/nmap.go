@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 const (
@@ -47,7 +47,7 @@ const (
 type NmapStatus struct {
 	// Target is the hostname or IP address the scan dialed.
 	Target string `json:"target"`
-	// PortState is one of nmapfsm.PortStateOpen or nmapfsm.PortStateClosed.
+	// PortState is one of nmapservice.PortStateOpen or nmapservice.PortStateClosed.
 	PortState string `json:"port_state"`
 	// LatencyMs is the dial round-trip time in milliseconds. Zero unless the
 	// port is open.
@@ -92,7 +92,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 
 		return NmapStatus{
 			Target:    cfg.NmapServiceConfig.Target,
-			PortState: string(nmapfsm.PortStateClosed),
+			PortState: string(nmapservice.PortStateClosed),
 			Port:      cfg.NmapServiceConfig.Port,
 			ScannedAt: start,
 		}, nil
@@ -103,7 +103,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 
 	return NmapStatus{
 		Target:    cfg.NmapServiceConfig.Target,
-		PortState: string(nmapfsm.PortStateOpen),
+		PortState: string(nmapservice.PortStateOpen),
 		LatencyMs: elapsedMs,
 		Port:      cfg.NmapServiceConfig.Port,
 		IsRunning: true,

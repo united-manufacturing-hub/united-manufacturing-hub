@@ -206,7 +206,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 		// first tick rather than wait out the timeout. This guards the opposite
 		// error: a check that never matches would fail every healthy edit after
 		// 30s, which is worse than the bug it replaces.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapfsm.PortStateOpen))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateOpen))
 
 		elapsed, err := runAwaitRollout("dest.example.com")
 		Expect(err).NotTo(HaveOccurred(),
@@ -220,7 +220,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 		// stamps the requested port onto a closed result too, so one poll after
 		// the edit the numbers match regardless of whether anything answered. A
 		// confirmed-closed port must not report a successful rollout.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapfsm.PortStateClosed))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateClosed))
 
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
@@ -253,7 +253,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 									IsRunning: true,
 									LastScan: &nmapsvc.NmapScanResult{
 										PortResult: nmapsvc.PortResult{
-											State: string(nmapfsm.PortStateClosed),
+											State: string(nmapsvc.PortStateClosed),
 											Port:  port,
 										},
 									},
@@ -288,7 +288,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 		// The connection FSM defines up as open and counts filtered (and all
 		// five non-open states) as down. Requiring open here makes the gate
 		// agree with that definition rather than inventing a second one.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapfsm.PortStateFiltered))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateFiltered))
 
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
@@ -349,7 +349,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 		})
 
 		It("reports a scanned-and-open resolved endpoint as a successful rollout, promptly", func() {
-			stageSnapshotOnPort(timescaleHost, timescaleHost, protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapfsm.PortStateOpen), timescalePort)
+			stageSnapshotOnPort(timescaleHost, timescaleHost, protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateOpen), timescalePort)
 
 			elapsed, err := runAwaitRolloutOnPort("{{ .historian.timescale.host }}", 0)
 			Expect(err).NotTo(HaveOccurred(),

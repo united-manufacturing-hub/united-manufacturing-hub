@@ -49,11 +49,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -676,7 +676,7 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 						// on fsmv2 and "the scanner process is up" on fsmv1, so on
 						// fsmv1 it is true for a port that never answered.
 						portIsOpen := nmapObs.ServiceInfo.NmapStatus.LastScan != nil &&
-							nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapfsm.PortStateOpen)
+							nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapservice.PortStateOpen)
 
 						if nmapPort != wantConnectionPort {
 							currentStateReason = "waiting for nmap to connect to port " + wantConnectionPort

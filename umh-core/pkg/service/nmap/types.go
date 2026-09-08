@@ -82,6 +82,17 @@ type PortResult struct {
 	Port uint16 `json:"port"`
 }
 
+type PortState string
+
+const (
+	PortStateOpen           PortState = "open"
+	PortStateFiltered       PortState = "filtered"
+	PortStateClosed         PortState = "closed"
+	PortStateUnfiltered     PortState = "unfiltered"
+	PortStateOpenFiltered   PortState = "open|filtered"
+	PortStateClosedFiltered PortState = "closed|filtered"
+)
+
 // ScanMetrics contains overall metrics for the scan.
 type ScanMetrics struct {
 	// Total duration of scan in seconds
