@@ -104,12 +104,15 @@ type mcStack struct {
 	backendProc *exec.Cmd
 	routerProc  *exec.Cmd
 
-	mu        sync.Mutex
-	replies   map[uuid.UUID]models.ActionReplyState
-	replyMsgs map[uuid.UUID][]string
+	mu                    sync.Mutex
+	replies               map[uuid.UUID]models.ActionReplyState
+	terminalStates        map[uuid.UUID]models.ActionReplyState
+	replyMsgs             map[uuid.UUID][]string
+	lastPullFailureReason string
 
 	stopPoll chan struct{}
 	pollDone chan struct{}
+	polling  bool
 
 	logDir string
 }
@@ -144,8 +147,6 @@ func mcFreePort() (int, error) {
 	return ln.Addr().(*net.TCPAddr).Port, nil
 }
 
-// buildMCBinaries builds the backend and router binaries once from the pulled
-// source.
 func buildMCBinaries() (string, string, error) {
 	mcBuildOnce.Do(func() {
 		dir, err := mcDir()
@@ -169,13 +170,26 @@ func buildMCBinaries() (string, string, error) {
 		reqSrc := filepath.Join(dir, "frontend", "static", "requirements.json")
 
 		reqDst := filepath.Join(backendDir, "cmd", "demo_simulator_v3", "requirements.json")
-		if data, err := os.ReadFile(reqSrc); err == nil {
-			_ = os.WriteFile(reqDst, data, 0o644)
+
+		data, err := os.ReadFile(reqSrc)
+		if err != nil {
+			mcBuildErr = fmt.Errorf("read %s, which the backend build embeds: %w", reqSrc, err)
+
+			return
 		}
 
-		binDir, err := os.MkdirTemp("", "mc-bins-")
-		if err != nil {
-			mcBuildErr = err
+		if err := os.WriteFile(reqDst, data, 0o644); err != nil {
+			mcBuildErr = fmt.Errorf("write %s: %w", reqDst, err)
+
+			return
+		}
+
+		// One fixed directory rather than a fresh MkdirTemp per run: the binaries
+		// are memoized for the whole process and nothing owns them afterwards, so
+		// a per-run directory accumulates a backend and a router on every run.
+		binDir := filepath.Join(os.TempDir(), "umh-mc-bins")
+		if err := os.MkdirAll(binDir, 0o755); err != nil {
+			mcBuildErr = fmt.Errorf("create %s: %w", binDir, err)
 
 			return
 		}
@@ -221,13 +235,14 @@ func newMCStack(ctx context.Context) (*mcStack, error) {
 	}
 
 	s := &mcStack{
-		jwtSecret:    hex.EncodeToString(secretBytes),
-		instanceUUID: uuid.New(),
-		userEmail:    mcUserEmail,
-		replies:      make(map[uuid.UUID]models.ActionReplyState),
-		replyMsgs:    make(map[uuid.UUID][]string),
-		stopPoll:     make(chan struct{}),
-		pollDone:     make(chan struct{}),
+		jwtSecret:      hex.EncodeToString(secretBytes),
+		instanceUUID:   uuid.New(),
+		userEmail:      mcUserEmail,
+		replies:        make(map[uuid.UUID]models.ActionReplyState),
+		terminalStates: make(map[uuid.UUID]models.ActionReplyState),
+		replyMsgs:      make(map[uuid.UUID][]string),
+		stopPoll:       make(chan struct{}),
+		pollDone:       make(chan struct{}),
 	}
 
 	for _, p := range []*int{&s.pgPort, &s.redisPort, &s.backendPort, &s.routerPort} {
@@ -248,7 +263,24 @@ func newMCStack(ctx context.Context) (*mcStack, error) {
 	s.pgContainer = "mc-pg-" + suffix
 	s.redisContainer = "mc-redis-" + suffix
 
-	// Postgres + Redis containers.
+	// Every failure below returns a nil stack, so the caller has nothing to call
+	// stop() on. The container names carry a fresh suffix per run, so a later run
+	// cannot reclaim them by name either, and stop() is what prints the backend
+	// and router logs. Without this the most likely failure, a backend that never
+	// reports healthy, leaves two containers holding four ports and takes its own
+	// diagnosis with it.
+	booted := false
+
+	defer func() {
+		if booted {
+			return
+		}
+
+		s.dumpLog("backend.log")
+		s.dumpLog("router.log")
+		s.stop()
+	}()
+
 	if _, err := runDockerCommand("run", "-d", "--name", s.pgContainer,
 		"-e", "POSTGRES_PASSWORD=password", "-e", "POSTGRES_DB="+mcDBName,
 		"-p", fmt.Sprintf("%d:5432", s.pgPort), mcPGImage); err != nil {
@@ -265,7 +297,7 @@ func newMCStack(ctx context.Context) (*mcStack, error) {
 		return nil, err
 	}
 
-	// Backend (migrates the schema on boot).
+	// The backend migrates the schema on boot.
 	if err := s.startBackend(backendBin); err != nil {
 		return nil, err
 	}
@@ -285,7 +317,7 @@ func newMCStack(ctx context.Context) (*mcStack, error) {
 		return nil, err
 	}
 
-	// Router (thin reverse proxy; boots on placeholder R2 creds).
+	// The router is a thin reverse proxy and boots on placeholder R2 credentials.
 	if err := s.startRouter(routerBin); err != nil {
 		return nil, err
 	}
@@ -294,7 +326,11 @@ func newMCStack(ctx context.Context) (*mcStack, error) {
 		return nil, fmt.Errorf("router never became healthy: %w", err)
 	}
 
+	s.polling = true
+
 	go s.pollUserQueue()
+
+	booted = true
 
 	return s, nil
 }
@@ -337,7 +373,10 @@ func (s *mcStack) waitForPostgres(ctx context.Context) error {
 }
 
 func (s *mcStack) startBackend(bin string) error {
-	dir, _ := mcDir()
+	dir, err := mcDir()
+	if err != nil {
+		return fmt.Errorf("locate the pulled ManagementConsole source: %w", err)
+	}
 
 	cmd := exec.Command(bin)
 	cmd.Dir = filepath.Join(dir, "backend")
@@ -373,7 +412,10 @@ func (s *mcStack) startBackend(bin string) error {
 }
 
 func (s *mcStack) startRouter(bin string) error {
-	dir, _ := mcDir()
+	dir, err := mcDir()
+	if err != nil {
+		return fmt.Errorf("locate the pulled ManagementConsole source: %w", err)
+	}
 
 	cmd := exec.Command(bin)
 	cmd.Dir = filepath.Join(dir, "router")
@@ -432,9 +474,6 @@ func (s *mcStack) seed(ctx context.Context) error {
 		return fmt.Errorf("seed company: %w", err)
 	}
 
-	// session_version must be set and match the minted token: GET /v2/user/pull
-	// resolves the user by numeric id and rejects the token if the row's
-	// session_version is nil or differs (auth.go ValidateTokenMiddleware).
 	s.sessionVersion = uuid.New().String()
 	if err := conn.QueryRow(ctx,
 		`INSERT INTO users (created_at, updated_at, email, password, company_id, session_version)
@@ -507,18 +546,13 @@ func (s *mcStack) apiURL() string {
 	return fmt.Sprintf("http://host.docker.internal:%d/api", s.routerPort)
 }
 
-// hostRouterURL is the base URL the TEST process (on the host) uses to reach the
-// router.
 func (s *mcStack) hostRouterURL() string {
 	return fmt.Sprintf("http://127.0.0.1:%d/api", s.routerPort)
 }
 
-// enqueueEditProtocolConverter sends an edit-protocol-converter action to the
-// instance by POSTing it to the real backend's user-push endpoint (through the
-// router), authenticated with the minted user cookie.
-// If readDFC is non-nil it is attached under the "readDFC" key so the edited
-// bridge keeps a non-empty DFC type (connection-gated rollout); a nil readDFC
-// produces a connection-only edit (DFCType empty).
+// enqueueEditProtocolConverter posts an edit-protocol-converter action to the
+// backend's user-push endpoint through the router, authenticated with the minted
+// user cookie.
 func (s *mcStack) enqueueEditProtocolConverter(actionUUID, pcUUID uuid.UUID, pcName, ip string, port uint32, readDFC map[string]any) error {
 	actionPayload := map[string]any{
 		"uuid": pcUUID.String(),
@@ -532,9 +566,7 @@ func (s *mcStack) enqueueEditProtocolConverter(actionUUID, pcUUID uuid.UUID, pcN
 		},
 	}
 
-	if readDFC != nil {
-		actionPayload["readDFC"] = readDFC
-	}
+	actionPayload["readDFC"] = readDFC
 
 	messageContent := models.UMHMessageContent{
 		MessageType: models.Action,
@@ -614,26 +646,58 @@ func (s *mcStack) pollUserQueue() {
 
 		resp, err := client.Do(req)
 		if err != nil {
+			s.notePullFailure(err.Error())
 			time.Sleep(500 * time.Millisecond)
 
 			continue
 		}
 
-		if resp.StatusCode == http.StatusOK {
-			var payload backend_api_structs.PullPayload
-			if err := json.NewDecoder(resp.Body).Decode(&payload); err == nil {
-				for _, msg := range payload.UMHMessages {
-					s.recordReply(msg)
-				}
-			}
+		if resp.StatusCode != http.StatusOK {
+			// A rejected pull is not retried faster than a failed one. Without
+			// the sleep an auth failure answers instantly and this loop floods
+			// the router for the whole wait, on the same host whose CPU the
+			// bridge needs to converge inside the rollout budget.
+			s.notePullFailure(fmt.Sprintf("pull returned status %d", resp.StatusCode))
+			_ = resp.Body.Close()
+			time.Sleep(500 * time.Millisecond)
+
+			continue
+		}
+
+		var payload backend_api_structs.PullPayload
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			// The pull pops the queue, so a batch lost here is lost for good and
+			// the spec would otherwise report a missing reply.
+			s.notePullFailure("decode: " + err.Error())
+		}
+
+		for _, msg := range payload.UMHMessages {
+			s.recordReply(msg)
 		}
 
 		_ = resp.Body.Close()
 	}
 }
 
-// recordReply decodes one pulled message and, if it is an action-reply, records
-// its state keyed by the action UUID.
+// notePullFailure keeps the most recent pull failure so a spec that times out
+// waiting for a reply can say why the queue went quiet.
+func (s *mcStack) notePullFailure(reason string) {
+	s.mu.Lock()
+	s.lastPullFailureReason = reason
+	s.mu.Unlock()
+
+	GinkgoWriter.Printf("user-queue pull failed: %s\n", reason)
+}
+
+// lastPullFailure returns the most recent pull failure, or "" if every pull has
+// succeeded.
+func (s *mcStack) lastPullFailure() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.lastPullFailureReason
+}
+
 func (s *mcStack) recordReply(msg models.UMHMessage) {
 	if msg.Content == "" {
 		return
@@ -641,6 +705,8 @@ func (s *mcStack) recordReply(msg models.UMHMessage) {
 
 	content, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
 	if err != nil {
+		GinkgoWriter.Printf("dropped a pulled message: decode failed: %v\n", err)
+
 		return
 	}
 
@@ -650,22 +716,36 @@ func (s *mcStack) recordReply(msg models.UMHMessage) {
 
 	raw, err := json.Marshal(content.Payload)
 	if err != nil {
+		GinkgoWriter.Printf("dropped an action-reply: re-marshal failed: %v\n", err)
+
 		return
 	}
 
 	var reply models.ActionReplyMessagePayload
 	if err := json.Unmarshal(raw, &reply); err != nil {
+		GinkgoWriter.Printf("dropped an action-reply: unmarshal failed: %v\n", err)
+
 		return
 	}
 
 	s.mu.Lock()
-	s.replies[reply.ActionUUID] = reply.ActionReplyState
+	// A terminal state is kept once seen. The pull returns batches, so a queued
+	// non-terminal reply can arrive after the terminal one and would otherwise
+	// overwrite it, leaving the spec waiting out its timeout.
+	if _, done := s.terminalStates[reply.ActionUUID]; !done {
+		s.replies[reply.ActionUUID] = reply.ActionReplyState
+
+		if reply.ActionReplyState == models.ActionFinishedSuccessfull ||
+			reply.ActionReplyState == models.ActionFinishedWithFailure {
+			s.terminalStates[reply.ActionUUID] = reply.ActionReplyState
+		}
+	}
+
 	s.replyMsgs[reply.ActionUUID] = append(s.replyMsgs[reply.ActionUUID],
 		fmt.Sprintf("%s: %v", reply.ActionReplyState, reply.ActionReplyPayload))
 	s.mu.Unlock()
 }
 
-// replyDump returns the ordered "state: message" history captured for the action.
 func (s *mcStack) replyDump(actionUUID uuid.UUID) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -676,32 +756,35 @@ func (s *mcStack) replyDump(actionUUID uuid.UUID) []string {
 	return out
 }
 
-// terminalReplyState returns the captured reply state for the action and whether
-// it is terminal (action-success or action-failure).
-func (s *mcStack) terminalReplyState(actionUUID uuid.UUID) (models.ActionReplyState, bool) {
+// lastReplyState returns the most recent reply state for the action and whether
+// it is terminal, meaning action-success or action-failure. Once a terminal
+// reply has arrived that state is what it returns.
+func (s *mcStack) lastReplyState(actionUUID uuid.UUID) (models.ActionReplyState, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if state, done := s.terminalStates[actionUUID]; done {
+		return state, true
+	}
 
 	state, ok := s.replies[actionUUID]
 	if !ok {
 		return "", false
 	}
 
-	terminal := state == models.ActionFinishedSuccessfull || state == models.ActionFinishedWithFailure
-
-	return state, terminal
+	return state, false
 }
 
 // loginSeen reports whether the container has completed at least one instance
 // login. The backend flips instances.verified to true on first login
 // (instance_login.go), so we poll that flag.
-func (s *mcStack) loginSeen() bool {
+func (s *mcStack) loginSeen() (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	conn, err := pgx.Connect(ctx, s.pgxURL())
 	if err != nil {
-		return false
+		return false, fmt.Errorf("connect to the seeded database: %w", err)
 	}
 
 	defer func() { _ = conn.Close(ctx) }()
@@ -710,16 +793,16 @@ func (s *mcStack) loginSeen() bool {
 	if err := conn.QueryRow(ctx,
 		`SELECT verified FROM instances WHERE uuid = $1`, s.instanceUUID.String(),
 	).Scan(&verified); err != nil {
-		return false
+		return false, fmt.Errorf("read instances.verified: %w", err)
 	}
 
-	return verified
+	return verified, nil
 }
 
 // stop tears down the poller, the two processes and the two containers, and
 // prints the backend and router logs on failure.
 func (s *mcStack) stop() {
-	if s.stopPoll != nil {
+	if s.polling {
 		close(s.stopPoll)
 
 		select {
@@ -754,6 +837,8 @@ func (s *mcStack) stop() {
 func (s *mcStack) dumpLog(name string) {
 	data, err := os.ReadFile(filepath.Join(s.logDir, name))
 	if err != nil {
+		GinkgoWriter.Printf("no %s to show: %v\n", name, err)
+
 		return
 	}
 
@@ -774,17 +859,30 @@ func mcWaitHTTP(url string, timeout time.Duration) error {
 	client := &http.Client{Timeout: 3 * time.Second}
 	deadline := time.Now().Add(timeout)
 
+	lastReason := "no attempt completed"
+
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(url)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode < 500 {
-				return nil
-			}
+		if err != nil {
+			lastReason = err.Error()
+
+			time.Sleep(1 * time.Second)
+
+			continue
 		}
+
+		_ = resp.Body.Close()
+
+		// 2xx only. These routes belong to the pulled ManagementConsole tree, so
+		// a renamed route there would answer 404 and read as healthy.
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return nil
+		}
+
+		lastReason = fmt.Sprintf("status %d", resp.StatusCode)
 
 		time.Sleep(1 * time.Second)
 	}
 
-	return fmt.Errorf("%s not reachable within %s", url, timeout)
+	return fmt.Errorf("%s not reachable within %s, last attempt: %s", url, timeout, lastReason)
 }
