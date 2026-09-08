@@ -6,7 +6,7 @@
 
 - Editing a bridge's connection to a port that does not answer now fails and restores the previous configuration, instead of reporting a successful deploy. The deploy waits for a scan that finds the new port open, so a port that is closed or filtered is no longer accepted
 - Repointing a bridge to a different host on the same port is now checked too. The deploy waits for a scan taken after the change, so the previous host's scan can no longer satisfy it
-- The check now covers a bridge that already has a read or write flow, not only one without flows. Editing a flow without changing the connection is unaffected
+- Editing a bridge that already has a read or write flow now verifies the new connection as well, not only a bridge without flows. Such an edit previously reported success as soon as the flow was applied, even when the new address never answered
 
 ## [0.44.38]
 
