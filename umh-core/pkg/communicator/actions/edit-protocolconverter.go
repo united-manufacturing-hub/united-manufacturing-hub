@@ -357,7 +357,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	// Await rollout and perform health checks
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, err := a.awaitRollout(oldConfig, newSpec.ProtocolConverterServiceConfig, desiredPCState)
+		errCode, err := a.awaitRollout(oldConfig, newSpec, desiredPCState)
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -519,10 +519,10 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
 //
-// previousConfig is the pre-edit configuration, used to roll back on failure. newSpec is
-// the specification this edit just persisted, used to resolve the endpoint the nmap
-// gate expects the scan to dial.
-func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.ProtocolConverterConfig, newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, desiredPCState string) (string, error) {
+// previousConfig is the pre-edit configuration, written back verbatim to roll back on
+// failure. newConfig is the configuration this edit just persisted; its spec resolves
+// the endpoint the nmap gate expects the scan to dial.
+func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.ProtocolConverterConfig, newConfig config.ProtocolConverterConfig, desiredPCState string) (string, error) {
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
@@ -676,7 +676,7 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 					// because a stopped bridge stops its nmap service too and
 					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
-						resolved, renderErr := a.resolvedConnectionEndpoint(newSpec)
+						resolved, renderErr := a.resolvedConnectionEndpoint(newConfig.ProtocolConverterServiceConfig)
 						if renderErr != nil {
 							a.lastRenderErr = renderErr
 							currentStateReason = "waiting to resolve the bridge's connection endpoint"
