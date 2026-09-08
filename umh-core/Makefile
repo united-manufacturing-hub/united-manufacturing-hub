@@ -441,13 +441,16 @@ badssl-test: pre-test
 ###############################################################################
 MC_REPO ?= united-manufacturing-hub/ManagementConsole
 MC_REF ?= staging
-MC_DIR := $(SRC_ROOT)/umh-core/integration/managementconsole
+# Dot-prefixed on purpose: both `go ./...` and ginkgo's own -r directory walk
+# skip names starting with a dot, so the pulled tree cannot be discovered as a
+# package by any other target in this Makefile.
+MC_DIR := $(SRC_ROOT)/umh-core/integration/.managementconsole
 
 .PHONY: pull-managementconsole connection-rollback-test
 
 pull-managementconsole: ## Pull backend+router source from the private ManagementConsole repo (needs `gh` access)
 	@command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI not found — install https://cli.github.com"; exit 1; }
-	@gh auth status >/dev/null 2>&1 || { echo "❌ Not logged in to GitHub — run: gh auth login"; exit 1; }
+	@gh auth status >/dev/null 2>&1 || { echo "❌ Not logged in to GitHub. Locally: gh auth login. In CI: export GH_TOKEN with read access to $(MC_REPO)"; exit 1; }
 	@echo "📥 Pulling ManagementConsole ($(MC_REF)) backend+router into $(MC_DIR) ..."
 	@rm -rf "$(MC_DIR)"
 	@mkdir -p "$(MC_DIR)"
@@ -463,9 +466,10 @@ pull-managementconsole: ## Pull backend+router source from the private Managemen
 	@printf '✅ ManagementConsole source ready (commit %s)\n' "$$(git -C '$(MC_DIR)' rev-parse --short HEAD)"
 
 # Runs the fsmv1+fsmv2 connection-edit rollback specs against the real
-# ManagementConsole backend+router. Pulls the source first (idempotent).
-# --skip-package keeps ginkgo's -r discovery out of the pulled ManagementConsole
-# tree, whose packages do not compile under the test runner.
+# ManagementConsole backend+router. Re-clones the source on every run, so it
+# needs network access and `gh` auth each time.
+# --skip-package is belt and braces: MC_DIR is dot-prefixed, which already keeps
+# the pulled tree out of the -r walk.
 connection-rollback-test: pull-managementconsole build-protobuf
 	FORCE_DOCKER=true VERSION=$(VERSION) MC_DIR="$(MC_DIR)" \
 	  go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test \
