@@ -56,13 +56,8 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		mu        sync.Mutex
 	)
 
-	// stageSnapshotScannedAt stages the desired connection config and the
-	// observed scan separately, so a spec can stage a connection edited to a new
-	// target whose scan has not caught up yet. portState distinguishes "not yet
-	// scanned" from "scanned and found closed", which awaitRollout treats
-	// differently; scannedPort can differ from the payload port, which is how a
-	// templated connection is staged; scannedAt is explicit because a spec
-	// stages its snapshot before Execute persists the config.
+	// Desired and observed sides are staged independently, so a spec can stage a
+	// connection edited to a target whose scan has not caught up yet.
 	stageSnapshotScannedAt := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16, scannedAt time.Time) {
 		observed := &protocolconverter.ProtocolConverterObservedStateSnapshot{
 			ServiceInfo: protocolconvertersvc.ServiceInfo{
@@ -111,21 +106,15 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		})
 	}
 
-	// stageSnapshotOnPort stamps the scan after the edit, the case every spec
-	// about a converged rollout is in.
 	stageSnapshotOnPort := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16) {
 		stageSnapshotScannedAt(desiredTarget, observedTarget, pcState, portState, scannedPort, time.Now().Add(time.Minute))
 	}
 
-	// stageSnapshot stages a scan of the port the payload asks for, the case
-	// every non-templated connection is in.
 	stageSnapshot := func(desiredTarget string, observedTarget string, pcState string, portState string) {
 		stageSnapshotOnPort(desiredTarget, observedTarget, pcState, portState, port)
 	}
 
-	// runAwaitRolloutOnPort drives a real awaitRollout Execute in a goroutine
-	// with the given payload connection, and returns the resulting error and the
-	// wall-clock time it took.
+	// Drives a real Execute in a goroutine and returns the error and elapsed time.
 	runAwaitRolloutOnPort := func(ip string, payloadPort uint32) (time.Duration, error) {
 		a := actions.NewEditProtocolConverterAction(
 			"probe@example.com", uuid.New(), uuid.New(), outbound, mockCfg, snapMgr)
@@ -160,8 +149,6 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		return got.elapsed, got.err
 	}
 
-	// runAwaitRollout edits a connection to ip on the payload port, the case
-	// every non-templated connection is in.
 	runAwaitRollout := func(ip string) (time.Duration, error) {
 		return runAwaitRolloutOnPort(ip, uint32(port))
 	}
@@ -203,11 +190,8 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	AfterEach(func() { close(outbound) })
 
 	It("reports a scanned-and-open port as a successful rollout, promptly", func() {
-		// Regression guard: when the observed scan has caught up to the
-		// requested port and reports it open, awaitRollout must succeed on the
-		// first tick rather than wait out the timeout. This guards the opposite
-		// error: a check that never matches would fail every healthy edit after
-		// 30s, which is worse than the bug it replaces.
+		// A check that never matches would fail every healthy edit after 30s,
+		// which is worse than the bug it replaces.
 		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateOpen))
 
 		elapsed, err := runAwaitRollout("dest.example.com")
@@ -218,10 +202,8 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	})
 
 	It("reports failure when the port was scanned but found closed", func() {
-		// The bug: the check's only condition was port-number equality. Poll
-		// stamps the requested port onto a closed result too, so one poll after
-		// the edit the numbers match regardless of whether anything answered. A
-		// confirmed-closed port must not report a successful rollout.
+		// Poll stamps the requested port onto a closed result too, so the numbers
+		// match one poll after the edit whether or not anything answered.
 		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateClosed))
 
 		_, err := runAwaitRollout("dest.example.com")
@@ -230,12 +212,8 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	})
 
 	It("reports failure when the only open scan on record predates the edit", func() {
-		// nmap's observed endpoint is re-read from the generated scan script,
-		// which is rewritten when the edit is persisted, so it names the new
-		// endpoint before the scanner has been rebuilt and dialed it. Staging an
-		// open scan from before the edit reproduces that window: both halves of
-		// the endpoint match and the scan says open, yet nothing has dialed the
-		// new endpoint.
+		// Stages the window where the observed endpoint already echoes the new
+		// scan script and the scan says open, yet nothing has dialed it.
 		stageSnapshotScannedAt(
 			"dest.example.com",
 			"dest.example.com",
@@ -251,11 +229,8 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	})
 
 	It("reports failure when the scanner is running but the port is not open", func() {
-		// IsRunning means different things per backend: the port accepted the
-		// connection on fsmv2, but only "the scanner process is up" on fsmv1.
-		// A check keyed on it would pass on fsmv1 for a port that never answered,
-		// and the other specs cannot catch that swap because they leave
-		// IsRunning false, so the healthy spec would be the only one to redden.
+		// The other specs leave IsRunning false, so swapping the check to trust it
+		// would redden only the healthy spec. This one catches that swap.
 		observed := &protocolconverter.ProtocolConverterObservedStateSnapshot{
 			ServiceInfo: protocolconvertersvc.ServiceInfo{
 				ConnectionObservedState: connfsm.ConnectionObservedState{
@@ -308,9 +283,9 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	})
 
 	It("reports failure when the port was scanned but found filtered", func() {
-		// The connection FSM defines up as open and counts filtered (and all
-		// five non-open states) as down. Requiring open here makes the check
-		// agree with that definition rather than inventing a second one.
+		// The connection FSM counts filtered, and every other non-open state, as
+		// down. Requiring open here agrees with that instead of inventing a
+		// second definition.
 		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateFiltered))
 
 		_, err := runAwaitRollout("dest.example.com")

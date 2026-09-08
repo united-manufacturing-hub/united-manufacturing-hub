@@ -110,13 +110,8 @@ type EditProtocolConverterAction struct {
 	configManager config.ConfigManager
 
 	fsmLogger deps.FSMLogger
-	// lastRenderErr holds the most recent render error, from
-	// renderDesiredDFCConfig or from the connection render that resolves the
-	// connection check's expected port, so the awaitRollout timeout message can
-	// name the real cause instead of just "did not become active in time".
-	// It is sticky: compareSingleDFCConfig clears it only when a later render
-	// succeeds, so ticks that never reach a render (for example while Benthos
-	// restarts) keep the captured cause.
+	// Sticky: compareSingleDFCConfig clears it only when a later render succeeds,
+	// so a tick that never reaches a render keeps the captured cause.
 	lastRenderErr error
 
 	// lastFailedDFCType records which DFC (read/write) produced the most
@@ -166,11 +161,9 @@ type EditProtocolConverterAction struct {
 	// Parsed request payload (only populated after Parse)
 	protocolConverterUUID uuid.UUID
 
-	// persistedAt is when the edit reached config.yaml. The connection check needs
-	// it because a scan is only evidence about the new endpoint if it started
-	// after the config changed: nmap's observed endpoint is re-read from the
-	// generated scan script, which is rewritten at persist time, so it names the
-	// new endpoint several ticks before anything dials it.
+	// nmap's observed endpoint is re-read from the generated scan script, which is
+	// rewritten at persist time, so it names the new endpoint several ticks before
+	// anything dials it. Only a scan started after this is evidence.
 	persistedAt time.Time
 
 	// rolloutSentryReported tells Execute to skip the generic rollout_failed
@@ -518,10 +511,6 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 // The function returns the error code and the error message via an error object.
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
-//
-// previousConfig is the pre-edit configuration, written back verbatim to roll back on
-// failure. newConfig is the configuration this edit just persisted; its spec resolves
-// the endpoint the nmap connection check expects the scan to dial.
 func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.ProtocolConverterConfig, newConfig config.ProtocolConverterConfig, desiredPCState string) (string, error) {
 	SendActionReply(
 		a.instanceUUID,
@@ -564,9 +553,6 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 		prevRenderErrMsg     string
 		identicalRenderFails int
 
-		// currentStateReason holds what the most recent tick was waiting for. The
-		// timeout branch reads it, so a rollback message names the half that never
-		// arrived instead of only saying the bridge did not become active.
 		currentStateReason string
 	)
 
@@ -654,9 +640,8 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 				currentStateReason = "current state: " + instance.CurrentState
 
 				if a.dfcType == DFCTypeEmpty {
-					// Unreachable today: applyMutation forces the bridge to
-					// active, so desiredPCState is never stopped here. Kept
-					// because a stopped bridge stops its nmap service too and
+					// Unreachable while applyMutation forces the bridge active.
+					// Kept because a stopped bridge stops its nmap service and
 					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
 						if waitingFor := a.connectionCheckWait(newConfig, pcSnapshot); waitingFor != "" {
@@ -1160,12 +1145,10 @@ func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any, in
 // connectionCheckWait reports what the connection check is still waiting for,
 // or "" when the scan agrees with the endpoint this edit persisted.
 //
-// The endpoint comes from the persisted spec, not from the action payload: a
-// templated connection resolves only at render time, and get-protocolconverter
-// hands the raw template back when the spec carries no IP/PORT variables, so
-// the payload can name a target and port 0 that no scan will ever report.
-// Called once per tick, so a transient config-read failure heals instead of
-// failing the edit; a deterministic one repeats and the timeout names it.
+// The endpoint is rendered from the persisted spec, never taken from the action
+// payload: get-protocolconverter hands back the raw connection template when
+// the spec carries no IP/PORT variables, so a payload can name an unresolved
+// target on port 0 that no scan will ever report.
 func (a *EditProtocolConverterAction) connectionCheckWait(
 	newConfig config.ProtocolConverterConfig,
 	pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot,
@@ -1183,27 +1166,21 @@ func (a *EditProtocolConverterAction) connectionCheckWait(
 	scannedEndpoint := nmapObs.ObservedNmapServiceConfig.Target + ":" +
 		strconv.FormatUint(uint64(nmapObs.ObservedNmapServiceConfig.Port), 10)
 
-	// Both halves must match. The port alone accepts a move to a different host
-	// on the same port: the number agrees, the old host's scan says that port is
-	// open, and nothing has dialed the new host (ENG-5586).
+	// Comparing the port alone accepts a move to a different host on the same
+	// port: the old host's scan reports it open and nothing dialed the new host.
 	if scannedEndpoint != wantEndpoint {
 		return "waiting for nmap to scan " + wantEndpoint
 	}
 
-	// The observed endpoint is re-read from the generated scan script, which is
-	// rewritten when the edit is persisted, so it names the new endpoint before
-	// the scanner has been rebuilt and dialed it. Requiring the scan to have
-	// started after the persist is what makes the endpoint match evidence rather
-	// than an echo. A bridge with no scan at all fails here too.
+	// The observed endpoint echoes the regenerated scan script, so it names the
+	// new endpoint before the scanner has dialed it.
 	lastScan := nmapObs.ServiceInfo.NmapStatus.LastScan
 	if lastScan == nil || !lastScan.Timestamp.After(a.persistedAt) {
 		return "waiting for a scan of " + wantEndpoint + " taken after the edit"
 	}
 
-	// Endpoint equality alone cannot tell a live port from a refused one, so
-	// require the scan to report open. Do not use IsRunning: it means the port
-	// accepted the connection on fsmv2 and "the scanner process is up" on fsmv1,
-	// so on fsmv1 it is true for a port that never answered.
+	// Do not use IsRunning instead: it means the port answered on fsmv2 but only
+	// "the scanner process is up" on fsmv1, where a refused port reads true.
 	if lastScan.PortResult.State != string(nmapservice.PortStateOpen) {
 		return "waiting for nmap to report " + wantEndpoint + " open (last scan: " + lastScan.PortResult.State + ")"
 	}
@@ -1211,14 +1188,11 @@ func (a *EditProtocolConverterAction) connectionCheckWait(
 	return ""
 }
 
-// resolvedConnectionEndpoint renders the connection template of the
-// just-persisted spec and returns the endpoint the nmap scan is expected to
-// dial, in the same type the observed scan config carries.
+// resolvedConnectionEndpoint renders the just-persisted spec's connection
+// template and returns the endpoint the scan is expected to dial.
 //
-// It renders with the same inputs the agent uses: the persisted spec (which
-// already carries the edit's merged variables), the agent location, and the
-// historian section read from the config manager. So the endpoint returned here
-// is the endpoint the control loop will make the scanner dial.
+// It renders with the same inputs the agent uses, so the endpoint returned here
+// is the one the control loop will make the scanner dial.
 func (a *EditProtocolConverterAction) resolvedConnectionEndpoint(newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec) (nmapserviceconfig.NmapServiceConfig, error) {
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)
