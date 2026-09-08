@@ -14,11 +14,10 @@
 
 package integration_test
 
-// mcStack boots the REAL ManagementConsole backend + router (built from source
-// pulled by `make pull-managementconsole`) and drives a real umh-core container
-// through them end-to-end, exactly the way ManagementConsole's own Playwright
-// e2e suite runs them: backend and router as local Go processes, Postgres and
-// Redis as throwaway Docker containers.
+// mcStack boots the ManagementConsole backend and router from source pulled by
+// `make pull-managementconsole` and drives a umh-core container through them,
+// the way ManagementConsole's own Playwright suite runs them: both as local Go
+// processes, with Postgres and Redis as throwaway Docker containers.
 //
 //	                 test process (the "user")
 //	          POST /api/v2/user/push  |  GET /api/v2/user/pull
@@ -27,9 +26,7 @@ package integration_test
 //	   login/pull/push        strips /api          v2/instance/*, v2/user/*
 //
 // The backend is a passthrough relay for the message Content, so umh-core keeps
-// using its own corev1 codec (base64(JSON), no encryption). What is real here
-// and cannot be faked: instance login against a DB row, JWT-scoped user auth,
-// and the v3 Redis message queue routing.
+// using its own corev1 codec (base64(JSON), no encryption).
 
 import (
 	"context"

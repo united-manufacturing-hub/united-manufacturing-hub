@@ -432,8 +432,8 @@ badssl-test: pre-test
 ###############################################################################
 # ManagementConsole integration dependencies
 #
-# The connection-edit-rollback specs drive umh-core through the *real*
-# ManagementConsole backend + router, run as local Go processes exactly the way
+# The connection-edit-rollback specs drive umh-core through the ManagementConsole
+# backend and router, run as local Go processes the way
 # ManagementConsole's own Playwright e2e suite runs them. That source lives in
 # the private united-manufacturing-hub/ManagementConsole repo, so we pull only
 # the folders needed to build the two binaries using the developer's `gh`
