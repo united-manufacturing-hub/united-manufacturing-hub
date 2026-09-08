@@ -1,0 +1,496 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// C4 model of umh-core. LikeC4 does not enforce C4's abstraction levels, so the
+// element kinds below are declared to match them exactly and nothing else may be
+// added: person, softwareSystem, container, store, component. A store is a
+// container-level element in C4 terms; it is a separate kind here only so the
+// generated legend can say that it is not a running process.
+
+specification {
+
+  color signal #16607f
+  color legacy #8f5d14
+  color neutral #6d7d87
+
+  element person {
+    notation 'Person. A human role, outside every system boundary.'
+    style {
+      shape person
+      color signal
+    }
+  }
+
+  element softwareSystem {
+    notation 'Software system. The highest level of abstraction.'
+    style {
+      color signal
+    }
+  }
+
+  element container {
+    notation 'Container. A separately runnable process. Every one is an s6 service under /run/service.'
+    style {
+      color sky
+    }
+  }
+
+  element store {
+    notation 'Store. A container-level element that holds data rather than running. Never appears under /run/service.'
+    style {
+      shape storage
+      color legacy
+    }
+  }
+
+  element component {
+    notation 'Component. A grouping of responsibility inside a single process.'
+    style {
+      shape rectangle
+      color indigo
+    }
+  }
+
+  tag external {
+    color neutral
+  }
+
+  tag fsmv1-only {
+    color amber
+  }
+
+  relationship supervises {
+    title 'supervises'
+    notation 'Creates the s6 service directory, starts it, and removes it.'
+  }
+}
+
+model {
+
+  otEngineer = person 'OT engineer' {
+    description '''
+      Operational-technology engineer. Configures bridges and reads instance
+      status through the cloud console, never by logging into the gateway.
+    '''
+  }
+
+  managementConsole = softwareSystem 'ManagementConsole' {
+    #external
+    description '''
+      Cloud control plane. Holds the fleet, renders the bridge wizard, and
+      queues actions for each instance.
+    '''
+  }
+
+  device = softwareSystem 'Industrial device' {
+    #external
+    description '''
+      PLC (programmable logic controller), gateway or historian endpoint,
+      reachable over OPC UA, Modbus, S7 and similar industrial protocols.
+    '''
+  }
+
+  externalSink = softwareSystem 'External sink' {
+    #external
+    description '''
+      A system a bridge writes to rather than reads from, such as the
+      historian's TimescaleDB.
+    '''
+  }
+
+  umhCore = softwareSystem 'umh-core' {
+    description '''
+      Edge gateway. One Docker container running an s6 supervision tree.
+      config.yaml is the source of truth for everything inside it.
+    '''
+
+    agent = container 'umh-core agent' {
+      technology 'Go'
+      description '''
+        Single process holding every FSM (finite state machine), the reconcile
+        loop and the cloud transport. Runs as the s6 service named umh-core.
+      '''
+
+      communicator = component 'Communicator' {
+        technology 'Go'
+        description '''
+          Logs in, pulls queued actions and pushes status. The agent dials out;
+          ManagementConsole never dials in.
+        '''
+        metadata {
+          package 'pkg/communicator'
+        }
+      }
+
+      actions = component 'Actions dispatcher' {
+        technology 'Go'
+        description '''
+          Executes one queued action: parse the payload, change the config, then
+          wait for the FSM to confirm the rollout before reporting success.
+        '''
+        metadata {
+          package 'pkg/communicator/actions'
+        }
+      }
+
+      configManager = component 'Config manager' {
+        technology 'Go'
+        description '''
+          Reads and rewrites config.yaml under a lock, taking a backup after
+          each write. The only writer inside the agent.
+        '''
+        metadata {
+          package 'pkg/config'
+        }
+      }
+
+      controlLoop = component 'Reconcile loop' {
+        technology 'Go'
+        description '''
+          One reconcile cycle at a time; within a cycle the manager tree fans
+          out across goroutines. Keeps observed state converging on config.yaml.
+        '''
+        metadata {
+          package 'pkg/control'
+        }
+      }
+
+      fsmv1 = component 'FSMv1 manager tree' {
+        technology 'Go'
+        description '''
+          The original state-machine layer. One manager per service type, each
+          owning the instances of that type.
+        '''
+        metadata {
+          package 'pkg/fsm'
+        }
+      }
+
+      fsmv2Runtime = component 'FSMv2 runtime' {
+        technology 'Go'
+        description '''
+          The replacement state-machine layer. Supervisor, one collector
+          goroutine per worker, and the asynchronous action executor.
+        '''
+        metadata {
+          package 'pkg/fsmv2/supervisor'
+        }
+      }
+
+      fsmv1Adapter = component 'FSMv1 adapter' {
+        technology 'Go'
+        description '''
+          Presents an FSMv2 worker as an FSMv1 manager and instance, so FSMv1
+          call sites are unchanged. Reads observations through the store client,
+          never through the supervisor.
+        '''
+        metadata {
+          package 'pkg/fsmv2/adapter'
+        }
+      }
+
+      triangularStore = component 'Triangular store' {
+        technology 'Go, in-memory'
+        description '''
+          Holds the three faces of every worker: Identity, Desired, Observed.
+          The collector is the only steady-state writer of Observed; the
+          supervisor seeds one initial observation when a worker is added.
+          In memory only: a restart loses it.
+        '''
+        metadata {
+          package 'pkg/cse/storage, pkg/persistence/memory'
+        }
+      }
+
+      serviceLayer = component 'Service layer' {
+        technology 'Go'
+        description '''
+          Renders what the FSM asks for into files on disk: benthos configs from
+          templates, and nmap scan scripts. Parses service logs back into
+          observed state.
+        '''
+        metadata {
+          package 'pkg/service'
+        }
+      }
+
+      s6Manager = component 'S6 service manager' {
+        technology 'Go'
+        description '''
+          Creates, updates and removes s6 service directories, and reads their
+          logs.
+        '''
+        metadata {
+          package 'pkg/service/s6'
+        }
+      }
+
+      registry = component 'Service registry' {
+        technology 'Go'
+        description '''
+          Filesystem access and port allocation, injected into every service so
+          tests can substitute them.
+        '''
+        metadata {
+          package 'pkg/serviceregistry, pkg/portmanager'
+        }
+      }
+    }
+
+    agentLog = container 'umh-core-log' {
+      technology 's6-log'
+      description 'Log service for the agent process. A 5 x 10 MB ring, unlike every other service.'
+    }
+
+    benthosRead = container 'Benthos read flow' {
+      technology 'benthos-umh'
+      description '''
+        One process per bridge that has a read flow. Speaks the industrial
+        protocol and publishes into the UNS (Unified Namespace).
+        Service name benthos-dataflow-read-protocolconverter-{bridge}.
+      '''
+    }
+
+    benthosWrite = container 'Benthos write flow' {
+      technology 'benthos-umh'
+      description '''
+        One process per bridge that has a write flow. Consumes from the UNS and
+        writes outward. Usually down (exitcode 0), because most bridges have
+        no write flow.
+      '''
+    }
+
+    topicBrowser = container 'Topic browser' {
+      technology 'benthos-umh'
+      description '''
+        One process per instance, not per bridge. Consumes umh.messages and
+        serves the topic tree to the console. Present on every instance,
+        including one with no bridges at all.
+      '''
+    }
+
+    benthosMonitor = container 'Benthos monitor' {
+      technology 'sh, curl'
+      description '''
+        A shell loop, one per benthos process. Curls /ping, /ready, /version and
+        /metrics once a second and writes gzip-then-hex blocks to its own log.
+      '''
+    }
+
+    nmapScanner = container 'Nmap scanner' {
+      #fsmv1-only
+      technology 'nmap'
+      description '''
+        One process per connection, on the FSMv1 backend only. Loops
+        nmap -n -Pn against the bridge's target and writes marker-delimited
+        results to its log. Under NMAP_BACKEND=fsmv2 this process does not
+        exist and the agent dials the target itself.
+      '''
+    }
+
+    redpanda = container 'Redpanda' {
+      technology 'Redpanda'
+      description '''
+        Embedded Kafka-compatible broker carrying the UNS topic umh.messages.
+        One per instance, shared by every bridge.
+      '''
+    }
+
+    redpandaMonitor = container 'Redpanda monitor' {
+      technology 'sh, curl'
+      description 'Health poller for the broker. Same poll loop as the benthos monitor.'
+    }
+
+    configFile = store 'config.yaml' {
+      technology 'YAML on /data'
+      description '''
+        The source of truth. Every benthos config is rendered from it into that
+        service's own directory at /run/service/{service}/config/benthos.yaml,
+        and is regenerated rather than edited.
+      '''
+    }
+
+    s6Logs = store 's6 log directories' {
+      technology 's6-log on /data/logs'
+      description '''
+        A per-service ring of 20 files, uncapped in size except for the benthos
+        monitors, which cap each file at 64 kB. A monitor's findings reach the agent
+        through these files.
+      '''
+    }
+
+    redpandaStorage = store 'Redpanda storage' {
+      technology 'Disk on /data/redpanda'
+      description 'Broker log segments.'
+    }
+  }
+
+  // ---- system context ----
+
+  otEngineer -> managementConsole 'configures bridges, reads status'
+  umhCore -> managementConsole 'pulls actions, pushes status' 'HTTPS'
+  umhCore -> device 'reads and writes process data'
+  umhCore -> externalSink 'writes to external systems'
+
+  // ---- containers ----
+
+  umhCore.agent -> managementConsole 'logs in, pulls actions, pushes status' 'HTTPS /v2/instance/*'
+  umhCore.agent -> umhCore.configFile 'reads, and rewrites under a lock on an accepted edit'
+  umhCore.agent -> umhCore.agentLog 'writes stdout and stderr'
+  umhCore.agent -[supervises]-> umhCore.benthosRead 'renders its config, then supervises'
+  umhCore.agent -[supervises]-> umhCore.benthosWrite 'renders its config, then supervises'
+  umhCore.agent -[supervises]-> umhCore.topicBrowser 'renders its config, then supervises'
+  umhCore.agent -[supervises]-> umhCore.benthosMonitor 'supervises'
+  umhCore.agent -[supervises]-> umhCore.nmapScanner 'generates the scan script, then supervises' {
+    #fsmv1-only
+  }
+  umhCore.agent -[supervises]-> umhCore.redpanda 'supervises'
+  umhCore.agent -[supervises]-> umhCore.redpandaMonitor 'supervises'
+  umhCore.agent -> umhCore.s6Logs 'reads and parses, to derive observed state'
+  umhCore.agent -> device 'dials the target port once a second' 'FSMv2 nmap backend'
+
+  umhCore.benthosMonitor -> umhCore.benthosRead 'polls four health endpoints' 'HTTP, 1 Hz'
+  umhCore.benthosMonitor -> umhCore.benthosWrite 'polls four health endpoints' 'HTTP, 1 Hz'
+  umhCore.benthosMonitor -> umhCore.topicBrowser 'polls four health endpoints' 'HTTP, 1 Hz'
+  umhCore.benthosMonitor -> umhCore.s6Logs 'writes gzip-then-hex blocks'
+  umhCore.nmapScanner -> device 'scans the configured port' 'nmap' {
+    #fsmv1-only
+  }
+  umhCore.nmapScanner -> umhCore.s6Logs 'writes marker-delimited scan results' {
+    #fsmv1-only
+  }
+  umhCore.redpandaMonitor -> umhCore.redpanda 'polls health'
+  umhCore.redpandaMonitor -> umhCore.s6Logs 'writes health blocks'
+
+  umhCore.benthosRead -> device 'reads process data' 'OPC UA, Modbus, S7'
+  umhCore.benthosRead -> umhCore.redpanda 'publishes to umh.messages'
+  umhCore.benthosWrite -> umhCore.redpanda 'consumes from umh.messages'
+  umhCore.benthosWrite -> device 'writes process data'
+  umhCore.benthosWrite -> externalSink 'writes historized tags'
+  umhCore.topicBrowser -> umhCore.redpanda 'consumes umh.messages to build the topic tree'
+  umhCore.redpanda -> umhCore.redpandaStorage 'persists log segments'
+
+  // ---- components of the agent ----
+
+  umhCore.agent.communicator -> managementConsole 'logs in, pulls, pushes' 'HTTPS'
+  umhCore.agent.communicator -> umhCore.agent.actions 'hands off one queued action'
+  umhCore.agent.communicator -> umhCore.agent.fsmv1 'reads snapshots to build the status push'
+
+  umhCore.agent.actions -> umhCore.agent.configManager 'changes the bridge entry'
+  umhCore.agent.actions -> umhCore.agent.fsmv1 'polls snapshots to confirm the rollout, or rolls the edit back'
+
+  umhCore.agent.controlLoop -> umhCore.agent.configManager 'reads the desired configuration'
+  umhCore.agent.controlLoop -> umhCore.agent.fsmv1 'ticks the manager tree once per cycle'
+
+  umhCore.agent.configManager -> umhCore.configFile 'reads and writes'
+
+  umhCore.agent.fsmv1 -> umhCore.agent.serviceLayer 'creates, updates and removes services'
+  umhCore.agent.fsmv1 -> umhCore.agent.fsmv1Adapter 'drives nmap workers' 'when NMAP_BACKEND=fsmv2'
+
+  umhCore.agent.fsmv1Adapter -> umhCore.agent.triangularStore 'reads observations, classified by age'
+  umhCore.agent.fsmv2Runtime -> umhCore.agent.triangularStore 'writes Observed, reads Desired'
+  umhCore.agent.fsmv2Runtime -> device 'dials the target port' 'nmap worker Poll'
+
+  umhCore.agent.serviceLayer -> umhCore.agent.s6Manager 'asks for service directories'
+  umhCore.agent.serviceLayer -> umhCore.agent.registry 'allocates ports, reaches the filesystem'
+  umhCore.agent.serviceLayer -> umhCore.s6Logs 'reads and parses monitor output'
+
+  umhCore.agent.s6Manager -[supervises]-> umhCore.benthosRead 'supervises'
+  umhCore.agent.s6Manager -[supervises]-> umhCore.benthosWrite 'supervises'
+  umhCore.agent.s6Manager -[supervises]-> umhCore.topicBrowser 'supervises'
+  umhCore.agent.s6Manager -[supervises]-> umhCore.benthosMonitor 'supervises'
+  umhCore.agent.s6Manager -[supervises]-> umhCore.nmapScanner 'supervises' {
+    #fsmv1-only
+  }
+  umhCore.agent.s6Manager -[supervises]-> umhCore.redpanda 'supervises'
+  umhCore.agent.s6Manager -[supervises]-> umhCore.redpandaMonitor 'supervises'
+}
+
+views {
+
+  view context of umhCore {
+    title 'L1 - System context'
+    description '''
+      Who talks to umh-core, and which side opens the connection. The engineer
+      reaches the gateway only through the cloud console; nothing dials in.
+    '''
+
+    include otEngineer, managementConsole, device, externalSink, umhCore
+
+    style * {
+      color signal
+    }
+    style otEngineer {
+      shape person
+    }
+    autoLayout LeftRight
+  }
+
+  view containers of umhCore {
+    title 'L2 - Containers'
+    description '''
+      The s6 supervision tree. Every box except the three stores is a real
+      service directory under /run/service. Bridge-scoped processes are drawn
+      once; in practice there is one read flow, one write flow and two monitors
+      per bridge.
+    '''
+
+    include
+      managementConsole, device, externalSink,
+      umhCore.*
+
+    autoLayout TopBottom
+  }
+
+  view agentComponents of umhCore.agent {
+    title 'L3 - Inside the agent process'
+    description '''
+      How the single Go process is organised, in four groups: what talks to the
+      cloud, what owns the configuration, what decides, and what writes to disk.
+      The FSMv1 tree and the FSMv2 runtime sit side by side in the third group,
+      with the adapter between them. That split is invisible at L2.
+    '''
+
+    include managementConsole, umhCore.configFile, umhCore.s6Logs
+
+    group 'Cloud transport' {
+      include
+        umhCore.agent.communicator,
+        umhCore.agent.actions
+    }
+
+    group 'Configuration' {
+      include
+        umhCore.agent.configManager,
+        umhCore.agent.controlLoop
+    }
+
+    group 'State machines' {
+      include
+        umhCore.agent.fsmv1,
+        umhCore.agent.fsmv1Adapter,
+        umhCore.agent.fsmv2Runtime,
+        umhCore.agent.triangularStore
+    }
+
+    group 'Writing to disk' {
+      include
+        umhCore.agent.serviceLayer,
+        umhCore.agent.s6Manager,
+        umhCore.agent.registry
+    }
+
+    autoLayout TopBottom
+  }
+}
