@@ -75,17 +75,17 @@ func cfgFor(cfg config.NmapConfig) (map[string]any, error) {
 // the adapter, so this only classifies the healthy leaf.
 func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 	switch s.Result.PortState {
-	case string(nmapfsm.PortStateOpen):
+	case string(nmapservice.PortStateOpen):
 		return nmapfsm.OperationalStateOpen
-	case string(nmapfsm.PortStateClosed):
+	case string(nmapservice.PortStateClosed):
 		return nmapfsm.OperationalStateClosed
-	case string(nmapfsm.PortStateFiltered):
+	case string(nmapservice.PortStateFiltered):
 		return nmapfsm.OperationalStateFiltered
-	case string(nmapfsm.PortStateUnfiltered):
+	case string(nmapservice.PortStateUnfiltered):
 		return nmapfsm.OperationalStateUnfiltered
-	case string(nmapfsm.PortStateOpenFiltered):
+	case string(nmapservice.PortStateOpenFiltered):
 		return nmapfsm.OperationalStateOpenFiltered
-	case string(nmapfsm.PortStateClosedFiltered):
+	case string(nmapservice.PortStateClosedFiltered):
 		return nmapfsm.OperationalStateClosedFiltered
 	default:
 		return nmapfsm.OperationalStateStarting

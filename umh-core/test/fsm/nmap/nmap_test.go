@@ -250,7 +250,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				IsS6Running: true,
 				IsRunning:   true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
-				PortState:   string(nmap.PortStateOpen),
+				PortState:   string(nmapsvc.PortStateOpen),
 			})
 
 			tick, err = fsmtest.TestNmapStateTransition(
@@ -321,7 +321,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				IsS6Running: true,
 				IsRunning:   true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
-				PortState:   string(nmap.PortStateOpen),
+				PortState:   string(nmapsvc.PortStateOpen),
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
 				ctx, instance, mockService, mockServices, serviceName,
@@ -408,7 +408,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				IsS6Running: true,
 				IsRunning:   true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
-				PortState:   string(nmap.PortStateOpen),
+				PortState:   string(nmapsvc.PortStateOpen),
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
 				ctx, instance, mockService, mockServices, serviceName,
@@ -427,7 +427,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			// Set timestamp to 15 seconds ago (NmapScanTimeout is 10 seconds)
 			oldTimestamp := time.Now().Add(-15 * time.Second)
 			mockService.ServiceStates[serviceName].NmapStatus.LastScan.Timestamp = oldTimestamp
-			mockService.ServiceStates[serviceName].NmapStatus.LastScan.PortResult.State = string(nmap.PortStateOpen)
+			mockService.ServiceStates[serviceName].NmapStatus.LastScan.PortResult.State = string(nmapsvc.PortStateOpen)
 
 			// The instance should transition from open => degraded due to timeout
 			tick, err = fsmtest.TestNmapStateTransition(
@@ -502,7 +502,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				IsS6Running: true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
 				IsRunning:   true,
-				PortState:   string(nmap.PortStateOpen),
+				PortState:   string(nmapsvc.PortStateOpen),
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
 				ctx, instance, mockService, mockServices, serviceName,

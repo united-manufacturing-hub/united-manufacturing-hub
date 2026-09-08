@@ -146,17 +146,6 @@ type NmapInstance struct {
 	ObservedState NmapObservedState
 }
 
-type PortState string
-
-const (
-	PortStateOpen           PortState = "open"
-	PortStateFiltered       PortState = "filtered"
-	PortStateClosed         PortState = "closed"
-	PortStateUnfiltered     PortState = "unfiltered"
-	PortStateOpenFiltered   PortState = "open|filtered"
-	PortStateClosedFiltered PortState = "closed|filtered"
-)
-
 // GetLastObservedState returns the last known observed data.
 func (n *NmapInstance) GetLastObservedState() publicfsm.ObservedState {
 	return n.ObservedState

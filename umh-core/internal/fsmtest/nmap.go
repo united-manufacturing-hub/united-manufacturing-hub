@@ -125,42 +125,42 @@ func TransitionToNmapState(mockService *nmap.MockNmapService, serviceName string
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapfsm.PortStateOpen),
+			PortState:   string(nmap.PortStateOpen),
 		})
 	case nmapfsm.OperationalStateOpenFiltered:
 		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapfsm.PortStateOpenFiltered),
+			PortState:   string(nmap.PortStateOpenFiltered),
 		})
 	case nmapfsm.OperationalStateFiltered:
 		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapfsm.PortStateFiltered),
+			PortState:   string(nmap.PortStateFiltered),
 		})
 	case nmapfsm.OperationalStateUnfiltered:
 		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapfsm.PortStateUnfiltered),
+			PortState:   string(nmap.PortStateUnfiltered),
 		})
 	case nmapfsm.OperationalStateClosed:
 		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapfsm.PortStateClosed),
+			PortState:   string(nmap.PortStateClosed),
 		})
 	case nmapfsm.OperationalStateClosedFiltered:
 		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapfsm.PortStateClosedFiltered),
+			PortState:   string(nmap.PortStateClosedFiltered),
 		})
 	case nmapfsm.OperationalStateStopping:
 		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
