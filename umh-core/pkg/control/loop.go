@@ -79,8 +79,10 @@ import (
 // 2. Managers continuously reconcile actual state with desired state
 // 3. Changes propagate in sequence until the system stabilizes
 //
-// This single-threaded design ensures deterministic behavior while the
-// time-sliced approach allows responsive handling of multiple components.
+// Ticks never overlap: Reconcile runs synchronously from the ticker and waits
+// for every manager before returning. Within a tick the managers reconcile
+// concurrently through an errgroup capped at MaxConcurrentFSMOperations, so
+// state a manager touches must be safe for concurrent access.
 type ControlLoop struct {
 	configManager     config.ConfigManager
 	logger            *zap.SugaredLogger
