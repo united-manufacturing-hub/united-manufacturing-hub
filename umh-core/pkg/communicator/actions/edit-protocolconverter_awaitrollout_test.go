@@ -40,7 +40,7 @@ import (
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
-var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
+var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func() {
 	const (
 		probeName    = "awaitrollout-bridge"
 		port         = uint16(445)
@@ -69,7 +69,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 	// from the payload port is what lets a test stage a templated connection,
 	// whose resolved port is not the one the payload carries.
 	// stageSnapshotOnPort stamps the staged scan ahead of the edit, because a
-	// spec stages its snapshot before Execute persists the config and the gate
+	// spec stages its snapshot before Execute persists the config and the check
 	// requires a scan taken after that persist. stageSnapshotScannedAt takes the
 	// scan time explicitly, for specs about a scan that predates the edit.
 	stageSnapshotScannedAt := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16, scannedAt time.Time) {
@@ -225,7 +225,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 	})
 
 	It("reports failure when the port was scanned but found closed", func() {
-		// The bug: the gate's only condition was port-number equality. Poll
+		// The bug: the check's only condition was port-number equality. Poll
 		// stamps the requested port onto a closed result too, so one poll after
 		// the edit the numbers match regardless of whether anything answered. A
 		// confirmed-closed port must not report a successful rollout.
@@ -260,7 +260,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 	It("reports failure when the scanner is running but the port is not open", func() {
 		// IsRunning means different things per backend: the port accepted the
 		// connection on fsmv2, but only "the scanner process is up" on fsmv1.
-		// A gate keyed on it would pass on fsmv1 for a port that never answered,
+		// A check keyed on it would pass on fsmv1 for a port that never answered,
 		// and the other specs cannot catch that swap because they leave
 		// IsRunning false, so the healthy spec would be the only one to redden.
 		observed := &protocolconverter.ProtocolConverterObservedStateSnapshot{
@@ -316,7 +316,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 
 	It("reports failure when the port was scanned but found filtered", func() {
 		// The connection FSM defines up as open and counts filtered (and all
-		// five non-open states) as down. Requiring open here makes the gate
+		// five non-open states) as down. Requiring open here makes the check
 		// agree with that definition rather than inventing a second one.
 		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapsvc.PortStateFiltered))
 
@@ -326,7 +326,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 	})
 
 	It("reports failure when the only open port on record belongs to the previous host", func() {
-		// ENG-5586. The gate compared the port number and nothing else. So
+		// ENG-5586. The check compared the port number and nothing else. So
 		// repointing a bridge from one host to another on the same port was
 		// accepted by the OLD host's scan: the number matches, that port is
 		// open, and nothing has dialled the new host. If the new host refuses
@@ -350,7 +350,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 		// get-protocolconverter therefore hands the Management Console the raw
 		// template string as the connection IP and a port of 0 (a template
 		// string does not parse as a number), and that is what returns in the
-		// edit payload. The gate must compare the scan against the rendered
+		// edit payload. The check must compare the scan against the rendered
 		// endpoint; comparing it against the payload can never match.
 		const (
 			timescaleHost = "timescale.example.com"
@@ -401,7 +401,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (rollout gate)", func() {
 
 			elapsed, err := runAwaitRolloutOnPort("{{ .historian.timescale.host }}", 0)
 			Expect(err).NotTo(HaveOccurred(),
-				"the gate must compare the scan against the rendered endpoint, not the unresolved payload")
+				"the check must compare the scan against the rendered endpoint, not the unresolved payload")
 			Expect(elapsed).To(BeNumerically("<", 5*time.Second),
 				"a healthy edit of a templated connection must not wait out the rollout timeout")
 		})

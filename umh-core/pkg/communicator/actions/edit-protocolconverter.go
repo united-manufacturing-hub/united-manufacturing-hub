@@ -112,7 +112,7 @@ type EditProtocolConverterAction struct {
 	fsmLogger deps.FSMLogger
 	// lastRenderErr holds the most recent render error — from
 	// renderDesiredDFCConfig, or from the connection render that resolves the
-	// rollout gate's expected port — so the awaitRollout timeout message can
+	// connection check's expected port — so the awaitRollout timeout message can
 	// surface the real cause instead of just "did not become active in time".
 	// It is sticky: compareSingleDFCConfig clears it only when a later render
 	// succeeds, so ticks that never reach a render (for example while Benthos
@@ -166,7 +166,7 @@ type EditProtocolConverterAction struct {
 	// Parsed request payload (only populated after Parse)
 	protocolConverterUUID uuid.UUID
 
-	// persistedAt is when the edit reached config.yaml. The rollout gate needs
+	// persistedAt is when the edit reached config.yaml. The connection check needs
 	// it because a scan is only evidence about the new endpoint if it started
 	// after the config changed: nmap's observed endpoint is re-read from the
 	// generated scan script, which is rewritten at persist time, so it names the
@@ -521,7 +521,7 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 //
 // previousConfig is the pre-edit configuration, written back verbatim to roll back on
 // failure. newConfig is the configuration this edit just persisted; its spec resolves
-// the endpoint the nmap gate expects the scan to dial.
+// the endpoint the nmap connection check expects the scan to dial.
 func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.ProtocolConverterConfig, newConfig config.ProtocolConverterConfig, desiredPCState string) (string, error) {
 	SendActionReply(
 		a.instanceUUID,
@@ -554,7 +554,7 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 	startTime := time.Now()
 	timeoutDuration := timeoutInterval
 
-	// wantTarget and wantPort are the host and port the nmap gate below requires
+	// wantTarget and wantPort are the host and port the connection check below requires
 	// the scan to have dialed and found open. They are rendered from the spec
 	// this edit just persisted, not taken from the action payload: a bridge whose
 	// connection template holds a template string rather than a literal resolves
