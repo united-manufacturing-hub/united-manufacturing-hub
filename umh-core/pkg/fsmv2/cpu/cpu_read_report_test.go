@@ -39,12 +39,10 @@ type recorded struct {
 	Fields map[string]any
 }
 
-// recordingLogger wraps a hook-wrapped FSMLogger so one emission is visible on
-// two channels: this recording, which counts and reads fields, and the hook's
-// debouncer, which proves interception. Neither alone suffices. ShouldCapture
-// answers only "was this ONE fingerprint seen" and RECORDS on every true call,
-// so it can be asked once per fingerprint and never yields a count. The raw
-// fields land on the Sentry event, built after the debouncer is consulted.
+// recordingLogger wraps a hook-wrapped FSMLogger so one emission is visible
+// both here, where fields and counts are read, and to the hook's debouncer,
+// which proves interception. ShouldCapture cannot serve as the count: it
+// answers "was this ONE fingerprint seen" and records on every true call.
 type recordingLogger struct {
 	deps.FSMLogger
 
@@ -52,10 +50,9 @@ type recordingLogger struct {
 }
 
 // With MUST re-wrap. NewBaseDependencies stores logger.With(String("worker",
-// ...)), so a wrapper inheriting With from its embedded logger is thrown away at
-// construction and records nothing. Silently and totally: every recording
-// assertion passes on an empty slice, the zero-events-on-a-healthy-container one
-// included, which would then hold with no implementation at all.
+// ...)), so a wrapper inheriting With from its embedded logger is discarded at
+// construction and records nothing, leaving every assertion here passing on an
+// empty slice.
 func (l recordingLogger) With(fields ...deps.Field) deps.FSMLogger {
 	return recordingLogger{FSMLogger: l.FSMLogger.With(fields...), events: l.events}
 }
@@ -73,7 +70,7 @@ func (l recordingLogger) SentryWarn(f deps.Feature, hierarchyPath, msg string, f
 const evidenceControllers = "cpuset cpu io memory hugetlb pids rdma\n"
 
 // healthyContainer is what a working container serves, measured live on
-// 2026-09-03, so the healthy control is a machine we have seen.
+// 2026-09-03.
 func healthyContainer() map[string][]byte {
 	return map[string][]byte{
 		cgroupBase + "/cpu.stat":              []byte("usage_usec 11457863754\nnr_periods 338962\nnr_throttled 903\n"),
@@ -88,8 +85,8 @@ func healthyContainer() map[string][]byte {
 }
 
 // reportFS serves the fixture. The embedded Service is nil deliberately, as in
-// stubFilesystem: a sampler growing a third kind of call panics here rather than
-// passing quietly on a method this fixture never meant to answer.
+// stubFilesystem: a sampler growing a third kind of call panics here rather
+// than passing on a method this fixture never meant to answer.
 type reportFS struct {
 	filesystem.Service
 
@@ -104,10 +101,9 @@ type reportFS struct {
 func (f reportFS) ReadFile(ctx context.Context, p string) ([]byte, error) {
 	*f.reads++
 
-	// Honour the context, as filesystem.DefaultService does: it checks before
-	// reading, so on shutdown every in-flight read fails. Ignoring it would make
-	// a shutdown indistinguishable from a healthy container, and the shutdown
-	// spec would assert nothing.
+	// Honour the context, as filesystem.DefaultService does. Ignoring it would
+	// make a shutdown indistinguishable from a healthy container, and the
+	// shutdown spec would assert nothing.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -134,9 +130,9 @@ func (f reportFS) ReadDir(_ context.Context, _ string) ([]os.DirEntry, error) {
 	return nil, nil
 }
 
-// buildReport wires the real construction path: a published fixture, a
-// hook-wrapped logger, NewDeps. Nothing pre-sets a "read failed" state — the
-// condition arrives as production produces it, through a filesystem that refuses.
+// buildReport runs the real construction path: a published fixture, a
+// hook-wrapped logger, NewDeps. Nothing pre-sets a "read failed" state; the
+// condition arrives through a filesystem that refuses.
 func buildReport(overrides map[string]error, fileOverrides map[string][]byte, errFn func(string) error) (*[]recorded, *fsmv2sentry.SentryHook, *int, *CPUDeps) {
 	events := &[]recorded{}
 	reads := 0
@@ -157,8 +153,8 @@ func buildReport(overrides map[string]error, fileOverrides map[string][]byte, er
 
 	d := NewDeps(id, bd)
 
-	// Without this the suite is host-dependent: NewDeps silently falls back to
-	// the real filesystem when nothing was published.
+	// Without this the suite is host-dependent: NewDeps falls back to the real
+	// filesystem when nothing was published.
 	Expect(reads).To(BeNumerically(">", 0), "the published fixture was never consulted")
 
 	return events, hook, &reads, d
@@ -246,9 +242,8 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
 
-		// errorTypes is EMPTY on purpose: these events carry no error, the type
-		// chain is derivable from the outcome already in the message, and every
-		// event would carry the same stack trace from this one call site.
+		// errorTypes is EMPTY on purpose: these events carry no error, and the
+		// cause is already in the message.
 		want := strings.Join(fsmv2sentry.BuildFingerprint(
 			zapcore.WarnLevel, string(deps.FeatureSupportCPU),
 			"cpu::read_failed::cpuset_cpus_effective::enoent",

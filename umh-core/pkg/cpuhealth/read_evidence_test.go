@@ -27,8 +27,7 @@ import (
 )
 
 // The controller list a working container serves. "cpuset" is the token that
-// matters: its absence is what the report exists to deliver, so this is the
-// positive control for a discriminator whose failing shape nobody has seen.
+// matters: its absence is what the report exists to deliver.
 const healthyControllers = "cpuset cpu io memory hugetlb pids rdma\n"
 
 // dirEntries fakes a ReadDir result of n entries. Only the count is read.
@@ -92,8 +91,8 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 		Expect(allReadOps).To(ContainElements(OpCgroupControllers, OpProcSelfCgroup, OpBaseDir))
 	})
 
-	// These fields have no consumer until the report exists, so without this they
-	// are untested by construction — and trusted by whoever reads an incident.
+	// These fields have no consumer until the report exists, so without this
+	// spec they are untested by construction.
 	It("records every raw value byte for byte as the file served it", func() {
 		smp := read(nil, 85, nil)
 
@@ -131,8 +130,8 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 			"zero entries is a real reading; an unread directory must not look like an empty one")
 	})
 
-	// The discriminator's whole point: a controller list read successfully that
-	// simply lacks cpuset. Parsing it would throw the shape away.
+	// A controller list that read fine and simply lacks cpuset. Parsing it
+	// would throw that shape away.
 	It("keeps a controller list with no cpuset token exactly as served", func() {
 		files := base + "/cgroup.controllers"
 		mfs := filesystem.NewMockFileSystem()
@@ -158,8 +157,8 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 	})
 
 	It("still gathers the evidence when cpu.stat returned early", func() {
-		// Most needed when a read failed, so it must not sit behind the early
-		// return a cpu.stat failure takes.
+		// The evidence is most needed when a read failed, so it must not sit
+		// behind the early return a cpu.stat failure takes.
 		statPath := base + "/cpu.stat"
 		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}}, 85, nil)
 

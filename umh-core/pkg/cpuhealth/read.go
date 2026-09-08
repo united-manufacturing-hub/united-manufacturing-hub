@@ -76,13 +76,10 @@ type linuxSampler struct {
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
-	// Sample.Reads says why this is seeded here rather than appended below.
 	smp.Reads = seedReads()
 
-	// Evidence first: a cpu.stat failure returns before every read below it, so
-	// gathering these later would lose them in the one case they exist for.
-	// They precede the timestamp because they are cheap, and it stays close to
-	// the measurement reads.
+	// The evidence reads come first because a cpu.stat failure returns before
+	// every read below it, and that is the case they exist for.
 	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
 	smp.ControllersRaw = controllers
 	smp.record(OpCgroupControllers, controllersOutcome)
@@ -115,7 +112,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.PsiAvailable = s.cgroup.psiAvailable
 
 	stat, statErr := s.cgroup.readStat(ctx)
-	// Before the early return: text that would not parse is why it would not.
+	// Assigned before the early return below: this text is what would not parse.
 	smp.CPUStatRaw = stat.Raw
 	smp.record(OpCPUStat, statOutcome(stat, statErr))
 	if statErr != nil {
@@ -145,12 +142,9 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// also carries LogicalCpus — the "2" in "pinned to 2 of 8 CPUs". A failed
 		// cpuset read leaves CpuScope at its zero value, ScopeUnknown, and
 		// LogicalCpus absent: never a silent ScopeHost on a known machine count.
-		// Comparing the two sources' reads is the composer's job — a cross-seam
-		// fact neither source can derive holding only its own read.
-		//
-		// Nesting it here is also why it stays not_attempted on a tick whose
-		// /proc/stat read failed: the cpuset file was never opened, and recording
-		// a failure for it would name the wrong file.
+		// Nested under a successful /proc/stat read so the cpuset stays
+		// not_attempted when /proc/stat failed: the file was never opened, and
+		// recording a failure for it would name the wrong one.
 		allowed, cpusetErr := s.cgroup.readCpuset(ctx)
 		smp.record(OpCpusetCPUs, classifyRead(cpusetErr))
 		if cpusetErr == nil {
@@ -184,10 +178,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 }
 
 // statOutcome reports a successful read with no usage figure as ReadEmpty,
-// because ReadOK would claim a value never produced. A zero-byte file and a
-// valueless usage_usec line both land there, since parseCounter reports an
-// absent key as absent rather than an error; the raw text on the event separates
-// them.
+// since ReadOK would claim a value never produced. A zero-byte file and a
+// valueless usage_usec line both land there; the raw text separates them.
 func statOutcome(stat statRead, err error) ReadOutcome {
 	if err != nil {
 		return classifyRead(err)
@@ -209,9 +201,8 @@ func seedReads() []ReadResult {
 	return reads
 }
 
-// record overwrites op's seeded entry. An op absent from allReadOps has none to
-// overwrite and records nothing; read_record_test.go asserts every declared op
-// is present exactly once, so no call site here can reach that.
+// record overwrites op's seeded entry. An op absent from allReadOps has no
+// entry to overwrite and records nothing.
 func (s *Sample) record(op ReadOp, outcome ReadOutcome) {
 	for i := range s.Reads {
 		if s.Reads[i].Op == op {

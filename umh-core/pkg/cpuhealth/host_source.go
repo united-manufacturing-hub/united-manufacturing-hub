@@ -121,11 +121,8 @@ func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) 
 }
 
 // readHost yields /proc/stat's busy, steal and denominator jiffy totals, plus
-// machine, the machine's CPU count. The totals stay raw: this function divides
-// by nothing, so the caller can take interval deltas off them. A non-nil error
-// is why there are no totals: the filesystem's own error where /proc/stat could
-// not be read, and one of this package's two sentinels where it read but held
-// no usable aggregate line.
+// machine, the machine's CPU count. The totals stay raw so the caller can take
+// interval deltas off them. A non-nil error is why there are none.
 func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine float64, err error) {
 	data, err := h.fs.ReadFile(ctx, "/proc/stat")
 	if err != nil {
@@ -158,9 +155,8 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine 
 			if parseErr != nil {
 				return 0, 0, 0, machine, errUnparsableRead
 			}
-			// ParseFloat accepts "NaN", "Inf" and "+Inf", so a counter holding one
-			// parses into a total no delta arithmetic can use: an infinite baseline
-			// yields Inf-Inf, and the reading published is a NaN.
+			// ParseFloat accepts "NaN", "Inf" and "+Inf", and an infinite baseline
+			// then yields Inf-Inf as its delta, publishing a NaN reading.
 			// https://pkg.go.dev/strconv#ParseFloat
 			if math.IsNaN(v) || math.IsInf(v, 0) {
 				return 0, 0, 0, machine, errUnparsableRead
@@ -186,10 +182,8 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine 
 // source that was readable and could have proved a guest.
 //
 // The returned ReadOutcome describes the /proc/cpuinfo read alone, and is
-// ReadNotAttempted on a tick that republished the cached fact without reading
-// anything. The two DMI reads are not reported: each has its own resolved flag
-// already, and this function's own contract is that a failure on one never
-// breaks the other.
+// ReadNotAttempted on a tick that republished the cached fact. The DMI reads
+// are not reported at all: a failure on one must never break the other.
 func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpuinfo ReadOutcome) {
 	if h.virtResolved {
 		return h.virtualized, ReadNotAttempted

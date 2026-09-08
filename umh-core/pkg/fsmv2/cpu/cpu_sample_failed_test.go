@@ -70,8 +70,8 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 
 	It("uses read_failed when the file read fine but carried no usage figure", func() {
 		// A zero-byte cpu.stat returns no error, since parseCounter treats a
-		// missing key as absent rather than malformed. The sample survives with
-		// no usage rate, so the verb must blame the read, not the sample.
+		// missing key as absent rather than malformed. The sample is still
+		// usable without a usage rate, so the verb must blame the read.
 		events, _, _ := build(map[string]error{})
 		Expect(msgs(events)).To(BeEmpty(), "precondition: the healthy fixture is quiet")
 
@@ -127,7 +127,7 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		Expect(e.Msg).To(HaveSuffix("::enoent"))
 
 		By("keeping every variable value out of the grouping key")
-		Expect(strings.Count(e.Msg, "::")).To(Equal(3), "verb, file, reason — nothing else")
+		Expect(strings.Count(e.Msg, "::")).To(Equal(3), "verb, file, reason, nothing else")
 		Expect(e.Msg).NotTo(ContainSubstring("/"))
 	})
 

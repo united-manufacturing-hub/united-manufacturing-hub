@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// A read can start failing at any point, not only at startup — a remount, a
+// A read can start failing at any point, not only at startup: a remount, a
 // reconfiguration, a failure that recovers. Construction-only reporting leaves
 // all of it silent.
 var _ = Describe("a read that starts failing later is reported too", func() {
@@ -53,12 +53,9 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 	})
 
 	It("reports a repeating failure once, not once per measurement", func() {
-		// The worker samples once a second, so per-measurement reporting is
-		// 86,400 events a day per instance per file, and the five-minute
-		// debouncer still lets 288 through.
 		// The failure must begin AFTER construction: failing from the first read
-		// lets construction emit the one event this asserts, and the spec passes
-		// with no per-tick reporting at all.
+		// lets construction emit the one event this asserts, and the spec then
+		// passes with no per-tick reporting at all.
 		broken := false
 		events, d := buildPollable(func(p string) error {
 			if broken && p == cpuset {
@@ -96,8 +93,7 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 	})
 
 	It("reports again when the cause changes on the same file", func() {
-		// A changed situation is worth a new event: the pair is new, so the gate
-		// does not hold it.
+		// The pair is new, so the gate does not hold it.
 		eacces := false
 		events, d := buildPollable(func(p string) error {
 			if p != cpuset {
@@ -121,9 +117,8 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 	})
 
 	It("stays silent while shutting down", func() {
-		// A cancelled context fails every in-flight read, classifying as `error`
-		// since they are neither missing nor unreadable files. Reporting them
-		// emits an event per reported read on every graceful shutdown.
+		// A cancelled context fails every read as `error`, and reporting those
+		// emits an event per read on every graceful shutdown.
 		events, d := buildPollable(nil)
 		Expect(msgs(events)).To(BeEmpty())
 

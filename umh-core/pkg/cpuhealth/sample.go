@@ -130,9 +130,8 @@ type Sample struct {
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
 
-	// The files behind the evidence reads, byte for byte, so a raw string shows
-	// a failure shape nobody predicted. Empty means its own read did not
-	// succeed, and its entry in Reads carries the reason.
+	// The evidence files, byte for byte. Empty means the read did not succeed,
+	// and that read's entry in Reads carries the reason.
 	ControllersRaw    string // cgroup.controllers, under the sampler's base
 	CPUMaxRaw         string // cpu.max, under the sampler's base
 	CPUStatRaw        string // cpu.stat, under the sampler's base
@@ -142,11 +141,10 @@ type Sample struct {
 	// reading, of a directory that exists and is empty.
 	BaseEntryCount int
 
-	// Reads is one entry per member of allReadOps, in that order, so its length
-	// is len(allReadOps) on any Sample a linuxSampler produced and zero on one it
-	// did not. Read seeds each entry to ReadNotAttempted and overwrites in place:
-	// appending could carry no entry for a read that never ran, and a cpu.stat
-	// failure returns before the reads below it.
+	// Reads is one entry per member of allReadOps, in that order, and empty on a
+	// Sample no linuxSampler produced. Read seeds every entry to
+	// ReadNotAttempted and overwrites in place, so a read that never ran still
+	// has an entry.
 	Reads []ReadResult
 }
 

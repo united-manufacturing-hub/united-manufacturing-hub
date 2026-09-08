@@ -26,7 +26,7 @@ import (
 )
 
 // healthyFiles is what a working container serves, measured on a live box on
-// 2026-09-03, so the healthy control is a machine we have seen.
+// 2026-09-03.
 func healthyFiles(base string) map[string][]byte {
 	return map[string][]byte{
 		base + "/cpu.stat":              []byte("usage_usec 11457863754\nuser_usec 9083319081\nsystem_usec 2374544673\nnr_periods 338962\nnr_throttled 903\nthrottled_usec 191447776\n"),
@@ -38,9 +38,8 @@ func healthyFiles(base string) map[string][]byte {
 	}
 }
 
-// fsServing serves files, overrides first. An override to nil-with-error is a
-// failed read; a path in neither map returns ENOENT, so a reader that consulted
-// an unexpected path fails rather than passing quietly.
+// fsServing serves files, overrides first. A path in neither map returns
+// ENOENT, so a reader that consulted an unexpected path fails.
 func fsServing(files map[string][]byte, overrides map[string]error) filesystem.Service {
 	mfs := filesystem.NewMockFileSystem()
 	mfs.ReadFileFunc = func(_ context.Context, p string) ([]byte, error) {
@@ -103,9 +102,8 @@ var _ = Describe("the sample records what each read produced", func() {
 	})
 
 	It("does not record the DMI reads at all", func() {
-		// The DMI files are excluded from reporting: a missing product_name in a
-		// container is normal, so an event would alert on correct absence.
-		// readVirtualized therefore reports only its /proc/cpuinfo read.
+		// The DMI files are not reported, so readVirtualized records only its
+		// /proc/cpuinfo read.
 		for _, op := range allReadOps {
 			Expect(string(op)).NotTo(ContainSubstring("dmi"),
 				"DMI reads are excluded from reporting, so they must not be recorded")
@@ -122,9 +120,8 @@ var _ = Describe("the sample records what each read produced", func() {
 	})
 
 	It("marks the cpuset read not_attempted when /proc/stat failed first", func() {
-		// read.go nests the cpuset read inside the host read's success branch, so
-		// a failed /proc/stat never opens the cpuset file. Recording a failure
-		// for it would name the wrong file.
+		// A failed /proc/stat never opens the cpuset file, and recording a
+		// failure for it would name the wrong one.
 		smp := read(map[string]error{"/proc/stat": &fs.PathError{Op: "open", Path: "/proc/stat", Err: syscall.EACCES}})
 
 		Expect(outcomeFor(smp, OpProcStat)).To(Equal(ReadEACCES))
@@ -133,7 +130,7 @@ var _ = Describe("the sample records what each read produced", func() {
 
 	It("marks every downstream read not_attempted when cpu.stat failed", func() {
 		// cpu.stat is the one read whose failure returns from Read, so the reads
-		// after it never happen — an event each, if not_attempted minted one.
+		// after it never happen.
 		statPath := base + "/cpu.stat"
 		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}})
 
@@ -146,7 +143,7 @@ var _ = Describe("the sample records what each read produced", func() {
 
 	It("records pressure before cpu.stat, since it is read first", func() {
 		// readPSI runs ahead of readStat, so a cpu.stat failure must NOT mark
-		// pressure not_attempted: it was already read.
+		// pressure not_attempted.
 		statPath := base + "/cpu.stat"
 		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}})
 

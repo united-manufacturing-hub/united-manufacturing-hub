@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Read outcomes: the vocabulary for WHY one file read failed. Every reader here
-// returns its cause — an errno, or a sentinel below where there is none.
-
 package cpuhealth
 
 import (
@@ -22,7 +19,7 @@ import (
 	"io/fs"
 )
 
-// ReadOutcome names one read's cause, as a string so it reports as-is.
+// ReadOutcome names one read's cause.
 type ReadOutcome string
 
 const (
@@ -36,23 +33,21 @@ const (
 	ReadEmpty ReadOutcome = "empty"
 	// ReadUnparsable means content was present but did not parse.
 	ReadUnparsable ReadOutcome = "unparsable"
-	// ReadError means no other outcome names the cause — see classifyRead.
+	// ReadError means no other outcome names the cause.
 	ReadError ReadOutcome = "error"
-	// ReadNotAttempted means no read happened: a cached fact, republished.
+	// ReadNotAttempted means no read happened.
 	ReadNotAttempted ReadOutcome = "not_attempted"
 )
 
-// The failures that carry no errno: a zero-byte cpuset, a cpu.pressure whose
-// avg60 will not parse. Both succeed at the syscall layer, so returning nil
-// would report a failed read as a good one.
+// A read can fail with no errno: the syscall succeeds and the content is
+// unusable. Returning nil there would report a failed read as a good one.
 var (
 	errEmptyRead      = errors.New("cpuhealth: file empty")
 	errUnparsableRead = errors.New("cpuhealth: content did not parse")
 )
 
-// classifyRead is total: every error classifies, and an unrecognised one
-// reaches ReadError rather than the closest-looking cause. Readers hand it the
-// error unwrapped, since wrapping hides the errno it reads.
+// classifyRead maps an unrecognised error to ReadError rather than to the
+// closest-looking cause, so nothing arrives at a report misattributed.
 func classifyRead(err error) ReadOutcome {
 	switch {
 	case err == nil:
@@ -70,39 +65,38 @@ func classifyRead(err error) ReadOutcome {
 	}
 }
 
-// ReadOp names one reported read. The value names the file, not the function,
-// because the file is what an operator goes and looks at.
+// ReadOp names one reported read by its file, not by the function reading it.
 type ReadOp string
 
 const (
-	// OpProcStat is the /proc/stat read: the machine's busy, steal and CPU count.
+	// OpProcStat is the /proc/stat read.
 	OpProcStat ReadOp = "proc_stat"
-	// OpProcCpuinfo is the /proc/cpuinfo read behind the virtualisation fact.
+	// OpProcCpuinfo is the /proc/cpuinfo read.
 	OpProcCpuinfo ReadOp = "proc_cpuinfo"
-	// OpCPUStat is the cgroup's cpu.stat read: usage and both throttle counters.
+	// OpCPUStat is the cgroup's cpu.stat read.
 	OpCPUStat ReadOp = "cpu_stat"
-	// OpCPUMax is the cgroup's cpu.max read, the container's CPU limit.
+	// OpCPUMax is the cgroup's cpu.max read.
 	OpCPUMax ReadOp = "cpu_max"
-	// OpCPUPressure is the cgroup's cpu.pressure read, this tick's PSI fraction.
+	// OpCPUPressure is the cgroup's cpu.pressure read.
 	OpCPUPressure ReadOp = "cpu_pressure"
-	// OpCpusetCPUs is cpuset.cpus.effective: the CPUs this container may use.
+	// OpCpusetCPUs is the cgroup's cpuset.cpus.effective read.
 	OpCpusetCPUs ReadOp = "cpuset_cpus_effective"
 
-	// Evidence, not measurement: these tell one failure shape from another, and
-	// mint no report (see reportedReadOps).
+	// The three below are evidence: they ride on a report and mint none of
+	// their own, so reportedReadOps omits them.
 
-	// OpCgroupControllers is cgroup.controllers: what was delegated here.
+	// OpCgroupControllers is the cgroup.controllers read.
 	OpCgroupControllers ReadOp = "cgroup_controllers"
-	// OpProcSelfCgroup is /proc/self/cgroup: the path this process is in.
+	// OpProcSelfCgroup is the /proc/self/cgroup read.
 	OpProcSelfCgroup ReadOp = "proc_self_cgroup"
 	// OpBaseDir is the base directory listing, kept only as an entry count.
 	OpBaseDir ReadOp = "cgroup_base_dir"
 )
 
-// allReadOps is every reported read, in the order Read performs them. The DMI
-// reads (/sys/class/dmi/id/product_name, sys_vendor) are deliberately absent:
-// a missing product_name in a container is normal, so an event would alert on
-// correct absence.
+// allReadOps is every read, in the order Read performs them. The DMI reads
+// (/sys/class/dmi/id/product_name, sys_vendor) are absent: product_name is
+// normally missing in a container, so reporting it would alert on correct
+// absence.
 var allReadOps = []ReadOp{
 	OpCgroupControllers,
 	OpProcSelfCgroup,
