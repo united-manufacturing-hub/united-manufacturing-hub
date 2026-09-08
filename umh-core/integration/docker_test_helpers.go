@@ -54,19 +54,10 @@ var (
 var imageNameOnce sync.Once
 var imageName string
 
-// extraCreateArgs holds additional `docker create` arguments (e.g. extra `-e`
-// env flags or `--add-host`) injected just before the image name. Tests set it
-// in their BeforeAll to customize the container without touching every existing
-// caller. An empty slice leaves the create command identical to the default, so
-// existing integration tests are unaffected.
+// extraCreateArgs holds additional `docker create` arguments injected just
+// before the image name. It is process-global and unguarded, so a spec that
+// sets it must clear it again and the package must keep running serially.
 var extraCreateArgs []string
-
-// skipConfigCopy tells BuildAndRunContainer not to `docker cp` the config into
-// the container. Set this when a test bind-mounts /data/config.yaml via
-// extraCreateArgs: `docker cp` onto a bind-mounted file fails with
-// "device or resource busy". The default (false) preserves the docker-cp
-// behavior for every existing caller.
-var skipConfigCopy bool
 
 func getImageName() string {
 	imageNameOnce.Do(func() {
@@ -282,12 +273,11 @@ func buildContainer() error {
 	return nil
 }
 
-// umhLogLevel returns the LOGGING_LEVEL passed to the container-under-test.
-// Defaults to "debug"; override with the UMH_LOG_LEVEL env var (e.g.
-// UMH_LOG_LEVEL=info) when running the integration tests.
+// umhLogLevel returns the container's LOGGING_LEVEL, "debug" unless UMH_LOG_LEVEL
+// overrides it. Specs that read state out of the agent log need info or below.
 func umhLogLevel() string {
-	if lvl := os.Getenv("UMH_LOG_LEVEL"); lvl != "" {
-		return lvl
+	if level := os.Getenv("UMH_LOG_LEVEL"); level != "" {
+		return level
 	}
 
 	return "debug"
@@ -351,6 +341,15 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	// 3. Run container WITHOUT mounting the config file (but we do need to mount the /data/redpanda folder, otherwise it cannot start)
 	tmpRedpandaDir := filepath.Join(getTmpDir(), containerName, "redpanda")
 	tmpLogsDir := filepath.Join(getTmpDir(), containerName, "logs")
+
+	// The container name is memoized per process, so two Describes in one run
+	// share these directories. cleanupTmpDirs only runs when the spec passed, so
+	// without this a failed run leaves its log file in place and the next
+	// container starts on top of it, where a spec reading state out of the log
+	// can match the previous run's last line.
+	if err := os.RemoveAll(filepath.Join(getTmpDir(), containerName)); err != nil {
+		return fmt.Errorf("failed to clear the container's temporary directories: %w", err)
+	}
 
 	// 4. Create the directories with permissions that allow container user (UID 1000) to write
 	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil {
@@ -421,19 +420,12 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 
 	GinkgoWriter.Printf("Container created with ID: %s\n", strings.TrimSpace(out))
 
-	// 6. Copy the config file to the container BEFORE starting it. When the
-	// caller bind-mounts /data/config.yaml, skip the copy (docker cp onto a
-	// bind-mounted file fails "device or resource busy"); the host file backing
-	// the mount was already written by the caller.
-	if skipConfigCopy {
-		GinkgoWriter.Println("Skipping config copy (config.yaml is bind-mounted)...")
-	} else {
-		GinkgoWriter.Println("Copying config file to container...")
+	// 6. Copy the config file to the container BEFORE starting it.
+	GinkgoWriter.Println("Copying config file to container...")
 
-		err = writeConfigFile(configYaml, containerName)
-		if err != nil {
-			return fmt.Errorf("failed to write config to container: %w", err)
-		}
+	err = writeConfigFile(configYaml, containerName)
+	if err != nil {
+		return fmt.Errorf("failed to write config to container: %w", err)
 	}
 
 	// 7. Start the container
