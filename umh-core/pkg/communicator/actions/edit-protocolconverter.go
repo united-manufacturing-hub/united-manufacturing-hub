@@ -557,12 +557,20 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 	// wantTarget and wantPort are the host and port the nmap gate below requires
 	// the scan to have dialed and found open. They are rendered from the spec
 	// this edit just persisted, not taken from the action payload: a bridge whose
-	// connection is templated resolves its endpoint only at render time. A
-	// historian bridge scans {{ .historian.timescale.host }}:{{ .historian.timescale.port }}
-	// and keeps no IP/PORT user variables, so its payload carries an unresolved
-	// target and port 0 while the scan dials the resolved endpoint — comparing
-	// the two would never match, burn the whole timeout and roll back a healthy
-	// edit.
+	// connection template holds a template string rather than a literal resolves
+	// its endpoint only at render time. get-protocolconverter falls back to that
+	// raw template when the spec carries no IP/PORT user variables, so the
+	// payload comes back with an unresolved target and, because the port string
+	// does not parse, port 0 — while the scan dials the resolved endpoint.
+	// Comparing the two would never match, burn the whole timeout and roll back a
+	// healthy edit.
+	//
+	// A historian bridge is the case that keeps no IP/PORT variables: its
+	// connection is {{ .historian.timescale.host }}:{{ .historian.timescale.port }},
+	// inherited from the shared section. get-protocolconverter special-cases it
+	// and returns the resolved endpoint, so a console edit of one does carry a
+	// literal host and port; rendering here is what keeps every other templated
+	// bridge, and any client that sends the raw template back, from timing out.
 	//
 	// The endpoint is resolved on every tick rather than once up front. Reading
 	// the config can fail transiently, and a single failure used to fall back to
