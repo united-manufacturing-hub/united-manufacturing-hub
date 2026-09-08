@@ -41,6 +41,7 @@ package cpuhealth
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -155,6 +156,13 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine 
 		for i := 1; i < len(fields); i++ {
 			v, parseErr := strconv.ParseFloat(fields[i], 64)
 			if parseErr != nil {
+				return 0, 0, 0, machine, errUnparsableRead
+			}
+			// ParseFloat accepts "NaN", "Inf" and "+Inf", so a counter holding one
+			// parses into a total no delta arithmetic can use: an infinite baseline
+			// yields Inf-Inf, and the reading published is a NaN.
+			// https://pkg.go.dev/strconv#ParseFloat
+			if math.IsNaN(v) || math.IsInf(v, 0) {
 				return 0, 0, 0, machine, errUnparsableRead
 			}
 			values[i] = v

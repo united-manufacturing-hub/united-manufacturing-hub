@@ -120,6 +120,20 @@ var _ = Describe("a failed read reports its cause", func() {
 			_, _, _, _, err := newHostSource(oneFile("/proc/stat", []byte("cpu  1 2 3\ncpu0 1 2 3\n"), nil)).readHost(ctx)
 			Expect(err).To(MatchError(errUnparsableRead))
 		})
+
+		// strconv.ParseFloat accepts "NaN", "Inf" and "+Inf" as valid floats, so a
+		// counter holding one parses and would leave readHost reporting ReadOK on
+		// a total no arithmetic can use.
+		// https://pkg.go.dev/strconv#ParseFloat
+		It("reports a NaN counter as unparsable", func() {
+			_, _, _, _, err := newHostSource(oneFile("/proc/stat", []byte("cpu  1 2 3 4 5 6 7 NaN 0 0\ncpu0 1 2 3 4 5 6 7 8 0 0\n"), nil)).readHost(ctx)
+			Expect(err).To(MatchError(errUnparsableRead))
+		})
+
+		It("reports an infinite counter as unparsable", func() {
+			_, _, _, _, err := newHostSource(oneFile("/proc/stat", []byte("cpu  +Inf 2 3 4 5 6 7 8 0 0\ncpu0 1 2 3 4 5 6 7 8 0 0\n"), nil)).readHost(ctx)
+			Expect(err).To(MatchError(errUnparsableRead))
+		})
 	})
 
 	// readQuota and readVirtualized return a ReadOutcome, not an error: neither
