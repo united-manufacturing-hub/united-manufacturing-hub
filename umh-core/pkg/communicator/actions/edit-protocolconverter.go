@@ -554,31 +554,6 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 	startTime := time.Now()
 	timeoutDuration := timeoutInterval
 
-	// wantTarget and wantPort are the host and port the connection check below requires
-	// the scan to have dialed and found open. They are rendered from the spec
-	// this edit just persisted, not taken from the action payload: a bridge whose
-	// connection template holds a template string rather than a literal resolves
-	// its endpoint only at render time. get-protocolconverter falls back to that
-	// raw template when the spec carries no IP/PORT user variables, so the
-	// payload comes back with an unresolved target and, because the port string
-	// does not parse, port 0 — while the scan dials the resolved endpoint.
-	// Comparing the two would never match, burn the whole timeout and roll back a
-	// healthy edit.
-	//
-	// A historian bridge is the case that keeps no IP/PORT variables: its
-	// connection is {{ .historian.timescale.host }}:{{ .historian.timescale.port }},
-	// inherited from the shared section. get-protocolconverter special-cases it
-	// and returns the resolved endpoint, so a console edit of one does carry a
-	// literal host and port; rendering here is what keeps every other templated
-	// bridge, and any client that sends the raw template back, from timing out.
-	//
-	// The endpoint is resolved on every tick rather than once up front. Reading
-	// the config can fail transiently, and a single failure used to fall back to
-	// the payload endpoint — which for a templated bridge is an unresolved target
-	// on port 0, an endpoint no scan can ever match, so a healthy edit waited out
-	// the whole timeout and rolled back. Resolving per tick lets a transient
-	// failure heal; a deterministic one repeats and the timeout message names it.
-
 	var (
 		logs     []s6.LogEntry
 		lastLogs []s6.LogEntry
@@ -684,6 +659,13 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 					// because a stopped bridge stops its nmap service too and
 					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
+						// The endpoint comes from the spec this edit persisted, not from the
+						// action payload: a templated connection resolves only at render
+						// time, and get-protocolconverter hands the raw template back when
+						// the spec carries no IP/PORT variables, so the payload can name a
+						// target and port 0 that no scan will ever report. Re-rendered every
+						// tick, so a transient config-read failure heals instead of failing
+						// the edit; a deterministic one repeats and the timeout names it.
 						resolved, renderErr := a.resolvedConnectionEndpoint(newConfig.ProtocolConverterServiceConfig)
 						if renderErr != nil {
 							a.lastRenderErr = renderErr
