@@ -112,7 +112,7 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 			"a sibling read succeeding is what rules out a broken mount")
 		Expect(e.Fields).To(HaveKeyWithValue("proc_self_cgroup_raw", "0::/\n"),
 			"the v2-only path shape rules out cgroup v1")
-		Expect(e.Fields).To(HaveKey("cgroup_base_entry_count"))
+		Expect(e.Fields).To(HaveKey("cgroup_base_dir_entry_count"))
 		Expect(e.Fields).To(HaveKeyWithValue("cgroup_base", cgroupBase))
 
 		By("carrying the controller list, which is the conclusion")

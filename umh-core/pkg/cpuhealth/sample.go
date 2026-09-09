@@ -132,14 +132,14 @@ type Sample struct {
 
 	// The evidence files, byte for byte. Empty means the read did not succeed,
 	// and that read's entry in Reads carries the reason.
-	ControllersRaw    string // cgroup.controllers, under the sampler's base
-	CPUMaxRaw         string // cpu.max, under the sampler's base
-	CPUStatRaw        string // cpu.stat, under the sampler's base
-	ProcSelfCgroupRaw string // /proc/self/cgroup
+	CgroupControllersRaw string // cgroup.controllers, under the sampler's base
+	CPUMaxRaw            string // cpu.max, under the sampler's base
+	CPUStatRaw           string // cpu.stat, under the sampler's base
+	ProcSelfCgroupRaw    string // /proc/self/cgroup
 
-	// BaseEntryCount is -1 when the directory was not read. Zero is a real
+	// BaseDirEntryCount is -1 when the directory was not read. Zero is a real
 	// reading, of a directory that exists and is empty.
-	BaseEntryCount int
+	BaseDirEntryCount int
 
 	// Reads is one entry per member of allReadOps, in that order, and empty on a
 	// Sample no linuxSampler produced. Read seeds every entry to

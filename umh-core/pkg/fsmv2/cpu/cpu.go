@@ -286,11 +286,11 @@ func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quo
 	fields := []deps.Field{
 		deps.String("path", readOpPaths[failed]),
 		deps.String("cgroup_base", cgroupBase),
-		deps.String("cgroup_controllers_raw", smp.ControllersRaw),
+		deps.String("cgroup_controllers_raw", smp.CgroupControllersRaw),
 		deps.String("cpu_max_raw", smp.CPUMaxRaw),
 		deps.String("cpu_stat_raw", smp.CPUStatRaw),
 		deps.String("proc_self_cgroup_raw", smp.ProcSelfCgroupRaw),
-		deps.Int("cgroup_base_entry_count", smp.BaseEntryCount),
+		deps.Int("cgroup_base_dir_entry_count", smp.BaseDirEntryCount),
 	}
 
 	// Every sibling is reported, a never-attempted one included: the pattern

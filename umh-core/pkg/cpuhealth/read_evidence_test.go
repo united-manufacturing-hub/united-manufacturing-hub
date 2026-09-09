@@ -96,13 +96,13 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 	It("records every raw value byte for byte as the file served it", func() {
 		smp := read(nil, 85, nil)
 
-		Expect(smp.ControllersRaw).To(Equal(healthyControllers),
+		Expect(smp.CgroupControllersRaw).To(Equal(healthyControllers),
 			"the controller list must arrive unparsed and untrimmed of meaning")
 		Expect(smp.ProcSelfCgroupRaw).To(Equal("0::/\n"))
 		Expect(smp.CPUMaxRaw).To(Equal("200000 100000\n"))
 		Expect(smp.CPUStatRaw).To(ContainSubstring("usage_usec 11457863754"),
 			"the cpu.stat text is what tells a reader whether an absent usage figure was an empty file or a malformed one")
-		Expect(smp.BaseEntryCount).To(Equal(85))
+		Expect(smp.BaseDirEntryCount).To(Equal(85))
 	})
 
 	It("marks the evidence reads ok when they succeed", func() {
@@ -118,7 +118,7 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 		smp := read(map[string]error{ctrl: &fs.PathError{Op: "open", Path: ctrl, Err: syscall.EACCES}}, 85, nil)
 
 		Expect(outcomeFor(smp, OpCgroupControllers)).To(Equal(ReadEACCES))
-		Expect(smp.ControllersRaw).To(BeEmpty(),
+		Expect(smp.CgroupControllersRaw).To(BeEmpty(),
 			"a failed read must not leave stale or invented text in the raw field")
 	})
 
@@ -126,7 +126,7 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 		smp := read(nil, 0, &fs.PathError{Op: "open", Path: base, Err: syscall.ENOENT})
 
 		Expect(outcomeFor(smp, OpBaseDir)).To(Equal(ReadENOENT))
-		Expect(smp.BaseEntryCount).To(Equal(-1),
+		Expect(smp.BaseDirEntryCount).To(Equal(-1),
 			"zero entries is a real reading; an unread directory must not look like an empty one")
 	})
 
@@ -151,7 +151,7 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 
 		smp, _ := NewLinuxSampler(mfs, base).Read(ctx)
 
-		Expect(smp.ControllersRaw).To(Equal("cpu io memory pids\n"))
+		Expect(smp.CgroupControllersRaw).To(Equal("cpu io memory pids\n"))
 		Expect(outcomeFor(smp, OpCgroupControllers)).To(Equal(ReadOK),
 			"a readable list missing cpuset is a successful read, not a failed one")
 	})
@@ -162,8 +162,8 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 		statPath := base + "/cpu.stat"
 		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}}, 85, nil)
 
-		Expect(smp.ControllersRaw).To(Equal(healthyControllers))
-		Expect(smp.BaseEntryCount).To(Equal(85))
+		Expect(smp.CgroupControllersRaw).To(Equal(healthyControllers))
+		Expect(smp.BaseDirEntryCount).To(Equal(85))
 		Expect(outcomeFor(smp, OpCgroupControllers)).To(Equal(ReadOK))
 	})
 })

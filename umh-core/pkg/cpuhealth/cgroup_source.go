@@ -266,10 +266,18 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 // The evidence readers below return what their file served, verbatim, with no
 // parsing.
 
-// readControllers reads cgroup.controllers, the controllers the parent
-// delegated here.
-func (c *cgroupSource) readControllers(ctx context.Context) (string, ReadOutcome) {
-	data, err := c.fs.ReadFile(ctx, c.base+"/cgroup.controllers")
+const (
+	// cgroupControllersFile lists the controllers the parent delegated to this
+	// cgroup. It is relative to the sampler's base.
+	cgroupControllersFile = "/cgroup.controllers"
+	// procSelfCgroupPath says which cgroup this process runs in.
+	procSelfCgroupPath = "/proc/self/cgroup"
+)
+
+// readRawFile returns a file's text verbatim, with the outcome that says why
+// there is none.
+func (c *cgroupSource) readRawFile(ctx context.Context, path string) (string, ReadOutcome) {
+	data, err := c.fs.ReadFile(ctx, path)
 	if err != nil {
 		return "", classifyRead(err)
 	}
@@ -277,21 +285,10 @@ func (c *cgroupSource) readControllers(ctx context.Context) (string, ReadOutcome
 	return string(data), ReadOK
 }
 
-// readProcSelfCgroup reads /proc/self/cgroup, which says whether base is the
-// cgroup this process runs in.
-func (c *cgroupSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome) {
-	data, err := c.fs.ReadFile(ctx, "/proc/self/cgroup")
-	if err != nil {
-		return "", classifyRead(err)
-	}
-
-	return string(data), ReadOK
-}
-
-// countBaseEntries keeps only the entry count. A mounted cgroup v2 tree holds
-// dozens of files, so a directory holding two or three says the mount is not
-// the one we expect. An unlistable directory yields -1, never 0.
-func (c *cgroupSource) countBaseEntries(ctx context.Context) (int, ReadOutcome) {
+// readBaseDirEntryCount keeps only the entry count. A mounted cgroup v2 tree
+// holds dozens of files, so a directory holding two or three says the mount is
+// not the one we expect. An unlistable directory yields -1, never 0.
+func (c *cgroupSource) readBaseDirEntryCount(ctx context.Context) (int, ReadOutcome) {
 	entries, err := c.fs.ReadDir(ctx, c.base)
 	if err != nil {
 		return -1, classifyRead(err)

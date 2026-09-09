@@ -80,16 +80,16 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	// The evidence reads come first because a cpu.stat failure returns before
 	// every read below it, and that is the case they exist for.
-	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
-	smp.ControllersRaw = controllers
+	controllers, controllersOutcome := s.cgroup.readRawFile(ctx, s.cgroup.base+cgroupControllersFile)
+	smp.CgroupControllersRaw = controllers
 	smp.record(OpCgroupControllers, controllersOutcome)
 
-	procSelf, procSelfOutcome := s.cgroup.readProcSelfCgroup(ctx)
+	procSelf, procSelfOutcome := s.cgroup.readRawFile(ctx, procSelfCgroupPath)
 	smp.ProcSelfCgroupRaw = procSelf
 	smp.record(OpProcSelfCgroup, procSelfOutcome)
 
-	baseEntries, baseDirOutcome := s.cgroup.countBaseEntries(ctx)
-	smp.BaseEntryCount = baseEntries
+	baseEntries, baseDirOutcome := s.cgroup.readBaseDirEntryCount(ctx)
+	smp.BaseDirEntryCount = baseEntries
 	smp.record(OpBaseDir, baseDirOutcome)
 
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
