@@ -78,8 +78,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
 	smp.Reads = seedReads()
 
-	// The evidence reads come first because a cpu.stat failure returns before
-	// every read below it, and that is the case they exist for.
+	// First because a cpu.stat failure returns before every read below it, and
+	// that event needs this evidence as much as any other.
 	controllers, controllersOutcome := s.cgroup.readRawFile(ctx, s.cgroup.base+cgroupControllersFile)
 	smp.CgroupControllersRaw = controllers
 	smp.record(OpCgroupControllers, controllersOutcome)
