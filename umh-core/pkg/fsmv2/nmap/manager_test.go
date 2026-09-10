@@ -164,6 +164,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 
 		Expect(nmapObserved.ServiceInfo.NmapStatus.IsRunning).To(BeTrue())
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan).NotTo(BeNil())
+		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.Target).To(Equal(target))
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.State).To(Equal("open"))
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.Port).To(Equal(port))
 	})

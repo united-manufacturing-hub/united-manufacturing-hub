@@ -96,9 +96,9 @@ func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 // and Port come from the status, so they name the endpoint the most recent poll
 // dialed rather than the one the config asked for. Until a poll of an edited
 // endpoint completes, the observed values are the previous endpoint's, which is
-// what lets awaitRollout in the edit action tell a converged edit from a pending
-// one. Timestamp is the scan's own start time, so an old poll cannot read as
-// fresh.
+// what lets a consumer tell a converged edit from a pending one. The scan
+// carries that endpoint and its own start time, so an old poll cannot read as
+// fresh or as evidence about a different endpoint.
 func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
 	return nmapfsm.NmapObservedState{
 		ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -110,6 +110,7 @@ func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.Obs
 				IsRunning: s.Result.IsRunning,
 				LastScan: &nmapservice.NmapScanResult{
 					Timestamp: s.Result.ScannedAt,
+					Target:    s.Result.Target,
 					PortResult: nmapservice.PortResult{
 						State:     s.Result.PortState,
 						LatencyMs: s.Result.LatencyMs,
