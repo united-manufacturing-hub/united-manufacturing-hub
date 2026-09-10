@@ -72,13 +72,8 @@ physical machine that signal reads "not possible" rather than 0%.
 ## When UMH refuses a new bridge
 
 While CPU is degraded, UMH will not start an additional bridge on the instance, because it would
-compete for CPU that is already short. The refusal carries the CPU status message, so it names the
-same cause and fix:
-
-```
-CPU degraded: CPU limited
-This instance hit its CPU limit and was paused until the next cycle, in 12% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it.
-```
+compete for CPU that is already short. The refusal repeats the CPU status message, so the cause
+and the fix are the ones in the table above.
 
 This is separate from the capacity ceiling, the number of bridges a given core count can hold, which the [Sizing Guide](./sizing-guide.md) covers. That number is a ceiling rather than a guarantee: because real CPU use varies per bridge, UMH can refuse a bridge on CPU health before you reach it.
 
