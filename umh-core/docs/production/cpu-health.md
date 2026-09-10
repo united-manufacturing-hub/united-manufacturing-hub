@@ -73,12 +73,16 @@ physical machine that signal reads "not possible" rather than 0%.
 ## When UMH refuses a new bridge
 
 While CPU is degraded, UMH will not start an additional bridge on the instance, because it would
-compete for CPU that is already short. The bridge stays pending, and its status reason repeats the
-CPU status message, so the cause and the fix are the ones in the table above. Bridges already
-running are left alone.
+compete for CPU that is already short. The bridge stays pending, and its status reason names the
+resource gate that stopped it, usually "System in degraded state". For the cause and the fix, read
+the instance's CPU status. Bridges already running are left alone.
 
-Setting `agent.enableResourceLimitBlocking: false` in `config.yaml` turns this off, and then a
-degraded CPU no longer stops a new bridge.
+To turn this off, so that a degraded CPU no longer stops a new bridge:
+
+```yaml
+agent:
+  enableResourceLimitBlocking: false
+```
 
 This is separate from the capacity ceiling, the number of bridges a given core count can hold, which the [Sizing Guide](./sizing-guide.md) covers. That number is a ceiling rather than a guarantee: because real CPU use varies per bridge, UMH can refuse a bridge on CPU health before you reach it.
 
