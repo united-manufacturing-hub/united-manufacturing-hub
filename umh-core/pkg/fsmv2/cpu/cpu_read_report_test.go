@@ -214,7 +214,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::enoent"),
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::missing"),
 			"one failed read is one event; ConsistOf also fails if a sibling read reported")
 	})
 
@@ -246,7 +246,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 		// cause is already in the message.
 		want := strings.Join(fsmv2sentry.BuildFingerprint(
 			zapcore.WarnLevel, string(deps.FeatureSupportCPU),
-			"cpu::read_failed::cpuset_cpus_effective::enoent",
+			"cpu::read_failed::cpuset_cpus_effective::missing",
 			"",
 		), "|")
 
@@ -261,7 +261,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 		})
 
 		Expect(msgs(events)).To(BeEmpty(),
-			"cpu.pressure + enoent is on the suppression list: absence is correct, not a failure")
+			"cpu.pressure + missing is on the suppression list: absence is correct, not a failure")
 	})
 
 	It("still reports cpu.pressure when it is present but unreadable", func() {
@@ -270,7 +270,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			psi: &fs.PathError{Op: "open", Path: psi, Err: syscall.EACCES},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpu_pressure::eacces"),
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpu_pressure::permission_denied"),
 			"only ENOENT is excused for pressure; a present-but-unreadable file is a real failure")
 	})
 
@@ -281,7 +281,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			"/proc/stat": &fs.PathError{Op: "open", Path: "/proc/stat", Err: syscall.EACCES},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::proc_stat::eacces"))
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::proc_stat::permission_denied"))
 	})
 
 	It("never puts a path or a raw value in the message", func() {

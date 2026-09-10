@@ -30,7 +30,7 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 	cpuset := cgroupBase + "/cpuset.cpus.effective"
 	ctx := context.Background()
 
-	enoent := func(p string) error {
+	missing := func(p string) error {
 		return &fs.PathError{Op: "open", Path: p, Err: syscall.ENOENT}
 	}
 
@@ -38,7 +38,7 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 		broken := false
 		events, d := buildPollable(func(p string) error {
 			if broken && p == cpuset {
-				return enoent(p)
+				return missing(p)
 			}
 
 			return nil
@@ -48,7 +48,7 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 		broken = true
 		_, _ = Poll(ctx, d, CPUConfig{})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::enoent"),
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::missing"),
 			"a read that only starts failing at tick 1 must still be reported")
 	})
 
@@ -59,7 +59,7 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 		broken := false
 		events, d := buildPollable(func(p string) error {
 			if broken && p == cpuset {
-				return enoent(p)
+				return missing(p)
 			}
 
 			return nil
@@ -80,7 +80,7 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 		// startup failure on the first tick.
 		events, d := buildPollable(func(p string) error {
 			if p == cpuset {
-				return enoent(p)
+				return missing(p)
 			}
 
 			return nil
@@ -94,25 +94,25 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 
 	It("reports again when the cause changes on the same file", func() {
 		// The pair is new, so the gate does not hold it.
-		eacces := false
+		permission_denied := false
 		events, d := buildPollable(func(p string) error {
 			if p != cpuset {
 				return nil
 			}
-			if eacces {
+			if permission_denied {
 				return &fs.PathError{Op: "open", Path: p, Err: syscall.EACCES}
 			}
 
-			return enoent(p)
+			return missing(p)
 		})
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::enoent"))
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::missing"))
 
-		eacces = true
+		permission_denied = true
 		_, _ = Poll(ctx, d, CPUConfig{})
 
 		Expect(msgs(events)).To(ConsistOf(
-			"cpu::read_failed::cpuset_cpus_effective::enoent",
-			"cpu::read_failed::cpuset_cpus_effective::eacces",
+			"cpu::read_failed::cpuset_cpus_effective::missing",
+			"cpu::read_failed::cpuset_cpus_effective::permission_denied",
 		), "a changed cause on the same file is a new fact")
 	})
 

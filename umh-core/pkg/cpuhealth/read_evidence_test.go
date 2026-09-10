@@ -117,7 +117,7 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 		ctrl := base + "/cgroup.controllers"
 		smp := read(map[string]error{ctrl: &fs.PathError{Op: "open", Path: ctrl, Err: syscall.EACCES}}, 85, nil)
 
-		Expect(outcomeFor(smp, OpCgroupControllers)).To(Equal(ReadEACCES))
+		Expect(outcomeFor(smp, OpCgroupControllers)).To(Equal(ReadPermissionDenied))
 		Expect(smp.CgroupControllersRaw).To(BeEmpty(),
 			"a failed read must not leave stale or invented text in the raw field")
 	})
@@ -125,7 +125,7 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 	It("reports the directory read's own failure and a sentinel count", func() {
 		smp := read(nil, 0, &fs.PathError{Op: "open", Path: base, Err: syscall.ENOENT})
 
-		Expect(outcomeFor(smp, OpBaseDir)).To(Equal(ReadENOENT))
+		Expect(outcomeFor(smp, OpBaseDir)).To(Equal(ReadMissing))
 		Expect(smp.BaseDirEntryCount).To(Equal(-1),
 			"zero entries is a real reading; an unread directory must not look like an empty one")
 	})

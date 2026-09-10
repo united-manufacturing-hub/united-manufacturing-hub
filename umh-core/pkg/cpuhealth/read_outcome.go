@@ -25,10 +25,11 @@ type ReadOutcome string
 const (
 	// ReadOK means the file was read and its content parsed.
 	ReadOK ReadOutcome = "ok"
-	// ReadENOENT means the file does not exist.
-	ReadENOENT ReadOutcome = "enoent"
-	// ReadEACCES means the file exists but could not be opened.
-	ReadEACCES ReadOutcome = "eacces"
+	// ReadMissing means the file does not exist (ENOENT).
+	ReadMissing ReadOutcome = "missing"
+	// ReadPermissionDenied means the file exists but could not be opened
+	// (EACCES).
+	ReadPermissionDenied ReadOutcome = "permission_denied"
 	// ReadEmpty means the file was read and held nothing.
 	ReadEmpty ReadOutcome = "empty"
 	// ReadUnparsable means content was present but did not parse.
@@ -53,9 +54,9 @@ func classifyRead(err error) ReadOutcome {
 	case err == nil:
 		return ReadOK
 	case errors.Is(err, fs.ErrNotExist):
-		return ReadENOENT
+		return ReadMissing
 	case errors.Is(err, fs.ErrPermission):
-		return ReadEACCES
+		return ReadPermissionDenied
 	case errors.Is(err, errEmptyRead):
 		return ReadEmpty
 	case errors.Is(err, errUnparsableRead):

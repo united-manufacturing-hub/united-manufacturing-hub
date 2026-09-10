@@ -114,7 +114,7 @@ var _ = Describe("the sample records what each read produced", func() {
 		cpuset := base + "/cpuset.cpus.effective"
 		smp := read(map[string]error{cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT}})
 
-		Expect(outcomeFor(smp, OpCpusetCPUs)).To(Equal(ReadENOENT))
+		Expect(outcomeFor(smp, OpCpusetCPUs)).To(Equal(ReadMissing))
 		Expect(outcomeFor(smp, OpCPUStat)).To(Equal(ReadOK), "a cpuset failure must not be blamed on its siblings")
 		Expect(outcomeFor(smp, OpProcStat)).To(Equal(ReadOK))
 	})
@@ -124,7 +124,7 @@ var _ = Describe("the sample records what each read produced", func() {
 		// failure for it would name the wrong one.
 		smp := read(map[string]error{"/proc/stat": &fs.PathError{Op: "open", Path: "/proc/stat", Err: syscall.EACCES}})
 
-		Expect(outcomeFor(smp, OpProcStat)).To(Equal(ReadEACCES))
+		Expect(outcomeFor(smp, OpProcStat)).To(Equal(ReadPermissionDenied))
 		Expect(outcomeFor(smp, OpCpusetCPUs)).To(Equal(ReadNotAttempted))
 	})
 
@@ -134,7 +134,7 @@ var _ = Describe("the sample records what each read produced", func() {
 		statPath := base + "/cpu.stat"
 		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}})
 
-		Expect(outcomeFor(smp, OpCPUStat)).To(Equal(ReadENOENT))
+		Expect(outcomeFor(smp, OpCPUStat)).To(Equal(ReadMissing))
 		for _, op := range []ReadOp{OpProcStat, OpCpusetCPUs, OpProcCpuinfo, OpCPUMax} {
 			Expect(outcomeFor(smp, op)).To(Equal(ReadNotAttempted),
 				"read %q happens after cpu.stat, which returned early", op)

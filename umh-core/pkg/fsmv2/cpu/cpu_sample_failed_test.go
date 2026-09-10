@@ -34,7 +34,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 			statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::cpu_stat::enoent"),
+		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::cpu_stat::missing"),
 			"one event: the four reads after cpu.stat never happened, so they have nothing to report")
 	})
 
@@ -49,8 +49,8 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		})
 
 		Expect(msgs(events)).To(ConsistOf(
-			"cpu::read_failed::cpu_pressure::eacces",
-			"cpu::sample_failed::cpu_stat::enoent",
+			"cpu::read_failed::cpu_pressure::permission_denied",
+			"cpu::sample_failed::cpu_stat::missing",
 		))
 	})
 
@@ -104,7 +104,7 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		e := (*events)[0]
 
 		By("naming which file failed and how")
-		Expect(e.Msg).To(Equal("cpu::read_failed::cpuset_cpus_effective::enoent"))
+		Expect(e.Msg).To(Equal("cpu::read_failed::cpuset_cpus_effective::missing"))
 		Expect(e.Fields).To(HaveKeyWithValue("path", cpuset))
 
 		By("ruling out a broken mount, a wrong base, and cgroup v1")
@@ -122,9 +122,9 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		Expect(e.Fields).To(HaveKeyWithValue("cgroup_controllers_raw", evidenceControllers))
 
 		By("ruling out a permission problem and a parse bug")
-		// enoent rather than eacces excludes both, and sits in the message, so
+		// missing rather than permission_denied excludes both, and sits in the message, so
 		// the Sentry issue list shows it without opening the event.
-		Expect(e.Msg).To(HaveSuffix("::enoent"))
+		Expect(e.Msg).To(HaveSuffix("::missing"))
 
 		By("keeping every variable value out of the grouping key")
 		Expect(strings.Count(e.Msg, "::")).To(Equal(3), "verb, file, reason, nothing else")

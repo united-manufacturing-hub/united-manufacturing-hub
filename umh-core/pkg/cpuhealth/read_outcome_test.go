@@ -143,12 +143,12 @@ var _ = Describe("a failed read reports its cause", func() {
 
 		It("reports ENOENT", func() {
 			_, outcome := newCgroupSource(oneFile(maxPath, nil, pathErr(maxPath, syscall.ENOENT)), base).readQuota(ctx)
-			Expect(outcome).To(Equal(ReadENOENT))
+			Expect(outcome).To(Equal(ReadMissing))
 		})
 
 		It("reports EACCES", func() {
 			_, outcome := newCgroupSource(oneFile(maxPath, nil, pathErr(maxPath, syscall.EACCES)), base).readQuota(ctx)
-			Expect(outcome).To(Equal(ReadEACCES))
+			Expect(outcome).To(Equal(ReadPermissionDenied))
 		})
 
 		It("reports a readable no-limit file as ok, never as a failure", func() {
@@ -204,7 +204,7 @@ var _ = Describe("a failed read reports its cause", func() {
 
 		It("reports the cpuinfo read outcome", func() {
 			_, outcome := newHostSource(oneFile("/proc/cpuinfo", nil, pathErr("/proc/cpuinfo", syscall.ENOENT))).readVirtualized(ctx)
-			Expect(outcome).To(Equal(ReadENOENT))
+			Expect(outcome).To(Equal(ReadMissing))
 		})
 	})
 })

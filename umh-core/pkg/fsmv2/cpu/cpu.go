@@ -216,7 +216,7 @@ var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
 // cpu.pressure at all. A cpu.pressure that exists and will not open does
 // report.
 var excusedReads = map[cpuhealth.ReadResult]struct{}{
-	{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadENOENT}: {},
+	{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadMissing}: {},
 }
 
 // readOpPaths is the file each reported read opens, a field not a message part.
