@@ -1,40 +1,40 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
-go 1.27.0
+go 1.27.1
 
 require (
-	github.com/99designs/gqlgen v0.17.94
+	github.com/99designs/gqlgen v0.17.95
 	github.com/DataDog/gostackparse v0.7.0
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/benbjohnson/clock v1.3.5
 	github.com/cactus/tai64 v1.0.4
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/getsentry/sentry-go v0.48.0
+	github.com/getsentry/sentry-go v0.49.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/goccy/go-json v0.10.6
 	github.com/google/uuid v1.6.0
 	github.com/h2non/gock v1.2.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/klauspost/compress v1.19.2
-	github.com/looplab/fsm v1.0.3
+	github.com/klauspost/compress v1.20.0
+	github.com/looplab/fsm v1.0.4
 	github.com/onsi/ginkgo/v2 v2.32.1
-	github.com/onsi/gomega v1.42.1
+	github.com/onsi/gomega v1.43.0
 	github.com/prometheus/client_golang v1.24.1
-	github.com/prometheus/client_model v0.6.2
-	github.com/prometheus/common v0.70.1
+	github.com/prometheus/client_model v0.6.3
+	github.com/prometheus/common v0.71.0
 	github.com/prometheus/prometheus v0.314.0
-	github.com/shirou/gopsutil/v4 v4.26.7
+	github.com/shirou/gopsutil/v4 v4.26.8
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.44.0
 	github.com/tiendc/go-deepcopy v1.7.2
 	github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-00010101000000-000000000000
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
-	github.com/vektah/gqlparser/v2 v2.5.36
+	github.com/vektah/gqlparser/v2 v2.5.37
 	go.uber.org/zap v1.28.0
-	golang.org/x/crypto v0.55.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/crypto v0.56.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/sys v0.48.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 )
