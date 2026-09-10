@@ -59,6 +59,8 @@ Since every bridge has different resource requirements (OPC UA with 10,000 tags 
 - **Memory Usage**: Blocks if memory exceeds 80%
 - **Disk Usage**: Blocks if disk exceeds 85%
 
+For what each CPU status means and how CPU health is judged, see [CPU Health](./cpu-health.md).
+
 **Redpanda CPU Utilization:**
 UMH Core runs Redpanda with the `--overprovisioned` flag, which optimizes CPU usage for containerized environments. This disables Seastar's busy-polling reactor model, reducing idle CPU usage from 100% to near-zero when not processing messages. The trade-off is slightly higher latency (microseconds to low milliseconds), which is acceptable for manufacturing data that doesn't require sub-millisecond response times. This is required because UMH Core runs in Docker where CPU pinning doesn't work effectively, and Redpanda shares the container with other processes.
 
