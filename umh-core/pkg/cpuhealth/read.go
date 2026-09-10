@@ -92,11 +92,11 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
 	frac, psiErr := s.cgroup.readPSI(ctx)
-	if psiErr == nil {
+	if psiErr != nil {
+		smp.Pressure = diagnosis.Unknown()
+	} else {
 		s.cgroup.psiAvailable = true
 		smp.Pressure = diagnosis.Known(frac)
-	} else {
-		smp.Pressure = diagnosis.Unknown()
 	}
 	smp.record(OpCPUPressure, classifyRead(psiErr))
 	smp.PsiAvailable = s.cgroup.psiAvailable
@@ -124,29 +124,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// CPU scope is derived.
 	busy, steal, denom, machine, hostErr := s.host.readHost(ctx)
 	smp.record(OpProcStat, classifyRead(hostErr))
-	if hostErr == nil {
-		smp.HostCpus = diagnosis.Known(machine)
-		// CPU scope compares the container's allowed cpuset against the machine's
-		// count (kept on the snapshot as HostCpus): a readable, covering cpuset
-		// reads ScopeHost, a pinned subset reads ScopeAffinity. The cpuset read
-		// also carries LogicalCpus — the "2" in "pinned to 2 of 8 CPUs". A failed
-		// cpuset read leaves CpuScope at its zero value, ScopeUnknown, and
-		// LogicalCpus absent: never a silent ScopeHost on a known machine count.
-		// Nested under a successful /proc/stat read so the cpuset stays
-		// not_attempted when /proc/stat failed: the file was never opened, and
-		// recording a failure for it would name the wrong one.
-		allowed, cpusetErr := s.cgroup.readCpuset(ctx)
-		smp.record(OpCpusetCPUs, classifyRead(cpusetErr))
-		if cpusetErr == nil {
-			smp.LogicalCpus = diagnosis.Known(float64(allowed))
-			if allowed == int(machine) {
-				smp.CpuScope = ScopeHost
-			} else {
-				smp.CpuScope = ScopeAffinity
-			}
-		}
-		smp.HostBusy, smp.Steal = s.host.advanceHostRates(ts, busy, steal, denom)
-	} else {
+	if hostErr != nil {
 		// An unreadable machine CPU count reads ScopeUnknown — never a silent
 		// ScopeHost, since a pinned idle container misread as host would have
 		// its host headroom computed by subtracting a host-scoped busy figure
@@ -154,17 +132,50 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// exists to prevent. HostCpus stays absent (its zero value) here, as the
 		// machine's count could not be read to populate it.
 		smp.CpuScope = ScopeUnknown
+	} else {
+		smp.HostCpus = diagnosis.Known(machine)
+		// Nested under a successful /proc/stat read so the cpuset stays
+		// not_attempted when /proc/stat failed: the file was never opened, and
+		// recording a failure for it would name the wrong one.
+		s.recordCPUScope(ctx, &smp, machine)
+		smp.HostBusy, smp.Steal = s.host.advanceHostRates(ts, busy, steal, denom)
 	}
 
-	var cpuinfo ReadOutcome
-	smp.Virtualized, cpuinfo = s.host.readVirtualized(ctx)
-	smp.record(OpProcCpuinfo, cpuinfo)
+	virtualized, cpuinfoOutcome := s.host.readVirtualized(ctx)
+	smp.Virtualized = virtualized
+	smp.record(OpProcCpuinfo, cpuinfoOutcome)
 
-	quota, cpuMax := s.cgroup.readQuota(ctx)
+	quota, cpuMaxOutcome := s.cgroup.readQuota(ctx)
 	smp.Quota = quota.Limit
 	smp.CPUMaxRaw = quota.Raw
-	smp.record(OpCPUMax, cpuMax)
+	smp.record(OpCPUMax, cpuMaxOutcome)
+
 	return smp, nil
+}
+
+// recordCPUScope compares the container's allowed cpuset against machine, the
+// host's CPU count: a covering cpuset reads ScopeHost, a pinned subset reads
+// ScopeAffinity. The same read carries LogicalCpus, the "2" in "pinned to 2 of
+// 8 CPUs". A failed cpuset read reads ScopeUnknown with LogicalCpus absent,
+// never a silent ScopeHost on a known machine count.
+func (s *linuxSampler) recordCPUScope(ctx context.Context, smp *Sample, machine float64) {
+	allowed, cpusetErr := s.cgroup.readCpuset(ctx)
+	smp.record(OpCpusetCPUs, classifyRead(cpusetErr))
+	if cpusetErr != nil {
+		smp.LogicalCpus = diagnosis.Unknown()
+		smp.CpuScope = ScopeUnknown
+
+		return
+	}
+
+	smp.LogicalCpus = diagnosis.Known(float64(allowed))
+	if allowed == int(machine) {
+		smp.CpuScope = ScopeHost
+
+		return
+	}
+
+	smp.CpuScope = ScopeAffinity
 }
 
 // recordEvidence puts the three evidence reads on smp: the text of
