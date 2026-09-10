@@ -109,7 +109,7 @@ The system handles:
 While the UI is the primary way to create stream processors, they're stored as YAML:
 
 ```yaml
-streamprocessors:
+streamProcessor:
   - name: pump_efficiency_calc
     model:
       name: pump

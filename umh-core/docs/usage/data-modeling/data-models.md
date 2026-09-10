@@ -58,7 +58,7 @@ Click the three-dot menu (⋮) on any model to access actions:
 ### Basic Structure
 
 ```yaml
-datamodels:
+dataModels:
   - name: pump                    # Model name
     description: "Pump monitoring" # Optional description
     version:
@@ -124,7 +124,7 @@ Define once, use everywhere:
 
 ```yaml
 # Define reusable motor model
-datamodels:
+dataModels:
   - name: motor
     version:
       v1:
@@ -135,7 +135,7 @@ datamodels:
             _payloadshape: timeseries-number
 
 # Reference in pump model
-datamodels:
+dataModels:
   - name: pump
     version:
       v1:

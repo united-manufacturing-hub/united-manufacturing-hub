@@ -53,7 +53,7 @@ Access configuration via: Instances → Select instance → `...` → Config Fil
 ### Basic Structure
 
 ```yaml
-datacontracts:
+dataContracts:
   - name: _pump_v1          # Contract name (used in bridges)
     model:
       name: pump            # References a data model
@@ -121,7 +121,7 @@ msg.meta.data_contract = "_raw";
 ### Model-Based Contracts
 
 ```yaml
-datacontracts:
+dataContracts:
   - name: _pump_v1
     model:
       name: pump
@@ -147,7 +147,7 @@ datacontracts:
 
 ```yaml
 # Model definition
-datamodels:
+dataModels:
   - name: temperature-sensor
     version:
       v1:
@@ -156,7 +156,7 @@ datamodels:
             _payloadshape: timeseries-number
 
 # Contract (auto-created or manual)
-datacontracts:
+dataContracts:
   - name: _temperature-sensor_v1
     model:
       name: temperature-sensor
@@ -174,7 +174,7 @@ Stream processors don't use contracts directly - they reference models:
 
 ```yaml
 templates:
-  streamProcessors:
+  streamProcessor:
     pump_aggregator:
       model:           # Direct model reference
         name: pump

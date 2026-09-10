@@ -96,7 +96,7 @@ Stream processors use templates for reusability and subscribe to specific topics
 
 ```yaml
 templates:
-  streamProcessors:
+  streamProcessor:
     production_aggregator:
       model:
         name: production-metrics
@@ -119,7 +119,7 @@ templates:
 ### Deploying Stream Processors
 
 ```yaml
-streamprocessors:
+streamProcessor:
   - name: line_a_metrics
     _templateRef: "production_aggregator"
     location:

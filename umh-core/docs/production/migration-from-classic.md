@@ -251,7 +251,7 @@ pipeline:
 **UMH Core (Virtual Paths in Topics):**
 ```yaml
 # Core data model with virtual paths
-datamodels:
+dataModels:
   - name: CNCHead
     version: v1
     structure:
@@ -263,7 +263,7 @@ datamodels:
       collision: { type: timeseries }
 
 # Core stream processor
-streamprocessors:
+streamProcessor:
   - name: cnc_head_sp
     contract: _cnc_head:v1
     sources:
