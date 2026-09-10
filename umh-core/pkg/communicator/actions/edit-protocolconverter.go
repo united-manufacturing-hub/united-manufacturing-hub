@@ -511,7 +511,11 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 // The function returns the error code and the error message via an error object.
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
-func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.ProtocolConverterConfig, newConfig config.ProtocolConverterConfig, desiredPCState string) (string, error) {
+func (a *EditProtocolConverterAction) awaitRollout(
+	rollbackConfig config.ProtocolConverterConfig,
+	rolloutConfig config.ProtocolConverterConfig,
+	desiredPCState string,
+) (string, error) {
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
@@ -566,12 +570,12 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 		select {
 		case <-timeout:
 			// rollback to previous configuration
-			rollbackErr := a.rollbackEdit(previousConfig)
+			rollbackErr := a.rollbackEdit(rollbackConfig)
 			if rollbackErr != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", rollbackErr)
 				stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, rollbackErr)
 				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_rollback_failed",
-					deps.String("previousConfig", previousConfig.String()))
+					deps.String("rollbackConfig", rollbackConfig.String()))
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
@@ -586,7 +590,7 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 			}
 
 			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout",
-				deps.String("previousConfig", previousConfig.String()),
+				deps.String("rollbackConfig", rollbackConfig.String()),
 				deps.String("desiredPCState", desiredPCState),
 			)
 
@@ -644,7 +648,7 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 					// Kept because a stopped bridge stops its nmap service and
 					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
-						if waitingFor := a.connectionCheckWait(newConfig, pcSnapshot); waitingFor != "" {
+						if waitingFor := a.connectionCheckWait(rolloutConfig, pcSnapshot); waitingFor != "" {
 							currentStateReason = waitingFor
 							SendActionReply(
 								a.instanceUUID,
@@ -774,7 +778,7 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 								models.EditProtocolConverter,
 							)
 
-							rollbackErr := a.rollbackEdit(previousConfig)
+							rollbackErr := a.rollbackEdit(rollbackConfig)
 							if rollbackErr != nil {
 								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, rollbackErr)
 								a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_render_failure_rollback_failed",
@@ -920,19 +924,19 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 						models.EditProtocolConverter,
 					)
 
-					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", previousConfig.ProtocolConverterServiceConfig.Variables.User)
+					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", rollbackConfig.ProtocolConverterServiceConfig.Variables.User)
 
-					err := a.rollbackEdit(previousConfig)
+					err := a.rollbackEdit(rollbackConfig)
 					if err != nil {
 						a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
-							deps.String("previousConfig", previousConfig.String()))
+							deps.String("rollbackConfig", rollbackConfig.String()))
 
 						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 					}
 
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
-						deps.String("previousConfig", previousConfig.String()))
+						deps.String("rollbackConfig", rollbackConfig.String()))
 
 					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 				}
