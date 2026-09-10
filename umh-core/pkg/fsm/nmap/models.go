@@ -35,7 +35,7 @@ const (
 	OperationalStateDegraded = "degraded"
 
 	// Running phase states
-	// See nmap-states here: https://nmapservice.org/book/man-port-scanning-basics.html
+	// See nmap-states here: https://nmap.org/book/man-port-scanning-basics.html
 	// active means nmap is running and it shows port filtered.
 	OperationalStateFiltered = "filtered"
 	// active means nmap is running and it shows port down.
