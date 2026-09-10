@@ -56,9 +56,11 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		mu        sync.Mutex
 	)
 
-	// Desired and observed sides are staged independently, so a spec can stage a
-	// connection edited to a target whose scan has not caught up yet.
-	stageSnapshotScannedAt := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16, scannedAt time.Time) {
+	// The desired side, the observed config and the last scan are staged
+	// independently, so a spec can stage a connection edited to a target whose
+	// scan has not caught up yet, and one where the observed config has caught
+	// up but the scan has not.
+	stageSnapshotScanned := func(desiredTarget string, observedTarget string, scannedTarget string, pcState string, portState string, scannedPort uint16, scannedAt time.Time) {
 		observed := &protocolconverter.ProtocolConverterObservedStateSnapshot{
 			ServiceInfo: protocolconvertersvc.ServiceInfo{
 				ConnectionObservedState: connfsm.ConnectionObservedState{
@@ -78,6 +80,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 								NmapStatus: nmapservice.NmapServiceInfo{
 									LastScan: &nmapservice.NmapScanResult{
 										Timestamp: scannedAt,
+										Target:    scannedTarget,
 										PortResult: nmapservice.PortResult{
 											State: portState,
 											Port:  scannedPort,
@@ -104,6 +107,11 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 				},
 			},
 		})
+	}
+
+	// The observed config and the scan agree unless a spec stages them apart.
+	stageSnapshotScannedAt := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16, scannedAt time.Time) {
+		stageSnapshotScanned(desiredTarget, observedTarget, observedTarget, pcState, portState, scannedPort, scannedAt)
 	}
 
 	stageSnapshotOnPort := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16) {
@@ -249,7 +257,12 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 							ServiceInfo: nmapservice.ServiceInfo{
 								NmapStatus: nmapservice.NmapServiceInfo{
 									IsRunning: true,
+									// Fresh and on the edited endpoint, so the
+									// spec reaches the port-state check instead
+									// of stopping at the staleness one.
 									LastScan: &nmapservice.NmapScanResult{
+										Timestamp: time.Now().Add(time.Minute),
+										Target:    "dest.example.com",
 										PortResult: nmapservice.PortResult{
 											State: string(nmapservice.PortStateClosed),
 											Port:  port,
@@ -307,8 +320,31 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// A bare HaveOccurred() would also be satisfied by a timeout for any other
 		// reason, so it cannot tell this spec passing from this spec passing by
 		// accident. The rollback message names what the last tick was waiting for.
-		Expect(err.Error()).To(ContainSubstring("waiting for nmap to scan dest.example.com"),
+		Expect(err.Error()).To(ContainSubstring("checking dest.example.com:445"),
 			"the rollout must have timed out on the host comparison, not on something else")
+	})
+
+	It("reports failure when the observed config names the new host but the fresh open scan does not", func() {
+		// ENG-5586. On fsmv1 the observed nmap config is parsed from the scan
+		// script on disk, so it names the new endpoint from the moment that
+		// script is rewritten. The old scanner keeps reporting the old endpoint
+		// as open until s6 restarts it, so comparing the observed config accepts
+		// a fresh open scan that never dialled the new host.
+		stageSnapshotScanned(
+			"dest.example.com",
+			"dest.example.com",
+			"src.example.com",
+			protocolconverter.OperationalStateStartingFailedDFCMissing,
+			string(nmapservice.PortStateOpen),
+			port,
+			time.Now().Add(time.Minute),
+		)
+
+		_, err := runAwaitRollout("dest.example.com")
+		Expect(err).To(HaveOccurred(),
+			"only the endpoint the scan recorded is evidence, not the one the scan script names")
+		Expect(err.Error()).To(ContainSubstring("checking dest.example.com:445"),
+			"the rollout must have timed out on the scanned endpoint, not on something else")
 	})
 
 	Describe("a bridge whose connection is templated", func() {

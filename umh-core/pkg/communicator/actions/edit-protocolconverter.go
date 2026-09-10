@@ -1146,52 +1146,53 @@ func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any, in
 	return merged
 }
 
-// formatEndpoint renders a scan config as target:port, the form the connection
-// check compares and the reply messages carry.
-func formatEndpoint(config nmapserviceconfig.NmapServiceConfig) string {
-	return config.Target + ":" + strconv.FormatUint(uint64(config.Port), 10)
+// formatEndpoint renders a target and port as target:port, the form the
+// connection check compares and the reply messages carry.
+func formatEndpoint(target string, port uint16) string {
+	return target + ":" + strconv.FormatUint(uint64(port), 10)
 }
 
 // connectionCheckWait reports what the connection check is still waiting for,
-// or "" when the scan agrees with the endpoint this edit persisted.
+// or "" when the check reached the endpoint this edit persisted.
 //
 // The endpoint is rendered from the persisted spec, never taken from the action
 // payload: get-protocolconverter hands back the raw connection template when
 // the spec carries no IP/PORT variables, so a payload can name an unresolved
-// target on port 0 that no scan will ever report.
+// target on port 0 that no check will ever report.
 func (a *EditProtocolConverterAction) connectionCheckWait(
-	newConfig config.ProtocolConverterConfig,
+	pcConfig config.ProtocolConverterConfig,
 	pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot,
 ) string {
-	resolved, renderErr := a.resolvedConnectionEndpoint(newConfig.ProtocolConverterServiceConfig)
+	resolved, renderErr := a.resolvedConnectionEndpoint(pcConfig.ProtocolConverterServiceConfig)
 	if renderErr != nil {
 		a.lastRenderErr = renderErr
 
-		return "waiting to resolve the bridge's connection endpoint"
+		return "reading the bridge's connection details"
 	}
 
-	wantEndpoint := formatEndpoint(resolved)
+	wantEndpoint := formatEndpoint(resolved.Target, resolved.Port)
 
-	nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
-	scannedEndpoint := formatEndpoint(nmapObs.ObservedNmapServiceConfig)
-
-	// Comparing the port alone accepts a move to a different host on the same
-	// port: the old host's scan reports it open and nothing dialed the new host.
-	if scannedEndpoint != wantEndpoint {
-		return "waiting for nmap to scan " + wantEndpoint
-	}
-
-	// The observed endpoint echoes the regenerated scan script, so it names the
-	// new endpoint before the scanner has dialed it.
-	lastScan := nmapObs.ServiceInfo.NmapStatus.LastScan
+	lastScan := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan
 	if lastScan == nil || !lastScan.Timestamp.After(a.persistedAt) {
-		return "waiting for a scan of " + wantEndpoint + " taken after the edit"
+		return "checking " + wantEndpoint
+	}
+
+	// Never compare against ObservedNmapServiceConfig here: on fsmv1 it is
+	// parsed from the scan script on disk, so it names the new endpoint from the
+	// moment that script is rewritten, while the old scanner keeps reporting the
+	// old endpoint as open until s6 restarts it. Only the scan itself records
+	// what was dialed.
+	//
+	// Comparing the port alone would accept a move to a different host on the
+	// same port for the same reason.
+	if formatEndpoint(lastScan.Target, lastScan.PortResult.Port) != wantEndpoint {
+		return "checking " + wantEndpoint
 	}
 
 	// Do not use IsRunning instead: it means the port answered on fsmv2 but only
 	// "the scanner process is up" on fsmv1, where a refused port reads true.
 	if lastScan.PortResult.State != string(nmapservice.PortStateOpen) {
-		return "waiting for nmap to report " + wantEndpoint + " open (last scan: " + lastScan.PortResult.State + ")"
+		return "cannot reach " + wantEndpoint + " (port " + lastScan.PortResult.State + ")"
 	}
 
 	return ""
