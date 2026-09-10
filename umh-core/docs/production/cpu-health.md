@@ -11,7 +11,7 @@ What UMH measures against depends on whether the container has a CPU limit (a Do
 
 With no limit, the machine is the ceiling. UMH averages how busy the machine is over 60 seconds and reports degraded when less than about one core is free, the point where everything on the box, UMH included, starts waiting for CPU. The view also shows the container's own usage, so you can see how much of the machine total is UMH.
 
-With a limit, the limit is the ceiling. UMH measures headroom against those cores rather than the machine, and reports degraded when its usage reaches 90% of the limit, the last 10% being held in reserve, or when the kernel throttles it. A full machine can still slow a container that sits below its limit, so where UMH can read the host, it warns on that too.
+With a limit, the limit is the ceiling. UMH measures headroom against those cores rather than the machine, and reports degraded once its usage passes 90% of the limit, the last 10% being held in reserve, or when the kernel throttles it. A full machine can still slow a container that sits below its limit, so where UMH can read the host, it warns on that too.
 
 High usage on its own does not make an instance degraded. It degrades when the headroom is gone, or when work is measurably delayed, which UMH reads from throttling, CPU pressure and steal. (For the reasoning, see [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/).)
 
@@ -35,7 +35,7 @@ Both the status and Technical Details carry the thresholds, so you do not have t
 A healthy instance states its remaining headroom, and each Technical Details line gives the
 reading next to the mark that would change it:
 
-```
+```text
 CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can use 1.5 more before it is marked degraded.
 
 Technical Details:
@@ -54,16 +54,17 @@ reading zero.
 ## Thresholds
 
 Each signal degrades at one value and recovers at a lower one, which is what keeps the status from
-flickering. All readings are 60-second figures.
+flickering. All readings are 60-second figures. A reading has to pass a threshold, not merely reach
+it, except where the table says "at".
 
 | Signal | Degrades | Recovers | Measured only when |
 |--------|----------|----------|--------------------|
-| **Throttling** | 5% of scheduling periods | below 3% | a CPU limit is set |
-| **CPU pressure** | 20% (PSI `avg60`) | below 12% | the kernel publishes PSI |
-| **CPU steal** | 10% | below 6% | the machine is a virtual machine |
+| **Throttling** | above 5% of scheduling periods | below 3% | a CPU limit is set |
+| **CPU pressure** | above 20% (PSI `avg60`) | below 12% | the kernel publishes PSI |
+| **CPU steal** | above 10% | below 6% | the machine is a virtual machine |
 | **Machine headroom** | less than 1 core free | 1.5 cores free | the machine's core count is readable |
-| **Limit headroom** | usage reaches 90% of the limit | below 85% of the limit | a CPU limit is set |
-| **Usage of the machine** | 70% | below 60% | host statistics are unreadable (fallback for machine headroom) |
+| **Limit headroom** | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
+| **Usage of the machine** | at 70% | below 60% | host statistics are unreadable (fallback for machine headroom) |
 
 Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a fresh
 instance is judgeable within seconds of starting. Bare metal reports no steal at all, so on a
@@ -93,5 +94,5 @@ healthy verdict. Set a CPU limit on such a container to get a correct reading.
 |------|---------|
 | **Throttling** | The kernel caps a container to its CPU limit in short repeating periods, about 100 ms each. A container that needs more within a period is paused until the next one, so a workload whose average looks fine can still be paused during bursts. |
 | **CPU pressure** | How much time tasks spent waiting for a free CPU core, from Linux Pressure Stall Information (PSI). High pressure means CPU is the bottleneck. |
-| **CPU steal** | Time the hypervisor gave this machine's CPU to other virtual machines, or, on burstable cloud instances, the point where CPU credits run out. High steal means the server is oversubscribed. |
+| **CPU steal** | Time the hypervisor scheduled this machine's CPU elsewhere. High steal usually means the physical server is oversubscribed. A burstable cloud instance whose CPU credits have run out is capped by a different mechanism, but the guest counts that capped time as steal too. |
 | **Host contention** | CPU used by software outside UMH on the same machine. UMH cannot see which processes those are, only that they are using CPU it needs. |
