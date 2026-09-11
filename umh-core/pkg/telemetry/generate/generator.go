@@ -19,12 +19,19 @@ import (
 	"flag"
 	"fmt"
 	"go/format"
+	"go/token"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// tagFormat is the spec's tag shape. Matching it is what rejects a leading,
+// trailing or doubled separator and any character outside the set, so those
+// three do not need checks of their own.
+var tagFormat = regexp.MustCompile(`^[a-z0-9_]+(::[a-z0-9_]+)+$`)
 
 type declaredEvent struct {
 	Brief    string `yaml:"brief"`
@@ -64,7 +71,10 @@ func Generate(registryYAML []byte, packageName string) ([]byte, error) {
 		return nil, fmt.Errorf("parse telemetry.yaml: %w", err)
 	}
 
-	roots := buildTree(domains)
+	roots, err := buildTree(domains)
+	if err != nil {
+		return nil, err
+	}
 
 	var source bytes.Buffer
 	source.WriteString(licenseHeader)
@@ -88,19 +98,37 @@ func Generate(registryYAML []byte, packageName string) ([]byte, error) {
 // buildTree splits each event key on "::" so the emitted tree follows the tag
 // rather than the YAML's flat keys. A domain with no events yields no node, so
 // nothing is emitted for it.
-func buildTree(domains map[string]map[string]declaredEvent) map[string]*node {
+//
+// Duplicate keys within one domain are not checked here: yaml.v3 rejects them
+// during Unmarshal, naming the key and both line numbers.
+func buildTree(domains map[string]map[string]declaredEvent) (map[string]*node, error) {
 	roots := map[string]*node{}
+	// Go path to the YAML key that claimed it. Two keys can differ and still
+	// need the same Go field: "push" beside "push::failed" wants Push as both a
+	// value and a struct, and "a__b" title-cases onto the same name as "a_b".
+	claimedBy := map[string]string{}
 
-	for domain, events := range domains {
+	for _, domain := range sortedKeys(domains) {
+		events := domains[domain]
 		if len(events) == 0 {
 			continue
 		}
 
 		root := &node{children: map[string]*node{}}
 
-		for key, event := range events {
+		for _, key := range sortedKeys(events) {
+			event := events[key]
+
+			if err := validate(domain, key, event); err != nil {
+				return nil, err
+			}
+
 			cursor := root
+			goPath := goIdentifier(domain)
+
 			for _, segment := range strings.Split(key, "::") {
+				goPath += "." + goIdentifier(segment)
+
 				child, found := cursor.children[segment]
 				if !found {
 					child = &node{children: map[string]*node{}}
@@ -110,6 +138,12 @@ func buildTree(domains map[string]map[string]declaredEvent) map[string]*node {
 				cursor = child
 			}
 
+			if owner, taken := claimedBy[goPath]; taken {
+				return nil, fmt.Errorf("keys %q and %q both need the Go path %s", owner, key, goPath)
+			}
+
+			claimedBy[goPath] = key
+
 			leaf := event
 			cursor.event = &leaf
 			cursor.tag = domain + "::" + key
@@ -118,7 +152,71 @@ func buildTree(domains map[string]map[string]declaredEvent) map[string]*node {
 		roots[domain] = root
 	}
 
-	return roots
+	// A leaf that also has children claimed its own path as a value and as a
+	// struct, which cannot compile.
+	for _, domain := range sortedKeys(roots) {
+		if err := rejectLeafBranch(domain, goIdentifier(domain), roots[domain]); err != nil {
+			return nil, err
+		}
+	}
+
+	return roots, nil
+}
+
+func rejectLeafBranch(key, goPath string, branch *node) error {
+	if branch.event != nil && len(branch.children) > 0 {
+		return fmt.Errorf("key %q is both an event and a prefix of other events, so %s cannot be a value and a struct", key, goPath)
+	}
+
+	for _, segment := range sortedKeys(branch.children) {
+		child := branch.children[segment]
+		if err := rejectLeafBranch(segment, goPath+"."+goIdentifier(segment), child); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validate rejects an entry the generator cannot turn into compiling Go, or one
+// whose severity nobody chose. Every message names the offending key, because
+// the YAML is hand-edited and the key is how the author finds it.
+func validate(domain, key string, event declaredEvent) error {
+	if event.Brief == "" {
+		return fmt.Errorf("key %q has no brief", key)
+	}
+
+	if event.Severity == "" {
+		return fmt.Errorf("key %q has no severity", key)
+	}
+
+	// No default: a defaulted severity is a silent decision about whether
+	// somebody gets paged.
+	if event.Severity != "warning" && event.Severity != "error" {
+		return fmt.Errorf("key %q has severity %q, which is neither warning nor error", key, event.Severity)
+	}
+
+	tag := domain + "::" + key
+	if !tagFormat.MatchString(tag) {
+		return fmt.Errorf("key %q gives tag %q, which does not match %s", key, tag, tagFormat)
+	}
+
+	for _, segment := range strings.Split(key, "::") {
+		name := goIdentifier(segment)
+		if name == "" {
+			return fmt.Errorf("key %q has an empty segment", key)
+		}
+
+		if token.IsKeyword(strings.ToLower(name)) {
+			return fmt.Errorf("key %q has segment %q, a Go keyword", key, segment)
+		}
+
+		if name[0] >= '0' && name[0] <= '9' {
+			return fmt.Errorf("key %q has segment %q, which starts with a digit", key, segment)
+		}
+	}
+
+	return nil
 }
 
 // emitNodeTypes declares a struct type per branch, depth first, so a type is
