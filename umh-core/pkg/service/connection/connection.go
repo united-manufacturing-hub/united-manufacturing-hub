@@ -645,7 +645,7 @@ func (c *ConnectionService) ReconcileManager(
 			Internal: config.InternalConfig{
 				Nmap: c.nmapConfigs,
 			}},
-		Tick: snapshot.Tick,
+		Tick:         snapshot.Tick,
 		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 }
@@ -690,7 +690,7 @@ func (c *ConnectionService) ForceRemoveConnection(
 	if ctx.Err() != nil {
 		c.logger.Warnf("Parent context already expired for force removal of %s", connectionName)
 	}
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
 	defer cancel()
 

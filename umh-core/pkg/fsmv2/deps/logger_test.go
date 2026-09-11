@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 func parseLine(buf *bytes.Buffer) map[string]interface{} {
@@ -50,7 +51,7 @@ var _ = Describe("zapLogger field propagation", func() {
 	It("SentryError produces JSON with feature, error, and msg fields", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 		testErr := errors.New("something broke")
-		logger.SentryError(deps.FeatureFSMv2, "root/worker-1(helloworld)", testErr, "lifecycle failed")
+		logger.Sentry(telemetry.Identifier{Tag: "lifecycle failed", Brief: "lifecycle failed", Severity: telemetry.SeverityError}, deps.FeatureFSMv2, "root/worker-1(helloworld)", testErr)
 
 		m := parseLine(buf)
 		Expect(m).To(HaveKeyWithValue("msg", "lifecycle failed"))
@@ -62,7 +63,7 @@ var _ = Describe("zapLogger field propagation", func() {
 
 	It("SentryWarn produces JSON with feature and msg fields", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
-		logger.SentryWarn(deps.FeatureFSMv2, "root/worker-1(helloworld)", "reconciliation slow")
+		logger.Sentry(telemetry.Identifier{Tag: "reconciliation slow", Brief: "reconciliation slow", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "root/worker-1(helloworld)", nil)
 
 		m := parseLine(buf)
 		Expect(m).To(HaveKeyWithValue("msg", "reconciliation slow"))
@@ -74,7 +75,7 @@ var _ = Describe("zapLogger field propagation", func() {
 	It("SentryError omits hierarchy_path when empty", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 		testErr := errors.New("something broke")
-		logger.SentryError(deps.FeatureFSMv2, "", testErr, "lifecycle failed")
+		logger.Sentry(telemetry.Identifier{Tag: "lifecycle failed", Brief: "lifecycle failed", Severity: telemetry.SeverityError}, deps.FeatureFSMv2, "", testErr)
 
 		m := parseLine(buf)
 		Expect(m).NotTo(HaveKey("hierarchy_path"))
@@ -82,7 +83,7 @@ var _ = Describe("zapLogger field propagation", func() {
 
 	It("SentryWarn omits hierarchy_path when empty", func() {
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
-		logger.SentryWarn(deps.FeatureFSMv2, "", "reconciliation slow")
+		logger.Sentry(telemetry.Identifier{Tag: "reconciliation slow", Brief: "reconciliation slow", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "", nil)
 
 		m := parseLine(buf)
 		Expect(m).NotTo(HaveKey("hierarchy_path"))
@@ -152,9 +153,9 @@ var _ = Describe("nopLogger contract", func() {
 		Expect(func() {
 			logger.Debug("debug")
 			logger.Info("info")
-			logger.SentryWarn(deps.FeatureExamples, "", "warn")
-			logger.SentryWarn(deps.FeatureFSMv2, "", "health warn")
-			logger.SentryError(deps.FeatureFSMv2, "", testErr, "action error")
+			logger.Sentry(telemetry.Identifier{Tag: "warn", Brief: "warn", Severity: telemetry.SeverityWarning}, deps.FeatureExamples, "", nil)
+			logger.Sentry(telemetry.Identifier{Tag: "health warn", Brief: "health warn", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "", nil)
+			logger.Sentry(telemetry.Identifier{Tag: "action error", Brief: "action error", Severity: telemetry.SeverityError}, deps.FeatureFSMv2, "", testErr)
 		}).NotTo(Panic())
 	})
 

@@ -299,8 +299,6 @@ func (p *panicOnSentryErrorCollectorLogger) Sentry(id telemetry.Identifier, _ de
 	}
 }
 
-func (p *panicOnSentryErrorCollectorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {
-}
 func (p *panicOnSentryErrorCollectorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
 	if !p.panicked.Load() {
 		p.panicked.Store(true)

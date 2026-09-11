@@ -495,7 +495,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		It("should extract port from monitor script pattern", func() {
 			// Test the regex parsing logic directly using sample script content
 			testCases := []struct {
-				name         string
+				name          string
 				scriptContent string
 				expectedPort  uint16
 				expectError   bool
@@ -512,16 +512,16 @@ done`,
 					expectError:  false,
 				},
 				{
-					name: "should parse different port numbers",
+					name:          "should parse different port numbers",
 					scriptContent: `curl -sSL --max-time 1 http://localhost:8080/ping`,
-					expectedPort: 8080,
-					expectError:  false,
+					expectedPort:  8080,
+					expectError:   false,
 				},
 				{
-					name: "should handle port 65535",
+					name:          "should handle port 65535",
 					scriptContent: `curl -sSL http://localhost:65535/ping`,
-					expectedPort: 65535,
-					expectError:  false,
+					expectedPort:  65535,
+					expectError:   false,
 				},
 				{
 					name: "should return error when no port pattern found",
@@ -536,7 +536,7 @@ echo "No curl commands here"`,
 				// Use regex pattern from the actual implementation
 				portRegex := regexp.MustCompile(`http://localhost:(\d+)/ping`)
 				matches := portRegex.FindStringSubmatch(tc.scriptContent)
-				
+
 				if tc.expectError {
 					Expect(len(matches)).To(BeNumerically("<", 2), "Test case: %s", tc.name)
 				} else {

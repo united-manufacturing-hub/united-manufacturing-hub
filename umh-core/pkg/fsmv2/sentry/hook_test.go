@@ -26,6 +26,7 @@ import (
 	sentrygo "github.com/getsentry/sentry-go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 
 	//nolint:revive // dot import for Ginkgo DSL
 	. "github.com/onsi/ginkgo/v2"
@@ -136,6 +137,17 @@ main.second()
 			frame := sentrygo.Frame{
 				Module:   "runtime/debug",
 				Function: "Stack",
+			}
+			Expect(sentry.IsInternalFrame(frame)).To(BeTrue())
+		})
+
+		It("should filter the logger's own Sentry method", func() {
+			// The filter names the method, so a rename leaves the logger as the
+			// innermost application frame and every event's culprit becomes the
+			// logger rather than the code that reported it.
+			frame := sentrygo.Frame{
+				Module:   "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps",
+				Function: "deps.(*zapLogger).Sentry",
 			}
 			Expect(sentry.IsInternalFrame(frame)).To(BeTrue())
 		})
@@ -1334,7 +1346,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 
 	It("SentryError produces exception with correct type and value", func() {
 		testErr := fmt.Errorf("connection refused: %w", io.EOF)
-		fsmLogger.SentryError(deps.FeatureFSMv2, "app(application)/w1(helloworld)", testErr, "supervisor::action::failed",
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "app(application)/w1(helloworld)", testErr,
 			deps.ActionName("connect"))
 
 		Eventually(func() int {
@@ -1348,7 +1360,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryError sets feature tag", func() {
-		fsmLogger.SentryError(deps.FeatureFSMv2, "", io.EOF, "supervisor::action::failed")
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "", io.EOF)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1359,7 +1371,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryError sets event_name tag from message", func() {
-		fsmLogger.SentryError(deps.FeatureFSMv2, "", io.EOF, "supervisor::action::failed")
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "", io.EOF)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1372,7 +1384,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	It("SentryError extracts error types from wrapped chain", func() {
 		rootErr := errors.New("root cause")
 		wrapped := fmt.Errorf("layer: %w", rootErr)
-		fsmLogger.SentryError(deps.FeatureFSMv2, "", wrapped, "supervisor::action::failed")
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "", wrapped)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1384,7 +1396,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryError with hierarchy_path derives fsm_version, worker_type, and worker_chain", func() {
-		fsmLogger.SentryError(deps.FeatureForWorker("communicator"), "app(application)/worker(communicator)", io.EOF, "supervisor::action::failed")
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureForWorker("communicator"), "app(application)/worker(communicator)", io.EOF)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1398,7 +1410,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryWarn captures at warn level without exception", func() {
-		fsmLogger.SentryWarn(deps.FeatureFSMv2, "", "collector_unresponsive",
+		fsmLogger.Sentry(telemetry.Identifier{Tag: "collector_unresponsive", Brief: "collector_unresponsive", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "", nil,
 			deps.Attempts(3))
 
 		Eventually(func() int {
@@ -1414,7 +1426,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 
 	It("With() context is preserved through FSMLogger", func() {
 		scoped := fsmLogger.With(deps.WorkerID("test-worker"))
-		scoped.SentryError(deps.FeatureFSMv2, "", io.EOF, "worker_failed")
+		scoped.Sentry(telemetry.Identifier{Tag: "worker_failed", Brief: "worker_failed", Severity: telemetry.SeverityError}, deps.FeatureFSMv2, "", io.EOF)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1427,8 +1439,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	It("SentryWarn with deps.Err still extracts typed error into Exception", func() {
 		// deps.Err() creates a typed error field that zap preserves as ErrorType.
 		// ExtractErrorFromFields finds it, so even SentryWarn produces an Exception.
-		fsmLogger.SentryWarn(deps.FeatureFSMv2, "", "shutdown_failed",
-			deps.Err(errors.New("connection reset")))
+		fsmLogger.Sentry(telemetry.Identifier{Tag: "shutdown_failed", Brief: "shutdown_failed", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "", errors.New("connection reset"))
 
 		Eventually(func() int {
 			return store.Len()
@@ -1440,7 +1451,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryError with extra fields captures them in Contexts", func() {
-		fsmLogger.SentryError(deps.FeatureFSMv2, "", io.EOF, "supervisor::action::failed",
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "", io.EOF,
 			deps.Attempts(3), deps.String("reason", "timeout"))
 
 		Eventually(func() int {

@@ -174,7 +174,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 		LastReadyAt:        statusData.ReadyTime,
 		LastDeploymentTime: getLastDeploymentTime(servicePath),
 		// Detect S6 "down and ready" edge case (see ServiceInfo.IsDownAndReady for detailed explanation)
-		IsDownAndReady:     statusData.IsReady && statusData.Pid == 0,
+		IsDownAndReady: statusData.IsReady && statusData.Pid == 0,
 	}
 
 	// --- Determine service status and calculate time fields ---

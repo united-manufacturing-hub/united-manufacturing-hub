@@ -588,7 +588,7 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 func (s *DefaultService) invalidatePathCache(path string) {
 	// Canonicalize the path for consistent cache keying
 	path = filepath.Clean(path)
-	
+
 	// Safely create path with trailing slash, avoiding double slashes
 	pathWithSlash := path
 	if !strings.HasSuffix(path, "/") {

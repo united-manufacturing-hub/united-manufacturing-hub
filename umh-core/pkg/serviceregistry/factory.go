@@ -61,7 +61,7 @@ func NewRegistry() (*Registry, error) {
 func GetGlobalRegistry() *Registry {
 	initMutex.Lock()
 	defer initMutex.Unlock()
-	
+
 	if !initialized || globalRegistry == nil {
 		panic("GetGlobalRegistry called before registry was initialized")
 	}

@@ -65,14 +65,6 @@ func (l *severityCapturingLogger) Sentry(id telemetry.Identifier, _ deps.Feature
 	l.record("sentryerror", id.Tag)
 }
 
-func (l *severityCapturingLogger) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {
-	l.record("sentrywarn", msg)
-}
-
-func (l *severityCapturingLogger) SentryError(_ deps.Feature, _ string, _ error, msg string, _ ...deps.Field) {
-	l.record("sentryerror", msg)
-}
-
 func (l *severityCapturingLogger) With(_ ...deps.Field) deps.FSMLogger { return l }
 
 // levelFor returns the level the given message was logged at, or "" if it was

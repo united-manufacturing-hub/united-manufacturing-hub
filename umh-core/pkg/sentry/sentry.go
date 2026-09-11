@@ -155,7 +155,6 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				event.Contexts["extra"][key] = v
 			}
 
-
 			// Special context keys that affect Sentry fingerprinting for better error grouping.
 			// These keys group errors by their semantic meaning rather than instance-specific data,
 			// making it easier to identify patterns and root causes in Sentry.
@@ -187,10 +186,10 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				event.Fingerprint = append(event.Fingerprint, valueStr)
 			}
 
-		if key == "trigger" {
-			valueStr := fmt.Sprintf("trigger: %v", value)
-			event.Fingerprint = append(event.Fingerprint, valueStr)
-		}
+			if key == "trigger" {
+				valueStr := fmt.Sprintf("trigger: %v", value)
+				event.Fingerprint = append(event.Fingerprint, valueStr)
+			}
 		}
 	}
 

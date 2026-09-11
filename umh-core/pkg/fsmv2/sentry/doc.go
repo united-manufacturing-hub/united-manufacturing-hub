@@ -17,7 +17,7 @@
 // The SentryHook wraps a zapcore.Core and intercepts warn/error-level log
 // entries, forwarding them to Sentry with fingerprinting and debouncing.
 //
-// Production code uses [deps.FSMLogger] methods (SentryWarn, SentryError)
+// Production code uses [deps.FSMLogger.Sentry]
 // which inject "feature", "hierarchy_path", and "error" fields that this hook extracts.
 //
 // # How Errors Appear in Sentry

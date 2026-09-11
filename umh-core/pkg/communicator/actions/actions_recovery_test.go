@@ -302,11 +302,7 @@ func (l *countingPanickingFSMLogger) Sentry(id telemetry.Identifier, feature dep
 		return
 	}
 
-	l.SentryError(feature, hp, cause, id.Tag, fields...)
-}
-func (l *countingPanickingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
-func (l *countingPanickingFSMLogger) SentryError(feature deps.Feature, hp string, err error, msg string, fields ...deps.Field) {
-	l.calls = append(l.calls, capturedSentryError{feature, hp, err, msg, fields})
+	l.calls = append(l.calls, capturedSentryError{feature, hp, cause, id.Tag, fields})
 	if len(l.calls) == 1 {
 		panic("primary sentry boom")
 	}
@@ -389,11 +385,7 @@ func (l *capturingFSMLogger) Sentry(id telemetry.Identifier, feature deps.Featur
 		return
 	}
 
-	l.SentryError(feature, hp, cause, id.Tag, fields...)
-}
-func (l *capturingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
-func (l *capturingFSMLogger) SentryError(feature deps.Feature, hp string, err error, msg string, fields ...deps.Field) {
-	l.calls = append(l.calls, capturedSentryError{feature, hp, err, msg, fields})
+	l.calls = append(l.calls, capturedSentryError{feature, hp, cause, id.Tag, fields})
 }
 func (l *capturingFSMLogger) With(...deps.Field) deps.FSMLogger { return l }
 
@@ -469,10 +461,6 @@ func (l panickingFSMLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ st
 		return
 	}
 
-	panic("logger boom")
-}
-func (panickingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
-func (panickingFSMLogger) SentryError(deps.Feature, string, error, string, ...deps.Field) {
 	panic("logger boom")
 }
 func (l panickingFSMLogger) With(...deps.Field) deps.FSMLogger { return l }

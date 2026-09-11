@@ -561,9 +561,4 @@ func (s *spyLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ string, _ 
 	s.sentryWarnMsgs = append(s.sentryWarnMsgs, id.Tag)
 }
 
-func (s *spyLogger) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {
-	s.sentryWarnCount++
-	s.sentryWarnMsgs = append(s.sentryWarnMsgs, msg)
-}
-
 func (s *spyLogger) With(_ ...deps.Field) deps.FSMLogger { return s }

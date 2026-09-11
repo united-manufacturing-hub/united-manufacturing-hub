@@ -502,10 +502,6 @@ func (p *panicOnSentryErrorLogger) Sentry(id telemetry.Identifier, _ deps.Featur
 
 	panic("logger Sentry panicked")
 }
-func (p *panicOnSentryErrorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {}
-func (p *panicOnSentryErrorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
-	panic("logger SentryError panicked")
-}
 func (p *panicOnSentryErrorLogger) With(fields ...deps.Field) deps.FSMLogger { return p }
 
 // panickingWorker is a test worker that panics during state machine execution.

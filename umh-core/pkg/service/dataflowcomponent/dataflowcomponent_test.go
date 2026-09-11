@@ -518,7 +518,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockBenthosService.ReconcileManagerError = mockError
 
 			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick+1, SnapshotTime: time.Now()})
+			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick + 1, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).ToNot(HaveOccurred()) // it should not return an error

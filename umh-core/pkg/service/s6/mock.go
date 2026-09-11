@@ -301,7 +301,7 @@ func (m *MockService) CheckServiceDirectoryIntegrity(ctx context.Context, servic
 	if m.ErrorMode {
 		return HealthUnknown
 	}
-	
+
 	// If service doesn't exist, return HealthBad
 	if !m.MockExists {
 		return HealthBad

@@ -366,29 +366,29 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	// Down File Management Strategy:
 	// Down files are S6 control files that indicate whether a service should auto-start.
 	// We deliberately DO NOT track them in artifacts because:
-	// 
+	//
 	// 1. They are temporary control files - removed when starting, recreated when stopping
 	// 2. Their presence/absence indicates desired operational state, not health
 	// 3. After agent restart, the S6 service directory remains in its actual state:
 	//    - Running service: no down file, process still running
 	//    - Stopped service: has down file, process not running
 	// 4. Tracking them would cause false failures because after restart:
-	//    - We lose in-memory tracking (artifacts==nil) 
+	//    - We lose in-memory tracking (artifacts==nil)
 	//    - Service might be legitimately running (no down file)
 	//    - Health check would fail on missing down file, triggering unnecessary removal
-	// 
+	//
 	// Our mitigation strategy relies on observed state detection:
 	// - UpdateObservedStateOfInstance calls Status() to detect actual S6 service state
 	// - This detects both process state (up/down) and control state (WantUp via down file)
 	// - FSM reconciles from this observed state to desired state, handling any inconsistencies
-	// 
+	//
 	// Edge case: If config changes during agent crash (e.g., running→stopped), there may be
 	// a brief inconsistency where the service is still running but should be stopped.
 	// This is acceptable because:
 	// - Extremely rare (requires simultaneous config change + crash)
 	// - Self-corrects within 1-2 reconciliation cycles via observed state detection
 	// - No data loss or corruption, just temporary state mismatch
-	
+
 	// Create down file to prevent automatic startup
 	downFilePath := filepath.Join(repositoryDir, "down")
 	if err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644); err != nil {

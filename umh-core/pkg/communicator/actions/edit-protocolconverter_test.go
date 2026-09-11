@@ -78,14 +78,6 @@ func (l *recordingFSMLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ s
 	l.record(id.Tag, fields)
 }
 
-func (l *recordingFSMLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
-	l.record(msg, fields)
-}
-
-func (l *recordingFSMLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
-	l.record(msg, fields)
-}
-
 func (l *recordingFSMLogger) With(fields ...deps.Field) deps.FSMLogger { return l }
 
 func (l *recordingFSMLogger) record(name string, fields []deps.Field) {
