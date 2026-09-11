@@ -7,13 +7,9 @@ restart. Without them, an instance is marked degraded whenever its CPU usage sta
 the cores it may use, whether or not work is being delayed.
 {% endhint %}
 
-What UMH measures against depends on whether the container has a CPU limit (a Docker `--cpus` or a Kubernetes CPU limit).
+UMH Core reports whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page, and while that status is degraded UMH will not start another bridge there. High usage on its own does not make an instance degraded: it degrades when its headroom is gone, or when its work is measurably delayed, which UMH reads from throttling, CPU pressure and steal. (For the reasoning, see [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/).)
 
-With no limit, the machine is the ceiling. UMH averages how busy the machine is over 60 seconds and reports degraded when less than about one core is free, the point where everything on the box, UMH included, starts waiting for CPU. The view also shows the container's own usage, so you can see how much of the machine total is UMH.
-
-With a limit, the limit is the ceiling. UMH measures headroom against those cores rather than the machine, and reports degraded once its usage passes 90% of the limit, the last 10% being held in reserve, or when the kernel throttles it. A full machine can still slow a container that sits below its limit, so where UMH can read the host, it warns on that too.
-
-High usage on its own does not make an instance degraded. It degrades when the headroom is gone, or when work is measurably delayed, which UMH reads from throttling, CPU pressure and steal. (For the reasoning, see [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/).)
+What UMH measures headroom against depends on whether the container has a CPU limit (a Docker `--cpus` or a Kubernetes CPU limit). With no limit, the machine is the ceiling: UMH averages how busy the machine is over 60 seconds and reports degraded when less than about one core is free. It also shows the container's own usage, so you can see how much of the machine total is UMH. With a limit, the limit is the ceiling: UMH measures headroom against those cores rather than the machine, and reports degraded once its usage passes 90% of the limit, the last 10% being held in reserve, or when the kernel throttles it.
 
 ## What each CPU status means
 
