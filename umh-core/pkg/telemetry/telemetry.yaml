@@ -1,0 +1,14 @@
+# Every Sentry event umh-core can report. Editing this file is how an event comes
+# to exist; identifiers.gen.go is generated from it by `make generate-telemetry`.
+#
+# A tag and a severity are stable for the life of an entry: both feed the Sentry
+# fingerprint, so changing either starts a new issue and orphans the old one's
+# history. A brief is safe to edit.
+cpu:
+  read_failed:
+    brief: A cgroup CPU file could not be read; the measurement continues.
+    severity: warning
+transport:
+  push::persistent_failure:
+    brief: Outbound pushes keep failing; the instance may look offline.
+    severity: error

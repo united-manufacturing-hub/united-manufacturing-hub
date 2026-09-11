@@ -19,8 +19,12 @@ package telemetry
 // Severity is an event's log level, declared once per event in telemetry.yaml.
 type Severity string
 
-// SeverityWarning reports at WARN level.
-const SeverityWarning Severity = "warning"
+const (
+	// SeverityWarning reports at WARN level.
+	SeverityWarning Severity = "warning"
+	// SeverityError reports at ERROR level.
+	SeverityError Severity = "error"
+)
 
 // Identifier is one declared event.
 type Identifier struct {
