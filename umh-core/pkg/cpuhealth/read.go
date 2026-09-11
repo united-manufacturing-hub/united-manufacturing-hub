@@ -53,6 +53,8 @@ const (
 // NewLinuxSampler returns a Sampler reading via fs from base.
 func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 	return &linuxSampler{
+		fs:     fs,
+		base:   base,
 		cgroup: newCgroupSource(fs, base),
 		host:   newHostSource(fs),
 	}
@@ -64,8 +66,16 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 // exists only to stamp the tick's single Timestamp and derive CPU scope, the
 // one fact that needs both sources' reads to compute.
 type linuxSampler struct {
-	cgroup *cgroupSource
+	fs   filesystem.Service
+	base string
+
+	cgroup cgroupReader
 	host   *hostSource
+
+	// psiAvailable is sticky: set true on the first successful cpu.pressure
+	// read and never cleared, even when a later read fails. It belongs to the
+	// machine rather than to a reader, which is why it is held here.
+	psiAvailable bool
 }
 
 // Read samples the cgroup at base from cpu.max, the container's CPU limit: a
@@ -95,11 +105,11 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	if psiErr != nil {
 		smp.Pressure = diagnosis.Unknown()
 	} else {
-		s.cgroup.psiAvailable = true
+		s.psiAvailable = true
 		smp.Pressure = diagnosis.Known(frac)
 	}
 	smp.record(OpCPUPressure, classifyRead(psiErr))
-	smp.PsiAvailable = s.cgroup.psiAvailable
+	smp.PsiAvailable = s.psiAvailable
 
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
@@ -112,7 +122,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// different thing: the three readings below stay absent and the sample
 		// carries on, so a host keeping its CPU accounting elsewhere is not
 		// degraded over a file it was never going to have.
-		return smp, fmt.Errorf("parse %s/cpu.stat: %w", s.cgroup.base, statErr)
+		return smp, fmt.Errorf("parse %s/cpu.stat: %w", s.base, statErr)
 	}
 	// A cancelled tick fails every read, which is the same shape as a host with
 	// none of these files. Without this the sample reports the second.
@@ -192,15 +202,15 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, smp *Sample, machine 
 // cgroup.controllers and /proc/self/cgroup, and the base directory's entry
 // count. None of them is parsed or judged here.
 func (s *linuxSampler) recordEvidence(ctx context.Context, smp *Sample) {
-	controllers, controllersOutcome := s.cgroup.readRawFile(ctx, s.cgroup.base+cgroupControllersFile)
+	controllers, controllersOutcome := readRawFile(ctx, s.fs, s.base+cgroupControllersFile)
 	smp.CgroupControllersRaw = controllers
 	smp.record(OpCgroupControllers, controllersOutcome)
 
-	procSelf, procSelfOutcome := s.cgroup.readRawFile(ctx, procSelfCgroupPath)
+	procSelf, procSelfOutcome := readRawFile(ctx, s.fs, procSelfCgroupPath)
 	smp.ProcSelfCgroupRaw = procSelf
 	smp.record(OpProcSelfCgroup, procSelfOutcome)
 
-	baseEntries, baseDirOutcome := s.cgroup.readBaseDirEntryCount(ctx)
+	baseEntries, baseDirOutcome := readBaseDirEntryCount(ctx, s.fs, s.base)
 	smp.BaseDirEntryCount = baseEntries
 	smp.record(OpBaseDir, baseDirOutcome)
 }

@@ -39,10 +39,6 @@ type cgroupSource struct {
 	base string
 
 	usageBase usageBaseline
-
-	// psiAvailable is sticky: set true on the first successful cpu.pressure
-	// read and never cleared, even when a later read fails.
-	psiAvailable bool
 }
 
 // newCgroupSource returns a cgroupSource reading via fs from base.
@@ -276,8 +272,8 @@ const (
 
 // readRawFile returns a file's text verbatim, with the outcome that says why
 // there is none.
-func (c *cgroupSource) readRawFile(ctx context.Context, path string) (string, ReadOutcome) {
-	data, err := c.fs.ReadFile(ctx, path)
+func readRawFile(ctx context.Context, fs filesystem.Service, path string) (string, ReadOutcome) {
+	data, err := fs.ReadFile(ctx, path)
 	if err != nil {
 		return "", classifyRead(err)
 	}
@@ -288,8 +284,8 @@ func (c *cgroupSource) readRawFile(ctx context.Context, path string) (string, Re
 // readBaseDirEntryCount keeps only the entry count. A mounted cgroup v2 tree
 // holds dozens of files, so a directory holding two or three says the mount is
 // not the one we expect. An unlistable directory yields -1, never 0.
-func (c *cgroupSource) readBaseDirEntryCount(ctx context.Context) (int, ReadOutcome) {
-	entries, err := c.fs.ReadDir(ctx, c.base)
+func readBaseDirEntryCount(ctx context.Context, fs filesystem.Service, base string) (int, ReadOutcome) {
+	entries, err := fs.ReadDir(ctx, base)
 	if err != nil {
 		return -1, classifyRead(err)
 	}
