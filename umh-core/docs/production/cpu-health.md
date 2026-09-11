@@ -27,9 +27,9 @@ What UMH measures headroom against depends on whether the container has a CPU li
 The Management Console shows CPU on the instance's detail page: the status, the usage row, and a
 Technical Details section listing every signal UMH can measure on that machine.
 
-Both the status and Technical Details carry the thresholds, so you do not have to look them up.
-A healthy instance states its remaining headroom, and each Technical Details line gives the
-reading next to the mark that would change it:
+Both the status and Technical Details carry the thresholds. A healthy instance states its
+remaining headroom, and each Technical Details line gives the reading next to the mark that would
+change it:
 
 ```text
 CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can use 1.5 more before it is marked degraded.
