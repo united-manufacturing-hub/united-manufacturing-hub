@@ -1,7 +1,7 @@
 # CPU Health
 
 {% hint style="info" %}
-**Preview.** This reporting needs UMH Core v0.44.37 or later, started with `USE_FSMV2_CPU=true`
+**Early access.** This reporting needs UMH Core v0.44.37 or later, started with `USE_FSMV2_CPU=true`
 and `USE_FSMV2_TRANSPORT=true`. Both are read at startup, so changing them requires a container
 restart. Without them, an instance is marked degraded whenever its CPU usage stays above 70% of
 the cores it may use, whether or not work is being delayed.
