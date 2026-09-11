@@ -34,9 +34,16 @@ var tagFormat = regexp.MustCompile(`^[a-z0-9_]+(::[a-z0-9_]+)+$`)
 // registry grows; the specs below then cover its entries without being edited.
 func domainVars() []any {
 	return []any{
+		telemetry.Actions,
+		telemetry.Adapter,
+		telemetry.Communicator,
+		telemetry.Config,
+		telemetry.Cse,
+		telemetry.Examples,
 		telemetry.Cpu,
 		telemetry.Telemetry,
-		telemetry.Transport,
+		telemetry.Supervisor,
+		telemetry.Workers,
 	}
 }
 
