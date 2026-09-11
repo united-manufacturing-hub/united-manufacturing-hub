@@ -20,7 +20,7 @@ What UMH measures headroom against depends on whether the container has a CPU li
 | **CPU limited** | The instance hit its CPU limit and was paused until the next scheduling cycle, for example in 12% of cycles over the last minute. Work is being delayed. | Raise the CPU limit, or reduce the load on the instance. |
 | **CPU contention** | Tasks inside the instance spent time waiting for a free CPU core, for example 23% of the last minute. | Reduce the load, or give the instance more CPU. Workloads sharing the server may be competing for it. |
 | **CPU taken by the server** | Other virtual machines on the same physical server took CPU this instance needed. | On your virtualization platform, give this VM more guaranteed CPU, or move the other VMs off the server. |
-| **CPU running near full** | The host or the CPU limit is exhausted, so there is no room for the next burst of work. With host statistics readable, this fires when less than one core is free; without them, at a coarser proxy of sustained usage above 70% of the machine's cores. Technical Details names which case it is. | Add CPU capacity, reduce load, or raise the CPU limit. If the host is full and this container is not the cause, reserve or pin cores for UMH, or reduce what else runs on the machine: a CPU limit caps UMH rather than protecting it. |
+| **CPU running near full** | There is no room left for the next burst of work, because either the machine is full or the instance is at its CPU limit. The status message says which. | Add CPU capacity, reduce load, or raise the CPU limit. If the host is full and this container is not the cause, reserve or pin cores for UMH, or reduce what else runs on the machine: a CPU limit caps UMH rather than protecting it. |
 
 ## Where to see it
 
