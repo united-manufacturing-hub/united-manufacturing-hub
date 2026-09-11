@@ -104,12 +104,22 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
 	smp.CPUStatRaw = stat.Raw
-	smp.record(OpCPUStat, statOutcome(stat, statErr))
-	if statErr != nil {
-		// cpu.stat is primary: a read failure there fails the WHOLE sample,
-		// never a silent drop of the throttle counters as absent no-signal.
-		return smp, fmt.Errorf("read %s/cpu.stat: %w", s.cgroup.base, statErr)
+	statResult := statOutcome(stat, statErr)
+	smp.record(OpCPUStat, statResult)
+	if statResult == ReadUnparsable {
+		// A cpu.stat that opens and does not parse is corrupt, and every number
+		// derived from it would be a guess. A cpu.stat that will not open is a
+		// different thing: the three readings below stay absent and the sample
+		// carries on, so a host keeping its CPU accounting elsewhere is not
+		// degraded over a file it was never going to have.
+		return smp, fmt.Errorf("parse %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
+	// A cancelled tick fails every read, which is the same shape as a host with
+	// none of these files. Without this the sample reports the second.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return smp, ctxErr
+	}
+
 	smp.NrPeriods = stat.Periods
 	smp.NrThrottled = stat.Throttled
 	smp.UsageUsec = stat.Usage

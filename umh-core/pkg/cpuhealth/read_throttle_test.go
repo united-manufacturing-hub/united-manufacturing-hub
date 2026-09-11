@@ -15,9 +15,9 @@
 // The sampler reads both throttle counters (nr_periods,
 // nr_throttled) out of the SAME cpu.stat bytes it reads for usage — never a
 // second cpu.stat read — and marks either counter unavailable when it is absent
-// from cpu.stat or fails to parse, never a trusted 0. cpu.stat is primary: a
-// READ failure there fails the whole sample, the first time Read's error is
-// live. Drives the real sampler over a fake filesystem so every branch is
+// from cpu.stat or fails to parse, never a trusted 0. A cpu.stat that will not
+// open leaves its three readings absent; only one that opens and does not parse
+// fails the sample. Drives the real sampler over a fake filesystem so every branch is
 // reachable; the mock counts cpu.stat reads so the single-read contract is
 // asserted too.
 package cpuhealth_test
@@ -25,11 +25,14 @@ package cpuhealth_test
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"syscall"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -58,7 +61,7 @@ var _ = Describe("throttle counters", func() {
 		return cpuhealth.NewLinuxSampler(fs, base), &reads
 	}
 
-	It("reads both throttle counters from the same cpu.stat, marks either unavailable when absent or unparsable, and fails the whole sample when cpu.stat cannot be read", func() {
+	It("reads both throttle counters from the same cpu.stat, marks either unavailable when absent, and fails the sample only when cpu.stat will not parse", func() {
 		ctx := context.Background()
 
 		// Both counters present. The throttle facts and the usage total all come
@@ -97,11 +100,37 @@ var _ = Describe("throttle counters", func() {
 		_, err = sampler.Read(ctx)
 		Expect(err).To(HaveOccurred(), "an unparsable cpu.stat value must fail the whole sample")
 
-		// cpu.stat is PRIMARY: a read failure there fails the WHOLE sample — the
-		// first time Read's error is live — rather than silently dropping the
-		// counters as if they were an absent no-signal.
-		sampler, _ = newSampler(nil, errors.New("permission denied"))
-		_, err = sampler.Read(ctx)
-		Expect(err).To(HaveOccurred(), "a cpu.stat read failure must fail the whole sample")
+		// A cpu.stat that will not open leaves its three readings absent and
+		// fails nothing. A host that keeps its CPU accounting somewhere else has
+		// no such file, and failing there degrades the instance over a file the
+		// box was never going to have.
+		sampler, _ = newSampler(nil, pathErr(base+"/cpu.stat", syscall.EACCES))
+		s, err = sampler.Read(ctx)
+		Expect(err).NotTo(HaveOccurred(), "a cpu.stat that will not open must not fail the sample")
+
+		_, ok = s.UsageUsec.Get()
+		Expect(ok).To(BeFalse(), "an unread usage total must be absent, not a trusted 0")
+		_, ok = s.NrPeriods.Get()
+		Expect(ok).To(BeFalse())
+		_, ok = s.NrThrottled.Get()
+		Expect(ok).To(BeFalse())
+
+		// The reading going absent is not the whole story: without the cause on
+		// the sample, nothing downstream can tell this box from one whose
+		// cpu.stat read fine and held nothing.
+		Expect(s.Reads).To(ContainElement(cpuhealth.ReadResult{
+			Op:      cpuhealth.OpCPUStat,
+			Outcome: cpuhealth.ReadPermissionDenied,
+		}))
+
+		// Every other field of the sample still reads. A quota was served, so
+		// losing cpu.stat must not cost the capacity that came from cpu.max.
+		Expect(s.Quota).To(Equal(diagnosis.Known(2.0)))
 	})
 })
+
+// pathErr is the shape a real filesystem returns, and the shape errors.Is needs
+// to tell a missing file from an unreadable one.
+func pathErr(path string, errno syscall.Errno) error {
+	return &fs.PathError{Op: "open", Path: path, Err: errno}
+}

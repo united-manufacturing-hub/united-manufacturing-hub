@@ -183,7 +183,7 @@ func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 		if len(fields) >= 2 && fields[0] == key {
 			v, err := strconv.ParseFloat(fields[1], 64)
 			if err != nil {
-				return diagnosis.Unknown(), fmt.Errorf("unparsable %s value %q: %w", key, fields[1], err)
+				return diagnosis.Unknown(), fmt.Errorf("%w: %s value %q: %w", errUnparsableRead, key, fields[1], err)
 			}
 			return diagnosis.Known(v), nil
 		}
