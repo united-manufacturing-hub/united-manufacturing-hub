@@ -20,29 +20,30 @@
 // configuration faults (Auth=TimescaleAuthInvalid) rather than transient network
 // faults, which leave authentication unverified (Auth=TimescaleAuthUnknown).
 //
-// # Scope: connection health only
+// # Two cadences in one worker
 //
-// This worker checks the connection and nothing else: reachability, latency,
-// and whether the credentials and database name are accepted. Its per-tick cost
-// is a single `SELECT 1` over one pooled, long-lived connection.
+// The connection check runs every tick and costs a single `SELECT 1`. Database
+// metrics (versions, database size, hypertable and chunk counts, compression
+// totals, background job failures) ride the same worker but collect only every
+// metricsInterval, gated by metricsSchedule.
 //
-// Database metrics (long-running queries, compression ratios, background job
-// state, especially aborted compression jobs, and the rest of the operational
-// signals on the Timescale Grafana dashboard) are deliberately NOT collected here.
-// They belong to a separate future worker (TODO(ENG-5320): the timescale metrics
-// monitor), for two reasons:
+// One worker rather than two, because a worker owns one Collector and one poll
+// goroutine: the connection check and the metric reads run sequentially on the
+// existing pool and can never contend for a connection. A second worker would
+// poll concurrently, and a slow metric read could then block `SELECT 1` in
+// Acquire until the observation deadline -- reporting a healthy database as
+// degraded, because pgxpool.Pool.QueryRow acquires inside the span this worker
+// times as connection latency.
 //
-//   - Cost. Those metrics need involved SQL that costs far more CPU on the
-//     server than a `SELECT 1`. The metrics worker will run on its own, slower
-//     tick so heavy queries never share this monitor's cadence. Splitting the
-//     workers keeps connection health cheap and always-fresh regardless of how
-//     expensive metrics collection becomes.
-//   - Sequencing. Which metrics to expose still needs discussion with the VEs.
-//     Keeping that out of this worker means it does not block Historian
-//     integration.
+// # Metrics never decide health
 //
-// Running two workers adds only one extra pooled connection to the database, so
-// the overhead is minimal and worth the isolation.
+// Poll returns a non-nil error only when the connection fails. A failed metric
+// read is recorded in TimescaleMetrics.MetricsError and the poll still succeeds,
+// so a database that answers but refuses the catalog reads (a plain Postgres
+// with no TimescaleDB, a role without schema access) reports healthy with an
+// explained metrics gap. Returning the error instead would let a slow catalog
+// read light up the historian health badge. This is enforced by discipline in
+// Poll, not by the framework: anything added there must keep it.
 package fsmv2timescale
 
 import (

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New Features
+
+- The instance now reports the state of its historian database alongside the connection check it already ran: the Postgres and TimescaleDB versions, how much disk the database occupies, how many hypertables and chunks it holds, how much the compressed chunks save, and how many of its background compression and retention jobs are failing. The figures refresh once a minute rather than every second, since none of them move faster than that, and a database that answers but refuses the reads reports the reason instead of going unhealthy
+
 ## [0.44.38]
 
 ### Improvements
