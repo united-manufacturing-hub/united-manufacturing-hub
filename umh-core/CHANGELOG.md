@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Instances on hosts whose CPU accounting sits outside the container's own cgroup are no longer reported as degraded, which previously blocked every bridge on them. CPU monitoring reads as unavailable on such a host instead
+
 ## [0.44.38]
 
 ### Improvements
@@ -19,7 +23,6 @@
 
 - Topics no longer go missing from the Topic Browser when several updates arrive in quick succession
 - The Topic Browser now updates as data arrives instead of in bursts roughly every 10 seconds
-- Instances on hosts whose CPU accounting sits outside the container's own cgroup are no longer reported as degraded, which previously blocked every bridge on them. CPU monitoring reads as unavailable on such a host instead
 
 ## [0.44.36]
 
