@@ -76,8 +76,7 @@ var _ = Describe("RunningDegradedState", func() {
 						},
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-						},
+						BaseDesiredState: fsmv2config.BaseDesiredState{},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
@@ -106,8 +105,7 @@ var _ = Describe("RunningDegradedState", func() {
 						},
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-						},
+						BaseDesiredState: fsmv2config.BaseDesiredState{},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
@@ -137,8 +135,7 @@ var _ = Describe("RunningDegradedState", func() {
 						},
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-						},
+						BaseDesiredState: fsmv2config.BaseDesiredState{},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
@@ -167,8 +164,7 @@ var _ = Describe("RunningDegradedState", func() {
 						},
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-						},
+						BaseDesiredState: fsmv2config.BaseDesiredState{},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
@@ -197,8 +193,7 @@ var _ = Describe("RunningDegradedState", func() {
 						},
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-						},
+						BaseDesiredState: fsmv2config.BaseDesiredState{},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,

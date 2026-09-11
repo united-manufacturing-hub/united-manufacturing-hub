@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/state"
@@ -136,8 +137,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
 		if err != nil {
-			cfg.Logger.SentryWarn(deps.FeatureExamples, "", "sync_id_fetch_failed",
-				deps.Err(err),
+			cfg.Logger.Sentry(telemetry.Examples.Runner.SyncIdFetchFailed, deps.FeatureExamples, "", err,
 				deps.String("impact", "dump_shows_all_changes"))
 		}
 	}
@@ -207,8 +207,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
 			if err != nil {
-				cfg.Logger.SentryWarn(deps.FeatureExamples, "", "scenario_dump_failed",
-					deps.Err(err))
+				cfg.Logger.Sentry(telemetry.Examples.Scenario.DumpFailed, deps.FeatureExamples, "", err)
 			} else {
 				fmt.Print(dump.FormatHuman())
 			}
@@ -259,7 +258,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	if cfg.DumpStore {
-		cfg.Logger.SentryWarn(deps.FeatureExamples, "", "dump_store_not_supported_for_v2",
+		cfg.Logger.Sentry(telemetry.Examples.Store.DumpUnsupportedForV2, deps.FeatureExamples, "", nil,
 			deps.String("scenario", cfg.ScenarioV2.Name),
 			deps.String("impact", "no_store_dump_printed"))
 	}

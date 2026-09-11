@@ -24,6 +24,7 @@ import (
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 const (
@@ -128,7 +129,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		// Transient errors are silent -- the failurerate.Tracker in RecordAuthError
 		// fires SentryWarn("persistent_auth_failure") if they sustain.
 		if !errType.IsTransient() && deps.GetPersistentAuthErrorCount() == 1 {
-			deps.GetLogger().SentryWarn(depspkg.FeatureForWorker(deps.GetWorkerType()), deps.GetHierarchyPath(), "authentication_failed",
+			deps.GetLogger().Sentry(telemetry.Workers.Auth.Failed, depspkg.FeatureForWorker(deps.GetWorkerType()), deps.GetHierarchyPath(), nil,
 				depspkg.Err(err), depspkg.String("errorType", errType.String()))
 		}
 
@@ -160,7 +161,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		)
 		deps.SetAuthenticatedUUID(authResp.InstanceUUID)
 	} else {
-		logger.SentryWarn(depspkg.FeatureForWorker(deps.GetWorkerType()), deps.GetHierarchyPath(), "instance_uuid_missing_in_auth_response",
+		logger.Sentry(telemetry.Workers.Auth.InstanceUuidMissing, depspkg.FeatureForWorker(deps.GetWorkerType()), deps.GetHierarchyPath(), nil,
 			depspkg.String("instance_name", authResp.InstanceName),
 			depspkg.Bool("has_token", authResp.Token != ""))
 	}

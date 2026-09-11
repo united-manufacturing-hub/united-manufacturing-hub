@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
@@ -175,16 +176,15 @@ func init() {
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PushDependencies {
 			parentDeps := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
 			if parentDeps == nil {
-				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath,
-					errors.New("parent transport deps not published"),
-					"push_parent_transport_deps_missing")
+				logger.Sentry(telemetry.Workers.Push.ParentTransportDepsMissing, deps.FeatureForWorker("push"), id.HierarchyPath,
+					errors.New("parent transport deps not published"))
 
 				return nil
 			}
 
 			d, err := NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, sr, id))
 			if err != nil {
-				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath, err, "push_dependencies_creation_failed")
+				logger.Sentry(telemetry.Workers.Push.DependenciesCreationFailed, deps.FeatureForWorker("push"), id.HierarchyPath, err)
 
 				return nil
 			}

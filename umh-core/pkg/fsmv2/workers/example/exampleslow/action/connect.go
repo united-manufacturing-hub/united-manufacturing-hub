@@ -21,6 +21,7 @@ import (
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 const ConnectActionName = "connect"
@@ -46,7 +47,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 		case <-time.After(time.Duration(delaySeconds) * time.Second):
 			logger.Info("Connect delay completed successfully")
 		case <-ctx.Done():
-			logger.SentryWarn(depspkg.FeatureExamples, deps.GetHierarchyPath(), "connect_cancelled_during_delay",
+			logger.Sentry(telemetry.Workers.Connect.CancelledDuringDelay, depspkg.FeatureExamples, deps.GetHierarchyPath(), nil,
 				depspkg.String("reason", "context_done"),
 				depspkg.Int("delay_seconds", delaySeconds))
 
