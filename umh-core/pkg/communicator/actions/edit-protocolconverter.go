@@ -46,6 +46,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -53,6 +54,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -108,11 +110,8 @@ type EditProtocolConverterAction struct {
 	configManager config.ConfigManager
 
 	fsmLogger deps.FSMLogger
-	// lastRenderErr holds the most recent renderDesiredDFCConfig error so the
-	// awaitRollout timeout message can surface the real cause instead of just
-	// "did not become active in time". It is sticky: compareSingleDFCConfig
-	// clears it only when a later render succeeds, so ticks that never reach
-	// a render (for example while Benthos restarts) keep the captured cause.
+	// Sticky: compareSingleDFCConfig clears it only when a later render succeeds,
+	// so a tick that never reaches a render keeps the captured cause.
 	lastRenderErr error
 
 	// lastFailedDFCType records which DFC (read/write) produced the most
@@ -161,6 +160,11 @@ type EditProtocolConverterAction struct {
 
 	// Parsed request payload (only populated after Parse)
 	protocolConverterUUID uuid.UUID
+
+	// nmap's observed endpoint is re-read from the generated scan script, which is
+	// rewritten at persist time, so it names the new endpoint several ticks before
+	// anything dials it. Only a scan started after this is evidence.
+	persistedAt time.Time
 
 	// rolloutSentryReported tells Execute to skip the generic rollout_failed
 	// Sentry event for this abort. Every awaitRollout abort path fires its own
@@ -272,8 +276,6 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	// Validate read DFC state — validate independently of whether config was provided,
-	// so state-only edits (readDFCSvcCfg == nil) are also checked.
 	if a.readDFCState != "" {
 		if err := ValidateDataFlowComponentState(a.readDFCState); err != nil {
 			return fmt.Errorf("invalid read DFC state: %w", err)
@@ -348,7 +350,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	// Await rollout and perform health checks
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, err := a.awaitRollout(oldConfig, desiredPCState)
+		errCode, err := a.awaitRollout(oldConfig, newSpec, desiredPCState)
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -480,6 +482,8 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to update protocol converter: %w", err)
 	}
 
+	a.persistedAt = time.Now()
+
 	// deep copy the old config therefore setup a full config
 	// this may seem hacky but like that we can reuse the Clone() function
 	// and we do not need to implement a custom Clone() function for the ProtocolConverterConfig
@@ -507,7 +511,11 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 // The function returns the error code and the error message via an error object.
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
-func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConverterConfig, desiredPCState string) (string, error) {
+func (a *EditProtocolConverterAction) awaitRollout(
+	rollbackConfig config.ProtocolConverterConfig,
+	rolloutConfig config.ProtocolConverterConfig,
+	desiredPCState string,
+) (string, error) {
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
@@ -548,6 +556,8 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 		// consecutive identical failures instead of burning the full timeout.
 		prevRenderErrMsg     string
 		identicalRenderFails int
+
+		currentStateReason string
 	)
 
 	const maxIdenticalRenderFails = 3
@@ -560,23 +570,27 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 		select {
 		case <-timeout:
 			// rollback to previous configuration
-			rollbackErr := a.rollbackEdit(pcConfig)
+			rollbackErr := a.rollbackEdit(rollbackConfig)
 			if rollbackErr != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", rollbackErr)
 				stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, rollbackErr)
 				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_rollback_failed",
-					deps.String("pcConfig", pcConfig.String()))
+					deps.String("rollbackConfig", rollbackConfig.String()))
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
 
 			stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
+			if currentStateReason != "" {
+				stateMessage += fmt.Sprintf(" (last check: %s)", currentStateReason)
+			}
+
 			if a.lastRenderErr != nil {
 				stateMessage += fmt.Sprintf(" (root cause: %v)", a.lastRenderErr)
 			}
 
 			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout",
-				deps.String("pcConfig", pcConfig.String()),
+				deps.String("rollbackConfig", rollbackConfig.String()),
 				deps.String("desiredPCState", desiredPCState),
 			)
 
@@ -627,20 +641,15 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				}
 
 				found = true
-				currentStateReason := "current state: " + instance.CurrentState
+				currentStateReason = "current state: " + instance.CurrentState
 
 				if a.dfcType == DFCTypeEmpty {
-					// For empty DFC type (connection/location/state update only)
-					// Only check the nmap port when activating; when stopping, nmap is also
-					// stopped so it will never update to the new port.
+					// Unreachable while applyMutation forces the bridge active.
+					// Kept because a stopped bridge stops its nmap service and
+					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
-						nmapPort := strconv.FormatUint(
-							uint64(pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port),
-							10,
-						)
-
-						if nmapPort != a.connectionPort {
-							currentStateReason = "waiting for nmap to connect to port " + a.connectionPort
+						if waitingFor := a.connectionCheckWait(rolloutConfig, pcSnapshot); waitingFor != "" {
+							currentStateReason = waitingFor
 							SendActionReply(
 								a.instanceUUID,
 								a.userEmail,
@@ -769,7 +778,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 								models.EditProtocolConverter,
 							)
 
-							rollbackErr := a.rollbackEdit(pcConfig)
+							rollbackErr := a.rollbackEdit(rollbackConfig)
 							if rollbackErr != nil {
 								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, rollbackErr)
 								a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_render_failure_rollback_failed",
@@ -915,19 +924,19 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						models.EditProtocolConverter,
 					)
 
-					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", pcConfig.ProtocolConverterServiceConfig.Variables.User)
+					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", rollbackConfig.ProtocolConverterServiceConfig.Variables.User)
 
-					err := a.rollbackEdit(pcConfig)
+					err := a.rollbackEdit(rollbackConfig)
 					if err != nil {
 						a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
-							deps.String("pcConfig", pcConfig.String()))
+							deps.String("rollbackConfig", rollbackConfig.String()))
 
 						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 					}
 
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
-						deps.String("pcConfig", pcConfig.String()))
+						deps.String("rollbackConfig", rollbackConfig.String()))
 
 					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 				}
@@ -1137,6 +1146,92 @@ func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any, in
 	return merged
 }
 
+// formatEndpoint renders a target and port as target:port, the form the
+// connection check compares and the reply messages carry.
+func formatEndpoint(target string, port uint16) string {
+	return target + ":" + strconv.FormatUint(uint64(port), 10)
+}
+
+// connectionCheckWait reports what the connection check is still waiting for,
+// or "" when the check reached the endpoint this edit persisted.
+//
+// The endpoint is rendered from the persisted spec, never taken from the action
+// payload: get-protocolconverter hands back the raw connection template when
+// the spec carries no IP/PORT variables, so a payload can name an unresolved
+// target on port 0 that no check will ever report.
+func (a *EditProtocolConverterAction) connectionCheckWait(
+	pcConfig config.ProtocolConverterConfig,
+	pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot,
+) string {
+	resolved, renderErr := a.resolvedConnectionEndpoint(pcConfig.ProtocolConverterServiceConfig)
+	if renderErr != nil {
+		a.lastRenderErr = renderErr
+
+		return "reading the bridge's connection details"
+	}
+
+	wantEndpoint := formatEndpoint(resolved.Target, resolved.Port)
+
+	lastScan := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan
+	if lastScan == nil || !lastScan.Timestamp.After(a.persistedAt) {
+		return "checking " + wantEndpoint
+	}
+
+	// Never compare against ObservedNmapServiceConfig here: on fsmv1 it is
+	// parsed from the scan script on disk, so it names the new endpoint from the
+	// moment that script is rewritten, while the old scanner keeps reporting the
+	// old endpoint as open until s6 restarts it. Only the scan itself records
+	// what was dialed.
+	//
+	// Comparing the port alone would accept a move to a different host on the
+	// same port for the same reason.
+	if formatEndpoint(lastScan.Target, lastScan.PortResult.Port) != wantEndpoint {
+		return "checking " + wantEndpoint
+	}
+
+	// Do not use IsRunning instead: it means the port answered on fsmv2 but only
+	// "the scanner process is up" on fsmv1, where a refused port reads true.
+	if lastScan.PortResult.State != string(nmapservice.PortStateOpen) {
+		return "cannot reach " + wantEndpoint + " (port " + lastScan.PortResult.State + ")"
+	}
+
+	return ""
+}
+
+// resolvedConnectionEndpoint renders the just-persisted spec's connection
+// template and returns the endpoint the scan is expected to dial.
+//
+// It renders with the same inputs the agent uses, so the endpoint returned here
+// is the one the control loop will make the scanner dial.
+func (a *EditProtocolConverterAction) resolvedConnectionEndpoint(newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec) (nmapserviceconfig.NmapServiceConfig, error) {
+	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)
+
+	// The stored system snapshot does not carry the top-level historian section,
+	// so read it straight from the config manager (see renderDesiredDFCConfig).
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	if err != nil {
+		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to read current config for historian variables: %w", err)
+	}
+
+	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
+		newSpec,
+		agentLocation,
+		nil, // TODO(ENG-5855): add global vars
+		currentConfig.Historian,
+		runtime_config.BridgedByPlaceholder,
+		a.name,
+	)
+	if err != nil {
+		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to build runtime config: %w", err)
+	}
+
+	return runtimeConfig.ConnectionServiceConfig.NmapServiceConfig, nil
+}
+
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
 // using the actual runtime values from the protocol converter observed state.
 // dfcTypeToReturn specifies which side (read or write) to return after rendering.
@@ -1202,7 +1297,7 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
 		modifiedSpec,
 		agentLocation,
-		nil, // TODO: add global vars
+		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
 		runtime_config.BridgedByPlaceholder,
 		pcName,

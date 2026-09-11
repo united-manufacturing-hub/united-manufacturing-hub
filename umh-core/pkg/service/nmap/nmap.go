@@ -168,8 +168,16 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	return result, nil
 }
 
+// scanCommandRegex reads the endpoint back out of the command a scan block
+// logged. GetConfig parses the run script on disk, which carries the new
+// endpoint from the moment it is rewritten, while the old scanner process keeps
+// producing scans of the old endpoint until s6 restarts it.
+var scanCommandRegex = regexp.MustCompile(`NMAP_COMMAND: nmap -n -Pn -p (\d+) ([^ ]+) -v`)
+
 // parseScanLogs parses the logs of an nmap service and extracts scan results.
-func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *NmapScanResult {
+// configuredPort is used only when a scan block logs no command to read the
+// dialled port from.
+func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, configuredPort uint16) *NmapScanResult {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -209,11 +217,24 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	latestScan := scanBlocks[len(scanBlocks)-1]
 	scanOutput := strings.Join(latestScan, "\n")
 
+	dialledTarget := ""
+	dialledPort := configuredPort
+
+	if matches := scanCommandRegex.FindStringSubmatch(scanOutput); len(matches) > 2 {
+		dialledTarget = matches[2]
+
+		parsedPort, parseErr := strconv.ParseUint(matches[1], 10, 16)
+		if parseErr == nil {
+			dialledPort = uint16(parsedPort)
+		}
+	}
+
 	// Create the scan result
 	result := &NmapScanResult{
+		Target:    dialledTarget,
 		RawOutput: scanOutput,
 		PortResult: PortResult{
-			Port: port,
+			Port: dialledPort,
 		},
 		Metrics: ScanMetrics{},
 	}
@@ -237,7 +258,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract port state
-	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(int(port)) + `/tcp\s+(open|closed|filtered|unfiltered|open\|filtered|closed\|filtered)`)
+	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(int(dialledPort)) + `/tcp\s+(open|closed|filtered|unfiltered|open\|filtered|closed\|filtered)`)
 	if matches := portStateRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
 		result.PortResult.State = matches[1]
 	} else {
