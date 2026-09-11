@@ -21,23 +21,44 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TimescaleMetrics is the aggregate operational picture of the historian database,
 // embedded into TimescaleStatus so its fields flatten to the top JSON level.
 type TimescaleMetrics struct {
-	ServerVersion     string `json:"server_version"`
-	TimescaleVersion  string `json:"timescale_version"`
-	MetricsError      string `json:"metrics_error"`
+	ServerVersion    string `json:"server_version"`
+	TimescaleVersion string `json:"timescale_version"`
+	// MetricsError carries why the last collection failed, so a database that
+	// answers the connection check but refuses the metric reads explains itself
+	// instead of reporting zeros.
+	MetricsError string `json:"metrics_error"`
+	// LastJobError is the most recent background-job failure message. A bare
+	// failure count says nothing an operator can act on; this names the table and
+	// the reason.
+	LastJobError      string `json:"last_job_error"`
 	DatabaseBytes     int64  `json:"database_bytes"`
 	UncompressedBytes int64  `json:"uncompressed_bytes"`
 	CompressedBytes   int64  `json:"compressed_bytes"`
-	Hypertables       int    `json:"hypertables"`
-	Chunks            int    `json:"chunks"`
-	CompressedChunks  int    `json:"compressed_chunks"`
-	Jobs              int    `json:"jobs"`
-	FailedJobs        int    `json:"failed_jobs"`
+	// CompressAfterSeconds and DropAfterSeconds are the shortest interval any
+	// hypertable uses, so the reported figure is the soonest chunks are compressed
+	// or dropped rather than a flattering maximum. Zero means no such policy
+	// exists: a zero DropAfterSeconds with RetentionJobs zero is a database that
+	// grows forever.
+	CompressAfterSeconds int64 `json:"compress_after_seconds"`
+	DropAfterSeconds     int64 `json:"drop_after_seconds"`
+	Hypertables          int   `json:"hypertables"`
+	Chunks               int   `json:"chunks"`
+	CompressedChunks     int   `json:"compressed_chunks"`
+	Jobs                 int   `json:"jobs"`
+	CompressionJobs      int   `json:"compression_jobs"`
+	RetentionJobs        int   `json:"retention_jobs"`
+	FailedJobs           int   `json:"failed_jobs"`
+	// PoliciesUniform reports whether every hypertable agrees on its intervals.
+	// When false the single reported interval describes only the shortest table,
+	// and the rest have to be read from the database.
+	PoliciesUniform bool `json:"policies_uniform"`
 }
 
 const historianSchema = "umh"
@@ -70,6 +91,30 @@ const jobsQuery = `SELECT count(*), count(*) FILTER (WHERE s.last_run_status = '
   FROM timescaledb_information.jobs j
   LEFT JOIN timescaledb_information.job_stats s USING (job_id)
  WHERE j.hypertable_schema = $1`
+
+// policyQuery reports the compression and retention policies as aggregates. The
+// intervals are the shortest any hypertable uses, so the figure is the soonest a
+// chunk is compressed or dropped rather than a flattering maximum; PoliciesUniform
+// says whether one figure describes every table.
+const policyQuery = `SELECT
+       count(*) FILTER (WHERE proc_name = 'policy_compression'),
+       count(*) FILTER (WHERE proc_name = 'policy_retention'),
+       coalesce(min(EXTRACT(EPOCH FROM (config->>'compress_after')::interval))::bigint, 0),
+       coalesce(min(EXTRACT(EPOCH FROM (config->>'drop_after')::interval))::bigint, 0),
+       count(DISTINCT config->>'compress_after') <= 1 AND count(DISTINCT config->>'drop_after') <= 1
+  FROM timescaledb_information.jobs
+ WHERE hypertable_schema = $1`
+
+// lastJobErrorQuery names the most recent background-job failure. job_errors has no
+// schema column, so scoping to the historian's own jobs means joining back to jobs
+// on job_id -- otherwise the built-in policy_telemetry job, which fails on every run
+// of an air-gapped deployment and carries an empty message, is what surfaces.
+const lastJobErrorQuery = `SELECT e.err_message
+  FROM timescaledb_information.job_errors e
+  JOIN timescaledb_information.jobs j USING (job_id)
+ WHERE j.hypertable_schema = $1 AND coalesce(e.err_message, '') <> ''
+ ORDER BY e.start_time DESC
+ LIMIT 1`
 
 const databaseSizeQuery = `SELECT pg_database_size(current_database())`
 
@@ -107,6 +152,22 @@ func collectMetrics(ctx context.Context, pool *pgxpool.Pool) (TimescaleMetrics, 
 	if err := pool.QueryRow(ctx, jobsQuery, historianSchema).
 		Scan(&metrics.Jobs, &metrics.FailedJobs); err != nil {
 		return metrics, fmt.Errorf("read job status: %w", err)
+	}
+
+	if err := pool.QueryRow(ctx, policyQuery, historianSchema).Scan(
+		&metrics.CompressionJobs,
+		&metrics.RetentionJobs,
+		&metrics.CompressAfterSeconds,
+		&metrics.DropAfterSeconds,
+		&metrics.PoliciesUniform,
+	); err != nil {
+		return metrics, fmt.Errorf("read policies: %w", err)
+	}
+
+	// No failure recorded is the normal case, not an error.
+	if err := pool.QueryRow(ctx, lastJobErrorQuery, historianSchema).Scan(&metrics.LastJobError); err != nil &&
+		!errors.Is(err, pgx.ErrNoRows) {
+		return metrics, fmt.Errorf("read last job error: %w", err)
 	}
 
 	if err := pool.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {

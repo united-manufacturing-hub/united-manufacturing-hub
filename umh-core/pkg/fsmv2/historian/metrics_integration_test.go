@@ -59,6 +59,19 @@ SELECT add_compression_policy('umh.attribute_bench', INTERVAL '168h');
 SELECT compress_chunk(c) FROM show_chunks('umh.value_bench', older_than => INTERVAL '168h') c;
 `
 
+// retentionSchemaDDL adds a retention policy to the value hypertable only, so a
+// spec can tell a historian that expires data from one that grows forever.
+const retentionSchemaDDL = `
+SELECT add_retention_policy('umh.value_bench', INTERVAL '720h');
+`
+
+// driftedPolicyDDL gives the two hypertables different compression intervals, the
+// drift an operator creates by hand that a single reported interval would hide.
+const driftedPolicyDDL = `
+SELECT remove_compression_policy('umh.attribute_bench');
+SELECT add_compression_policy('umh.attribute_bench', INTERVAL '336h');
+`
+
 // startDatabase runs image as a throwaway Postgres and returns a pool pointed at it
 // plus the config a worker would dial it with. The container and pool are torn down
 // when the spec finishes.
@@ -278,5 +291,67 @@ var _ = Describe("Metrics surviving a connection failure", Label("integration"),
 		Expect(broken.Reachable).To(BeFalse())
 		Expect(broken.Hypertables).To(Equal(2),
 			"a connection blip must not blank the last known database metrics")
+	})
+})
+
+var _ = Describe("Policy reporting", Label("integration"), func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("reports a historian that compresses but never expires data", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.CompressionJobs).To(Equal(2))
+		Expect(metrics.CompressAfterSeconds).To(Equal(int64(604800)), "168h")
+		Expect(metrics.RetentionJobs).To(BeZero(), "nothing expires, so the database grows forever")
+		Expect(metrics.DropAfterSeconds).To(BeZero())
+		Expect(metrics.PoliciesUniform).To(BeTrue())
+	})
+
+	It("reports the retention interval when one is configured", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, retentionSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.RetentionJobs).To(Equal(1))
+		Expect(metrics.DropAfterSeconds).To(Equal(int64(2592000)), "720h")
+	})
+
+	It("flags tables that disagree on an interval", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, driftedPolicyDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.PoliciesUniform).To(BeFalse(), "one table compresses at 168h, the other at 336h")
+		Expect(metrics.CompressAfterSeconds).To(Equal(int64(604800)), "the shortest of the two")
+	})
+
+	It("reports no job error on a healthy database", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.LastJobError).To(BeEmpty())
 	})
 })
