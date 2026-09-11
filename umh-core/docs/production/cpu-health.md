@@ -49,9 +49,10 @@ reading zero.
 
 ## Thresholds
 
-Each signal degrades at one value and recovers at a lower one, which is what keeps the status from
-flickering. All readings are 60-second figures. A reading has to pass a threshold, not merely reach
-it, except where the table says "at".
+Each signal degrades at one value and recovers at another, held apart so the status does not
+flicker. Which direction is worse depends on the signal: throttling, pressure, steal and usage are
+worse the higher they read, headroom the lower. All readings are 60-second figures. A reading has
+to pass a threshold, not merely reach it, except where the table says "at".
 
 | Signal | Degrades | Recovers | Measured only when |
 |--------|----------|----------|--------------------|
