@@ -28,6 +28,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 const (
@@ -192,5 +193,86 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := collectMetrics(ctx, pool)
 
 		Expect(err).To(HaveOccurred())
+	})
+})
+
+// pollDeps builds one worker instance's Poll dependencies the way the framework
+// would, so a spec exercises the same wiring production gets.
+func pollDeps() Deps {
+	return newDeps(idUnder("poll-metrics"), baseUnder("poll-metrics"))
+}
+
+var _ = Describe("Poll reporting metrics", Label("integration"), func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("reports metrics alongside the connection check", func() {
+		cfg, pool := startDatabaseWithConfig(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		status, err := Poll(ctx, pollDeps(), cfg)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Reachable).To(BeTrue())
+		Expect(status.Auth).To(Equal(models.TimescaleAuthValid))
+		Expect(status.Hypertables).To(Equal(2))
+		Expect(status.MetricsError).To(BeEmpty())
+	})
+
+	It("stays healthy when the database is reachable but carries no TimescaleDB", func() {
+		cfg, _ := startDatabaseWithConfig(postgresImage)
+
+		status, err := Poll(ctx, pollDeps(), cfg)
+
+		Expect(err).NotTo(HaveOccurred(), "a metrics failure must not degrade the worker")
+		Expect(status.Reachable).To(BeTrue())
+		Expect(status.Auth).To(Equal(models.TimescaleAuthValid))
+		Expect(status.MetricsError).NotTo(BeEmpty())
+		Expect(status.Hypertables).To(BeZero())
+	})
+
+	It("keeps the collected metrics on a tick that does not re-collect", func() {
+		cfg, pool := startDatabaseWithConfig(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		deps := pollDeps()
+		first, err := Poll(ctx, deps, cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(first.Hypertables).To(Equal(2))
+
+		second, err := Poll(ctx, deps, cfg)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(second.Hypertables).To(Equal(2), "the second tick must not blank the metrics")
+	})
+})
+
+var _ = Describe("Metrics surviving a connection failure", Label("integration"), func() {
+	It("still reports the last metrics when the connection later fails", func() {
+		ctx := context.Background()
+		cfg, pool := startDatabaseWithConfig(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		deps := pollDeps()
+		healthy, err := Poll(ctx, deps, cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(healthy.Hypertables).To(Equal(2))
+
+		unreachable := cfg
+		unreachable.Timescale.Host = "127.0.0.1"
+		unreachable.Timescale.Port = closedPort()
+
+		broken, err := Poll(ctx, deps, unreachable)
+
+		Expect(err).To(HaveOccurred(), "the connection check fails")
+		Expect(broken.Reachable).To(BeFalse())
+		Expect(broken.Hypertables).To(Equal(2),
+			"a connection blip must not blank the last known database metrics")
 	})
 })
