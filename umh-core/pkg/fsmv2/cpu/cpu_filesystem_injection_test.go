@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -48,6 +49,28 @@ func (stubFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, error) {
 	return nil, errRefusedByStub
 }
 
+// stubStatMarker is a cpu.stat counter value no cgroup writes, so an error
+// quoting it names the stub below as the filesystem that was read.
+const stubStatMarker = "not-a-number-from-the-stub"
+
+// markedStatFilesystem serves one cpu.stat carrying stubStatMarker and refuses
+// every other read.
+type markedStatFilesystem struct {
+	filesystem.Service
+}
+
+func (markedStatFilesystem) ReadFile(_ context.Context, path string) ([]byte, error) {
+	if path == cgroupBase+"/cpu.stat" {
+		return []byte("usage_usec " + stubStatMarker + "\n"), nil
+	}
+
+	return nil, errRefusedByStub
+}
+
+func (markedStatFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, error) {
+	return nil, errRefusedByStub
+}
+
 var _ = Describe("the filesystem the CPU worker reads", func() {
 	newBaseDeps := func() (deps.Identity, *deps.BaseDependencies) {
 		id := deps.Identity{ID: "cpu-filesystem-injection", WorkerType: WorkerType}
@@ -58,7 +81,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 	It("samples through a published filesystem rather than the real one", func() {
 		// The registry outlives the spec and SetDeps overwrites, so publishing
 		// without clearing hands this stub to every later spec.
-		register.SetDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
+		register.SetDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
 		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
@@ -66,9 +89,22 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).To(HaveOccurred(),
-			"the published stub refuses cpu.stat, so the sample must fail")
-		Expect(err).To(MatchError(errRefusedByStub),
-			"only the published stub words a failure this way; the real filesystem never does")
+			"the published stub serves a cpu.stat that cannot parse, so the sample must fail")
+		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
+			"only the published stub serves this counter value; the real cgroup never does")
+	})
+
+	It("reports a filesystem that refuses every read as healthy and unmeasured, not degraded", func() {
+		// A failed poll degrades the instance and blocks every bridge on it. A
+		// host that keeps its CPU accounting outside this cgroup has none of
+		// these files, so the poll succeeds carrying no capacity instead.
+		register.SetDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
+		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+
+		id, bd := newBaseDeps()
+		status, err := Poll(context.Background(), NewDeps(id, bd), CPUConfig{})
+		Expect(err).NotTo(HaveOccurred(), "an unreadable cgroup must not degrade the instance")
+		Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy))
 	})
 
 	It("falls back to the real filesystem when nothing was published", func() {

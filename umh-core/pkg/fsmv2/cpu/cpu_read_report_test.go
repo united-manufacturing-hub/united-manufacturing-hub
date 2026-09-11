@@ -185,6 +185,14 @@ func buildPollable(errFn func(string) error) (*[]recorded, *CPUDeps) {
 	return events, d
 }
 
+// buildReportEvents is buildWithFiles plus read errors, for the specs that need
+// one file to fail to open while another fails to parse.
+func buildReportEvents(overrides map[string]error, fileOverrides map[string][]byte) *[]recorded {
+	events, _, _, _ := buildReport(overrides, fileOverrides, nil)
+
+	return events
+}
+
 func buildWithFiles(fileOverrides map[string][]byte) *[]recorded {
 	events, _, _, _ := buildReport(nil, fileOverrides, nil)
 
