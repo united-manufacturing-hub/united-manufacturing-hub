@@ -37,7 +37,7 @@ var ChildFailureRateConfig = failurerate.Config{
 }
 
 // AuthFailureRateConfig controls when the tracker fires a one-shot
-// SentryWarn("persistent_auth_failure") during auth failure episodes.
+// workers::auth::persistent_failure during auth failure episodes.
 //
 // Because auth uses Reset() on success (not RecordOutcome(true)), the
 // window only ever contains failures during an episode. The failure rate
@@ -148,7 +148,7 @@ func (d *TransportDependencies) RecordError() {
 
 // RecordAuthError records a typed auth error and feeds the auth failure rate
 // tracker. If the tracker's one-shot fires (sustained failures crossing the
-// MinSamples threshold), a SentryWarn("persistent_auth_failure") is emitted.
+// MinSamples threshold), workers::auth::persistent_failure is reported.
 func (d *TransportDependencies) RecordAuthError(errType types.ErrorType, retryAfter time.Duration) {
 	d.RecordTypedError(errType, retryAfter)
 

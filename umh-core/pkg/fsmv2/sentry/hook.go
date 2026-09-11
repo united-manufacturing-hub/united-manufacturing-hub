@@ -149,10 +149,10 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	}
 
 	// Add error as exception with event_name as the Type (appears as title in Sentry UI).
-	// The title displays "action_failed" instead of "*fmt.wrapError".
+	// The title displays "supervisor::action::failed" instead of "*fmt.wrapError".
 	if err != nil {
 		exception := sentry.Exception{
-			Type:  entry.Message, // "action_failed" - becomes the title
+			Type:  entry.Message, // "supervisor::action::failed" - becomes the title
 			Value: err.Error(),   // "connection failed: ..." - becomes subtitle
 		}
 

@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 const (
@@ -179,7 +180,7 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 			err = fmt.Errorf("action panicked: %v", r)
 			status = "panic"
 
-			ae.logger.SentryError(deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, err, "action_panic",
+			ae.logger.Sentry(telemetry.Supervisor.Action.Panic, deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, err,
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
 				deps.Int64("timeout_ms", work.timeout.Milliseconds()),
@@ -258,13 +259,13 @@ func (ae *ActionExecutor) executeWorkWithRecovery(ctx context.Context, work acti
 		if errors.Is(err, context.DeadlineExceeded) {
 			metrics.RecordActionTimeout(ae.identity.HierarchyPath, work.action.Name())
 
-			ae.logger.SentryError(deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, err, "action_failed",
+			ae.logger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, err,
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
 				deps.DurationMs(duration.Milliseconds()),
 				deps.Int64("timeout_ms", work.timeout.Milliseconds()))
 		} else {
-			ae.logger.SentryError(deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, err, "action_failed",
+			ae.logger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, err,
 				deps.CorrelationID(work.actionID),
 				deps.ActionName(work.action.Name()),
 				deps.DurationMs(duration.Milliseconds()))
@@ -288,7 +289,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		inProgressCount := len(ae.inProgress)
 		ae.mu.Unlock()
 
-		ae.logger.SentryWarn(deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, "action_enqueue_rejected",
+		ae.logger.Sentry(telemetry.Supervisor.Action.EnqueueRejected, deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, nil,
 			deps.CorrelationID(actionID),
 			deps.ActionName(action.Name()),
 			deps.Reason("executor_stopped"),
@@ -301,7 +302,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 	if _, exists := ae.inProgress[actionID]; exists {
 		ae.mu.Unlock()
 
-		ae.logger.SentryWarn(deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, "action_enqueue_rejected",
+		ae.logger.Sentry(telemetry.Supervisor.Action.EnqueueRejected, deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, nil,
 			deps.CorrelationID(actionID),
 			deps.ActionName(action.Name()),
 			deps.Reason("already_in_progress"))
@@ -346,7 +347,7 @@ func (ae *ActionExecutor) EnqueueAction(actionID string, action fsmv2.Action[any
 		ae.mu.Unlock()
 
 		queueErr := errors.New("action queue full")
-		ae.logger.SentryError(deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, queueErr, "action_queue_full",
+		ae.logger.Sentry(telemetry.Supervisor.Action.QueueFull, deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, queueErr,
 			deps.CorrelationID(actionID),
 			deps.ActionName(action.Name()),
 			deps.Capacity(cap(ae.actionQueue)),
@@ -407,7 +408,7 @@ func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 			for _, stuck := range stuckActions {
 				if stuck.forceRemove {
 					metrics.RecordStuckActionForceRemoved(ae.identity.HierarchyPath, stuck.actionName)
-					ae.logger.SentryError(deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, fmt.Errorf("action %s stuck for %dms (timeout %dms), force-removed", stuck.actionName, stuck.elapsedMs, stuck.timeoutMs), "stuck_action_force_removed",
+					ae.logger.Sentry(telemetry.Supervisor.Action.StuckForceRemoved, deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, fmt.Errorf("action %s stuck for %dms (timeout %dms), force-removed", stuck.actionName, stuck.elapsedMs, stuck.timeoutMs),
 						deps.Field{Key: "action_id", Value: stuck.actionID},
 						deps.Field{Key: "action_name", Value: stuck.actionName},
 						deps.Field{Key: "elapsed_ms", Value: stuck.elapsedMs},
@@ -424,7 +425,7 @@ func (ae *ActionExecutor) metricsReporter(ctx context.Context) {
 					}
 				} else {
 					metrics.RecordStuckActionDetected(ae.identity.HierarchyPath, stuck.actionName)
-					ae.logger.SentryWarn(deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, "stuck_action_detected",
+					ae.logger.Sentry(telemetry.Supervisor.Action.StuckDetected, deps.FeatureForWorker(ae.identity.WorkerType), ae.identity.HierarchyPath, nil,
 						deps.Field{Key: "action_id", Value: stuck.actionID},
 						deps.Field{Key: "action_name", Value: stuck.actionName},
 						deps.Field{Key: "elapsed_ms", Value: stuck.elapsedMs},

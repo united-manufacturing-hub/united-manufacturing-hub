@@ -36,7 +36,7 @@ var _ = Describe("VariableBundle", func() {
 					"api_endpoint": "https://api.example.com",
 				},
 				Internal: map[string]any{
-					"id":        "internal-123",
+					"id":         "internal-123",
 					"bridged_by": "bridge-1",
 				},
 			}
@@ -133,7 +133,7 @@ global:
 					"api_endpoint": "https://api.example.com",
 				},
 				Internal: map[string]any{
-					"id":        "internal-123",
+					"id":         "internal-123",
 					"bridged_by": "bridge-1",
 				},
 			}
@@ -217,7 +217,7 @@ global:
 		It("should nest Internal variables under 'internal' key", func() {
 			bundle := config.VariableBundle{
 				Internal: map[string]any{
-					"id":        "internal-123",
+					"id":         "internal-123",
 					"bridged_by": "bridge-1",
 				},
 			}

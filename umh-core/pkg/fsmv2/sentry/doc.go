@@ -22,7 +22,7 @@
 //
 // # How Errors Appear in Sentry
 //
-//   - Title: event_name (e.g., "action_failed")
+//   - Title: event_name (e.g., "supervisor::action::failed")
 //   - Subtitle: error message
 //   - Tags: feature, event_name, error_types, fsm_version, worker_type, worker_chain, action_name
 //   - Contexts["umh_context"]: all remaining fields (reason, duration_ms, capacity, etc.)

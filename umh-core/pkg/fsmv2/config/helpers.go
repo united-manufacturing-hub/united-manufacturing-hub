@@ -56,4 +56,3 @@ func ParseUserSpec[T any](spec interface{}) (T, error) {
 
 	return result, nil
 }
-
