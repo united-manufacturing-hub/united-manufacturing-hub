@@ -114,6 +114,12 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// degraded over a file it was never going to have.
 		return smp, fmt.Errorf("parse %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
+	// A cancelled tick fails every read, which is the same shape as a host with
+	// none of these files. Without this the sample reports the second.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return smp, ctxErr
+	}
+
 	smp.NrPeriods = stat.Periods
 	smp.NrThrottled = stat.Throttled
 	smp.UsageUsec = stat.Usage
