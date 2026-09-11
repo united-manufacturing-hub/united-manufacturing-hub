@@ -1344,6 +1344,29 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		}
 	})
 
+	// The capstone for the telemetry registry: one call with a generated
+	// identifier and no error of its own, all the way to the event the transport
+	// would have sent. The unit specs prove each piece; only an assertion here
+	// fails if the pieces stop being wired together.
+	It("carries a declared identifier's tag, level and brief onto the event", func() {
+		fsmLogger.Sentry(telemetry.Supervisor.Collector.Stopped, deps.FeatureFSMv2, "app(application)/w1(helloworld)", nil)
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		Expect(event.Tags).To(HaveKeyWithValue("event_name", "supervisor::collector::stopped"))
+		Expect(event.Tags).To(HaveKeyWithValue("feature", "fsmv2"))
+		Expect(event.Level).To(Equal(sentrygo.LevelWarning))
+		Expect(event.Exception).NotTo(BeEmpty())
+		Expect(event.Exception[0].Type).To(Equal("supervisor::collector::stopped"))
+		// The brief is the only readable sentence on an event whose caller had
+		// no error, so a triager reads it under the title rather than grepping
+		// the repo for what the tag means.
+		Expect(event.Exception[0].Value).To(Equal(telemetry.Supervisor.Collector.Stopped.Brief))
+	})
+
 	It("SentryError produces exception with correct type and value", func() {
 		testErr := fmt.Errorf("connection refused: %w", io.EOF)
 		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "app(application)/w1(helloworld)", testErr,
@@ -1409,8 +1432,12 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		Expect(event.Tags["worker_chain"]).To(Equal("application/communicator"))
 	})
 
-	It("SentryWarn captures at warn level without exception", func() {
-		fsmLogger.Sentry(telemetry.Identifier{Tag: "collector_unresponsive", Brief: "collector_unresponsive", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "", nil,
+	It("captures a warning-severity identifier at warn level, with the brief as its exception", func() {
+		// A warn-level event used to arrive with no exception at all, which left
+		// the issue with a title and nothing under it. The brief is synthesized
+		// into the error so there is always a readable sentence; the level and
+		// the tag are unchanged.
+		fsmLogger.Sentry(telemetry.Identifier{Tag: "collector_unresponsive", Brief: "A collector stopped answering.", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "", nil,
 			deps.Attempts(3))
 
 		Eventually(func() int {
@@ -1419,9 +1446,11 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 
 		event := store.GetLast()
 		Expect(event.Level).To(Equal(sentrygo.LevelWarning))
-		Expect(event.Exception).To(BeEmpty())
 		Expect(event.Tags["feature"]).To(Equal("fsmv2"))
 		Expect(event.Tags["event_name"]).To(Equal("collector_unresponsive"))
+		Expect(event.Exception).To(HaveLen(1))
+		Expect(event.Exception[0].Type).To(Equal("collector_unresponsive"))
+		Expect(event.Exception[0].Value).To(Equal("A collector stopped answering."))
 	})
 
 	It("With() context is preserved through FSMLogger", func() {

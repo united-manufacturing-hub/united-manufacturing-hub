@@ -14,7 +14,7 @@
 
 - Every new source file starts with the repo's Apache 2.0 header, copied verbatim from any existing file (13 lines, beginning `// Copyright 2025 UMH Systems GmbH`). Lefthook's `fix-license-header` job injects it otherwise, which breaks Task 5.
 - Branch is `error-telemetry-registry`, cut from `staging`. Never push to `staging` directly.
-- `umh-core/CHANGELOG.md` needs an entry under `## Unreleased`; CI fails a code change without one. Add it in Task 17.
+- **No CHANGELOG entry.** This work changes nothing a user can see: no UI, no config, no product behaviour, only which names umh-core uses when reporting to our own Sentry. That is Internal by the changelog skill's own matrix, so the PR carries the `skip-changelog-guard` label instead, which `pull-request.yml:224` provides for refactoring. An earlier version of this plan said to add an entry in Task 17; that was wrong.
 - Tests are Ginkgo v2 specs in a `_test` package with a `TestXxx` bootstrap calling `RunSpecs`. Do not commit focused specs: CI runs `ginkgo -r --fail-on-focused`.
 - Neither static analyser works on this machine: `golangci-lint` 2.6.2 starts but its type-checker cannot decode go1.27 export data, so it reports spurious `typecheck` errors on untouched packages too, and `nilaway` fails with `package requires newer Go version go1.27`. Do not run either, and do not read their output as a finding. Per-task verification is `go build ./...`, `go vet -tags=test ./...` and `go test -race -tags=test ./<scope>/...`. CI runs both analysers.
 - Tag format, fixed: `^[a-z0-9_]+(::[a-z0-9_]+)+$`.
@@ -1128,9 +1128,9 @@ Comment out the `errors.New(id.Brief)` line in `logger_impl.go`, run, and confir
 Run: `cd umh-core && go test ./pkg/fsmv2/deps/ -v`
 Expected: PASS once restored.
 
-- [ ] **Step 3: Add the changelog entry**
+- [ ] **Step 3: Label the PR rather than write a changelog entry**
 
-Under `## Unreleased` in `umh-core/CHANGELOG.md`, following the `changelog-writing` skill.
+Add `skip-changelog-guard`. See Global Constraints for why this work gets no entry.
 
 - [ ] **Step 4: Full verification**
 
