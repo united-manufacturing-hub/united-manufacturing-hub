@@ -55,6 +55,26 @@ const (
 	TimescaleAuthInvalid TimescaleAuthState = "invalid"
 )
 
+// TimescaleMetrics is the aggregate operational picture of the historian database.
+// Every field is collected on a slower cadence than the connection check beside it,
+// so the values lag the health verdict by up to that interval.
+type TimescaleMetrics struct {
+	ServerVersion    string `json:"serverVersion"`
+	TimescaleVersion string `json:"timescaleVersion"`
+	// MetricsError carries why the last collection failed. It is independent of the
+	// health verdict: a database can answer the connection check while refusing or
+	// failing the metric reads, and that must not read as an unhealthy historian.
+	MetricsError      string `json:"metricsError"`
+	DatabaseBytes     int64  `json:"databaseBytes"`
+	UncompressedBytes int64  `json:"uncompressedBytes"`
+	CompressedBytes   int64  `json:"compressedBytes"`
+	Hypertables       int    `json:"hypertables"`
+	Chunks            int    `json:"chunks"`
+	CompressedChunks  int    `json:"compressedChunks"`
+	Jobs              int    `json:"jobs"`
+	FailedJobs        int    `json:"failedJobs"`
+}
+
 // Timescale holds the health verdict and last dialed target for the timescale endpoint.
 type Timescale struct {
 	Health    *Health            `json:"health"`
@@ -63,6 +83,7 @@ type Timescale struct {
 	Latency   float64            `json:"latency"`
 	Port      uint16             `json:"port"`
 	Reachable bool               `json:"reachable"`
+	TimescaleMetrics
 }
 
 type Agent struct {

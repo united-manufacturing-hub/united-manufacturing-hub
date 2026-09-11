@@ -53,6 +53,12 @@ func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.His
 		return nil
 	}
 
+	return historianFromStatus(status, freshness)
+}
+
+// historianFromStatus maps one observation to the reported historian section. It is
+// separate from the store read so the mapping is exercised without a live client.
+func historianFromStatus(status simple.Status[fsmv2historian.TimescaleStatus], freshness fsmv2client.Freshness) *models.Historian {
 	result := status.Result
 
 	// A stale observation is degraded regardless of its last-seen verdict: the
@@ -80,11 +86,32 @@ func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.His
 				DesiredState:  "active",
 				Category:      healthCat,
 			},
-			Host:      result.Host,
-			Auth:      result.Auth,
-			Latency:   result.LatencyMs,
-			Port:      result.Port,
-			Reachable: result.Reachable,
+			Host:             result.Host,
+			Auth:             result.Auth,
+			Latency:          result.LatencyMs,
+			Port:             result.Port,
+			Reachable:        result.Reachable,
+			TimescaleMetrics: timescaleMetrics(result.TimescaleMetrics),
 		},
+	}
+}
+
+// timescaleMetrics copies the worker's metrics into the reported shape. The two
+// structs are kept apart on purpose: pkg/models is the status-message contract and
+// the worker already imports it, so embedding the worker's type here would close an
+// import cycle.
+func timescaleMetrics(metrics fsmv2historian.TimescaleMetrics) models.TimescaleMetrics {
+	return models.TimescaleMetrics{
+		ServerVersion:     metrics.ServerVersion,
+		TimescaleVersion:  metrics.TimescaleVersion,
+		MetricsError:      metrics.MetricsError,
+		DatabaseBytes:     metrics.DatabaseBytes,
+		UncompressedBytes: metrics.UncompressedBytes,
+		CompressedBytes:   metrics.CompressedBytes,
+		Hypertables:       metrics.Hypertables,
+		Chunks:            metrics.Chunks,
+		CompressedChunks:  metrics.CompressedChunks,
+		Jobs:              metrics.Jobs,
+		FailedJobs:        metrics.FailedJobs,
 	}
 }
