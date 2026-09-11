@@ -70,8 +70,9 @@ type linuxSampler struct {
 
 // Read samples the cgroup and the machine once.
 //
-// A non-nil error means cpu.stat could not be read or parsed, and this tick has
-// no measurement. Sample.Troubleshooting.Reads still records what every read
+// A non-nil error means cpu.stat opened and would not parse, and this tick has
+// no measurement. A cpu.stat that will not open at all is not an error: the
+// three readings taken from it stay absent and the rest of the sample reads. Sample.Troubleshooting.Reads still records what every read
 // produced, so diagnose a failed read from there, not from the error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var sample Sample
@@ -104,11 +105,15 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
 	sample.Troubleshooting.CPUStatRaw = stat.Raw
-	sample.record(OperationCPUStat, statOutcome(stat, statErr))
-	if statErr != nil {
-		// cpu.stat is primary: a read failure there fails the WHOLE sample,
-		// never a silent drop of the throttle counters as absent no-signal.
-		return sample, fmt.Errorf("read %s/cpu.stat: %w", s.cgroup.base, statErr)
+	statReadOutcome := statOutcome(stat, statErr)
+	sample.record(OperationCPUStat, statReadOutcome)
+	if statReadOutcome == ReadUnparsable {
+		// A cpu.stat that opens and does not parse is corrupt, and every number
+		// derived from it would be a guess. A cpu.stat that will not open is a
+		// different thing: the three readings below stay absent and the sample
+		// carries on, so a host keeping its CPU accounting elsewhere is not
+		// degraded over a file it was never going to have.
+		return sample, fmt.Errorf("parse %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
 	sample.NrPeriods = stat.Periods
 	sample.NrThrottled = stat.Throttled

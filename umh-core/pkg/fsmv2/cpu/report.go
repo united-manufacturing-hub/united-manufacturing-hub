@@ -91,13 +91,14 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 	return failures
 }
 
-// messageFor says what a failed read cost. Only cpu.stat carries the usage
-// counters, so only a cpu.stat that could not be read or parsed leaves the
-// tick with no measurement. A cpu.stat that read fine and held no usage figure
-// still yields a usable sample, and a cpu.pressure failing in the same tick
-// cost one signal, so both stay read_failed.
+// messageFor says what a failed read cost. A cpu.stat that opens and does not
+// parse is the one read whose failure voids the sample: its counters are
+// corrupt, so every number derived from them would be a guess. A cpu.stat that
+// will not open at all leaves its three readings absent and the sample usable,
+// the same as any other file the sampler cannot read, so it stays read_failed
+// along with every other failure.
 func messageFor(read cpuhealth.ReadResult) string {
-	if read.Operation == cpuhealth.OperationCPUStat && read.Outcome != cpuhealth.ReadEmpty {
+	if read.Operation == cpuhealth.OperationCPUStat && read.Outcome == cpuhealth.ReadUnparsable {
 		return sampleFailedTag
 	}
 
