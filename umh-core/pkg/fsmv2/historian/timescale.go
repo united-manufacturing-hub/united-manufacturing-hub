@@ -20,29 +20,30 @@
 // configuration faults (Auth=TimescaleAuthInvalid) rather than transient network
 // faults, which leave authentication unverified (Auth=TimescaleAuthUnknown).
 //
-// # Scope: connection health only
+// # Two cadences in one worker
 //
-// This worker checks the connection and nothing else: reachability, latency,
-// and whether the credentials and database name are accepted. Its per-tick cost
-// is a single `SELECT 1` over one pooled, long-lived connection.
+// The connection check runs every tick and costs a single `SELECT 1`. Database
+// metrics (versions, database size, hypertable and chunk counts, compression
+// totals, background job failures) ride the same worker but collect only every
+// metricsInterval, gated by metricsSchedule.
 //
-// Database metrics (long-running queries, compression ratios, background job
-// state, especially aborted compression jobs, and the rest of the operational
-// signals on the Timescale Grafana dashboard) are deliberately NOT collected here.
-// They belong to a separate future worker (TODO(ENG-5320): the timescale metrics
-// monitor), for two reasons:
+// One worker rather than two, because a worker owns one Collector and one poll
+// goroutine: the connection check and the metric reads run sequentially on the
+// existing pool and can never contend for a connection. A second worker would
+// poll concurrently, and a slow metric read could then block `SELECT 1` in
+// Acquire until the observation deadline -- reporting a healthy database as
+// degraded, because pgxpool.Pool.QueryRow acquires inside the span this worker
+// times as connection latency.
 //
-//   - Cost. Those metrics need involved SQL that costs far more CPU on the
-//     server than a `SELECT 1`. The metrics worker will run on its own, slower
-//     tick so heavy queries never share this monitor's cadence. Splitting the
-//     workers keeps connection health cheap and always-fresh regardless of how
-//     expensive metrics collection becomes.
-//   - Sequencing. Which metrics to expose still needs discussion with the VEs.
-//     Keeping that out of this worker means it does not block Historian
-//     integration.
+// # Metrics never decide health
 //
-// Running two workers adds only one extra pooled connection to the database, so
-// the overhead is minimal and worth the isolation.
+// Poll returns a non-nil error only when the connection fails. A failed metric
+// read is recorded in TimescaleMetrics.MetricsError and the poll still succeeds,
+// so a database that answers but refuses the catalog reads (a plain Postgres
+// with no TimescaleDB, a role without schema access) reports healthy with an
+// explained metrics gap. Returning the error instead would let a slow catalog
+// read light up the historian health badge. This is enforced by discipline in
+// Poll, not by the framework: anything added there must keep it.
 package fsmv2timescale
 
 import (
@@ -72,6 +73,18 @@ const (
 
 	// pollInterval is the cadence at which the framework calls Poll.
 	pollInterval = 1 * time.Second
+
+	// metricsInterval is how often Poll collects database metrics. Nothing it
+	// reads moves faster than minutes, and the collection costs roughly 100ms
+	// against a large deployment, so running it every pollInterval would spend
+	// continuous server CPU to re-read unchanged numbers.
+	metricsInterval = 60 * time.Second
+
+	// metricsTimeout bounds metrics collection so it cannot consume the poll
+	// budget. The framework cancels the whole observation at
+	// supervisor.DefaultObservationTimeout (2.2s), which would surface as a poll
+	// error and drive the worker degraded -- a database metric must never do that.
+	metricsTimeout = 1500 * time.Millisecond
 )
 
 // Ref is the (WorkerType, Name) pair identifying the timescale monitor child,
@@ -109,6 +122,11 @@ type TimescaleStatus struct {
 	// or the server rejected the credentials/database (an auth fault). It is
 	// false only for network or timeout faults, where nothing answered.
 	Reachable bool `json:"reachable"`
+	// TimescaleMetrics is embedded rather than nested so its fields flatten to the
+	// top JSON level alongside the connection fields, giving CSE delta sync one
+	// unit per metric: a moving database size then does not re-sync the compression
+	// ratio beside it.
+	TimescaleMetrics
 }
 
 // sharedPool is the one holder every worker instance polls through. The
@@ -136,7 +154,8 @@ var sharedPool = &poolHolder{}
 type Deps struct {
 	*deps.BaseDependencies
 
-	pool *poolHolder
+	pool    *poolHolder
+	metrics *metricsSchedule
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -148,6 +167,7 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 	return Deps{
 		BaseDependencies: bd,
 		pool:             sharedPool,
+		metrics:          newMetricsSchedule(metricsInterval),
 	}
 }
 
@@ -263,7 +283,12 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Bool("reachable", false),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port, Auth: models.TimescaleAuthUnknown}, fmt.Errorf("timescale pool: %w", err)
+		return TimescaleStatus{
+			Host:             host,
+			Port:             port,
+			Auth:             models.TimescaleAuthUnknown,
+			TimescaleMetrics: d.metrics.last(),
+		}, fmt.Errorf("timescale pool: %w", err)
 	}
 
 	start := time.Now()
@@ -285,7 +310,13 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.String("auth", string(auth)),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port, Reachable: reachable, Auth: auth}, fmt.Errorf("timescale query %s: %w", host, err)
+		return TimescaleStatus{
+			Host:             host,
+			Port:             port,
+			Reachable:        reachable,
+			Auth:             auth,
+			TimescaleMetrics: d.metrics.last(),
+		}, fmt.Errorf("timescale query %s: %w", host, err)
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
@@ -295,13 +326,40 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		deps.String("auth", string(models.TimescaleAuthValid)),
 		deps.Float64("latency_ms", elapsedMs))
 
+	if d.metrics.claimNextRun(time.Now()) {
+		d.metrics.remember(pollMetrics(ctx, d, pool, host))
+	}
+
 	return TimescaleStatus{
-		Host:      host,
-		Auth:      models.TimescaleAuthValid,
-		LatencyMs: elapsedMs,
-		Port:      port,
-		Reachable: true,
+		Host:             host,
+		Auth:             models.TimescaleAuthValid,
+		LatencyMs:        elapsedMs,
+		Port:             port,
+		Reachable:        true,
+		TimescaleMetrics: d.metrics.last(),
 	}, nil
+}
+
+// pollMetrics collects one round of database metrics and returns them with any
+// failure recorded in MetricsError rather than returned. Metrics describe the
+// database; they are not a verdict on the connection, which this tick already
+// proved good. Returning the error instead would make the framework mark the
+// worker degraded, so a missing extension or a slow catalog read would light up
+// the historian health badge for a database that is answering fine.
+func pollMetrics(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) TimescaleMetrics {
+	metricsCtx, cancel := context.WithTimeout(ctx, metricsTimeout)
+	defer cancel()
+
+	metrics, err := collectMetrics(metricsCtx, pool)
+	if err != nil {
+		metrics.MetricsError = err.Error()
+
+		d.GetLogger().Debug("timescale metrics collection",
+			deps.String("host", host),
+			deps.Err(err))
+	}
+
+	return metrics
 }
 
 func init() {
