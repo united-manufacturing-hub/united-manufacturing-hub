@@ -219,7 +219,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// A silently ignored DumpStore lets a developer misread "no dump
 		// printed" as "no store changes", so the gap must be logged.
-		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeTrue(),
+		Expect(logContainsEvent(logBuf.String(), "examples::store::dump_unsupported_for_v2")).To(BeTrue(),
 			"runV2 must warn that DumpStore is ignored for v2 scenarios")
 	})
 
@@ -279,7 +279,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// loop shared the caller's ctx, the cancel would kill it before
 		// Shutdown, and every drain phase would wait out its timeout and
 		// emit this warning.
-		Expect(logContainsEvent(logBuf.String(), "graceful_shutdown_timeout")).To(BeFalse(),
+		Expect(logContainsEvent(logBuf.String(), "supervisor::shutdown::timeout")).To(BeFalse(),
 			"the supervisor must drain via a live tick loop, not time out against a dead one")
 	})
 

@@ -142,7 +142,7 @@ func verifyCascadeChildrenCreated(t *integration.TestLogger) {
 	}
 
 	// Also check failure logs as indicator of child activity
-	failureLogs := t.GetLogsMatching("connect_failed_simulated")
+	failureLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 	for _, entry := range failureLogs {
 		worker := ""
 
@@ -165,7 +165,7 @@ func verifyCascadeChildrenCreated(t *integration.TestLogger) {
 
 // verifyCascadeChildrenFailed checks that children experienced failures.
 func verifyCascadeChildrenFailed(t *integration.TestLogger) {
-	failureLogs := t.GetLogsMatching("connect_failed_simulated")
+	failureLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 
 	childFailures := 0
 
@@ -285,7 +285,7 @@ func verifyCascadeParentStateTransitions(t *integration.TestLogger) {
 
 // verifyCascadeMultipleChildrenIndependent checks that multiple children fail independently.
 func verifyCascadeMultipleChildrenIndependent(t *integration.TestLogger) {
-	failureLogs := t.GetLogsMatching("connect_failed_simulated")
+	failureLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 
 	child0Failures := 0
 	child1Failures := 0
@@ -355,7 +355,7 @@ func verifyCascadeAllChildrenMustRecover(t *integration.TestLogger) {
 
 // verifyCascadeChildFailureCounts checks that each child fails expected number of times.
 func verifyCascadeChildFailureCounts(t *integration.TestLogger) {
-	failureLogs := t.GetLogsMatching("connect_failed_simulated")
+	failureLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 
 	childFailures := make(map[string]int)
 

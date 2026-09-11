@@ -32,8 +32,8 @@ import (
 // race detector banner ("DATA RACE"), the runtime's "concurrent map" fatal, and the
 // word-boundary tokens for "race condition", "deadlock", and "panic". Word boundaries
 // keep it from firing on substrings of unrelated event names — notably
-// "graceful_shutdown_timeout" (contains "race" inside "graceful") and
-// "graceful_shutdown_budget_exhausted", both of which the shutdown-budget cascade can
+// "supervisor::shutdown::timeout" (contains "race" inside "graceful") and
+// "supervisor::shutdown::budget_exhausted", both of which the shutdown-budget cascade can
 // emit under load and which a plain strings.Contains("race") check misreads as a race.
 var interferenceSignatureRE = regexp.MustCompile(`(?i)\b(data race|race condition|concurrent map|deadlock|panic)\b`)
 
@@ -161,8 +161,8 @@ func verifyConcurrentNoInterference(t *integration.TestLogger) {
 
 	// Known timing-related issues that are acceptable
 	knownIssues := []string{
-		"data_stale",
-		"collector_observation_failed",
+		"supervisor::freshness::data_stale",
+		"supervisor::collector::observation_failed",
 	}
 
 	unexpectedErrors := []string{}

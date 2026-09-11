@@ -82,7 +82,7 @@ var _ = Describe("Collector Panic Recovery", func() {
 				"Collector should still be running after panic recovery")
 
 			// Verify panic was logged
-			panicLogs := filterCollectorLogs(observedLogs, "collector_panic")
+			panicLogs := filterCollectorLogs(observedLogs, "supervisor::collector::panic")
 			Expect(panicLogs).ToNot(BeEmpty(), "Expected collector_panic log entry")
 
 			cancel()
@@ -126,7 +126,7 @@ var _ = Describe("Collector Panic Recovery", func() {
 
 			time.Sleep(200 * time.Millisecond)
 
-			panicLogs := filterCollectorLogs(observedLogs, "collector_panic")
+			panicLogs := filterCollectorLogs(observedLogs, "supervisor::collector::panic")
 			Expect(panicLogs).ToNot(BeEmpty())
 
 			panicLog := panicLogs[0]
@@ -177,7 +177,7 @@ var _ = Describe("Collector Panic Type Classification", func() {
 
 		time.Sleep(200 * time.Millisecond)
 
-		panicLogs := filterCollectorLogs(observedLogs, "collector_panic")
+		panicLogs := filterCollectorLogs(observedLogs, "supervisor::collector::panic")
 		Expect(panicLogs).ToNot(BeEmpty())
 
 		panicLog := panicLogs[0]
@@ -224,7 +224,7 @@ var _ = Describe("Collector Panic Type Classification", func() {
 
 		time.Sleep(200 * time.Millisecond)
 
-		panicLogs := filterCollectorLogs(observedLogs, "collector_panic")
+		panicLogs := filterCollectorLogs(observedLogs, "supervisor::collector::panic")
 		Expect(panicLogs).ToNot(BeEmpty())
 
 		panicLog := panicLogs[0]
@@ -299,8 +299,6 @@ func (p *panicOnSentryErrorCollectorLogger) Sentry(id telemetry.Identifier, _ de
 	}
 }
 
-func (p *panicOnSentryErrorCollectorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {
-}
 func (p *panicOnSentryErrorCollectorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
 	if !p.panicked.Load() {
 		p.panicked.Store(true)

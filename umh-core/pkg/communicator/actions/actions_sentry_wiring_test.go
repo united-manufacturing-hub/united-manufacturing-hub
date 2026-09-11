@@ -23,6 +23,7 @@ import (
 
 	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // TestCommunicatorFSMLoggerWiredToSentryHook locks the invariant that the
@@ -70,11 +71,13 @@ func TestCommunicatorFSMLoggerWiredToSentryHook(t *testing.T) {
 		t.Fatal("unexpected: precheck fingerprint already seen")
 	}
 
-	// Fire the SentryError through the FSMLogger. If the hook is wired,
+	// Fire the event through the FSMLogger. If the hook is wired,
 	// SentryHook.Write intercepts the entry, computes the fingerprint
 	// (same formula as expectedFingerprint above), and calls
 	// ShouldCapture which records the timestamp in debouncer.lastSeen.
-	logger.SentryError(feature, communicatorHierarchyPath, testErr, eventName)
+	logger.Sentry(
+		telemetry.Identifier{Tag: eventName, Brief: eventName, Severity: telemetry.SeverityError},
+		feature, communicatorHierarchyPath, testErr)
 
 	// Post-assert: a fresh ShouldCapture call with the SAME fingerprint
 	// must return false (within the 5-min window) because the hook
@@ -82,6 +85,6 @@ func TestCommunicatorFSMLoggerWiredToSentryHook(t *testing.T) {
 	// (i.e., we regressed back to a bare FSMLogger), the lastSeen map
 	// is empty for this fingerprint and ShouldCapture returns true.
 	if communicatorSentryHook.Debouncer().ShouldCapture(expectedFingerprint) {
-		t.Errorf("SentryHook did not intercept FSMLogger.SentryError — communicatorFSMLogger() is not wrapping the logger with the hook")
+		t.Errorf("SentryHook did not intercept FSMLogger.Sentry — communicatorFSMLogger() is not wrapping the logger with the hook")
 	}
 }

@@ -35,6 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -134,10 +135,9 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	action := newActionFromPayloadFn(instanceUUID, payload, sender, outboundChannel, systemSnapshotManager, configManager, log, fsmLogger)
 	if action == nil {
 		log.Errorf("Unknown action type: %s", payload.ActionType)
-		fsmLogger.SentryWarn(
+		fsmLogger.Sentry(telemetry.Actions.UnknownType,
 			deps.FeatureFSMv1Communicator,
-			communicatorHierarchyPath,
-			"unknown action type",
+			communicatorHierarchyPath, nil,
 			deps.String("action_type", string(payload.ActionType)),
 			deps.String("action_uuid", payload.ActionUUID.String()),
 		)
@@ -161,7 +161,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		log.Errorf("Error parsing action payload: %s", err)
 
 		if isLogToSentry {
-			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_parse_failed")
+			fsmLogger.Sentry(telemetry.Communicator.Bridge.ParseFailed, deps.FeatureDisableReadFlows, "", err)
 		}
 
 		return
@@ -176,7 +176,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		log.Errorf("Error validating action payload: %s", err)
 
 		if isLogToSentry {
-			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_validate_failed")
+			fsmLogger.Sentry(telemetry.Communicator.Bridge.ValidateFailed, deps.FeatureDisableReadFlows, "", err)
 		}
 
 		return
@@ -189,7 +189,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		log.Errorf("Error executing action: %s", err)
 
 		if isLogToSentry {
-			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_execute_failed")
+			fsmLogger.Sentry(telemetry.Communicator.Bridge.ExecuteFailed, deps.FeatureDisableReadFlows, "", err)
 		}
 
 		return
@@ -240,11 +240,10 @@ func recoverActionPanic(
 				defer func() { _ = recover() }()
 
 				if fsmLogger != nil {
-					fsmLogger.SentryError(
+					fsmLogger.Sentry(telemetry.Communicator.ActionHandler.DoublePanic,
 						deps.FeatureFSMv1Communicator,
 						communicatorHierarchyPath,
 						fmt.Errorf("action handler double panic: primary=%v secondary=%v", r, r2),
-						"action_handler_double_panic",
 						deps.String("action_type", string(payload.ActionType)),
 						deps.String("action_uuid", payload.ActionUUID.String()),
 					)
@@ -252,7 +251,7 @@ func recoverActionPanic(
 			}()
 
 			fmt.Fprintf(os.Stderr,
-				"action_handler_double_panic: action=%s uuid=%s primary=%v secondary=%v\n",
+				"communicator::action_handler::double_panic: action=%s uuid=%s primary=%v secondary=%v\n",
 				payload.ActionType, payload.ActionUUID.String(), r, r2)
 		}
 	}()
@@ -265,11 +264,10 @@ func recoverActionPanic(
 	// so the primary panic always reaches the dashboard even if metrics
 	// or reply generation fails.
 	if fsmLogger != nil {
-		fsmLogger.SentryError(
+		fsmLogger.Sentry(telemetry.Communicator.ActionHandler.Panic,
 			deps.FeatureFSMv1Communicator,
 			communicatorHierarchyPath,
 			fmt.Errorf("action handler panic: %w", panicErr),
-			"action_handler_panic",
 			deps.String("action_type", string(payload.ActionType)),
 			deps.String("action_uuid", payload.ActionUUID.String()),
 			deps.String("panic_type", panicType),
@@ -298,18 +296,17 @@ func recoverActionPanic(
 		// reply ever arrives) and engineering only sees the panic event, not
 		// the follow-on failure. Stderr line kept as last-resort fallback.
 		if fsmLogger != nil {
-			fsmLogger.SentryError(
+			fsmLogger.Sentry(telemetry.Communicator.ActionHandler.PanicReplyGenerationFailed,
 				deps.FeatureFSMv1Communicator,
 				communicatorHierarchyPath,
 				err,
-				"action_handler_panic_reply_generation_failed",
 				deps.String("action_type", string(payload.ActionType)),
 				deps.String("action_uuid", payload.ActionUUID.String()),
 			)
 		}
 
 		fmt.Fprintf(os.Stderr,
-			"action_handler_panic_reply_generation_failed: action=%s uuid=%s err=%v\n",
+			"communicator::action_handler::panic_reply_generation_failed: action=%s uuid=%s err=%v\n",
 			payload.ActionType, payload.ActionUUID.String(), err)
 
 		return

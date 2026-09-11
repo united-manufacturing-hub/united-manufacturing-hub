@@ -86,11 +86,10 @@ WRONG:
 loses the error chain and Sentry's ability to group related errors.
 
 CORRECT:
-  logger.SentryError(feature, hierarchyPath, err, "operation_failed")
-  logger.SentryWarn(feature, hierarchyPath, "problem detected", deps.Err(err))
+  logger.Sentry(telemetry.Supervisor.Action.Failed, feature, hierarchyPath, err)
 
 WRONG:
-  logger.SentryError(feature, hierarchyPath, err, "failed", deps.String("detail", err.Error()))
+  logger.Sentry(telemetry.Supervisor.Action.Failed, feature, hierarchyPath, err, deps.String("detail", err.Error()))
   logger.Info("failed", deps.String("error", someErr.Error()))
 
 The error chain is important for debugging and Sentry grouping. Always pass

@@ -283,7 +283,7 @@ func TestRecoverActionPanicDoublePanicGuard(t *testing.T) {
 		recoverActionPanic(errors.New("primary"), uuid.New(), "user@example.com", payload, bad, out)
 	})
 
-	if !strings.Contains(stderr, "action_handler_double_panic") {
+	if !strings.Contains(stderr, "communicator::action_handler::double_panic") {
 		t.Errorf("expected stderr to contain action_handler_double_panic; got %q", stderr)
 	}
 }
@@ -302,11 +302,7 @@ func (l *countingPanickingFSMLogger) Sentry(id telemetry.Identifier, feature dep
 		return
 	}
 
-	l.SentryError(feature, hp, cause, id.Tag, fields...)
-}
-func (l *countingPanickingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
-func (l *countingPanickingFSMLogger) SentryError(feature deps.Feature, hp string, err error, msg string, fields ...deps.Field) {
-	l.calls = append(l.calls, capturedSentryError{feature, hp, err, msg, fields})
+	l.calls = append(l.calls, capturedSentryError{feature, hp, cause, id.Tag, fields})
 	if len(l.calls) == 1 {
 		panic("primary sentry boom")
 	}
@@ -332,7 +328,7 @@ func TestRecoverActionPanicDoublePanicGuardFiresWhenMetricPanics(t *testing.T) {
 		recoverActionPanic(errors.New("primary"), uuid.New(), "user@example.com", payload, deps.NewFSMLogger(log), out)
 	})
 
-	if !strings.Contains(stderr, "action_handler_double_panic") {
+	if !strings.Contains(stderr, "communicator::action_handler::double_panic") {
 		t.Errorf("expected stderr to contain action_handler_double_panic; got %q", stderr)
 	}
 }
@@ -350,7 +346,7 @@ func TestRecoverActionPanicDoublePanicGuardReattemptsSentry(t *testing.T) {
 		recoverActionPanic(errors.New("primary"), uuid.New(), "user@example.com", payload, bad, out)
 	})
 
-	if !strings.Contains(stderr, "action_handler_double_panic") {
+	if !strings.Contains(stderr, "communicator::action_handler::double_panic") {
 		t.Errorf("expected stderr to contain action_handler_double_panic; got %q", stderr)
 	}
 
@@ -359,7 +355,7 @@ func TestRecoverActionPanicDoublePanicGuardReattemptsSentry(t *testing.T) {
 	}
 
 	secondary := bad.calls[1]
-	if secondary.msg != "action_handler_double_panic" {
+	if secondary.msg != "communicator::action_handler::double_panic" {
 		t.Errorf("want secondary msg=action_handler_double_panic, got %q", secondary.msg)
 	}
 
@@ -389,16 +385,12 @@ func (l *capturingFSMLogger) Sentry(id telemetry.Identifier, feature deps.Featur
 		return
 	}
 
-	l.SentryError(feature, hp, cause, id.Tag, fields...)
-}
-func (l *capturingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
-func (l *capturingFSMLogger) SentryError(feature deps.Feature, hp string, err error, msg string, fields ...deps.Field) {
-	l.calls = append(l.calls, capturedSentryError{feature, hp, err, msg, fields})
+	l.calls = append(l.calls, capturedSentryError{feature, hp, cause, id.Tag, fields})
 }
 func (l *capturingFSMLogger) With(...deps.Field) deps.FSMLogger { return l }
 
 func TestRecoverActionPanicLogsSentryFields(t *testing.T) {
-	// T2.6 — Sentry event "action_handler_panic" is logged with the required
+	// T2.6 — Sentry event "communicator::action_handler::panic" is logged with the required
 	// fields, and stack_trace is non-empty (debug.Stack() caveat noted in
 	// recoverActionPanic).
 	actionUUID := uuid.New()
@@ -424,7 +416,7 @@ func TestRecoverActionPanicLogsSentryFields(t *testing.T) {
 		t.Errorf("want hierarchyPath=fsmv1.Communicator, got %q", call.hierarchyPath)
 	}
 
-	if call.msg != "action_handler_panic" {
+	if call.msg != "communicator::action_handler::panic" {
 		t.Errorf("want msg=action_handler_panic, got %q", call.msg)
 	}
 
@@ -469,10 +461,6 @@ func (l panickingFSMLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ st
 		return
 	}
 
-	panic("logger boom")
-}
-func (panickingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
-func (panickingFSMLogger) SentryError(deps.Feature, string, error, string, ...deps.Field) {
 	panic("logger boom")
 }
 func (l panickingFSMLogger) With(...deps.Field) deps.FSMLogger { return l }

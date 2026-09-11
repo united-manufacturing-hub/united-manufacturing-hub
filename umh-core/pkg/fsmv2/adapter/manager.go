@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // stoppedState is the desired-state literal that disables a config: a config
@@ -334,13 +335,13 @@ func (m *WorkerManager[TConfig, TStatus]) applyDesired(client *fsmv2client.FSMv2
 
 	cfgMap, err := m.spec.CfgFor(cfg)
 	if err != nil {
-		m.spec.Log.SentryWarn(deps.FeatureForWorker(m.spec.WorkerType), name, "build spec failed, will retry next tick", deps.String("worker", name), deps.Err(err))
+		m.spec.Log.Sentry(telemetry.Adapter.Child.SpecBuildFailed, deps.FeatureForWorker(m.spec.WorkerType), name, err, deps.String("worker", name))
 
 		return false
 	}
 
 	if err := client.Upsert(m.refFor(cfg), cfgMap); err != nil {
-		m.spec.Log.SentryWarn(deps.FeatureForWorker(m.spec.WorkerType), name, "upsert failed, will retry next tick", deps.String("worker", name), deps.Err(err))
+		m.spec.Log.Sentry(telemetry.Adapter.Child.UpsertFailed, deps.FeatureForWorker(m.spec.WorkerType), name, err, deps.String("worker", name))
 
 		return false
 	}

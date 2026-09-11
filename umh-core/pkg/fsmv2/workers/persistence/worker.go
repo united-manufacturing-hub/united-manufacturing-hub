@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	persistencepkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 
 	// Blank import registers the "persistence" initial state via
 	// fsmv2.RegisterInitialState in state/state_stopped.go init().
@@ -141,8 +142,7 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 		} else if errors.Is(err, persistencepkg.ErrNotFound) && !d.IsObservedStateLoaded() {
 			d.GetLogger().Debug("no previous observed state found, using zero-value defaults")
 		} else {
-			d.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "previous_observed_load_failed",
-				deps.Err(err),
+			d.GetLogger().Sentry(telemetry.Workers.Transport.PreviousObservedLoadFailed, deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), err,
 				deps.String("worker_type", d.GetWorkerType()),
 				deps.String("worker_id", d.GetWorkerID()))
 		}

@@ -26,6 +26,7 @@ import (
 	sentrygo "github.com/getsentry/sentry-go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 
 	//nolint:revive // dot import for Ginkgo DSL
 	. "github.com/onsi/ginkgo/v2"
@@ -136,6 +137,17 @@ main.second()
 			frame := sentrygo.Frame{
 				Module:   "runtime/debug",
 				Function: "Stack",
+			}
+			Expect(sentry.IsInternalFrame(frame)).To(BeTrue())
+		})
+
+		It("should filter the logger's own Sentry method", func() {
+			// The filter names the method, so a rename leaves the logger as the
+			// innermost application frame and every event's culprit becomes the
+			// logger rather than the code that reported it.
+			frame := sentrygo.Frame{
+				Module:   "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps",
+				Function: "deps.(*zapLogger).Sentry",
 			}
 			Expect(sentry.IsInternalFrame(frame)).To(BeTrue())
 		})
@@ -501,7 +513,7 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 			wrappedErr := fmt.Errorf("connection failed: %w", rootErr)
 
 			// When: logged with error fields
-			logger.Errorw("action_failed",
+			logger.Errorw("supervisor::action::failed",
 				"feature", "communicator",
 				"error", wrappedErr)
 
@@ -522,7 +534,7 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 			err3 := fmt.Errorf("layer 3: %w", err2)
 
 			// When: logged
-			logger.Errorw("action_failed",
+			logger.Errorw("supervisor::action::failed",
 				"feature", "fsmv2",
 				"error", err3)
 
@@ -570,7 +582,7 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 			err := errors.New("specific error message")
 
 			// When: logged
-			logger.Errorw("action_failed",
+			logger.Errorw("supervisor::action::failed",
 				"feature", "fsmv2",
 				"error", err)
 
@@ -581,7 +593,7 @@ var _ = Describe("SentryHook Integration with Mock Transport", func() {
 
 			event := store.GetLast()
 			Expect(event).NotTo(BeNil())
-			Expect(event.Message).To(Equal("action_failed"))
+			Expect(event.Message).To(Equal("supervisor::action::failed"))
 		})
 
 		It("attaches stacktrace to exception when stack field is present", func() {
@@ -594,7 +606,7 @@ github.com/example/pkg/executor.executeWork()
 	/app/executor.go:142 +0x1a
 `
 			// When: logged with stack field (like action_executor does for panics)
-			logger.Errorw("action_panic",
+			logger.Errorw("supervisor::action::panic",
 				"feature", "fsmv2",
 				"error", err)
 			// Add stack field separately to match action_executor pattern
@@ -641,7 +653,7 @@ github.com/example/pkg/executor.executeWork()
 			derivedLogger := logger.With("worker", "test-worker-123")
 
 			// Log an error through the derived logger
-			derivedLogger.Errorw("action_failed",
+			derivedLogger.Errorw("supervisor::action::failed",
 				"feature", "fsmv2",
 				"error", io.EOF)
 
@@ -652,7 +664,7 @@ github.com/example/pkg/executor.executeWork()
 
 			event := store.GetLast()
 			Expect(event).NotTo(BeNil())
-			Expect(event.Message).To(Equal("action_failed"))
+			Expect(event.Message).To(Equal("supervisor::action::failed"))
 			Expect(event.Exception).NotTo(BeEmpty(), "Error should be captured as Exception")
 		})
 
@@ -751,9 +763,9 @@ github.com/example/pkg/executor.executeWork()
 			err2 := context.DeadlineExceeded
 
 			// When: both logged
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", err1)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", err1)
 			time.Sleep(10 * time.Millisecond)
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", err2)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", err2)
 
 			// Then: different fingerprints
 			Eventually(func() int {
@@ -783,9 +795,9 @@ github.com/example/pkg/executor.executeWork()
 			err := io.EOF
 
 			// When: both logged
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", err)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", err)
 			time.Sleep(10 * time.Millisecond)
-			logger.Errorw("action_failed", "feature", "communicator", "error", err)
+			logger.Errorw("supervisor::action::failed", "feature", "communicator", "error", err)
 
 			// Then: different fingerprints due to different features
 			Eventually(func() int {
@@ -801,7 +813,7 @@ github.com/example/pkg/executor.executeWork()
 
 	Describe("Per-Fingerprint Debouncing", func() {
 		It("captures first event", func() {
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -810,8 +822,8 @@ github.com/example/pkg/executor.executeWork()
 
 		It("debounces duplicate within window", func() {
 			// Both use same feature, same error, same message → same fingerprint
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", io.EOF)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", io.EOF)
 
 			// Wait a bit for any async processing
 			time.Sleep(100 * time.Millisecond)
@@ -834,7 +846,7 @@ github.com/example/pkg/executor.executeWork()
 			logger = zap.New(wrappedCore).Sugar()
 
 			// First event
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -844,7 +856,7 @@ github.com/example/pkg/executor.executeWork()
 			time.Sleep(100 * time.Millisecond)
 
 			// Second event after window
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -853,8 +865,8 @@ github.com/example/pkg/executor.executeWork()
 
 		It("debounces different fingerprints independently", func() {
 			// Different features = different fingerprints = both captured
-			logger.Errorw("action_failed", "feature", "fsmv2", "error", io.EOF)
-			logger.Errorw("action_failed", "feature", "communicator", "error", io.EOF)
+			logger.Errorw("supervisor::action::failed", "feature", "fsmv2", "error", io.EOF)
+			logger.Errorw("supervisor::action::failed", "feature", "communicator", "error", io.EOF)
 
 			Eventually(func() int {
 				return store.Len()
@@ -864,7 +876,7 @@ github.com/example/pkg/executor.executeWork()
 
 	Describe("Hierarchy Path Auto-Tagging", func() {
 		It("extracts fsm_version=v2, worker_type, and worker_chain from fsmv2 path", func() {
-			logger.Errorw("action_failed",
+			logger.Errorw("supervisor::action::failed",
 				"feature", "communicator",
 				"error", io.EOF,
 				"hierarchy_path", "app(application)/worker(communicator)")
@@ -881,7 +893,7 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("extracts fsm_version=v1 from legacy path", func() {
-			logger.Errorw("action_failed",
+			logger.Errorw("supervisor::action::failed",
 				"feature", "legacy",
 				"error", io.EOF,
 				"hierarchy_path", "Enterprise.Site.Area.WorkCell")
@@ -898,7 +910,7 @@ github.com/example/pkg/executor.executeWork()
 		})
 
 		It("handles empty hierarchy path gracefully", func() {
-			logger.Errorw("action_failed",
+			logger.Errorw("supervisor::action::failed",
 				"feature", "fsmv2",
 				"error", io.EOF)
 
@@ -916,7 +928,7 @@ github.com/example/pkg/executor.executeWork()
 
 	Describe("Tag Extraction", func() {
 		It("sets feature tag", func() {
-			logger.Errorw("action_failed",
+			logger.Errorw("supervisor::action::failed",
 				"feature", "communicator",
 				"error", io.EOF)
 
@@ -1033,7 +1045,7 @@ var _ = Describe("Contexts Catch-All", func() {
 	})
 
 	It("captures extra fields in Contexts['umh_context']", func() {
-		logger.Errorw("action_failed",
+		logger.Errorw("supervisor::action::failed",
 			"feature", "fsmv2",
 			"error", io.EOF,
 			"reason", "timeout",
@@ -1051,7 +1063,7 @@ var _ = Describe("Contexts Catch-All", func() {
 	})
 
 	It("excludes handled keys from Contexts", func() {
-		logger.Errorw("action_panic",
+		logger.Errorw("supervisor::action::panic",
 			"feature", "fsmv2",
 			"error", io.EOF,
 			"hierarchy_path", "app(application)/w(communicator)",
@@ -1080,7 +1092,7 @@ var _ = Describe("Contexts Catch-All", func() {
 	})
 
 	It("excludes 'error' from Contexts when typed error is present", func() {
-		logger.Errorw("action_failed",
+		logger.Errorw("supervisor::action::failed",
 			"feature", "fsmv2",
 			"error", io.EOF,
 			"reason", "test")
@@ -1127,7 +1139,7 @@ var _ = Describe("Contexts Catch-All", func() {
 	})
 
 	It("captures panic_value in Contexts instead of Extra", func() {
-		logger.Errorw("action_panic",
+		logger.Errorw("supervisor::action::panic",
 			"feature", "fsmv2",
 			"error", errors.New("panicked"),
 			"panic", "runtime error: nil pointer",
@@ -1261,7 +1273,7 @@ var _ = Describe("Tag Truncation", func() {
 		}
 		// error_types for 15 wraps + 1 base: ~16 types * ~20 chars = ~320 chars
 
-		logger.Errorw("action_failed",
+		logger.Errorw("supervisor::action::failed",
 			"feature", "fsmv2",
 			"error", err)
 
@@ -1277,7 +1289,7 @@ var _ = Describe("Tag Truncation", func() {
 	It("does not truncate error_types under 200 chars", func() {
 		err := fmt.Errorf("wrap: %w", io.EOF)
 
-		logger.Errorw("action_failed",
+		logger.Errorw("supervisor::action::failed",
 			"feature", "fsmv2",
 			"error", err)
 
@@ -1332,9 +1344,32 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		}
 	})
 
+	// The capstone for the telemetry registry: one call with a generated
+	// identifier and no error of its own, all the way to the event the transport
+	// would have sent. The unit specs prove each piece; only an assertion here
+	// fails if the pieces stop being wired together.
+	It("carries a declared identifier's tag, level and brief onto the event", func() {
+		fsmLogger.Sentry(telemetry.Supervisor.Collector.Stopped, deps.FeatureFSMv2, "app(application)/w1(helloworld)", nil)
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		event := store.GetLast()
+		Expect(event.Tags).To(HaveKeyWithValue("event_name", "supervisor::collector::stopped"))
+		Expect(event.Tags).To(HaveKeyWithValue("feature", "fsmv2"))
+		Expect(event.Level).To(Equal(sentrygo.LevelWarning))
+		Expect(event.Exception).NotTo(BeEmpty())
+		Expect(event.Exception[0].Type).To(Equal("supervisor::collector::stopped"))
+		// The brief is the only readable sentence on an event whose caller had
+		// no error, so a triager reads it under the title rather than grepping
+		// the repo for what the tag means.
+		Expect(event.Exception[0].Value).To(Equal(telemetry.Supervisor.Collector.Stopped.Brief))
+	})
+
 	It("SentryError produces exception with correct type and value", func() {
 		testErr := fmt.Errorf("connection refused: %w", io.EOF)
-		fsmLogger.SentryError(deps.FeatureFSMv2, "app(application)/w1(helloworld)", testErr, "action_failed",
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "app(application)/w1(helloworld)", testErr,
 			deps.ActionName("connect"))
 
 		Eventually(func() int {
@@ -1343,12 +1378,12 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 
 		event := store.GetLast()
 		Expect(event.Exception).NotTo(BeEmpty())
-		Expect(event.Exception[0].Type).To(Equal("action_failed"))
+		Expect(event.Exception[0].Type).To(Equal("supervisor::action::failed"))
 		Expect(event.Exception[0].Value).To(ContainSubstring("connection refused"))
 	})
 
 	It("SentryError sets feature tag", func() {
-		fsmLogger.SentryError(deps.FeatureFSMv2, "", io.EOF, "action_failed")
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "", io.EOF)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1359,20 +1394,20 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryError sets event_name tag from message", func() {
-		fsmLogger.SentryError(deps.FeatureFSMv2, "", io.EOF, "action_failed")
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "", io.EOF)
 
 		Eventually(func() int {
 			return store.Len()
 		}, time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 		event := store.GetLast()
-		Expect(event.Tags["event_name"]).To(Equal("action_failed"))
+		Expect(event.Tags["event_name"]).To(Equal("supervisor::action::failed"))
 	})
 
 	It("SentryError extracts error types from wrapped chain", func() {
 		rootErr := errors.New("root cause")
 		wrapped := fmt.Errorf("layer: %w", rootErr)
-		fsmLogger.SentryError(deps.FeatureFSMv2, "", wrapped, "action_failed")
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "", wrapped)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1384,7 +1419,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryError with hierarchy_path derives fsm_version, worker_type, and worker_chain", func() {
-		fsmLogger.SentryError(deps.FeatureForWorker("communicator"), "app(application)/worker(communicator)", io.EOF, "action_failed")
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureForWorker("communicator"), "app(application)/worker(communicator)", io.EOF)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1397,8 +1432,12 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		Expect(event.Tags["worker_chain"]).To(Equal("application/communicator"))
 	})
 
-	It("SentryWarn captures at warn level without exception", func() {
-		fsmLogger.SentryWarn(deps.FeatureFSMv2, "", "collector_unresponsive",
+	It("captures a warning-severity identifier at warn level, with the brief as its exception", func() {
+		// A warn-level event used to arrive with no exception at all, which left
+		// the issue with a title and nothing under it. The brief is synthesized
+		// into the error so there is always a readable sentence; the level and
+		// the tag are unchanged.
+		fsmLogger.Sentry(telemetry.Identifier{Tag: "collector_unresponsive", Brief: "A collector stopped answering.", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "", nil,
 			deps.Attempts(3))
 
 		Eventually(func() int {
@@ -1407,14 +1446,16 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 
 		event := store.GetLast()
 		Expect(event.Level).To(Equal(sentrygo.LevelWarning))
-		Expect(event.Exception).To(BeEmpty())
 		Expect(event.Tags["feature"]).To(Equal("fsmv2"))
 		Expect(event.Tags["event_name"]).To(Equal("collector_unresponsive"))
+		Expect(event.Exception).To(HaveLen(1))
+		Expect(event.Exception[0].Type).To(Equal("collector_unresponsive"))
+		Expect(event.Exception[0].Value).To(Equal("A collector stopped answering."))
 	})
 
 	It("With() context is preserved through FSMLogger", func() {
 		scoped := fsmLogger.With(deps.WorkerID("test-worker"))
-		scoped.SentryError(deps.FeatureFSMv2, "", io.EOF, "worker_failed")
+		scoped.Sentry(telemetry.Identifier{Tag: "worker_failed", Brief: "worker_failed", Severity: telemetry.SeverityError}, deps.FeatureFSMv2, "", io.EOF)
 
 		Eventually(func() int {
 			return store.Len()
@@ -1427,8 +1468,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	It("SentryWarn with deps.Err still extracts typed error into Exception", func() {
 		// deps.Err() creates a typed error field that zap preserves as ErrorType.
 		// ExtractErrorFromFields finds it, so even SentryWarn produces an Exception.
-		fsmLogger.SentryWarn(deps.FeatureFSMv2, "", "shutdown_failed",
-			deps.Err(errors.New("connection reset")))
+		fsmLogger.Sentry(telemetry.Identifier{Tag: "shutdown_failed", Brief: "shutdown_failed", Severity: telemetry.SeverityWarning}, deps.FeatureFSMv2, "", errors.New("connection reset"))
 
 		Eventually(func() int {
 			return store.Len()
@@ -1440,7 +1480,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 	})
 
 	It("SentryError with extra fields captures them in Contexts", func() {
-		fsmLogger.SentryError(deps.FeatureFSMv2, "", io.EOF, "action_failed",
+		fsmLogger.Sentry(telemetry.Supervisor.Action.Failed, deps.FeatureFSMv2, "", io.EOF,
 			deps.Attempts(3), deps.String("reason", "timeout"))
 
 		Eventually(func() int {

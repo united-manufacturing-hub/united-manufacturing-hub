@@ -23,6 +23,7 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // PullActionName identifies the pull action in FSM action results.
@@ -81,7 +82,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	if len(pending) > 0 {
 		inChan := pullDeps.GetInboundChan()
 		if inChan == nil {
-			pullDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), "pull_skipped_nil_inbound_chan_pending_delivery")
+			pullDeps.GetLogger().Sentry(telemetry.Workers.Pull.SkippedNilInboundChanWithPending, depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), nil)
 			pullDeps.StorePendingMessages(pending)
 
 			return nil
@@ -112,7 +113,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	// Phase 2: Backpressure check
 	inChan := pullDeps.GetInboundChan()
 	if inChan == nil {
-		pullDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), "pull_skipped_nil_inbound_chan")
+		pullDeps.GetLogger().Sentry(telemetry.Workers.Pull.SkippedNilInboundChan, depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), nil)
 
 		return nil
 	}
@@ -129,7 +130,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if shouldSkip && !wasBackpressured {
-		pullDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), "backpressure_entering",
+		pullDeps.GetLogger().Sentry(telemetry.Workers.Transport.BackpressureEntering, depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), nil,
 			depspkg.Int("available", available), depspkg.Int("threshold", ExpectedBatchSize))
 		pullDeps.SetBackpressured(true)
 		metrics.SetGauge(depspkg.GaugeBackpressureActive, 1)
@@ -137,7 +138,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if !shouldSkip && wasBackpressured {
-		pullDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), "backpressure_exiting",
+		pullDeps.GetLogger().Sentry(telemetry.Workers.Transport.BackpressureExiting, depspkg.FeatureForWorker(pullDeps.GetWorkerType()), pullDeps.GetHierarchyPath(), nil,
 			depspkg.Int("available", available), depspkg.Int("low_water_mark", ExpectedBatchSize*LowWaterMarkMultiplier))
 		pullDeps.SetBackpressured(false)
 		metrics.SetGauge(depspkg.GaugeBackpressureActive, 0)

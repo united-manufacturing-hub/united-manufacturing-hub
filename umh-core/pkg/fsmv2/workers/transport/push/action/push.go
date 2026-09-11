@@ -23,6 +23,7 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 const PushActionName = "push"
@@ -253,7 +254,7 @@ func (a *PushAction) retryPending(ctx context.Context, t types.Transport, pushDe
 			// is adding the type to IsTransient() or isRecoverableByParent(),
 			// not retrying unknowns here. SentryWarn fires on every drop so
 			// a spike is visible in Sentry.
-			pushDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pushDeps.GetWorkerType()), pushDeps.GetHierarchyPath(), "dropping_poison_message",
+			pushDeps.GetLogger().Sentry(telemetry.Workers.Transport.PoisonMessageDropped, depspkg.FeatureForWorker(pushDeps.GetWorkerType()), pushDeps.GetHierarchyPath(), nil,
 				depspkg.String("errorType", errType.String()),
 				depspkg.Err(err),
 				depspkg.Int("remaining", len(pending)-i-1))

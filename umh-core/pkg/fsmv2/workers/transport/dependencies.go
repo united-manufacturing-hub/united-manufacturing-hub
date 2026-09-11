@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry/failurerate"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // ChildFailureRateConfig is the shared failurerate.Config for push and pull
@@ -36,7 +37,7 @@ var ChildFailureRateConfig = failurerate.Config{
 }
 
 // AuthFailureRateConfig controls when the tracker fires a one-shot
-// SentryWarn("persistent_auth_failure") during auth failure episodes.
+// workers::auth::persistent_failure during auth failure episodes.
 //
 // Because auth uses Reset() on success (not RecordOutcome(true)), the
 // window only ever contains failures during an episode. The failure rate
@@ -147,7 +148,7 @@ func (d *TransportDependencies) RecordError() {
 
 // RecordAuthError records a typed auth error and feeds the auth failure rate
 // tracker. If the tracker's one-shot fires (sustained failures crossing the
-// MinSamples threshold), a SentryWarn("persistent_auth_failure") is emitted.
+// MinSamples threshold), workers::auth::persistent_failure is reported.
 func (d *TransportDependencies) RecordAuthError(errType types.ErrorType, retryAfter time.Duration) {
 	d.RecordTypedError(errType, retryAfter)
 
@@ -158,7 +159,7 @@ func (d *TransportDependencies) RecordAuthError(errType types.ErrorType, retryAf
 	}
 
 	if d.authFailureRate.RecordOutcome(false) {
-		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_auth_failure",
+		d.BaseDependencies.GetLogger().Sentry(telemetry.Workers.Auth.PersistentFailure, deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), nil,
 			deps.String("error_type", errType.String()),
 			deps.Float64("failure_rate", d.authFailureRate.FailureRate()))
 	}
@@ -247,7 +248,7 @@ func (d *TransportDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int) {
 	provider := GetChannelProvider()
 	if provider == nil {
-		d.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "channel_provider_not_initialized",
+		d.GetLogger().Sentry(telemetry.Workers.Transport.ChannelProviderNotInitialized, deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), nil,
 			deps.WorkerID(d.GetWorkerID()))
 
 		return 0, 0

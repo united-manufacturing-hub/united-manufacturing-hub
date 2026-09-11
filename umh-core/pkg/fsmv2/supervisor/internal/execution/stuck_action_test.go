@@ -71,7 +71,7 @@ var _ = Describe("Stuck Action Detection", func() {
 			// So by ~400ms the first metrics check after 2x should fire
 			time.Sleep(600 * time.Millisecond)
 
-			stuckLogs := filterStuckActionLogs(observedLogs, "stuck_action_detected")
+			stuckLogs := filterStuckActionLogs(observedLogs, "supervisor::action::stuck_detected")
 			Expect(stuckLogs).ToNot(BeEmpty(), "Expected stuck_action_detected log entry")
 
 			stuckLog := stuckLogs[0]
@@ -112,7 +112,7 @@ var _ = Describe("Stuck Action Detection", func() {
 
 			time.Sleep(500 * time.Millisecond)
 
-			stuckLogs := filterStuckActionLogs(observedLogs, "stuck_action_detected")
+			stuckLogs := filterStuckActionLogs(observedLogs, "supervisor::action::stuck_detected")
 			Expect(stuckLogs).To(BeEmpty(), "No stuck action logs expected for fast action")
 		})
 	})
@@ -159,7 +159,7 @@ var _ = Describe("Stuck Action Force-Removal", func() {
 		Expect(executor.HasActionInProgress("stuck-force")).To(BeFalse(),
 			"Stuck entry should be force-removed after 3x timeout")
 
-		removedLogs := filterStuckActionLogs(observedLogs, "stuck_action_force_removed")
+		removedLogs := filterStuckActionLogs(observedLogs, "supervisor::action::stuck_force_removed")
 		Expect(removedLogs).ToNot(BeEmpty(), "Expected stuck_action_force_removed log entry")
 		removedLog := removedLogs[0]
 		Expect(removedLog.ContextMap()).To(HaveKey("action_name"))
@@ -366,7 +366,7 @@ var _ = Describe("Stuck Action Deduplication", func() {
 		// Metrics fires every 100ms, so after 800ms we'd have ~6 ticks past the threshold
 		time.Sleep(800 * time.Millisecond)
 
-		stuckLogs := filterStuckActionLogs(observedLogs, "stuck_action_detected")
+		stuckLogs := filterStuckActionLogs(observedLogs, "supervisor::action::stuck_detected")
 		Expect(stuckLogs).To(HaveLen(1), "Expected exactly 1 stuck_action_detected log, got %d", len(stuckLogs))
 	})
 
@@ -408,10 +408,10 @@ var _ = Describe("Stuck Action Deduplication", func() {
 		// enqueue (worker must pick up action and add to inProgress map) and
 		// the metrics tick that detects stuck actions.
 		Eventually(func() int {
-			return len(filterStuckActionLogs(observedLogs, "stuck_action_detected"))
+			return len(filterStuckActionLogs(observedLogs, "supervisor::action::stuck_detected"))
 		}, 5*time.Second, 50*time.Millisecond).Should(Equal(2), "Expected exactly 2 stuck_action_detected logs (one per action)")
 
-		stuckLogs := filterStuckActionLogs(observedLogs, "stuck_action_detected")
+		stuckLogs := filterStuckActionLogs(observedLogs, "supervisor::action::stuck_detected")
 		actionNames := map[string]bool{}
 		for _, log := range stuckLogs {
 			name, _ := log.ContextMap()["action_name"].(string)

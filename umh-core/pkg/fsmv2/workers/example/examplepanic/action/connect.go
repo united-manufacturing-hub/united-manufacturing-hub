@@ -19,6 +19,7 @@ import (
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	example_panic "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 const ConnectActionName = "connect"
@@ -36,7 +37,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	logger := deps.GetLogger()
 
 	if deps.IsShouldPanic() {
-		logger.SentryWarn(depspkg.FeatureExamples, deps.GetHierarchyPath(), "simulating_panic",
+		logger.Sentry(telemetry.Workers.Transport.SimulatingPanic, depspkg.FeatureExamples, deps.GetHierarchyPath(), nil,
 			depspkg.ActionName("connect"),
 			depspkg.Reason("should_panic_flag_set"))
 		panic("simulated panic in connect action")

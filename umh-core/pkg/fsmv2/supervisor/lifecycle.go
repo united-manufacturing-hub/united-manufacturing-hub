@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // Start starts the supervisor goroutines.
@@ -99,7 +100,7 @@ func (s *Supervisor[TObserved, TDesired]) startWorkerRunners(ctx context.Context
 
 	for _, workerCtx := range s.workers {
 		if err := workerCtx.collector.Start(ctx); err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "collector_start_failed")
+			s.logger.Sentry(telemetry.Supervisor.Collector.StartFailed, deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err)
 		}
 
 		workerCtx.executor.Start(ctx)
@@ -179,7 +180,7 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 						deps.HierarchyPath(s.GetHierarchyPath()),
 						deps.Err(err))
 				} else {
-					s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPath(), err, "tick_error")
+					s.logger.Sentry(telemetry.Supervisor.Tick.Error, deps.FeatureFSMv2, s.GetHierarchyPath(), err)
 				}
 			}
 		}
@@ -329,8 +330,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
 			if err := s.requestShutdown(shutdownCtx, workerID, "supervisor_shutdown"); err != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_request_failed",
-					deps.Err(err))
+				s.logger.Sentry(telemetry.Supervisor.Shutdown.GracefulRequestFailed, deps.FeatureFSMv2, s.GetHierarchyPath(), err)
 			}
 		}
 
@@ -369,12 +369,13 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 				// Event name per the rule above childDrainElapsed: a budget the
 				// children pre-spent is exhaustion, not an own-worker timeout.
-				event := "graceful_shutdown_timeout"
+				event := telemetry.Supervisor.Shutdown.Timeout
 				if childDrainElapsed >= drainBudget {
-					event = "graceful_shutdown_budget_exhausted"
+					event = telemetry.Supervisor.Shutdown.BudgetExhausted
 				}
 
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), event,
+				s.logger.Sentry(event, deps.FeatureFSMv2, s.GetHierarchyPath(),
+					nil,
 					deps.Duration("timeout", drainBudget),
 					deps.Duration("child_drain_elapsed", childDrainElapsed),
 					deps.Int("remaining_worker_count", remainingCount))
@@ -399,7 +400,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				remainingCount := len(s.workers)
 				s.mu.RUnlock()
 
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_force_exit",
+				s.logger.Sentry(telemetry.Supervisor.Shutdown.ForceExit, deps.FeatureFSMv2, s.GetHierarchyPath(), nil,
 					deps.Int("remaining_worker_count", remainingCount))
 
 				// The operator forced the exit; the post-join budget re-check
@@ -425,7 +426,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		remainingCount := len(s.workers)
 		s.mu.RUnlock()
 
-		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_budget_exhausted",
+		s.logger.Sentry(telemetry.Supervisor.Shutdown.BudgetExhausted, deps.FeatureFSMv2, s.GetHierarchyPath(), nil,
 			deps.Duration("timeout", drainBudget),
 			deps.Duration("child_drain_elapsed", childDrainElapsed),
 			deps.Int("remaining_worker_count", remainingCount))
@@ -502,7 +503,7 @@ func (s *Supervisor[TObserved, TDesired]) recordPostJoinBudgetOverrun(totalDrain
 		return
 	}
 
-	s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_budget_exhausted",
+	s.logger.Sentry(telemetry.Supervisor.Shutdown.BudgetExhausted, deps.FeatureFSMv2, s.GetHierarchyPath(), nil,
 		deps.Duration("timeout", drainBudget),
 		deps.Duration("child_drain_elapsed", childDrainElapsed),
 		deps.Duration("total_drain_elapsed", totalDrainElapsed))
@@ -702,8 +703,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 
 	for _, workerID := range workerIDs {
 		if err := s.requestShutdown(ctx, workerID, reason); err != nil {
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "shutdown_request_failed",
-				deps.Err(err))
+			s.logger.Sentry(telemetry.Supervisor.Shutdown.RequestFailedInCascade, deps.FeatureFSMv2, s.GetHierarchyPath(), err)
 		}
 	}
 
@@ -732,7 +732,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		s.mu.RUnlock()
 
 		err := errors.New("worker not found for restart")
-		s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "worker_restart_not_found",
+		s.logger.Sentry(telemetry.Supervisor.Worker.RestartNotFound, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 			deps.String("target_worker_id", workerID))
 
 		return err
@@ -778,8 +778,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker.
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {
-		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "restart_clear_shutdown_failed",
-			deps.Err(err))
+		s.logger.Sentry(telemetry.Supervisor.Restart.ClearShutdownFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 		// Continue anyway - the new worker might still work
 	}
 
@@ -816,7 +815,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		if collector != nil {
 			if err := collector.Start(supervisorCtx); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "restart_collector_start_failed")
+				s.logger.Sentry(telemetry.Supervisor.Restart.CollectorStartFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 			}
 		}
 

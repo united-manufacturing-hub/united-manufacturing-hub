@@ -117,7 +117,7 @@ func verifyRecoveryWorkerSucceeds(t *integration.TestLogger) {
 
 // verifyPermanentWorkerStaysStuck checks that the permanent failure worker keeps failing.
 func verifyPermanentWorkerStaysStuck(t *integration.TestLogger) {
-	failedLogs := t.GetLogsMatching("connect_failed_simulated")
+	failedLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 
 	// Count failures for permanent worker
 	permanentFailures := 0
@@ -160,7 +160,7 @@ func verifyPermanentWorkerStaysStuck(t *integration.TestLogger) {
 
 // verifyActionFailuresLogged checks that action failures include attempt counts.
 func verifyActionFailuresLogged(t *integration.TestLogger) {
-	failedLogs := t.GetLogsMatching("connect_failed_simulated")
+	failedLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 
 	Expect(failedLogs).ToNot(BeEmpty(),
 		"Expected at least one connect_failed_simulated log")

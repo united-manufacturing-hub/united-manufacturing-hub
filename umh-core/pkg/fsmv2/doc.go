@@ -84,8 +84,8 @@
 //   - Permanent failures: Return SignalNeedsRestart from state.Next() instead.
 //   - Expected conditions: For example, "already connected" is success.
 //
-// For Sentry error reporting, use [deps.FSMLogger.SentryError] and
-// [deps.FSMLogger.SentryWarn] which enforce required parameters at compile time.
+// For Sentry error reporting, use [deps.FSMLogger.Sentry], which takes a
+// declared [telemetry.Identifier] and enforces its parameters at compile time.
 //
 // ## DesiredState constraints
 //

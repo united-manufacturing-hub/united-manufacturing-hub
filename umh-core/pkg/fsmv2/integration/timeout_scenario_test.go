@@ -125,7 +125,7 @@ func verifyTimeoutSlowWorker(t *integration.TestLogger) {
 
 // verifyTimeoutRetryWorker checks that the retry worker demonstrates retry pattern.
 func verifyTimeoutRetryWorker(t *integration.TestLogger) {
-	failureLogs := t.GetLogsMatching("connect_failed_simulated")
+	failureLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 
 	retryFailures := 0
 
@@ -175,7 +175,7 @@ func verifyTimeoutRetryWorker(t *integration.TestLogger) {
 
 // verifyTimeoutCombinedWorker checks the combined slow + retry pattern.
 func verifyTimeoutCombinedWorker(t *integration.TestLogger) {
-	failureLogs := t.GetLogsMatching("connect_failed_simulated")
+	failureLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 
 	combinedFailures := 0
 

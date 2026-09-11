@@ -134,7 +134,7 @@ func verifyConfigTypeMismatchWorker(t *integration.TestLogger) {
 // Note: When max_failures: "three" is parsed, YAML gives 0, so GetMaxFailures() returns default 3.
 func verifyConfigFailingDefaults(t *integration.TestLogger) {
 	// Look for any failing worker logs (might have different name format)
-	failureLogs := t.GetLogsMatching("connect_failed_simulated")
+	failureLogs := t.GetLogsMatching("workers::connect::failed_simulated")
 
 	// Also check for workers containing "failing-defaults" or "failing"
 	failingDefaultsLogs := t.GetLogsWithFieldContaining("worker", "failing")

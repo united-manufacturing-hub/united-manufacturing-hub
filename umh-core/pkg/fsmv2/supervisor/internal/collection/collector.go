@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 type collectorState int
@@ -173,7 +174,7 @@ func (c *Collector[TObserved]) TriggerNow() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_trigger_now_failed",
+		c.config.Logger.Sentry(telemetry.Supervisor.Collector.TriggerNowFailed, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, nil,
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
 
@@ -200,7 +201,7 @@ func (c *Collector[TObserved]) Restart() {
 	c.mu.RUnlock()
 
 	if !running {
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_restart_failed",
+		c.config.Logger.Sentry(telemetry.Supervisor.Collector.RestartSkippedNotRunning, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, nil,
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
 
@@ -226,12 +227,12 @@ func (c *Collector[TObserved]) Restart() {
 	// Error handling preserved for future extensibility (e.g., context validation, resource allocation).
 	if parentCtx != nil {
 		if err := c.Start(parentCtx); err != nil {
-			c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_restart_start_failed")
+			c.config.Logger.Sentry(telemetry.Supervisor.Collector.RestartStartFailed, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err)
 		} else {
 			c.config.Logger.Info("collector_restart_complete")
 		}
 	} else {
-		c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, errors.New("no_parent_context"), "collector_restart_failed")
+		c.config.Logger.Sentry(telemetry.Supervisor.Collector.RestartNoParentContext, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, errors.New("no_parent_context"))
 	}
 }
 
@@ -261,7 +262,7 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 
 	select {
 	case <-doneChan:
-		c.config.Logger.Debug("collector_stopped",
+		c.config.Logger.Debug(telemetry.Supervisor.Collector.Stopped.Tag,
 			deps.String("result", "success"))
 	case <-ctx.Done():
 		// Phase-4 teardown cancels this ctx and races the collector goroutine's
@@ -270,14 +271,14 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 		// at Debug. A non-cancellation ctx error would be unexpected and stays a
 		// warn.
 		if errors.Is(ctx.Err(), context.Canceled) {
-			c.config.Logger.Debug("collector_stopped",
+			c.config.Logger.Debug(telemetry.Supervisor.Collector.Stopped.Tag,
 				deps.String("result", "context_cancelled"))
 		} else {
-			c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stopped",
+			c.config.Logger.Sentry(telemetry.Supervisor.Collector.Stopped, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, nil,
 				deps.String("result", "context_cancelled"))
 		}
 	case <-stopTimer.C:
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stopped",
+		c.config.Logger.Sentry(telemetry.Supervisor.Collector.Stopped, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, nil,
 			deps.String("result", "timeout"))
 	}
 }
@@ -296,7 +297,7 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 		currentState := c.state.String()
 		c.mu.RUnlock()
 
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_skipped",
+		c.config.Logger.Sentry(telemetry.Supervisor.Collector.FinalObservationSkipped, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, nil,
 			deps.Reason("not_running"),
 			deps.String("current_state", currentState))
 
@@ -324,11 +325,12 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 		// notably context.DeadlineExceeded means the collection overran
 		// ObservationTimeout (a genuinely stuck collector), which must stay visible.
 		if errors.Is(err, context.Canceled) {
-			c.config.Logger.Debug("collector_final_observation_failed",
+			// Tag, not a literal: both branches report the same event, and only
+			// the level differs.
+			c.config.Logger.Debug(telemetry.Supervisor.Collector.FinalObservationFailed.Tag,
 				deps.Err(err))
 		} else {
-			c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_failed",
-				deps.Err(err))
+			c.config.Logger.Sentry(telemetry.Supervisor.Collector.FinalObservationFailed, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err)
 		}
 
 		return err
@@ -384,7 +386,7 @@ func (c *Collector[TObserved]) observationLoop() {
 			c.collectionMu.Unlock()
 
 			if err != nil {
-				c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_observation_failed",
+				c.config.Logger.Sentry(telemetry.Supervisor.Collector.ObservationFailed, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err,
 					deps.String("trigger", "restart"))
 			}
 
@@ -398,7 +400,7 @@ func (c *Collector[TObserved]) observationLoop() {
 			c.collectionMu.Unlock()
 
 			if err != nil {
-				c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_observation_failed",
+				c.config.Logger.Sentry(telemetry.Supervisor.Collector.ObservationFailed, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err,
 					deps.String("trigger", "ticker"))
 			}
 
@@ -543,7 +545,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	observedTyped, ok := observed.(TObserved)
 	if !ok {
 		err := fmt.Errorf("observed state type mismatch: expected %T, got %T", *new(TObserved), observed)
-		c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_type_mismatch",
+		c.config.Logger.Sentry(telemetry.Supervisor.Collector.TypeMismatch, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err,
 			deps.String("expected_type", fmt.Sprintf("%T", *new(TObserved))),
 			deps.String("actual_type", fmt.Sprintf("%T", observed)))
 
@@ -567,8 +569,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	changed, err := c.config.Store.SaveObserved(ctx, c.config.Identity.WorkerType, c.config.Identity.ID, observedDoc)
 	if err != nil {
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_save_failed",
-			deps.Err(err))
+		c.config.Logger.Sentry(telemetry.Supervisor.Collector.SaveFailed, deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err)
 
 		return err
 	}
@@ -714,7 +715,7 @@ func (c *Collector[TObserved]) handleCollectorPanic(r interface{}) (err error) {
 			func() {
 				defer func() { recover() }() //nolint:errcheck // recover() return value is intentionally unused in safety net
 
-				logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), hierarchyPath, err, "collector_double_panic",
+				logger.Sentry(telemetry.Supervisor.Collector.DoublePanic, deps.FeatureForWorker(c.config.Identity.WorkerType), hierarchyPath, err,
 					deps.String("stack", string(debug.Stack())))
 			}()
 		}
@@ -725,7 +726,7 @@ func (c *Collector[TObserved]) handleCollectorPanic(r interface{}) (err error) {
 
 	metrics.RecordPanicRecovery(hierarchyPath, panicType)
 
-	logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), hierarchyPath, err, "collector_panic",
+	logger.Sentry(telemetry.Supervisor.Collector.Panic, deps.FeatureForWorker(c.config.Identity.WorkerType), hierarchyPath, err,
 		deps.Field{Key: "panic_value", Value: fmt.Sprintf("%v", r)},
 		deps.Field{Key: "panic_type", Value: panicType},
 		deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
