@@ -138,6 +138,25 @@ var _ = Describe("a failed read reports its cause", func() {
 
 	// readQuota and readVirtualized return a ReadOutcome, not an error: neither
 	// has an `ok bool` to replace, so presence stays on the existing return.
+	Describe("readStat", func() {
+		statPath := base + "/cpu.stat"
+
+		It("reports ENOENT as a not-exist error", func() {
+			_, err := newCgroupSource(oneFile(statPath, nil, pathErr(statPath, syscall.ENOENT)), base).readStat(ctx)
+			Expect(err).To(MatchError(fs.ErrNotExist))
+		})
+
+		It("reports EACCES as a permission error", func() {
+			_, err := newCgroupSource(oneFile(statPath, nil, pathErr(statPath, syscall.EACCES)), base).readStat(ctx)
+			Expect(err).To(MatchError(fs.ErrPermission))
+		})
+
+		It("reports a non-numeric counter as unparsable", func() {
+			_, err := newCgroupSource(oneFile(statPath, []byte("usage_usec abc\n"), nil), base).readStat(ctx)
+			Expect(err).To(MatchError(errUnparsableRead))
+		})
+	})
+
 	Describe("readQuota", func() {
 		maxPath := base + "/cpu.max"
 
