@@ -5,6 +5,7 @@
 ### Fixes
 
 - Instances on hosts whose CPU accounting sits outside the container's own cgroup are no longer reported as degraded, which previously blocked every bridge on them. CPU monitoring reads as unavailable on such a host instead
+- CPU usage, limit and throttling now read on hosts using the older cgroup v1 hierarchy, such as RHEL 8 and CentOS 7, where the CPU panel previously showed N/A. Pressure stays unavailable there, since that kernel publishes no per-container pressure figure
 
 ## [0.44.38]
 
