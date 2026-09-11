@@ -33,16 +33,25 @@ var healthyTimescaleStatus = simple.Status[fsmv2historian.TimescaleStatus]{
 		LatencyMs: 2.5,
 		Reachable: true,
 		TimescaleMetrics: fsmv2historian.TimescaleMetrics{
-			ServerVersion:     "17.7",
-			TimescaleVersion:  "2.24.0",
-			DatabaseBytes:     917000000,
-			UncompressedBytes: 460849152,
-			CompressedBytes:   276061440,
-			Hypertables:       40,
-			Chunks:            7112,
-			CompressedChunks:  7032,
-			Jobs:              80,
-			FailedJobs:        1,
+			ServerVersion:        "17.7",
+			TimescaleVersion:     "2.24.0",
+			DatabaseBytes:        917000000,
+			UncompressedBytes:    460849152,
+			CompressedBytes:      276061440,
+			Hypertables:          40,
+			Chunks:               7112,
+			CompressedChunks:     7032,
+			Jobs:                 80,
+			CompressionJobs:      40,
+			RetentionJobs:        40,
+			CompressAfterSeconds: 604800,
+			DropAfterSeconds:     2592000,
+			PoliciesUniform:      true,
+			FailedJobs:           1,
+			LastJobError:         "columnstore policy failure",
+			Tables: []fsmv2historian.TimescaleTable{
+				{Name: "value_bench", Chunks: 105, CompressedChunks: 103, ChunkIntervalSeconds: 604800},
+			},
 		},
 	},
 }
@@ -88,5 +97,27 @@ var _ = Describe("Historian status mapping", func() {
 		Expect(historian.Timescale.Health.Category).To(Equal(models.Degraded))
 		Expect(historian.Timescale.Health.Message).To(Equal("poll error: connection refused"))
 		Expect(historian.Timescale.Hypertables).To(Equal(40), "the last known metrics survive a degraded tick")
+	})
+})
+
+var _ = Describe("Historian policy and per-table mapping", func() {
+	It("carries the policy aggregates through", func() {
+		historian := historianFromStatus(healthyTimescaleStatus, fsmv2client.Fresh)
+
+		Expect(historian.Timescale.CompressionJobs).To(Equal(40))
+		Expect(historian.Timescale.RetentionJobs).To(Equal(40))
+		Expect(historian.Timescale.CompressAfterSeconds).To(Equal(int64(604800)))
+		Expect(historian.Timescale.DropAfterSeconds).To(Equal(int64(2592000)))
+		Expect(historian.Timescale.PoliciesUniform).To(BeTrue())
+		Expect(historian.Timescale.LastJobError).To(Equal("columnstore policy failure"))
+	})
+
+	It("carries the per-table entries through", func() {
+		historian := historianFromStatus(healthyTimescaleStatus, fsmv2client.Fresh)
+
+		Expect(historian.Timescale.Tables).To(HaveLen(1))
+		Expect(historian.Timescale.Tables[0].Name).To(Equal("value_bench"))
+		Expect(historian.Timescale.Tables[0].Chunks).To(Equal(105))
+		Expect(historian.Timescale.Tables[0].ChunkIntervalSeconds).To(Equal(int64(604800)))
 	})
 })

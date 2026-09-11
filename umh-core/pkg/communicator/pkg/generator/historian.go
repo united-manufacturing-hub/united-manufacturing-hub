@@ -102,16 +102,46 @@ func historianFromStatus(status simple.Status[fsmv2historian.TimescaleStatus], f
 // import cycle.
 func timescaleMetrics(metrics fsmv2historian.TimescaleMetrics) models.TimescaleMetrics {
 	return models.TimescaleMetrics{
-		ServerVersion:     metrics.ServerVersion,
-		TimescaleVersion:  metrics.TimescaleVersion,
-		MetricsError:      metrics.MetricsError,
-		DatabaseBytes:     metrics.DatabaseBytes,
-		UncompressedBytes: metrics.UncompressedBytes,
-		CompressedBytes:   metrics.CompressedBytes,
-		Hypertables:       metrics.Hypertables,
-		Chunks:            metrics.Chunks,
-		CompressedChunks:  metrics.CompressedChunks,
-		Jobs:              metrics.Jobs,
-		FailedJobs:        metrics.FailedJobs,
+		ServerVersion:        metrics.ServerVersion,
+		TimescaleVersion:     metrics.TimescaleVersion,
+		MetricsError:         metrics.MetricsError,
+		LastJobError:         metrics.LastJobError,
+		Tables:               timescaleTables(metrics.Tables),
+		DatabaseBytes:        metrics.DatabaseBytes,
+		UncompressedBytes:    metrics.UncompressedBytes,
+		CompressedBytes:      metrics.CompressedBytes,
+		CompressAfterSeconds: metrics.CompressAfterSeconds,
+		DropAfterSeconds:     metrics.DropAfterSeconds,
+		Hypertables:          metrics.Hypertables,
+		Chunks:               metrics.Chunks,
+		CompressedChunks:     metrics.CompressedChunks,
+		Jobs:                 metrics.Jobs,
+		CompressionJobs:      metrics.CompressionJobs,
+		RetentionJobs:        metrics.RetentionJobs,
+		FailedJobs:           metrics.FailedJobs,
+		PoliciesUniform:      metrics.PoliciesUniform,
 	}
+}
+
+func timescaleTables(tables []fsmv2historian.TimescaleTable) []models.TimescaleTable {
+	if len(tables) == 0 {
+		return nil
+	}
+
+	reported := make([]models.TimescaleTable, 0, len(tables))
+
+	for _, table := range tables {
+		reported = append(reported, models.TimescaleTable{
+			Name:                 table.Name,
+			UncompressedBytes:    table.UncompressedBytes,
+			CompressedBytes:      table.CompressedBytes,
+			ChunkIntervalSeconds: table.ChunkIntervalSeconds,
+			CompressAfterSeconds: table.CompressAfterSeconds,
+			DropAfterSeconds:     table.DropAfterSeconds,
+			Chunks:               table.Chunks,
+			CompressedChunks:     table.CompressedChunks,
+		})
+	}
+
+	return reported
 }

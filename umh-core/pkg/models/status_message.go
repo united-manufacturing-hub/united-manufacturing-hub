@@ -55,24 +55,53 @@ const (
 	TimescaleAuthInvalid TimescaleAuthState = "invalid"
 )
 
-// TimescaleMetrics is the aggregate operational picture of the historian database.
-// Every field is collected on a slower cadence than the connection check beside it,
-// so the values lag the health verdict by up to that interval.
+// TimescaleTable is one hypertable's storage, chunking and policy settings. The
+// aggregates beside it say whether the historian as a whole compresses and expires
+// data; this says which table does not.
+type TimescaleTable struct {
+	Name                 string `json:"name"`
+	UncompressedBytes    int64  `json:"uncompressedBytes"`
+	CompressedBytes      int64  `json:"compressedBytes"`
+	ChunkIntervalSeconds int64  `json:"chunkIntervalSeconds"`
+	CompressAfterSeconds int64  `json:"compressAfterSeconds"`
+	DropAfterSeconds     int64  `json:"dropAfterSeconds"`
+	Chunks               int    `json:"chunks"`
+	CompressedChunks     int    `json:"compressedChunks"`
+}
+
+// TimescaleMetrics is the state of the historian database. Every field is collected
+// on a slower cadence than the connection check beside it, so the values lag the
+// health verdict by up to that interval.
 type TimescaleMetrics struct {
 	ServerVersion    string `json:"serverVersion"`
 	TimescaleVersion string `json:"timescaleVersion"`
 	// MetricsError carries why the last collection failed. It is independent of the
 	// health verdict: a database can answer the connection check while refusing or
 	// failing the metric reads, and that must not read as an unhealthy historian.
-	MetricsError      string `json:"metricsError"`
-	DatabaseBytes     int64  `json:"databaseBytes"`
-	UncompressedBytes int64  `json:"uncompressedBytes"`
-	CompressedBytes   int64  `json:"compressedBytes"`
-	Hypertables       int    `json:"hypertables"`
-	Chunks            int    `json:"chunks"`
-	CompressedChunks  int    `json:"compressedChunks"`
-	Jobs              int    `json:"jobs"`
-	FailedJobs        int    `json:"failedJobs"`
+	MetricsError string `json:"metricsError"`
+	// LastJobError is the most recent background-job failure message. A bare failure
+	// count says nothing an operator can act on; this names the table and the reason.
+	LastJobError      string           `json:"lastJobError"`
+	Tables            []TimescaleTable `json:"tables"`
+	DatabaseBytes     int64            `json:"databaseBytes"`
+	UncompressedBytes int64            `json:"uncompressedBytes"`
+	CompressedBytes   int64            `json:"compressedBytes"`
+	// CompressAfterSeconds and DropAfterSeconds are the shortest interval any
+	// hypertable uses, so the figure is the soonest chunks are compressed or dropped
+	// rather than a flattering maximum. A zero DropAfterSeconds with RetentionJobs
+	// zero is a database that grows forever.
+	CompressAfterSeconds int64 `json:"compressAfterSeconds"`
+	DropAfterSeconds     int64 `json:"dropAfterSeconds"`
+	Hypertables          int   `json:"hypertables"`
+	Chunks               int   `json:"chunks"`
+	CompressedChunks     int   `json:"compressedChunks"`
+	Jobs                 int   `json:"jobs"`
+	CompressionJobs      int   `json:"compressionJobs"`
+	RetentionJobs        int   `json:"retentionJobs"`
+	FailedJobs           int   `json:"failedJobs"`
+	// PoliciesUniform reports whether every hypertable agrees on its intervals. When
+	// false the reported interval describes only the shortest table.
+	PoliciesUniform bool `json:"policiesUniform"`
 }
 
 // Timescale holds the health verdict and last dialed target for the timescale endpoint.
