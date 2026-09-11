@@ -8,6 +8,10 @@ cpu:
   read_failed:
     brief: A cgroup CPU file could not be read; the measurement continues.
     severity: warning
+telemetry:
+  unregistered_identifier:
+    brief: A zero-value telemetry.Identifier reached the logger, so the call site is a bug.
+    severity: error
 transport:
   push::persistent_failure:
     brief: Outbound pushes keep failing; the instance may look offline.

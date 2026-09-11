@@ -35,6 +35,7 @@ var tagFormat = regexp.MustCompile(`^[a-z0-9_]+(::[a-z0-9_]+)+$`)
 func domainVars() []any {
 	return []any{
 		telemetry.Cpu,
+		telemetry.Telemetry,
 		telemetry.Transport,
 	}
 }

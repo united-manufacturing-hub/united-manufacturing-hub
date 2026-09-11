@@ -88,6 +88,13 @@ func (l *zapLogger) Info(msg string, fields ...Field) {
 }
 
 func (l *zapLogger) Sentry(id telemetry.Identifier, feature Feature, hierarchyPath string, cause error, fields ...Field) {
+	// An identifier that did not come from the generated tree has no tag, and a
+	// blank event_name would collect every such bug into one Sentry issue. The
+	// caller's fields still travel, because they are what locates the call site.
+	if id.IsZero() {
+		id = telemetry.Telemetry.UnregisteredIdentifier
+	}
+
 	if cause == nil {
 		cause = errors.New(id.Brief)
 	}

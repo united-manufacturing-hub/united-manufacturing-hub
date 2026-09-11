@@ -87,6 +87,19 @@ var _ = Describe("Sentry reports a declared identifier", func() {
 		Expect(parseLine(buf)).To(HaveKeyWithValue("path", "/sys/fs/cgroup/cpu.stat"))
 	})
 
+	It("reports a zero identifier as a defect rather than a blank event", func() {
+		// A zero Identifier is constructible even though the generated tree never
+		// yields one. Emitting it would put an empty event_name into Sentry, which
+		// collects every such bug into one unreadable issue.
+		deps.NewJSONFSMLogger(buf, deps.LevelDebug).
+			Sentry(telemetry.Identifier{}, deps.FeatureFSMv2, "root", nil, deps.String("caller", "x"))
+
+		line := parseLine(buf)
+		Expect(line).To(HaveKeyWithValue("msg", "telemetry::unregistered_identifier"))
+		Expect(line).To(HaveKeyWithValue("level", "error"))
+		Expect(line).To(HaveKeyWithValue("caller", "x"))
+	})
+
 	It("omits hierarchy_path when empty", func() {
 		deps.NewJSONFSMLogger(buf, deps.LevelDebug).
 			Sentry(warning, deps.FeatureSupportCPU, "", nil)

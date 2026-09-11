@@ -25,6 +25,15 @@ var Cpu = cpuNode{
 	ReadFailed: Identifier{Tag: "cpu::read_failed", Brief: "A cgroup CPU file could not be read; the measurement continues.", Severity: SeverityWarning},
 }
 
+type telemetryNode struct {
+	UnregisteredIdentifier Identifier
+}
+
+// Telemetry holds the declared events of the telemetry domain.
+var Telemetry = telemetryNode{
+	UnregisteredIdentifier: Identifier{Tag: "telemetry::unregistered_identifier", Brief: "A zero-value telemetry.Identifier reached the logger, so the call site is a bug.", Severity: SeverityError},
+}
+
 type transportPushNode struct {
 	PersistentFailure Identifier
 }
