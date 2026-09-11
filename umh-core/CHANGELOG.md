@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Preview: `USE_FSMV2_CPU` now publishes CPU health metrics on `/metrics`
+
 ## [0.44.38]
 
 ### Improvements

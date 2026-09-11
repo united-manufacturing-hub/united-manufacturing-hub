@@ -197,6 +197,62 @@ const (
 	GaugePendingMessages GaugeName = "pending_messages"
 )
 
+// CPU worker gauge names for the evidence behind a CPU health verdict.
+const (
+	// GaugeCPUAvgUsageCores tracks this container's own 60s mean usage, in absolute cores.
+	GaugeCPUAvgUsageCores GaugeName = "cpu_avg_usage_cores"
+
+	// GaugeCPUAvgUsageFraction tracks the 60s mean usage as a 0..1 fraction of the CPUs this container may run on.
+	GaugeCPUAvgUsageFraction GaugeName = "cpu_avg_usage_fraction"
+
+	// GaugeCPUThrottleRatio tracks the 60s nr_throttled/nr_periods delta, 0..1.
+	GaugeCPUThrottleRatio GaugeName = "cpu_throttle_ratio"
+
+	// GaugeCPUPressureAvg60 tracks PSI cpu-some avg60 as a 0..1 fraction: the
+	// kernel's percentage divided by 100.
+	GaugeCPUPressureAvg60 GaugeName = "cpu_pressure_avg60"
+
+	// GaugeCPUHostHeadroomCores tracks cores free on the host after the reserve.
+	// Unclamped: a full box reports a negative number rather than 0.
+	GaugeCPUHostHeadroomCores GaugeName = "cpu_host_headroom_cores"
+
+	// GaugeCPUAvgHostBusyCores tracks the whole machine's 60s mean busy time, in cores.
+	GaugeCPUAvgHostBusyCores GaugeName = "cpu_avg_host_busy_cores"
+
+	// GaugeCPUCapacityCores tracks the ceiling the verdict judged against: the
+	// quota when one applies, else the CPU count.
+	GaugeCPUCapacityCores GaugeName = "cpu_capacity_cores"
+
+	// GaugeCPUReserveCores tracks the headroom held back from cpu_capacity_cores.
+	GaugeCPUReserveCores GaugeName = "cpu_reserve_cores"
+
+	// GaugeCPUHostCpus tracks the machine's CPU count, which exceeds this container's when it is pinned to a subset.
+	GaugeCPUHostCpus GaugeName = "cpu_host_cpus"
+)
+
+// CPU worker readability flags, 1 for true and 0 for false.
+//
+// Several of the gauges above report 0 when their signal was absent or
+// untrusted, so without the matching flag a consumer cannot tell "not
+// throttled" from "no throttle signal".
+const (
+	// GaugeCPUUsageRingActive qualifies cpu_avg_usage_cores.
+	GaugeCPUUsageRingActive GaugeName = "cpu_usage_ring_active"
+
+	// GaugeCPUHostBusyRingActive qualifies cpu_avg_host_busy_cores.
+	GaugeCPUHostBusyRingActive GaugeName = "cpu_host_busy_ring_active"
+
+	// GaugeCPUHostHeadroomAvailable reports whether this container sees the whole
+	// machine, reading 0 when it is pinned to a subset of CPUs.
+	GaugeCPUHostHeadroomAvailable GaugeName = "cpu_host_headroom_available"
+
+	// GaugeCPUThrottleSignalReady qualifies cpu_throttle_ratio.
+	GaugeCPUThrottleSignalReady GaugeName = "cpu_throttle_signal_ready"
+
+	// GaugeCPUPressureSignalReady qualifies cpu_pressure_avg60.
+	GaugeCPUPressureSignalReady GaugeName = "cpu_pressure_signal_ready"
+)
+
 // =============================================================================
 // METRICS INFRASTRUCTURE
 // =============================================================================
