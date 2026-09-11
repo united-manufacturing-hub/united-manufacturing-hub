@@ -355,3 +355,80 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		Expect(metrics.LastJobError).To(BeEmpty())
 	})
 })
+
+// tableNamed returns the reported entry for one hypertable, failing the spec when
+// it is absent so the assertion that follows reads against a real value.
+func tableNamed(metrics TimescaleMetrics, name string) TimescaleTable {
+	for _, table := range metrics.Tables {
+		if table.Name == name {
+			return table
+		}
+	}
+
+	Fail("no reported table named " + name)
+
+	return TimescaleTable{}
+}
+
+var _ = Describe("Per-table reporting", Label("integration"), func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("reports one entry per hypertable, named", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.Tables).To(HaveLen(2))
+		Expect([]string{metrics.Tables[0].Name, metrics.Tables[1].Name}).
+			To(ConsistOf("attribute_bench", "value_bench"))
+	})
+
+	It("reports storage and compression for each table", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		value := tableNamed(metrics, "value_bench")
+		Expect(value.Chunks).To(BeNumerically(">", 0))
+		Expect(value.CompressedChunks).To(BeNumerically(">", 0))
+		Expect(value.UncompressedBytes).To(BeNumerically(">", 0))
+		Expect(value.CompressedBytes).To(BeNumerically(">", 0))
+	})
+
+	It("reports the chunk interval each table was created with", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(tableNamed(metrics, "value_bench").ChunkIntervalSeconds).To(Equal(int64(604800)), "168h")
+	})
+
+	It("reports each table's own policies, so a table without retention is visible", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, retentionSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
+		Expect(tableNamed(metrics, "attribute_bench").DropAfterSeconds).To(BeZero(),
+			"this table expires nothing, which the aggregate alone would hide")
+		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
+	})
+})
