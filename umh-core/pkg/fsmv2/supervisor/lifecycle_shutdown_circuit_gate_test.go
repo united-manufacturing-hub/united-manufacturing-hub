@@ -163,7 +163,7 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 		// Assertion 3: the timeout warn must NOT fire. The drain logs
 		// graceful_shutdown_timeout and runs its full budget only when a worker
 		// never reaches SignalNeedsRemoval — exactly the blocked-gate case.
-		Expect(containsLogEvent(buf.String(), "graceful_shutdown_timeout")).To(BeFalse(),
+		Expect(containsLogEvent(buf.String(), "supervisor::shutdown::timeout")).To(BeFalse(),
 			"graceful_shutdown_timeout was logged: the drain timed out because the open circuit blocked the worker's shutdown check")
 
 		// Assertion 4: no false recovery log. Gating the whole circuit-breaker

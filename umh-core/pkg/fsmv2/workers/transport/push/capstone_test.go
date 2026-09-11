@@ -67,7 +67,7 @@ var _ = Describe("ENG-5275 incident reproduction (P8 capstone)", func() {
 		// Gateway" and "nginx" preserved).
 		m := parseLastJSONLine(buf)
 		Expect(m).NotTo(BeNil())
-		Expect(m["msg"]).To(Equal("persistent_push_failure"))
+		Expect(m["msg"]).To(Equal("workers::push::persistent_failure"))
 		Expect(m["status_code"]).To(BeEquivalentTo(502))
 		Expect(m["error_detail"]).To(ContainSubstring("502 Bad Gateway"))
 		Expect(m["error_detail"]).To(ContainSubstring("nginx"))

@@ -109,8 +109,8 @@ func verifyNoErrorsOrWarnings(t *integration.TestLogger) {
 
 	// Known timing-related issues during test scenarios
 	knownIssues := []string{
-		"data_stale",                   // Observation collector may report stale data briefly
-		"collector_observation_failed", // Collector may fail temporarily during shutdown
+		"supervisor::freshness::data_stale",                   // Observation collector may report stale data briefly
+		"supervisor::collector::observation_failed", // Collector may fail temporarily during shutdown
 		// The worker-removal handler stops a worker's collector after deleting
 		// the worker from the registry; Shutdown's drain sees the empty registry,
 		// cancels the supervisor ctx, and the collector self-stops before the
@@ -642,7 +642,7 @@ func verifyChildCountMatches(store storage.TriangularStoreInterface) {
 // verifyNoActionFailures verifies no action execution failures or panics occurred.
 func verifyNoActionFailures(t *integration.TestLogger) {
 	failures := t.GetLogsMatching("action_execution_failed")
-	panics := t.GetLogsMatching("action_panic")
+	panics := t.GetLogsMatching("supervisor::action::panic")
 
 	Expect(failures).To(BeEmpty(),
 		fmt.Sprintf("Found %d action execution failures", len(failures)))

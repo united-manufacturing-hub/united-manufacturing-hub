@@ -172,7 +172,7 @@ var _ = Describe("Shutdown drain regression", func() {
 
 			// Assertion 3: graceful_shutdown_timeout warn must NOT be emitted.
 			logOutput := buf.String()
-			Expect(containsLogEvent(logOutput, "graceful_shutdown_timeout")).To(BeFalse(),
+			Expect(containsLogEvent(logOutput, "supervisor::shutdown::timeout")).To(BeFalse(),
 				"graceful_shutdown_timeout was logged, indicating the timeout fired instead of draining")
 		})
 	})
@@ -222,7 +222,7 @@ var _ = Describe("Shutdown drain regression", func() {
 
 			// Assertion 3: graceful_shutdown_timeout warn IS present, with remaining_worker_count > 0.
 			logOutput := buf.String()
-			entry := findLogEvent(logOutput, "graceful_shutdown_timeout")
+			entry := findLogEvent(logOutput, "supervisor::shutdown::timeout")
 			Expect(entry).ToNot(BeNil(), "expected graceful_shutdown_timeout warn to be logged")
 			if entry != nil {
 				count, ok := entry["remaining_worker_count"]
@@ -344,11 +344,11 @@ var _ = Describe("Shutdown drain regression", func() {
 
 			// Assertion 2: the dedicated force-exit log event fires.
 			logOutput := buf.String()
-			Expect(containsLogEvent(logOutput, "graceful_shutdown_force_exit")).To(BeTrue(),
+			Expect(containsLogEvent(logOutput, "supervisor::shutdown::force_exit")).To(BeTrue(),
 				"expected graceful_shutdown_force_exit log; ForceExit branch did not fire")
 
 			// Assertion 3: the timeout path must NOT have fired (forceExit wins).
-			Expect(containsLogEvent(logOutput, "graceful_shutdown_timeout")).To(BeFalse(),
+			Expect(containsLogEvent(logOutput, "supervisor::shutdown::timeout")).To(BeFalse(),
 				"graceful_shutdown_timeout fired; ForceExit should have won the race")
 		})
 	})

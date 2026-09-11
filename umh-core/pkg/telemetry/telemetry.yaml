@@ -26,6 +26,9 @@ examples:
   persistence::observed_state_load_failed:
     brief: The persistence example could not load its observed state.
     severity: warning
+  runner::sync_id_fetch_failed:
+    brief: The example runner could not fetch the sync id, so its dump shows every change rather than the new ones.
+    severity: warning
   scenario::dump_failed:
     brief: Dumping a scenario's state failed, so the run has no artefact to inspect.
     severity: warning

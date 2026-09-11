@@ -374,7 +374,7 @@ var _ = Describe("RecordTypedError status_code and error_detail emission", func(
 		Expect(d.GetLastErrorDetail()).To(Equal(detail))
 
 		m := parseLastJSONLine(buf)
-		Expect(m["msg"]).To(Equal("persistent_push_failure"))
+		Expect(m["msg"]).To(Equal("workers::push::persistent_failure"))
 		Expect(m["status_code"]).To(BeEquivalentTo(502))
 		Expect(m["error_detail"]).To(Equal(detail))
 	})
@@ -386,7 +386,7 @@ var _ = Describe("RecordTypedError status_code and error_detail emission", func(
 
 		m := parseLastJSONLine(buf)
 		Expect(m).NotTo(BeNil())
-		Expect(m["msg"]).To(Equal("persistent_push_failure"))
+		Expect(m["msg"]).To(Equal("workers::push::persistent_failure"))
 		Expect(m["error_type"]).To(Equal("network"))
 		_, hasStatusCode := m["status_code"]
 		Expect(hasStatusCode).To(BeFalse())

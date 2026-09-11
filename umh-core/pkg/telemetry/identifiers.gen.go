@@ -212,6 +212,10 @@ type examplesPersistenceNode struct {
 	ObservedStateLoadFailed Identifier
 }
 
+type examplesRunnerNode struct {
+	SyncIdFetchFailed Identifier
+}
+
 type examplesScenarioNode struct {
 	DumpFailed Identifier
 }
@@ -222,6 +226,7 @@ type examplesStoreNode struct {
 
 type examplesNode struct {
 	Persistence examplesPersistenceNode
+	Runner      examplesRunnerNode
 	Scenario    examplesScenarioNode
 	Store       examplesStoreNode
 }
@@ -230,6 +235,9 @@ type examplesNode struct {
 var Examples = examplesNode{
 	Persistence: examplesPersistenceNode{
 		ObservedStateLoadFailed: Identifier{Tag: "examples::persistence::observed_state_load_failed", Brief: "The persistence example could not load its observed state.", Severity: SeverityWarning},
+	},
+	Runner: examplesRunnerNode{
+		SyncIdFetchFailed: Identifier{Tag: "examples::runner::sync_id_fetch_failed", Brief: "The example runner could not fetch the sync id, so its dump shows every change rather than the new ones.", Severity: SeverityWarning},
 	},
 	Scenario: examplesScenarioNode{
 		DumpFailed: Identifier{Tag: "examples::scenario::dump_failed", Brief: "Dumping a scenario's state failed, so the run has no artefact to inspect.", Severity: SeverityWarning},

@@ -188,9 +188,9 @@ var _ = Describe("Collector log severity", func() {
 			err := collector.CollectFinalObservation(expiredCtx)
 			Expect(err).To(MatchError(context.DeadlineExceeded))
 
-			Expect(logger.levelFor("collector_final_observation_failed")).To(Equal("sentrywarn"),
+			Expect(logger.levelFor("supervisor::collector::final_observation_failed")).To(Equal("sentrywarn"),
 				"a DeadlineExceeded final observation is a genuinely stuck collector and must stay visible in Sentry, not Debug")
-			Expect(logger.has("debug", "collector_final_observation_failed")).To(BeFalse(),
+			Expect(logger.has("debug", "supervisor::collector::final_observation_failed")).To(BeFalse(),
 				"only context.Canceled (the shutdown race) is downgraded to Debug; DeadlineExceeded must not be")
 		})
 
@@ -226,9 +226,9 @@ var _ = Describe("Collector log severity", func() {
 			err := collector.CollectFinalObservation(cancelledCtx)
 			Expect(err).To(MatchError(context.Canceled))
 
-			Expect(logger.levelFor("collector_final_observation_failed")).To(Equal("debug"),
+			Expect(logger.levelFor("supervisor::collector::final_observation_failed")).To(Equal("debug"),
 				"context.Canceled is the benign shutdown race and must be downgraded to Debug")
-			Expect(logger.has("sentrywarn", "collector_final_observation_failed")).To(BeFalse(),
+			Expect(logger.has("sentrywarn", "supervisor::collector::final_observation_failed")).To(BeFalse(),
 				"context.Canceled must not raise a SentryWarn (that would re-noise Sentry on clean shutdown)")
 		})
 	})

@@ -439,7 +439,7 @@ var _ = Describe("RecordTypedError status_code and error_detail emission (pull)"
 
 		m := parsePersistentPullFailureLinePull(buf)
 		Expect(m).NotTo(BeNil())
-		Expect(m["msg"]).To(Equal("persistent_pull_failure"))
+		Expect(m["msg"]).To(Equal("workers::pull::persistent_failure"))
 		Expect(m["error_type"]).To(Equal("server_error"))
 		Expect(m["failure_rate"]).To(BeNumerically(">", 0))
 		Expect(m["status_code"]).To(BeEquivalentTo(502))
@@ -460,7 +460,7 @@ var _ = Describe("RecordTypedError status_code and error_detail emission (pull)"
 
 		m := parsePersistentPullFailureLinePull(buf)
 		Expect(m).NotTo(BeNil())
-		Expect(m["msg"]).To(Equal("persistent_pull_failure"))
+		Expect(m["msg"]).To(Equal("workers::pull::persistent_failure"))
 		Expect(m["error_type"]).To(Equal("network"))
 		_, hasStatusCode := m["status_code"]
 		Expect(hasStatusCode).To(BeFalse())
@@ -490,7 +490,7 @@ func parsePersistentPullFailureLinePull(buf *bytes.Buffer) map[string]interface{
 			continue
 		}
 
-		if msg, ok := m["msg"].(string); ok && msg == "persistent_pull_failure" {
+		if msg, ok := m["msg"].(string); ok && msg == "workers::pull::persistent_failure" {
 			return m
 		}
 	}

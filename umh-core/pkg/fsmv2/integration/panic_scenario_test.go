@@ -85,7 +85,7 @@ func verifyPanicWorkerCreated(t *integration.TestLogger) {
 
 // verifyPanicWasCaught checks that the panic was caught and logged.
 func verifyPanicWasCaught(t *integration.TestLogger) {
-	panicLogs := t.GetLogsMatching("action_panic")
+	panicLogs := t.GetLogsMatching("supervisor::action::panic")
 
 	Expect(panicLogs).ToNot(BeEmpty(),
 		"Expected at least one action_panic log entry")

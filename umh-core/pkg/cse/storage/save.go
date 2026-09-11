@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // SaveOptions configures role-specific behavior for saveWithDelta.
@@ -199,8 +200,7 @@ func (ts *TriangularStore) saveWithDelta(
 				}
 			}
 
-			ts.logger.SentryWarn(deps.FeatureCSE, hierarchyPath, "delta_append_failed",
-				deps.Err(appendErr),
+			ts.logger.Sentry(telemetry.Cse.Delta.AppendFailed, deps.FeatureCSE, hierarchyPath, appendErr,
 				deps.String("role", opts.Role))
 		}
 	}

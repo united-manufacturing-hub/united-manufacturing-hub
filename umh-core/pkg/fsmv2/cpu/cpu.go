@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 const (
@@ -167,8 +168,7 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
 	smp, err := s.Read(ctx)
 	if err != nil {
-		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
-			"cpu: startup cgroup snapshot failed; quota signals omitted", deps.Err(err))
+		bd.GetLogger().Sentry(telemetry.Cpu.Startup.SnapshotFailed, deps.FeatureSupportCPU, bd.GetHierarchyPath(), err)
 	}
 
 	if lc, ok := smp.LogicalCpus.Get(); ok {

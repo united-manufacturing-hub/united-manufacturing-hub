@@ -54,6 +54,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // DeployProtocolConverterAction implements the Action interface for deploying a
@@ -169,7 +170,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		errorMsg := fmt.Sprintf("Failed to create protocol converter configuration: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
-		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_create_config_failed",
+		a.fsmLogger.Sentry(telemetry.Communicator.Bridge.Deploy.CreateConfigFailed, deps.FeatureDisableReadFlows, "", err,
 			deps.String("name", a.payload.Name))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
@@ -190,7 +191,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		errorMsg := fmt.Sprintf("Failed to add Bridge: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
-		a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_add_failed",
+		a.fsmLogger.Sentry(telemetry.Communicator.Bridge.Deploy.AddFailed, deps.FeatureDeploymentSaveConfig, "", err,
 			deps.String("pcConfig", pcConfig.String()))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
@@ -244,7 +245,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				models.DeployProtocolConverter,
 				nil,
 			)
-			a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
+			a.fsmLogger.Sentry(telemetry.Communicator.Bridge.Deploy.WaitFailed, deps.FeatureDeploymentSaveConfig, "", err,
 				deps.String("pcConfig", pcConfig.String()),
 				deps.String("desiredState", pcConfig.DesiredFSMState))
 
@@ -253,7 +254,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 			currentConfig, getErr := a.configManager.GetConfig(stopCtx, 0)
 			if getErr != nil {
-				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", getErr, "deploy_protocol_converter_stop_on_failure_get_config_failed",
+				a.fsmLogger.Sentry(telemetry.Communicator.Bridge.Deploy.StopOnFailureGetConfigFailed, deps.FeatureDeploymentSaveConfig, "", getErr,
 					deps.String("name", a.payload.Name))
 
 				return nil, nil, err
@@ -297,7 +298,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 			}
 
 			if _, editErr := a.configManager.AtomicEditProtocolConverter(stopCtx, pcUUID, pcToStop); editErr != nil {
-				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", editErr, "deploy_protocol_converter_stop_on_failure_failed",
+				a.fsmLogger.Sentry(telemetry.Communicator.Bridge.Deploy.StopOnFailureFailed, deps.FeatureDeploymentSaveConfig, "", editErr,
 					deps.String("name", a.payload.Name))
 			}
 
@@ -452,7 +453,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 				errorMsg += ". Please check system load or component configuration and try again"
 			}
 
-			a.fsmLogger.SentryWarn(deps.FeatureDeploymentSaveConfig, "", "deploy_protocol_converter_timeout",
+			a.fsmLogger.Sentry(telemetry.Communicator.Bridge.Deploy.Timeout, deps.FeatureDeploymentSaveConfig, "", nil,
 				deps.String("name", a.payload.Name),
 				deps.String("desiredState", desiredState),
 				deps.String("lastStatusReason", lastStatusReason))

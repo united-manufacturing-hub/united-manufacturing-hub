@@ -187,7 +187,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 		// Assertion 3: the timeout warn must NOT fire. The Shutdown() loop logs
 		// graceful_shutdown_timeout and runs its full budget only when a worker
 		// never reaches SignalNeedsRemoval, which is exactly the blocked-gate case.
-		Expect(containsLogEvent(buf.String(), "graceful_shutdown_timeout")).To(BeFalse(),
+		Expect(containsLogEvent(buf.String(), "supervisor::shutdown::timeout")).To(BeFalse(),
 			"graceful_shutdown_timeout was logged: the Shutdown() loop timed out because the gated worker never ran its shutdown check")
 	})
 

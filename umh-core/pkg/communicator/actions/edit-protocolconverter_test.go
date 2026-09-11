@@ -1971,9 +1971,9 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(rollingBack).To(Equal(1))
 
 				events := sentryRec.eventNames()
-				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rolled_back"))
-				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
-				rolledBack := sentryRec.eventsNamed("edit_protocol_converter_render_failure_rolled_back")
+				Expect(events).To(ContainElement("communicator::bridge::edit::render_failure_rolled_back"))
+				Expect(events).NotTo(ContainElement("communicator::bridge::edit::rollout_failed"))
+				rolledBack := sentryRec.eventsNamed("communicator::bridge::edit::render_failure_rolled_back")
 				Expect(rolledBack).To(HaveLen(1))
 				Expect(rolledBack[0].fieldKeys()).To(ConsistOf(
 					"protocolConverter", "protocolConverterUUID", "renderErr"))
@@ -2096,9 +2096,9 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(final.message).To(ContainSubstring("yaml:"))
 
 				events := sentryRec.eventNames()
-				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rollback_failed"))
-				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
-				failed := sentryRec.eventsNamed("edit_protocol_converter_render_failure_rollback_failed")
+				Expect(events).To(ContainElement("communicator::bridge::edit::render_failure_rollback_failed"))
+				Expect(events).NotTo(ContainElement("communicator::bridge::edit::rollout_failed"))
+				failed := sentryRec.eventsNamed("communicator::bridge::edit::render_failure_rollback_failed")
 				Expect(failed).To(HaveLen(1))
 				Expect(failed[0].fieldKeys()).To(ConsistOf(
 					"protocolConverter", "protocolConverterUUID", "renderErr"))
@@ -2193,7 +2193,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(execErr).To(HaveOccurred())
 				Expect(execErr.Error()).To(ContainSubstring("did not become"))
 
-				Expect(sentryRec.eventNames()).To(ContainElement("edit_protocol_converter_rollout_failed"))
+				Expect(sentryRec.eventNames()).To(ContainElement("communicator::bridge::edit::rollout_failed"))
 
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrRetryRollbackTimeout))
@@ -2454,8 +2454,8 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(progressWithRender).NotTo(BeEmpty())
 
 				events := sentryRec.eventNames()
-				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rolled_back"))
-				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
+				Expect(events).To(ContainElement("communicator::bridge::edit::render_failure_rolled_back"))
+				Expect(events).NotTo(ContainElement("communicator::bridge::edit::rollout_failed"))
 			})
 
 			// ── ENG-5103 templateVars/connectionIP divergence specs ──────────────

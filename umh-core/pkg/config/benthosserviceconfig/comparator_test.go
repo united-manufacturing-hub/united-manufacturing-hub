@@ -34,7 +34,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 					},
 				},
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 			}
 
 			config2 := BenthosServiceConfig{
@@ -49,7 +49,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 					},
 				},
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 			}
 
 			comparator := NewComparator()
@@ -135,7 +135,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 			config1 := BenthosServiceConfig{
 				Input:       map[string]interface{}{},
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 			}
 
 			// Missing fields that should get default values
@@ -162,7 +162,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 					},
 				},
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 			}
 
 			config2 := BenthosServiceConfig{
@@ -177,7 +177,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 					},
 				},
 				MetricsPort: 5000,
-				DebugLevel: true,
+				DebugLevel:  true,
 			}
 
 			comparator := NewComparator()

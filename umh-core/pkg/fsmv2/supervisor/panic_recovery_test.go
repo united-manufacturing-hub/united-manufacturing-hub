@@ -68,7 +68,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 				Expect(err.Error()).To(ContainSubstring("tick panic"))
 
 				// Verify panic was logged with ErrorFields pattern
-				panicLogs := filterLogs(observedLogs, "tick_panic")
+				panicLogs := filterLogs(observedLogs, "supervisor::tick::panic")
 				Expect(panicLogs).ToNot(BeEmpty(), "Expected tick_panic log entry")
 
 				panicLog := panicLogs[0]
@@ -137,7 +137,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 				err = s.TestTick(context.Background())
 				Expect(err).To(HaveOccurred())
 
-				panicLogs := filterLogs(observedLogs, "tick_panic")
+				panicLogs := filterLogs(observedLogs, "supervisor::tick::panic")
 				Expect(panicLogs).ToNot(BeEmpty())
 				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("string_panic"))
 			})
@@ -174,7 +174,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 				// Verify error chain is preserved
 				Expect(errors.Is(err, testErr)).To(BeTrue(), "Error chain should be preserved")
 
-				panicLogs := filterLogs(observedLogs, "tick_panic")
+				panicLogs := filterLogs(observedLogs, "supervisor::tick::panic")
 				Expect(panicLogs).ToNot(BeEmpty())
 				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("error_panic"))
 			})
@@ -206,7 +206,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("tick panic"))
 
-				panicLogs := filterLogs(observedLogs, "tick_panic")
+				panicLogs := filterLogs(observedLogs, "supervisor::tick::panic")
 				Expect(panicLogs).ToNot(BeEmpty())
 				// In Go 1.21+, panic(nil) creates *runtime.PanicNilError which is an error type
 				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("error_panic"))
@@ -240,7 +240,7 @@ var _ = Describe("Tick Loop Panic Recovery", func() {
 				Expect(err.Error()).To(ContainSubstring("tick panic"))
 				Expect(err.Error()).To(ContainSubstring("42"))
 
-				panicLogs := filterLogs(observedLogs, "tick_panic")
+				panicLogs := filterLogs(observedLogs, "supervisor::tick::panic")
 				Expect(panicLogs).ToNot(BeEmpty())
 				Expect(panicLogs[0].ContextMap()["panic_type"]).To(Equal("unknown_panic"))
 			})
@@ -357,7 +357,7 @@ var _ = Describe("Panic Escalation", func() {
 
 			Expect(s.TestIsPanicCircuitOpen()).To(BeTrue(), "3 panics should open panic circuit")
 
-			circuitLogs := filterLogs(observedLogs, "panic_circuit_open")
+			circuitLogs := filterLogs(observedLogs, "supervisor::panic_circuit::open")
 			Expect(circuitLogs).ToNot(BeEmpty(), "Expected panic_circuit_open log entry")
 			circuitLog := circuitLogs[0]
 			Expect(circuitLog.ContextMap()["feature"]).To(Equal("fsmv2"))

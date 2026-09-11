@@ -197,10 +197,10 @@ var _ = Describe("Run(ctx) cancel with live nested workers (ENG-4971)", func() {
 		// cancel, no level can reap its workers, so every level burns its full
 		// budget and warns. A live drain of prompt-stopping workers never
 		// reaches any budget.
-		Expect(containsLogEvent(logOutput, "graceful_shutdown_timeout")).To(BeFalse(),
+		Expect(containsLogEvent(logOutput, "supervisor::shutdown::timeout")).To(BeFalse(),
 			"graceful_shutdown_timeout was logged: Run's ctx cancel killed the tick loop before Shutdown drained, "+
 				"so the drain waited on worker removals only the dead loop could perform (ENG-4971 dead-loop drain)")
-		Expect(containsLogEvent(logOutput, "graceful_shutdown_budget_exhausted")).To(BeFalse(),
+		Expect(containsLogEvent(logOutput, "supervisor::shutdown::budget_exhausted")).To(BeFalse(),
 			"graceful_shutdown_budget_exhausted was logged: child drains burned the whole budget, "+
 				"which a live drain of prompt-stopping workers never does")
 
