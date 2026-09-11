@@ -37,6 +37,7 @@ header:
     - "LICENSE"
     - "NOTICE"
     - "CODEOWNERS"
+    - ".gitattributes"
     - "AUTHORS"
     - ".git"
     - "deployment/united-manufacturing-hub/_mqttDevCertificates/"

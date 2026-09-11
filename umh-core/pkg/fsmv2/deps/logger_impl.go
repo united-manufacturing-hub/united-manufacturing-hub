@@ -15,11 +15,14 @@
 package deps
 
 import (
+	"errors"
 	"io"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"go.uber.org/zap"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -82,6 +85,43 @@ func (l *zapLogger) Debug(msg string, fields ...Field) {
 
 func (l *zapLogger) Info(msg string, fields ...Field) {
 	l.sugar.Infow(msg, fieldsToArgs(l.baseFields, fields)...)
+}
+
+func (l *zapLogger) Sentry(id telemetry.Identifier, feature Feature, hierarchyPath string, cause error, fields ...Field) {
+	// An identifier that did not come from the generated tree has no tag, and a
+	// blank event_name would collect every such bug into one Sentry issue. The
+	// caller's fields still travel, because they are what locates the call site.
+	if id.IsZero() {
+		id = telemetry.Telemetry.UnregisteredIdentifier
+	}
+
+	if cause == nil {
+		cause = errors.New(id.Brief)
+	}
+
+	allFields := make([]Field, 0, 3+len(fields))
+	allFields = append(allFields, Field{Key: "feature", Value: string(feature)})
+
+	if hierarchyPath != "" {
+		allFields = append(allFields, Field{Key: "hierarchy_path", Value: hierarchyPath})
+	}
+
+	// Bare value, not wrapped: SugaredLogger.sweetenFields detects the error
+	// interface and produces the zapcore.ErrorType that the Sentry hook's
+	// ExtractErrorFromFields looks for.
+	allFields = append(allFields, Field{Key: "error", Value: cause})
+	allFields = append(allFields, fields...)
+
+	// Anything but SeverityWarning reports at error. The hook forwards warn and
+	// above, so a level below warn would silence the event along with whatever
+	// made its severity unrecognisable.
+	if id.Severity == telemetry.SeverityWarning {
+		l.sugar.Warnw(id.Tag, fieldsToArgs(l.baseFields, allFields)...)
+
+		return
+	}
+
+	l.sugar.Errorw(id.Tag, fieldsToArgs(l.baseFields, allFields)...)
 }
 
 func (l *zapLogger) SentryWarn(feature Feature, hierarchyPath string, msg string, fields ...Field) {

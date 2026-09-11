@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // logEntry records the level and message of a single log call.
@@ -53,6 +54,16 @@ func (l *severityCapturingLogger) record(level, msg string) {
 func (l *severityCapturingLogger) Debug(msg string, _ ...deps.Field) { l.record("debug", msg) }
 
 func (l *severityCapturingLogger) Info(msg string, _ ...deps.Field) { l.record("info", msg) }
+
+func (l *severityCapturingLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ string, _ error, _ ...deps.Field) {
+	if id.Severity == telemetry.SeverityWarning {
+		l.record("sentrywarn", id.Tag)
+
+		return
+	}
+
+	l.record("sentryerror", id.Tag)
+}
 
 func (l *severityCapturingLogger) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {
 	l.record("sentrywarn", msg)

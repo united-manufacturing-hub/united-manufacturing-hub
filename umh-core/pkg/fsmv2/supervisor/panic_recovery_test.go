@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/testutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -492,8 +493,15 @@ var _ = Describe("IsCircuitOpen Infra Path", func() {
 // panicOnSentryErrorLogger panics when SentryError is called, used to test double-panic recovery.
 type panicOnSentryErrorLogger struct{}
 
-func (p *panicOnSentryErrorLogger) Debug(msg string, fields ...deps.Field)                         {}
-func (p *panicOnSentryErrorLogger) Info(msg string, fields ...deps.Field)                          {}
+func (p *panicOnSentryErrorLogger) Debug(msg string, fields ...deps.Field) {}
+func (p *panicOnSentryErrorLogger) Info(msg string, fields ...deps.Field)  {}
+func (p *panicOnSentryErrorLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ string, _ error, _ ...deps.Field) {
+	if id.Severity == telemetry.SeverityWarning {
+		return
+	}
+
+	panic("logger Sentry panicked")
+}
 func (p *panicOnSentryErrorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {}
 func (p *panicOnSentryErrorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
 	panic("logger SentryError panicked")

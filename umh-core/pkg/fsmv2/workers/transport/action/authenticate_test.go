@@ -27,6 +27,7 @@ import (
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 var _ = Describe("AuthenticateAction", func() {
@@ -553,6 +554,11 @@ type spyLogger struct {
 	deps.FSMLogger
 	sentryWarnCount int
 	sentryWarnMsgs  []string
+}
+
+func (s *spyLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ string, _ error, _ ...deps.Field) {
+	s.sentryWarnCount++
+	s.sentryWarnMsgs = append(s.sentryWarnMsgs, id.Tag)
 }
 
 func (s *spyLogger) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {

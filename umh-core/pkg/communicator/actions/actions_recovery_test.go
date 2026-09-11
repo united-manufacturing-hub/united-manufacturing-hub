@@ -34,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // panickingAction is a minimal Action used in tests to drive HandleActionMessage
@@ -294,8 +295,15 @@ type countingPanickingFSMLogger struct {
 	calls []capturedSentryError
 }
 
-func (l *countingPanickingFSMLogger) Debug(string, ...deps.Field)                            {}
-func (l *countingPanickingFSMLogger) Info(string, ...deps.Field)                             {}
+func (l *countingPanickingFSMLogger) Debug(string, ...deps.Field) {}
+func (l *countingPanickingFSMLogger) Info(string, ...deps.Field)  {}
+func (l *countingPanickingFSMLogger) Sentry(id telemetry.Identifier, feature deps.Feature, hp string, cause error, fields ...deps.Field) {
+	if id.Severity == telemetry.SeverityWarning {
+		return
+	}
+
+	l.SentryError(feature, hp, cause, id.Tag, fields...)
+}
 func (l *countingPanickingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
 func (l *countingPanickingFSMLogger) SentryError(feature deps.Feature, hp string, err error, msg string, fields ...deps.Field) {
 	l.calls = append(l.calls, capturedSentryError{feature, hp, err, msg, fields})
@@ -374,8 +382,15 @@ type capturedSentryError struct {
 	fields        []deps.Field
 }
 
-func (l *capturingFSMLogger) Debug(string, ...deps.Field)                            {}
-func (l *capturingFSMLogger) Info(string, ...deps.Field)                             {}
+func (l *capturingFSMLogger) Debug(string, ...deps.Field) {}
+func (l *capturingFSMLogger) Info(string, ...deps.Field)  {}
+func (l *capturingFSMLogger) Sentry(id telemetry.Identifier, feature deps.Feature, hp string, cause error, fields ...deps.Field) {
+	if id.Severity == telemetry.SeverityWarning {
+		return
+	}
+
+	l.SentryError(feature, hp, cause, id.Tag, fields...)
+}
 func (l *capturingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
 func (l *capturingFSMLogger) SentryError(feature deps.Feature, hp string, err error, msg string, fields ...deps.Field) {
 	l.calls = append(l.calls, capturedSentryError{feature, hp, err, msg, fields})
@@ -447,8 +462,15 @@ func TestRecoverActionPanicLogsSentryFields(t *testing.T) {
 // to exercise the double-panic guard.
 type panickingFSMLogger struct{}
 
-func (panickingFSMLogger) Debug(string, ...deps.Field)                            {}
-func (panickingFSMLogger) Info(string, ...deps.Field)                             {}
+func (panickingFSMLogger) Debug(string, ...deps.Field) {}
+func (panickingFSMLogger) Info(string, ...deps.Field)  {}
+func (l panickingFSMLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ string, _ error, _ ...deps.Field) {
+	if id.Severity == telemetry.SeverityWarning {
+		return
+	}
+
+	panic("logger boom")
+}
 func (panickingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
 func (panickingFSMLogger) SentryError(deps.Feature, string, error, string, ...deps.Field) {
 	panic("logger boom")

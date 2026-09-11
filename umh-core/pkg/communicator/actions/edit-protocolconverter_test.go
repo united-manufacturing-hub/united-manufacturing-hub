@@ -43,6 +43,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // recordedSentryEvent captures one SentryWarn/SentryError call: the event
@@ -72,6 +73,10 @@ type recordingFSMLogger struct {
 
 func (l *recordingFSMLogger) Debug(msg string, fields ...deps.Field) {}
 func (l *recordingFSMLogger) Info(msg string, fields ...deps.Field)  {}
+
+func (l *recordingFSMLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ string, _ error, fields ...deps.Field) {
+	l.record(id.Tag, fields)
+}
 
 func (l *recordingFSMLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
 	l.record(msg, fields)
