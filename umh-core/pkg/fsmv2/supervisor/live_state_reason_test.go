@@ -180,7 +180,7 @@ var _ = Describe("Live state reason propagation (ENG-4991)", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			parentWorker := &hierarchicalWorker{
-				id:     "parent-worker",
+				id: "parent-worker",
 				logger: newTickLogger(),
 				observed: &mockObservedState{
 					ID:          "parent-worker",

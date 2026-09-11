@@ -48,21 +48,21 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 
 // FailingDependencies provides access to tools needed by failing worker actions.
 type FailingDependencies struct {
-	*deps.BaseDependencies                   // Embedded pointer (8 bytes)
-	connectionPool            ConnectionPool // Interface (16 bytes)
-	lastFailureTime           time.Time      // When the last failure occurred - kept for metrics (24 bytes)
-	mu                        sync.RWMutex   // Protects mutable fields below (24 bytes)
-	maxFailures               int
-	attempts                  int
-	restartAfterFailures      int
-	failureCycles             int // Total number of failure cycles to perform
-	currentCycle              int // Current failure cycle (0-indexed)
-	ticksInConnectedState     int // Number of ticks spent in Connected state
-	recoveryDelayMs           int // Time to wait after failure before retrying (ms) - kept for backward compat
+	*deps.BaseDependencies                // Embedded pointer (8 bytes)
+	connectionPool         ConnectionPool // Interface (16 bytes)
+	lastFailureTime        time.Time      // When the last failure occurred - kept for metrics (24 bytes)
+	mu                     sync.RWMutex   // Protects mutable fields below (24 bytes)
+	maxFailures            int
+	attempts               int
+	restartAfterFailures   int
+	failureCycles          int // Total number of failure cycles to perform
+	currentCycle           int // Current failure cycle (0-indexed)
+	ticksInConnectedState  int // Number of ticks spent in Connected state
+	recoveryDelayMs        int // Time to wait after failure before retrying (ms) - kept for backward compat
 	recoveryDelayObservations int // Number of observations to wait after failure before retrying
 	observationsSinceFailure  int // Counter incremented each time CollectObservedState is called
-	shouldFail                bool
-	connected                 bool
+	shouldFail             bool
+	connected              bool
 }
 
 // NewFailingDependencies creates dependencies for the failing worker.

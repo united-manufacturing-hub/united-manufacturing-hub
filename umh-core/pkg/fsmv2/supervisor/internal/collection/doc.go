@@ -144,13 +144,13 @@
 //
 // The collector runs observations in two scenarios:
 //
-//  1. Periodic: Every ObservationInterval (default ~1 second) for regular monitoring.
-//     This ensures the FSM always has relatively fresh state even when idle.
+// 1. Periodic: Every ObservationInterval (default ~1 second) for regular monitoring.
+//    This ensures the FSM always has relatively fresh state even when idle.
 //
-//  2. On-demand: Immediately after an action completes. When a state returns an
-//     action, the FSM waits for fresh observation before re-evaluating. The action
-//     executor calls TriggerNow() when done, which signals the collector to collect
-//     immediately instead of waiting for the next periodic interval.
+// 2. On-demand: Immediately after an action completes. When a state returns an
+//    action, the FSM waits for fresh observation before re-evaluating. The action
+//    executor calls TriggerNow() when done, which signals the collector to collect
+//    immediately instead of waiting for the next periodic interval.
 //
 // This design ensures the FSM sees fresh state after any action that might modify
 // the external world (connecting to devices, writing data, etc.).
@@ -168,11 +168,11 @@
 // # Action-observation gating
 //
 // When a state returns an action:
-//  1. FSM sets an "action gate" and waits for fresh observation
-//  2. Action executes asynchronously in worker pool
-//  3. Action completes → OnActionComplete callback → TriggerNow()
-//  4. Collector wakes up, collects fresh observation
-//  5. Fresh observation unblocks the gate, FSM re-evaluates state
+//   1. FSM sets an "action gate" and waits for fresh observation
+//   2. Action executes asynchronously in worker pool
+//   3. Action completes → OnActionComplete callback → TriggerNow()
+//   4. Collector wakes up, collects fresh observation
+//   5. Fresh observation unblocks the gate, FSM re-evaluates state
 //
 // This guarantees the FSM always has post-action state before deciding next transition.
 package collection
