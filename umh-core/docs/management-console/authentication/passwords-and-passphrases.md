@@ -4,12 +4,12 @@ Depending on your account, the Management Console can ask you for two different 
 
 | Secret | What it is | Can it be reset? |
 | --- | --- | --- |
-| **Password** | Proves who you are at sign-in, the same as any username-and-password login. Our identity provider stores it. Google, LinkedIn, single sign-on and one-time email codes take its place with another way to prove who you are. | Yes |
+| **Password** | Proves who you are at sign-in, the same as any username-and-password login. Our identity provider stores it. Google, LinkedIn, single sign-on and email codes take its place with another way to prove who you are. | Yes, when our identity provider stores it. Community accounts created with a password use it as their passphrase, see [Username and Password](username-and-password.md#resetting-a-password). |
 | **Passphrase** | A decryption key you create. Your account keeps a certificate on our servers, and the passphrase decrypts it. Only you hold the passphrase, so we never see it and cannot decrypt the certificate for you. | No |
 
 ## The password
 
-The password answers "are you allowed to sign in". It works like any other login password, our identity provider stores it, and you can reset it if you forget it. If you sign in with Google, LinkedIn, single sign-on, or a one-time email code, that method proves who you are instead and you have no password to manage.
+The password answers "are you allowed to sign in". It works like any other login password. When our identity provider stores it, you can reset it if you forget it. If you sign in with Google, LinkedIn, single sign-on, or an email code, that method proves who you are instead and you have no password to manage.
 
 ## The passphrase
 
@@ -19,8 +19,4 @@ Keep it somewhere you can find it again, such as your password manager. If it is
 
 ## Why every sign-in still asks for it
 
-Proving who you are and decrypting the certificate are two separate steps. Signing in covers the first; the passphrase covers the second. So every sign-in method still needs the passphrase, whichever way you proved your identity. Even a one-time email code, which involves no password at all, prompts for the passphrase so the console can decrypt the certificate.
-
-{% hint style="info" %}
-Accounts created with the older username-and-password method use one secret for both jobs: the password you sign in with is also the passphrase that decrypts the certificate. See [Username and Password](username-and-password.md).
-{% endhint %}
+Proving who you are and decrypting the certificate are two separate steps. Signing in covers the first; the passphrase covers the second. So every sign-in method still needs the passphrase, whichever way you proved your identity. Even an email code, which involves no password at all, prompts for the passphrase so the console can decrypt the certificate.

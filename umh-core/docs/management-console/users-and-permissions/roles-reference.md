@@ -8,13 +8,14 @@ Three roles apply at the locations a user or instance is assigned to.
 
 | Role | What it allows |
 | --- | --- |
-| Admin | Everything Editor allows, plus inviting users at the locations where they are an admin. Any admin can add an instance at any location, see [Managing users](managing-access.md#managing-users) |
-| Editor | Create and modify resources, such as bridges, data models and instance configuration. Cannot manage users |
+| Account Owner | Everything Admin allows, and is able to create, update and delete instances.
+| Admin | Everything Editor allows, plus inviting users at the locations where they are an admin.  See [Managing users](managing-access.md#managing-users) |
+| Editor | Create and modify resources, such as bridges and data models. Cannot manage users or instances. |
 | Viewer | Read-only. See resources and their state, change nothing |
 
-A role applies to the location it was granted at and everything below it. Exceptions set at a lower location override what is inherited, see [Permission inheritance](location-based-permissions.md#permission-inheritance).
+In addition to setting roles, user access is set on a per-location basis, at the granting person's desired location granularity. Exceptions set at a lower location override what is inherited, see [Permission inheritance](location-based-permissions.md#permission-inheritance).
 
-These capabilities apply in the Management Console. They do not apply on an instance, which does not check the role behind a request, see [What roles do not cover](README.md#what-roles-do-not-cover).
+These capabilities apply in the Management Console. They do not apply on an `umh-core` instance, which does not check the role behind a request, see [What roles do not cover](README.md#what-roles-do-not-cover). The Management Console ensures that a user is allowed to talk to an instance instead. 
 
 ## One role for the whole company
 
