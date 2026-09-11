@@ -82,9 +82,14 @@ func Generate(registryYAML []byte, packageName string) ([]byte, error) {
 	fmt.Fprintf(&source, "package %s\n", packageName)
 
 	for _, domain := range sortedKeys(roots) {
+		root, found := roots[domain]
+		if !found || root == nil {
+			continue
+		}
+
 		typeName := goIdentifier(domain)
-		emitNodeTypes(&source, typeName, roots[domain])
-		emitVar(&source, domain, typeName, roots[domain])
+		emitNodeTypes(&source, typeName, root)
+		emitVar(&source, domain, typeName, root)
 	}
 
 	formatted, err := format.Source(source.Bytes())
@@ -130,7 +135,7 @@ func buildTree(domains map[string]map[string]declaredEvent) (map[string]*node, e
 				goPath += "." + goIdentifier(segment)
 
 				child, found := cursor.children[segment]
-				if !found {
+				if !found || child == nil {
 					child = &node{children: map[string]*node{}}
 					cursor.children[segment] = child
 				}
@@ -155,7 +160,12 @@ func buildTree(domains map[string]map[string]declaredEvent) (map[string]*node, e
 	// A leaf that also has children claimed its own path as a value and as a
 	// struct, which cannot compile.
 	for _, domain := range sortedKeys(roots) {
-		if err := rejectLeafBranch(domain, goIdentifier(domain), roots[domain]); err != nil {
+		root, found := roots[domain]
+		if !found || root == nil {
+			continue
+		}
+
+		if err := rejectLeafBranch(domain, goIdentifier(domain), root); err != nil {
 			return nil, err
 		}
 	}
@@ -164,12 +174,20 @@ func buildTree(domains map[string]map[string]declaredEvent) (map[string]*node, e
 }
 
 func rejectLeafBranch(key, goPath string, branch *node) error {
+	if branch == nil {
+		return nil
+	}
+
 	if branch.event != nil && len(branch.children) > 0 {
 		return fmt.Errorf("key %q is both an event and a prefix of other events, so %s cannot be a value and a struct", key, goPath)
 	}
 
 	for _, segment := range sortedKeys(branch.children) {
-		child := branch.children[segment]
+		child, found := branch.children[segment]
+		if !found || child == nil {
+			continue
+		}
+
 		if err := rejectLeafBranch(segment, goPath+"."+goIdentifier(segment), child); err != nil {
 			return err
 		}
@@ -222,8 +240,16 @@ func validate(domain, key string, event declaredEvent) error {
 // emitNodeTypes declares a struct type per branch, depth first, so a type is
 // declared before the type that embeds it.
 func emitNodeTypes(source *bytes.Buffer, typeName string, branch *node) {
+	if branch == nil {
+		return
+	}
+
 	for _, segment := range sortedKeys(branch.children) {
-		child := branch.children[segment]
+		child, found := branch.children[segment]
+		if !found || child == nil {
+			continue
+		}
+
 		if len(child.children) > 0 {
 			emitNodeTypes(source, typeName+goIdentifier(segment), child)
 		}
@@ -232,7 +258,11 @@ func emitNodeTypes(source *bytes.Buffer, typeName string, branch *node) {
 	fmt.Fprintf(source, "\ntype %sNode struct {\n", lowerFirst(typeName))
 
 	for _, segment := range sortedKeys(branch.children) {
-		child := branch.children[segment]
+		child, found := branch.children[segment]
+		if !found || child == nil {
+			continue
+		}
+
 		if len(child.children) > 0 {
 			fmt.Fprintf(source, "%s %sNode\n", goIdentifier(segment), lowerFirst(typeName+goIdentifier(segment)))
 
@@ -246,6 +276,10 @@ func emitNodeTypes(source *bytes.Buffer, typeName string, branch *node) {
 }
 
 func emitVar(source *bytes.Buffer, domain, typeName string, branch *node) {
+	if branch == nil {
+		return
+	}
+
 	fmt.Fprintf(source, "\n// %s holds the declared events of the %s domain.\n", goIdentifier(domain), domain)
 	fmt.Fprintf(source, "var %s = %sNode{\n", goIdentifier(domain), lowerFirst(typeName))
 	emitFields(source, typeName, branch)
@@ -253,8 +287,16 @@ func emitVar(source *bytes.Buffer, domain, typeName string, branch *node) {
 }
 
 func emitFields(source *bytes.Buffer, typeName string, branch *node) {
+	if branch == nil {
+		return
+	}
+
 	for _, segment := range sortedKeys(branch.children) {
-		child := branch.children[segment]
+		child, found := branch.children[segment]
+		if !found || child == nil || child.event == nil && len(child.children) == 0 {
+			continue
+		}
+
 		if len(child.children) > 0 {
 			fmt.Fprintf(source, "%s: %sNode{\n", goIdentifier(segment), lowerFirst(typeName+goIdentifier(segment)))
 			emitFields(source, typeName+goIdentifier(segment), child)
@@ -263,8 +305,13 @@ func emitFields(source *bytes.Buffer, typeName string, branch *node) {
 			continue
 		}
 
+		event := child.event
+		if event == nil {
+			continue
+		}
+
 		fmt.Fprintf(source, "%s: Identifier{Tag: %q, Brief: %q, Severity: Severity%s},\n",
-			goIdentifier(segment), child.tag, child.event.Brief, goIdentifier(child.event.Severity))
+			goIdentifier(segment), child.tag, event.Brief, goIdentifier(event.Severity))
 	}
 }
 
