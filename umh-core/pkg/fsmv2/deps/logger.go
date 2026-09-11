@@ -14,6 +14,10 @@
 
 package deps
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
+)
+
 import "time"
 
 // FSMLogger provides structured logging with compile-time enforcement of Sentry fields.
@@ -28,6 +32,12 @@ type FSMLogger interface {
 
 	// Info logs at INFO level with structured fields.
 	Info(msg string, fields ...Field)
+
+	// Sentry logs one declared event. The level comes from id.Severity, so an
+	// event's severity is declared once, in telemetry.yaml. Pass nil for cause
+	// when the event carries no error of its own: the brief is reported instead,
+	// so the Sentry event always has a readable sentence under its title.
+	Sentry(id telemetry.Identifier, feature Feature, hierarchyPath string, cause error, fields ...Field)
 
 	// SentryWarn logs at WARN level with required Feature and hierarchyPath for Sentry routing.
 	// Pass empty string for hierarchyPath when no worker hierarchy exists (e.g., runner-level code).

@@ -82,4 +82,3 @@ func (p *panicRecovery) Reset() {
 
 	p.timestamps = nil
 }
-
