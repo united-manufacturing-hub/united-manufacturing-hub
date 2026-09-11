@@ -19,6 +19,7 @@ package fsmv2cpu
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
@@ -107,6 +108,10 @@ type CPUDeps struct {
 	// that will not build has to surface at the next Poll instead, which reports
 	// it could not measure.
 	engineErr error
+	// reportedReads holds every {op, outcome} already reported, so a failure
+	// repeating each tick reports once. Startup and Poll share this one map;
+	// two maps would re-report a startup failure on the first tick.
+	reportedReads sync.Map // map[cpuhealth.ReadResult]struct{}
 }
 
 // Poll samples the cgroup once and reports the verdict Decide judged. On a
@@ -119,6 +124,12 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}
 
 	sample, err := d.sampler.Read(ctx)
+
+	// Called before the error return below: Read fills Sample.Reads even when it
+	// errors, so the read that broke is named either way.
+	cores, quota := limitsFromSample(sample)
+	reportFailedReads(ctx, sample, err, cores, quota, d)
+
 	if err != nil {
 		return CPUStatus{}, err
 	}
@@ -153,7 +164,7 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 		sampler:          sampler,
 	}
 
-	cores, quota := containerOrHostLimit(context.Background(), sampler, bd)
+	cores, quota := containerOrHostLimit(context.Background(), sampler, d)
 	table := cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(table)
 
@@ -164,13 +175,19 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 // the container's own resource limit, or the host's capacity. cpuhealth needs
 // that answer in advance, because the table is built from it once and never
 // rebuilt.
-func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
+//
+// NewDeps calls this before setting d.engine, so d.engine is nil here.
+func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
 	smp, err := s.Read(ctx)
-	if err != nil {
-		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
-			"cpu: startup cgroup snapshot failed; quota signals omitted", deps.Err(err))
-	}
+	cores, quota = limitsFromSample(smp)
 
+	reportFailedReads(ctx, smp, err, cores, quota, d)
+
+	return cores, quota
+}
+
+// limitsFromSample reads the capacity figures off one sample.
+func limitsFromSample(smp cpuhealth.Sample) (cores, quota float64) {
 	if lc, ok := smp.LogicalCpus.Get(); ok {
 		cores = lc
 	}
@@ -180,6 +197,128 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.Bas
 	}
 
 	return cores, quota
+}
+
+// reportedReadOps are the reads that get a Sentry event when they fail: each
+// one carries a fact the verdict needs. The other three ops are listed as
+// fields on somebody else's event and never get one of their own.
+var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
+	cpuhealth.OpProcStat:    {},
+	cpuhealth.OpProcCpuinfo: {},
+	cpuhealth.OpCPUStat:     {},
+	cpuhealth.OpCPUMax:      {},
+	cpuhealth.OpCPUPressure: {},
+	cpuhealth.OpCpusetCPUs:  {},
+}
+
+// excusedReads are the failures that report nothing, because the file is
+// legitimately absent on some kernels: a kernel without PSI serves no
+// cpu.pressure at all. A cpu.pressure that exists and will not open does
+// report.
+var excusedReads = map[cpuhealth.ReadResult]struct{}{
+	{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadMissing}: {},
+}
+
+// readOpPaths is the file each reported read opens, a field not a message part.
+var readOpPaths = map[cpuhealth.ReadOp]string{
+	cpuhealth.OpProcStat:    "/proc/stat",
+	cpuhealth.OpProcCpuinfo: "/proc/cpuinfo",
+	cpuhealth.OpCPUStat:     cgroupBase + "/cpu.stat",
+	cpuhealth.OpCPUMax:      cgroupBase + "/cpu.max",
+	cpuhealth.OpCPUPressure: cgroupBase + "/cpu.pressure",
+	cpuhealth.OpCpusetCPUs:  cgroupBase + "/cpuset.cpus.effective",
+}
+
+const (
+	// The message is one of these prefixes, the op and the outcome, and nothing
+	// else: Sentry groups on it, so a path or a count would mint an issue per
+	// value. read_failed means the sample survived without one signal.
+	readFailedPrefix = "cpu::read_failed::"
+	// sampleFailedPrefix means the failure voided the whole sample.
+	sampleFailedPrefix = "cpu::sample_failed::"
+	readFailedSep      = "::"
+)
+
+// reportFailedReads emits one Sentry event per failed read.
+//
+// ReadNotAttempted never reports: one failure stops several later reads, so
+// reporting those would turn one root cause into several issues. The verb
+// belongs to the read it is reported under, and only cpu.stat can void a
+// sample, so a cpu.pressure failing in the same tick stays read_failed.
+func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error, cores, quota float64, d *CPUDeps) {
+	// Shutdown is not a failure. filesystem.DefaultService.ReadFile checks the
+	// context, so once it is done every read fails and a graceful shutdown would
+	// emit an event per read on every instance.
+	if ctx.Err() != nil {
+		return
+	}
+
+	for _, r := range smp.Reads {
+		if _, reported := reportedReadOps[r.Op]; !reported {
+			continue
+		}
+
+		if r.Outcome == cpuhealth.ReadOK || r.Outcome == cpuhealth.ReadNotAttempted {
+			continue
+		}
+
+		if _, excused := excusedReads[r]; excused {
+			continue
+		}
+
+		if _, reportedBefore := d.reportedReads.LoadOrStore(r, struct{}{}); reportedBefore {
+			continue
+		}
+
+		prefix := readFailedPrefix
+		if r.Op == cpuhealth.OpCPUStat && readErr != nil {
+			prefix = sampleFailedPrefix
+		}
+
+		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
+			prefix+string(r.Op)+readFailedSep+string(r.Outcome),
+			readFailureFields(smp, r.Op, cores, quota)...)
+	}
+}
+
+// readFailureFields is one failed-read event's evidence.
+func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quota float64) []deps.Field {
+	fields := []deps.Field{
+		deps.String("path", readOpPaths[failed]),
+		deps.String("cgroup_base", cgroupBase),
+		deps.String("cgroup_controllers_raw", smp.CgroupControllersRaw),
+		deps.String("cpu_max_raw", smp.CPUMaxRaw),
+		deps.String("cpu_stat_raw", smp.CPUStatRaw),
+		deps.String("proc_self_cgroup_raw", smp.ProcSelfCgroupRaw),
+		deps.Int("cgroup_base_dir_entry_count", smp.BaseDirEntryCount),
+	}
+
+	// Every sibling is reported, a never-attempted one included: the pattern
+	// across the reads is what says which shape a machine is in.
+	for _, r := range smp.Reads {
+		if r.Op == failed {
+			continue
+		}
+
+		fields = append(fields, deps.String(string(r.Op)+"_read", string(r.Outcome)))
+	}
+
+	if hostCpus, ok := smp.HostCpus.Get(); ok {
+		fields = append(fields, deps.Float64("host_cpus", hostCpus))
+	}
+
+	// capacity_cores is what the table would be built against. Zero means
+	// neither read answered.
+	capacity := cores
+	if quota > 0 {
+		capacity = quota
+	}
+
+	if capacity > 0 {
+		fields = append(fields, deps.Float64("capacity_cores", capacity))
+	}
+
+	return fields
 }
 
 // healthFromStatus turns one poll's verdict into the worker's own health.
