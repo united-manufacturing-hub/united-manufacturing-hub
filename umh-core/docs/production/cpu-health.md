@@ -1,10 +1,11 @@
 # CPU Health
 
 {% hint style="info" %}
-**Early access.** This reporting needs UMH Core v0.44.37 or later, started with `USE_FSMV2_CPU=true`
-and `USE_FSMV2_TRANSPORT=true`. Both are read at startup, so changing them requires a container
-restart. Without them, an instance is marked degraded whenever its CPU usage stays above 70% of
-the cores it may use, whether or not work is being delayed.
+**Early access.** This reporting needs UMH Core v0.44.37 or later, started with
+`-e USE_FSMV2_CPU=true -e USE_FSMV2_TRANSPORT=true` added to the `docker run` command that starts
+the container. Both are read at startup, so changing them means recreating the container. Without
+them, an instance is marked degraded whenever its CPU usage stays above 70% of the cores it may
+use, whether or not work is being delayed.
 {% endhint %}
 
 UMH Core reports whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page, and while that status is degraded UMH will not start another bridge there. High usage on its own does not make an instance degraded: it degrades when its headroom is gone, or when its work is measurably delayed, which UMH reads from throttling, CPU pressure and steal. (For the reasoning, see [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/).)
