@@ -85,6 +85,10 @@ func startDatabaseWithConfig(image string) (config.HistorianConfig, *pgxpool.Poo
 		},
 	})
 	Expect(err).NotTo(HaveOccurred(), "the database container starts")
+	if container == nil {
+		Fail("testcontainers.GenericContainer returned a nil container")
+	}
+
 	DeferCleanup(func() { _ = container.Terminate(context.Background()) })
 
 	var dialled config.HistorianConfig
