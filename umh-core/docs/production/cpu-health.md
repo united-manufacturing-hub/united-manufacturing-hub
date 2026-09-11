@@ -22,7 +22,7 @@ What UMH measures headroom against depends on whether the container has a CPU li
 | **CPU taken by the server** | Other virtual machines on the same physical server took CPU this instance needed. | On your virtualization platform, give this VM more guaranteed CPU, or move the other VMs off the server. |
 | **CPU running near full** | There is no room left for the next burst of work, because either the machine is full or the instance is at its CPU limit. The status message says which. | Add CPU capacity, reduce load, or raise the CPU limit. If the host is full and this container is not the cause, reserve or pin cores for UMH, or reduce what else runs on the machine: a CPU limit caps UMH rather than protecting it. |
 
-## Where to see it
+## Where to see the CPU health
 
 The Management Console shows CPU on the instance's detail page: the status, the usage row, and a
 Technical Details section listing every signal UMH can measure on that machine.
