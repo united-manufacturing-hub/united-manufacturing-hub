@@ -39,15 +39,6 @@ type FSMLogger interface {
 	// so the Sentry event always has a readable sentence under its title.
 	Sentry(id telemetry.Identifier, feature Feature, hierarchyPath string, cause error, fields ...Field)
 
-	// SentryWarn logs at WARN level with required Feature and hierarchyPath for Sentry routing.
-	// Pass empty string for hierarchyPath when no worker hierarchy exists (e.g., runner-level code).
-	SentryWarn(feature Feature, hierarchyPath string, msg string, fields ...Field)
-
-	// SentryError logs at ERROR level with required Feature, hierarchyPath, and error for Sentry.
-	// The err parameter is captured as a Sentry exception with stack trace.
-	// Pass empty string for hierarchyPath when no worker hierarchy exists.
-	SentryError(feature Feature, hierarchyPath string, err error, msg string, fields ...Field)
-
 	// With returns a new FSMLogger with additional context fields.
 	// All logs from the returned logger include these fields.
 	With(fields ...Field) FSMLogger
@@ -100,13 +91,13 @@ func Any(key string, val any) Field {
 }
 
 // Err creates a Field with an error value using the standard "error" key.
-// Use this for additional errors beyond the primary error in SentryError.
+// Use this for additional errors beyond the primary error in Sentry.
 func Err(err error) Field {
 	return Field{Key: "error", Value: err}
 }
 
 // HierarchyPath creates a Field for the worker hierarchy path.
-// For SentryWarn/SentryError, use the dedicated hierarchyPath parameter instead.
+// For Sentry, use the dedicated hierarchyPath parameter instead.
 func HierarchyPath(path string) Field {
 	return Field{Key: "hierarchy_path", Value: path}
 }

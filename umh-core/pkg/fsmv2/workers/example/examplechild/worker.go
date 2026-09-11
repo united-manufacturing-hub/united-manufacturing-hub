@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // ChildWorker implements the FSM v2 Worker interface for resource management.
@@ -57,8 +58,7 @@ func NewChildWorker(
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
-		logger.SentryWarn(deps.FeatureExamples, identity.HierarchyPath, "initial_connection_failed",
-			deps.Err(err))
+		logger.Sentry(telemetry.Workers.Connect.InitialFailed, deps.FeatureExamples, identity.HierarchyPath, err)
 	}
 
 	w.connection = conn

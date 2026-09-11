@@ -327,7 +327,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		// Assertion 1: an in-progress graceful drain must not be truncated.
 		// Under a flat budget the mid level WOULD arm 1×base while its worker
 		// needs 1.1×base, so graceful_shutdown_timeout would fire spuriously.
-		Expect(containsLogEvent(logOutput, "graceful_shutdown_timeout")).To(BeFalse(),
+		Expect(containsLogEvent(logOutput, "supervisor::shutdown::timeout")).To(BeFalse(),
 			"graceful_shutdown_timeout was logged: a level armed a flat %v budget instead of the cascaded "+
 				"height-based budget, truncating a drain that still needed 0.1×base to emit SignalNeedsRemoval", cascadeDrainBase)
 
@@ -425,7 +425,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		// own drain starts), then the root with 3×base. Any further entry —
 		// a leaf warn (1×base) or a duplicate — is a spurious warn: a level
 		// armed a flat 1×base budget instead of its cascaded one.
-		warns := findLogEvents(logOutput, "graceful_shutdown_timeout")
+		warns := findLogEvents(logOutput, "supervisor::shutdown::timeout")
 		Expect(warns).To(HaveLen(2),
 			"expected exactly two graceful_shutdown_timeout warns (stuck mid, stuck root), got %d: %v", len(warns), warns)
 		Expect(warns[0]["timeout"]).To(Equal((2 * cascadeTruncationBase).String()),
@@ -537,7 +537,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		// by fingerprint, not by reading fields. The mids drain in
 		// map-iteration order, but they are identical, so both timeout
 		// entries carry 2×base.
-		warns := findLogEvents(logOutput, "graceful_shutdown_timeout")
+		warns := findLogEvents(logOutput, "supervisor::shutdown::timeout")
 		Expect(warns).To(HaveLen(2),
 			"expected exactly two graceful_shutdown_timeout warns (the two stuck mids), got %d: %v", len(warns), warns)
 		Expect(warns[0]["timeout"]).To(Equal((2 * cascadeTruncationBase).String()),
@@ -545,7 +545,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		Expect(warns[1]["timeout"]).To(Equal((2 * cascadeTruncationBase).String()),
 			"expected the second warn to carry a mid level's cascaded budget (2×base)")
 
-		exhausted := findLogEvents(logOutput, "graceful_shutdown_budget_exhausted")
+		exhausted := findLogEvents(logOutput, "supervisor::shutdown::budget_exhausted")
 		Expect(exhausted).To(HaveLen(1),
 			"expected exactly one graceful_shutdown_budget_exhausted warn (the pre-spent root), got %d: %v", len(exhausted), exhausted)
 
@@ -656,11 +656,11 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		// stuck — those three warn graceful_shutdown_timeout. The zero-worker
 		// root's 2×base budget was spent entirely by its children, so it
 		// warns the distinct graceful_shutdown_budget_exhausted event.
-		warns := findLogEvents(logOutput, "graceful_shutdown_timeout")
+		warns := findLogEvents(logOutput, "supervisor::shutdown::timeout")
 		Expect(warns).To(HaveLen(3),
 			"expected exactly three graceful_shutdown_timeout warns (the three stuck children), got %d: %v", len(warns), warns)
 
-		exhausted := findLogEvents(logOutput, "graceful_shutdown_budget_exhausted")
+		exhausted := findLogEvents(logOutput, "supervisor::shutdown::budget_exhausted")
 		Expect(exhausted).To(HaveLen(1),
 			"expected exactly one graceful_shutdown_budget_exhausted warn (the zero-worker root), got %d: %v", len(exhausted), exhausted)
 
@@ -765,9 +765,9 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		logOutput := buf.String()
 
-		Expect(findLogEvents(logOutput, "graceful_shutdown_timeout")).To(BeEmpty(),
+		Expect(findLogEvents(logOutput, "supervisor::shutdown::timeout")).To(BeEmpty(),
 			"graceful_shutdown_timeout was logged: a zero-worker level whose child drained within budget must exit warn-free")
-		Expect(findLogEvents(logOutput, "graceful_shutdown_budget_exhausted")).To(BeEmpty(),
+		Expect(findLogEvents(logOutput, "supervisor::shutdown::budget_exhausted")).To(BeEmpty(),
 			"graceful_shutdown_budget_exhausted was logged: the child's prompt drain left budget to spare, so the exhaustion warn fired on a non-exhausted budget")
 	})
 })

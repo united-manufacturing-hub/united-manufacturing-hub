@@ -22,6 +22,7 @@ import (
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	examplefailing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 const ConnectActionName = "connect"
@@ -70,7 +71,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 		)
 
 		if attempts <= maxFailures {
-			logger.SentryWarn(depspkg.FeatureExamples, deps.GetHierarchyPath(), "connect_failed_simulated",
+			logger.Sentry(telemetry.Workers.Connect.FailedSimulated, depspkg.FeatureExamples, deps.GetHierarchyPath(), nil,
 				depspkg.Int("attempt", attempts),
 				depspkg.Int("max_failures", maxFailures),
 				depspkg.Int("remaining", maxFailures-attempts),

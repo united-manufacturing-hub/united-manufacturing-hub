@@ -272,7 +272,7 @@ var _ = Describe("Persistence Scenario caller-ctx cancellation", func() {
 		// loop shared the caller's ctx, the cancel would kill it before
 		// Shutdown, and every drain phase would wait out its timeout and
 		// emit this warning.
-		Expect(logContainsEvent(logBuf.String(), "graceful_shutdown_timeout")).To(BeFalse(),
+		Expect(logContainsEvent(logBuf.String(), "supervisor::shutdown::timeout")).To(BeFalse(),
 			"the supervisor must drain via a live tick loop, not time out against a dead one")
 	})
 })

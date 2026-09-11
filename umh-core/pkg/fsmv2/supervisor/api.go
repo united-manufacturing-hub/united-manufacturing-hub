@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // AddWorker adds a new worker to the supervisor's registry.
@@ -57,7 +58,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	defer s.mu.Unlock()
 
 	if _, exists := s.workers[identity.ID]; exists {
-		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_rejected",
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddRejected, deps.FeatureFSMv2, identity.HierarchyPath, nil,
 			deps.Reason("already_exists"))
 
 		return errors.New("worker already exists")
@@ -86,20 +87,19 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		// reconciliation cycle. Hard errors (parse failures, type mismatches, YAML
 		// validation issues) are NOT wrapped with ErrVariablesNotPropagated and bubble
 		// up below so they don't get silently swallowed at startup.
-		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_derive_desired_fallback_to_nil",
-			deps.Err(err))
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddDeriveDesiredFallbackToNil, deps.FeatureFSMv2, identity.HierarchyPath, err)
 		initialDesired, err = worker.DeriveDesiredState(nil)
 	}
 
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddDeriveDesiredFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
 
 	observed, err := worker.CollectObservedState(ctx, initialDesired)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddCollectObservedFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to collect initial observed state: %w", err)
 	}
@@ -113,8 +113,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		}); ok {
 			observed = setter.SetCollectedAt(time.Now())
 		} else {
-			s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath,
-				"worker_add_zero_timestamp_not_settable",
+			s.logger.Sentry(telemetry.Supervisor.Worker.AddZeroTimestampNotSettable, deps.FeatureFSMv2, identity.HierarchyPath, nil,
 				deps.String("type", fmt.Sprintf("%T", observed)))
 		}
 	}
@@ -126,7 +125,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		"hierarchy_path": identity.HierarchyPath,
 	}
 	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_identity_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddSaveIdentityFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to save identity: %w", err)
 	}
@@ -135,14 +134,14 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	observedJSON, err := json.Marshal(observed)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_observed_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddMarshalObservedFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to marshal observed state: %w", err)
 	}
 
 	observedDoc := make(persistence.Document)
 	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_observed_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddUnmarshalObservedFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
 	}
@@ -163,7 +162,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_observed_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddSaveObservedFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
@@ -172,14 +171,14 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	desiredJSON, err := json.Marshal(initialDesired)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_desired_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddMarshalDesiredFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to marshal desired state: %w", err)
 	}
 
 	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_desired_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddUnmarshalDesiredFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
 	}
@@ -188,7 +187,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
+		s.logger.Sentry(telemetry.Supervisor.Worker.AddSaveDesiredFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to save initial desired state: %w", err)
 	}
@@ -236,8 +235,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			var desired TDesired
 			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "shutdown_requested_load_failed",
-					deps.Err(err))
+				s.logger.Sentry(telemetry.Supervisor.Shutdown.RequestedLoadFailed, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 				return true
 			}
@@ -356,8 +354,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 					return nil, fsmv2.ErrNoDesiredState
 				}
 
-				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
-					deps.Err(err))
+				s.logger.Sentry(telemetry.Supervisor.DesiredState.LoadFailedOnCollect, deps.FeatureFSMv2, identity.HierarchyPath, err)
 
 				return nil, err
 			}
@@ -459,7 +456,7 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, work
 	if !exists {
 		s.mu.Unlock()
 
-		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_remove_not_found",
+		s.logger.Sentry(telemetry.Supervisor.Worker.RemoveNotFound, deps.FeatureFSMv2, hierarchyPath, nil,
 			deps.String("target_worker_id", workerID))
 
 		return errors.New("worker not found")

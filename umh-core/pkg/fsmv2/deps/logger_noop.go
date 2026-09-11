@@ -37,10 +37,6 @@ func (l *nopLogger) Info(_ string, _ ...Field) {}
 
 func (l *nopLogger) Sentry(_ telemetry.Identifier, _ Feature, _ string, _ error, _ ...Field) {}
 
-func (l *nopLogger) SentryWarn(_ Feature, _ string, _ string, _ ...Field) {}
-
-func (l *nopLogger) SentryError(_ Feature, _ string, _ error, _ string, _ ...Field) {}
-
 func (l *nopLogger) With(_ ...Field) FSMLogger {
 	return l
 }

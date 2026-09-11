@@ -400,7 +400,7 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Persistent errors fire SentryWarn("authentication_failed") on first occurrence
+			// Persistent errors fire SentryWarn("workers::auth::failed") on first occurrence
 			// (persistentAuthErrorCount == 1) via the !IsTransient() guard.
 			Expect(dependencies.GetLastErrorType()).To(Equal(types.ErrorTypeInvalidToken))
 			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
@@ -479,12 +479,12 @@ var _ = Describe("AuthenticateAction", func() {
 				err := act.Execute(ctx, spyDeps)
 				Expect(err).NotTo(HaveOccurred())
 			}
-			Expect(spy.sentryWarnMsgs).NotTo(ContainElement("persistent_auth_failure"),
+			Expect(spy.sentryWarnMsgs).NotTo(ContainElement("workers::auth::persistent_failure"),
 				"tracker should not fire before MinSamples=5")
 
 			err := act.Execute(ctx, spyDeps)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(spy.sentryWarnMsgs).To(ContainElement("persistent_auth_failure"),
+			Expect(spy.sentryWarnMsgs).To(ContainElement("workers::auth::persistent_failure"),
 				"tracker should fire persistent_auth_failure after 5 consecutive failures")
 
 			sentryCountBefore := len(spy.sentryWarnMsgs)
@@ -559,11 +559,6 @@ type spyLogger struct {
 func (s *spyLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ string, _ error, _ ...deps.Field) {
 	s.sentryWarnCount++
 	s.sentryWarnMsgs = append(s.sentryWarnMsgs, id.Tag)
-}
-
-func (s *spyLogger) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {
-	s.sentryWarnCount++
-	s.sentryWarnMsgs = append(s.sentryWarnMsgs, msg)
 }
 
 func (s *spyLogger) With(_ ...deps.Field) deps.FSMLogger { return s }

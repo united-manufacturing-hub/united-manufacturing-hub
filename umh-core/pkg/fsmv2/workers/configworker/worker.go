@@ -48,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 
 	// Blank-import the state subpackage so its init() registers the initial
 	// state before the supervisor ticks the worker.
@@ -164,8 +165,7 @@ func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
 	}
 
 	if err := syncCPU(client, w.cpuEnabled); err != nil {
-		w.Logger().SentryWarn(deps.FeatureSupportCPU, w.Identity().HierarchyPath,
-			"cpu watch: upsert failed", deps.Err(err))
+		w.Logger().Sentry(telemetry.Workers.Config.Watch.CpuUpsertFailed, deps.FeatureSupportCPU, w.Identity().HierarchyPath, err)
 	}
 }
 
@@ -200,15 +200,13 @@ func (w *ConfigworkerWorker) reconcileHistorian(ctx context.Context) {
 
 	cfg, err := w.configManager.GetConfig(ctx, 0)
 	if err != nil {
-		w.Logger().SentryWarn(deps.FeatureSupportHistorian, w.Identity().HierarchyPath,
-			"config watch: failed to read config", deps.Err(err))
+		w.Logger().Sentry(telemetry.Workers.Config.Watch.ReadFailed, deps.FeatureSupportHistorian, w.Identity().HierarchyPath, err)
 
 		return
 	}
 
 	if err := syncHistorian(client, cfg); err != nil {
-		w.Logger().SentryWarn(deps.FeatureSupportHistorian, w.Identity().HierarchyPath,
-			"historian watch: upsert failed", deps.Err(err))
+		w.Logger().Sentry(telemetry.Workers.Config.Watch.HistorianUpsertFailed, deps.FeatureSupportHistorian, w.Identity().HierarchyPath, err)
 	}
 }
 

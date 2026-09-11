@@ -32,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 )
 
 // ErrPanicCircuitOpen is returned when the tick is suppressed because the panic circuit breaker is open.
@@ -130,7 +131,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	storageSnapshot, err := s.store.LoadSnapshot(ctx, s.workerType, workerID)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "snapshot_load_failed")
+		s.logger.Sentry(telemetry.Supervisor.Snapshot.LoadFailed, deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to load snapshot: %w", err)
 	}
@@ -144,7 +145,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadObservedTyped(ctx, s.workerType, workerID, &observed)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "observed_state_load_failed")
+		s.logger.Sentry(telemetry.Supervisor.ObservedState.LoadFailed, deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to load typed observed state: %w", err)
 	}
@@ -153,7 +154,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	err = s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "desired_state_load_failed")
+		s.logger.Sentry(telemetry.Supervisor.DesiredState.LoadFailed, deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err)
 
 		return fmt.Errorf("failed to load typed desired state: %w", err)
 	}
@@ -225,11 +226,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			if restartCount >= s.collectorHealth.maxRestartAttempts {
 				// Max attempts reached - escalate to shutdown (Layer 3)
 				maxAttemptsErr := fmt.Errorf("collector unresponsive after %d restart attempts", s.collectorHealth.maxRestartAttempts)
-				s.logger.SentryError(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), maxAttemptsErr, "collector_unresponsive_max_attempts",
+				s.logger.Sentry(telemetry.Supervisor.Collector.UnresponsiveMaxAttempts, deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), maxAttemptsErr,
 					deps.Attempts(s.collectorHealth.maxRestartAttempts))
 
 				if shutdownErr := s.requestShutdown(ctx, workerID, maxAttemptsErr.Error()); shutdownErr != nil {
-					s.logger.SentryError(deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, shutdownErr, "shutdown_request_failed")
+					s.logger.Sentry(telemetry.Supervisor.Shutdown.RequestFailed, deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, shutdownErr)
 				}
 
 				return errors.New("collector unresponsive, shutdown requested")
@@ -243,7 +244,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 				maxAttempts := s.collectorHealth.maxRestartAttempts
 				s.mu.RUnlock()
 
-				s.logger.SentryError(deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, err, "collector_restart_failed",
+				s.logger.Sentry(telemetry.Supervisor.Collector.RestartFailed, deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, err,
 					deps.Int("restart_attempt", restartAttempt),
 					deps.Int("max_attempts", maxAttempts))
 
@@ -388,7 +389,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps.String("action_id", actionID))
 
 		if err := workerCtx.executor.EnqueueAction(actionID, result.Action, workerDeps); err != nil {
-			s.logger.SentryError(deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, err, "action_enqueue_failed",
+			s.logger.Sentry(telemetry.Supervisor.Action.EnqueueFailed, deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, err,
 				deps.String("action_id", actionID))
 
 			return fmt.Errorf("failed to enqueue action: %w", err)
@@ -500,7 +501,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	workerCtx.mu.RUnlock()
 
 	if err := s.processSignal(ctx, workerID, result.Signal); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "signal_processing_failed",
+		s.logger.Sentry(telemetry.Supervisor.Signal.ProcessingFailed, deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err,
 			deps.Int("signal", int(result.Signal)))
 
 		return fmt.Errorf("signal processing failed: %w", err)
@@ -553,7 +554,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 					func() {
 						defer func() { _ = recover() }()
 
-						s.logger.SentryError(deps.FeatureFSMv2, "unknown", err, "tick_double_panic",
+						s.logger.Sentry(telemetry.Supervisor.Tick.DoublePanic, deps.FeatureFSMv2, "unknown", err,
 							deps.String("stack", string(debug.Stack())))
 					}()
 				}
@@ -565,7 +566,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			hierarchyPath := s.GetHierarchyPathUnlocked()
 			metrics.RecordPanicRecovery(hierarchyPath, panicType)
 
-			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "tick_panic",
+			s.logger.Sentry(telemetry.Supervisor.Tick.Panic, deps.FeatureFSMv2, hierarchyPath, err,
 				deps.WorkerType(s.workerType),
 				deps.Field{Key: "panic_type", Value: panicType},
 				deps.Field{Key: "stack_trace", Value: string(debug.Stack())})
@@ -573,7 +574,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			if s.panicTracker.RecordPanic() {
 				s.panicCircuitOpen.Store(true)
 				panicCount := s.panicTracker.PanicCount()
-				s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "panic_circuit_open",
+				s.logger.Sentry(telemetry.Supervisor.PanicCircuit.Open, deps.FeatureFSMv2, hierarchyPath, nil,
 					deps.WorkerType(s.workerType),
 					deps.Field{Key: "panic_count", Value: panicCount})
 			}
@@ -584,7 +585,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	if s.panicCircuitOpen.Load() {
 		if s.panicTracker.PanicCount() == 0 {
 			s.panicCircuitOpen.Store(false)
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "panic_circuit_auto_reset",
+			s.logger.Sentry(telemetry.Supervisor.PanicCircuit.AutoReset, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), nil,
 				deps.WorkerType(s.workerType))
 		} else {
 			s.logger.Debug("tick_suppressed_panic_circuit_open",
@@ -642,7 +643,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 					logFields = append(logFields, deps.String("failed_child", childErr.ChildName))
 				}
 
-				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "circuit_breaker_opened",
+				s.logger.Sentry(telemetry.Supervisor.CircuitBreaker.Opened, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 					logFields...)
 				metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
 			}
@@ -651,7 +652,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 				attempts := s.healthChecker.backoff.GetAttempts()
 				nextDelay := s.healthChecker.backoff.NextDelay()
 
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "circuit_breaker_retry_scheduled",
+				s.logger.Sentry(telemetry.Supervisor.CircuitBreaker.RetryScheduled, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), nil,
 					deps.String("failed_child", childErr.ChildName),
 					deps.Attempts(attempts),
 					deps.Int("max_attempts", s.healthChecker.maxAttempts),
@@ -660,14 +661,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 					deps.String("recovery_status", s.getRecoveryStatus()))
 
 				if attempts == 4 {
-					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "escalation_warning_one_retry_remaining",
+					s.logger.Sentry(telemetry.Supervisor.Escalation.OneRetryRemaining, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), nil,
 						deps.String("child_name", childErr.ChildName),
 						deps.Int("attempts_remaining", 1),
 						deps.String("total_downtime", s.healthChecker.backoff.GetTotalDowntime().String()))
 				}
 
 				if attempts >= 5 {
-					s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), childErr, "escalation_required",
+					s.logger.Sentry(telemetry.Supervisor.Escalation.Required, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), childErr,
 						deps.String("child_name", childErr.ChildName),
 						deps.Int("max_attempts", 5),
 						deps.String("total_downtime", s.healthChecker.backoff.GetTotalDowntime().String()),
@@ -796,7 +797,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		templateDuration := time.Since(templateStart)
 
 		if err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "template_rendering_failed",
+			s.logger.Sentry(telemetry.Supervisor.Spec.TemplateRenderingFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 				deps.DurationMs(templateDuration.Milliseconds()))
 			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
 			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "derivation_failed")
@@ -834,13 +835,11 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
 		userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
 		if marshalErr != nil {
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
-				deps.Err(marshalErr))
+			s.logger.Sentry(telemetry.Supervisor.Spec.OriginalUserMarshalFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), marshalErr)
 		} else {
 			var userSpecMap map[string]any
 			if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_unmarshal_failed",
-					deps.Err(unmarshalErr))
+				s.logger.Sentry(telemetry.Supervisor.Spec.OriginalUserUnmarshalFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), unmarshalErr)
 			} else {
 				desiredDoc["originalUserSpec"] = userSpecMap
 			}
@@ -880,8 +879,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	if err != nil {
 		// Log the error but continue with the tick - the system can recover on the next tick
 		// The tickWorker will use the previously saved desired state
-		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "derived_desired_state_save_failed",
-			deps.Err(err))
+		s.logger.Sentry(telemetry.Supervisor.DesiredState.DerivedSaveFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err)
 	} else {
 		// Per-tick log moved to TRACE for scalability
 		s.logTrace("derived_desired_state_saved")
@@ -924,8 +922,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			hash, err := spec.Hash()
 			if err != nil {
 				// If hashing fails, always validate to be safe
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "spec_hash_failed",
-					deps.Err(err),
+				s.logger.Sentry(telemetry.Supervisor.Spec.HashFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 					deps.String("spec", spec.Name))
 				specsToValidate = append(specsToValidate, spec)
 
@@ -939,7 +936,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 		if len(specsToValidate) > 0 {
 			if err := config.ValidateChildSpecs(specsToValidate, registry); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "child_spec_validation_failed")
+				s.logger.Sentry(telemetry.Supervisor.Child.SpecValidationFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err)
 
 				return fmt.Errorf("invalid child specifications: %w", err)
 			}
@@ -949,8 +946,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 				hash, err := spec.Hash()
 				if err != nil {
 					// Skip caching if hash fails - will revalidate next time
-					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "spec_hash_cache_failed",
-						deps.Err(err),
+					s.logger.Sentry(telemetry.Supervisor.Spec.HashCacheFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 						deps.String("spec", spec.Name))
 
 					continue
@@ -999,7 +995,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	for _, child := range childrenToTick {
 		if err := child.tick(ctx); err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "child_tick_failed")
+			s.logger.Sentry(telemetry.Supervisor.Child.TickFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err)
 			// Continue with other children
 		}
 	}
@@ -1083,7 +1079,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		if !exists {
 			s.mu.Unlock()
 
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "worker_removal_not_found",
+			s.logger.Sentry(telemetry.Supervisor.Worker.RemovalNotFound, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), nil,
 				deps.String("target_worker_id", workerID))
 
 			return errors.New("worker not found in registry")
@@ -1158,8 +1154,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		// Request graceful shutdown - worker will go through cleanup states
 		if err := s.requestShutdown(ctx, workerID, "restart_requested"); err != nil {
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "restart_shutdown_request_failed",
-				deps.Err(err),
+			s.logger.Sentry(telemetry.Supervisor.Restart.ShutdownRequestFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 				deps.String("target_worker_id", workerID))
 			// Continue anyway - we want to restart even if request fails
 		}
@@ -1167,7 +1162,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		return nil
 	default:
 		unknownSignalErr := fmt.Errorf("unknown signal: %d", signal)
-		s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), unknownSignalErr, "unknown_signal_received",
+		s.logger.Sentry(telemetry.Supervisor.Signal.UnknownReceived, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), unknownSignalErr,
 			deps.String("target_worker_id", workerID),
 			deps.Int("signal", int(signal)))
 
@@ -1188,7 +1183,7 @@ func (s *Supervisor[TObserved, TDesired]) checkRestartTimeouts(ctx context.Conte
 		}
 
 		if time.Since(requestedAt) > DefaultGracefulRestartTimeout {
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "restart_graceful_timeout",
+			s.logger.Sentry(telemetry.Supervisor.Restart.GracefulTimeout, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), nil,
 				deps.String("target_worker_id", workerID),
 				deps.Duration("timeout", DefaultGracefulRestartTimeout),
 				deps.Duration("waited", time.Since(requestedAt)))
@@ -1325,14 +1320,13 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 			escalationRisk = "imminent"
 		}
 
-		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), "collector_restarting",
-			deps.Err(fmt.Errorf("collector restart attempt %d of %d", restartCount, maxRestartAttempts)),
+		s.logger.Sentry(telemetry.Supervisor.Collector.Restarting, deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), fmt.Errorf("collector restart attempt %d of %d", restartCount, maxRestartAttempts),
 			deps.Int("restart_attempt", restartCount),
 			deps.Int("max_attempts", maxRestartAttempts),
 			deps.Duration("backoff", backoff),
 			deps.String("escalation_risk", escalationRisk))
 	} else {
-		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), "collector_restarting",
+		s.logger.Sentry(telemetry.Supervisor.Collector.Restarting, deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), nil,
 			deps.Int("restart_attempt", restartCount),
 			deps.Int("max_attempts", maxRestartAttempts),
 			deps.Duration("backoff", backoff))
@@ -1344,7 +1338,7 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 
 	if !exists {
 		notFoundErr := errors.New("worker not found")
-		s.logger.SentryError(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), notFoundErr, "collector_restart_worker_not_found",
+		s.logger.Sentry(telemetry.Supervisor.Collector.RestartWorkerNotFound, deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), notFoundErr,
 			deps.String("target_worker_id", workerID))
 
 		return notFoundErr
@@ -1375,7 +1369,7 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	}
 
 	if !hasTimestamp {
-		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), snapshot.Identity.HierarchyPath, "snapshot_missing_timestamp",
+		s.logger.Sentry(telemetry.Supervisor.Snapshot.MissingTimestamp, deps.FeatureForWorker(s.workerType), snapshot.Identity.HierarchyPath, nil,
 			deps.Reason("Snapshot.Observed does not implement GetTimestamp()"),
 			deps.String("impact", "cannot check freshness"))
 
@@ -1389,13 +1383,13 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	isShuttingDown := !s.started.Load()
 
 	if s.freshnessChecker.IsTimeout(snapshot) {
-		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, "data_timeout", age, s.collectorHealth.timeout)
+		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, telemetry.Supervisor.Freshness.DataTimeout, age, s.collectorHealth.timeout)
 
 		return false
 	}
 
 	if !s.freshnessChecker.Check(snapshot) {
-		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, "data_stale", age, s.collectorHealth.staleThreshold)
+		s.logFreshnessWarning(isShuttingDown, snapshot.Identity.HierarchyPath, telemetry.Supervisor.Freshness.DataStale, age, s.collectorHealth.staleThreshold)
 
 		return false
 	}
@@ -1403,17 +1397,21 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Sna
 	return true
 }
 
-// logFreshnessWarning logs a data freshness issue at DEBUG during shutdown (expected) or SentryWarn otherwise.
-func (s *Supervisor[TObserved, TDesired]) logFreshnessWarning(isShuttingDown bool, hierarchyPath, msg string, age, threshold time.Duration) {
+// logFreshnessWarning logs a data freshness issue at DEBUG during shutdown,
+// where staleness is expected, and reports it otherwise.
+func (s *Supervisor[TObserved, TDesired]) logFreshnessWarning(isShuttingDown bool, hierarchyPath string, id telemetry.Identifier, age, threshold time.Duration) {
 	if isShuttingDown {
-		s.logger.Debug(msg+"_during_shutdown",
+		s.logger.Debug(id.Tag+"_during_shutdown",
 			deps.Duration("age", age),
 			deps.Duration("threshold", threshold))
-	} else {
-		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), hierarchyPath, msg,
-			deps.Duration("age", age),
-			deps.Duration("threshold", threshold))
+
+		return
 	}
+
+	s.logger.Sentry(id, deps.FeatureForWorker(s.workerType), hierarchyPath,
+		nil,
+		deps.Duration("age", age),
+		deps.Duration("threshold", threshold))
 }
 
 func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
@@ -1550,7 +1548,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// Use factory to create child supervisor with proper type
 			rawSupervisor, err := factory.NewSupervisorByType(spec.WorkerType, childConfig)
 			if err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "child_supervisor_creation_failed",
+				s.logger.Sentry(telemetry.Supervisor.Child.SupervisorCreationFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 					deps.String("child_name", spec.Name))
 
 				continue
@@ -1559,7 +1557,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childSupervisor, ok := rawSupervisor.(SupervisorInterface)
 			if !ok {
 				typeErr := fmt.Errorf("factory returned %T (expected SupervisorInterface)", rawSupervisor)
-				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), typeErr, "factory_invalid_supervisor_type",
+				s.logger.Sentry(telemetry.Supervisor.Factory.InvalidSupervisorType, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), typeErr,
 					deps.String("child_name", spec.Name))
 
 				continue
@@ -1603,7 +1601,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// Use mergedDeps to include both parent and child-specific dependencies
 			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store, mergedDeps)
 			if err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_worker_creation_failed",
+				s.logger.Sentry(telemetry.Supervisor.Child.WorkerCreationFailed, deps.FeatureFSMv2, childPath, err,
 					deps.String("child_name", spec.Name),
 					deps.WorkerType(spec.WorkerType))
 
@@ -1612,7 +1610,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Add worker to child supervisor
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_supervisor_add_worker_failed",
+				s.logger.Sentry(telemetry.Supervisor.Child.SupervisorAddWorkerFailed, deps.FeatureFSMv2, childPath, err,
 					deps.String("child_name", spec.Name))
 
 				continue
@@ -1626,8 +1624,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				FieldShutdownRequested: false,
 			}
 			if _, err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, childPath, "child_initial_desired_state_save_failed",
-					deps.Err(err),
+				s.logger.Sentry(telemetry.Supervisor.Child.InitialDesiredStateSaveFailed, deps.FeatureFSMv2, childPath, err,
 					deps.String("child_name", spec.Name))
 			}
 
@@ -1647,7 +1644,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				if childCtx.Err() == nil {
 					childSupervisor.StartAsChild(childCtx)
 				} else {
-					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_start_skipped_context_cancelled",
+					s.logger.Sentry(telemetry.Supervisor.Child.StartSkippedContextCancelled, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), nil,
 						deps.String("child_name", spec.Name))
 				}
 			}
@@ -1681,8 +1678,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				// Child continues ticking and will emit SignalNeedsRemoval when ready
 				ctx := context.Background()
 				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {
-					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_shutdown_request_failed",
-						deps.Err(err),
+					s.logger.Sentry(telemetry.Supervisor.Child.ShutdownRequestFailed, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 						deps.String("child_name", name))
 				}
 			}
@@ -1852,10 +1848,9 @@ func (s *Supervisor[TObserved, TDesired]) handleDisableMappingError(spec config.
 
 	// Sentry key intentionally retains the historical "reducer" name to keep
 	// issue grouping stable across the applyDisableMapping rename.
-	s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "reducer_error",
+	s.logger.Sentry(telemetry.Supervisor.Reducer.Error, deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err,
 		deps.String("child_name", spec.Name),
 		deps.String("error_class", errClass),
-		deps.Err(err),
 		deps.Int("suppressed_count", entry.count))
 }
 

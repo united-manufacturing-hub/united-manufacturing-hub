@@ -97,7 +97,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		// Pin the flag to the real timeout signal: the warn must have fired,
 		// so DrainOutcomeClean=false reflects an actual unclean drain, not a
 		// coincidental default.
-		Expect(findLogEvents(logOutput, "graceful_shutdown_timeout")).ToNot(BeEmpty(),
+		Expect(findLogEvents(logOutput, "supervisor::shutdown::timeout")).ToNot(BeEmpty(),
 			"expected graceful_shutdown_timeout to be logged for a worker that ignores shutdown")
 
 		Expect(root.DrainOutcomeClean()).To(BeFalse(),
@@ -156,7 +156,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 
 		logOutput := buf.String()
 
-		Expect(findLogEvents(logOutput, "graceful_shutdown_timeout")).To(BeEmpty(),
+		Expect(findLogEvents(logOutput, "supervisor::shutdown::timeout")).To(BeEmpty(),
 			"a worker that honors shutdown must drain warn-free")
 
 		Expect(root.DrainOutcomeClean()).To(BeTrue(),
@@ -193,7 +193,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		// the slack absorbs: no warn, drain stays clean.
 		root.TestRecordPostJoinBudgetOverrun(budget+supervisor.TestDrainTickInterval()/2, budget, 0, false)
 
-		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).To(BeEmpty(),
+		Expect(findLogEvents(buf.String(), "supervisor::shutdown::budget_exhausted")).To(BeEmpty(),
 			"post-join overhead within drainBudget+slack must not fire graceful_shutdown_budget_exhausted")
 		Expect(root.DrainOutcomeClean()).To(BeTrue(),
 			"a drain whose total elapsed lands inside drainBudget+slack must report clean")
@@ -205,7 +205,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		// A genuine overrun, larger than any plausible join overhead, still warns.
 		root.TestRecordPostJoinBudgetOverrun(budget+2*supervisor.TestDrainTickInterval(), budget, 0, false)
 
-		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).ToNot(BeEmpty(),
+		Expect(findLogEvents(buf.String(), "supervisor::shutdown::budget_exhausted")).ToNot(BeEmpty(),
 			"an overrun beyond drainBudget+slack must fire graceful_shutdown_budget_exhausted")
 		Expect(root.DrainOutcomeClean()).To(BeFalse(),
 			"an overrun beyond the slack must report not-clean")
@@ -218,7 +218,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		// graceful_shutdown_timeout in the drain loop does not double-report here.
 		root.TestRecordPostJoinBudgetOverrun(budget+2*supervisor.TestDrainTickInterval(), budget, 0, true)
 
-		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).To(BeEmpty(),
+		Expect(findLogEvents(buf.String(), "supervisor::shutdown::budget_exhausted")).To(BeEmpty(),
 			"a prior drain-phase warn must short-circuit the post-join re-check")
 	})
 })
