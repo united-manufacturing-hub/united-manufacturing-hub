@@ -115,22 +115,22 @@ var _ = Describe("Machine State Data Contract", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).ToNot(BeNil())
-
+			
 			expectedSubject := "_machine-state_v1-machine-state-update"
 			schema, exists := result.Schemas[expectedSubject]
 			Expect(exists).To(BeTrue(), "Schema for %s should exist", expectedSubject)
-
+			
 			// Verify the schema structure
 			Expect(schema["type"]).To(Equal("object"))
-
+			
 			// The translator should have created a schema with virtual paths
 			properties, ok := schema["properties"].(map[string]interface{})
 			Expect(ok).To(BeTrue(), "Schema should have properties")
-
+			
 			// Check if virtualPaths exist in the schema
 			// The actual structure might be different, so let's just verify the schema exists
 			Expect(properties).ToNot(BeEmpty())
-
+			
 			Expect(result.PayloadShapeUsage["machine-state-update"]).To(ConsistOf("update"))
 		})
 

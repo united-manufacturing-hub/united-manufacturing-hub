@@ -88,7 +88,7 @@ type BenthosMonitorObservedState struct {
 	ServiceInfo *benthos_monitor.ServiceInfo
 
 	// Normally this would have also have an ObservedAgentConfig, but we don't need it here
-
+	
 	// ObservedMonitorConfig contains the actual monitor config from the running service
 	ObservedMonitorConfig config.BenthosMonitorConfig
 }

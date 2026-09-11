@@ -109,7 +109,7 @@ func verifyNoErrorsOrWarnings(t *integration.TestLogger) {
 
 	// Known timing-related issues during test scenarios
 	knownIssues := []string{
-		"supervisor::freshness::data_stale",         // Observation collector may report stale data briefly
+		"supervisor::freshness::data_stale",                   // Observation collector may report stale data briefly
 		"supervisor::collector::observation_failed", // Collector may fail temporarily during shutdown
 		// The worker-removal handler stops a worker's collector after deleting
 		// the worker from the registry; Shutdown's drain sees the empty registry,

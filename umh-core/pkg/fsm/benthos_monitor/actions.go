@@ -162,28 +162,28 @@ func (b *BenthosMonitorInstance) UpdateObservedStateOfInstance(ctx context.Conte
 
 	// Store the raw service info
 	b.ObservedState.ServiceInfo = &info
-
+	
 	// Get the actual config from the running service
 	observedConfig, err := b.monitorService.GetConfig(ctx, services.GetFileSystem())
 	if err == nil {
 		// Only update if we successfully got the config
 		b.ObservedState.ObservedMonitorConfig = observedConfig
-
+		
 		// Check if config has changed (primarily port changes from Benthos updates)
 		// Following S6 pattern: if config changes, trigger removal and recreation
-		if b.ObservedState.ObservedMonitorConfig.MetricsPort != 0 &&
-			b.config.MetricsPort != b.ObservedState.ObservedMonitorConfig.MetricsPort {
+		if b.ObservedState.ObservedMonitorConfig.MetricsPort != 0 && 
+		   b.config.MetricsPort != b.ObservedState.ObservedMonitorConfig.MetricsPort {
 			b.baseFSMInstance.GetLogger().Infof("Monitor config changed: port %d -> %d, triggering removal and recreation",
 				b.ObservedState.ObservedMonitorConfig.MetricsPort, b.config.MetricsPort)
-
+			
 			// Following S6 pattern: trigger removal which will cause recreation with new config
 			err := b.baseFSMInstance.Remove(ctx)
 			if err != nil {
 				b.baseFSMInstance.GetLogger().Errorf("error removing monitor instance for config change: %v", err)
-
+				
 				return err
 			}
-
+			
 			// Return early as the instance will be recreated
 			return nil
 		}

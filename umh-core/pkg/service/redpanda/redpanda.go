@@ -238,8 +238,8 @@ func WithSchemaRegistryManager(schemaRegistryManager ISchemaRegistry) RedpandaSe
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaService{
-		logger:                 logger.NewDedupLogger(logger.For(managerName)),
-		s6Manager:              s6fsm.NewS6Manager(managerName),
+		logger:    logger.NewDedupLogger(logger.For(managerName)),
+		s6Manager: s6fsm.NewS6Manager(managerName),
 		s6Service:              s6service.NewDefaultService(),
 		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,

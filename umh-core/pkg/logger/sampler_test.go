@@ -38,7 +38,7 @@ type countingCore struct {
 
 func newCountingCore() *countingCore { return &countingCore{counts: map[zapcore.Level]int{}} }
 
-func (c *countingCore) Enabled(zapcore.Level) bool        { return true }
+func (c *countingCore) Enabled(zapcore.Level) bool { return true }
 func (c *countingCore) With([]zapcore.Field) zapcore.Core { return c }
 func (c *countingCore) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
 	return ce.AddCore(e, c)

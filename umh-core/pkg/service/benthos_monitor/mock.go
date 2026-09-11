@@ -260,16 +260,16 @@ func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceN
 // GetConfig mocks the GetConfig method for the BenthosMonitor.
 func (m *MockBenthosMonitorService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (config.BenthosMonitorConfig, error) {
 	m.GetConfigCalled = true
-
+	
 	if m.GetConfigError != nil {
 		return config.BenthosMonitorConfig{}, m.GetConfigError
 	}
-
+	
 	// If a result is preset, return it
 	if m.GetConfigResult.MetricsPort != 0 {
 		return m.GetConfigResult, nil
 	}
-
+	
 	// Return a default config with the last updated port
 	return config.BenthosMonitorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{

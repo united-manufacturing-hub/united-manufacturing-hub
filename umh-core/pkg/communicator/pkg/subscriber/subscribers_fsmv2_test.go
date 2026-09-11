@@ -155,8 +155,8 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				logger,
 				nil,
 				fsmv2Channel, // FSMv2 mode
-				nil,          // gatekeeperOutboundChannel
-				nil,          // featureUsage
+				nil, // gatekeeperOutboundChannel
+				nil, // featureUsage
 			)
 
 			// Both handlers should work independently

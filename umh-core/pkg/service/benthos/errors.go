@@ -21,7 +21,6 @@ import "errors"
 //   - The service has been removed from S6 manager (returns ErrServiceNotExist)
 //   - The service directory is corrupted or missing
 //   - The service has never been created
-//
 // This is used as a user-friendly representation of an undefined/empty S6 state.
 const S6StateNotExisting = "not existing"
 
