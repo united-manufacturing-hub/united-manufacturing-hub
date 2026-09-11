@@ -69,8 +69,12 @@ type linuxSampler struct {
 	fs   filesystem.Service
 	base string
 
-	cgroup cgroupReader
-	host   *hostSource
+	// cgroup is non-nil from construction, holding the v2 reader until the
+	// probe says otherwise, so no call site has to guard it.
+	cgroup   cgroupReader
+	resolved bool
+
+	host *hostSource
 
 	// psiAvailable is sticky: set true on the first successful cpu.pressure
 	// read and never cleared, even when a later read fails. It belongs to the
@@ -92,6 +96,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// that event needs this evidence as much as any other.
 	s.recordEvidence(ctx, &smp)
 
+	cgroup := s.reader(ctx)
+
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
 	// calls time.Now() itself, so both rate derivations divide by the same
 	// elapsed time and Decide never compares a machine-wide mean against a
@@ -101,7 +107,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
-	frac, psiErr := s.cgroup.readPSI(ctx)
+	frac, psiErr := cgroup.readPSI(ctx)
 	if psiErr != nil {
 		smp.Pressure = diagnosis.Unknown()
 	} else {
@@ -111,7 +117,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.record(OpCPUPressure, classifyRead(psiErr))
 	smp.PsiAvailable = s.psiAvailable
 
-	stat, statErr := s.cgroup.readStat(ctx)
+	stat, statErr := cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
 	smp.CPUStatRaw = stat.Raw
 	statResult := statOutcome(stat, statErr)
@@ -122,7 +128,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// different thing: the three readings below stay absent and the sample
 		// carries on, so a host keeping its CPU accounting elsewhere is not
 		// degraded over a file it was never going to have.
-		return smp, fmt.Errorf("parse %s/cpu.stat: %w", s.base, statErr)
+		return smp, fmt.Errorf("parse cpu.stat: %w", statErr)
 	}
 	// A cancelled tick fails every read, which is the same shape as a host with
 	// none of these files. Without this the sample reports the second.
@@ -133,7 +139,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.NrPeriods = stat.Periods
 	smp.NrThrottled = stat.Throttled
 	smp.UsageUsec = stat.Usage
-	smp.UsageCores = s.cgroup.advanceUsageRate(ts, stat.Usage)
+	smp.UsageCores = cgroup.advanceUsageRate(ts, stat.Usage)
 
 	// Host signals: the first /proc/stat read fixes a baseline and publishes
 	// neither; a read after that publishes this tick's instantaneous host-busy
@@ -165,7 +171,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.Virtualized = virtualized
 	smp.record(OpProcCpuinfo, cpuinfoOutcome)
 
-	quota, cpuMaxOutcome := s.cgroup.readQuota(ctx)
+	quota, cpuMaxOutcome := cgroup.readQuota(ctx)
 	smp.Quota = quota.Limit
 	smp.CPUMaxRaw = quota.Raw
 	smp.record(OpCPUMax, cpuMaxOutcome)
@@ -179,7 +185,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 // 8 CPUs". A failed cpuset read reads ScopeUnknown with LogicalCpus absent,
 // never a silent ScopeHost on a known machine count.
 func (s *linuxSampler) recordCPUScope(ctx context.Context, smp *Sample, machine float64) {
-	allowed, cpusetErr := s.cgroup.readCpuset(ctx)
+	allowed, cpusetErr := s.reader(ctx).readCpuset(ctx)
 	smp.record(OpCpusetCPUs, classifyRead(cpusetErr))
 	if cpusetErr != nil {
 		smp.LogicalCpus = diagnosis.Unknown()
@@ -196,6 +202,27 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, smp *Sample, machine 
 	}
 
 	smp.CpuScope = ScopeAffinity
+}
+
+// reader returns the cgroup reader for this mount, probing the filesystem the
+// first time. A mount neither shape matched is probed again next tick: the
+// container can start before its cgroup is mounted, and writing the box off for
+// the life of the process would leave it unmeasured after the mount appeared.
+func (s *linuxSampler) reader(ctx context.Context) cgroupReader {
+	if s.resolved {
+		return s.cgroup
+	}
+
+	switch layout, cpuDir := resolveLayout(ctx, s.fs, s.base); layout {
+	case layoutV1:
+		s.cgroup = newCgroupV1Source(s.fs, s.base, cpuDir)
+		s.resolved = true
+	case layoutV2:
+		s.resolved = true
+	case layoutNone:
+	}
+
+	return s.cgroup
 }
 
 // recordEvidence puts the three evidence reads on smp: the text of
