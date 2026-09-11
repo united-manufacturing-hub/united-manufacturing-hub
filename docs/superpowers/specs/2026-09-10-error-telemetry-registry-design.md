@@ -270,10 +270,14 @@ key supplies the rest.
 
 - Mutation testing: not run, because Standard intensity omits Phase 5.
 - Static analysis: `golangci-lint run ./...` and `nilaway`, as the repo configures
-  them. `golangci-lint` runs on this machine: version 2.6.2, built with go1.27.0
-  against a module declaring `go 1.27.0`. Its numbers are reported per rung rather
-  than deferred to CI. `nilaway` is the one that cannot run locally; it fails
-  with `package requires newer Go version go1.27`, so CI is its only signal.
+  them. Neither is usable on this machine, for different reasons. `golangci-lint`
+  2.6.2 reports itself as built with go1.27.0 and does start, but its type-checker
+  cannot read this toolchain's export data (`cannot decode "internal/goarch", export
+  data version 4 is greater than maximum supported version 2`), so it emits spurious
+  `typecheck` errors even on untouched packages: 25 on `pkg/cpuhealth`. `nilaway`
+  fails earlier, with `package requires newer Go version go1.27`. CI is the signal
+  for both. Per-rung verification is `go build`, `go vet -tags=test` and
+  `go test -race -tags=test`.
 - Property-based tests: not warranted. Property 2's input space is the finite
   registry, so a table test enumerates it exhaustively rather than sampling it.
 - E2E: none. The capstone is an integration test; the feature has no user journey.

@@ -16,7 +16,7 @@
 - Branch is `error-telemetry-registry`, cut from `staging`. Never push to `staging` directly.
 - `umh-core/CHANGELOG.md` needs an entry under `## Unreleased`; CI fails a code change without one. Add it in Task 17.
 - Tests are Ginkgo v2 specs in a `_test` package with a `TestXxx` bootstrap calling `RunSpecs`. Do not commit focused specs: CI runs `ginkgo -r --fail-on-focused`.
-- `golangci-lint run ./...` runs locally here (2.6.2, built with go1.27.0). Run it per task and report the count. `nilaway` cannot run locally; CI is its only signal.
+- Neither static analyser works on this machine: `golangci-lint` 2.6.2 starts but its type-checker cannot decode go1.27 export data, so it reports spurious `typecheck` errors on untouched packages too, and `nilaway` fails with `package requires newer Go version go1.27`. Do not run either, and do not read their output as a finding. Per-task verification is `go build ./...`, `go vet -tags=test ./...` and `go test -race -tags=test ./<scope>/...`. CI runs both analysers.
 - Tag format, fixed: `^[a-z0-9_]+(::[a-z0-9_]+)+$`.
 - `Tag` and `Severity` are stable for the life of an entry. Both feed the Sentry fingerprint, so editing either re-groups the issue and orphans its history. `Brief` is safe to edit.
 
@@ -153,8 +153,8 @@ func (i Identifier) IsZero() bool {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd umh-core && go test ./pkg/telemetry/... && golangci-lint run ./pkg/telemetry/...`
-Expected: PASS, 3 specs; lint reports 0 issues.
+Run: `cd umh-core && go test ./pkg/telemetry/...`
+Expected: PASS, 3 specs.
 
 - [ ] **Step 5: Commit**
 
@@ -418,7 +418,6 @@ cd umh-core
 go test ./pkg/telemetry/generate/...          # 3 tests pass
 make generate-telemetry                        # writes identifiers.gen.go
 go build ./pkg/telemetry/...                   # generated file compiles
-golangci-lint run ./pkg/telemetry/...          # expect 0; see the naming note above
 ```
 
 - [ ] **Step 5: Commit**
@@ -517,7 +516,6 @@ In `buildTree` and `goName`, add, in this order, each returning an error naming 
 ```bash
 cd umh-core
 go test ./pkg/telemetry/generate/...        # 11 subtests + 4 tests pass
-golangci-lint run ./pkg/telemetry/...
 ```
 
 - [ ] **Step 5: Commit**
@@ -712,7 +710,7 @@ Expected: FAIL with "identifiers.gen.go is stale". Revert the YAML edit afterwar
 - [ ] **Step 4: Run the whole package**
 
 ```bash
-cd umh-core && go test ./pkg/telemetry/... && golangci-lint run ./pkg/telemetry/...
+cd umh-core && go test ./pkg/telemetry/...
 ```
 
 - [ ] **Step 5: Commit**
@@ -885,7 +883,6 @@ Every fake gets the same empty or recording body, matching whatever that fake do
 cd umh-core
 go test ./pkg/fsmv2/deps/...
 go build ./... && go test ./pkg/fsmv2/... ./pkg/communicator/...
-golangci-lint run ./pkg/fsmv2/deps/...
 ```
 
 - [ ] **Step 5: Commit**
@@ -954,7 +951,7 @@ telemetry:
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd umh-core && make generate-telemetry && go test ./pkg/fsmv2/deps/... && golangci-lint run ./pkg/fsmv2/deps/...
+cd umh-core && make generate-telemetry && go test ./pkg/fsmv2/deps/...
 ```
 
 - [ ] **Step 5: Commit**
@@ -1012,7 +1009,6 @@ cd umh-core
 go build ./... && go test ./<scope>/...
 git diff --stat                     # only the expected files
 grep -rn "SentryWarn(\|SentryError(" --include="*.go" <scope> | grep -v _test | wc -l   # expect 0
-golangci-lint run ./<scope>/...
 ```
 
 - [ ] **Step 4: for Task 14 only, add the level test before converting**
@@ -1081,7 +1077,6 @@ Then delete `SentryWarn` and `SentryError` from the interface and all implemento
 cd umh-core
 go build ./... && go test ./... 2>&1 | tail -20
 grep -rn "SentryWarn(\|SentryError(" --include="*.go" pkg/ cmd/ | wc -l   # expect 0
-golangci-lint run ./...
 ```
 
 - [ ] **Step 5: Commit**
@@ -1143,7 +1138,6 @@ Under `## Unreleased` in `umh-core/CHANGELOG.md`, following the `changelog-writi
 cd umh-core
 go vet -tags=test ./...
 go test -race -tags=test ./... 2>&1 | tail -20
-golangci-lint run ./...
 ginkgo -r --fail-on-focused --dry-run 2>&1 | tail -3
 ```
 
