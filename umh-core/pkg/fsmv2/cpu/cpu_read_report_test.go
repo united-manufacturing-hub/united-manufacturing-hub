@@ -98,6 +98,14 @@ type reportFS struct {
 	reads *int
 }
 
+// FileExists answers the layout probe from the same file map ReadFile serves,
+// so a fixture holding the v2 files resolves as a v2 mount.
+func (f reportFS) FileExists(ctx context.Context, p string) (bool, error) {
+	data, err := f.ReadFile(ctx, p)
+
+	return err == nil && data != nil, nil
+}
+
 func (f reportFS) ReadFile(ctx context.Context, p string) ([]byte, error) {
 	*f.reads++
 

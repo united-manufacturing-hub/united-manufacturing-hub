@@ -16,6 +16,7 @@ package cpuhealth
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 )
 
@@ -45,6 +46,10 @@ const (
 var (
 	errEmptyRead      = errors.New("cpuhealth: file empty")
 	errUnparsableRead = errors.New("cpuhealth: content did not parse")
+	// errNoPressureFile is what a hierarchy with no per-cgroup pressure file
+	// returns. It wraps fs.ErrNotExist so it classifies as ReadMissing, the
+	// cause a kernel without PSI already produces, which reports nothing.
+	errNoPressureFile = fmt.Errorf("cpuhealth: hierarchy publishes no cpu.pressure: %w", fs.ErrNotExist)
 )
 
 // classifyRead maps an unrecognised error to ReadError rather than to the

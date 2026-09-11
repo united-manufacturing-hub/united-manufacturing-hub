@@ -63,19 +63,26 @@ type usageBaseline struct {
 // Timestamp and never time.Now(); Read in read.go says why both sources have to
 // divide by the same elapsed time.
 func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) diagnosis.Reading {
+	return c.usageBase.advance(ts, usage)
+}
+
+// advance is the derivation itself, shared by both hierarchies' readers. Both
+// hand it microseconds, so the divisor is the same either way.
+func (b *usageBaseline) advance(ts time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
-	if c.usageBase.have {
+	if b.have {
 		// A rising cumulative counter over a positive elapsed time derives an
 		// instantaneous rate; a falling one has been reset, so no rate.
-		if u, ok := usage.Get(); ok && u >= c.usageBase.usage {
-			if elapsed := ts.Sub(c.usageBase.time).Seconds(); elapsed > 0 {
-				rate = diagnosis.Known((u - c.usageBase.usage) / 1e6 / elapsed)
+		if u, ok := usage.Get(); ok && u >= b.usage {
+			if elapsed := ts.Sub(b.time).Seconds(); elapsed > 0 {
+				rate = diagnosis.Known((u - b.usage) / 1e6 / elapsed)
 			}
 		}
 	}
 	if u, ok := usage.Get(); ok {
-		c.usageBase = usageBaseline{usage: u, time: ts, have: true}
+		*b = usageBaseline{usage: u, time: ts, have: true}
 	}
+
 	return rate
 }
 
@@ -148,7 +155,9 @@ type statRead struct {
 func (c *cgroupSource) readStat(ctx context.Context) (statRead, error) {
 	failed := statRead{Usage: diagnosis.Unknown(), Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
 
-	data, err := c.fs.ReadFile(ctx, c.base+"/cpu.stat")
+	path := c.base + "/cpu.stat"
+
+	data, err := c.fs.ReadFile(ctx, path)
 	if err != nil {
 		return failed, err
 	}
@@ -156,15 +165,15 @@ func (c *cgroupSource) readStat(ctx context.Context) (statRead, error) {
 
 	usage, err := parseCounter(data, "usage_usec")
 	if err != nil {
-		return failed, err
+		return failed, fmt.Errorf("%s: %w", path, err)
 	}
 	periods, err := parseCounter(data, "nr_periods")
 	if err != nil {
-		return failed, err
+		return failed, fmt.Errorf("%s: %w", path, err)
 	}
 	throttled, err := parseCounter(data, "nr_throttled")
 	if err != nil {
-		return failed, err
+		return failed, fmt.Errorf("%s: %w", path, err)
 	}
 
 	return statRead{Usage: usage, Periods: periods, Throttled: throttled, Raw: string(data)}, nil
@@ -229,7 +238,14 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	text := strings.TrimSpace(string(data))
+
+	return countCPUList(string(data))
+}
+
+// countCPUList counts the CPU ids a cpuset file names. Both hierarchies write
+// the same list format, so both readers count it the same way.
+func countCPUList(list string) (count int, err error) {
+	text := strings.TrimSpace(list)
 	if text == "" {
 		return 0, errEmptyRead
 	}
