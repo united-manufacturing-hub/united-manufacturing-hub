@@ -148,8 +148,8 @@ type Sample struct {
 	Reads []ReadResult
 }
 
-// Sampler reads one tick of CPU health signals: a cgroup's own accounting
-// (cpu.max, cpu.stat, cpu.pressure, cpuset.cpus.effective) and the host's
+// Sampler reads one tick of CPU health signals: a cgroup's own accounting,
+// from either hierarchy, and the host's
 // machine-wide state (/proc/stat, /proc/cpuinfo, and the DMI identity files),
 // both stamped with the one Timestamp the tick was read at. A file it cannot
 // read leaves its readings absent; only an unparsable cpu.stat and a cancelled
