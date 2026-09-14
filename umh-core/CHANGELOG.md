@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.39]
+
 ### Fixes
 
 - Repointing a bridge to a different host on the same port now waits for a check of the new host, so the previous host can no longer make the deploy report success
