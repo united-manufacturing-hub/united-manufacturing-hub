@@ -30,9 +30,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -1306,7 +1306,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 					DfcFSMReadState:    dataflowcomponentfsm.OperationalStateStopped,
 					ConnectionFSMState: connectionfsm.OperationalStateDown, // Connection is DOWN!
 					RedpandaFSMState:   redpandafsm.OperationalStateStopped,
-					PortState:          nmapfsm.PortStateClosed, // Port is CLOSED (unreachable)
+					PortState:          nmapservice.PortStateClosed, // Port is CLOSED (unreachable)
 				})
 
 			// The instance should stay stuck in starting_connection because connection is down

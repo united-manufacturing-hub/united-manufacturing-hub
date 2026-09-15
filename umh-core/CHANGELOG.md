@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+## [0.44.39]
+
+### Fixes
+
+- Repointing a bridge to a different host on the same port now waits for a check of the new host, so the previous host can no longer make the deploy report success
+
+## [0.44.38]
+
+### Improvements
+
+- The historian output takes `value_chunk_interval` and `attribute_chunk_interval`, setting how wide a TimescaleDB chunk is for each of its two hypertables, both still defaulting to 168h. An interval applies only when a table is created, so changing it later needs `set_chunk_time_interval` on the database, and a restart warns when a configured interval no longer matches its table
+
+### Fixes
+
+- The historian output now applies compression and retention to every data contract, not only the first one. Existing historian setups are unaffected
+- The historian no longer stores `timestamp_ms` as a tag attribute, which previously wrote one attribute row per data point
+
+## [0.44.37]
+
+### Fixes
+
+- Topics no longer go missing from the Topic Browser when several updates arrive in quick succession
+- The Topic Browser now updates as data arrives instead of in bursts roughly every 10 seconds
+
+## [0.44.36]
+
+### Improvements
+
+- Topic Browser updates are around 60% smaller on instances with many topics, because per-topic metadata is no longer resent with every refresh. This helps most on slow or metered connections
+
+### Fixes
+
+- Instances with large configurations no longer run out of time in the control loop, which previously caused "not enough time left to reconcile" error log messages.
+
 ## [0.44.35]
 
 ### Improvements

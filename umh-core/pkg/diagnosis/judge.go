@@ -57,14 +57,21 @@ type Marks struct {
 	Worst float64
 }
 
-// Identity is the four sort keys Rank needs, copied onto every Fired so ranking
-// never reads the table: which Signal, its Tier (rank class, sorted ascending),
-// whether the cause is External to this box, and its table Index.
+// Identity is what a consumer needs to know about a fired signal, copied onto
+// every Fired so ranking and consumers never read the table. Rank sorts on
+// Tier, severity and Index.
 type Identity struct {
-	Signal   string
-	Tier     int
-	External bool
-	Index    int
+	// Signal is the bare name the table declared, "X" for a refinement declared
+	// as X, and NOT the "A/X" path a Readiness row is named by: a Fired sits
+	// under the parent it narrows, which already says whose refinement it is.
+	Signal string
+	// Tier is Signal.Tier as declared.
+	Tier int
+	// Attribution is Signal.Attribution as declared. Rank never reads it.
+	Attribution int
+	// Index is the signal's position among its siblings: in Table.Signals for a
+	// top-level signal, in the parent's Refinements for a refinement.
+	Index int
 }
 
 // Fired is one signal's verdict once it has fired: value, marks, and since when.
@@ -75,6 +82,11 @@ type Fired struct {
 	// Instrument is the instrument that fired, stamped on the fire transition and
 	// never refreshed; a later live winner does not overwrite it.
 	Instrument string
+	// Refinements are the signals hanging under this one that have fired, each
+	// judged against its own marks and ordered lowest Tier first, ties going to
+	// declaration order, at every depth. Index 0 is the most urgent narrowing of
+	// this signal.
+	Refinements []Fired
 	Identity
 	// Marks is the pair Value fired against, stamped with it: Severity scores the
 	// one against the other, so a later instrument's pair would not measure it.
@@ -86,6 +98,9 @@ type Fired struct {
 // Latch holds one signal's fired-or-not verdict, one per signal and never one per
 // instrument: only the instrument picked for this tick reaches Update. It is not
 // synchronized, so only the loop driving Update may call Fired.
+//
+// An episode is one fired span: from the tick the signal crosses its fire mark
+// to the tick it releases.
 type Latch struct {
 	since       time.Time
 	lastUpdate  time.Time
@@ -141,29 +156,53 @@ func crossedClear(v float64, m Marks) bool {
 // answered in spare cores and in a usage fraction cannot have the cores episode
 // released by a fraction that happens to sit past a cores threshold.
 //
-// The gate is the pair, not the instrument, because arms that share a pair are by
-// construction answering one question in one unit and differ only in how they
-// reduce it — a p95 and the mean fallback behind it. Selection moves between
+// The gate is the pair, not the instrument, because instruments that share a pair
+// are by construction answering one question in one unit and differ only in how
+// they reduce it — a p95 and the mean fallback behind it. Selection moves between
 // those on the tick the p95 reaches its minimum sample count, on every start, and
 // their values are interchangeable for judging recovery. Gating on the instrument
-// name instead strands such an episode fired: the arm that fired it is never
-// selected again, so nothing can ever release it.
+// name instead strands such an episode fired: the instrument that fired it is
+// never selected again, so nothing can ever release it.
 //
 // instrument names the instrument the reduction came from. It is stamped beside
 // the marks and value when the latch fires, and never refreshed afterwards, so a
 // Fired names the instrument that fired, not whichever one a later tick selected.
 // It is attribution only; the clear arm does not read it.
 //
-// Arms measuring genuinely different quantities are the remaining gap: while a
-// foreign pair keeps answering Ready, no tick can release the episode and every
-// tick refreshes lastUpdate, so the Signal.DemoteSpan fallback in Engine.Observe
-// never runs either. Such an episode holds until its own arm answers again.
+// An instrument measuring a genuinely different quantity can act on an episode it
+// did not fire, but only when its own number is decisive. The block inside Update
+// says which readings release, which hold, and which move the blame.
 func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now time.Time) {
 	if r.state != StateValue {
 		return
 	}
 
 	l.lastUpdate = now
+
+	// The instrument that fired has stopped answering, so judge on the marks of
+	// one that still does. since is not re-stamped: the condition never stopped,
+	// only what can measure it changed. latch_measurement_switch_test.go works
+	// the three cases through.
+	//
+	// A one-tick gap reaches this block too, because a window goes untrusted on
+	// the first reading it misses rather than when it drains. That is harmless
+	// because a live number reading neither past its clear nor past its fire
+	// leaves the episode exactly as it was, marks and blame included.
+	if l.fired && m != l.marks {
+		if crossedClear(r.v, m) && c.Full() {
+			l.release(now)
+
+			return
+		}
+
+		if crossedFire(r.v, m) {
+			l.marks = m
+			l.value = r.v
+			l.instrument = instrument
+		}
+
+		return
+	}
 
 	if l.fired && m == l.marks && crossedClear(r.v, l.marks) && c.Full() {
 		l.release(now)
@@ -258,10 +297,12 @@ func (f Fired) Severity() float64 {
 	return clamp01((worse(f.Value, m) - fire) / (worse(m.Worst, m) - fire))
 }
 
-// Rank orders the signals that fired so the caller can show the main reason
-// first: tier ascending (a lower tier outranks a higher one), then severity
-// descending, then external attribution first, then the signal's table index.
-// It sorts in place and returns the same slice.
+// Rank orders the signals that fired, and only the top level: a signal's
+// refinements arrive in Fired.Refinements already ordered.
+//
+// The order is tier ascending (a lower tier outranks a higher one), then
+// severity descending, then the signal's table index, so the caller can show
+// the main reason first. It sorts in place and returns the same slice.
 func Rank(fired []Fired) []Fired {
 	sort.Slice(fired, func(i, j int) bool {
 		a, b := fired[i], fired[j]
@@ -271,10 +312,6 @@ func Rank(fired []Fired) []Fired {
 
 		if sa, sb := a.Severity(), b.Severity(); sa != sb {
 			return sa > sb
-		}
-
-		if a.External != b.External {
-			return a.External
 		}
 
 		return a.Index < b.Index

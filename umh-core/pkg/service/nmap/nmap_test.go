@@ -341,6 +341,37 @@ done`
 				Expect(result.Timestamp.Format(time.RFC3339)).To(Equal("2025-05-27T09:29:59Z"))
 			})
 
+			It("should record the endpoint the scan dialled, not the configured one", func() {
+				// The configured endpoint comes from the run script on disk,
+				// which is rewritten before the running scanner picks it up. A
+				// consumer that has to tell one endpoint's scan from another's
+				// can only use what the scan block itself recorded.
+				rawLogs := `2025-05-27 09:29:59.576902049  NMAP_SCAN_START
+2025-05-27 09:29:59.577869966  NMAP_TIMESTAMP: 2025-05-27T09:29:59+00:00
+2025-05-27 09:29:59.578415299  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 09:29:59.619551216  8080/tcp open  http-proxy
+2025-05-27 09:29:59.623004091  NMAP_SCAN_END`
+
+				result := service.parseScanLogs(parseLogOutput(rawLogs), 445)
+				Expect(result).NotTo(BeNil())
+				Expect(result.Target).To(Equal("localhost"))
+				Expect(result.PortResult.Port).To(Equal(uint16(8080)))
+				Expect(result.PortResult.State).To(Equal("open"))
+			})
+
+			It("should leave the target empty when the scan recorded no command", func() {
+				rawLogs := `2025-05-27 09:29:59.576902049  NMAP_SCAN_START
+2025-05-27 09:29:59.577869966  NMAP_TIMESTAMP: 2025-05-27T09:29:59+00:00
+2025-05-27 09:29:59.619551216  8080/tcp open  http-proxy
+2025-05-27 09:29:59.623004091  NMAP_SCAN_END`
+
+				result := service.parseScanLogs(parseLogOutput(rawLogs), 8080)
+				Expect(result).NotTo(BeNil())
+				Expect(result.Target).To(BeEmpty())
+				Expect(result.PortResult.Port).To(Equal(uint16(8080)))
+				Expect(result.PortResult.State).To(Equal("open"))
+			})
+
 			It("should parse scan results correctly with multiple scans", func() {
 				rawLogs := `2025-05-27 11:34:24.541823586  Read data files from: /usr/bin/../share/nmap
 2025-05-27 11:34:24.541824086  Nmap done: 1 IP address (1 host up) scanned in 0.03 seconds

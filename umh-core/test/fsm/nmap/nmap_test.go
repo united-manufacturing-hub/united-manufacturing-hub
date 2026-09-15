@@ -31,7 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	nmapsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -39,7 +39,7 @@ import (
 var _ = Describe("NmapInstance FSM", func() {
 	var (
 		instance    *nmap.NmapInstance
-		mockService *nmapsvc.MockNmapService
+		mockService *nmapservice.MockNmapService
 		serviceName string
 		ctx         context.Context
 		tick        uint64
@@ -82,12 +82,12 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(mockService.AddNmapToS6ManagerCalled).To(BeTrue())
 
 			// Next, mock the service creation success
-			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+			mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped,
 				S6ObservedState: s6fsm.S6ObservedState{
 					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
 				},
-				NmapStatus: nmapsvc.NmapServiceInfo{
+				NmapStatus: nmapservice.NmapServiceInfo{
 					IsRunning: true,
 				},
 			}
@@ -108,7 +108,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(instance.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
 
 			// Also set the mock flags for an initial start attempt
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: false,
 			})
 
@@ -142,7 +142,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+			mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped}
 			mockService.ExistingServices[serviceName] = true
 
@@ -169,7 +169,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => degraded
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
 			})
@@ -203,7 +203,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+			mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped}
 			mockService.ExistingServices[serviceName] = true
 
@@ -230,7 +230,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => degraded
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsRunning:   true,
 				IsS6Running: true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
@@ -246,11 +246,11 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(instance.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
 
 			// Step 3: from Idle => Active when processing data
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				IsRunning:   true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
-				PortState:   string(nmap.PortStateOpen),
+				PortState:   string(nmapservice.PortStateOpen),
 			})
 
 			tick, err = fsmtest.TestNmapStateTransition(
@@ -275,7 +275,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+			mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped}
 			mockService.ExistingServices[serviceName] = true
 
@@ -302,7 +302,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => degraded
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
 				IsRunning:   true,
@@ -317,11 +317,11 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from idle => active
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				IsRunning:   true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
-				PortState:   string(nmap.PortStateOpen),
+				PortState:   string(nmapservice.PortStateOpen),
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
 				ctx, instance, mockService, mockServices, serviceName,
@@ -333,7 +333,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 3: Then degrade => set flags => "degraded"
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				IsRunning:   true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
@@ -362,7 +362,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+			mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped}
 			mockService.ExistingServices[serviceName] = true
 
@@ -389,7 +389,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => degraded
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
 				IsRunning:   true,
@@ -404,11 +404,11 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from degraded => open
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				IsRunning:   true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
-				PortState:   string(nmap.PortStateOpen),
+				PortState:   string(nmapservice.PortStateOpen),
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
 				ctx, instance, mockService, mockServices, serviceName,
@@ -422,12 +422,12 @@ var _ = Describe("NmapInstance FSM", func() {
 			// Step 3: Set an old timestamp that exceeds NmapScanTimeout
 			// First, ensure we have a LastScan with an old timestamp
 			if mockService.ServiceStates[serviceName].NmapStatus.LastScan == nil {
-				mockService.ServiceStates[serviceName].NmapStatus.LastScan = &nmapsvc.NmapScanResult{}
+				mockService.ServiceStates[serviceName].NmapStatus.LastScan = &nmapservice.NmapScanResult{}
 			}
 			// Set timestamp to 15 seconds ago (NmapScanTimeout is 10 seconds)
 			oldTimestamp := time.Now().Add(-15 * time.Second)
 			mockService.ServiceStates[serviceName].NmapStatus.LastScan.Timestamp = oldTimestamp
-			mockService.ServiceStates[serviceName].NmapStatus.LastScan.PortResult.State = string(nmap.PortStateOpen)
+			mockService.ServiceStates[serviceName].NmapStatus.LastScan.PortResult.State = string(nmapservice.PortStateOpen)
 
 			// The instance should transition from open => degraded due to timeout
 			tick, err = fsmtest.TestNmapStateTransition(
@@ -457,7 +457,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestNmapStateTransition(
@@ -483,7 +483,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => degraded
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
 				IsRunning:   true,
@@ -498,11 +498,11 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from startingConfigLoading => open
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: true,
 				S6FSMState:  s6fsm.OperationalStateRunning,
 				IsRunning:   true,
-				PortState:   string(nmap.PortStateOpen),
+				PortState:   string(nmapservice.PortStateOpen),
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
 				ctx, instance, mockService, mockServices, serviceName,
@@ -527,7 +527,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// simulate S6 stopping
-			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 				IsS6Running: false,
 				S6FSMState:  s6fsm.OperationalStateStopped,
 			})
@@ -566,7 +566,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Setup service in stopped state
-			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
 			mockService.ExistingServices[serviceName] = true
 
 			// Progress to stopped state
@@ -623,7 +623,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 	var (
 		ctx          context.Context
 		instance     *nmap.NmapInstance
-		mockService  *nmapsvc.MockNmapService
+		mockService  *nmapservice.MockNmapService
 		mockServices *serviceregistry.Registry
 		serviceName  string
 		tick         uint64
@@ -646,7 +646,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 			5, tick,
 		)
 		// creating → stopped
-		mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+		mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
 		mockService.ExistingServices[serviceName] = true
 		tick, _ = fsmtest.TestNmapStateTransition(
 			ctx, instance, mockService, mockServices, serviceName,
@@ -665,7 +665,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 			5, tick,
 		)
 		// starting → degraded (service up, no port result yet)
-		mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+		mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
@@ -681,7 +681,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 	AfterEach(func() {
 		Expect(instance.SetDesiredFSMState(nmap.OperationalStateStopped)).To(Succeed())
 
-		mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+		mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: false,
 			S6FSMState:  s6fsm.OperationalStateStopped,
 		})
@@ -713,7 +713,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 
 	DescribeTable("follows the degraded → from → to matrix", func(fromState, toState, fromPort, toPort string, _ uint64) {
 		// Degraded → fromState
-		mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+		mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
@@ -725,7 +725,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// fromState → toState
-		mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+		mockService.SetServiceState(serviceName, nmapservice.ServiceStateFlags{
 			IsS6Running: true,
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,

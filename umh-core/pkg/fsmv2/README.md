@@ -346,6 +346,7 @@ docker run -d \
 | `USE_FSMV2_TRANSPORT` | No | FSMv2 communicator; defaults to `true` (enabled). Set to `false` to revert to legacy. |
 | `USE_FSMV2_MEMORY_CLEANUP` | No | FSMv2 memory cleanup (persistence worker); defaults to `true` (enabled). Set to `false` to revert. |
 | `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter |
+| `USE_FSMV2_CPU` | No | FSMv2 container CPU monitoring; defaults to `false` (legacy operating-system metrics). Read once at startup, so changing it requires a restart. Temporary migration flag |
 
 ### Disabling FSMv2 Features
 

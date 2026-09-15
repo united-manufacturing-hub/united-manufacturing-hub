@@ -18,12 +18,11 @@
 // Today the worker anchors the application's children union: once the shared
 // registry is published, every application state emits this kernel child
 // (renderUnion in workers/application/state), so the children list can never
-// become empty. It also reconciles the historian monitor child on every tick:
-// CollectObservedState polls the config manager, then upserts or deletes the
-// historian child in the dynamicchildren registry so live config edits apply
-// without restarting umh-core. Other child specs still reach the registry via
-// fsmv2client and its Writer, and the application's collector reads the
-// registry directly.
+// become empty. On every tick it also reconciles two standalone children: the
+// historian, so live config edits apply without restarting umh-core, and the
+// CPU monitor, following USE_FSMV2_CPU. This worker owns the decision to create
+// or remove those two, where every other spec exists because whoever called the
+// client wrote it.
 //
 // TODO(ENG-4400): this worker becomes the config.yaml authority. It reads
 // config.yaml, validates and serializes changes to it, and materializes the
@@ -42,6 +41,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
@@ -71,6 +71,12 @@ const WorkerTypeName = "configworker"
 // cmd/main.go go away.
 const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 
+// CPUEnabledDepsKey is the register.SetDeps key holding the bool for whether
+// the fsmv2 CPU monitor child should run (USE_FSMV2_CPU). It is a key of its
+// own rather than a second payload under ConfigManagerDepsKey, for the reason
+// given there.
+const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
+
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
 // to the shared dynamicchildren registry. See the package doc for why it does
 // nothing else yet.
@@ -82,6 +88,11 @@ type ConfigworkerWorker struct {
 	configManager config.ConfigManager
 
 	fsmv2.WorkerBase[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps]
+
+	// cpuEnabled gates whether the fsmv2 CPU monitor child is upserted. It is
+	// set once at construction from CPUEnabledDepsKey (the USE_FSMV2_CPU env
+	// flag, read in cmd/main.go and never persisted).
+	cpuEnabled bool
 }
 
 // NewConfigworkerWorker creates a config worker holding the registry published
@@ -102,10 +113,12 @@ func NewConfigworkerWorker(
 	// one, and the historian reconcile in CollectObservedState no-ops when it is
 	// nil (mirroring the fsmv2client.GetClient nil guard).
 	configManager := register.GetDeps[config.ConfigManager](ConfigManagerDepsKey)
+	cpuEnabled := register.GetDeps[bool](CPUEnabledDepsKey)
 
 	w := &ConfigworkerWorker{
 		registry:      shared,
 		configManager: configManager,
+		cpuEnabled:    cpuEnabled,
 	}
 	w.InitBase(identity, logger, stateReader)
 
@@ -123,12 +136,9 @@ func (w *ConfigworkerWorker) GetDependenciesAny() any {
 	return nil
 }
 
-// CollectObservedState reconciles the historian monitor child from the live
-// config, then returns the observed state. It reads config through the config
-// manager and upserts or deletes the historian child in the shared registry so
-// live edits apply without a restart. Reconcile failures are logged, not
-// returned: a transient config read or upsert error must not fail the tick and
-// stall the worker.
+// CollectObservedState is the only per-tick hook available: DeriveDesiredState
+// must not touch dependencies (an architecture validator enforces that) and
+// GetInitialState runs once.
 func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -136,9 +146,41 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	default:
 	}
 
+	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
 	w.reconcileHistorian(ctx)
+	w.reconcileCPU(ctx)
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil
+}
+
+// reconcileCPU upserts or deletes the CPU monitor child. It logs rather than
+// returns the upsert error, so a transient failure never fails the tick.
+func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
+	_ = ctx
+
+	client := fsmv2client.GetClient()
+	if client == nil {
+		return
+	}
+
+	if err := syncCPU(client, w.cpuEnabled); err != nil {
+		w.Logger().SentryWarn(deps.FeatureSupportCPU, w.Identity().HierarchyPath,
+			"cpu watch: upsert failed", deps.Err(err))
+	}
+}
+
+// syncCPU upserts the CPU monitor child when the flag is on and deletes it when
+// off. The flag cannot change mid-run, so today the Delete removes nothing; it
+// is kept so that a change which does let the flag flip cannot leave a CPU child
+// behind.
+func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
+	if !enabled {
+		client.Delete(fsmv2cpu.Ref)
+
+		return nil
+	}
+
+	return client.Upsert(fsmv2cpu.Ref, nil)
 }
 
 // reconcileHistorian reads the live config and syncs the historian monitor

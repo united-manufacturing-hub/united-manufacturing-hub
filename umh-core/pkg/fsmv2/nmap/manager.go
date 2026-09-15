@@ -16,11 +16,11 @@ package fsmv2nmap
 
 import (
 	"fmt"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
@@ -75,34 +75,42 @@ func cfgFor(cfg config.NmapConfig) (map[string]any, error) {
 // the adapter, so this only classifies the healthy leaf.
 func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 	switch s.Result.PortState {
-	case string(nmapfsm.PortStateOpen):
+	case string(nmapservice.PortStateOpen):
 		return nmapfsm.OperationalStateOpen
-	case string(nmapfsm.PortStateClosed):
+	case string(nmapservice.PortStateClosed):
 		return nmapfsm.OperationalStateClosed
-	case string(nmapfsm.PortStateFiltered):
+	case string(nmapservice.PortStateFiltered):
 		return nmapfsm.OperationalStateFiltered
-	case string(nmapfsm.PortStateUnfiltered):
+	case string(nmapservice.PortStateUnfiltered):
 		return nmapfsm.OperationalStateUnfiltered
-	case string(nmapfsm.PortStateOpenFiltered):
+	case string(nmapservice.PortStateOpenFiltered):
 		return nmapfsm.OperationalStateOpenFiltered
-	case string(nmapfsm.PortStateClosedFiltered):
+	case string(nmapservice.PortStateClosedFiltered):
 		return nmapfsm.OperationalStateClosedFiltered
 	default:
 		return nmapfsm.OperationalStateStarting
 	}
 }
 
-// mapObserved builds a nmapfsm.NmapObservedState from the config and the stored
-// status: the observed service config comes from the config entry, and the
-// ServiceInfo mirrors the last scan (port state, port, latency, running).
-func mapObserved(cfg config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
+// mapObserved builds a nmapfsm.NmapObservedState from the stored status. Target
+// and Port come from the status, so they name the endpoint the most recent poll
+// dialed rather than the one the config asked for. Until a poll of an edited
+// endpoint completes, the observed values are the previous endpoint's, which is
+// what lets a consumer tell a converged edit from a pending one. The scan
+// carries that endpoint and its own start time, so an old poll cannot read as
+// fresh or as evidence about a different endpoint.
+func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
 	return nmapfsm.NmapObservedState{
-		ObservedNmapServiceConfig: cfg.NmapServiceConfig,
+		ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+			Target: s.Result.Target,
+			Port:   s.Result.Port,
+		},
 		ServiceInfo: nmapservice.ServiceInfo{
 			NmapStatus: nmapservice.NmapServiceInfo{
 				IsRunning: s.Result.IsRunning,
 				LastScan: &nmapservice.NmapScanResult{
-					Timestamp: time.Now(),
+					Timestamp: s.Result.ScannedAt,
+					Target:    s.Result.Target,
 					PortResult: nmapservice.PortResult{
 						State:     s.Result.PortState,
 						LatencyMs: s.Result.LatencyMs,

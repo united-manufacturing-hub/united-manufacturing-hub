@@ -45,9 +45,11 @@ func (e Environment) Has(c Capability) bool {
 	return e.caps[c]
 }
 
-// Instrument is one way of measuring a signal: what to read, over how long a
-// window, under which reduction, against which thresholds.
-type Instrument[S any] struct {
+// Measurement is a number sampled over time: what to read, over how long a
+// window, under which reduction. It carries no thresholds, so nothing about a
+// measurement can answer a signal. Its number is judged only where an
+// Instrument pairs it with marks.
+type Measurement[S any] struct {
 	// Extract reads the value from a snapshot, the numerator under DeltaRatio.
 	Extract func(S) Reading
 	// Against reads the DENOMINATOR of a ratio: DeltaRatio divides the delta of
@@ -56,9 +58,7 @@ type Instrument[S any] struct {
 	Name      string
 	Requires  []Capability
 	Reduction Reduction
-	// Marks are the thresholds this instrument's number is judged against.
-	Marks Marks
-	Span  time.Duration
+	Span      time.Duration
 	// Boolean says the series is zero or one and nothing between.
 	Boolean bool
 	// Counter says both series are monotone counters, so a backwards step means
@@ -67,37 +67,56 @@ type Instrument[S any] struct {
 	Counter bool
 }
 
+// Instrument is one way of answering a signal: a measurement plus the marks its
+// number is judged against.
+type Instrument[S any] struct {
+	Measurement[S]
+	// Marks are the thresholds this instrument's number is judged against.
+	Marks Marks
+}
+
 // Read applies both extractors to one snapshot, so both counters of a delta
 // ratio come off the same instant. With no Against it hands back an absence.
-func (i Instrument[S]) Read(s S) (value, against Reading) {
-	if i.Against == nil {
-		return i.Extract(s), Unknown()
+func (m Measurement[S]) Read(s S) (value, against Reading) {
+	if m.Against == nil {
+		return m.Extract(s), Unknown()
 	}
 
-	return i.Extract(s), i.Against(s)
+	return m.Extract(s), m.Against(s)
 }
 
 // Signal is a QUESTION about the resource, such as whether the CPU is saturated.
-// Each of its Instruments answers it differently. The order is significant: the
-// first instrument that can supply a number is the one used.
 type Signal[S any] struct {
-	Name        string
+	Name string
+	// Instruments each answer the signal differently. The order is significant:
+	// the first instrument that can supply a number is the one used.
 	Instruments []Instrument[S]
+	// Refinements are signals declared under this one, narrowing its answer with
+	// their own instruments and marks. A refinement is itself a Signal, so it may
+	// declare refinements of its own, to any depth. Each is sampled and judged on
+	// every tick, whether or not this signal fired, so its window is warm when
+	// this one fires and its Since is the tick IT crossed its mark. A refinement
+	// appears in Fired.Refinements under a parent that fired, and never as a
+	// verdict of its own. The Refinements section of the package doc works
+	// through an example.
+	Refinements []Signal[S]
 	// DemoteSpan is how long a signal may go unread before its window empties:
 	// stale detection, so an old number cannot stand forever.
 	DemoteSpan time.Duration
 	// Tier is a rank class the caller assigns, lower meaning more urgent. The
 	// numbers themselves are the caller's vocabulary.
 	Tier int
+	// Attribution is who the caller blames, an opaque int. The numbers are the
+	// caller's vocabulary, and this package never interprets them.
+	Attribution int
 	// ReleaseOnAbsent stops reporting the signal the moment nothing can answer
 	// it at all, rather than waiting out DemoteSpan.
 	ReleaseOnAbsent bool
-	// External marks a cause attributed outside this box rather than to it.
-	External bool
 }
 
-// Capable returns the instruments the environment satisfies, in declared order.
-func (s Signal[S]) Capable(env Environment) []Instrument[S] {
+// CapableInstruments returns the instruments the environment satisfies, in
+// declared order.
+func (s Signal[S]) CapableInstruments(env Environment) []Instrument[S] {
 	capable := make([]Instrument[S], 0, len(s.Instruments))
 	for _, inst := range s.Instruments {
 		satisfied := true
@@ -118,19 +137,16 @@ func (s Signal[S]) Capable(env Environment) []Instrument[S] {
 	return capable
 }
 
-// Track is a quantity measured but never judged: reduced every tick like an
-// instrument, with no thresholds. Use it for a number the caller must publish.
-type Track[S any] struct {
-	Extract   func(S) Reading
-	Name      string
-	Reduction Reduction
-	Span      time.Duration
-}
-
-// Table is the whole declaration for one resource: every signal, every track,
-// and the interval the caller ticks at. The order of Signals is significant.
+// Table is the whole declaration for one resource: every signal and every
+// measurement.
 type Table[S any] struct {
-	Signals  []Signal[S]
-	Tracks   []Track[S]
+	// The order is significant: see Identity.Index.
+	Signals []Signal[S]
+	// Measurements are the numbers no signal judges: each has a window sampled
+	// every tick like an instrument's, but no thresholds, and it is reduced only
+	// when the caller reads it through Engine.Measurement. Use one for a number
+	// the caller must publish without a verdict.
+	Measurements []Measurement[S]
+	// Interval is how often the caller ticks.
 	Interval time.Duration
 }

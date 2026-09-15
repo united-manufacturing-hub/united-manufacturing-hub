@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 const (
@@ -45,7 +45,9 @@ const (
 
 // NmapStatus is the result of one TCP-dial observation of the target port.
 type NmapStatus struct {
-	// PortState is one of nmapfsm.PortStateOpen or nmapfsm.PortStateClosed.
+	// Target is the hostname or IP address the scan dialed.
+	Target string `json:"target"`
+	// PortState is one of nmapservice.PortStateOpen or nmapservice.PortStateClosed.
 	PortState string `json:"port_state"`
 	// LatencyMs is the dial round-trip time in milliseconds. Zero unless the
 	// port is open.
@@ -54,6 +56,10 @@ type NmapStatus struct {
 	Port uint16 `json:"port"`
 	// IsRunning is true when the target port accepted the connection.
 	IsRunning bool `json:"is_running"`
+	// ScannedAt is when the dial started. A consumer comparing it against the
+	// time a config edit was persisted can tell a scan of the new target from a
+	// leftover scan of the previous one, which no other field distinguishes.
+	ScannedAt time.Time `json:"scanned_at"`
 }
 
 // Poll dials the configured target once and reports the port state. A
@@ -77,12 +83,18 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 		// as shutdown reports cancelled, not closed. A deadline
 		// (ObservationTimeout) is not a shutdown: it falls through to closed.
 		if errors.Is(ctx.Err(), context.Canceled) {
-			return NmapStatus{Port: cfg.NmapServiceConfig.Port}, fmt.Errorf("scan cancelled: %w", ctx.Err())
+			return NmapStatus{
+				Target:    cfg.NmapServiceConfig.Target,
+				Port:      cfg.NmapServiceConfig.Port,
+				ScannedAt: start,
+			}, fmt.Errorf("scan cancelled: %w", ctx.Err())
 		}
 
 		return NmapStatus{
-			PortState: string(nmapfsm.PortStateClosed),
+			Target:    cfg.NmapServiceConfig.Target,
+			PortState: string(nmapservice.PortStateClosed),
 			Port:      cfg.NmapServiceConfig.Port,
+			ScannedAt: start,
 		}, nil
 	}
 
@@ -90,10 +102,12 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 	_ = conn.Close()
 
 	return NmapStatus{
-		PortState: string(nmapfsm.PortStateOpen),
+		Target:    cfg.NmapServiceConfig.Target,
+		PortState: string(nmapservice.PortStateOpen),
 		LatencyMs: elapsedMs,
 		Port:      cfg.NmapServiceConfig.Port,
 		IsRunning: true,
+		ScannedAt: start,
 	}, nil
 }
 

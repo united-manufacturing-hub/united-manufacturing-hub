@@ -43,6 +43,7 @@
         * [nginx](production/deployment/docker-compose/additional-services/nginx.md)
       * [Updating](production/deployment/docker-compose/updating.md)
   * [Sizing Guide](production/sizing-guide.md)
+  * [CPU Health](production/cpu-health.md)
   * [High Availability](production/high-availability.md)
   * [Metrics](production/metrics.md)
   * [Migration from Classic](production/migration-from-classic.md)

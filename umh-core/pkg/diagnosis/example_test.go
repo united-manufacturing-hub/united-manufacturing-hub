@@ -26,6 +26,9 @@ import (
 // 0, where the reserve is first touched, and severity reaches 1 at -10, where the
 // whole reserve is gone. Worst is NEGATIVE because it must lie on the worse side
 // of Fire, which for a falling quantity is below it.
+//
+// The two signals are named "root" and "var-log" rather than by their mount
+// points, because NewEngine refuses a "/" in any signal name.
 func Example() {
 	type mounts struct{ root, varLog float64 } // GB free above the reserve
 
@@ -41,11 +44,13 @@ func Example() {
 			Name:       name,
 			DemoteSpan: time.Minute,
 			Instruments: []diagnosis.Instrument[mounts]{{
-				Name:      "spare",
-				Reduction: diagnosis.Last,
-				Span:      10 * time.Second,
-				Marks:     spare,
-				Extract:   func(m mounts) diagnosis.Reading { return diagnosis.Known(read(m)) },
+				Measurement: diagnosis.Measurement[mounts]{
+					Name:      "spare",
+					Reduction: diagnosis.Last,
+					Span:      10 * time.Second,
+					Extract:   func(m mounts) diagnosis.Reading { return diagnosis.Known(read(m)) },
+				},
+				Marks: spare,
 			}},
 		}
 	}
@@ -53,8 +58,8 @@ func Example() {
 	engine, err := diagnosis.NewEngine(diagnosis.Table[mounts]{
 		Interval: time.Second,
 		Signals: []diagnosis.Signal[mounts]{
-			watch("/", func(m mounts) float64 { return m.root }),
-			watch("/var", func(m mounts) float64 { return m.varLog }),
+			watch("root", func(m mounts) float64 { return m.root }),
+			watch("var-log", func(m mounts) float64 { return m.varLog }),
 		},
 	})
 	if err != nil {
@@ -63,11 +68,11 @@ func Example() {
 
 	fired, _ := engine.Observe(mounts{root: -3, varLog: -10}, diagnosis.NewEnvironment(), time.Unix(0, 0))
 	for _, cause := range diagnosis.Rank(fired) {
-		fmt.Printf("%-4s %+5.1f %s  severity %.2f\n",
+		fmt.Printf("%-7s %+5.1f %s  severity %.2f\n",
 			cause.Signal, cause.Value, cause.Marks.Unit, cause.Severity())
 	}
 
 	// Output:
-	// /var -10.0 GB  severity 1.00
-	// /     -3.0 GB  severity 0.30
+	// var-log -10.0 GB  severity 1.00
+	// root     -3.0 GB  severity 0.30
 }

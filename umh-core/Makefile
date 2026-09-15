@@ -58,10 +58,9 @@ TARGETARCH := $(shell go env GOARCH)
 
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
-NILAWAY_VERSION = v0.0.0-20260213150243-937701de96c7
+NILAWAY_VERSION = v0.0.0-20260808063849-8649a03c818a
 LEFTHOOK_VERSION = v1.13.2
 GOLANGCI_LINT_VERSION = v2.5.0
-BETTERALIGN_VERSION = v0.7.1
 GOTESTSUM_VERSION = v1.13.0
 DLV_VERSION = v1.25.1
 
@@ -70,7 +69,7 @@ NMAP_VERSION = 7.99-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.15.1
+BENTHOS_UMH_VERSION = 0.15.2
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -91,7 +90,6 @@ install:
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	go install github.com/dkorunic/betteralign/cmd/betteralign@$(BETTERALIGN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
 download-docker-binaries:
@@ -199,8 +197,16 @@ COMMON_ARGS = \
 	--build-arg TARGETARCH=$(TARGETARCH) \
 	$(VERSION_ARGS)
 
+ROOT_DIR := $(shell git rev-parse --show-toplevel)
+MC_PATH := $(ROOT_DIR)/../ManagementConsole
+
+# CRYPTOLIB=true builds the private cryptolib validator (needs mc context); false is noop, no MC.
+CRYPTOLIB ?= false
+MC_CONTEXT_ARG = $(if $(filter true,$(CRYPTOLIB)),--build-context mc=$(MC_PATH),)
+
 define DOCKER_BUILD
 	docker buildx build $(COMMON_ARGS) $(EXTRA_ARGS) \
+		--build-arg CRYPTOLIB=$(CRYPTOLIB) $(MC_CONTEXT_ARG) \
 		--progress=plain --load -f Dockerfile \
 		-t $(IMAGE_NAME):$(TAG) .
 endef
@@ -213,6 +219,7 @@ CI_ARGS = \
 # TAGS should be passed as: TAGS="-t ghcr.io/.../umh-core:tag1 -t ghcr.io/.../umh-core:tag2"
 define DEPOT_BUILD
 	depot build $(CI_ARGS) $(EXTRA_ARGS) \
+		--build-arg CRYPTOLIB=$(CRYPTOLIB) $(MC_CONTEXT_ARG) \
 		--project $(DEPOT_PROJECT_ID) \
 		--push \
 		--progress=plain -f Dockerfile \
@@ -245,6 +252,8 @@ build build-pprof build-debug: build-protobuf download-docker-binaries
 # CI build using Depot (multi-arch)
 # Note: Skips build-protobuf since pb.go files are committed to repo
 # Usage: make build-depot DEPOT_PROJECT_ID=xxx TAGS="-t ghcr.io/.../umh-core:v1.0.0" VERSION=v1.0.0
+# Release images always ship the real cryptolib validator.
+build-depot: CRYPTOLIB := true
 build-depot: download-docker-binaries
 	$(call DEPOT_BUILD)
 
@@ -340,22 +349,10 @@ nilaway:
 		-exclude-errors-in-files="integration/" \
 		./...
 
-betteralign:
-	betteralign -test=false ./... || (echo "Consider running 'make betteralign-fix' to fix the issues" && exit 1)
-betteralign-fix:
-	betteralign -test=false -apply ./...
+# Meta target for vet, nilaway and lint
+vet-nilaway-lint: vet nilaway lint
 
-betteralign-fix-all:
-	@echo "Running betteralign-fix in loop until exit code is not 3..."
-	@while betteralign -test=false -apply ./...; [ $$? -eq 3 ]; do \
-		echo "betteralign-fix returned exit code 3, running again..."; \
-	done
-	@echo "betteralign-fix-all completed"
-
-# Meta target for vet, nilaway, lint, staticcheck and betteralign
-vet-nilaway-lint-betteralign: vet nilaway lint betteralign
-
-test: vet-nilaway-lint-betteralign
+test: vet-nilaway-lint
 	go test -race -v -tags=test ./...
 
 unit-test:
@@ -379,7 +376,7 @@ else
 endif
 
 # Sequential fallback using ginkgo directly (no fail-fast, full failure report, covers ./...)
-unit-test-fail-slow: vet-nilaway-lint-betteralign
+unit-test-fail-slow: vet-nilaway-lint
 	go run github.com/onsi/ginkgo/v2/ginkgo -r --tags=test --race --label-filter='$(UNIT_LABEL_FILTER)' ./...
 
 benchmark:
@@ -417,7 +414,7 @@ benchmark-encoding:
 	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
 
 # Meta target to setup the environment for the tests
-pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
+pre-test: build-protobuf stop-all-pods
 
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)

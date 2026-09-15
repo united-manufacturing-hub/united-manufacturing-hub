@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -474,40 +475,40 @@ func (n *NmapInstance) checkPortState(currentState string) (bool, string) {
 		return false, ""
 	}
 
-	portState := PortState(strings.ToLower(n.ObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.State))
+	portState := nmapservice.PortState(strings.ToLower(n.ObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.State))
 
 	switch portState {
-	case PortStateOpen:
+	case nmapservice.PortStateOpen:
 		if currentState == OperationalStateOpen {
 			return false, ""
 		}
 
 		return true, EventPortOpen
-	case PortStateFiltered:
+	case nmapservice.PortStateFiltered:
 		if currentState == OperationalStateFiltered {
 			return false, ""
 		}
 
 		return true, EventPortFiltered
-	case PortStateClosed:
+	case nmapservice.PortStateClosed:
 		if currentState == OperationalStateClosed {
 			return false, ""
 		}
 
 		return true, EventPortClosed
-	case PortStateUnfiltered:
+	case nmapservice.PortStateUnfiltered:
 		if currentState == OperationalStateUnfiltered {
 			return false, ""
 		}
 
 		return true, EventPortUnfiltered
-	case PortStateOpenFiltered:
+	case nmapservice.PortStateOpenFiltered:
 		if currentState == OperationalStateOpenFiltered {
 			return false, ""
 		}
 
 		return true, EventPortOpenFiltered
-	case PortStateClosedFiltered:
+	case nmapservice.PortStateClosedFiltered:
 		if currentState == OperationalStateClosedFiltered {
 			return false, ""
 		}
