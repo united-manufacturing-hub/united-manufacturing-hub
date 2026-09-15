@@ -27,6 +27,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -762,6 +763,16 @@ func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow tim
 
 	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
 	if !logsFine {
+		reportPluginErrorAsync(
+			dataflowcomponentserviceconfig.BenthosPluginID(b.config.Input),
+			b.baseFSMInstance.GetID(),
+			b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs,
+			currentTime,
+			logWindow,
+			logEntry.Content,
+			b.baseFSMInstance.GetLogger(),
+		)
+
 		timeUntilClear := logEntry.Timestamp.Add(logWindow).Sub(currentTime)
 		if timeUntilClear > 0 {
 			return false, fmt.Sprintf("found error (clears in %v): %s",
