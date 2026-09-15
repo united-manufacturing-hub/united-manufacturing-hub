@@ -17,11 +17,11 @@ package benthos
 import (
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
 
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -54,10 +54,9 @@ type pluginErrorEvent struct {
 // derived from a hard requirement.
 var pluginErrorCh = make(chan pluginErrorEvent, 64)
 
-var (
-	pluginErrorLastSent   = make(map[string]time.Time)
-	pluginErrorLastSentMu sync.Mutex
-)
+// pluginErrorDebouncer reuses fsmv2's per-fingerprint Sentry debouncer
+// (map + mutex + periodic cleanup) instead of rolling our own.
+var pluginErrorDebouncer = fsmv2sentry.NewFingerprintDebouncer(pluginErrorDebounceWindow)
 
 func init() {
 	go processPluginErrors()
@@ -90,22 +89,11 @@ func processPluginErrors() {
 // reconcile goroutine before any log scanning so a persistent error only
 // pays that cost once per pluginErrorDebounceWindow, not every tick.
 func shouldReportPluginError(protocol, instanceID string) bool {
-	pluginErrorLastSentMu.Lock()
-	defer pluginErrorLastSentMu.Unlock()
-
 	if !pluginErrorReportingEnabled[protocol] {
 		return false
 	}
 
-	key := protocol + "|" + instanceID
-
-	if last, ok := pluginErrorLastSent[key]; ok && time.Since(last) < pluginErrorDebounceWindow {
-		return false
-	}
-
-	pluginErrorLastSent[key] = time.Now()
-
-	return true
+	return pluginErrorDebouncer.ShouldCapture(protocol + "|" + instanceID)
 }
 
 // reportPluginErrorAsync queues a plugin runtime error for Sentry reporting,
