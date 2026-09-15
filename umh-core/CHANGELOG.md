@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Adding a data model with a name longer than 53 characters is now rejected with an explanation, instead of only being blocked in the Management Console.
+
 ## [0.44.39]
 
 ### Fixes

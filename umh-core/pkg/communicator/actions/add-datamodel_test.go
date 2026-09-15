@@ -17,6 +17,7 @@ package actions_test
 import (
 	"encoding/base64"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -125,6 +126,51 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
 			})
+		})
+	})
+
+	Describe("Validate", func() {
+		var validStructure map[string]models.Field
+
+		BeforeEach(func() {
+			validStructure = map[string]models.Field{
+				"field1": {
+					PayloadShape: "timeseries-string",
+				},
+			}
+
+			mockConfigMgr.WithConfig(config.FullConfig{
+				PayloadShapes: map[string]config.PayloadShape{
+					"timeseries-string": {
+						Description: "Time series string data",
+						Fields: map[string]config.PayloadField{
+							"value": {Type: "string"},
+						},
+					},
+				},
+			})
+		})
+
+		It("should accept a name at the maximum length", func() {
+			err := action.Parse(structToEncodedMap(models.AddDataModelPayload{
+				Name:      strings.Repeat("a", 53),
+				Structure: validStructure,
+			}))
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(action.Validate()).To(Succeed())
+		})
+
+		It("should reject a name that exceeds the maximum length", func() {
+			err := action.Parse(structToEncodedMap(models.AddDataModelPayload{
+				Name:      strings.Repeat("a", 54),
+				Structure: validStructure,
+			}))
+			Expect(err).ToNot(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("is 54 characters; use 53 or fewer"))
 		})
 	})
 
