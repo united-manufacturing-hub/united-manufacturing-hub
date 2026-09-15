@@ -95,6 +95,10 @@ func shouldReportPluginError(protocol, instanceID string) bool {
 	pluginErrorLastSentMu.Lock()
 	defer pluginErrorLastSentMu.Unlock()
 
+	if !pluginErrorReportingEnabled[protocol] {
+		return false
+	}
+
 	key := protocol + "|" + instanceID
 
 	if last, ok := pluginErrorLastSent[key]; ok && time.Since(last) < pluginErrorDebounceWindow {
