@@ -79,6 +79,16 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		Expect(msgs(events2)).To(ConsistOf("cpu::read_failed::cpu_stat::empty"))
 	})
 
+	It("separates a malformed counter from an I/O failure", func() {
+		// Sentry groups on the message, so a garbage counter and an unreadable
+		// file must not mint one issue: the first is a kernel or cgroup-shape
+		// problem, the second is the host. Every other reader maps a parse
+		// failure to unparsable; cpu.stat is the one that must agree.
+		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec notanumber\n")})
+
+		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::cpu_stat::unparsable"))
+	})
+
 	It("uses the same reason for a key with no value, and lets the raw text tell them apart", func() {
 		// One token for both: diagnosis.Reading carries a single presence bit and
 		// cannot distinguish them. The raw text on the event shows which.

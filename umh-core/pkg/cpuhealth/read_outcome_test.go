@@ -105,6 +105,38 @@ var _ = Describe("a failed read reports its cause", func() {
 		})
 	})
 
+	Describe("readStat", func() {
+		statPath := base + "/cpu.stat"
+
+		It("reports ENOENT as a not-exist error", func() {
+			_, err := newCgroupSource(oneFile(statPath, nil, pathErr(statPath, syscall.ENOENT)), base).readStat(ctx)
+			Expect(err).To(MatchError(fs.ErrNotExist))
+		})
+
+		It("reports a malformed counter value as unparsable", func() {
+			// The sibling readers all map a parse failure to errUnparsableRead.
+			// cpu.stat wrapping strconv's error instead would classify as
+			// ReadError, the bucket for a cause nothing else names, and a
+			// garbage counter would share a Sentry issue with an I/O failure.
+			_, err := newCgroupSource(oneFile(statPath, []byte("usage_usec notanumber\n"), nil), base).readStat(ctx)
+			Expect(err).To(MatchError(errUnparsableRead))
+			Expect(classifyRead(err)).To(Equal(ReadUnparsable))
+		})
+
+		It("keeps strconv's detail alongside the cause", func() {
+			_, err := newCgroupSource(oneFile(statPath, []byte("usage_usec notanumber\n"), nil), base).readStat(ctx)
+			Expect(err.Error()).To(ContainSubstring("usage_usec"), "the message must still name which counter")
+			Expect(err.Error()).To(ContainSubstring("notanumber"), "and the text that would not parse")
+		})
+
+		It("treats an absent key as absent, never as malformed", func() {
+			stat, err := newCgroupSource(oneFile(statPath, []byte("nr_periods 5\n"), nil), base).readStat(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			_, ok := stat.Usage.Get()
+			Expect(ok).To(BeFalse())
+		})
+	})
+
 	Describe("readHost", func() {
 		It("reports ENOENT as a not-exist error", func() {
 			_, _, _, _, err := newHostSource(oneFile("/proc/stat", nil, pathErr("/proc/stat", syscall.ENOENT))).readHost(ctx)
