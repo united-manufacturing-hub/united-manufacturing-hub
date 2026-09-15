@@ -64,12 +64,10 @@ func init() {
 }
 
 // processPluginErrors turns queued plugin error events into Sentry reports.
+// Debouncing already happened before the event was queued (see
+// reportPluginErrorAsync), so every event here gets sent.
 func processPluginErrors() {
 	for ev := range pluginErrorCh {
-		if !shouldReportPluginError(ev.protocol, ev.instanceID) {
-			continue
-		}
-
 		sentry.ReportIssueWithContext(
 			pluginRuntimeError(),
 			sentry.IssueTypeError,
@@ -88,9 +86,9 @@ func processPluginErrors() {
 	}
 }
 
-// shouldReportPluginError debounces per protocol+instance. pkg/sentry also
-// debounces errors, but globally across the process, so this keeps that
-// shared debounce from being hit every reconcile tick.
+// shouldReportPluginError debounces per protocol+instance, called from the
+// reconcile goroutine before any log scanning so a persistent error only
+// pays that cost once per pluginErrorDebounceWindow, not every tick.
 func shouldReportPluginError(protocol, instanceID string) bool {
 	pluginErrorLastSentMu.Lock()
 	defer pluginErrorLastSentMu.Unlock()
@@ -111,11 +109,12 @@ func shouldReportPluginError(protocol, instanceID string) bool {
 }
 
 // reportPluginErrorAsync queues a plugin runtime error for Sentry reporting,
-// no-op if protocol isn't in pluginErrorReportingEnabled. Non-blocking: safe
-// to call from the reconcile loop. logs/currentTime/logWindow are the same
-// window already used for degraded detection.
+// no-op if protocol isn't enabled or is still debounced (checked before any
+// log scanning). Non-blocking: safe to call from the reconcile loop.
+// logs/currentTime/logWindow are the same window already used for degraded
+// detection.
 func reportPluginErrorAsync(protocol, instanceID string, logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, triggerMessage string, logger *zap.SugaredLogger) {
-	if !pluginErrorReportingEnabled[protocol] {
+	if !shouldReportPluginError(protocol, instanceID) {
 		return
 	}
 
