@@ -294,6 +294,25 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			"the hook already recorded this fingerprint, so it intercepted the entry")
 	})
 
+	It("names the cause in the fingerprint when a file reads empty", func() {
+		// An empty cpu.max fails on content, not on errno, so its error carries no
+		// syscall type. A plain errors.New would reach Sentry as the
+		// *errors.errorString every sentinel in the process shares; the named type
+		// is what keeps this cause apart from the next content failure and says
+		// which one it is.
+		cpuMax := cgroupBase + "/cpu.max"
+		_, hook, _, _ := buildReport(nil, map[string][]byte{cpuMax: {}}, nil)
+
+		want := strings.Join(fsmv2sentry.BuildFingerprint(
+			zapcore.WarnLevel, string(deps.FeatureSupportCPU),
+			"cpu::read_failed",
+			"cpuhealth.emptyReadError",
+		), "|")
+
+		Expect(hook.Debouncer().ShouldCapture(want)).To(BeFalse(),
+			"an empty read should fingerprint on its own error type")
+	})
+
 	It("says nothing when cpu.pressure is absent, since a kernel without PSI is normal", func() {
 		psi := cgroupBase + "/cpu.pressure"
 		events, _, _ := build(map[string]error{
