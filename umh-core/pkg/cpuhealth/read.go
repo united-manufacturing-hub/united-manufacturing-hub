@@ -113,6 +113,11 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// different thing: the three readings below stay absent and the sample
 		// carries on, so a host keeping its CPU accounting elsewhere is not
 		// degraded over a file it was never going to have.
+		//
+		// Unparsable is a key present with a value that is not a number
+		// ("usage_usec abc"), which no kernel writes. A cgroup v1 cpu.stat does
+		// not land here: its counters are numeric and usage_usec is simply
+		// absent, which reads empty and carries on.
 		return sample, fmt.Errorf("parse %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
 	// A cancelled tick fails every read, which is the same shape as a host with
