@@ -208,14 +208,13 @@ const (
 	// GaugeCPUThrottleRatio tracks the 60s nr_throttled/nr_periods delta, 0..1.
 	GaugeCPUThrottleRatio GaugeName = "cpu_throttle_ratio"
 
-	// GaugeCPUPressureAvg60 tracks PSI cpu-some avg60 as a 0..1 fraction: the
-	// kernel's percentage divided by 100.
-	GaugeCPUPressureAvg60 GaugeName = "cpu_pressure_avg60"
+	// GaugeCPUPressureAvg60 tracks the kernel's cpu-some avg60 pressure-stall
+	// figure as a 0..1 fraction: the percentage in /proc/pressure/cpu, divided
+	// by 100.
+	GaugeCPUPressureAvg60 GaugeName = "cpu_pressure_avg60_ratio"
 
 	// GaugeCPUHostHeadroomCores tracks cores free on the host after the reserve.
-	// Unclamped: a full box reports a negative number rather than 0. A 0 is also
-	// what a box whose core count was unreadable at startup reports for its whole
-	// lifetime, and no flag below distinguishes the two (ENG-5752).
+	// Unclamped: a full box reports a negative number rather than 0.
 	GaugeCPUHostHeadroomCores GaugeName = "cpu_host_headroom_cores"
 
 	// GaugeCPUAvgHostBusyCores tracks the whole machine's 60s mean busy time, in cores.
@@ -230,15 +229,37 @@ const (
 
 	// GaugeCPUHostCpus tracks the machine's CPU count, which exceeds this container's when it is pinned to a subset.
 	GaugeCPUHostCpus GaugeName = "cpu_host_cpus"
+
+	// GaugeCPULastSampleUnix carries the unix seconds of the last tick that
+	// measured. Every other cpu_* gauge, flags included, keeps its previous value
+	// when a tick cannot measure: recordGauges publishes only on a tick that
+	// measured, Collector.wrapNewObservation reloads and re-merges the previous
+	// gauge map, and WorkerMetricsExporter.export re-Sets every series it is
+	// handed and deletes none. A frozen series therefore keeps being scraped at
+	// its last value, and Prometheus cannot mark it stale while the series is
+	// still being written. The age of this timestamp is what tells a frozen value
+	// from a fresh one.
+	GaugeCPULastSampleUnix GaugeName = "cpu_last_sample_unix"
 )
 
 // CPU worker readability flags, 1 for true and 0 for false.
 //
-// Several of the gauges above report 0 when their signal was absent or
-// untrusted, so without the matching flag a consumer cannot tell "not
-// throttled" from "no throttle signal". Not every one of them has a flag:
-// cpu_host_headroom_cores has none, and the scope flag below is not a
-// substitute for one.
+// The suffix says which question a flag answers. A *_ring_active flag reports
+// whether the 60s window had filled. A non-zero mean beside it is still real,
+// because SlidingWindow.Reduce in pkg/diagnosis folds the points first and
+// downgrades the window's state afterwards. A zero beside it is not, because an
+// empty window returns StateAbsent carrying a 0, and the flag alone cannot tell
+// that from a short window. A *_signal_ready flag reports whether the signal
+// could be read at all, so a 0 there means the number beside it is a zero nobody
+// measured. cpu_host_headroom_available answers neither question; it reports CPU
+// scope.
+//
+// A gauge above is qualified only where a flag for it is declared here, and a
+// CPU gauge with no flag cannot be told apart from one that measured 0. The
+// widest case is the container's allowed CPU count (the cpuset): when that read
+// fails at startup the signal table in pkg/cpuhealth declares no host-cpu-full
+// signal, and every gauge derived from that signal reads 0 for the process
+// lifetime (ENG-5752).
 const (
 	// GaugeCPUUsageRingActive qualifies cpu_avg_usage_cores.
 	GaugeCPUUsageRingActive GaugeName = "cpu_usage_ring_active"
@@ -247,14 +268,13 @@ const (
 	GaugeCPUHostBusyRingActive GaugeName = "cpu_host_busy_ring_active"
 
 	// GaugeCPUHostHeadroomAvailable reports whether this container sees the whole
-	// machine, reading 0 when it is pinned to a subset of CPUs. Scope, not
-	// readability: it does not qualify cpu_host_headroom_cores.
+	// machine, reading 0 when it is pinned to a subset of CPUs.
 	GaugeCPUHostHeadroomAvailable GaugeName = "cpu_host_headroom_available"
 
 	// GaugeCPUThrottleSignalReady qualifies cpu_throttle_ratio.
 	GaugeCPUThrottleSignalReady GaugeName = "cpu_throttle_signal_ready"
 
-	// GaugeCPUPressureSignalReady qualifies cpu_pressure_avg60.
+	// GaugeCPUPressureSignalReady qualifies cpu_pressure_avg60_ratio.
 	GaugeCPUPressureSignalReady GaugeName = "cpu_pressure_signal_ready"
 )
 

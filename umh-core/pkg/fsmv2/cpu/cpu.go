@@ -110,9 +110,10 @@ type CPUDeps struct {
 }
 
 // Poll samples the cgroup once and reports the verdict Decide judged. On a
-// NewEngine construction error or a non-nil Read error it stores no verdict and
-// reports it could not measure, never a healthy zero. One absent field (e.g.
-// Pressure) on a nil error is not a failure: it reports what Decide produced.
+// NewEngine construction error or a non-nil Read error it stores no verdict,
+// publishes no gauges, and reports it could not measure, never a healthy zero.
+// One absent field (e.g. Pressure) on a nil error is not a failure: it reports
+// what Decide produced.
 func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	if d.engineErr != nil {
 		return CPUStatus{}, d.engineErr
@@ -126,7 +127,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
-	recordGauges(d.MetricsRecorder(), details)
+	recordGauges(d.MetricsRecorder(), sample.Timestamp, details)
 
 	return CPUStatus{
 		Verdict: verdict,
@@ -136,8 +137,16 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 }
 
 // recordGauges publishes the measured evidence for the framework's worker-metrics
-// exporter, which turns each name into umh_fsmv2_worker_<name>.
-func recordGauges(m *deps.MetricsRecorder, det cpuhealth.Details) {
+// exporter, which turns each name into umh_fsmv2_worker_<name>
+// (WorkerMetricsExporter.getOrCreateGauge, pkg/fsmv2/supervisor/metrics/metrics.go).
+func recordGauges(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.Details) {
+	// GaugeCPULastSampleUnix freezes along with every gauge below when a tick
+	// cannot measure: Poll returns before recordGauges runs, and the collector
+	// reloads and re-publishes the previous gauge values instead
+	// (Collector.wrapNewObservation, pkg/fsmv2/supervisor/internal/collection/collector.go).
+	// Its age is what reveals the freeze.
+	m.SetGauge(deps.GaugeCPULastSampleUnix, float64(sampledAt.Unix()))
+
 	m.SetGauge(deps.GaugeCPUAvgUsageCores, det.AvgUsageCores)
 	m.SetGauge(deps.GaugeCPUAvgUsageFraction, det.AvgUsageFraction)
 	m.SetGauge(deps.GaugeCPUThrottleRatio, det.ThrottleRatio)
