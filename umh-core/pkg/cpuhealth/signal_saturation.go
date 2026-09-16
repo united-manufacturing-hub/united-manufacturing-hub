@@ -86,7 +86,8 @@ func hostCpuFullSignal(cores float64) diagnosis.Signal[Sample] {
 					// because off a host-scoped sample the count means something else
 					// and there is no headroom to read.
 					// Why subtracting a machine-wide busy time from this
-					// container-scoped count is valid: see host_source.go's header.
+					// container-scoped count is valid: see "Which CPU count answers what" in
+					// the package doc.
 					Extract: func(s Sample) diagnosis.Reading {
 						// Unreachable in production: cpuTable declares no host-cpu-full signal when
 						// cores <= 0, pinned by host_headroom_guard_test.go. The guard stays so

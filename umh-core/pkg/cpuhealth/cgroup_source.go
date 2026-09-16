@@ -30,10 +30,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// cgroupSource reads one cgroup's CPU accounting files. It owns the two facts
-// that persist across ticks for this cgroup — the usage-rate baseline and the
-// sticky PSI-availability flag — so it is constructible and testable
-// independently of hostSource.
+// cgroupSource reads one cgroup's CPU accounting files, and owns the facts
+// that persist across ticks for this cgroup.
 type cgroupSource struct {
 	fs   filesystem.Service
 	base string

@@ -91,6 +91,31 @@
 // filling up. It is a stand-in and not the same quantity, which is why it
 // answers only where the instrument that does measure the machine cannot.
 //
+// # Which CPU count answers what
+//
+// Two different CPU counts are in play, and host-headroom depends on their
+// relationship. Sample.HostCpus is the machine's own count, read from
+// /proc/stat every tick; no signal is judged against it, and it is what
+// decides whether this sample covers the whole machine. Sample.LogicalCpus is
+// the CPUs this container may use, read from the cgroup's cpuset and handed to
+// Table as cores once, before the first tick. host-cpu-full is declared on
+// that second count, and host-headroom subtracts the machine-wide busy time
+// from it.
+//
+// Wherever host-headroom answers, the two counts are the same number: the
+// sample covers the whole machine only where the container's count equals the
+// machine's, and host-headroom withholds on any other sample. That equality is
+// what makes subtracting a machine-wide busy time from a container-scoped
+// count valid.
+//
+// Once the table is built, a /proc/stat that cannot be read leaves steal and
+// host-headroom with nothing to judge, so host-cpu-full falls to
+// usage-fraction and goes unanswered wherever that instrument may not answer.
+// The sampler reads the cpuset only on a tick whose /proc/stat read succeeded,
+// so a box that can never read /proc/stat supplies no such count and gets no
+// host-cpu-full row. Throttling, pressure and container-limit-full are
+// unaffected.
+//
 // # Who is to blame
 //
 // A degraded verdict carries an Attribution. It is declared in the table
