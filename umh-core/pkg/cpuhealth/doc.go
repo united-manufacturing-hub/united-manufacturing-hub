@@ -91,6 +91,19 @@
 // filling up. It is a stand-in and not the same quantity, which is why it
 // answers only where the instrument that does measure the machine cannot.
 //
+// # Which CPU count answers what
+//
+// Sample.HostCpus is the machine's CPU count and Sample.LogicalCpus is the CPUs
+// this container may use. Both are read every tick, from /proc/stat and from
+// the cgroup's cpuset.
+//
+// host-headroom subtracts a machine-wide busy time from cores, which is the
+// container's count as Table took it once from the startup snapshot, not the
+// per-tick LogicalCpus. ENG-5752 is what a startup read that failed then costs.
+// The subtraction holds only because host-headroom withholds unless the sample
+// covers the whole machine, which is to say unless the two counts above are
+// equal.
+//
 // # Who is to blame
 //
 // A degraded verdict carries an Attribution. It is declared in the table
