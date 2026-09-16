@@ -162,6 +162,10 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.Troubleshooting.CPUMaxRaw = quota.Raw
 	sample.record(OperationCPUMax, cpuMaxOutcome)
 
+	if cancelErr := ctx.Err(); cancelErr != nil {
+		return sample, cancelErr
+	}
+
 	return sample, nil
 }
 
