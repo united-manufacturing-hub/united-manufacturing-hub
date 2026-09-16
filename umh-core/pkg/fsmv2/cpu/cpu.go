@@ -179,20 +179,20 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
 	// The error is discarded because it carries nothing the sample does not:
 	// it is non-nil only when cpu.stat failed, which reportFailedReads reads
-	// off smp.Reads.
-	smp, _ := s.Read(ctx)
-	d.reportFailedReads(ctx, smp)
+	// off sample.Reads.
+	sample, _ := s.Read(ctx)
+	d.reportFailedReads(ctx, sample)
 
-	return limitsFromSample(smp)
+	return limitsFromSample(sample)
 }
 
 // limitsFromSample reads the capacity figures off one sample.
-func limitsFromSample(smp cpuhealth.Sample) (cores, quota float64) {
-	if lc, ok := smp.LogicalCpus.Get(); ok {
+func limitsFromSample(sample cpuhealth.Sample) (cores, quota float64) {
+	if lc, ok := sample.LogicalCpus.Get(); ok {
 		cores = lc
 	}
 
-	if q, ok := smp.Quota.Get(); ok && q > 0 {
+	if q, ok := sample.Quota.Get(); ok && q > 0 {
 		quota = q
 	}
 

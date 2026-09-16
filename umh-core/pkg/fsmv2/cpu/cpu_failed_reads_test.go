@@ -24,12 +24,12 @@ import (
 // failedReads is the decision reportFailedReads acts on. It takes a Sample and
 // nothing else.
 var _ = Describe("failedReads decides which reads earn an event", func() {
-	sample := func(rs ...cpuhealth.ReadResult) cpuhealth.Sample {
+	withReads := func(rs ...cpuhealth.ReadResult) cpuhealth.Sample {
 		return cpuhealth.Sample{Reads: rs}
 	}
 
 	It("finds nothing in a sample whose reads all succeeded", func() {
-		got := failedReads(sample(
+		got := failedReads(withReads(
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUStat, Outcome: cpuhealth.ReadOK},
 			cpuhealth.ReadResult{Op: cpuhealth.OpProcStat, Outcome: cpuhealth.ReadOK},
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUMax, Outcome: cpuhealth.ReadOK},
@@ -39,7 +39,7 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 	})
 
 	It("finds nothing in a read that never ran", func() {
-		got := failedReads(sample(
+		got := failedReads(withReads(
 			cpuhealth.ReadResult{Op: cpuhealth.OpProcStat, Outcome: cpuhealth.ReadNotAttempted},
 		))
 
@@ -47,7 +47,7 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 	})
 
 	It("ignores the reads that ride on another read's event", func() {
-		got := failedReads(sample(
+		got := failedReads(withReads(
 			cpuhealth.ReadResult{Op: cpuhealth.OpCgroupControllers, Outcome: cpuhealth.ReadMissing},
 			cpuhealth.ReadResult{Op: cpuhealth.OpProcSelfCgroup, Outcome: cpuhealth.ReadMissing},
 			cpuhealth.ReadResult{Op: cpuhealth.OpBaseDir, Outcome: cpuhealth.ReadMissing},
@@ -57,24 +57,24 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 	})
 
 	It("excuses an absent cpu.pressure but not one that will not open", func() {
-		Expect(failedReads(sample(
+		Expect(failedReads(withReads(
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadMissing},
 		))).To(BeEmpty(), "a kernel without PSI serves no cpu.pressure at all")
 
-		Expect(failedReads(sample(
+		Expect(failedReads(withReads(
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadPermissionDenied},
 		))).To(HaveLen(1), "a cpu.pressure that exists and will not open is a real failure")
 	})
 
 	It("calls the tick voided only for a cpu.stat that could not be read", func() {
-		unreadable := failedReads(sample(
+		unreadable := failedReads(withReads(
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUStat, Outcome: cpuhealth.ReadMissing},
 		))
 		Expect(unreadable).To(HaveLen(1))
 		Expect(unreadable[0].Verb).To(Equal(sampleFailedTag))
 
 		// Read fine, no usage figure: the sample survives without a usage rate.
-		valueless := failedReads(sample(
+		valueless := failedReads(withReads(
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUStat, Outcome: cpuhealth.ReadEmpty},
 		))
 		Expect(valueless).To(HaveLen(1))
@@ -82,7 +82,7 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 	})
 
 	It("leaves a sibling failure under its own verb when cpu.stat voided the tick", func() {
-		got := failedReads(sample(
+		got := failedReads(withReads(
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadPermissionDenied},
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUStat, Outcome: cpuhealth.ReadMissing},
 		))
@@ -97,9 +97,9 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 // as the package's default tree: NewLinuxSampler takes the base, so an instance
 // built on another one reports that one.
 var _ = Describe("a failure report names the tree the sample was read from", func() {
-	fieldsOf := func(smp cpuhealth.Sample, op cpuhealth.ReadOp) map[string]any {
+	fieldsOf := func(sample cpuhealth.Sample, op cpuhealth.ReadOp) map[string]any {
 		kv := map[string]any{}
-		for _, f := range readFailureFields(smp, readFailure{Op: op}, 0, 0) {
+		for _, f := range readFailureFields(sample, readFailure{Op: op}, 0, 0) {
 			kv[f.Key] = f.Value
 		}
 

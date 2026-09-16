@@ -74,46 +74,46 @@ type linuxSampler struct {
 // no measurement. Sample.Reads still records what every read produced, so
 // diagnose a failed read from Sample.Reads, not from the error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
-	var smp Sample
-	smp.Base = s.cgroup.base
-	smp.Reads = seedReads()
+	var sample Sample
+	sample.Base = s.cgroup.base
+	sample.Reads = seedReads()
 
 	// First because a cpu.stat failure returns before every read below it, and
 	// a report of that failure needs these reads as much as any other.
-	s.recordRawReads(ctx, &smp)
+	s.recordRawReads(ctx, &sample)
 
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
 	// calls time.Now() itself, so both rate derivations divide by the same
 	// elapsed time and Decide never compares a machine-wide mean against a
 	// cgroup mean taken from a different instant.
 	ts := time.Now()
-	smp.Timestamp = ts
+	sample.Timestamp = ts
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
 	frac, psiErr := s.cgroup.readPSI(ctx)
 	if psiErr != nil {
-		smp.Pressure = diagnosis.Unknown()
+		sample.Pressure = diagnosis.Unknown()
 	} else {
 		s.cgroup.psiAvailable = true
-		smp.Pressure = diagnosis.Known(frac)
+		sample.Pressure = diagnosis.Known(frac)
 	}
-	smp.record(OpCPUPressure, classifyRead(psiErr))
-	smp.PsiAvailable = s.cgroup.psiAvailable
+	sample.record(OpCPUPressure, classifyRead(psiErr))
+	sample.PsiAvailable = s.cgroup.psiAvailable
 
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
-	smp.CPUStatRaw = stat.Raw
-	smp.record(OpCPUStat, statOutcome(stat, statErr))
+	sample.CPUStatRaw = stat.Raw
+	sample.record(OpCPUStat, statOutcome(stat, statErr))
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
 		// never a silent drop of the throttle counters as absent no-signal.
-		return smp, fmt.Errorf("read %s/cpu.stat: %w", s.cgroup.base, statErr)
+		return sample, fmt.Errorf("read %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
-	smp.NrPeriods = stat.Periods
-	smp.NrThrottled = stat.Throttled
-	smp.UsageUsec = stat.Usage
-	smp.UsageCores = s.cgroup.advanceUsageRate(ts, stat.Usage)
+	sample.NrPeriods = stat.Periods
+	sample.NrThrottled = stat.Throttled
+	sample.UsageUsec = stat.Usage
+	sample.UsageCores = s.cgroup.advanceUsageRate(ts, stat.Usage)
 
 	// Host signals: the first /proc/stat read fixes a baseline and publishes
 	// neither; a read after that publishes this tick's instantaneous host-busy
@@ -123,7 +123,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
 	busy, steal, denom, machine, hostErr := s.host.readHost(ctx)
-	smp.record(OpProcStat, classifyRead(hostErr))
+	sample.record(OpProcStat, classifyRead(hostErr))
 	if hostErr != nil {
 		// An unreadable machine CPU count reads ScopeUnknown — never a silent
 		// ScopeHost, since a pinned idle container misread as host would have
@@ -132,26 +132,26 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// exists to prevent. HostCpus stays absent even where readHost did count
 		// the per-CPU lines: a sample whose scope could not be established must
 		// not publish a machine count.
-		smp.CpuScope = ScopeUnknown
+		sample.CpuScope = ScopeUnknown
 	} else {
-		smp.HostCpus = diagnosis.Known(machine)
+		sample.HostCpus = diagnosis.Known(machine)
 		// Nested under a successful /proc/stat read so the cpuset stays
 		// not_attempted when /proc/stat failed: the file was never opened, and
 		// recording a failure for it would name the wrong one.
-		s.recordCPUScope(ctx, &smp, machine)
-		smp.HostBusy, smp.Steal = s.host.advanceHostRates(ts, busy, steal, denom)
+		s.recordCPUScope(ctx, &sample, machine)
+		sample.HostBusy, sample.Steal = s.host.advanceHostRates(ts, busy, steal, denom)
 	}
 
 	virtualized, cpuinfoOutcome := s.host.readVirtualized(ctx)
-	smp.Virtualized = virtualized
-	smp.record(OpProcCpuinfo, cpuinfoOutcome)
+	sample.Virtualized = virtualized
+	sample.record(OpProcCpuinfo, cpuinfoOutcome)
 
 	quota, cpuMaxOutcome := s.cgroup.readQuota(ctx)
-	smp.Quota = quota.Limit
-	smp.CPUMaxRaw = quota.Raw
-	smp.record(OpCPUMax, cpuMaxOutcome)
+	sample.Quota = quota.Limit
+	sample.CPUMaxRaw = quota.Raw
+	sample.record(OpCPUMax, cpuMaxOutcome)
 
-	return smp, nil
+	return sample, nil
 }
 
 // recordCPUScope says whether this container may use the whole machine or a
@@ -164,41 +164,41 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 // ScopeAffinity. The same read carries LogicalCpus, the "2" in "pinned to 2 of
 // 8 CPUs". A failed cpuset read reads ScopeUnknown with LogicalCpus absent,
 // never a silent ScopeHost on a known machine count.
-func (s *linuxSampler) recordCPUScope(ctx context.Context, smp *Sample, machine float64) {
+func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machine float64) {
 	allowed, cpusetErr := s.cgroup.readCpuset(ctx)
-	smp.record(OpCpusetCPUs, classifyRead(cpusetErr))
+	sample.record(OpCpusetCPUs, classifyRead(cpusetErr))
 	if cpusetErr != nil {
-		smp.LogicalCpus = diagnosis.Unknown()
-		smp.CpuScope = ScopeUnknown
+		sample.LogicalCpus = diagnosis.Unknown()
+		sample.CpuScope = ScopeUnknown
 
 		return
 	}
 
-	smp.LogicalCpus = diagnosis.Known(float64(allowed))
+	sample.LogicalCpus = diagnosis.Known(float64(allowed))
 	if allowed == int(machine) {
-		smp.CpuScope = ScopeHost
+		sample.CpuScope = ScopeHost
 
 		return
 	}
 
-	smp.CpuScope = ScopeAffinity
+	sample.CpuScope = ScopeAffinity
 }
 
-// recordRawReads puts the reads that produce no signal on smp: file text kept
+// recordRawReads puts the reads that produce no signal on sample: file text kept
 // verbatim, and the base directory kept as an entry count. They describe the
 // machine on a failure report, and nothing here judges them.
-func (s *linuxSampler) recordRawReads(ctx context.Context, smp *Sample) {
+func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
 	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
-	smp.CgroupControllersRaw = controllers
-	smp.record(OpCgroupControllers, controllersOutcome)
+	sample.CgroupControllersRaw = controllers
+	sample.record(OpCgroupControllers, controllersOutcome)
 
 	procSelf, procSelfOutcome := s.host.readProcSelfCgroup(ctx)
-	smp.ProcSelfCgroupRaw = procSelf
-	smp.record(OpProcSelfCgroup, procSelfOutcome)
+	sample.ProcSelfCgroupRaw = procSelf
+	sample.record(OpProcSelfCgroup, procSelfOutcome)
 
 	baseEntries, baseDirOutcome := s.cgroup.readBaseDirEntryCount(ctx)
-	smp.BaseDirEntryCount = baseEntries
-	smp.record(OpBaseDir, baseDirOutcome)
+	sample.BaseDirEntryCount = baseEntries
+	sample.record(OpBaseDir, baseDirOutcome)
 }
 
 // statOutcome reports a successful read with no usage figure as ReadEmpty,

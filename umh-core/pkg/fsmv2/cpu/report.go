@@ -62,16 +62,16 @@ type readFailure struct {
 	Verb    string
 }
 
-// failedReads returns the reads on smp that earn a Sentry event, in the order
+// failedReads returns the reads on sample that earn a Sentry event, in the order
 // Read performed them. Whether an event was already sent for one is not asked
 // here; that rule belongs to reportFailedReads.
 //
 // ReadNotAttempted earns nothing: one failure stops several later reads, so
 // reporting those would turn one root cause into several issues.
-func failedReads(smp cpuhealth.Sample) []readFailure {
+func failedReads(sample cpuhealth.Sample) []readFailure {
 	var failures []readFailure
 
-	for _, r := range smp.Reads {
+	for _, r := range sample.Reads {
 		if _, reported := reportedReadOps[r.Op]; !reported {
 			continue
 		}
@@ -103,14 +103,14 @@ func verbFor(r cpuhealth.ReadResult) string {
 	return readFailedTag
 }
 
-// reportFailedReads emits one Sentry event per failed read on smp. A sample
+// reportFailedReads emits one Sentry event per failed read on sample. A sample
 // whose reads all succeeded yields no failures and no events, which is why
 // Poll calls this on every tick rather than only when Read returns an error.
 //
 // A failure that repeats every tick reports once. Repeats carry the same
 // message, so they would land in the one issue as an event per tick per
 // instance, saying nothing the first event did not.
-func (d *CPUDeps) reportFailedReads(ctx context.Context, smp cpuhealth.Sample) {
+func (d *CPUDeps) reportFailedReads(ctx context.Context, sample cpuhealth.Sample) {
 	// Shutdown is not a failure. filesystem.DefaultService.ReadFile checks the
 	// context, so once it is done every read fails and a graceful shutdown would
 	// emit an event per read on every instance.
@@ -118,38 +118,38 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, smp cpuhealth.Sample) {
 		return
 	}
 
-	cores, quota := limitsFromSample(smp)
+	cores, quota := limitsFromSample(sample)
 
-	for _, f := range failedReads(smp) {
+	for _, f := range failedReads(sample) {
 		seen := cpuhealth.ReadResult{Op: f.Op, Outcome: f.Outcome}
 		if _, reportedBefore := d.reportedReads.LoadOrStore(seen, struct{}{}); reportedBefore {
 			continue
 		}
 
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			f.Verb, readFailureFields(smp, f, cores, quota)...)
+			f.Verb, readFailureFields(sample, f, cores, quota)...)
 	}
 }
 
 // readFailureFields is what one failed-read event carries besides its message.
-func readFailureFields(smp cpuhealth.Sample, failed readFailure, cores, quota float64) []deps.Field {
+func readFailureFields(sample cpuhealth.Sample, failed readFailure, cores, quota float64) []deps.Field {
 	fields := []deps.Field{
 		// The read this event is about. Sentry facets on these, so one failure
 		// stays one issue while the breakdown stays available.
 		deps.String("read_op", string(failed.Op)),
 		deps.String("read_outcome", string(failed.Outcome)),
-		deps.String("path", cpuhealth.PathOf(smp.Base, failed.Op)),
-		deps.String("cgroup_base", smp.Base),
-		deps.String("cgroup_controllers_raw", smp.CgroupControllersRaw),
-		deps.String("cpu_max_raw", smp.CPUMaxRaw),
-		deps.String("cpu_stat_raw", smp.CPUStatRaw),
-		deps.String("proc_self_cgroup_raw", smp.ProcSelfCgroupRaw),
-		deps.Int("cgroup_base_dir_entry_count", smp.BaseDirEntryCount),
+		deps.String("path", cpuhealth.PathOf(sample.Base, failed.Op)),
+		deps.String("cgroup_base", sample.Base),
+		deps.String("cgroup_controllers_raw", sample.CgroupControllersRaw),
+		deps.String("cpu_max_raw", sample.CPUMaxRaw),
+		deps.String("cpu_stat_raw", sample.CPUStatRaw),
+		deps.String("proc_self_cgroup_raw", sample.ProcSelfCgroupRaw),
+		deps.Int("cgroup_base_dir_entry_count", sample.BaseDirEntryCount),
 	}
 
 	// Every sibling is reported, a never-attempted one included: the pattern
 	// across the reads is what says which shape a machine is in.
-	for _, r := range smp.Reads {
+	for _, r := range sample.Reads {
 		if r.Op == failed.Op {
 			continue
 		}
@@ -157,7 +157,7 @@ func readFailureFields(smp cpuhealth.Sample, failed readFailure, cores, quota fl
 		fields = append(fields, deps.String(string(r.Op)+"_read", string(r.Outcome)))
 	}
 
-	if hostCpus, ok := smp.HostCpus.Get(); ok {
+	if hostCpus, ok := sample.HostCpus.Get(); ok {
 		fields = append(fields, deps.Float64("host_cpus", hostCpus))
 	}
 

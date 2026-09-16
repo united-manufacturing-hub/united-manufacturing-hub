@@ -81,9 +81,9 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 	ctx := context.Background()
 
 	read := func(overrides map[string]error, entryCount int, dirErr error) Sample {
-		smp, _ := NewLinuxSampler(rawReadFS(base, overrides, entryCount, dirErr), base).Read(ctx)
+		sample, _ := NewLinuxSampler(rawReadFS(base, overrides, entryCount, dirErr), base).Read(ctx)
 
-		return smp
+		return sample
 	}
 
 	It("declares the three unreported operations alongside the six reported reads", func() {
@@ -99,39 +99,39 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 	// Byte for byte matters because readFailureFields ships these verbatim: a
 	// trimmed or re-encoded value would misdescribe the machine on the report.
 	It("records every raw value byte for byte as the file served it", func() {
-		smp := read(nil, 85, nil)
+		sample := read(nil, 85, nil)
 
-		Expect(smp.CgroupControllersRaw).To(Equal(healthyControllers),
+		Expect(sample.CgroupControllersRaw).To(Equal(healthyControllers),
 			"the controller list must arrive unparsed and untrimmed of meaning")
-		Expect(smp.ProcSelfCgroupRaw).To(Equal("0::/\n"))
-		Expect(smp.CPUMaxRaw).To(Equal("200000 100000\n"))
-		Expect(smp.CPUStatRaw).To(ContainSubstring("usage_usec 11457863754"),
+		Expect(sample.ProcSelfCgroupRaw).To(Equal("0::/\n"))
+		Expect(sample.CPUMaxRaw).To(Equal("200000 100000\n"))
+		Expect(sample.CPUStatRaw).To(ContainSubstring("usage_usec 11457863754"),
 			"the cpu.stat text is what tells a reader whether an absent usage figure was an empty file or a malformed one")
-		Expect(smp.BaseDirEntryCount).To(Equal(85))
+		Expect(sample.BaseDirEntryCount).To(Equal(85))
 	})
 
 	It("marks the unparsed reads ok when they succeed", func() {
-		smp := read(nil, 85, nil)
+		sample := read(nil, 85, nil)
 
 		for _, op := range []ReadOp{OpCgroupControllers, OpProcSelfCgroup, OpBaseDir} {
-			Expect(outcomeFor(smp, op)).To(Equal(ReadOK), "unparsed read %q", op)
+			Expect(outcomeFor(sample, op)).To(Equal(ReadOK), "unparsed read %q", op)
 		}
 	})
 
 	It("carries the reason and an empty raw when an unparsed read fails", func() {
 		ctrl := base + "/cgroup.controllers"
-		smp := read(map[string]error{ctrl: &fs.PathError{Op: "open", Path: ctrl, Err: syscall.EACCES}}, 85, nil)
+		sample := read(map[string]error{ctrl: &fs.PathError{Op: "open", Path: ctrl, Err: syscall.EACCES}}, 85, nil)
 
-		Expect(outcomeFor(smp, OpCgroupControllers)).To(Equal(ReadPermissionDenied))
-		Expect(smp.CgroupControllersRaw).To(BeEmpty(),
+		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadPermissionDenied))
+		Expect(sample.CgroupControllersRaw).To(BeEmpty(),
 			"a failed read must not leave stale or invented text in the raw field")
 	})
 
 	It("reports the directory read's own failure and a sentinel count", func() {
-		smp := read(nil, 0, &fs.PathError{Op: "open", Path: base, Err: syscall.ENOENT})
+		sample := read(nil, 0, &fs.PathError{Op: "open", Path: base, Err: syscall.ENOENT})
 
-		Expect(outcomeFor(smp, OpBaseDir)).To(Equal(ReadMissing))
-		Expect(smp.BaseDirEntryCount).To(Equal(-1),
+		Expect(outcomeFor(sample, OpBaseDir)).To(Equal(ReadMissing))
+		Expect(sample.BaseDirEntryCount).To(Equal(-1),
 			"zero entries is a real reading; an unread directory must not look like an empty one")
 	})
 
@@ -154,10 +154,10 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 			return dirEntries(34), nil
 		}
 
-		smp, _ := NewLinuxSampler(mfs, base).Read(ctx)
+		sample, _ := NewLinuxSampler(mfs, base).Read(ctx)
 
-		Expect(smp.CgroupControllersRaw).To(Equal("cpu io memory pids\n"))
-		Expect(outcomeFor(smp, OpCgroupControllers)).To(Equal(ReadOK),
+		Expect(sample.CgroupControllersRaw).To(Equal("cpu io memory pids\n"))
+		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadOK),
 			"a readable list missing cpuset is a successful read, not a failed one")
 	})
 
@@ -165,10 +165,10 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		// The evidence is most needed when a read failed, so it must not sit
 		// behind the early return a cpu.stat failure takes.
 		statPath := base + "/cpu.stat"
-		smp := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}}, 85, nil)
+		sample := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}}, 85, nil)
 
-		Expect(smp.CgroupControllersRaw).To(Equal(healthyControllers))
-		Expect(smp.BaseDirEntryCount).To(Equal(85))
-		Expect(outcomeFor(smp, OpCgroupControllers)).To(Equal(ReadOK))
+		Expect(sample.CgroupControllersRaw).To(Equal(healthyControllers))
+		Expect(sample.BaseDirEntryCount).To(Equal(85))
+		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadOK))
 	})
 })
