@@ -128,7 +128,11 @@ func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcom
 
 // readHost yields /proc/stat's busy, steal and denominator jiffy totals, plus
 // machine, the machine's CPU count. The totals stay raw so the caller can take
-// interval deltas off them. A non-nil error is why there are none.
+// interval deltas off them.
+//
+// On a non-nil error no totals were read. machine may still hold a count: the
+// per-CPU lines are counted before the aggregate line is parsed, so they can be
+// readable on a file whose aggregate line is not.
 func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine float64, err error) {
 	data, err := h.fs.ReadFile(ctx, PathOf("", OpProcStat))
 	if err != nil {

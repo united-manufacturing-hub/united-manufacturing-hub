@@ -68,12 +68,11 @@ type linuxSampler struct {
 	host   *hostSource
 }
 
-// Read samples the cgroup at base from cpu.max, the container's CPU limit: a
-// positive limit reads as a capacity, "max" and non-positive limits as a
-// present no-limit, and an unreadable or unparsable cpu.max as absent
-// no-signal. cpu.max and cpu.stat are the cgroup v2 CPU controller's files,
-// documented at
-// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
+// Read samples the cgroup and the machine once.
+//
+// A non-nil error means cpu.stat could not be read or parsed, and this tick has
+// no measurement. Sample.Reads still records what every read produced, so
+// diagnose a failed read from Sample.Reads, not from the error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
 	smp.Base = s.cgroup.base
@@ -130,8 +129,9 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// ScopeHost, since a pinned idle container misread as host would have
 		// its host headroom computed by subtracting a host-scoped busy figure
 		// from an affinity-scoped count, the invalid subtraction the scope
-		// exists to prevent. HostCpus stays absent (its zero value) here, as the
-		// machine's count could not be read to populate it.
+		// exists to prevent. HostCpus stays absent even where readHost did count
+		// the per-CPU lines: a sample whose scope could not be established must
+		// not publish a machine count.
 		smp.CpuScope = ScopeUnknown
 	} else {
 		smp.HostCpus = diagnosis.Known(machine)
@@ -154,8 +154,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	return smp, nil
 }
 
-// recordCPUScope compares the container's allowed cpuset against machine, the
-// host's CPU count: a covering cpuset reads ScopeHost, a pinned subset reads
+// recordCPUScope says whether this container may use the whole machine or a
+// pinned subset of it. Host headroom subtracts a machine-wide busy figure from
+// a CPU count, and that subtraction is only valid when both are on the same
+// scale, so a container pinned to 2 of 8 CPUs must not have its headroom
+// computed against 2.
+//
+// A cpuset covering the machine reads ScopeHost and a pinned subset reads
 // ScopeAffinity. The same read carries LogicalCpus, the "2" in "pinned to 2 of
 // 8 CPUs". A failed cpuset read reads ScopeUnknown with LogicalCpus absent,
 // never a silent ScopeHost on a known machine count.

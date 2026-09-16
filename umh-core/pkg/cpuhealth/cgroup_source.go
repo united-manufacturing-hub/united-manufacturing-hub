@@ -83,14 +83,15 @@ func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) d
 	return rate
 }
 
-// readQuota reads cpu.max, the container's CPU limit: a positive limit reads as
-// a capacity, the literal "max" or a non-positive limit reads as a present
-// no-limit (a present 0.0), and an unreadable or unparsable cpu.max reads as
-// absent no-signal.
+// readQuota reads cpu.max, the cgroup's CPU limit. The kernel writes the file
+// as "$QUOTA $PERIOD" and puts the literal string "max" in the quota field when
+// the cgroup is unlimited:
+// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#cpu-interface-files
 //
-// A cpu.max holding the word "max" returns ReadOK, so an uncapped container
-// reports nothing to Sentry: the limit is missing because there is none, not
-// because the file could not be read.
+// A positive quota reads as a capacity in cores. "max" and a non-positive quota
+// read as a present no-limit, a present 0.0. Only an unreadable or unparsable
+// cpu.max reads as absent no-signal, and only that case returns an outcome
+// other than ReadOK.
 func (c *cgroupSource) readQuota(ctx context.Context) (quotaRead, ReadOutcome) {
 	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OpCPUMax))
 	if err != nil {
@@ -131,8 +132,9 @@ func (c *cgroupSource) readQuota(ctx context.Context) (quotaRead, ReadOutcome) {
 type quotaRead struct {
 	Limit diagnosis.Reading
 
-	// Raw is set whenever the read succeeded, even if the parse then failed, so
-	// it holds the text that would not parse.
+	// Raw is the file's text, kept for a failure report and published as
+	// Sample.CPUMaxRaw. It is set whenever the read succeeded, a failed parse
+	// included, so a report can show the text that would not parse.
 	Raw string
 }
 
@@ -142,13 +144,16 @@ type statRead struct {
 	Periods   diagnosis.Reading
 	Throttled diagnosis.Reading
 
-	// Raw is the file's text, set whenever the read succeeded.
+	// Raw is the file's text, kept for a failure report and published as
+	// Sample.CPUStatRaw. It is set whenever the read succeeded, a failed parse
+	// included.
 	Raw string
 }
 
-// readStat reads cpu.stat once. A non-nil error reports a read OR parse
-// failure, either of which fails the whole sample; on success each value's
-// Reading is independently present or unavailable.
+// readStat reads cpu.stat once. A non-nil error means either the read or a
+// counter's parse failed. linuxSampler.Read turns that into the whole tick's
+// error, and parseCounter says what an absent or unparsable key does to a
+// single counter.
 func (c *cgroupSource) readStat(ctx context.Context) (statRead, error) {
 	failed := statRead{Usage: diagnosis.Unknown(), Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
 
@@ -191,8 +196,8 @@ func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 	return diagnosis.Unknown(), nil
 }
 
-// readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction. A non-nil error
-// is why there is none this tick.
+// readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction. On a non-nil
+// error no fraction was read and frac is 0, which is not a measured zero.
 func (c *cgroupSource) readPSI(ctx context.Context) (frac float64, err error) {
 	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OpCPUPressure))
 	if err != nil {
