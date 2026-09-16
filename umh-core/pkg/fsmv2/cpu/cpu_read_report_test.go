@@ -210,8 +210,8 @@ func msgs(events *[]recorded) []string {
 var _ = Describe("the message carries the sad path, the fields carry the read", func() {
 	It("names only the sad path in the message", func() {
 		// The message is the Sentry fingerprint. Naming the op and the outcome
-		// in it mints an issue per combination, and there are 29 reachable;
-		// as fields they stay searchable while one failure stays one issue.
+		// in it gives every pair its own issue; as fields they stay searchable
+		// while one failure stays one issue.
 		cpuset := cgroupBase + "/cpuset.cpus.effective"
 		events, _, _ := build(map[string]error{
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
@@ -301,7 +301,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 		})
 
 		Expect(msgs(events)).To(BeEmpty(),
-			"cpu.pressure + missing is on the suppression list: absence is correct, not a failure")
+			"cpu.pressure + missing is excused: absence is correct, not a failure")
 	})
 
 	It("still reports cpu.pressure when it is present but unreadable", func() {

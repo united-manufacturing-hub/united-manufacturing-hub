@@ -96,8 +96,8 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		Expect(ops).To(ContainElements(OpCgroupControllers, OpProcSelfCgroup, OpBaseDir))
 	})
 
-	// These fields have no consumer until the report exists, so without this
-	// spec they are untested by construction.
+	// Byte for byte matters because readFailureFields ships these verbatim: a
+	// trimmed or re-encoded value would misdescribe the machine on the report.
 	It("records every raw value byte for byte as the file served it", func() {
 		smp := read(nil, 85, nil)
 

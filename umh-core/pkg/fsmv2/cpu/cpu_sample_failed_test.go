@@ -35,7 +35,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		})
 
 		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::cpu_stat::missing"),
-			"one event: the four reads after cpu.stat never happened, so they have nothing to report")
+			"one event: the reads after cpu.stat never happened, so they have nothing to report")
 	})
 
 	It("leaves a failed PSI read under read_failed when cpu.stat voided the sample", func() {
@@ -79,11 +79,12 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		Expect(msgs(events2)).To(ConsistOf("cpu::read_failed::cpu_stat::empty"))
 	})
 
-	It("separates a malformed counter from an I/O failure", func() {
-		// Sentry groups on the message, so a garbage counter and an unreadable
-		// file must not mint one issue: the first is a kernel or cgroup-shape
-		// problem, the second is the host. Every other reader maps a parse
-		// failure to unparsable; cpu.stat is the one that must agree.
+	It("classifies a malformed counter apart from an I/O failure", func() {
+		// Both land in the cpu::sample_failed issue, so read_outcome is the only
+		// thing telling a garbage counter from an unreadable file: the first is
+		// a kernel or cgroup-shape problem, the second is the host. Every other
+		// reader maps a parse failure to unparsable; cpu.stat is the one that
+		// must agree, or the facet reads error and says nothing.
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec notanumber\n")})
 
 		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::cpu_stat::unparsable"))

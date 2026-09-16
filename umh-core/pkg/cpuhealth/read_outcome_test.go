@@ -145,8 +145,8 @@ var _ = Describe("a failed read reports its cause", func() {
 		It("reports a malformed counter value as unparsable", func() {
 			// The sibling readers all map a parse failure to errUnparsableRead.
 			// cpu.stat wrapping strconv's error instead would classify as
-			// ReadError, the bucket for a cause nothing else names, and a
-			// garbage counter would share a Sentry issue with an I/O failure.
+			// ReadError, the catch-all, and the Sentry facet that tells a
+			// garbage counter from an I/O failure would say nothing.
 			_, err := newCgroupSource(oneFile(statPath, []byte("usage_usec notanumber\n"), nil), base).readStat(ctx)
 			Expect(err).To(MatchError(errUnparsableRead))
 			Expect(classifyRead(err)).To(Equal(ReadUnparsable))
@@ -197,8 +197,6 @@ var _ = Describe("a failed read reports its cause", func() {
 		})
 	})
 
-	// readQuota and readVirtualized return a ReadOutcome, not an error: neither
-	// has an `ok bool` to replace, so presence stays on the existing return.
 	Describe("readQuota", func() {
 		maxPath := base + "/cpu.max"
 
@@ -221,8 +219,8 @@ var _ = Describe("a failed read reports its cause", func() {
 		})
 	})
 
-	// Nothing else covers these: deleting the sentinel cases from classifyRead
-	// leaves the rest of the suite green. Locked here against a silent rewiring.
+	// classifyRead maps these two through sentinel errors rather than an errno,
+	// so they are the cases a rewiring can drop without any syscall changing.
 	Describe("readQuota's non-errno causes", func() {
 		maxPath := base + "/cpu.max"
 
@@ -250,9 +248,8 @@ var _ = Describe("a failed read reports its cause", func() {
 	Describe("readVirtualized", func() {
 		It("reports not_attempted once the fact is already resolved", func() {
 			// virtResolved short-circuits before any ReadFile, so the second call
-			// opens nothing. It is the sampler's only producer of
-			// ReadNotAttempted, which would otherwise be declared and never
-			// produced.
+			// opens nothing. It is the only reader that returns
+			// ReadNotAttempted; seedReads is what puts it on every other entry.
 			h := newHostSource(oneFile("/proc/cpuinfo", []byte("flags\t\t: fpu hypervisor\n"), nil))
 
 			virt, first := h.readVirtualized(ctx)

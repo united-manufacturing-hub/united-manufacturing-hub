@@ -87,9 +87,9 @@ func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) d
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#cpu-interface-files
 //
 // A positive quota reads as a capacity in cores. "max" and a non-positive quota
-// read as a present no-limit, a present 0.0. Only an unreadable or unparsable
-// cpu.max reads as absent no-signal, and only that case returns an outcome
-// other than ReadOK.
+// read as a present no-limit, a present 0.0, and both return ReadOK. A cpu.max
+// that is unreadable, empty or unparsable reads as absent no-signal, under the
+// outcome that says which.
 func (c *cgroupSource) readQuota(ctx context.Context) (quotaRead, ReadOutcome) {
 	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OpCPUMax))
 	if err != nil {

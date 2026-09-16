@@ -173,7 +173,7 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine 
 //
 // The returned ReadOutcome describes the /proc/cpuinfo read alone, and is
 // ReadNotAttempted on a tick that republished the cached fact. The DMI reads
-// are not reported at all: a failure on one must never break the other.
+// get no outcome of their own; allReadOps says why.
 func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpuinfo ReadOutcome) {
 	if h.virtResolved {
 		return h.virtualized, ReadNotAttempted

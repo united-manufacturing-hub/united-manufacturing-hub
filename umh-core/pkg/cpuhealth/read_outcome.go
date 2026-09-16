@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Which file each read opens (ReadOp, PathOf), and what it produced
-// (ReadOutcome). Every reader in this package uses both, and the fsmv2 CPU
-// worker reports the failures to Sentry.
+// Which file each read opens (ReadOp, PathOf), and how it ended (ReadOutcome).
+// Every read on a Sample carries an outcome, though a reader may return an
+// error that classifyRead turns into one. The fsmv2 CPU worker reports the
+// failures to Sentry.
 
 package cpuhealth
 
@@ -76,9 +77,8 @@ func classifyRead(err error) ReadOutcome {
 // readRawFile returns a file's text verbatim, with no parsing. Both sources
 // use it, so it takes the filesystem rather than hanging off either one.
 //
-// A file that exists and holds nothing reads ReadEmpty, not ReadOK: the
-// outcome says what the read got, and every reader in this package answers
-// that question the same way.
+// A file that exists and holds nothing reads ReadEmpty, not ReadOK, which is
+// what readQuota, readCpuset and readPSI report for the same case.
 func readRawFile(ctx context.Context, fsys filesystem.Service, path string) (string, ReadOutcome) {
 	data, err := fsys.ReadFile(ctx, path)
 	if err != nil {
@@ -109,9 +109,9 @@ const (
 	// OpCpusetCPUs is the cgroup's cpuset.cpus.effective read.
 	OpCpusetCPUs ReadOp = "cpuset_cpus_effective"
 
-	// The ops below mint no report of their own. They ride on one that does,
-	// describing the machine around it, which is how a reader tells a broken
-	// mount from a broken file.
+	// The ops below get no Sentry event of their own. They travel as fields on
+	// one that does, describing the machine around it, which is how a reader
+	// tells a broken mount from a broken file.
 
 	// OpCgroupControllers is the cgroup.controllers read.
 	OpCgroupControllers ReadOp = "cgroup_controllers"

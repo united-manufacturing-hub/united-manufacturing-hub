@@ -25,7 +25,7 @@ import (
 )
 
 // reportedReadOps are the reads that get a Sentry event when they fail: each
-// one carries a fact the verdict needs. The other three ops are listed as
+// one carries a fact the verdict needs. The ops this map omits are listed as
 // fields on somebody else's event and never get one of their own.
 var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
 	cpuhealth.OpProcStat:    {},
@@ -45,9 +45,9 @@ var excusedReads = map[cpuhealth.ReadResult]struct{}{
 }
 
 const (
-	// The message is the whole Sentry fingerprint, so it names the sad path and
-	// nothing else. Which read failed, and how, are fields: naming them here
-	// would mint an issue per combination, and there are 29 reachable ones.
+	// The message is the whole Sentry fingerprint, so it names what went wrong
+	// and nothing else. Which read failed, and how, ride as fields: naming them
+	// here would give every op-and-outcome pair its own Sentry issue.
 	//
 	// readFailedTag means the sample survived without one signal.
 	readFailedTag = "cpu::read_failed"
@@ -107,8 +107,9 @@ func verbFor(r cpuhealth.ReadResult) string {
 // whose reads all succeeded yields no failures and no events, which is why
 // Poll calls this on every tick rather than only when Read returns an error.
 //
-// A failure that repeats every tick reports once: the first event names the
-// problem and the rest would cost an issue each while adding nothing.
+// A failure that repeats every tick reports once. Repeats carry the same
+// message, so they would land in the one issue as an event per tick per
+// instance, saying nothing the first event did not.
 func (d *CPUDeps) reportFailedReads(ctx context.Context, smp cpuhealth.Sample) {
 	// Shutdown is not a failure. filesystem.DefaultService.ReadFile checks the
 	// context, so once it is done every read fails and a graceful shutdown would
@@ -133,8 +134,8 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, smp cpuhealth.Sample) {
 // readFailureFields is what one failed-read event carries besides its message.
 func readFailureFields(smp cpuhealth.Sample, failed readFailure, cores, quota float64) []deps.Field {
 	fields := []deps.Field{
-		// The two the message no longer carries. Sentry facets on them, so the
-		// issue stays one while the breakdown stays available.
+		// The read this event is about. Sentry facets on these, so one failure
+		// stays one issue while the breakdown stays available.
 		deps.String("read_op", string(failed.Op)),
 		deps.String("read_outcome", string(failed.Outcome)),
 		deps.String("path", cpuhealth.PathOf(smp.Base, failed.Op)),
@@ -160,8 +161,10 @@ func readFailureFields(smp cpuhealth.Sample, failed readFailure, cores, quota fl
 		fields = append(fields, deps.Float64("host_cpus", hostCpus))
 	}
 
-	// capacity_cores is what the table would be built against. Zero means
-	// neither read answered.
+	// capacity_cores is the ceiling the reader should judge the usage against:
+	// the cgroup's own limit where it has one, the CPUs it may use otherwise.
+	// Table declares its two capacity signals off these separately. Zero means
+	// no limit was set and the cpuset gave no count.
 	capacity := cores
 	if quota > 0 {
 		capacity = quota

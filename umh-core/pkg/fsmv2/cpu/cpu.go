@@ -147,9 +147,9 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 // (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
 // it, and builds the table and engine.
 //
-// A failed startup read yields cores=0, quota=0, which drops the two capacity
-// signals from this instance's table for its whole lifetime; a later
-// successful read does not restore them (ENG-5752).
+// A read that fails at startup leaves its own figure zero, which drops that
+// capacity signal from this instance's table for its whole lifetime; a later
+// successful read does not restore it (ENG-5752).
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
@@ -171,8 +171,9 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 }
 
 // containerOrHostLimit takes the one snapshot the table is built from, and
-// reports any read that failed while taking it. A failed read yields zero for
-// both figures; NewDeps says what that costs the instance (ENG-5752).
+// reports any read that failed while taking it. Each figure comes from its own
+// read and is zero when that read gave nothing; NewDeps says what a zero costs
+// the instance (ENG-5752).
 //
 // NewDeps calls this before setting d.engine, so d.engine is nil here.
 func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {

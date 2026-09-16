@@ -184,7 +184,7 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, smp *Sample, machine 
 	smp.CpuScope = ScopeAffinity
 }
 
-// recordRawReads puts the reads that mint no signal on smp: file text kept
+// recordRawReads puts the reads that produce no signal on smp: file text kept
 // verbatim, and the base directory kept as an entry count. They describe the
 // machine on a failure report, and nothing here judges them.
 func (s *linuxSampler) recordRawReads(ctx context.Context, smp *Sample) {
