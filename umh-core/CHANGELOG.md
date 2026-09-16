@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-### Improvements
+### New
 
-- CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, throttling, CPU pressure and how much of the machine is still free. Requires `USE_FSMV2_CPU=true` and a container restart
+- CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, CPU pressure, throttling and how busy the machine is. Requires `USE_FSMV2_CPU=true` and `USE_FSMV2_TRANSPORT=true`
 
 ## [0.44.39]
 
