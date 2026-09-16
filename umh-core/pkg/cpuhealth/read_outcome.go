@@ -79,17 +79,17 @@ func classifyRead(err error) ReadOutcome {
 //
 // A file that exists and holds nothing reads ReadEmpty, not ReadOK, which is
 // what readQuota, readCpuset and readPSI report for the same case.
-func readRawFile(ctx context.Context, fsys filesystem.Service, path string) (string, ReadOutcome) {
+func readRawFile(ctx context.Context, fsys filesystem.Service, path string) (string, ReadOutcome, error) {
 	data, err := fsys.ReadFile(ctx, path)
 	if err != nil {
-		return "", classifyRead(err)
+		return "", classifyRead(err), err
 	}
 
 	if len(data) == 0 {
-		return "", ReadEmpty
+		return "", ReadEmpty, errEmptyRead
 	}
 
-	return string(data), ReadOK
+	return string(data), ReadOK, nil
 }
 
 // ReadOperation names one reported read by its file, not by the function

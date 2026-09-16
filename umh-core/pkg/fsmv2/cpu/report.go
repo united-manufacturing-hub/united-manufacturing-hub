@@ -61,6 +61,10 @@ type readFailure struct {
 	Operation cpuhealth.ReadOperation
 	Outcome   cpuhealth.ReadOutcome
 	Message   string
+	// Err is what the read returned, nil when the outcome named no error. It
+	// rides to Sentry as the event's exception, so the issue carries the
+	// kernel's own words and groups by the error's type.
+	Err error
 }
 
 // failedReads returns the reads on sample that earn a Sentry event, in the order
@@ -85,7 +89,12 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 			continue
 		}
 
-		failures = append(failures, readFailure{Operation: read.Operation, Outcome: read.Outcome, Message: messageFor(read)})
+		failures = append(failures, readFailure{
+			Operation: read.Operation,
+			Outcome:   read.Outcome,
+			Message:   messageFor(read),
+			Err:       sample.Troubleshooting.ReadErrors[read.Operation],
+		})
 	}
 
 	return failures
@@ -127,8 +136,13 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, sample cpuhealth.Sample
 			continue
 		}
 
+		fields := readFailureFields(sample, failure, cores, quota)
+		if failure.Err != nil {
+			fields = append(fields, deps.Err(failure.Err))
+		}
+
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			failure.Message, readFailureFields(sample, failure, cores, quota)...)
+			failure.Message, fields...)
 	}
 }
 

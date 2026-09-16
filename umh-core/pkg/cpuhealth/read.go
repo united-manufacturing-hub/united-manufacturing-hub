@@ -98,13 +98,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		s.cgroup.psiAvailable = true
 		sample.Pressure = diagnosis.Known(fraction)
 	}
-	sample.record(OperationCPUPressure, classifyRead(psiErr))
+	sample.record(OperationCPUPressure, classifyRead(psiErr), psiErr)
 	sample.PsiAvailable = s.cgroup.psiAvailable
 
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
 	sample.Troubleshooting.CPUStatRaw = stat.Raw
-	sample.record(OperationCPUStat, statOutcome(stat, statErr))
+	sample.record(OperationCPUStat, statOutcome(stat, statErr), statErr)
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
 		// never a silent drop of the throttle counters as absent no-signal.
@@ -123,7 +123,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
 	busy, steal, denominator, machine, hostErr := s.host.readHost(ctx)
-	sample.record(OperationProcStat, classifyRead(hostErr))
+	sample.record(OperationProcStat, classifyRead(hostErr), hostErr)
 	if hostErr != nil {
 		// An unreadable machine CPU count reads ScopeUnknown — never a silent
 		// ScopeHost, since a pinned idle container misread as host would have
@@ -142,14 +142,14 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		sample.HostBusy, sample.Steal = s.host.advanceHostRates(timestamp, busy, steal, denominator)
 	}
 
-	virtualized, cpuinfoOutcome := s.host.readVirtualized(ctx)
+	virtualized, cpuinfoOutcome, cpuinfoErr := s.host.readVirtualized(ctx)
 	sample.Virtualized = virtualized
-	sample.record(OperationProcCpuinfo, cpuinfoOutcome)
+	sample.record(OperationProcCpuinfo, cpuinfoOutcome, cpuinfoErr)
 
-	quota, cpuMaxOutcome := s.cgroup.readQuota(ctx)
+	quota, cpuMaxOutcome, cpuMaxErr := s.cgroup.readQuota(ctx)
 	sample.Quota = quota.Limit
 	sample.Troubleshooting.CPUMaxRaw = quota.Raw
-	sample.record(OperationCPUMax, cpuMaxOutcome)
+	sample.record(OperationCPUMax, cpuMaxOutcome, cpuMaxErr)
 
 	return sample, nil
 }
@@ -166,7 +166,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 // never a silent ScopeHost on a known machine count.
 func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machine float64) {
 	allowed, cpusetErr := s.cgroup.readCpuset(ctx)
-	sample.record(OperationCpusetCPUs, classifyRead(cpusetErr))
+	sample.record(OperationCpusetCPUs, classifyRead(cpusetErr), cpusetErr)
 	if cpusetErr != nil {
 		sample.LogicalCpus = diagnosis.Unknown()
 		sample.CpuScope = ScopeUnknown
@@ -188,17 +188,17 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machi
 // verbatim, and the base directory kept as an entry count. They describe the
 // machine on a failure report, and nothing here judges them.
 func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
-	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
+	controllers, controllersOutcome, controllersErr := s.cgroup.readControllers(ctx)
 	sample.Troubleshooting.CgroupControllersRaw = controllers
-	sample.record(OperationCgroupControllers, controllersOutcome)
+	sample.record(OperationCgroupControllers, controllersOutcome, controllersErr)
 
-	procSelf, procSelfOutcome := s.host.readProcSelfCgroup(ctx)
+	procSelf, procSelfOutcome, procSelfErr := s.host.readProcSelfCgroup(ctx)
 	sample.Troubleshooting.ProcSelfCgroupRaw = procSelf
-	sample.record(OperationProcSelfCgroup, procSelfOutcome)
+	sample.record(OperationProcSelfCgroup, procSelfOutcome, procSelfErr)
 
-	baseEntries, baseDirOutcome := s.cgroup.readBaseDirEntryCount(ctx)
+	baseEntries, baseDirOutcome, baseDirErr := s.cgroup.readBaseDirEntryCount(ctx)
 	sample.Troubleshooting.CgroupBaseDirEntryCount = baseEntries
-	sample.record(OperationCgroupBaseDir, baseDirOutcome)
+	sample.record(OperationCgroupBaseDir, baseDirOutcome, baseDirErr)
 }
 
 // statOutcome reports a successful read with no usage figure as ReadEmpty,
@@ -226,9 +226,18 @@ func seedReads() []ReadResult {
 	return reads
 }
 
-// record overwrites the operation's seeded entry. An operation absent from
-// allReadOperations has no entry to overwrite and records nothing.
-func (s *Sample) record(operation ReadOperation, outcome ReadOutcome) {
+// record overwrites the operation's seeded entry and keeps readErr for the
+// report. An operation absent from allReadOperations has no entry to overwrite
+// and records nothing.
+func (s *Sample) record(operation ReadOperation, outcome ReadOutcome, readErr error) {
+	if readErr != nil {
+		if s.Troubleshooting.ReadErrors == nil {
+			s.Troubleshooting.ReadErrors = make(map[ReadOperation]error, len(allReadOperations))
+		}
+
+		s.Troubleshooting.ReadErrors[operation] = readErr
+	}
+
 	for i := range s.Troubleshooting.Reads {
 		if s.Troubleshooting.Reads[i].Operation == operation {
 			s.Troubleshooting.Reads[i].Outcome = outcome

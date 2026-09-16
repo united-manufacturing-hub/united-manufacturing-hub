@@ -114,21 +114,21 @@ var _ = Describe("a failed read reports its cause", func() {
 			// means the parent delegated no controllers, which is the broken mount
 			// this read exists to show; reporting ok would hide it behind the raw
 			// string.
-			text, outcome := newCgroupSource(oneFile(ctrlPath, []byte(""), nil), base).readControllers(ctx)
+			text, outcome, _ := newCgroupSource(oneFile(ctrlPath, []byte(""), nil), base).readControllers(ctx)
 
 			Expect(outcome).To(Equal(ReadEmpty))
 			Expect(text).To(BeEmpty())
 		})
 
 		It("keeps ok for a file that holds something", func() {
-			text, outcome := newCgroupSource(oneFile(ctrlPath, []byte("cpu memory\n"), nil), base).readControllers(ctx)
+			text, outcome, _ := newCgroupSource(oneFile(ctrlPath, []byte("cpu memory\n"), nil), base).readControllers(ctx)
 
 			Expect(outcome).To(Equal(ReadOK))
 			Expect(text).To(Equal("cpu memory\n"))
 		})
 
 		It("still names the cause when the file cannot be read", func() {
-			_, outcome := newCgroupSource(oneFile(ctrlPath, nil, pathErr(ctrlPath, syscall.EACCES)), base).readControllers(ctx)
+			_, outcome, _ := newCgroupSource(oneFile(ctrlPath, nil, pathErr(ctrlPath, syscall.EACCES)), base).readControllers(ctx)
 
 			Expect(outcome).To(Equal(ReadPermissionDenied))
 		})
@@ -201,17 +201,17 @@ var _ = Describe("a failed read reports its cause", func() {
 		maxPath := base + "/cpu.max"
 
 		It("reports ENOENT", func() {
-			_, outcome := newCgroupSource(oneFile(maxPath, nil, pathErr(maxPath, syscall.ENOENT)), base).readQuota(ctx)
+			_, outcome, _ := newCgroupSource(oneFile(maxPath, nil, pathErr(maxPath, syscall.ENOENT)), base).readQuota(ctx)
 			Expect(outcome).To(Equal(ReadMissing))
 		})
 
 		It("reports EACCES", func() {
-			_, outcome := newCgroupSource(oneFile(maxPath, nil, pathErr(maxPath, syscall.EACCES)), base).readQuota(ctx)
+			_, outcome, _ := newCgroupSource(oneFile(maxPath, nil, pathErr(maxPath, syscall.EACCES)), base).readQuota(ctx)
 			Expect(outcome).To(Equal(ReadPermissionDenied))
 		})
 
 		It("reports a readable no-limit file as ok, never as a failure", func() {
-			r, outcome := newCgroupSource(oneFile(maxPath, []byte("max 100000\n"), nil), base).readQuota(ctx)
+			r, outcome, _ := newCgroupSource(oneFile(maxPath, []byte("max 100000\n"), nil), base).readQuota(ctx)
 			Expect(outcome).To(Equal(ReadOK), "content 'max' is a present no-limit, not a failed read")
 			v, ok := r.Limit.Get()
 			Expect(ok).To(BeTrue())
@@ -225,22 +225,22 @@ var _ = Describe("a failed read reports its cause", func() {
 		maxPath := base + "/cpu.max"
 
 		It("reports a zero-byte file as empty, not unparsable", func() {
-			_, outcome := newCgroupSource(oneFile(maxPath, []byte(""), nil), base).readQuota(ctx)
+			_, outcome, _ := newCgroupSource(oneFile(maxPath, []byte(""), nil), base).readQuota(ctx)
 			Expect(outcome).To(Equal(ReadEmpty))
 		})
 
 		It("reports a whitespace-only file as empty", func() {
-			_, outcome := newCgroupSource(oneFile(maxPath, []byte("  \n"), nil), base).readQuota(ctx)
+			_, outcome, _ := newCgroupSource(oneFile(maxPath, []byte("  \n"), nil), base).readQuota(ctx)
 			Expect(outcome).To(Equal(ReadEmpty))
 		})
 
 		It("reports a non-numeric quota as unparsable", func() {
-			_, outcome := newCgroupSource(oneFile(maxPath, []byte("abc 100000\n"), nil), base).readQuota(ctx)
+			_, outcome, _ := newCgroupSource(oneFile(maxPath, []byte("abc 100000\n"), nil), base).readQuota(ctx)
 			Expect(outcome).To(Equal(ReadUnparsable))
 		})
 
 		It("reports a non-positive period as unparsable, since it cannot be a divisor", func() {
-			_, outcome := newCgroupSource(oneFile(maxPath, []byte("100000 0\n"), nil), base).readQuota(ctx)
+			_, outcome, _ := newCgroupSource(oneFile(maxPath, []byte("100000 0\n"), nil), base).readQuota(ctx)
 			Expect(outcome).To(Equal(ReadUnparsable))
 		})
 	})
@@ -252,16 +252,16 @@ var _ = Describe("a failed read reports its cause", func() {
 			// ReadNotAttempted; seedReads is what puts it on every other entry.
 			h := newHostSource(oneFile("/proc/cpuinfo", []byte("flags\t\t: fpu hypervisor\n"), nil))
 
-			virt, first := h.readVirtualized(ctx)
+			virt, first, _ := h.readVirtualized(ctx)
 			Expect(virt).To(BeTrue())
 			Expect(first).To(Equal(ReadOK))
 
-			_, second := h.readVirtualized(ctx)
+			_, second, _ := h.readVirtualized(ctx)
 			Expect(second).To(Equal(ReadNotAttempted))
 		})
 
 		It("reports the cpuinfo read outcome", func() {
-			_, outcome := newHostSource(oneFile("/proc/cpuinfo", nil, pathErr("/proc/cpuinfo", syscall.ENOENT))).readVirtualized(ctx)
+			_, outcome, _ := newHostSource(oneFile("/proc/cpuinfo", nil, pathErr("/proc/cpuinfo", syscall.ENOENT))).readVirtualized(ctx)
 			Expect(outcome).To(Equal(ReadMissing))
 		})
 	})

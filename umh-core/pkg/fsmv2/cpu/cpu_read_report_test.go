@@ -279,15 +279,15 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
 
-		// The fingerprint is the message, so this is also where the message's
-		// shape is load-bearing: naming the operation and the outcome in it would put
-		// them in the fingerprint and split one failure into an issue per
-		// combination. errorTypes is EMPTY on purpose, as these events carry no
-		// error value.
+		// The message stays the bare tag: naming the operation and the outcome in
+		// it would put them in the fingerprint and split one failure into an issue
+		// per combination. The read's own error joins the fingerprint as its type
+		// chain, which is why an unreadable file and an unparsable one group apart
+		// while the message stays the same.
 		want := strings.Join(fsmv2sentry.BuildFingerprint(
 			zapcore.WarnLevel, string(deps.FeatureSupportCPU),
 			"cpu::read_failed",
-			"",
+			"*fs.PathError|syscall.Errno",
 		), "|")
 
 		Expect(hook.Debouncer().ShouldCapture(want)).To(BeFalse(),
