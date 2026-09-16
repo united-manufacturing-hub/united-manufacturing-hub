@@ -25,7 +25,7 @@ import (
 // nothing else.
 var _ = Describe("failedReads decides which reads earn an event", func() {
 	withReads := func(rs ...cpuhealth.ReadResult) cpuhealth.Sample {
-		return cpuhealth.Sample{Reads: rs}
+		return cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{Reads: rs}}
 	}
 
 	It("finds nothing in a sample whose reads all succeeded", func() {
@@ -107,20 +107,20 @@ var _ = Describe("a failure report names the tree the sample was read from", fun
 	}
 
 	It("builds the path from the sample's base, not from the package constant", func() {
-		kv := fieldsOf(cpuhealth.Sample{Base: "/custom/tree"}, cpuhealth.OpCPUStat)
+		kv := fieldsOf(cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{Base: "/custom/tree"}}, cpuhealth.OpCPUStat)
 
 		Expect(kv).To(HaveKeyWithValue("path", "/custom/tree/cpu.stat"))
 		Expect(kv).To(HaveKeyWithValue("cgroup_base", "/custom/tree"))
 	})
 
 	It("leaves a machine-wide file absolute whatever the base is", func() {
-		kv := fieldsOf(cpuhealth.Sample{Base: "/custom/tree"}, cpuhealth.OpProcStat)
+		kv := fieldsOf(cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{Base: "/custom/tree"}}, cpuhealth.OpProcStat)
 
 		Expect(kv).To(HaveKeyWithValue("path", "/proc/stat"))
 	})
 
 	It("still names the default tree for a sampler built on it", func() {
-		kv := fieldsOf(cpuhealth.Sample{Base: cgroupBase}, cpuhealth.OpCPUMax)
+		kv := fieldsOf(cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{Base: cgroupBase}}, cpuhealth.OpCPUMax)
 
 		Expect(kv).To(HaveKeyWithValue("path", cgroupBase+"/cpu.max"))
 	})

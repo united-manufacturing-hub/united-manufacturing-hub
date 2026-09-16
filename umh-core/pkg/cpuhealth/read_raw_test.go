@@ -101,13 +101,13 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 	It("records every raw value byte for byte as the file served it", func() {
 		sample := read(nil, 85, nil)
 
-		Expect(sample.CgroupControllersRaw).To(Equal(healthyControllers),
+		Expect(sample.Troubleshooting.CgroupControllersRaw).To(Equal(healthyControllers),
 			"the controller list must arrive unparsed and untrimmed of meaning")
-		Expect(sample.ProcSelfCgroupRaw).To(Equal("0::/\n"))
-		Expect(sample.CPUMaxRaw).To(Equal("200000 100000\n"))
-		Expect(sample.CPUStatRaw).To(ContainSubstring("usage_usec 11457863754"),
+		Expect(sample.Troubleshooting.ProcSelfCgroupRaw).To(Equal("0::/\n"))
+		Expect(sample.Troubleshooting.CPUMaxRaw).To(Equal("200000 100000\n"))
+		Expect(sample.Troubleshooting.CPUStatRaw).To(ContainSubstring("usage_usec 11457863754"),
 			"the cpu.stat text is what tells a reader whether an absent usage figure was an empty file or a malformed one")
-		Expect(sample.BaseDirEntryCount).To(Equal(85))
+		Expect(sample.Troubleshooting.BaseDirEntryCount).To(Equal(85))
 	})
 
 	It("marks the unparsed reads ok when they succeed", func() {
@@ -123,7 +123,7 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		sample := read(map[string]error{ctrl: &fs.PathError{Op: "open", Path: ctrl, Err: syscall.EACCES}}, 85, nil)
 
 		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadPermissionDenied))
-		Expect(sample.CgroupControllersRaw).To(BeEmpty(),
+		Expect(sample.Troubleshooting.CgroupControllersRaw).To(BeEmpty(),
 			"a failed read must not leave stale or invented text in the raw field")
 	})
 
@@ -131,7 +131,7 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		sample := read(nil, 0, &fs.PathError{Op: "open", Path: base, Err: syscall.ENOENT})
 
 		Expect(outcomeFor(sample, OpBaseDir)).To(Equal(ReadMissing))
-		Expect(sample.BaseDirEntryCount).To(Equal(-1),
+		Expect(sample.Troubleshooting.BaseDirEntryCount).To(Equal(-1),
 			"zero entries is a real reading; an unread directory must not look like an empty one")
 	})
 
@@ -156,7 +156,7 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 
 		sample, _ := NewLinuxSampler(mfs, base).Read(ctx)
 
-		Expect(sample.CgroupControllersRaw).To(Equal("cpu io memory pids\n"))
+		Expect(sample.Troubleshooting.CgroupControllersRaw).To(Equal("cpu io memory pids\n"))
 		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadOK),
 			"a readable list missing cpuset is a successful read, not a failed one")
 	})
@@ -167,8 +167,8 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		statPath := base + "/cpu.stat"
 		sample := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}}, 85, nil)
 
-		Expect(sample.CgroupControllersRaw).To(Equal(healthyControllers))
-		Expect(sample.BaseDirEntryCount).To(Equal(85))
+		Expect(sample.Troubleshooting.CgroupControllersRaw).To(Equal(healthyControllers))
+		Expect(sample.Troubleshooting.BaseDirEntryCount).To(Equal(85))
 		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadOK))
 	})
 })

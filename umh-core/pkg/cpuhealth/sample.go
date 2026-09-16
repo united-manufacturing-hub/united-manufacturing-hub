@@ -130,13 +130,23 @@ type Sample struct {
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
 
+	// Troubleshooting is what a failure report carries. Nothing in the judging
+	// path reads it: Decide, the signals and the message work from the
+	// measurements above.
+	Troubleshooting ReadTroubleshooting
+}
+
+// ReadTroubleshooting is what the sampler captured for a failure report rather
+// than for a verdict: the text of the files it did not parse, the tree it read
+// them from, and how each read ended.
+type ReadTroubleshooting struct {
 	// The file text the sampler captured but did not parse. An empty string
 	// means either the read failed or the file held nothing, and that read's
 	// entry in Reads says which.
-	CgroupControllersRaw string // cgroup.controllers, under the sampler's base
-	CPUMaxRaw            string // cpu.max, under the sampler's base
-	CPUStatRaw           string // cpu.stat, under the sampler's base
-	ProcSelfCgroupRaw    string // /proc/self/cgroup
+	CgroupControllersRaw string
+	CPUMaxRaw            string
+	CPUStatRaw           string
+	ProcSelfCgroupRaw    string
 
 	// BaseDirEntryCount is -1 when the directory was not read. Zero is a real
 	// reading, of a directory that exists and is empty.

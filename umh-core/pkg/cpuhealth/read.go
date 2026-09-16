@@ -71,12 +71,12 @@ type linuxSampler struct {
 // Read samples the cgroup and the machine once.
 //
 // A non-nil error means cpu.stat could not be read or parsed, and this tick has
-// no measurement. Sample.Reads still records what every read produced, so
-// diagnose a failed read from Sample.Reads, not from the error.
+// no measurement. Sample.Troubleshooting.Reads still records what every read
+// produced, so diagnose a failed read from there, not from the error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var sample Sample
-	sample.Base = s.cgroup.base
-	sample.Reads = seedReads()
+	sample.Troubleshooting.Base = s.cgroup.base
+	sample.Troubleshooting.Reads = seedReads()
 
 	// First because a cpu.stat failure returns before every read below it, and
 	// a report of that failure needs these reads as much as any other.
@@ -103,7 +103,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
-	sample.CPUStatRaw = stat.Raw
+	sample.Troubleshooting.CPUStatRaw = stat.Raw
 	sample.record(OpCPUStat, statOutcome(stat, statErr))
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
@@ -148,7 +148,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	quota, cpuMaxOutcome := s.cgroup.readQuota(ctx)
 	sample.Quota = quota.Limit
-	sample.CPUMaxRaw = quota.Raw
+	sample.Troubleshooting.CPUMaxRaw = quota.Raw
 	sample.record(OpCPUMax, cpuMaxOutcome)
 
 	return sample, nil
@@ -189,15 +189,15 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machi
 // machine on a failure report, and nothing here judges them.
 func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
 	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
-	sample.CgroupControllersRaw = controllers
+	sample.Troubleshooting.CgroupControllersRaw = controllers
 	sample.record(OpCgroupControllers, controllersOutcome)
 
 	procSelf, procSelfOutcome := s.host.readProcSelfCgroup(ctx)
-	sample.ProcSelfCgroupRaw = procSelf
+	sample.Troubleshooting.ProcSelfCgroupRaw = procSelf
 	sample.record(OpProcSelfCgroup, procSelfOutcome)
 
 	baseEntries, baseDirOutcome := s.cgroup.readBaseDirEntryCount(ctx)
-	sample.BaseDirEntryCount = baseEntries
+	sample.Troubleshooting.BaseDirEntryCount = baseEntries
 	sample.record(OpBaseDir, baseDirOutcome)
 }
 
@@ -228,9 +228,9 @@ func seedReads() []ReadResult {
 // record overwrites op's seeded entry. An op absent from allReadOps has no
 // entry to overwrite and records nothing.
 func (s *Sample) record(op ReadOp, outcome ReadOutcome) {
-	for i := range s.Reads {
-		if s.Reads[i].Op == op {
-			s.Reads[i].Outcome = outcome
+	for i := range s.Troubleshooting.Reads {
+		if s.Troubleshooting.Reads[i].Op == op {
+			s.Troubleshooting.Reads[i].Outcome = outcome
 			return
 		}
 	}

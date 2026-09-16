@@ -131,8 +131,9 @@ type quotaRead struct {
 	Limit diagnosis.Reading
 
 	// Raw is the file's text, kept for a failure report and published as
-	// Sample.CPUMaxRaw. It is set whenever the read succeeded, a failed parse
-	// included, so a report can show the text that would not parse.
+	// Sample.Troubleshooting.CPUMaxRaw. It is set whenever the read succeeded,
+	// a failed parse included, so a report can show the text that would not
+	// parse.
 	Raw string
 }
 
@@ -143,8 +144,8 @@ type statRead struct {
 	Throttled diagnosis.Reading
 
 	// Raw is the file's text, kept for a failure report and published as
-	// Sample.CPUStatRaw. It is set whenever the read succeeded, a failed parse
-	// included.
+	// Sample.Troubleshooting.CPUStatRaw. It is set whenever the read succeeded,
+	// a failed parse included.
 	Raw string
 }
 

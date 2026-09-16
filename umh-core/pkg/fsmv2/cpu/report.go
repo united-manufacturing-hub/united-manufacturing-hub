@@ -71,7 +71,7 @@ type readFailure struct {
 func failedReads(sample cpuhealth.Sample) []readFailure {
 	var failures []readFailure
 
-	for _, read := range sample.Reads {
+	for _, read := range sample.Troubleshooting.Reads {
 		if _, reported := reportedReadOps[read.Op]; !reported {
 			continue
 		}
@@ -138,18 +138,18 @@ func readFailureFields(sample cpuhealth.Sample, failed readFailure, cores, quota
 		// stays one issue while the breakdown stays available.
 		deps.String("read_op", string(failed.Op)),
 		deps.String("read_outcome", string(failed.Outcome)),
-		deps.String("path", cpuhealth.PathOf(sample.Base, failed.Op)),
-		deps.String("cgroup_base", sample.Base),
-		deps.String("cgroup_controllers_raw", sample.CgroupControllersRaw),
-		deps.String("cpu_max_raw", sample.CPUMaxRaw),
-		deps.String("cpu_stat_raw", sample.CPUStatRaw),
-		deps.String("proc_self_cgroup_raw", sample.ProcSelfCgroupRaw),
-		deps.Int("cgroup_base_dir_entry_count", sample.BaseDirEntryCount),
+		deps.String("path", cpuhealth.PathOf(sample.Troubleshooting.Base, failed.Op)),
+		deps.String("cgroup_base", sample.Troubleshooting.Base),
+		deps.String("cgroup_controllers_raw", sample.Troubleshooting.CgroupControllersRaw),
+		deps.String("cpu_max_raw", sample.Troubleshooting.CPUMaxRaw),
+		deps.String("cpu_stat_raw", sample.Troubleshooting.CPUStatRaw),
+		deps.String("proc_self_cgroup_raw", sample.Troubleshooting.ProcSelfCgroupRaw),
+		deps.Int("cgroup_base_dir_entry_count", sample.Troubleshooting.BaseDirEntryCount),
 	}
 
 	// Every sibling is reported, a never-attempted one included: the pattern
 	// across the reads is what says which shape a machine is in.
-	for _, read := range sample.Reads {
+	for _, read := range sample.Troubleshooting.Reads {
 		if read.Op == failed.Op {
 			continue
 		}

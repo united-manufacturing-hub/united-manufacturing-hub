@@ -57,7 +57,7 @@ func fsServing(files map[string][]byte, overrides map[string]error) filesystem.S
 }
 
 func outcomeFor(sample Sample, op ReadOp) ReadOutcome {
-	for _, r := range sample.Reads {
+	for _, r := range sample.Troubleshooting.Reads {
 		if r.Op == op {
 			return r.Outcome
 		}
@@ -81,11 +81,11 @@ var _ = Describe("the sample records what each read produced", func() {
 	It("records exactly one entry per declared read operation", func() {
 		sample := read(nil)
 
-		Expect(sample.Reads).To(HaveLen(len(allReadOps)),
+		Expect(sample.Troubleshooting.Reads).To(HaveLen(len(allReadOps)),
 			"every declared read operation must appear, and none twice")
 
 		seen := map[ReadOp]int{}
-		for _, r := range sample.Reads {
+		for _, r := range sample.Troubleshooting.Reads {
 			seen[r.Op]++
 		}
 		for _, spec := range allReadOps {

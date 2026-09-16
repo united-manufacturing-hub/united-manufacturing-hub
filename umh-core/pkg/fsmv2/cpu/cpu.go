@@ -125,7 +125,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	sample, err := d.sampler.Read(ctx)
 
-	// Called before the error return below: Read fills Sample.Reads even when it
+	// Called before the error return below: Read fills Sample.Troubleshooting.Reads even when it
 	// errors, so the read that broke is named either way.
 	d.reportFailedReads(ctx, sample)
 
@@ -179,7 +179,7 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 func containerOrHostLimit(ctx context.Context, sampler cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
 	// The error is discarded because it carries nothing the sample does not:
 	// it is non-nil only when cpu.stat failed, which reportFailedReads reads
-	// off sample.Reads.
+	// off sample.Troubleshooting.Reads.
 	sample, _ := sampler.Read(ctx)
 	d.reportFailedReads(ctx, sample)
 
