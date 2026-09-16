@@ -105,6 +105,35 @@ var _ = Describe("a failed read reports its cause", func() {
 		})
 	})
 
+	Describe("the raw reads", func() {
+		ctrlPath := base + "/cgroup.controllers"
+
+		It("reports a blank file as empty, the same as the readers that parse", func() {
+			// ReadEmpty is declared as "the file was read and held nothing", so a
+			// raw read of a blank file is exactly that. A blank cgroup.controllers
+			// means the parent delegated no controllers, which is the broken mount
+			// this read exists to show; reporting ok would hide it behind the raw
+			// string.
+			text, outcome := newCgroupSource(oneFile(ctrlPath, []byte(""), nil), base).readControllers(ctx)
+
+			Expect(outcome).To(Equal(ReadEmpty))
+			Expect(text).To(BeEmpty())
+		})
+
+		It("keeps ok for a file that holds something", func() {
+			text, outcome := newCgroupSource(oneFile(ctrlPath, []byte("cpu memory\n"), nil), base).readControllers(ctx)
+
+			Expect(outcome).To(Equal(ReadOK))
+			Expect(text).To(Equal("cpu memory\n"))
+		})
+
+		It("still names the cause when the file cannot be read", func() {
+			_, outcome := newCgroupSource(oneFile(ctrlPath, nil, pathErr(ctrlPath, syscall.EACCES)), base).readControllers(ctx)
+
+			Expect(outcome).To(Equal(ReadPermissionDenied))
+		})
+	})
+
 	Describe("readStat", func() {
 		statPath := base + "/cpu.stat"
 

@@ -71,10 +71,18 @@ func classifyRead(err error) ReadOutcome {
 
 // readRawFile returns a file's text verbatim, with no parsing. Both sources
 // use it, so it takes the filesystem rather than hanging off either one.
+//
+// A file that exists and holds nothing reads ReadEmpty, not ReadOK: the
+// outcome says what the read got, and every reader in this package answers
+// that question the same way.
 func readRawFile(ctx context.Context, fsys filesystem.Service, path string) (string, ReadOutcome) {
 	data, err := fsys.ReadFile(ctx, path)
 	if err != nil {
 		return "", classifyRead(err)
+	}
+
+	if len(data) == 0 {
+		return "", ReadEmpty
 	}
 
 	return string(data), ReadOK
