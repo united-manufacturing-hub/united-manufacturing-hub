@@ -193,15 +193,15 @@ func buildWithFiles(fileOverrides map[string][]byte) *[]recorded {
 
 // msgs renders each event the way a reader identifies it: the message, then
 // the read it was about. Only the message reaches the Sentry fingerprint; the
-// op and the outcome are fields, so one failed read does not mint its own
+// operation and the outcome are fields, so one failed read does not mint its own
 // issue. Reconstructing the pair here keeps these specs asserting WHICH read
 // failed, which is what they are about.
 func msgs(events *[]recorded) []string {
 	out := []string{}
 	for _, e := range *events {
-		op, _ := e.Fields["read_op"].(string)
+		operation, _ := e.Fields["read_op"].(string)
 		outcome, _ := e.Fields["read_outcome"].(string)
-		out = append(out, e.Msg+"::"+op+"::"+outcome)
+		out = append(out, e.Msg+"::"+operation+"::"+outcome)
 	}
 
 	return out
@@ -209,7 +209,7 @@ func msgs(events *[]recorded) []string {
 
 var _ = Describe("the message carries the sad path, the fields carry the read", func() {
 	It("names only the sad path in the message", func() {
-		// The message is the Sentry fingerprint. Naming the op and the outcome
+		// The message is the Sentry fingerprint. Naming the operation and the outcome
 		// in it gives every pair its own issue; as fields they stay searchable
 		// while one failure stays one issue.
 		cpuset := cgroupBase + "/cpuset.cpus.effective"
@@ -280,7 +280,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 		})
 
 		// The fingerprint is the message, so this is also where the message's
-		// shape is load-bearing: naming the op and the outcome in it would put
+		// shape is load-bearing: naming the operation and the outcome in it would put
 		// them in the fingerprint and split one failure into an issue per
 		// combination. errorTypes is EMPTY on purpose, as these events carry no
 		// error value.

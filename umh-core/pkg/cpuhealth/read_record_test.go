@@ -56,14 +56,14 @@ func fsServing(files map[string][]byte, overrides map[string]error) filesystem.S
 	return mfs
 }
 
-func outcomeFor(sample Sample, op ReadOp) ReadOutcome {
+func outcomeFor(sample Sample, operation ReadOperation) ReadOutcome {
 	for _, r := range sample.Troubleshooting.Reads {
-		if r.Op == op {
+		if r.Operation == operation {
 			return r.Outcome
 		}
 	}
 
-	return ReadOutcome("<op not recorded>")
+	return ReadOutcome("<operation not recorded>")
 }
 
 var _ = Describe("the sample records what each read produced", func() {
@@ -77,35 +77,35 @@ var _ = Describe("the sample records what each read produced", func() {
 	}
 
 	// Structural, not a hand-written length: a new read operation added to
-	// allReadOps without being recorded fails here.
+	// allReadOperations without being recorded fails here.
 	It("records exactly one entry per declared read operation", func() {
 		sample := read(nil)
 
-		Expect(sample.Troubleshooting.Reads).To(HaveLen(len(allReadOps)),
+		Expect(sample.Troubleshooting.Reads).To(HaveLen(len(allReadOperations)),
 			"every declared read operation must appear, and none twice")
 
-		seen := map[ReadOp]int{}
+		seen := map[ReadOperation]int{}
 		for _, r := range sample.Troubleshooting.Reads {
-			seen[r.Op]++
+			seen[r.Operation]++
 		}
-		for _, spec := range allReadOps {
-			Expect(seen[spec.Op]).To(Equal(1), "read operation %q must be recorded exactly once", spec.Op)
+		for _, spec := range allReadOperations {
+			Expect(seen[spec.Operation]).To(Equal(1), "read operation %q must be recorded exactly once", spec.Operation)
 		}
 	})
 
 	It("records ok for every read a healthy container serves", func() {
 		sample := read(nil)
 
-		for _, op := range []ReadOp{OpCPUStat, OpCPUMax, OpCPUPressure, OpCpusetCPUs, OpProcStat, OpProcCpuinfo} {
-			Expect(outcomeFor(sample, op)).To(Equal(ReadOK), "healthy container, read %q", op)
+		for _, operation := range []ReadOperation{OperationCPUStat, OperationCPUMax, OperationCPUPressure, OperationCpusetCPUs, OperationProcStat, OperationProcCpuinfo} {
+			Expect(outcomeFor(sample, operation)).To(Equal(ReadOK), "healthy container, read %q", operation)
 		}
 	})
 
 	It("does not record the DMI reads at all", func() {
 		// The DMI files are not reported, so readVirtualized records only its
 		// /proc/cpuinfo read.
-		for _, spec := range allReadOps {
-			Expect(string(spec.Op)).NotTo(ContainSubstring("dmi"),
+		for _, spec := range allReadOperations {
+			Expect(string(spec.Operation)).NotTo(ContainSubstring("dmi"),
 				"DMI reads are excluded from reporting, so they must not be recorded")
 		}
 	})
@@ -114,9 +114,9 @@ var _ = Describe("the sample records what each read produced", func() {
 		cpuset := base + "/cpuset.cpus.effective"
 		sample := read(map[string]error{cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT}})
 
-		Expect(outcomeFor(sample, OpCpusetCPUs)).To(Equal(ReadMissing))
-		Expect(outcomeFor(sample, OpCPUStat)).To(Equal(ReadOK), "a cpuset failure must not be blamed on its siblings")
-		Expect(outcomeFor(sample, OpProcStat)).To(Equal(ReadOK))
+		Expect(outcomeFor(sample, OperationCpusetCPUs)).To(Equal(ReadMissing))
+		Expect(outcomeFor(sample, OperationCPUStat)).To(Equal(ReadOK), "a cpuset failure must not be blamed on its siblings")
+		Expect(outcomeFor(sample, OperationProcStat)).To(Equal(ReadOK))
 	})
 
 	It("marks the cpuset read not_attempted when /proc/stat failed first", func() {
@@ -124,8 +124,8 @@ var _ = Describe("the sample records what each read produced", func() {
 		// failure for it would name the wrong one.
 		sample := read(map[string]error{"/proc/stat": &fs.PathError{Op: "open", Path: "/proc/stat", Err: syscall.EACCES}})
 
-		Expect(outcomeFor(sample, OpProcStat)).To(Equal(ReadPermissionDenied))
-		Expect(outcomeFor(sample, OpCpusetCPUs)).To(Equal(ReadNotAttempted))
+		Expect(outcomeFor(sample, OperationProcStat)).To(Equal(ReadPermissionDenied))
+		Expect(outcomeFor(sample, OperationCpusetCPUs)).To(Equal(ReadNotAttempted))
 	})
 
 	It("marks every downstream read not_attempted when cpu.stat failed", func() {
@@ -134,10 +134,10 @@ var _ = Describe("the sample records what each read produced", func() {
 		statPath := base + "/cpu.stat"
 		sample := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}})
 
-		Expect(outcomeFor(sample, OpCPUStat)).To(Equal(ReadMissing))
-		for _, op := range []ReadOp{OpProcStat, OpCpusetCPUs, OpProcCpuinfo, OpCPUMax} {
-			Expect(outcomeFor(sample, op)).To(Equal(ReadNotAttempted),
-				"read %q happens after cpu.stat, which returned early", op)
+		Expect(outcomeFor(sample, OperationCPUStat)).To(Equal(ReadMissing))
+		for _, operation := range []ReadOperation{OperationProcStat, OperationCpusetCPUs, OperationProcCpuinfo, OperationCPUMax} {
+			Expect(outcomeFor(sample, operation)).To(Equal(ReadNotAttempted),
+				"read %q happens after cpu.stat, which returned early", operation)
 		}
 	})
 
@@ -147,6 +147,6 @@ var _ = Describe("the sample records what each read produced", func() {
 		statPath := base + "/cpu.stat"
 		sample := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}})
 
-		Expect(outcomeFor(sample, OpCPUPressure)).To(Equal(ReadOK))
+		Expect(outcomeFor(sample, OperationCPUPressure)).To(Equal(ReadOK))
 	})
 })

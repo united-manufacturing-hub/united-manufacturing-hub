@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Which file each read opens (ReadOp, PathOf), and how it ended (ReadOutcome).
+// Which file each read opens (ReadOperation, PathOf), and how it ended (ReadOutcome).
 // Every read on a Sample carries an outcome, though a reader may return an
 // error that classifyRead turns into one. The fsmv2 CPU worker reports the
 // failures to Sentry.
@@ -92,70 +92,73 @@ func readRawFile(ctx context.Context, fsys filesystem.Service, path string) (str
 	return string(data), ReadOK
 }
 
-// ReadOp names one reported read by its file, not by the function reading it.
-type ReadOp string
+// ReadOperation names one reported read by its file, not by the function
+// reading it.
+type ReadOperation string
 
 const (
-	// OpProcStat is the /proc/stat read.
-	OpProcStat ReadOp = "proc_stat"
-	// OpProcCpuinfo is the /proc/cpuinfo read.
-	OpProcCpuinfo ReadOp = "proc_cpuinfo"
-	// OpCPUStat is the cgroup's cpu.stat read.
-	OpCPUStat ReadOp = "cpu_stat"
-	// OpCPUMax is the cgroup's cpu.max read.
-	OpCPUMax ReadOp = "cpu_max"
-	// OpCPUPressure is the cgroup's cpu.pressure read.
-	OpCPUPressure ReadOp = "cpu_pressure"
-	// OpCpusetCPUs is the cgroup's cpuset.cpus.effective read.
-	OpCpusetCPUs ReadOp = "cpuset_cpus_effective"
+	// OperationProcStat is the /proc/stat read.
+	OperationProcStat ReadOperation = "proc_stat"
+	// OperationProcCpuinfo is the /proc/cpuinfo read.
+	OperationProcCpuinfo ReadOperation = "proc_cpuinfo"
+	// OperationCPUStat is the cgroup's cpu.stat read.
+	OperationCPUStat ReadOperation = "cpu_stat"
+	// OperationCPUMax is the cgroup's cpu.max read.
+	OperationCPUMax ReadOperation = "cpu_max"
+	// OperationCPUPressure is the cgroup's cpu.pressure read.
+	OperationCPUPressure ReadOperation = "cpu_pressure"
+	// OperationCpusetCPUs is the cgroup's cpuset.cpus.effective read.
+	OperationCpusetCPUs ReadOperation = "cpuset_cpus_effective"
 
-	// The ops below get no Sentry event of their own. They travel as fields on
-	// one that does, describing the machine around it, which is how a reader
-	// tells a broken mount from a broken file.
+	// The operations below get no Sentry event of their own. They travel as
+	// fields on one that does, describing the machine around it, which is how a
+	// reader tells a broken mount from a broken file.
 
-	// OpCgroupControllers is the cgroup.controllers read.
-	OpCgroupControllers ReadOp = "cgroup_controllers"
-	// OpProcSelfCgroup is the /proc/self/cgroup read.
-	OpProcSelfCgroup ReadOp = "proc_self_cgroup"
-	// OpBaseDir is the base directory listing, kept only as an entry count.
-	OpBaseDir ReadOp = "cgroup_base_dir"
+	// OperationCgroupControllers is the cgroup.controllers read.
+	OperationCgroupControllers ReadOperation = "cgroup_controllers"
+	// OperationProcSelfCgroup is the /proc/self/cgroup read.
+	OperationProcSelfCgroup ReadOperation = "proc_self_cgroup"
+	// OperationCgroupBaseDir is the base directory listing, kept only as an
+	// entry count.
+	OperationCgroupBaseDir ReadOperation = "cgroup_base_dir"
 )
 
-// readOpSpec pairs one read with the file it opens. underBase marks a file
-// that hangs off the sampler's cgroup base; the rest are machine-wide and
-// absolute. OpBaseDir opens the base directory itself, so it carries no name.
-type readOpSpec struct {
-	Op        ReadOp
-	name      string
-	underBase bool
+// readOperationSpec pairs one read with the file it opens. A cgroupRelative
+// file's name is appended to the sampler's cgroup base; every other name is an
+// absolute machine-wide path. OperationCgroupBaseDir opens the base directory
+// itself, so it carries no name.
+type readOperationSpec struct {
+	Operation      ReadOperation
+	name           string
+	cgroupRelative bool
 }
 
-// allReadOps is every read, in the order Read performs them. The DMI reads
+// allReadOperations is every read, in the order Read performs them. The DMI reads
 // (/sys/class/dmi/id/product_name, sys_vendor) are absent: product_name is
 // normally missing in a container, so reporting it would alert on correct
 // absence.
-var allReadOps = []readOpSpec{
-	{Op: OpCgroupControllers, name: "/cgroup.controllers", underBase: true},
-	{Op: OpProcSelfCgroup, name: "/proc/self/cgroup"},
-	{Op: OpBaseDir, underBase: true},
-	{Op: OpCPUPressure, name: "/cpu.pressure", underBase: true},
-	{Op: OpCPUStat, name: "/cpu.stat", underBase: true},
-	{Op: OpProcStat, name: "/proc/stat"},
-	{Op: OpCpusetCPUs, name: "/cpuset.cpus.effective", underBase: true},
-	{Op: OpProcCpuinfo, name: "/proc/cpuinfo"},
-	{Op: OpCPUMax, name: "/cpu.max", underBase: true},
+var allReadOperations = []readOperationSpec{
+	{Operation: OperationCgroupControllers, name: "/cgroup.controllers", cgroupRelative: true},
+	{Operation: OperationProcSelfCgroup, name: "/proc/self/cgroup"},
+	{Operation: OperationCgroupBaseDir, cgroupRelative: true},
+	{Operation: OperationCPUPressure, name: "/cpu.pressure", cgroupRelative: true},
+	{Operation: OperationCPUStat, name: "/cpu.stat", cgroupRelative: true},
+	{Operation: OperationProcStat, name: "/proc/stat"},
+	{Operation: OperationCpusetCPUs, name: "/cpuset.cpus.effective", cgroupRelative: true},
+	{Operation: OperationProcCpuinfo, name: "/proc/cpuinfo"},
+	{Operation: OperationCPUMax, name: "/cpu.max", cgroupRelative: true},
 }
 
-// PathOf returns the file op opens under base, so a reader and a report of
-// that read name the same path by construction. base is ignored for a
-// machine-wide file. An op with no entry returns "".
-func PathOf(base string, op ReadOp) string {
-	for _, spec := range allReadOps {
-		if spec.Op != op {
+// PathOf returns the file this operation opens under base, so a reader and a
+// report of that read name the same path by construction. base is ignored for a
+// machine-wide file. An operation with no entry returns "".
+func PathOf(base string, operation ReadOperation) string {
+	for _, spec := range allReadOperations {
+		if spec.Operation != operation {
 			continue
 		}
 
-		if spec.underBase {
+		if spec.cgroupRelative {
 			return base + spec.name
 		}
 
@@ -167,6 +170,6 @@ func PathOf(base string, op ReadOp) string {
 
 // ReadResult pairs one read with what it produced.
 type ReadResult struct {
-	Op      ReadOp
-	Outcome ReadOutcome
+	Operation ReadOperation
+	Outcome   ReadOutcome
 }

@@ -24,16 +24,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// reportedReadOps are the reads that get a Sentry event when they fail: each
-// one carries a fact the verdict needs. The ops this map omits are listed as
-// fields on somebody else's event and never get one of their own.
-var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
-	cpuhealth.OpProcStat:    {},
-	cpuhealth.OpProcCpuinfo: {},
-	cpuhealth.OpCPUStat:     {},
-	cpuhealth.OpCPUMax:      {},
-	cpuhealth.OpCPUPressure: {},
-	cpuhealth.OpCpusetCPUs:  {},
+// reportedReadOperations are the reads that get a Sentry event when they
+// fail: each one carries a fact the verdict needs. The operations this map
+// omits are listed as fields on somebody else's event and never get one of
+// their own.
+var reportedReadOperations = map[cpuhealth.ReadOperation]struct{}{
+	cpuhealth.OperationProcStat:    {},
+	cpuhealth.OperationProcCpuinfo: {},
+	cpuhealth.OperationCPUStat:     {},
+	cpuhealth.OperationCPUMax:      {},
+	cpuhealth.OperationCPUPressure: {},
+	cpuhealth.OperationCpusetCPUs:  {},
 }
 
 // excusedReads are the failures that report nothing, because the file is
@@ -41,13 +42,13 @@ var reportedReadOps = map[cpuhealth.ReadOp]struct{}{
 // cpu.pressure at all. A cpu.pressure that exists and will not open does
 // report.
 var excusedReads = map[cpuhealth.ReadResult]struct{}{
-	{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadMissing}: {},
+	{Operation: cpuhealth.OperationCPUPressure, Outcome: cpuhealth.ReadMissing}: {},
 }
 
 const (
 	// The message is the whole Sentry fingerprint, so it names what went wrong
 	// and nothing else. Which read failed, and how, ride as fields: naming them
-	// here would give every op-and-outcome pair its own Sentry issue.
+	// here would give every operation-and-outcome pair its own Sentry issue.
 	//
 	// readFailedTag means the sample survived without one signal.
 	readFailedTag = "cpu::read_failed"
@@ -57,9 +58,9 @@ const (
 
 // readFailure is one read whose outcome earns a Sentry event.
 type readFailure struct {
-	Op      cpuhealth.ReadOp
-	Outcome cpuhealth.ReadOutcome
-	Message string
+	Operation cpuhealth.ReadOperation
+	Outcome   cpuhealth.ReadOutcome
+	Message   string
 }
 
 // failedReads returns the reads on sample that earn a Sentry event, in the order
@@ -72,7 +73,7 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 	var failures []readFailure
 
 	for _, read := range sample.Troubleshooting.Reads {
-		if _, reported := reportedReadOps[read.Op]; !reported {
+		if _, reported := reportedReadOperations[read.Operation]; !reported {
 			continue
 		}
 
@@ -84,7 +85,7 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 			continue
 		}
 
-		failures = append(failures, readFailure{Op: read.Op, Outcome: read.Outcome, Message: messageFor(read)})
+		failures = append(failures, readFailure{Operation: read.Operation, Outcome: read.Outcome, Message: messageFor(read)})
 	}
 
 	return failures
@@ -96,7 +97,7 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 // still yields a usable sample, and a cpu.pressure failing in the same tick
 // cost one signal, so both stay read_failed.
 func messageFor(read cpuhealth.ReadResult) string {
-	if read.Op == cpuhealth.OpCPUStat && read.Outcome != cpuhealth.ReadEmpty {
+	if read.Operation == cpuhealth.OperationCPUStat && read.Outcome != cpuhealth.ReadEmpty {
 		return sampleFailedTag
 	}
 
@@ -121,7 +122,7 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, sample cpuhealth.Sample
 	cores, quota := limitsFromSample(sample)
 
 	for _, failure := range failedReads(sample) {
-		key := cpuhealth.ReadResult{Op: failure.Op, Outcome: failure.Outcome}
+		key := cpuhealth.ReadResult{Operation: failure.Operation, Outcome: failure.Outcome}
 		if _, reportedBefore := d.reportedReads.LoadOrStore(key, struct{}{}); reportedBefore {
 			continue
 		}
@@ -136,25 +137,25 @@ func readFailureFields(sample cpuhealth.Sample, failed readFailure, cores, quota
 	fields := []deps.Field{
 		// The read this event is about. Sentry facets on these, so one failure
 		// stays one issue while the breakdown stays available.
-		deps.String("read_op", string(failed.Op)),
+		deps.String("read_op", string(failed.Operation)),
 		deps.String("read_outcome", string(failed.Outcome)),
-		deps.String("path", cpuhealth.PathOf(sample.Troubleshooting.Base, failed.Op)),
-		deps.String("cgroup_base", sample.Troubleshooting.Base),
+		deps.String("path", cpuhealth.PathOf(sample.Troubleshooting.CgroupBase, failed.Operation)),
+		deps.String("cgroup_base", sample.Troubleshooting.CgroupBase),
 		deps.String("cgroup_controllers_raw", sample.Troubleshooting.CgroupControllersRaw),
 		deps.String("cpu_max_raw", sample.Troubleshooting.CPUMaxRaw),
 		deps.String("cpu_stat_raw", sample.Troubleshooting.CPUStatRaw),
 		deps.String("proc_self_cgroup_raw", sample.Troubleshooting.ProcSelfCgroupRaw),
-		deps.Int("cgroup_base_dir_entry_count", sample.Troubleshooting.BaseDirEntryCount),
+		deps.Int("cgroup_base_dir_entry_count", sample.Troubleshooting.CgroupBaseDirEntryCount),
 	}
 
 	// Every sibling is reported, a never-attempted one included: the pattern
 	// across the reads is what says which shape a machine is in.
 	for _, read := range sample.Troubleshooting.Reads {
-		if read.Op == failed.Op {
+		if read.Operation == failed.Operation {
 			continue
 		}
 
-		fields = append(fields, deps.String(string(read.Op)+"_read", string(read.Outcome)))
+		fields = append(fields, deps.String(string(read.Operation)+"_read", string(read.Outcome)))
 	}
 
 	if hostCpus, ok := sample.HostCpus.Get(); ok {

@@ -75,7 +75,7 @@ type linuxSampler struct {
 // produced, so diagnose a failed read from there, not from the error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var sample Sample
-	sample.Troubleshooting.Base = s.cgroup.base
+	sample.Troubleshooting.CgroupBase = s.cgroup.base
 	sample.Troubleshooting.Reads = seedReads()
 
 	// First because a cpu.stat failure returns before every read below it, and
@@ -98,13 +98,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		s.cgroup.psiAvailable = true
 		sample.Pressure = diagnosis.Known(fraction)
 	}
-	sample.record(OpCPUPressure, classifyRead(psiErr))
+	sample.record(OperationCPUPressure, classifyRead(psiErr))
 	sample.PsiAvailable = s.cgroup.psiAvailable
 
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
 	sample.Troubleshooting.CPUStatRaw = stat.Raw
-	sample.record(OpCPUStat, statOutcome(stat, statErr))
+	sample.record(OperationCPUStat, statOutcome(stat, statErr))
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
 		// never a silent drop of the throttle counters as absent no-signal.
@@ -123,7 +123,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
 	busy, steal, denominator, machine, hostErr := s.host.readHost(ctx)
-	sample.record(OpProcStat, classifyRead(hostErr))
+	sample.record(OperationProcStat, classifyRead(hostErr))
 	if hostErr != nil {
 		// An unreadable machine CPU count reads ScopeUnknown — never a silent
 		// ScopeHost, since a pinned idle container misread as host would have
@@ -144,12 +144,12 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	virtualized, cpuinfoOutcome := s.host.readVirtualized(ctx)
 	sample.Virtualized = virtualized
-	sample.record(OpProcCpuinfo, cpuinfoOutcome)
+	sample.record(OperationProcCpuinfo, cpuinfoOutcome)
 
 	quota, cpuMaxOutcome := s.cgroup.readQuota(ctx)
 	sample.Quota = quota.Limit
 	sample.Troubleshooting.CPUMaxRaw = quota.Raw
-	sample.record(OpCPUMax, cpuMaxOutcome)
+	sample.record(OperationCPUMax, cpuMaxOutcome)
 
 	return sample, nil
 }
@@ -166,7 +166,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 // never a silent ScopeHost on a known machine count.
 func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machine float64) {
 	allowed, cpusetErr := s.cgroup.readCpuset(ctx)
-	sample.record(OpCpusetCPUs, classifyRead(cpusetErr))
+	sample.record(OperationCpusetCPUs, classifyRead(cpusetErr))
 	if cpusetErr != nil {
 		sample.LogicalCpus = diagnosis.Unknown()
 		sample.CpuScope = ScopeUnknown
@@ -190,15 +190,15 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machi
 func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
 	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
 	sample.Troubleshooting.CgroupControllersRaw = controllers
-	sample.record(OpCgroupControllers, controllersOutcome)
+	sample.record(OperationCgroupControllers, controllersOutcome)
 
 	procSelf, procSelfOutcome := s.host.readProcSelfCgroup(ctx)
 	sample.Troubleshooting.ProcSelfCgroupRaw = procSelf
-	sample.record(OpProcSelfCgroup, procSelfOutcome)
+	sample.record(OperationProcSelfCgroup, procSelfOutcome)
 
 	baseEntries, baseDirOutcome := s.cgroup.readBaseDirEntryCount(ctx)
-	sample.Troubleshooting.BaseDirEntryCount = baseEntries
-	sample.record(OpBaseDir, baseDirOutcome)
+	sample.Troubleshooting.CgroupBaseDirEntryCount = baseEntries
+	sample.record(OperationCgroupBaseDir, baseDirOutcome)
 }
 
 // statOutcome reports a successful read with no usage figure as ReadEmpty,
@@ -216,20 +216,21 @@ func statOutcome(stat statRead, err error) ReadOutcome {
 	return ReadOK
 }
 
-// seedReads returns one ReadNotAttempted entry per op, in allReadOps order.
+// seedReads returns one ReadNotAttempted entry per operation, in
+// allReadOperations order.
 func seedReads() []ReadResult {
-	reads := make([]ReadResult, len(allReadOps))
-	for i, spec := range allReadOps {
-		reads[i] = ReadResult{Op: spec.Op, Outcome: ReadNotAttempted}
+	reads := make([]ReadResult, len(allReadOperations))
+	for i, spec := range allReadOperations {
+		reads[i] = ReadResult{Operation: spec.Operation, Outcome: ReadNotAttempted}
 	}
 	return reads
 }
 
-// record overwrites op's seeded entry. An op absent from allReadOps has no
-// entry to overwrite and records nothing.
-func (s *Sample) record(op ReadOp, outcome ReadOutcome) {
+// record overwrites the operation's seeded entry. An operation absent from
+// allReadOperations has no entry to overwrite and records nothing.
+func (s *Sample) record(operation ReadOperation, outcome ReadOutcome) {
 	for i := range s.Troubleshooting.Reads {
-		if s.Troubleshooting.Reads[i].Op == op {
+		if s.Troubleshooting.Reads[i].Operation == operation {
 			s.Troubleshooting.Reads[i].Outcome = outcome
 			return
 		}

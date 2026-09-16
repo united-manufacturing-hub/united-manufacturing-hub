@@ -87,13 +87,13 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 	}
 
 	It("declares the three unreported operations alongside the six reported reads", func() {
-		ops := make([]ReadOp, 0, len(allReadOps))
-		for _, spec := range allReadOps {
-			ops = append(ops, spec.Op)
+		operations := make([]ReadOperation, 0, len(allReadOperations))
+		for _, spec := range allReadOperations {
+			operations = append(operations, spec.Operation)
 		}
 
-		Expect(ops).To(HaveLen(9))
-		Expect(ops).To(ContainElements(OpCgroupControllers, OpProcSelfCgroup, OpBaseDir))
+		Expect(operations).To(HaveLen(9))
+		Expect(operations).To(ContainElements(OperationCgroupControllers, OperationProcSelfCgroup, OperationCgroupBaseDir))
 	})
 
 	// Byte for byte matters because readFailureFields ships these verbatim: a
@@ -107,14 +107,14 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		Expect(sample.Troubleshooting.CPUMaxRaw).To(Equal("200000 100000\n"))
 		Expect(sample.Troubleshooting.CPUStatRaw).To(ContainSubstring("usage_usec 11457863754"),
 			"the cpu.stat text is what tells a reader whether an absent usage figure was an empty file or a malformed one")
-		Expect(sample.Troubleshooting.BaseDirEntryCount).To(Equal(85))
+		Expect(sample.Troubleshooting.CgroupBaseDirEntryCount).To(Equal(85))
 	})
 
 	It("marks the unparsed reads ok when they succeed", func() {
 		sample := read(nil, 85, nil)
 
-		for _, op := range []ReadOp{OpCgroupControllers, OpProcSelfCgroup, OpBaseDir} {
-			Expect(outcomeFor(sample, op)).To(Equal(ReadOK), "unparsed read %q", op)
+		for _, operation := range []ReadOperation{OperationCgroupControllers, OperationProcSelfCgroup, OperationCgroupBaseDir} {
+			Expect(outcomeFor(sample, operation)).To(Equal(ReadOK), "unparsed read %q", operation)
 		}
 	})
 
@@ -122,7 +122,7 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		ctrl := base + "/cgroup.controllers"
 		sample := read(map[string]error{ctrl: &fs.PathError{Op: "open", Path: ctrl, Err: syscall.EACCES}}, 85, nil)
 
-		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadPermissionDenied))
+		Expect(outcomeFor(sample, OperationCgroupControllers)).To(Equal(ReadPermissionDenied))
 		Expect(sample.Troubleshooting.CgroupControllersRaw).To(BeEmpty(),
 			"a failed read must not leave stale or invented text in the raw field")
 	})
@@ -130,8 +130,8 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 	It("reports the directory read's own failure and a sentinel count", func() {
 		sample := read(nil, 0, &fs.PathError{Op: "open", Path: base, Err: syscall.ENOENT})
 
-		Expect(outcomeFor(sample, OpBaseDir)).To(Equal(ReadMissing))
-		Expect(sample.Troubleshooting.BaseDirEntryCount).To(Equal(-1),
+		Expect(outcomeFor(sample, OperationCgroupBaseDir)).To(Equal(ReadMissing))
+		Expect(sample.Troubleshooting.CgroupBaseDirEntryCount).To(Equal(-1),
 			"zero entries is a real reading; an unread directory must not look like an empty one")
 	})
 
@@ -157,7 +157,7 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		sample, _ := NewLinuxSampler(mfs, base).Read(ctx)
 
 		Expect(sample.Troubleshooting.CgroupControllersRaw).To(Equal("cpu io memory pids\n"))
-		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadOK),
+		Expect(outcomeFor(sample, OperationCgroupControllers)).To(Equal(ReadOK),
 			"a readable list missing cpuset is a successful read, not a failed one")
 	})
 
@@ -168,7 +168,7 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		sample := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}}, 85, nil)
 
 		Expect(sample.Troubleshooting.CgroupControllersRaw).To(Equal(healthyControllers))
-		Expect(sample.Troubleshooting.BaseDirEntryCount).To(Equal(85))
-		Expect(outcomeFor(sample, OpCgroupControllers)).To(Equal(ReadOK))
+		Expect(sample.Troubleshooting.CgroupBaseDirEntryCount).To(Equal(85))
+		Expect(outcomeFor(sample, OperationCgroupControllers)).To(Equal(ReadOK))
 	})
 })

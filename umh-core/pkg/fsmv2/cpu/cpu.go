@@ -108,7 +108,7 @@ type CPUDeps struct {
 	// that will not build has to surface at the next Poll instead, which reports
 	// it could not measure.
 	engineErr error
-	// reportedReads holds every {op, outcome} already reported, so a failure
+	// reportedReads holds every {operation, outcome} already reported, so a failure
 	// repeating each tick reports once. Startup and Poll share this one map;
 	// two maps would re-report a startup failure on the first tick.
 	reportedReads sync.Map // map[cpuhealth.ReadResult]struct{}

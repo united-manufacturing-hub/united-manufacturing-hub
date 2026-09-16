@@ -148,17 +148,17 @@ type ReadTroubleshooting struct {
 	CPUStatRaw           string
 	ProcSelfCgroupRaw    string
 
-	// BaseDirEntryCount is -1 when the directory was not read. Zero is a real
+	// CgroupBaseDirEntryCount is -1 when the directory was not read. Zero is a real
 	// reading, of a directory that exists and is empty.
-	BaseDirEntryCount int
+	CgroupBaseDirEntryCount int
 
-	// Base is the cgroup tree this sample was read from, as passed to
+	// CgroupBase is the cgroup tree this sample was read from, as passed to
 	// NewLinuxSampler. A report names its files against this, so an instance
 	// reading a non-default tree reports the paths it actually opened.
-	Base string
+	CgroupBase string
 
-	// Reads is one entry per member of allReadOps, in that order, and empty on a
-	// Sample no linuxSampler produced. Read seeds every entry to
+	// Reads is one entry per member of allReadOperations, in that order, and
+	// empty on a Sample no linuxSampler produced. Read seeds every entry to
 	// ReadNotAttempted and overwrites in place, so a read that never ran still
 	// has an entry.
 	Reads []ReadResult
