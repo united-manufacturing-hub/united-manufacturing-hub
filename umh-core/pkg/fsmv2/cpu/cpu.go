@@ -170,17 +170,15 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	return d
 }
 
-// containerOrHostLimit decides which limit cpuhealth judges CPU use against:
-// the container's own resource limit, or the host's capacity. cpuhealth needs
-// that answer in advance, because the table is built from it once and never
-// rebuilt.
+// containerOrHostLimit takes the one snapshot the table is built from, and
+// reports any read that failed while taking it. A failed read yields zero for
+// both figures; NewDeps says what that costs the instance (ENG-5752).
 //
 // NewDeps calls this before setting d.engine, so d.engine is nil here.
 func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
 	// The error is discarded because it carries nothing the sample does not:
 	// it is non-nil only when cpu.stat failed, which reportFailedReads reads
-	// off smp.Reads. A startup read that fails yields the zero limits below,
-	// which is what ENG-5752 describes.
+	// off smp.Reads.
 	smp, _ := s.Read(ctx)
 	d.reportFailedReads(ctx, smp)
 
