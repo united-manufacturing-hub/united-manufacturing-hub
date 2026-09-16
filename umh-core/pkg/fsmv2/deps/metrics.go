@@ -230,36 +230,13 @@ const (
 	// GaugeCPUHostCpus tracks the machine's CPU count, which exceeds this container's when it is pinned to a subset.
 	GaugeCPUHostCpus GaugeName = "cpu_host_cpus"
 
-	// GaugeCPULastSampleUnix carries the unix seconds of the last tick that
-	// measured. Every other cpu_* gauge, flags included, keeps its previous value
-	// when a tick cannot measure: recordGauges publishes only on a tick that
-	// measured, Collector.wrapNewObservation reloads and re-merges the previous
-	// gauge map, and WorkerMetricsExporter.export re-Sets every series it is
-	// handed and deletes none. A frozen series therefore keeps being scraped at
-	// its last value, and Prometheus cannot mark it stale while the series is
-	// still being written. The age of this timestamp is what tells a frozen value
-	// from a fresh one.
+	// GaugeCPULastSampleUnix carries the unix seconds of the last tick that measured.
+	// Every other cpu_* gauge holds its last value until then, so its age reveals a freeze.
 	GaugeCPULastSampleUnix GaugeName = "cpu_last_sample_unix"
 )
 
-// CPU worker readability flags, 1 for true and 0 for false.
-//
-// The suffix says which question a flag answers. A *_ring_active flag reports
-// whether the 60s window had filled. A non-zero mean beside it is still real,
-// because SlidingWindow.Reduce in pkg/diagnosis folds the points first and
-// downgrades the window's state afterwards. A zero beside it is not, because an
-// empty window returns StateAbsent carrying a 0, and the flag alone cannot tell
-// that from a short window. A *_signal_ready flag reports whether the signal
-// could be read at all, so a 0 there means the number beside it is a zero nobody
-// measured. cpu_host_headroom_available answers neither question; it reports CPU
-// scope.
-//
-// A gauge above is qualified only where a flag for it is declared here, and a
-// CPU gauge with no flag cannot be told apart from one that measured 0. The
-// widest case is the container's allowed CPU count (the cpuset): when that read
-// fails at startup the signal table in pkg/cpuhealth declares no host-cpu-full
-// signal, and every gauge derived from that signal reads 0 for the process
-// lifetime (ENG-5752).
+// CPU worker readability flags, 1 for true and 0 for false. *_ring_active: the 60s
+// window reduced to a trusted number. *_signal_ready: the signal could be read.
 const (
 	// GaugeCPUUsageRingActive qualifies cpu_avg_usage_cores.
 	GaugeCPUUsageRingActive GaugeName = "cpu_usage_ring_active"
