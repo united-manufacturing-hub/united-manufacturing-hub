@@ -50,22 +50,9 @@ const (
 
 // A read can fail with no errno: the syscall succeeds and the content is
 // unusable. Returning nil there would report a failed read as a good one.
-//
-// Each has a type of its own rather than being an errors.New value. The Sentry
-// fingerprint is built from the error's type chain, and every errors.New
-// sentinel in the process shares *errors.errorString, so a named type is what
-// keeps these two causes apart in Sentry and names them there.
-type emptyReadError struct{}
-
-func (emptyReadError) Error() string { return "cpuhealth: file empty" }
-
-type unparsableReadError struct{}
-
-func (unparsableReadError) Error() string { return "cpuhealth: content did not parse" }
-
 var (
-	errEmptyRead      error = emptyReadError{}
-	errUnparsableRead error = unparsableReadError{}
+	errEmptyRead      = errors.New("cpuhealth: file empty")
+	errUnparsableRead = errors.New("cpuhealth: content did not parse")
 )
 
 // classifyRead maps an unrecognised error to ReadError rather than to the
