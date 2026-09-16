@@ -80,8 +80,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	smp.Reads = seedReads()
 
 	// First because a cpu.stat failure returns before every read below it, and
-	// that event needs this evidence as much as any other.
-	s.recordEvidence(ctx, &smp)
+	// a report of that failure needs these reads as much as any other.
+	s.recordRawReads(ctx, &smp)
 
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
 	// calls time.Now() itself, so both rate derivations divide by the same
@@ -179,10 +179,10 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, smp *Sample, machine 
 	smp.CpuScope = ScopeAffinity
 }
 
-// recordEvidence puts the three evidence reads on smp: the text of
-// cgroup.controllers and /proc/self/cgroup, and the base directory's entry
-// count. None of them is parsed or judged here.
-func (s *linuxSampler) recordEvidence(ctx context.Context, smp *Sample) {
+// recordRawReads puts the reads that mint no signal on smp: file text kept
+// verbatim, and the base directory kept as an entry count. They describe the
+// machine on a failure report, and nothing here judges them.
+func (s *linuxSampler) recordRawReads(ctx context.Context, smp *Sample) {
 	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
 	smp.CgroupControllersRaw = controllers
 	smp.record(OpCgroupControllers, controllersOutcome)

@@ -130,8 +130,9 @@ type Sample struct {
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
 
-	// The evidence files, byte for byte. Empty means the read did not succeed,
-	// and that read's entry in Reads carries the reason.
+	// The file text the sampler captured but did not parse. An empty string
+	// means either the read failed or the file held nothing, and that read's
+	// entry in Reads says which.
 	CgroupControllersRaw string // cgroup.controllers, under the sampler's base
 	CPUMaxRaw            string // cpu.max, under the sampler's base
 	CPUStatRaw           string // cpu.stat, under the sampler's base

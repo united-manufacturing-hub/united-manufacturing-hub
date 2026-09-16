@@ -47,9 +47,9 @@ func (fakeDirEntry) IsDir() bool                { return false }
 func (fakeDirEntry) Type() os.FileMode          { return 0 }
 func (fakeDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
-// evidenceFS serves the healthy files plus the evidence sources, with per-path
+// rawReadFS serves the healthy files plus the unparsed ones, with per-path
 // overrides for failure cases.
-func evidenceFS(base string, overrides map[string]error, entryCount int, dirErr error) filesystem.Service {
+func rawReadFS(base string, overrides map[string]error, entryCount int, dirErr error) filesystem.Service {
 	files := healthyFiles(base)
 	files[base+"/cgroup.controllers"] = []byte(healthyControllers)
 	files["/proc/self/cgroup"] = []byte("0::/\n")
@@ -76,17 +76,17 @@ func evidenceFS(base string, overrides map[string]error, entryCount int, dirErr 
 	return mfs
 }
 
-var _ = Describe("the sample carries the surrounding evidence", func() {
+var _ = Describe("the sample carries the reads that mint no signal", func() {
 	const base = "/sys/fs/cgroup"
 	ctx := context.Background()
 
 	read := func(overrides map[string]error, entryCount int, dirErr error) Sample {
-		smp, _ := NewLinuxSampler(evidenceFS(base, overrides, entryCount, dirErr), base).Read(ctx)
+		smp, _ := NewLinuxSampler(rawReadFS(base, overrides, entryCount, dirErr), base).Read(ctx)
 
 		return smp
 	}
 
-	It("declares the three evidence operations alongside the six reported reads", func() {
+	It("declares the three unreported operations alongside the six reported reads", func() {
 		ops := make([]ReadOp, 0, len(allReadOps))
 		for _, spec := range allReadOps {
 			ops = append(ops, spec.Op)
@@ -110,15 +110,15 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 		Expect(smp.BaseDirEntryCount).To(Equal(85))
 	})
 
-	It("marks the evidence reads ok when they succeed", func() {
+	It("marks the unparsed reads ok when they succeed", func() {
 		smp := read(nil, 85, nil)
 
 		for _, op := range []ReadOp{OpCgroupControllers, OpProcSelfCgroup, OpBaseDir} {
-			Expect(outcomeFor(smp, op)).To(Equal(ReadOK), "evidence read %q", op)
+			Expect(outcomeFor(smp, op)).To(Equal(ReadOK), "unparsed read %q", op)
 		}
 	})
 
-	It("carries the reason and an empty raw when an evidence read fails", func() {
+	It("carries the reason and an empty raw when an unparsed read fails", func() {
 		ctrl := base + "/cgroup.controllers"
 		smp := read(map[string]error{ctrl: &fs.PathError{Op: "open", Path: ctrl, Err: syscall.EACCES}}, 85, nil)
 
@@ -161,7 +161,7 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 			"a readable list missing cpuset is a successful read, not a failed one")
 	})
 
-	It("still gathers the evidence when cpu.stat returned early", func() {
+	It("still gathers the unparsed reads when cpu.stat returned early", func() {
 		// The evidence is most needed when a read failed, so it must not sit
 		// behind the early return a cpu.stat failure takes.
 		statPath := base + "/cpu.stat"

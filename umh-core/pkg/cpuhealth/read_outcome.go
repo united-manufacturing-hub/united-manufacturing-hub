@@ -97,8 +97,9 @@ const (
 	// OpCpusetCPUs is the cgroup's cpuset.cpus.effective read.
 	OpCpusetCPUs ReadOp = "cpuset_cpus_effective"
 
-	// The three below are evidence: they ride on a report and mint none of
-	// their own, so reportedReadOps omits them.
+	// The ops below mint no report of their own. They ride on one that does,
+	// describing the machine around it, which is how a reader tells a broken
+	// mount from a broken file.
 
 	// OpCgroupControllers is the cgroup.controllers read.
 	OpCgroupControllers ReadOp = "cgroup_controllers"

@@ -306,7 +306,7 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, smp cpuhealth.Sample) {
 	}
 }
 
-// readFailureFields is one failed-read event's evidence.
+// readFailureFields is what one failed-read event carries besides its message.
 func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quota float64) []deps.Field {
 	fields := []deps.Field{
 		deps.String("path", cpuhealth.PathOf(smp.Base, failed)),
