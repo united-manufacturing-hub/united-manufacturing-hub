@@ -1,0 +1,174 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package cpuhealth
+
+import (
+	"context"
+	"io/fs"
+	"os"
+	"syscall"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+)
+
+// The controller list a working container serves. "cpuset" is the token that
+// matters: its absence is what the report exists to deliver.
+const healthyControllers = "cpuset cpu io memory hugetlb pids rdma\n"
+
+// dirEntries fakes a ReadDir result of n entries. Only the count is read.
+func dirEntries(n int) []os.DirEntry {
+	entries := make([]os.DirEntry, 0, n)
+	for i := 0; i < n; i++ {
+		entries = append(entries, fakeDirEntry{})
+	}
+
+	return entries
+}
+
+type fakeDirEntry struct{}
+
+func (fakeDirEntry) Name() string               { return "entry" }
+func (fakeDirEntry) IsDir() bool                { return false }
+func (fakeDirEntry) Type() os.FileMode          { return 0 }
+func (fakeDirEntry) Info() (os.FileInfo, error) { return nil, nil }
+
+// rawReadFS serves the healthy files plus the unparsed ones, with per-path
+// overrides for failure cases.
+func rawReadFS(base string, overrides map[string]error, entryCount int, dirErr error) filesystem.Service {
+	files := healthyFiles(base)
+	files[base+"/cgroup.controllers"] = []byte(healthyControllers)
+	files["/proc/self/cgroup"] = []byte("0::/\n")
+
+	mfs := filesystem.NewMockFileSystem()
+	mfs.ReadFileFunc = func(_ context.Context, p string) ([]byte, error) {
+		if err, ok := overrides[p]; ok {
+			return nil, err
+		}
+		if content, ok := files[p]; ok {
+			return content, nil
+		}
+
+		return nil, &fs.PathError{Op: "open", Path: p, Err: syscall.ENOENT}
+	}
+	mfs.ReadDirFunc = func(_ context.Context, _ string) ([]os.DirEntry, error) {
+		if dirErr != nil {
+			return nil, dirErr
+		}
+
+		return dirEntries(entryCount), nil
+	}
+
+	return mfs
+}
+
+var _ = Describe("the sample carries the reads that mint no signal", func() {
+	const base = "/sys/fs/cgroup"
+	ctx := context.Background()
+
+	read := func(overrides map[string]error, entryCount int, dirErr error) Sample {
+		sample, _ := NewLinuxSampler(rawReadFS(base, overrides, entryCount, dirErr), base).Read(ctx)
+
+		return sample
+	}
+
+	It("declares the three unreported operations alongside the six reported reads", func() {
+		operations := make([]ReadOperation, 0, len(allReadOperations))
+		for _, spec := range allReadOperations {
+			operations = append(operations, spec.Operation)
+		}
+
+		Expect(operations).To(HaveLen(9))
+		Expect(operations).To(ContainElements(OperationCgroupControllers, OperationProcSelfCgroup, OperationCgroupBaseDir))
+	})
+
+	// Byte for byte matters because readFailureFields ships these verbatim: a
+	// trimmed or re-encoded value would misdescribe the machine on the report.
+	It("records every raw value byte for byte as the file served it", func() {
+		sample := read(nil, 85, nil)
+
+		Expect(sample.Troubleshooting.CgroupControllersRaw).To(Equal(healthyControllers),
+			"the controller list must arrive unparsed and untrimmed of meaning")
+		Expect(sample.Troubleshooting.ProcSelfCgroupRaw).To(Equal("0::/\n"))
+		Expect(sample.Troubleshooting.CPUMaxRaw).To(Equal("200000 100000\n"))
+		Expect(sample.Troubleshooting.CPUStatRaw).To(ContainSubstring("usage_usec 11457863754"),
+			"the cpu.stat text is what tells a reader whether an absent usage figure was an empty file or a malformed one")
+		Expect(sample.Troubleshooting.CgroupBaseDirEntryCount).To(Equal(85))
+	})
+
+	It("marks the unparsed reads ok when they succeed", func() {
+		sample := read(nil, 85, nil)
+
+		for _, operation := range []ReadOperation{OperationCgroupControllers, OperationProcSelfCgroup, OperationCgroupBaseDir} {
+			Expect(outcomeFor(sample, operation)).To(Equal(ReadOK), "unparsed read %q", operation)
+		}
+	})
+
+	It("carries the reason and an empty raw when an unparsed read fails", func() {
+		ctrl := base + "/cgroup.controllers"
+		sample := read(map[string]error{ctrl: &fs.PathError{Op: "open", Path: ctrl, Err: syscall.EACCES}}, 85, nil)
+
+		Expect(outcomeFor(sample, OperationCgroupControllers)).To(Equal(ReadPermissionDenied))
+		Expect(sample.Troubleshooting.CgroupControllersRaw).To(BeEmpty(),
+			"a failed read must not leave stale or invented text in the raw field")
+	})
+
+	It("reports the directory read's own failure and a sentinel count", func() {
+		sample := read(nil, 0, &fs.PathError{Op: "open", Path: base, Err: syscall.ENOENT})
+
+		Expect(outcomeFor(sample, OperationCgroupBaseDir)).To(Equal(ReadMissing))
+		Expect(sample.Troubleshooting.CgroupBaseDirEntryCount).To(Equal(-1),
+			"zero entries is a real reading; an unread directory must not look like an empty one")
+	})
+
+	// A controller list that read fine and simply lacks cpuset. Parsing the
+	// list into a boolean would discard the evidence of which are present.
+	It("keeps a controller list with no cpuset token exactly as served", func() {
+		files := base + "/cgroup.controllers"
+		mfs := filesystem.NewMockFileSystem()
+		healthy := healthyFiles(base)
+		healthy[files] = []byte("cpu io memory pids\n")
+		healthy["/proc/self/cgroup"] = []byte("0::/\n")
+		mfs.ReadFileFunc = func(_ context.Context, p string) ([]byte, error) {
+			if c, ok := healthy[p]; ok {
+				return c, nil
+			}
+
+			return nil, &fs.PathError{Op: "open", Path: p, Err: syscall.ENOENT}
+		}
+		mfs.ReadDirFunc = func(_ context.Context, _ string) ([]os.DirEntry, error) {
+			return dirEntries(34), nil
+		}
+
+		sample, _ := NewLinuxSampler(mfs, base).Read(ctx)
+
+		Expect(sample.Troubleshooting.CgroupControllersRaw).To(Equal("cpu io memory pids\n"))
+		Expect(outcomeFor(sample, OperationCgroupControllers)).To(Equal(ReadOK),
+			"a readable list missing cpuset is a successful read, not a failed one")
+	})
+
+	It("still gathers the unparsed reads when cpu.stat returned early", func() {
+		// The evidence is most needed when a read failed, so it must not sit
+		// behind the early return a cpu.stat failure takes.
+		statPath := base + "/cpu.stat"
+		sample := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}}, 85, nil)
+
+		Expect(sample.Troubleshooting.CgroupControllersRaw).To(Equal(healthyControllers))
+		Expect(sample.Troubleshooting.CgroupBaseDirEntryCount).To(Equal(85))
+		Expect(outcomeFor(sample, OperationCgroupControllers)).To(Equal(ReadOK))
+	})
+})
