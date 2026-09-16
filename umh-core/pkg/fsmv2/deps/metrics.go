@@ -213,7 +213,9 @@ const (
 	GaugeCPUPressureAvg60 GaugeName = "cpu_pressure_avg60"
 
 	// GaugeCPUHostHeadroomCores tracks cores free on the host after the reserve.
-	// Unclamped: a full box reports a negative number rather than 0.
+	// Unclamped: a full box reports a negative number rather than 0. A 0 is also
+	// what a box whose core count was unreadable at startup reports for its whole
+	// lifetime, and no flag below distinguishes the two (ENG-5752).
 	GaugeCPUHostHeadroomCores GaugeName = "cpu_host_headroom_cores"
 
 	// GaugeCPUAvgHostBusyCores tracks the whole machine's 60s mean busy time, in cores.
@@ -234,7 +236,9 @@ const (
 //
 // Several of the gauges above report 0 when their signal was absent or
 // untrusted, so without the matching flag a consumer cannot tell "not
-// throttled" from "no throttle signal".
+// throttled" from "no throttle signal". Not every one of them has a flag:
+// cpu_host_headroom_cores has none, and the scope flag below is not a
+// substitute for one.
 const (
 	// GaugeCPUUsageRingActive qualifies cpu_avg_usage_cores.
 	GaugeCPUUsageRingActive GaugeName = "cpu_usage_ring_active"
@@ -243,7 +247,8 @@ const (
 	GaugeCPUHostBusyRingActive GaugeName = "cpu_host_busy_ring_active"
 
 	// GaugeCPUHostHeadroomAvailable reports whether this container sees the whole
-	// machine, reading 0 when it is pinned to a subset of CPUs.
+	// machine, reading 0 when it is pinned to a subset of CPUs. Scope, not
+	// readability: it does not qualify cpu_host_headroom_cores.
 	GaugeCPUHostHeadroomAvailable GaugeName = "cpu_host_headroom_available"
 
 	// GaugeCPUThrottleSignalReady qualifies cpu_throttle_ratio.
