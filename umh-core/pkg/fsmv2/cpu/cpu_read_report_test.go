@@ -191,14 +191,51 @@ func buildWithFiles(fileOverrides map[string][]byte) *[]recorded {
 	return events
 }
 
+// msgs renders each event the way a reader identifies it: the message, then
+// the read it was about. Only the message reaches the Sentry fingerprint; the
+// op and the outcome are fields, so one failed read does not mint its own
+// issue. Reconstructing the pair here keeps these specs asserting WHICH read
+// failed, which is what they are about.
 func msgs(events *[]recorded) []string {
 	out := []string{}
 	for _, e := range *events {
-		out = append(out, e.Msg)
+		op, _ := e.Fields["read_op"].(string)
+		outcome, _ := e.Fields["read_outcome"].(string)
+		out = append(out, e.Msg+"::"+op+"::"+outcome)
 	}
 
 	return out
 }
+
+var _ = Describe("the message carries the sad path, the fields carry the read", func() {
+	It("names only the sad path in the message", func() {
+		// The message is the Sentry fingerprint. Naming the op and the outcome
+		// in it mints an issue per combination, and there are 29 reachable;
+		// as fields they stay searchable while one failure stays one issue.
+		cpuset := cgroupBase + "/cpuset.cpus.effective"
+		events, _, _ := build(map[string]error{
+			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
+		})
+
+		Expect(*events).To(HaveLen(1))
+		e := (*events)[0]
+
+		Expect(e.Msg).To(Equal("cpu::read_failed"), "the fingerprint is the sad path, nothing else")
+		Expect(e.Fields).To(HaveKeyWithValue("read_op", "cpuset_cpus_effective"))
+		Expect(e.Fields).To(HaveKeyWithValue("read_outcome", "missing"))
+	})
+
+	It("keeps a voided sample under its own message", func() {
+		statPath := cgroupBase + "/cpu.stat"
+		events, _, _ := build(map[string]error{
+			statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT},
+		})
+
+		Expect(*events).To(HaveLen(1))
+		Expect((*events)[0].Msg).To(Equal("cpu::sample_failed"))
+		Expect((*events)[0].Fields).To(HaveKeyWithValue("read_op", "cpu_stat"))
+	})
+})
 
 var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	It("reports nothing at all from a healthy container", func() {
@@ -242,11 +279,14 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
 
-		// errorTypes is EMPTY on purpose: these events carry no error, and the
-		// cause is already in the message.
+		// The fingerprint is the message, so this is also where the message's
+		// shape is load-bearing: naming the op and the outcome in it would put
+		// them in the fingerprint and split one failure into an issue per
+		// combination. errorTypes is EMPTY on purpose, as these events carry no
+		// error value.
 		want := strings.Join(fsmv2sentry.BuildFingerprint(
 			zapcore.WarnLevel, string(deps.FeatureSupportCPU),
-			"cpu::read_failed::cpuset_cpus_effective::missing",
+			"cpu::read_failed",
 			"",
 		), "|")
 

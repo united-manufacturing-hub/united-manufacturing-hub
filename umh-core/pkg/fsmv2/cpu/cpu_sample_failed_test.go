@@ -114,7 +114,9 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		e := (*events)[0]
 
 		By("naming which file failed and how")
-		Expect(e.Msg).To(Equal("cpu::read_failed::cpuset_cpus_effective::missing"))
+		Expect(e.Msg).To(Equal("cpu::read_failed"))
+		Expect(e.Fields).To(HaveKeyWithValue("read_op", "cpuset_cpus_effective"))
+		Expect(e.Fields).To(HaveKeyWithValue("read_outcome", "missing"))
 		Expect(e.Fields).To(HaveKeyWithValue("path", cpuset))
 
 		By("ruling out a broken mount, a wrong base, and cgroup v1")
@@ -132,12 +134,14 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		Expect(e.Fields).To(HaveKeyWithValue("cgroup_controllers_raw", evidenceControllers))
 
 		By("ruling out a permission problem and a parse bug")
-		// missing rather than permission_denied excludes both, and sits in the message, so
-		// the Sentry issue list shows it without opening the event.
-		Expect(e.Msg).To(HaveSuffix("::missing"))
+		// missing rather than permission_denied excludes both. It rides as a
+		// field: the message is the grouping key, so an outcome in it would
+		// split one failure into an issue per outcome. Sentry facets on the
+		// field instead.
+		Expect(e.Fields).To(HaveKeyWithValue("read_outcome", "missing"))
 
 		By("keeping every variable value out of the grouping key")
-		Expect(strings.Count(e.Msg, "::")).To(Equal(3), "verb, file, reason, nothing else")
+		Expect(strings.Count(e.Msg, "::")).To(Equal(1), "domain and sad path, nothing else")
 		Expect(e.Msg).NotTo(ContainSubstring("/"))
 	})
 

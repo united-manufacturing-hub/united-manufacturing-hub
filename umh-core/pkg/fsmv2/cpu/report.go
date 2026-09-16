@@ -45,13 +45,14 @@ var excusedReads = map[cpuhealth.ReadResult]struct{}{
 }
 
 const (
-	// The message is one of these prefixes, the op and the outcome, and nothing
-	// else: Sentry groups on it, so a path or a count would mint an issue per
-	// value. read_failed means the sample survived without one signal.
-	readFailedPrefix = "cpu::read_failed::"
-	// sampleFailedPrefix means the failure voided the whole sample.
-	sampleFailedPrefix = "cpu::sample_failed::"
-	readFailedSep      = "::"
+	// The message is the whole Sentry fingerprint, so it names the sad path and
+	// nothing else. Which read failed, and how, are fields: naming them here
+	// would mint an issue per combination, and there are 29 reachable ones.
+	//
+	// readFailedTag means the sample survived without one signal.
+	readFailedTag = "cpu::read_failed"
+	// sampleFailedTag means the failure voided the whole sample.
+	sampleFailedTag = "cpu::sample_failed"
 )
 
 // readFailure is one read whose outcome earns a Sentry event.
@@ -96,10 +97,10 @@ func failedReads(smp cpuhealth.Sample) []readFailure {
 // cost one signal, so both stay read_failed.
 func verbFor(r cpuhealth.ReadResult) string {
 	if r.Op == cpuhealth.OpCPUStat && r.Outcome != cpuhealth.ReadEmpty {
-		return sampleFailedPrefix
+		return sampleFailedTag
 	}
 
-	return readFailedPrefix
+	return readFailedTag
 }
 
 // reportFailedReads emits one Sentry event per failed read on smp. A sample
@@ -125,15 +126,18 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, smp cpuhealth.Sample) {
 		}
 
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			f.Verb+string(f.Op)+readFailedSep+string(f.Outcome),
-			readFailureFields(smp, f.Op, cores, quota)...)
+			f.Verb, readFailureFields(smp, f, cores, quota)...)
 	}
 }
 
 // readFailureFields is what one failed-read event carries besides its message.
-func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quota float64) []deps.Field {
+func readFailureFields(smp cpuhealth.Sample, failed readFailure, cores, quota float64) []deps.Field {
 	fields := []deps.Field{
-		deps.String("path", cpuhealth.PathOf(smp.Base, failed)),
+		// The two the message no longer carries. Sentry facets on them, so the
+		// issue stays one while the breakdown stays available.
+		deps.String("read_op", string(failed.Op)),
+		deps.String("read_outcome", string(failed.Outcome)),
+		deps.String("path", cpuhealth.PathOf(smp.Base, failed.Op)),
 		deps.String("cgroup_base", smp.Base),
 		deps.String("cgroup_controllers_raw", smp.CgroupControllersRaw),
 		deps.String("cpu_max_raw", smp.CPUMaxRaw),
@@ -145,7 +149,7 @@ func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quo
 	// Every sibling is reported, a never-attempted one included: the pattern
 	// across the reads is what says which shape a machine is in.
 	for _, r := range smp.Reads {
-		if r.Op == failed {
+		if r.Op == failed.Op {
 			continue
 		}
 

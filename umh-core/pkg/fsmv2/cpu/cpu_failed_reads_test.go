@@ -72,14 +72,14 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUStat, Outcome: cpuhealth.ReadMissing},
 		))
 		Expect(unreadable).To(HaveLen(1))
-		Expect(unreadable[0].Verb).To(Equal(sampleFailedPrefix))
+		Expect(unreadable[0].Verb).To(Equal(sampleFailedTag))
 
 		// Read fine, no usage figure: the sample survives without a usage rate.
 		valueless := failedReads(sample(
 			cpuhealth.ReadResult{Op: cpuhealth.OpCPUStat, Outcome: cpuhealth.ReadEmpty},
 		))
 		Expect(valueless).To(HaveLen(1))
-		Expect(valueless[0].Verb).To(Equal(readFailedPrefix))
+		Expect(valueless[0].Verb).To(Equal(readFailedTag))
 	})
 
 	It("leaves a sibling failure under its own verb when cpu.stat voided the tick", func() {
@@ -89,8 +89,8 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 		))
 
 		Expect(got).To(HaveLen(2))
-		Expect(got[0].Verb).To(Equal(readFailedPrefix), "cpu.pressure cost one signal, not the sample")
-		Expect(got[1].Verb).To(Equal(sampleFailedPrefix))
+		Expect(got[0].Verb).To(Equal(readFailedTag), "cpu.pressure cost one signal, not the sample")
+		Expect(got[1].Verb).To(Equal(sampleFailedTag))
 	})
 })
 
@@ -101,7 +101,7 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 var _ = Describe("a failure report names the tree the sample was read from", func() {
 	fieldsOf := func(smp cpuhealth.Sample, op cpuhealth.ReadOp) map[string]any {
 		kv := map[string]any{}
-		for _, f := range readFailureFields(smp, op, 0, 0) {
+		for _, f := range readFailureFields(smp, readFailure{Op: op}, 0, 0) {
 			kv[f.Key] = f.Value
 		}
 
