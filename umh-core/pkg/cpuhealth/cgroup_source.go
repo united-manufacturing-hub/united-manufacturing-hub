@@ -92,7 +92,7 @@ func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) d
 // reports nothing to Sentry: the limit is missing because there is none, not
 // because the file could not be read.
 func (c *cgroupSource) readQuota(ctx context.Context) (quotaRead, ReadOutcome) {
-	data, err := c.fs.ReadFile(ctx, c.base+"/cpu.max")
+	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OpCPUMax))
 	if err != nil {
 		return quotaRead{Limit: diagnosis.Unknown()}, classifyRead(err)
 	}
@@ -152,7 +152,7 @@ type statRead struct {
 func (c *cgroupSource) readStat(ctx context.Context) (statRead, error) {
 	failed := statRead{Usage: diagnosis.Unknown(), Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
 
-	data, err := c.fs.ReadFile(ctx, c.base+"/cpu.stat")
+	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OpCPUStat))
 	if err != nil {
 		return failed, err
 	}
@@ -194,7 +194,7 @@ func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 // readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction. A non-nil error
 // is why there is none this tick.
 func (c *cgroupSource) readPSI(ctx context.Context) (frac float64, err error) {
-	data, err := c.fs.ReadFile(ctx, c.base+"/cpu.pressure")
+	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OpCPUPressure))
 	if err != nil {
 		return 0, err
 	}
@@ -229,7 +229,7 @@ func (c *cgroupSource) readPSI(ctx context.Context) (frac float64, err error) {
 // An unreadable file, or any entry that does not parse, yields zero and the
 // reason rather than a partial count.
 func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
-	data, err := c.fs.ReadFile(ctx, c.base+"/cpuset.cpus.effective")
+	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OpCpusetCPUs))
 	if err != nil {
 		return 0, err
 	}
@@ -267,14 +267,14 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 // parent delegated to this cgroup. Any outcome other than ReadOK means no text
 // was read, and names the cause.
 func (c *cgroupSource) readControllers(ctx context.Context) (string, ReadOutcome) {
-	return readRawFile(ctx, c.fs, c.base+"/cgroup.controllers")
+	return readRawFile(ctx, c.fs, PathOf(c.base, OpCgroupControllers))
 }
 
 // readBaseDirEntryCount keeps only the entry count. A mounted cgroup v2 tree
 // holds dozens of files, so a directory holding two or three says the mount is
 // not the one we expect. An unlistable directory yields -1, never 0.
 func (c *cgroupSource) readBaseDirEntryCount(ctx context.Context) (int, ReadOutcome) {
-	entries, err := c.fs.ReadDir(ctx, c.base)
+	entries, err := c.fs.ReadDir(ctx, PathOf(c.base, OpBaseDir))
 	if err != nil {
 		return -1, classifyRead(err)
 	}

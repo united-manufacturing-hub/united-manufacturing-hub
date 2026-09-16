@@ -108,20 +108,48 @@ const (
 	OpBaseDir ReadOp = "cgroup_base_dir"
 )
 
+// readOpSpec pairs one read with the file it opens. underBase marks a file
+// that hangs off the sampler's cgroup base; the rest are machine-wide and
+// absolute. OpBaseDir opens the base directory itself, so it carries no name.
+type readOpSpec struct {
+	Op        ReadOp
+	name      string
+	underBase bool
+}
+
 // allReadOps is every read, in the order Read performs them. The DMI reads
 // (/sys/class/dmi/id/product_name, sys_vendor) are absent: product_name is
 // normally missing in a container, so reporting it would alert on correct
 // absence.
-var allReadOps = []ReadOp{
-	OpCgroupControllers,
-	OpProcSelfCgroup,
-	OpBaseDir,
-	OpCPUPressure,
-	OpCPUStat,
-	OpProcStat,
-	OpCpusetCPUs,
-	OpProcCpuinfo,
-	OpCPUMax,
+var allReadOps = []readOpSpec{
+	{Op: OpCgroupControllers, name: "/cgroup.controllers", underBase: true},
+	{Op: OpProcSelfCgroup, name: "/proc/self/cgroup"},
+	{Op: OpBaseDir, underBase: true},
+	{Op: OpCPUPressure, name: "/cpu.pressure", underBase: true},
+	{Op: OpCPUStat, name: "/cpu.stat", underBase: true},
+	{Op: OpProcStat, name: "/proc/stat"},
+	{Op: OpCpusetCPUs, name: "/cpuset.cpus.effective", underBase: true},
+	{Op: OpProcCpuinfo, name: "/proc/cpuinfo"},
+	{Op: OpCPUMax, name: "/cpu.max", underBase: true},
+}
+
+// PathOf returns the file op opens under base, so a reader and a report of
+// that read name the same path by construction. base is ignored for a
+// machine-wide file. An op with no entry returns "".
+func PathOf(base string, op ReadOp) string {
+	for _, spec := range allReadOps {
+		if spec.Op != op {
+			continue
+		}
+
+		if spec.underBase {
+			return base + spec.name
+		}
+
+		return spec.name
+	}
+
+	return ""
 }
 
 // ReadResult pairs one read with what it produced.

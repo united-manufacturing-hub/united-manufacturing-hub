@@ -87,8 +87,13 @@ var _ = Describe("the sample carries the surrounding evidence", func() {
 	}
 
 	It("declares the three evidence operations alongside the six reported reads", func() {
-		Expect(allReadOps).To(HaveLen(9))
-		Expect(allReadOps).To(ContainElements(OpCgroupControllers, OpProcSelfCgroup, OpBaseDir))
+		ops := make([]ReadOp, 0, len(allReadOps))
+		for _, spec := range allReadOps {
+			ops = append(ops, spec.Op)
+		}
+
+		Expect(ops).To(HaveLen(9))
+		Expect(ops).To(ContainElements(OpCgroupControllers, OpProcSelfCgroup, OpBaseDir))
 	})
 
 	// These fields have no consumer until the report exists, so without this

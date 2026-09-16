@@ -220,16 +220,6 @@ var excusedReads = map[cpuhealth.ReadResult]struct{}{
 	{Op: cpuhealth.OpCPUPressure, Outcome: cpuhealth.ReadMissing}: {},
 }
 
-// readOpPaths is the file each reported read opens, a field not a message part.
-var readOpPaths = map[cpuhealth.ReadOp]string{
-	cpuhealth.OpProcStat:    "/proc/stat",
-	cpuhealth.OpProcCpuinfo: "/proc/cpuinfo",
-	cpuhealth.OpCPUStat:     cgroupBase + "/cpu.stat",
-	cpuhealth.OpCPUMax:      cgroupBase + "/cpu.max",
-	cpuhealth.OpCPUPressure: cgroupBase + "/cpu.pressure",
-	cpuhealth.OpCpusetCPUs:  cgroupBase + "/cpuset.cpus.effective",
-}
-
 const (
 	// The message is one of these prefixes, the op and the outcome, and nothing
 	// else: Sentry groups on it, so a path or a count would mint an issue per
@@ -319,8 +309,8 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, smp cpuhealth.Sample) {
 // readFailureFields is one failed-read event's evidence.
 func readFailureFields(smp cpuhealth.Sample, failed cpuhealth.ReadOp, cores, quota float64) []deps.Field {
 	fields := []deps.Field{
-		deps.String("path", readOpPaths[failed]),
-		deps.String("cgroup_base", cgroupBase),
+		deps.String("path", cpuhealth.PathOf(smp.Base, failed)),
+		deps.String("cgroup_base", smp.Base),
 		deps.String("cgroup_controllers_raw", smp.CgroupControllersRaw),
 		deps.String("cpu_max_raw", smp.CPUMaxRaw),
 		deps.String("cpu_stat_raw", smp.CPUStatRaw),

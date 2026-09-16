@@ -123,14 +123,14 @@ func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) 
 // which is why it is read here and not by cgroupSource. Any outcome other than
 // ReadOK means no text was read, and names the cause.
 func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome) {
-	return readRawFile(ctx, h.fs, "/proc/self/cgroup")
+	return readRawFile(ctx, h.fs, PathOf("", OpProcSelfCgroup))
 }
 
 // readHost yields /proc/stat's busy, steal and denominator jiffy totals, plus
 // machine, the machine's CPU count. The totals stay raw so the caller can take
 // interval deltas off them. A non-nil error is why there are none.
 func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine float64, err error) {
-	data, err := h.fs.ReadFile(ctx, "/proc/stat")
+	data, err := h.fs.ReadFile(ctx, PathOf("", OpProcStat))
 	if err != nil {
 		return 0, 0, 0, 0, err
 	}
@@ -196,7 +196,7 @@ func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpu
 	}
 	// The x86 route. The "hypervisor" flag is the guest's own evidence, so a
 	// match settles the fact without reading DMI at all.
-	data, err := h.fs.ReadFile(ctx, "/proc/cpuinfo")
+	data, err := h.fs.ReadFile(ctx, PathOf("", OpProcCpuinfo))
 	cpuinfo = classifyRead(err)
 	if err == nil && cpuinfoHasHypervisorFlag(data) {
 		h.virtualized = true

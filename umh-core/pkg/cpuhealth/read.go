@@ -76,6 +76,7 @@ type linuxSampler struct {
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
+	smp.Base = s.cgroup.base
 	smp.Reads = seedReads()
 
 	// First because a cpu.stat failure returns before every read below it, and
@@ -213,8 +214,8 @@ func statOutcome(stat statRead, err error) ReadOutcome {
 // seedReads returns one ReadNotAttempted entry per op, in allReadOps order.
 func seedReads() []ReadResult {
 	reads := make([]ReadResult, len(allReadOps))
-	for i, op := range allReadOps {
-		reads[i] = ReadResult{Op: op, Outcome: ReadNotAttempted}
+	for i, spec := range allReadOps {
+		reads[i] = ReadResult{Op: spec.Op, Outcome: ReadNotAttempted}
 	}
 	return reads
 }

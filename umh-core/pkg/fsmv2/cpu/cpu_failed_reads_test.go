@@ -93,3 +93,37 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 		Expect(got[1].Verb).To(Equal(sampleFailedPrefix))
 	})
 })
+
+// The reported path must be the path the sampler opened. An instance reading a
+// non-default cgroup tree used to report /sys/fs/cgroup regardless, because the
+// reporter held its own table of paths built from the package constant rather
+// than from the sample.
+var _ = Describe("a failure report names the tree the sample was read from", func() {
+	fieldsOf := func(smp cpuhealth.Sample, op cpuhealth.ReadOp) map[string]any {
+		kv := map[string]any{}
+		for _, f := range readFailureFields(smp, op, 0, 0) {
+			kv[f.Key] = f.Value
+		}
+
+		return kv
+	}
+
+	It("builds the path from the sample's base, not from the package constant", func() {
+		kv := fieldsOf(cpuhealth.Sample{Base: "/custom/tree"}, cpuhealth.OpCPUStat)
+
+		Expect(kv).To(HaveKeyWithValue("path", "/custom/tree/cpu.stat"))
+		Expect(kv).To(HaveKeyWithValue("cgroup_base", "/custom/tree"))
+	})
+
+	It("leaves a machine-wide file absolute whatever the base is", func() {
+		kv := fieldsOf(cpuhealth.Sample{Base: "/custom/tree"}, cpuhealth.OpProcStat)
+
+		Expect(kv).To(HaveKeyWithValue("path", "/proc/stat"))
+	})
+
+	It("still names the default tree for a sampler built on it", func() {
+		kv := fieldsOf(cpuhealth.Sample{Base: cgroupBase}, cpuhealth.OpCPUMax)
+
+		Expect(kv).To(HaveKeyWithValue("path", cgroupBase+"/cpu.max"))
+	})
+})

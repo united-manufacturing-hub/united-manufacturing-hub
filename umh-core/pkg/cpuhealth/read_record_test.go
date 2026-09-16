@@ -88,8 +88,8 @@ var _ = Describe("the sample records what each read produced", func() {
 		for _, r := range smp.Reads {
 			seen[r.Op]++
 		}
-		for _, op := range allReadOps {
-			Expect(seen[op]).To(Equal(1), "read operation %q must be recorded exactly once", op)
+		for _, spec := range allReadOps {
+			Expect(seen[spec.Op]).To(Equal(1), "read operation %q must be recorded exactly once", spec.Op)
 		}
 	})
 
@@ -104,8 +104,8 @@ var _ = Describe("the sample records what each read produced", func() {
 	It("does not record the DMI reads at all", func() {
 		// The DMI files are not reported, so readVirtualized records only its
 		// /proc/cpuinfo read.
-		for _, op := range allReadOps {
-			Expect(string(op)).NotTo(ContainSubstring("dmi"),
+		for _, spec := range allReadOps {
+			Expect(string(spec.Op)).NotTo(ContainSubstring("dmi"),
 				"DMI reads are excluded from reporting, so they must not be recorded")
 		}
 	})
