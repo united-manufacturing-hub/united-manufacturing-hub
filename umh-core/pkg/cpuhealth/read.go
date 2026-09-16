@@ -235,7 +235,10 @@ func (s *Sample) record(operation ReadOperation, outcome ReadOutcome, readErr er
 			s.Troubleshooting.ReadErrors = make(map[ReadOperation]error, len(allReadOperations))
 		}
 
-		s.Troubleshooting.ReadErrors[operation] = readErr
+		// Named here rather than at each failure: the seventeen places that
+		// return a content failure sit inside parse helpers that never learn
+		// which file they were handed, while this one knows both.
+		s.Troubleshooting.ReadErrors[operation] = pathErrorFor(s.Troubleshooting.CgroupBase, operation, readErr)
 	}
 
 	for i := range s.Troubleshooting.Reads {

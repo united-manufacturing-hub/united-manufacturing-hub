@@ -266,3 +266,39 @@ var _ = Describe("a failed read reports its cause", func() {
 		})
 	})
 })
+
+var _ = Describe("a failure names the file it happened to", func() {
+	base := "/sys/fs/cgroup"
+
+	It("gives a content failure the same shape as an errno failure", func() {
+		// The reason reaches Sentry as the event's subtitle, so it is what a
+		// reader acts on. A bare "file is empty" names no file and sends them
+		// hunting; the errno failures already read well because the kernel's
+		// own error carries the path.
+		Expect(pathErrorFor(base, OperationCPUMax, errEmptyRead).Error()).
+			To(Equal("read /sys/fs/cgroup/cpu.max: file is empty"))
+		Expect(pathErrorFor(base, OperationCPUStat, errUnparsableRead).Error()).
+			To(Equal("read /sys/fs/cgroup/cpu.stat: content did not parse"))
+	})
+
+	It("leaves an error that already names its file alone", func() {
+		// Wrapping the kernel's own error again would read
+		// "read /proc/stat: open /proc/stat: ...".
+		kernel := pathErr("/proc/stat", syscall.ENOENT)
+		Expect(pathErrorFor(base, OperationProcStat, kernel)).To(BeIdenticalTo(kernel))
+		Expect(pathErrorFor(base, OperationProcStat, kernel).Error()).
+			To(Equal("open /proc/stat: no such file or directory"))
+	})
+
+	It("does not disturb how the read was classified", func() {
+		// classifyRead runs on the raw error, before this wraps it. Were that
+		// order reversed, every content failure would read as ReadError.
+		Expect(classifyRead(errEmptyRead)).To(Equal(ReadEmpty))
+		Expect(classifyRead(errUnparsableRead)).To(Equal(ReadUnparsable))
+		Expect(classifyRead(pathErr("/proc/stat", syscall.EACCES))).To(Equal(ReadPermissionDenied))
+	})
+
+	It("returns nil for a read that did not fail", func() {
+		Expect(pathErrorFor(base, OperationCPUMax, nil)).To(BeNil())
+	})
+})
