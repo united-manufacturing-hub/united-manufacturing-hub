@@ -127,8 +127,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	// Called before the error return below: Read fills Sample.Reads even when it
 	// errors, so the read that broke is named either way.
-	cores, quota := limitsFromSample(sample)
-	reportFailedReads(ctx, sample, err, cores, quota, d)
+	d.reportFailedReads(ctx, sample)
 
 	if err != nil {
 		return CPUStatus{}, err
@@ -178,12 +177,14 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 //
 // NewDeps calls this before setting d.engine, so d.engine is nil here.
 func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
-	smp, err := s.Read(ctx)
-	cores, quota = limitsFromSample(smp)
+	// The error is discarded because it carries nothing the sample does not:
+	// it is non-nil only when cpu.stat failed, which reportFailedReads reads
+	// off smp.Reads. A startup read that fails yields the zero limits below,
+	// which is what ENG-5752 describes.
+	smp, _ := s.Read(ctx)
+	d.reportFailedReads(ctx, smp)
 
-	reportFailedReads(ctx, smp, err, cores, quota, d)
-
-	return cores, quota
+	return limitsFromSample(smp)
 }
 
 // limitsFromSample reads the capacity figures off one sample.
@@ -239,19 +240,21 @@ const (
 	readFailedSep      = "::"
 )
 
-// reportFailedReads emits one Sentry event per failed read.
+// readFailure is one read whose outcome earns a Sentry event.
+type readFailure struct {
+	Op      cpuhealth.ReadOp
+	Outcome cpuhealth.ReadOutcome
+	Verb    string
+}
+
+// failedReads returns the reads on smp that earn a Sentry event, in the order
+// Read performed them. Whether an event was already sent for one is not asked
+// here; that rule belongs to reportFailedReads.
 //
-// ReadNotAttempted never reports: one failure stops several later reads, so
-// reporting those would turn one root cause into several issues. The verb
-// belongs to the read it is reported under, and only cpu.stat can void a
-// sample, so a cpu.pressure failing in the same tick stays read_failed.
-func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error, cores, quota float64, d *CPUDeps) {
-	// Shutdown is not a failure. filesystem.DefaultService.ReadFile checks the
-	// context, so once it is done every read fails and a graceful shutdown would
-	// emit an event per read on every instance.
-	if ctx.Err() != nil {
-		return
-	}
+// ReadNotAttempted earns nothing: one failure stops several later reads, so
+// reporting those would turn one root cause into several issues.
+func failedReads(smp cpuhealth.Sample) []readFailure {
+	var failures []readFailure
 
 	for _, r := range smp.Reads {
 		if _, reported := reportedReadOps[r.Op]; !reported {
@@ -266,18 +269,50 @@ func reportFailedReads(ctx context.Context, smp cpuhealth.Sample, readErr error,
 			continue
 		}
 
-		if _, reportedBefore := d.reportedReads.LoadOrStore(r, struct{}{}); reportedBefore {
+		failures = append(failures, readFailure{Op: r.Op, Outcome: r.Outcome, Verb: verbFor(r)})
+	}
+
+	return failures
+}
+
+// verbFor says what a failed read cost. Only cpu.stat carries the usage
+// counters, so only a cpu.stat that could not be read or parsed leaves the
+// tick with no measurement. A cpu.stat that read fine and held no usage figure
+// still yields a usable sample, and a cpu.pressure failing in the same tick
+// cost one signal, so both stay read_failed.
+func verbFor(r cpuhealth.ReadResult) string {
+	if r.Op == cpuhealth.OpCPUStat && r.Outcome != cpuhealth.ReadEmpty {
+		return sampleFailedPrefix
+	}
+
+	return readFailedPrefix
+}
+
+// reportFailedReads emits one Sentry event per failed read on smp. A sample
+// whose reads all succeeded yields no failures and no events, which is why
+// Poll calls this on every tick rather than only when Read returns an error.
+//
+// A failure that repeats every tick reports once: the first event names the
+// problem and the rest would cost an issue each while adding nothing.
+func (d *CPUDeps) reportFailedReads(ctx context.Context, smp cpuhealth.Sample) {
+	// Shutdown is not a failure. filesystem.DefaultService.ReadFile checks the
+	// context, so once it is done every read fails and a graceful shutdown would
+	// emit an event per read on every instance.
+	if ctx.Err() != nil {
+		return
+	}
+
+	cores, quota := limitsFromSample(smp)
+
+	for _, f := range failedReads(smp) {
+		seen := cpuhealth.ReadResult{Op: f.Op, Outcome: f.Outcome}
+		if _, reportedBefore := d.reportedReads.LoadOrStore(seen, struct{}{}); reportedBefore {
 			continue
 		}
 
-		prefix := readFailedPrefix
-		if r.Op == cpuhealth.OpCPUStat && readErr != nil {
-			prefix = sampleFailedPrefix
-		}
-
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			prefix+string(r.Op)+readFailedSep+string(r.Outcome),
-			readFailureFields(smp, r.Op, cores, quota)...)
+			f.Verb+string(f.Op)+readFailedSep+string(f.Outcome),
+			readFailureFields(smp, f.Op, cores, quota)...)
 	}
 }
 
