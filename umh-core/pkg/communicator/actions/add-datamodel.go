@@ -52,6 +52,7 @@ import (
 // and the PostgreSQL tables derived from it are named after the data model, and
 // PostgreSQL truncates table names at 63 bytes, so two data models sharing the
 // first maxContractLen characters would write to the same tables.
+// https://www.postgresql.org/docs/current/limits.html
 const maxContractLen = 53
 
 // AddDataModelAction implements the Action interface for adding a new Data Model.
