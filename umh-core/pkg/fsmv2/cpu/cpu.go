@@ -92,9 +92,9 @@ type CPUStatus struct {
 
 // CPUDeps is the per-instance state Poll reads.
 //
-// TDeps must be *CPUDeps, never the value: simple.MonitorSpec passes TDeps to
-// Poll by value, so state a field holds directly, rather than behind a pointer,
-// would die with that copy. Nothing enforces this.
+// TDeps is *CPUDeps rather than the value because simple.MonitorSpec passes
+// TDeps to Poll by value: state held directly in a field, rather than behind a
+// pointer, would die with that copy.
 type CPUDeps struct {
 	*deps.BaseDependencies
 
