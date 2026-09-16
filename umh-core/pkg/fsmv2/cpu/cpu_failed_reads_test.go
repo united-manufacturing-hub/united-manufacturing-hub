@@ -71,14 +71,14 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadMissing},
 		))
 		Expect(unreadable).To(HaveLen(1))
-		Expect(unreadable[0].Message).To(Equal(sampleFailedTag))
+		Expect(unreadable[0].Message).To(Equal(sampleFailedTag + "::missing"))
 
 		// Read fine, no usage figure: the sample survives without a usage rate.
 		valueless := failedReads(withReads(
 			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadEmpty},
 		))
 		Expect(valueless).To(HaveLen(1))
-		Expect(valueless[0].Message).To(Equal(readFailedTag))
+		Expect(valueless[0].Message).To(Equal(readFailedTag + "::empty"))
 	})
 
 	It("leaves a sibling failure under its own message when cpu.stat voided the tick", func() {
@@ -88,8 +88,8 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 		))
 
 		Expect(got).To(HaveLen(2))
-		Expect(got[0].Message).To(Equal(readFailedTag), "cpu.pressure cost one signal, not the sample")
-		Expect(got[1].Message).To(Equal(sampleFailedTag))
+		Expect(got[0].Message).To(Equal(readFailedTag+"::permission_denied"), "cpu.pressure cost one signal, not the sample")
+		Expect(got[1].Message).To(Equal(sampleFailedTag + "::missing"))
 	})
 })
 

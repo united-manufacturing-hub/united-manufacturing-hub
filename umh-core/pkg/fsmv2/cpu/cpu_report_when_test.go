@@ -48,7 +48,7 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 		broken = true
 		_, _ = Poll(ctx, d, CPUConfig{})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::missing"),
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::missing::cpuset_cpus_effective"),
 			"a read that only starts failing at tick 1 must still be reported")
 	})
 
@@ -105,14 +105,14 @@ var _ = Describe("a read that starts failing later is reported too", func() {
 
 			return missing(p)
 		})
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::missing"))
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::missing::cpuset_cpus_effective"))
 
 		permission_denied = true
 		_, _ = Poll(ctx, d, CPUConfig{})
 
 		Expect(msgs(events)).To(ConsistOf(
-			"cpu::read_failed::cpuset_cpus_effective::missing",
-			"cpu::read_failed::cpuset_cpus_effective::permission_denied",
+			"cpu::read_failed::missing::cpuset_cpus_effective",
+			"cpu::read_failed::permission_denied::cpuset_cpus_effective",
 		), "a changed cause on the same file is a new fact")
 	})
 
