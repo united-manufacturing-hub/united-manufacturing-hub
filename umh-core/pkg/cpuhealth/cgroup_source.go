@@ -263,26 +263,11 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 	return count, nil
 }
 
-// The evidence readers below return what their file served, verbatim, with no
-// parsing.
-
-const (
-	// cgroupControllersFile lists the controllers the parent delegated to this
-	// cgroup. It is relative to the sampler's base.
-	cgroupControllersFile = "/cgroup.controllers"
-	// procSelfCgroupPath says which cgroup this process runs in.
-	procSelfCgroupPath = "/proc/self/cgroup"
-)
-
-// readRawFile returns a file's text verbatim, with the outcome that says why
-// there is none.
-func (c *cgroupSource) readRawFile(ctx context.Context, path string) (string, ReadOutcome) {
-	data, err := c.fs.ReadFile(ctx, path)
-	if err != nil {
-		return "", classifyRead(err)
-	}
-
-	return string(data), ReadOK
+// readControllers returns cgroup.controllers verbatim: the controllers the
+// parent delegated to this cgroup. Any outcome other than ReadOK means no text
+// was read, and names the cause.
+func (c *cgroupSource) readControllers(ctx context.Context) (string, ReadOutcome) {
+	return readRawFile(ctx, c.fs, c.base+"/cgroup.controllers")
 }
 
 // readBaseDirEntryCount keeps only the entry count. A mounted cgroup v2 tree

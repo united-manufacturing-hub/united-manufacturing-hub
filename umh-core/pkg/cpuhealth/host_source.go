@@ -57,11 +57,9 @@ import (
 // Dockerfile), so sysconf(_SC_CLK_TCK) is not reachable to ask instead.
 const userHz = 100.0
 
-// hostSource reads the machine-wide files: /proc/stat, /proc/cpuinfo,
-// /sys/class/dmi/id/product_name and /sys/class/dmi/id/sys_vendor. It owns
-// the two facts that persist across ticks for this host — the
-// host-busy/steal baseline and the sticky virtualisation fact — so it is
-// constructible and testable independently of cgroupSource.
+// hostSource reads the machine-wide files: the ones that say the same thing
+// whichever cgroup is asking. It owns the facts that persist across ticks for
+// this host, the host-busy/steal baseline and the sticky virtualisation fact.
 type hostSource struct {
 	fs filesystem.Service
 
@@ -118,6 +116,14 @@ func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) 
 	}
 	h.hostBase = hostBaseline{busy: busy, steal: steal, denom: denom, time: ts, have: true}
 	return hostBusy, stealFrac
+}
+
+// readProcSelfCgroup returns /proc/self/cgroup verbatim: which cgroup this
+// process runs in. The file is machine-wide, not under any cgroup's base,
+// which is why it is read here and not by cgroupSource. Any outcome other than
+// ReadOK means no text was read, and names the cause.
+func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome) {
+	return readRawFile(ctx, h.fs, "/proc/self/cgroup")
 }
 
 // readHost yields /proc/stat's busy, steal and denominator jiffy totals, plus

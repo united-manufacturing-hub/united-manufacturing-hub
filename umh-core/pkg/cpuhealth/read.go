@@ -182,11 +182,11 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, smp *Sample, machine 
 // cgroup.controllers and /proc/self/cgroup, and the base directory's entry
 // count. None of them is parsed or judged here.
 func (s *linuxSampler) recordEvidence(ctx context.Context, smp *Sample) {
-	controllers, controllersOutcome := s.cgroup.readRawFile(ctx, s.cgroup.base+cgroupControllersFile)
+	controllers, controllersOutcome := s.cgroup.readControllers(ctx)
 	smp.CgroupControllersRaw = controllers
 	smp.record(OpCgroupControllers, controllersOutcome)
 
-	procSelf, procSelfOutcome := s.cgroup.readRawFile(ctx, procSelfCgroupPath)
+	procSelf, procSelfOutcome := s.host.readProcSelfCgroup(ctx)
 	smp.ProcSelfCgroupRaw = procSelf
 	smp.record(OpProcSelfCgroup, procSelfOutcome)
 

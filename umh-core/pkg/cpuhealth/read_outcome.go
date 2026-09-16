@@ -15,8 +15,11 @@
 package cpuhealth
 
 import (
+	"context"
 	"errors"
 	"io/fs"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // ReadOutcome names one read's cause.
@@ -64,6 +67,17 @@ func classifyRead(err error) ReadOutcome {
 	default:
 		return ReadError
 	}
+}
+
+// readRawFile returns a file's text verbatim, with no parsing. Both sources
+// use it, so it takes the filesystem rather than hanging off either one.
+func readRawFile(ctx context.Context, fsys filesystem.Service, path string) (string, ReadOutcome) {
+	data, err := fsys.ReadFile(ctx, path)
+	if err != nil {
+		return "", classifyRead(err)
+	}
+
+	return string(data), ReadOK
 }
 
 // ReadOp names one reported read by its file, not by the function reading it.
