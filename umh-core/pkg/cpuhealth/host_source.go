@@ -64,24 +64,24 @@ func newHostSource(fs filesystem.Service) *hostSource {
 // until a first successful read fixes the baseline; a falling counter (a host
 // restart) re-baselines instead of publishing a nonsense value.
 type hostBaseline struct {
-	time               time.Time
-	busy, steal, denom float64
-	have               bool
+	time                     time.Time
+	busy, steal, denominator float64
+	have                     bool
 }
 
 // advanceHostRates advances the baseline this source owns to this tick, which is
 // what the next tick measures against. It returns this tick's own HostBusy rate
-// and Steal fraction, from busy, steal and denom against the baseline it
-// replaced. ts is the composer's single per-tick Timestamp and never time.Now();
+// and Steal fraction, from busy, steal and denominator against the baseline it
+// replaced. timestamp is the composer's single per-tick Timestamp and never time.Now();
 // Read in read.go says why both sources have to divide by the same elapsed time.
-func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) (hostBusy, stealFrac diagnosis.Reading) {
+func (h *hostSource) advanceHostRates(timestamp time.Time, busy, steal, denominator float64) (hostBusy, stealFrac diagnosis.Reading) {
 	hostBusy = diagnosis.Unknown()
 	stealFrac = diagnosis.Unknown()
 	if h.hostBase.have {
 		// HostBusy: busy-jiffy delta ÷ USER_HZ ÷ elapsed seconds; skipped on
 		// a counter reset or zero elapsed time.
 		if busy >= h.hostBase.busy {
-			if elapsed := ts.Sub(h.hostBase.time).Seconds(); elapsed > 0 {
+			if elapsed := timestamp.Sub(h.hostBase.time).Seconds(); elapsed > 0 {
 				hostBusy = diagnosis.Known((busy - h.hostBase.busy) / userHz / elapsed)
 			}
 		}
@@ -89,12 +89,12 @@ func (h *hostSource) advanceHostRates(ts time.Time, busy, steal, denom float64) 
 		// interval's total-jiffy delta. A falling steal counter (a reset)
 		// and a non-positive denominator delta (proc/stat did not advance,
 		// or is all zeros) publish nothing, never a NaN/Inf reading.
-		dDenom := denom - h.hostBase.denom
+		dDenom := denominator - h.hostBase.denominator
 		if steal >= h.hostBase.steal && dDenom > 0 {
 			stealFrac = diagnosis.Known((steal - h.hostBase.steal) / dDenom)
 		}
 	}
-	h.hostBase = hostBaseline{busy: busy, steal: steal, denom: denom, time: ts, have: true}
+	h.hostBase = hostBaseline{busy: busy, steal: steal, denominator: denominator, time: timestamp, have: true}
 	return hostBusy, stealFrac
 }
 
@@ -113,7 +113,7 @@ func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcom
 // On a non-nil error no totals were read. machine may still hold a count: the
 // per-CPU lines are counted before the aggregate line is parsed, so they can be
 // readable on a file whose aggregate line is not.
-func (h *hostSource) readHost(ctx context.Context) (busy, steal, denom, machine float64, err error) {
+func (h *hostSource) readHost(ctx context.Context) (busy, steal, denominator, machine float64, err error) {
 	data, err := h.fs.ReadFile(ctx, PathOf("", OpProcStat))
 	if err != nil {
 		return 0, 0, 0, 0, err

@@ -59,7 +59,7 @@ const (
 type readFailure struct {
 	Op      cpuhealth.ReadOp
 	Outcome cpuhealth.ReadOutcome
-	Verb    string
+	Message string
 }
 
 // failedReads returns the reads on sample that earn a Sentry event, in the order
@@ -71,32 +71,32 @@ type readFailure struct {
 func failedReads(sample cpuhealth.Sample) []readFailure {
 	var failures []readFailure
 
-	for _, r := range sample.Reads {
-		if _, reported := reportedReadOps[r.Op]; !reported {
+	for _, read := range sample.Reads {
+		if _, reported := reportedReadOps[read.Op]; !reported {
 			continue
 		}
 
-		if r.Outcome == cpuhealth.ReadOK || r.Outcome == cpuhealth.ReadNotAttempted {
+		if read.Outcome == cpuhealth.ReadOK || read.Outcome == cpuhealth.ReadNotAttempted {
 			continue
 		}
 
-		if _, excused := excusedReads[r]; excused {
+		if _, excused := excusedReads[read]; excused {
 			continue
 		}
 
-		failures = append(failures, readFailure{Op: r.Op, Outcome: r.Outcome, Verb: verbFor(r)})
+		failures = append(failures, readFailure{Op: read.Op, Outcome: read.Outcome, Message: messageFor(read)})
 	}
 
 	return failures
 }
 
-// verbFor says what a failed read cost. Only cpu.stat carries the usage
+// messageFor says what a failed read cost. Only cpu.stat carries the usage
 // counters, so only a cpu.stat that could not be read or parsed leaves the
 // tick with no measurement. A cpu.stat that read fine and held no usage figure
 // still yields a usable sample, and a cpu.pressure failing in the same tick
 // cost one signal, so both stay read_failed.
-func verbFor(r cpuhealth.ReadResult) string {
-	if r.Op == cpuhealth.OpCPUStat && r.Outcome != cpuhealth.ReadEmpty {
+func messageFor(read cpuhealth.ReadResult) string {
+	if read.Op == cpuhealth.OpCPUStat && read.Outcome != cpuhealth.ReadEmpty {
 		return sampleFailedTag
 	}
 
@@ -120,14 +120,14 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, sample cpuhealth.Sample
 
 	cores, quota := limitsFromSample(sample)
 
-	for _, f := range failedReads(sample) {
-		seen := cpuhealth.ReadResult{Op: f.Op, Outcome: f.Outcome}
-		if _, reportedBefore := d.reportedReads.LoadOrStore(seen, struct{}{}); reportedBefore {
+	for _, failure := range failedReads(sample) {
+		key := cpuhealth.ReadResult{Op: failure.Op, Outcome: failure.Outcome}
+		if _, reportedBefore := d.reportedReads.LoadOrStore(key, struct{}{}); reportedBefore {
 			continue
 		}
 
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			f.Verb, readFailureFields(sample, f, cores, quota)...)
+			failure.Message, readFailureFields(sample, failure, cores, quota)...)
 	}
 }
 
@@ -149,12 +149,12 @@ func readFailureFields(sample cpuhealth.Sample, failed readFailure, cores, quota
 
 	// Every sibling is reported, a never-attempted one included: the pattern
 	// across the reads is what says which shape a machine is in.
-	for _, r := range sample.Reads {
-		if r.Op == failed.Op {
+	for _, read := range sample.Reads {
+		if read.Op == failed.Op {
 			continue
 		}
 
-		fields = append(fields, deps.String(string(r.Op)+"_read", string(r.Outcome)))
+		fields = append(fields, deps.String(string(read.Op)+"_read", string(read.Outcome)))
 	}
 
 	if hostCpus, ok := sample.HostCpus.Get(); ok {

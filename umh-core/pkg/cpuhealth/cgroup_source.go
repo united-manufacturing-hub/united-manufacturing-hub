@@ -61,22 +61,22 @@ type usageBaseline struct {
 // advanceUsageRate advances the baseline this source owns to this tick, which is
 // what the next tick measures against. It returns this tick's instantaneous usage
 // rate: the delta of usage against the baseline it replaced, divided by the
-// elapsed time since that baseline. ts is the composer's single per-tick
+// elapsed time since that baseline. timestamp is the composer's single per-tick
 // Timestamp and never time.Now(); Read in read.go says why both sources have to
 // divide by the same elapsed time.
-func (c *cgroupSource) advanceUsageRate(ts time.Time, usage diagnosis.Reading) diagnosis.Reading {
+func (c *cgroupSource) advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
 	if c.usageBase.have {
 		// A rising cumulative counter over a positive elapsed time derives an
 		// instantaneous rate; a falling one has been reset, so no rate.
 		if u, ok := usage.Get(); ok && u >= c.usageBase.usage {
-			if elapsed := ts.Sub(c.usageBase.time).Seconds(); elapsed > 0 {
+			if elapsed := timestamp.Sub(c.usageBase.time).Seconds(); elapsed > 0 {
 				rate = diagnosis.Known((u - c.usageBase.usage) / 1e6 / elapsed)
 			}
 		}
 	}
 	if u, ok := usage.Get(); ok {
-		c.usageBase = usageBaseline{usage: u, time: ts, have: true}
+		c.usageBase = usageBaseline{usage: u, time: timestamp, have: true}
 	}
 	return rate
 }
@@ -195,8 +195,8 @@ func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 }
 
 // readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction. On a non-nil
-// error no fraction was read and frac is 0, which is not a measured zero.
-func (c *cgroupSource) readPSI(ctx context.Context) (frac float64, err error) {
+// error no fraction was read and fraction is 0, which is not a measured zero.
+func (c *cgroupSource) readPSI(ctx context.Context) (fraction float64, err error) {
 	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OpCPUPressure))
 	if err != nil {
 		return 0, err

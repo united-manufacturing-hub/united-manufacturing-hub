@@ -86,17 +86,17 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// calls time.Now() itself, so both rate derivations divide by the same
 	// elapsed time and Decide never compares a machine-wide mean against a
 	// cgroup mean taken from a different instant.
-	ts := time.Now()
-	sample.Timestamp = ts
+	timestamp := time.Now()
+	sample.Timestamp = timestamp
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
-	frac, psiErr := s.cgroup.readPSI(ctx)
+	fraction, psiErr := s.cgroup.readPSI(ctx)
 	if psiErr != nil {
 		sample.Pressure = diagnosis.Unknown()
 	} else {
 		s.cgroup.psiAvailable = true
-		sample.Pressure = diagnosis.Known(frac)
+		sample.Pressure = diagnosis.Known(fraction)
 	}
 	sample.record(OpCPUPressure, classifyRead(psiErr))
 	sample.PsiAvailable = s.cgroup.psiAvailable
@@ -113,7 +113,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.NrPeriods = stat.Periods
 	sample.NrThrottled = stat.Throttled
 	sample.UsageUsec = stat.Usage
-	sample.UsageCores = s.cgroup.advanceUsageRate(ts, stat.Usage)
+	sample.UsageCores = s.cgroup.advanceUsageRate(timestamp, stat.Usage)
 
 	// Host signals: the first /proc/stat read fixes a baseline and publishes
 	// neither; a read after that publishes this tick's instantaneous host-busy
@@ -122,7 +122,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// reset: the baseline is re-established and nothing is published this tick.
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
-	busy, steal, denom, machine, hostErr := s.host.readHost(ctx)
+	busy, steal, denominator, machine, hostErr := s.host.readHost(ctx)
 	sample.record(OpProcStat, classifyRead(hostErr))
 	if hostErr != nil {
 		// An unreadable machine CPU count reads ScopeUnknown — never a silent
@@ -139,7 +139,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// not_attempted when /proc/stat failed: the file was never opened, and
 		// recording a failure for it would name the wrong one.
 		s.recordCPUScope(ctx, &sample, machine)
-		sample.HostBusy, sample.Steal = s.host.advanceHostRates(ts, busy, steal, denom)
+		sample.HostBusy, sample.Steal = s.host.advanceHostRates(timestamp, busy, steal, denominator)
 	}
 
 	virtualized, cpuinfoOutcome := s.host.readVirtualized(ctx)

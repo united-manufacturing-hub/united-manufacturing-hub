@@ -176,11 +176,11 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 // the instance (ENG-5752).
 //
 // NewDeps calls this before setting d.engine, so d.engine is nil here.
-func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
+func containerOrHostLimit(ctx context.Context, sampler cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
 	// The error is discarded because it carries nothing the sample does not:
 	// it is non-nil only when cpu.stat failed, which reportFailedReads reads
 	// off sample.Reads.
-	sample, _ := s.Read(ctx)
+	sample, _ := sampler.Read(ctx)
 	d.reportFailedReads(ctx, sample)
 
 	return limitsFromSample(sample)
@@ -188,12 +188,12 @@ func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, d *CPUDeps) 
 
 // limitsFromSample reads the capacity figures off one sample.
 func limitsFromSample(sample cpuhealth.Sample) (cores, quota float64) {
-	if lc, ok := sample.LogicalCpus.Get(); ok {
-		cores = lc
+	if logicalCpus, ok := sample.LogicalCpus.Get(); ok {
+		cores = logicalCpus
 	}
 
-	if q, ok := sample.Quota.Get(); ok && q > 0 {
-		quota = q
+	if limit, ok := sample.Quota.Get(); ok && limit > 0 {
+		quota = limit
 	}
 
 	return cores, quota
