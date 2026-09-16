@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Which file each read opens (ReadOp, PathOf), and what it produced
+// (ReadOutcome). Every reader in this package uses both, and the fsmv2 CPU
+// worker reports the failures to Sentry.
+
 package cpuhealth
 
 import (
