@@ -71,19 +71,15 @@ physical machine that signal reads "not possible" rather than 0%.
 ## Enabling CPU pressure stats
 
 UMH reads CPU pressure from the container's own `/sys/fs/cgroup/cpu.pressure`. That file exists only
-if the kernel booted with Pressure Stall Information (PSI) on and the machine runs cgroup v2, the
-Linux facility that meters a container's CPU, memory and disk use. Most distributions ship both on.
-The Red Hat family is the exception: RHEL, Rocky, AlmaLinux and Oracle Linux ship PSI off, and
-version 8 of each also boots cgroup v1.
+if the kernel booted with Pressure Stall Information (PSI) on and the machine runs cgroup v2. Most
+distributions ship both on. The Red Hat family is the exception: RHEL, Rocky, AlmaLinux and Oracle
+Linux ship PSI off, and version 8 of each also boots cgroup v1.
 
 Check your own machine:
 
 ```bash
 docker exec umh-core cat /sys/fs/cgroup/cpu.pressure
 ```
-
-A Docker Compose install names the container `<project>-umh-1` rather than `umh-core`. `docker ps`
-shows yours.
 
 A line beginning `some avg10=` means there is nothing to do. `No such file or directory` means one or
 both are missing. Find out which, on the host:
@@ -92,10 +88,8 @@ both are missing. Find out which, on the host:
 stat -fc %T /sys/fs/cgroup
 ```
 
-`cgroup2fs` means only PSI is missing: set `psi=1`. `tmpfs` means the machine runs cgroup v1 and both
-are missing: set `psi=1` and, on a systemd distribution, `systemd.unified_cgroup_hierarchy=1`.
-Setting both at once costs one reboot instead of two. Version 8 of RHEL, Rocky and AlmaLinux boots
-cgroup v1; version 9 and later boots cgroup v2.
+`cgroup2fs` means only PSI is missing: set `psi=1`. `tmpfs` means the machine runs cgroup v1, where
+`cpu.pressure` does not exist at all.
 
 Docker runs containers on a cgroup v2 host only from version 20.10. On an older engine the machine
 reboots into a state where UMH Core does not start, so check `docker version` first.
@@ -111,7 +105,6 @@ Each operating system sets kernel parameters differently. Follow yours, then reb
 |------------------|--------------|
 | RHEL, Rocky, AlmaLinux, Oracle Linux, Fedora | [Configuring kernel command-line parameters](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_monitoring_and_updating_the_kernel/configuring-kernel-command-line-parameters_managing-monitoring-and-updating-the-kernel): `sudo grubby --update-kernel=ALL --args="psi=1"` |
 | Debian and Ubuntu | [GRUB 2 setup](https://help.ubuntu.com/community/Grub2/Setup): add `psi=1` to `GRUB_CMDLINE_LINUX` in `/etc/default/grub`, then run `sudo update-grub` |
-| Void Linux | [Void Handbook: kernel](https://docs.voidlinux.org/config/kernel.html) |
 
 `update-grub` is a Debian and Ubuntu wrapper. On another GRUB machine, edit `GRUB_CMDLINE_LINUX` the
 same way and run `grub-mkconfig -o /boot/grub/grub.cfg`.
