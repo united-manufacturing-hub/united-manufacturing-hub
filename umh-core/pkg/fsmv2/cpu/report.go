@@ -46,9 +46,14 @@ var excusedReads = map[cpuhealth.ReadResult]struct{}{
 }
 
 const (
-	// The message is the whole Sentry fingerprint, so it names what went wrong
-	// and nothing else. Which read failed, and how, ride as fields: naming them
-	// here would give every operation-and-outcome pair its own Sentry issue.
+	// The message is the whole Sentry fingerprint, so what it names is what
+	// Sentry groups by. It names the sad path and the outcome, which is the
+	// coarsest split that still separates a file that is absent from one that
+	// will not open: both are *fs.PathError, so the error's type cannot tell
+	// them apart. WHICH read failed stays a field, since naming it here too
+	// would give every operation-and-outcome pair its own issue. The separator
+	// stays "::" so the message keeps the shape of an identifier rather than a
+	// sentence.
 	//
 	// readFailedTag means the sample survived without one signal.
 	readFailedTag = "cpu::read_failed"
@@ -61,6 +66,10 @@ type readFailure struct {
 	Operation cpuhealth.ReadOperation
 	Outcome   cpuhealth.ReadOutcome
 	Message   string
+	// Err is what the read returned, nil when the outcome named no error. It
+	// rides to Sentry as the event's exception, so the issue carries the
+	// kernel's own words and groups by the error's type.
+	Err error
 }
 
 // failedReads returns the reads on sample that earn a Sentry event, in the order
@@ -85,7 +94,12 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 			continue
 		}
 
-		failures = append(failures, readFailure{Operation: read.Operation, Outcome: read.Outcome, Message: messageFor(read)})
+		failures = append(failures, readFailure{
+			Operation: read.Operation,
+			Outcome:   read.Outcome,
+			Message:   messageFor(read),
+			Err:       sample.Troubleshooting.ReadErrors[read.Operation],
+		})
 	}
 
 	return failures
@@ -99,10 +113,10 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 // along with every other failure.
 func messageFor(read cpuhealth.ReadResult) string {
 	if read.Operation == cpuhealth.OperationCPUStat && read.Outcome == cpuhealth.ReadUnparsable {
-		return sampleFailedTag
+		return sampleFailedTag + "::" + string(read.Outcome)
 	}
 
-	return readFailedTag
+	return readFailedTag + "::" + string(read.Outcome)
 }
 
 // reportFailedReads emits one Sentry event per failed read on sample. A sample
@@ -128,16 +142,23 @@ func (d *CPUDeps) reportFailedReads(ctx context.Context, sample cpuhealth.Sample
 			continue
 		}
 
+		fields := readFailureFields(sample, failure, cores, quota)
+		if failure.Err != nil {
+			fields = append(fields, deps.Err(failure.Err))
+		}
+
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			failure.Message, readFailureFields(sample, failure, cores, quota)...)
+			failure.Message, fields...)
 	}
 }
 
 // readFailureFields is what one failed-read event carries besides its message.
 func readFailureFields(sample cpuhealth.Sample, failed readFailure, cores, quota float64) []deps.Field {
 	fields := []deps.Field{
-		// The read this event is about. Sentry facets on these, so one failure
-		// stays one issue while the breakdown stays available.
+		// The read this event is about. These land in the event's context, which
+		// Sentry shows per event but does not index, so they are for reading off
+		// one event rather than for searching across them. What separates the
+		// issues is the message.
 		deps.String("read_op", string(failed.Operation)),
 		deps.String("read_outcome", string(failed.Outcome)),
 		deps.String("path", cpuhealth.PathOf(sample.Troubleshooting.CgroupBase, failed.Operation)),

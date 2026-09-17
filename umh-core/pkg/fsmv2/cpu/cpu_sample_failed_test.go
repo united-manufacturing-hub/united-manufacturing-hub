@@ -33,7 +33,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 	It("uses sample_failed when the file would not parse", func() {
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec abc\n")})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::cpu_stat::unparsable"),
+		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::unparsable::cpu_stat"),
 			"one event: the four reads after cpu.stat never happened, so they have nothing to report")
 	})
 
@@ -45,7 +45,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 			statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpu_stat::missing"))
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::missing::cpu_stat"))
 	})
 
 	It("leaves a failed PSI read under read_failed when cpu.stat voided the sample", func() {
@@ -59,8 +59,8 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		)
 
 		Expect(msgs(events)).To(ConsistOf(
-			"cpu::read_failed::cpu_pressure::permission_denied",
-			"cpu::sample_failed::cpu_stat::unparsable",
+			"cpu::read_failed::permission_denied::cpu_pressure",
+			"cpu::sample_failed::unparsable::cpu_stat",
 		))
 	})
 
@@ -86,7 +86,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		Expect(msgs(events)).To(BeEmpty(), "precondition: the healthy fixture is quiet")
 
 		events2 := buildWithFiles(map[string][]byte{statPath: []byte("")})
-		Expect(msgs(events2)).To(ConsistOf("cpu::read_failed::cpu_stat::empty"))
+		Expect(msgs(events2)).To(ConsistOf("cpu::read_failed::empty::cpu_stat"))
 	})
 
 	It("classifies a malformed counter apart from an I/O failure", func() {
@@ -96,7 +96,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		// one that must agree, or the facet reads error and says nothing.
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec notanumber\n")})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::cpu_stat::unparsable"))
+		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::unparsable::cpu_stat"))
 	})
 
 	It("uses the same reason for a key with no value, and lets the raw text tell them apart", func() {
@@ -104,7 +104,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		// cannot distinguish them. The raw text on the event shows which.
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec\n")})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpu_stat::empty"))
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::empty::cpu_stat"))
 		Expect((*events)[0].Fields).To(HaveKeyWithValue("cpu_stat_raw", "usage_usec\n"),
 			"the raw text is what distinguishes an empty file from a malformed one")
 	})
@@ -124,7 +124,7 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		e := (*events)[0]
 
 		By("naming which file failed and how")
-		Expect(e.Msg).To(Equal("cpu::read_failed"))
+		Expect(e.Msg).To(Equal("cpu::read_failed::missing"))
 		Expect(e.Fields).To(HaveKeyWithValue("read_op", "cpuset_cpus_effective"))
 		Expect(e.Fields).To(HaveKeyWithValue("read_outcome", "missing"))
 		Expect(e.Fields).To(HaveKeyWithValue("path", cpuset))
@@ -144,14 +144,17 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		Expect(e.Fields).To(HaveKeyWithValue("cgroup_controllers_raw", evidenceControllers))
 
 		By("ruling out a permission problem and a parse bug")
-		// missing rather than permission_denied excludes both. It rides as a
-		// field: the message is the grouping key, so an outcome in it would
-		// split one failure into an issue per outcome. Sentry facets on the
-		// field instead.
+		// missing rather than permission_denied excludes both. It is in the
+		// message, so it is in the grouping key: an issue per outcome is the
+		// point, because a file that is absent and one that will not open are
+		// both *fs.PathError and the error's type cannot separate them. It stays
+		// a field as well, for reading off the event.
 		Expect(e.Fields).To(HaveKeyWithValue("read_outcome", "missing"))
 
 		By("keeping every variable value out of the grouping key")
-		Expect(strings.Count(e.Msg, "::")).To(Equal(1), "domain and sad path, nothing else")
+		// The outcome is one of seven fixed words, so the key stays bounded.
+		// A path or a file's contents would not be, which is what this excludes.
+		Expect(strings.Count(e.Msg, "::")).To(Equal(2), "domain, sad path, outcome, nothing else")
 		Expect(e.Msg).NotTo(ContainSubstring("/"))
 	})
 

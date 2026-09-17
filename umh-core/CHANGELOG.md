@@ -6,6 +6,8 @@
 
 - CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, CPU pressure, throttling and how busy the machine is. Requires `USE_FSMV2_CPU=true` and `USE_FSMV2_TRANSPORT=true`
 
+## [0.44.40]
+
 ### Fixes
 
 - Adding a data model with a name longer than 53 characters is now rejected with an explanation, instead of only being blocked in the Management Console.

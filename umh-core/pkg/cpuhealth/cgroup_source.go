@@ -91,40 +91,40 @@ func (c *cgroupSource) advanceUsageRate(timestamp time.Time, usage diagnosis.Rea
 // read as a present no-limit, a present 0.0, and both return ReadOK. A cpu.max
 // that is unreadable, empty or unparsable reads as absent no-signal, under the
 // outcome that says which.
-func (c *cgroupSource) readQuota(ctx context.Context) (quotaRead, ReadOutcome) {
+func (c *cgroupSource) readQuota(ctx context.Context) (quotaRead, ReadOutcome, error) {
 	data, err := c.fs.ReadFile(ctx, PathOf(c.base, OperationCPUMax))
 	if err != nil {
-		return quotaRead{Limit: diagnosis.Unknown()}, classifyRead(err)
+		return quotaRead{Limit: diagnosis.Unknown()}, classifyRead(err), err
 	}
 	raw := string(data)
 	if strings.TrimSpace(raw) == "" {
-		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errEmptyRead)
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errEmptyRead), errEmptyRead
 	}
 
 	fields := strings.Fields(raw)
 	if len(fields) < 2 {
-		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead)
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead), errUnparsableRead
 	}
 
 	if fields[0] == "max" {
 		// Uncapped is a definite no-limit: present, but never a positive capacity.
-		return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK
+		return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK, nil
 	}
 
 	quota, err := strconv.ParseInt(fields[0], 10, 64)
 	if err != nil {
-		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead)
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead), errUnparsableRead
 	}
 	period, err := strconv.ParseInt(fields[1], 10, 64)
 	if err != nil || period <= 0 {
-		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead)
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(errUnparsableRead), errUnparsableRead
 	}
 
 	if quota > 0 {
-		return quotaRead{Limit: diagnosis.Known(float64(quota) / float64(period)), Raw: raw}, ReadOK
+		return quotaRead{Limit: diagnosis.Known(float64(quota) / float64(period)), Raw: raw}, ReadOK, nil
 	}
 	// A non-positive limit is never a positive capacity/denominator.
-	return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK
+	return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK, nil
 }
 
 // quotaRead is one cpu.max read: the limit in cores, and the text it came from.
@@ -274,18 +274,18 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 // readControllers returns cgroup.controllers verbatim: the controllers the
 // parent delegated to this cgroup. Any outcome other than ReadOK means no text
 // was read, and names the cause.
-func (c *cgroupSource) readControllers(ctx context.Context) (string, ReadOutcome) {
+func (c *cgroupSource) readControllers(ctx context.Context) (string, ReadOutcome, error) {
 	return readRawFile(ctx, c.fs, PathOf(c.base, OperationCgroupControllers))
 }
 
 // readBaseDirEntryCount keeps only the entry count. A mounted cgroup v2 tree
 // holds dozens of files, so a directory holding two or three says the mount is
 // not the one we expect. An unlistable directory yields -1, never 0.
-func (c *cgroupSource) readBaseDirEntryCount(ctx context.Context) (int, ReadOutcome) {
+func (c *cgroupSource) readBaseDirEntryCount(ctx context.Context) (int, ReadOutcome, error) {
 	entries, err := c.fs.ReadDir(ctx, PathOf(c.base, OperationCgroupBaseDir))
 	if err != nil {
-		return -1, classifyRead(err)
+		return -1, classifyRead(err), err
 	}
 
-	return len(entries), ReadOK
+	return len(entries), ReadOK, nil
 }

@@ -102,7 +102,7 @@ func (h *hostSource) advanceHostRates(timestamp time.Time, busy, steal, denomina
 // process runs in. The file is machine-wide, not under any cgroup's base,
 // which is why it is read here and not by cgroupSource. Any outcome other than
 // ReadOK means no text was read, and names the cause.
-func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome) {
+func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome, error) {
 	return readRawFile(ctx, h.fs, PathOf("", OperationProcSelfCgroup))
 }
 
@@ -174,18 +174,19 @@ func (h *hostSource) readHost(ctx context.Context) (busy, steal, denominator, ma
 // The returned ReadOutcome describes the /proc/cpuinfo read alone, and is
 // ReadNotAttempted on a tick that republished the cached fact. The DMI reads
 // get no outcome of their own; allReadOperations says why.
-func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpuinfo ReadOutcome) {
+func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpuinfo ReadOutcome, readErr error) {
 	if h.virtResolved {
-		return h.virtualized, ReadNotAttempted
+		return h.virtualized, ReadNotAttempted, nil
 	}
 	// The x86 route. The "hypervisor" flag is the guest's own evidence, so a
 	// match settles the fact without reading DMI at all.
 	data, err := h.fs.ReadFile(ctx, PathOf("", OperationProcCpuinfo))
 	cpuinfo = classifyRead(err)
+	readErr = err
 	if err == nil && cpuinfoHasHypervisorFlag(data) {
 		h.virtualized = true
 		h.virtResolved = true
-		return true, cpuinfo
+		return true, cpuinfo, readErr
 	}
 	// ARM64 route. A successful DMI read resolves the fact either way; a failed
 	// DMI read leaves it unresolved so the next tick retries. The DMI identity
@@ -197,14 +198,14 @@ func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpu
 	if (pok && pv) || (vok && vv) {
 		h.virtualized = true
 		h.virtResolved = true
-		return true, cpuinfo
+		return true, cpuinfo, readErr
 	}
 	// Neither DMI source was readable — there is no evidence of a guest or of a
 	// bare-metal identity at all, so keep the fact open and let the next tick
 	// re-read rather than caching Virtualized=false for the process lifetime
 	// off a momentary read failure.
 	if !pok && !vok {
-		return false, cpuinfo
+		return false, cpuinfo, readErr
 	}
 	// product_name read resolved the fact. On a platform whose /proc/cpuinfo
 	// has a flags line (x86) product_name alone is authoritative and the result
@@ -215,11 +216,11 @@ func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpu
 	// waits for sys_vendor: caching false off a momentary read failure would
 	// cost this host steal attribution until the process restarts.
 	if (err != nil || !cpuinfoHasFlagsLine(data)) && !vok {
-		return false, cpuinfo
+		return false, cpuinfo, readErr
 	}
 	h.virtualized = false
 	h.virtResolved = true
-	return false, cpuinfo
+	return false, cpuinfo, readErr
 }
 
 // cpuinfoHasFlagsLine reports whether /proc/cpuinfo carries a "flags" line at
