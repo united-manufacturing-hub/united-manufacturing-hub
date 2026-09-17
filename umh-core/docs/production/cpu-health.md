@@ -17,7 +17,7 @@ What UMH measures headroom against depends on whether the container has a CPU li
 | Status | What it means | What to do |
 |--------|---------------|------------|
 | **CPU healthy** | The instance has the CPU it needs. Usage is shown for context, for example "1.2 of 4 cores". | Nothing. |
-| **CPU healthy, limited visibility** | The instance looks fine, but UMH cannot fully measure CPU health here: no CPU limit is set and the operating system is not reporting CPU-pressure statistics. | For full monitoring, set a CPU limit, or boot the operating system with `psi=1`. |
+| **CPU healthy, limited visibility** | The instance looks fine, but UMH cannot fully measure CPU health here: no CPU limit is set and the operating system is not reporting CPU-pressure statistics. | For full monitoring, set a CPU limit, or [enable CPU pressure stats](#enabling-cpu-pressure-stats). |
 | **CPU limited** | The instance hit its CPU limit and was paused until the next scheduling cycle, for example in 12% of cycles over the last minute. Work is being delayed. | Raise the CPU limit, or reduce the load on the instance. |
 | **CPU contention** | Tasks inside the instance spent time waiting for a free CPU core, for example 23% of the last minute. | Reduce the load, or give the instance more CPU. Workloads sharing the server may be competing for it. |
 | **CPU taken by the server** | Other virtual machines on the same physical server took CPU this instance needed. | On your virtualization platform, give this VM more guaranteed CPU, or move the other VMs off the server. |
@@ -58,7 +58,7 @@ to pass a threshold, not merely reach it, except where the table says "at".
 | Signal | Degrades | Recovers | Measured only when |
 |--------|----------|----------|--------------------|
 | **Throttling** | above 5% of scheduling periods | below 3% | a CPU limit is set |
-| **CPU pressure** | above 20% (PSI `avg60`) | below 12% | the kernel publishes PSI |
+| **CPU pressure** | above 20% (PSI `avg60`) | below 12% | the container can read `cpu.pressure` (see [Enabling CPU pressure stats](#enabling-cpu-pressure-stats)) |
 | **CPU steal** | above 10% | below 6% | the machine is a virtual machine |
 | **Machine headroom** | less than 1 core free | 1.5 cores free | the machine's core count is readable |
 | **Limit headroom** | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
@@ -70,50 +70,51 @@ physical machine that signal reads "not possible" rather than 0%.
 
 ## Enabling CPU pressure stats
 
-UMH reads pressure from the container's own `/sys/fs/cgroup/cpu.pressure`. Two things have to be
-true for that file to exist: the kernel was booted with pressure stall information switched on, and
-the machine runs cgroup v2. Ubuntu 22.04 and later and Fedora 33 and later ship both. RHEL, Rocky,
-AlmaLinux, Oracle Linux, Debian and Void need one or both switched on.
+UMH reads CPU pressure from the container's own `/sys/fs/cgroup/cpu.pressure`. Two things have to be
+true for that file to exist: the kernel was booted with Pressure Stall Information (PSI) switched on,
+and the machine runs cgroup v2, the Linux facility that meters a container's CPU, memory and disk
+use. Ubuntu 22.04 and Fedora 33 ship both, as do their later releases. RHEL, Rocky, AlmaLinux,
+Oracle Linux, Debian and Void may ship either one switched off.
 
-Check the machine you have rather than trusting a list:
+Those are a guide. Check the machine you have:
 
 ```bash
 docker exec umh-core cat /sys/fs/cgroup/cpu.pressure
 ```
 
-A line beginning `some avg10=` means UMH can read pressure and there is nothing to do here. `No such
-file or directory` means one of the two conditions is missing.
-
-### Switch pressure stats on
-
-The kernel parameter is `psi=1`, and it takes effect on the next reboot. How you set a kernel
-parameter is the operating system's own business, so follow its instructions:
-
-| Operating system | Instructions |
-|------------------|--------------|
-| RHEL, Rocky, AlmaLinux, Oracle Linux | [Configuring kernel command-line parameters](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_monitoring_and_updating_the_kernel/configuring-kernel-command-line-parameters_managing-monitoring-and-updating-the-kernel) — `sudo grubby --update-kernel=ALL --args="psi=1"` |
-| Debian, Ubuntu, and other systems booting with GRUB | [GRUB manual: simple configuration](https://www.gnu.org/software/grub/manual/grub/grub.html#Simple-configuration) — add `psi=1` to `GRUB_CMDLINE_LINUX`, then run `update-grub` |
-| Void Linux | [Void Handbook: kernel](https://docs.voidlinux.org/config/kernel.html) |
-
-### Switch cgroup v2 on
-
-RHEL, Rocky and AlmaLinux 8 boot cgroup v1 by default. There, `psi=1` fills `/proc/pressure/` on the
-host and the container's `cpu.pressure` still does not appear, so the CPU status does not change.
-Version 9 and later boot cgroup v2. To see which one a machine is using:
+A line beginning `some avg10=` means UMH can read CPU pressure, and there is nothing to do here. `No
+such file or directory` means at least one of the two is missing. Find out which, on the host that
+runs the container:
 
 ```bash
 stat -fc %T /sys/fs/cgroup
 ```
 
-`cgroup2fs` is cgroup v2. `tmpfs` is cgroup v1: add `systemd.unified_cgroup_hierarchy=1` to the
-kernel command line next to `psi=1`.
+`cgroup2fs` means the machine already runs cgroup v2, so only PSI is missing: set `psi=1`. `tmpfs`
+means the machine runs cgroup v1, so both are missing: set `psi=1` and, on a systemd distribution,
+`systemd.unified_cgroup_hierarchy=1`. Setting both at once costs one reboot instead of two. Version
+8 of RHEL, Rocky, AlmaLinux and Oracle Linux boots cgroup v1 by default, and version 9 and later
+boots cgroup v2.
 
-### Confirm UMH can read it
+### Set the kernel parameters
 
-After the reboot, run the `docker exec` check above again. Checking the kernel command line instead
-only proves the kernel took the flag, which is not the same as the container being able to read the
-file. The Management Console confirms the end of that path: on the instance's detail page, the
-Technical Details `Pressure` line changes from "not available" to a percentage.
+Each operating system sets kernel parameters differently. Follow yours, then reboot:
+
+| Operating system | Instructions |
+|------------------|--------------|
+| RHEL, Rocky, AlmaLinux, Oracle Linux, Fedora | [Configuring kernel command-line parameters](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_monitoring_and_updating_the_kernel/configuring-kernel-command-line-parameters_managing-monitoring-and-updating-the-kernel) — `sudo grubby --update-kernel=ALL --args="psi=1"` |
+| Debian, Ubuntu, and other systems booting with GRUB | [GRUB 2 setup](https://help.ubuntu.com/community/Grub2/Setup) — add `psi=1` to `GRUB_CMDLINE_LINUX` in `/etc/default/grub`, then run `sudo update-grub` |
+| Void Linux | [Void Handbook: kernel](https://docs.voidlinux.org/config/kernel.html) |
+
+### Confirm UMH can read the file
+
+Run the `docker exec` check again. It reads the file UMH itself reads, which is what makes it the
+check that settles the question.
+
+The Management Console shows the same result: on the instance's detail page, the Technical Details
+`Pressure` line changes from `Pressure not available (not possible).` to a percentage. `Pressure not
+available (measuring).` means UMH can now read the file and is filling its 60-second window. Wait a
+minute and look again.
 
 ## When UMH refuses a new bridge
 
