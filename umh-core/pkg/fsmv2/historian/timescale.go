@@ -85,6 +85,15 @@ const (
 	// supervisor.DefaultObservationTimeout (2.2s), which would surface as a poll
 	// error and drive the worker degraded -- a database metric must never do that.
 	metricsTimeout = 1500 * time.Millisecond
+
+	// freshnessInterval is how often Poll reads the last write per table. It runs
+	// slower than metricsInterval because the cost grows with table count and
+	// staleness is a slow signal: minute resolution buys nothing.
+	freshnessInterval = 5 * time.Minute
+
+	// freshnessTimeout bounds the per-table reads so they cannot consume the poll
+	// budget the connection check needs.
+	freshnessTimeout = 1500 * time.Millisecond
 )
 
 // Ref is the (WorkerType, Name) pair identifying the timescale monitor child,
@@ -154,8 +163,9 @@ var sharedPool = &poolHolder{}
 type Deps struct {
 	*deps.BaseDependencies
 
-	pool    *poolHolder
-	metrics *metricsSchedule
+	pool      *poolHolder
+	metrics   *metricsSchedule
+	freshness *freshnessSchedule
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -168,6 +178,7 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 		BaseDependencies: bd,
 		pool:             sharedPool,
 		metrics:          newMetricsSchedule(metricsInterval),
+		freshness:        newFreshnessSchedule(freshnessInterval),
 	}
 }
 
@@ -326,9 +337,19 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		deps.String("auth", string(models.TimescaleAuthValid)),
 		deps.Float64("latency_ms", elapsedMs))
 
-	if d.metrics.claimNextRun(time.Now()) {
+	now := time.Now()
+
+	if d.metrics.claimNextRun(now) {
 		d.metrics.remember(pollMetrics(ctx, d, pool, host))
 	}
+
+	metrics := d.metrics.last()
+
+	if d.freshness.claimNextRun(now) {
+		d.freshness.remember(pollFreshness(ctx, d, pool, host, metrics.Tables))
+	}
+
+	metrics.Tables = withFreshness(metrics.Tables, d.freshness.last(), now)
 
 	return TimescaleStatus{
 		Host:             host,
@@ -336,7 +357,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		LatencyMs:        elapsedMs,
 		Port:             port,
 		Reachable:        true,
-		TimescaleMetrics: d.metrics.last(),
+		TimescaleMetrics: metrics,
 	}, nil
 }
 
@@ -346,6 +367,22 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 // proved good. Returning the error instead would make the framework mark the
 // worker degraded, so a missing extension or a slow catalog read would light up
 // the historian health badge for a database that is answering fine.
+func pollFreshness(ctx context.Context, d Deps, pool *pgxpool.Pool, host string, tables []TimescaleTable) map[string]int64 {
+	freshnessCtx, cancel := context.WithTimeout(ctx, freshnessTimeout)
+	defer cancel()
+
+	writes, err := collectFreshness(freshnessCtx, pool, tables)
+	if err != nil {
+		d.GetLogger().Debug("timescale freshness collection",
+			deps.String("host", host),
+			deps.Err(err))
+
+		return d.freshness.last()
+	}
+
+	return writes
+}
+
 func pollMetrics(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) TimescaleMetrics {
 	metricsCtx, cancel := context.WithTimeout(ctx, metricsTimeout)
 	defer cancel()

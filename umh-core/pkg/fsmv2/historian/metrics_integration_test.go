@@ -187,6 +187,134 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		Expect(metrics.FailedJobs).To(BeZero())
 	})
 
+	It("lists every umh job with the table and schedule it runs on", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.JobList).To(HaveLen(2), "one compression policy per hypertable")
+
+		for _, job := range metrics.JobList {
+			Expect(job.Kind).To(Equal("compression"))
+			Expect(job.Table).To(BeElementOf("value_bench", "attribute_bench"))
+			Expect(job.ScheduleSeconds).To(BeNumerically(">", 0))
+			Expect(job.Failures).To(BeZero())
+		}
+	})
+
+	It("excludes the built-in telemetry job from the listing, since it has no table", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		for _, job := range metrics.JobList {
+			Expect(job.Kind).NotTo(Equal("telemetry"))
+			Expect(job.Table).NotTo(BeEmpty())
+		}
+	})
+
+	It("reads the last write per table", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectFreshness(ctx, pool, metrics.Tables)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(writes).To(HaveKey("value_bench"))
+		Expect(writes["value_bench"]).To(BeNumerically(">", 0), "the fixture wrote rows inside the freshness window")
+	})
+
+	It("skips regular tables, which have no time column", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY, name text)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectFreshness(ctx, pool, metrics.Tables)
+
+		Expect(err).NotTo(HaveOccurred(), "a regular table must not fail the whole read")
+		Expect(writes).To(HaveKey("value_bench"))
+		Expect(writes).NotTo(HaveKey("tag"))
+	})
+
+	It("refuses to build the freshness query from a name it cannot vouch for", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectFreshness(ctx, pool, []TimescaleTable{
+			{Name: `value"; DROP TABLE umh.value_bench; --`},
+		})
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(writes).To(BeEmpty())
+
+		var survives int
+		Expect(pool.QueryRow(ctx, `SELECT count(*) FROM umh.value_bench`).Scan(&survives)).To(Succeed())
+		Expect(survives).To(BeNumerically(">", 0), "the table is untouched")
+	})
+
+	It("lists regular tables alongside the hypertables", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY, name text)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		byName := map[string]TimescaleTable{}
+		for _, table := range metrics.Tables {
+			byName[table.Name] = table
+		}
+
+		Expect(byName).To(HaveKey("tag"))
+		Expect(byName["tag"].IsHypertable).To(BeFalse())
+		Expect(byName["tag"].UncompressedBytes).To(BeNumerically(">", 0))
+		Expect(byName["value_bench"].IsHypertable).To(BeTrue())
+		Expect(metrics.Hypertables).To(Equal(2), "a regular table is not counted as a hypertable")
+	})
+
+	It("leaves the migration bookkeeping table out of the listing", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.schema_migrations (version bigint PRIMARY KEY)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		names := []string{}
+		for _, table := range metrics.Tables {
+			names = append(names, table.Name)
+		}
+
+		Expect(names).NotTo(ContainElement("schema_migrations"))
+		Expect(names).To(ContainElement("tag"), "other plain tables are still listed")
+	})
+
 	It("ignores the built-in telemetry job, which fails on an air-gapped host", func() {
 		pool := startDatabase(timescaleImage)
 		_, err := pool.Exec(ctx, historianSchemaDDL)
@@ -430,5 +558,35 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		Expect(tableNamed(metrics, "attribute_bench").DropAfterSeconds).To(BeZero(),
 			"this table expires nothing, which the aggregate alone would hide")
 		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
+	})
+})
+
+var _ = Describe("Data span reporting", Label("integration"), func() {
+	It("reports how much history the hypertables cover", func() {
+		ctx := context.Background()
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		// The schema writes 200 daily points, so the chunks covering them span
+		// roughly 200 days; the newest chunk reaches into the future by up to its
+		// 168h width, so the figure is bounded rather than exact.
+		Expect(metrics.DataSpanSeconds).To(BeNumerically(">", int64(195*24*3600)))
+		Expect(metrics.DataSpanSeconds).To(BeNumerically("<", int64(215*24*3600)))
+	})
+
+	It("reports no span when nothing has been written", func() {
+		ctx := context.Background()
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS umh;`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.DataSpanSeconds).To(BeZero())
 	})
 })

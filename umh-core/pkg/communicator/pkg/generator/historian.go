@@ -107,11 +107,13 @@ func timescaleMetrics(metrics fsmv2historian.TimescaleMetrics) models.TimescaleM
 		MetricsError:         metrics.MetricsError,
 		LastJobError:         metrics.LastJobError,
 		Tables:               timescaleTables(metrics.Tables),
+		JobList:              timescaleJobs(metrics.JobList),
 		DatabaseBytes:        metrics.DatabaseBytes,
 		UncompressedBytes:    metrics.UncompressedBytes,
 		CompressedBytes:      metrics.CompressedBytes,
 		CompressAfterSeconds: metrics.CompressAfterSeconds,
 		DropAfterSeconds:     metrics.DropAfterSeconds,
+		DataSpanSeconds:      metrics.DataSpanSeconds,
 		Hypertables:          metrics.Hypertables,
 		Chunks:               metrics.Chunks,
 		CompressedChunks:     metrics.CompressedChunks,
@@ -121,6 +123,28 @@ func timescaleMetrics(metrics fsmv2historian.TimescaleMetrics) models.TimescaleM
 		FailedJobs:           metrics.FailedJobs,
 		PoliciesUniform:      metrics.PoliciesUniform,
 	}
+}
+
+func timescaleJobs(jobs []fsmv2historian.TimescaleJob) []models.TimescaleJob {
+	if len(jobs) == 0 {
+		return nil
+	}
+
+	reported := make([]models.TimescaleJob, 0, len(jobs))
+
+	for _, job := range jobs {
+		reported = append(reported, models.TimescaleJob{
+			Kind:               job.Kind,
+			Table:              job.Table,
+			Status:             job.Status,
+			ScheduleSeconds:    job.ScheduleSeconds,
+			LastSuccessSeconds: job.LastSuccessSeconds,
+			NextRunSeconds:     job.NextRunSeconds,
+			Failures:           job.Failures,
+		})
+	}
+
+	return reported
 }
 
 func timescaleTables(tables []fsmv2historian.TimescaleTable) []models.TimescaleTable {
@@ -138,6 +162,8 @@ func timescaleTables(tables []fsmv2historian.TimescaleTable) []models.TimescaleT
 			ChunkIntervalSeconds: table.ChunkIntervalSeconds,
 			CompressAfterSeconds: table.CompressAfterSeconds,
 			DropAfterSeconds:     table.DropAfterSeconds,
+			LastWriteSeconds:     table.LastWriteSeconds,
+			IsHypertable:         table.IsHypertable,
 			Chunks:               table.Chunks,
 			CompressedChunks:     table.CompressedChunks,
 		})

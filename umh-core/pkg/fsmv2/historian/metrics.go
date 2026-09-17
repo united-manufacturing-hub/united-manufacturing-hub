@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,8 +27,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// TimescaleMetrics is the aggregate operational picture of the historian database,
-// embedded into TimescaleStatus so its fields flatten to the top JSON level.
 // TimescaleTable is one hypertable's storage, chunking and policy settings. The
 // aggregates beside it answer whether the historian as a whole compresses and
 // expires data; this answers which table does not.
@@ -37,10 +37,24 @@ type TimescaleTable struct {
 	ChunkIntervalSeconds int64  `json:"chunk_interval_seconds"`
 	CompressAfterSeconds int64  `json:"compress_after_seconds"`
 	DropAfterSeconds     int64  `json:"drop_after_seconds"`
+	LastWriteSeconds     int64  `json:"last_write_seconds"`
 	Chunks               int    `json:"chunks"`
 	CompressedChunks     int    `json:"compressed_chunks"`
+	IsHypertable         bool   `json:"is_hypertable"`
 }
 
+type TimescaleJob struct {
+	Kind               string `json:"kind"`
+	Table              string `json:"table"`
+	Status             string `json:"status"`
+	ScheduleSeconds    int64  `json:"schedule_seconds"`
+	LastSuccessSeconds int64  `json:"last_success_seconds"`
+	NextRunSeconds     int64  `json:"next_run_seconds"`
+	Failures           int    `json:"failures"`
+}
+
+// TimescaleMetrics is the aggregate operational picture of the historian database,
+// embedded into TimescaleStatus so its fields flatten to the top JSON level.
 type TimescaleMetrics struct {
 	ServerVersion    string `json:"server_version"`
 	TimescaleVersion string `json:"timescale_version"`
@@ -60,16 +74,22 @@ type TimescaleMetrics struct {
 	// or dropped rather than a flattering maximum. Zero means no such policy
 	// exists: a zero DropAfterSeconds with RetentionJobs zero is a database that
 	// grows forever.
-	CompressAfterSeconds int64            `json:"compress_after_seconds"`
-	DropAfterSeconds     int64            `json:"drop_after_seconds"`
-	Hypertables          int              `json:"hypertables"`
-	Chunks               int              `json:"chunks"`
-	CompressedChunks     int              `json:"compressed_chunks"`
-	Jobs                 int              `json:"jobs"`
-	CompressionJobs      int              `json:"compression_jobs"`
-	RetentionJobs        int              `json:"retention_jobs"`
-	FailedJobs           int              `json:"failed_jobs"`
-	Tables               []TimescaleTable `json:"tables"`
+	CompressAfterSeconds int64 `json:"compress_after_seconds"`
+	DropAfterSeconds     int64 `json:"drop_after_seconds"`
+	// DataSpanSeconds is how much history the hypertables cover, from the oldest
+	// chunk's start to the newest chunk's end. Divided into DatabaseBytes it gives a
+	// growth rate. It reads slightly long, because the newest chunk extends into the
+	// future by up to its own width.
+	DataSpanSeconds  int64            `json:"data_span_seconds"`
+	Hypertables      int              `json:"hypertables"`
+	Chunks           int              `json:"chunks"`
+	CompressedChunks int              `json:"compressed_chunks"`
+	Jobs             int              `json:"jobs"`
+	CompressionJobs  int              `json:"compression_jobs"`
+	RetentionJobs    int              `json:"retention_jobs"`
+	FailedJobs       int              `json:"failed_jobs"`
+	Tables           []TimescaleTable `json:"tables"`
+	JobList          []TimescaleJob   `json:"job_list"`
 	// PoliciesUniform reports whether every hypertable agrees on its intervals.
 	// When false the single reported interval describes only the shortest table,
 	// and the rest have to be read from the database.
@@ -156,7 +176,114 @@ const tablesQuery = `SELECT h.table_name,
  GROUP BY h.table_name
  ORDER BY h.table_name`
 
+// dataSpanQuery reads the chunk time range from _timescaledb_catalog rather than
+// timescaledb_information.chunks: the same answer, 7ms against 57ms at 7112 chunks.
+// The dimension_slice bounds are microseconds since the epoch.
+const dataSpanQuery = `SELECT coalesce((max(ds.range_end) - min(ds.range_start)) / 1000000, 0)
+  FROM _timescaledb_catalog.dimension_slice ds
+  JOIN _timescaledb_catalog.dimension d ON d.id = ds.dimension_id
+  JOIN _timescaledb_catalog.hypertable h ON h.id = d.hypertable_id
+ WHERE h.schema_name = $1`
+
+const jobsListQuery = `SELECT
+       CASE j.proc_name
+         WHEN 'policy_compression' THEN 'compression'
+         WHEN 'policy_retention' THEN 'retention'
+         ELSE j.proc_name
+       END,
+       coalesce(j.hypertable_name, ''),
+       coalesce(s.last_run_status, ''),
+       coalesce(extract(epoch FROM j.schedule_interval)::bigint, 0),
+       CASE WHEN s.last_successful_finish IS NULL OR s.last_successful_finish = '-infinity'::timestamptz THEN 0
+            ELSE greatest(extract(epoch FROM (now() - s.last_successful_finish))::bigint, 0) END,
+       CASE WHEN s.next_start IS NULL OR s.next_start = '-infinity'::timestamptz OR s.next_start = 'infinity'::timestamptz THEN 0
+            ELSE greatest(extract(epoch FROM (s.next_start - now()))::bigint, 0) END,
+       coalesce(s.total_failures, 0)
+  FROM timescaledb_information.jobs j
+  LEFT JOIN timescaledb_information.job_stats s USING (job_id)
+ WHERE j.hypertable_schema = $1
+ ORDER BY coalesce(s.total_failures, 0) DESC, j.hypertable_name, j.job_id`
+
 const databaseSizeQuery = `SELECT pg_database_size(current_database())`
+
+const regularTablesQuery = `SELECT c.relname, pg_total_relation_size(c.oid)::bigint
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = $1 AND c.relkind = 'r'
+   AND c.relname <> 'schema_migrations'
+   AND NOT EXISTS (SELECT 1 FROM _timescaledb_catalog.hypertable h
+                    WHERE h.schema_name = n.nspname AND h.table_name = c.relname)
+ ORDER BY c.relname`
+
+const freshnessWindow = "30 days"
+
+var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
+
+func safeTableName(name string) bool {
+	return tableNamePattern.MatchString(name)
+}
+
+func withFreshness(tables []TimescaleTable, writes map[string]int64, now time.Time) []TimescaleTable {
+	applied := make([]TimescaleTable, 0, len(tables))
+
+	for _, table := range tables {
+		written, ok := writes[table.Name]
+		if ok && written > 0 {
+			age := now.Unix() - written
+			if age > 0 {
+				table.LastWriteSeconds = age
+			}
+		}
+
+		applied = append(applied, table)
+	}
+
+	return applied
+}
+
+func collectFreshness(ctx context.Context, pool *pgxpool.Pool, tables []TimescaleTable) (map[string]int64, error) {
+	selects := make([]string, 0, len(tables))
+
+	for _, table := range tables {
+		if !table.IsHypertable || !safeTableName(table.Name) {
+			continue
+		}
+
+		selects = append(selects, fmt.Sprintf(
+			`SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s WHERE ts > now() - interval '%s'`,
+			table.Name, historianSchema, table.Name, freshnessWindow,
+		))
+	}
+
+	if len(selects) == 0 {
+		return map[string]int64{}, nil
+	}
+
+	rows, err := pool.Query(ctx, strings.Join(selects, " UNION ALL "))
+	if err != nil {
+		return nil, fmt.Errorf("read freshness: %w", err)
+	}
+	defer rows.Close()
+
+	writes := make(map[string]int64, len(selects))
+
+	for rows.Next() {
+		var name string
+
+		var written int64
+		if err := rows.Scan(&name, &written); err != nil {
+			return nil, fmt.Errorf("scan freshness: %w", err)
+		}
+
+		writes[name] = written
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read freshness: %w", err)
+	}
+
+	return writes, nil
+}
 
 // collectMetrics reads the historian database's aggregate operational picture.
 //
@@ -210,6 +337,10 @@ func collectMetrics(ctx context.Context, pool *pgxpool.Pool) (TimescaleMetrics, 
 		return metrics, fmt.Errorf("read last job error: %w", err)
 	}
 
+	if err := pool.QueryRow(ctx, dataSpanQuery, historianSchema).Scan(&metrics.DataSpanSeconds); err != nil {
+		return metrics, fmt.Errorf("read data span: %w", err)
+	}
+
 	tables, err := collectTables(ctx, pool)
 	if err != nil {
 		return metrics, err
@@ -217,11 +348,56 @@ func collectMetrics(ctx context.Context, pool *pgxpool.Pool) (TimescaleMetrics, 
 
 	metrics.Tables = tables
 
+	jobs, err := collectJobs(ctx, pool)
+	if err != nil {
+		return metrics, err
+	}
+
+	metrics.JobList = jobs
+
 	if err := pool.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {
 		return metrics, fmt.Errorf("read database size: %w", err)
 	}
 
 	return metrics, nil
+}
+
+type freshnessSchedule struct {
+	lastRun    time.Time
+	lastWrites map[string]int64
+	interval   time.Duration
+	mu         sync.Mutex
+}
+
+func newFreshnessSchedule(interval time.Duration) *freshnessSchedule {
+	return &freshnessSchedule{interval: interval, lastWrites: map[string]int64{}}
+}
+
+func (s *freshnessSchedule) claimNextRun(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.lastRun.IsZero() && now.Sub(s.lastRun) < s.interval {
+		return false
+	}
+
+	s.lastRun = now
+
+	return true
+}
+
+func (s *freshnessSchedule) remember(writes map[string]int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.lastWrites = writes
+}
+
+func (s *freshnessSchedule) last() map[string]int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.lastWrites
 }
 
 type metricsSchedule struct {
@@ -265,6 +441,39 @@ func (s *metricsSchedule) claimNextRun(now time.Time) bool {
 	return true
 }
 
+func collectJobs(ctx context.Context, pool *pgxpool.Pool) ([]TimescaleJob, error) {
+	rows, err := pool.Query(ctx, jobsListQuery, historianSchema)
+	if err != nil {
+		return nil, fmt.Errorf("read jobs: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []TimescaleJob
+
+	for rows.Next() {
+		var job TimescaleJob
+		if err := rows.Scan(
+			&job.Kind,
+			&job.Table,
+			&job.Status,
+			&job.ScheduleSeconds,
+			&job.LastSuccessSeconds,
+			&job.NextRunSeconds,
+			&job.Failures,
+		); err != nil {
+			return nil, fmt.Errorf("scan job: %w", err)
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read jobs: %w", err)
+	}
+
+	return jobs, nil
+}
+
 func collectTables(ctx context.Context, pool *pgxpool.Pool) ([]TimescaleTable, error) {
 	rows, err := pool.Query(ctx, tablesQuery, historianSchema)
 	if err != nil {
@@ -289,11 +498,42 @@ func collectTables(ctx context.Context, pool *pgxpool.Pool) ([]TimescaleTable, e
 			return nil, fmt.Errorf("scan table: %w", err)
 		}
 
+		table.IsHypertable = true
 		tables = append(tables, table)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read tables: %w", err)
+	}
+
+	regular, err := collectRegularTables(ctx, pool)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(tables, regular...), nil
+}
+
+func collectRegularTables(ctx context.Context, pool *pgxpool.Pool) ([]TimescaleTable, error) {
+	rows, err := pool.Query(ctx, regularTablesQuery, historianSchema)
+	if err != nil {
+		return nil, fmt.Errorf("read regular tables: %w", err)
+	}
+	defer rows.Close()
+
+	var tables []TimescaleTable
+
+	for rows.Next() {
+		var table TimescaleTable
+		if err := rows.Scan(&table.Name, &table.UncompressedBytes); err != nil {
+			return nil, fmt.Errorf("scan regular table: %w", err)
+		}
+
+		tables = append(tables, table)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read regular tables: %w", err)
 	}
 
 	return tables, nil

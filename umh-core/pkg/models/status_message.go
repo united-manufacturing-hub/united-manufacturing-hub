@@ -65,8 +65,20 @@ type TimescaleTable struct {
 	ChunkIntervalSeconds int64  `json:"chunkIntervalSeconds"`
 	CompressAfterSeconds int64  `json:"compressAfterSeconds"`
 	DropAfterSeconds     int64  `json:"dropAfterSeconds"`
+	LastWriteSeconds     int64  `json:"lastWriteSeconds"`
+	IsHypertable         bool   `json:"isHypertable"`
 	Chunks               int    `json:"chunks"`
 	CompressedChunks     int    `json:"compressedChunks"`
+}
+
+type TimescaleJob struct {
+	Kind               string `json:"kind"`
+	Table              string `json:"table"`
+	Status             string `json:"status"`
+	ScheduleSeconds    int64  `json:"scheduleSeconds"`
+	LastSuccessSeconds int64  `json:"lastSuccessSeconds"`
+	NextRunSeconds     int64  `json:"nextRunSeconds"`
+	Failures           int    `json:"failures"`
 }
 
 // TimescaleMetrics is the state of the historian database. Every field is collected
@@ -83,6 +95,7 @@ type TimescaleMetrics struct {
 	// count says nothing an operator can act on; this names the table and the reason.
 	LastJobError      string           `json:"lastJobError"`
 	Tables            []TimescaleTable `json:"tables"`
+	JobList           []TimescaleJob   `json:"jobList"`
 	DatabaseBytes     int64            `json:"databaseBytes"`
 	UncompressedBytes int64            `json:"uncompressedBytes"`
 	CompressedBytes   int64            `json:"compressedBytes"`
@@ -92,13 +105,16 @@ type TimescaleMetrics struct {
 	// zero is a database that grows forever.
 	CompressAfterSeconds int64 `json:"compressAfterSeconds"`
 	DropAfterSeconds     int64 `json:"dropAfterSeconds"`
-	Hypertables          int   `json:"hypertables"`
-	Chunks               int   `json:"chunks"`
-	CompressedChunks     int   `json:"compressedChunks"`
-	Jobs                 int   `json:"jobs"`
-	CompressionJobs      int   `json:"compressionJobs"`
-	RetentionJobs        int   `json:"retentionJobs"`
-	FailedJobs           int   `json:"failedJobs"`
+	// DataSpanSeconds is how much history the hypertables cover. Divided into
+	// DatabaseBytes it gives a growth rate.
+	DataSpanSeconds  int64 `json:"dataSpanSeconds"`
+	Hypertables      int   `json:"hypertables"`
+	Chunks           int   `json:"chunks"`
+	CompressedChunks int   `json:"compressedChunks"`
+	Jobs             int   `json:"jobs"`
+	CompressionJobs  int   `json:"compressionJobs"`
+	RetentionJobs    int   `json:"retentionJobs"`
+	FailedJobs       int   `json:"failedJobs"`
 	// PoliciesUniform reports whether every hypertable agrees on its intervals. When
 	// false the reported interval describes only the shortest table.
 	PoliciesUniform bool `json:"policiesUniform"`

@@ -47,8 +47,20 @@ var healthyTimescaleStatus = simple.Status[fsmv2historian.TimescaleStatus]{
 			CompressAfterSeconds: 604800,
 			DropAfterSeconds:     2592000,
 			PoliciesUniform:      true,
+			DataSpanSeconds:      17280000,
 			FailedJobs:           1,
 			LastJobError:         "columnstore policy failure",
+			JobList: []fsmv2historian.TimescaleJob{
+				{
+					Kind:               "compression",
+					Table:              "value_bench",
+					Status:             "Success",
+					ScheduleSeconds:    43200,
+					LastSuccessSeconds: 33414,
+					NextRunSeconds:     9786,
+					Failures:           0,
+				},
+			},
 			Tables: []fsmv2historian.TimescaleTable{
 				{Name: "value_bench", Chunks: 105, CompressedChunks: 103, ChunkIntervalSeconds: 604800},
 			},
@@ -109,7 +121,19 @@ var _ = Describe("Historian policy and per-table mapping", func() {
 		Expect(historian.Timescale.CompressAfterSeconds).To(Equal(int64(604800)))
 		Expect(historian.Timescale.DropAfterSeconds).To(Equal(int64(2592000)))
 		Expect(historian.Timescale.PoliciesUniform).To(BeTrue())
+		Expect(historian.Timescale.DataSpanSeconds).To(Equal(int64(17280000)), "200 days of history")
 		Expect(historian.Timescale.LastJobError).To(Equal("columnstore policy failure"))
+	})
+
+	It("carries the per-job entries through", func() {
+		historian := historianFromStatus(healthyTimescaleStatus, fsmv2client.Fresh)
+
+		Expect(historian.Timescale.JobList).To(HaveLen(1))
+		Expect(historian.Timescale.JobList[0].Kind).To(Equal("compression"))
+		Expect(historian.Timescale.JobList[0].Table).To(Equal("value_bench"))
+		Expect(historian.Timescale.JobList[0].Status).To(Equal("Success"))
+		Expect(historian.Timescale.JobList[0].ScheduleSeconds).To(Equal(int64(43200)))
+		Expect(historian.Timescale.JobList[0].NextRunSeconds).To(Equal(int64(9786)))
 	})
 
 	It("carries the per-table entries through", func() {

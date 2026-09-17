@@ -88,3 +88,47 @@ var _ = Describe("Metrics retention between collections", func() {
 		Expect(schedule.last()).To(Equal(collected), "an unclaimed tick must not blank the metrics")
 	})
 })
+
+var _ = Describe("Freshness applied to the reported tables", func() {
+	now := time.Unix(1000000, 0)
+
+	It("reports the age at report time rather than at collection time", func() {
+		tables := []TimescaleTable{{Name: "value_pump"}}
+		writes := map[string]int64{"value_pump": 999400}
+
+		applied := withFreshness(tables, writes, now)
+
+		Expect(applied[0].LastWriteSeconds).To(Equal(int64(600)))
+	})
+
+	It("leaves a table with no recorded write at zero", func() {
+		tables := []TimescaleTable{{Name: "value_pump"}}
+
+		applied := withFreshness(tables, map[string]int64{}, now)
+
+		Expect(applied[0].LastWriteSeconds).To(BeZero())
+	})
+
+	It("never reports a negative age when the database clock runs ahead", func() {
+		tables := []TimescaleTable{{Name: "value_pump"}}
+		writes := map[string]int64{"value_pump": 1000600}
+
+		applied := withFreshness(tables, writes, now)
+
+		Expect(applied[0].LastWriteSeconds).To(BeZero())
+	})
+})
+
+var _ = Describe("Freshness table names", func() {
+	It("accepts the catalog names the historian creates", func() {
+		Expect(safeTableName("value_pump")).To(BeTrue())
+		Expect(safeTableName("attribute_historian_2")).To(BeTrue())
+	})
+
+	It("refuses anything that could leave the identifier", func() {
+		Expect(safeTableName(`value"; DROP TABLE umh.tag; --`)).To(BeFalse())
+		Expect(safeTableName("umh.value_pump")).To(BeFalse())
+		Expect(safeTableName("Value_Pump")).To(BeFalse())
+		Expect(safeTableName("")).To(BeFalse())
+	})
+})
