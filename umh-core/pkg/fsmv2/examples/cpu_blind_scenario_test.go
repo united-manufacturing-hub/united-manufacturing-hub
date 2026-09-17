@@ -94,6 +94,6 @@ var _ = Describe("CPU blind ScenarioV2", func() {
 
 		Expect(observed.Status.Degraded).To(BeTrue())
 		Expect(observed.Status.Reason).To(ContainSubstring("poll error: read /sys/fs/cgroup/cpu.stat"))
-		Expect(observed.Status.Result.Verdict).To(BeEmpty())
+		Expect(observed.Status.Result.Verdict.State).To(BeEmpty())
 	})
 })

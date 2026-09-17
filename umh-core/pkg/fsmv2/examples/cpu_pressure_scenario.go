@@ -219,7 +219,7 @@ func awaitFirstCPUReading(ctx context.Context, client *fsmv2client.FSMv2Client) 
 		obs, err := fsmv2client.Get[fsmv2cpu.CPUStatus](ctx, client, fsmv2cpu.Ref)
 		switch {
 		case err == nil:
-			if obs.Status.Verdict != "" {
+			if obs.Status.Verdict.State != "" {
 				return nil
 			}
 		case errors.Is(err, fsmv2client.ErrNotObserved):

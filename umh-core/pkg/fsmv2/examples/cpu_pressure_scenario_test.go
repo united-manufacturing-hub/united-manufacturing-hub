@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
@@ -54,7 +55,7 @@ var _ = Describe("CPU pressure ScenarioV2", func() {
 		Expect(store.LoadObservedTyped(context.Background(),
 			fsmv2cpu.WorkerType, config.ChildID(fsmv2cpu.InstanceName), &observed)).To(Succeed())
 
-		Expect(observed.Status.Verdict).To(Equal("degraded"))
+		Expect(observed.Status.Verdict.State).To(Equal(cpuhealth.StateDegraded))
 
 		// The verdict alone would be satisfied by any degraded machine: a run
 		// whose capacity signal fired for its own reasons, or a real host that

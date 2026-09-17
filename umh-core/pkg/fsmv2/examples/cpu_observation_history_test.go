@@ -112,6 +112,25 @@ func cpuObservationHistory(store storage.TriangularStoreInterface) []cpuObservat
 	return history
 }
 
+// verdictState reads the state out of a verdict as it crossed the delta wire.
+// cpuhealth.Verdict marshals to an object, so the raw value is a map and only
+// its state belongs in cpuObservation.Verdict. A verdict stored as a bare state
+// string still decodes, which cpuhealth.Verdict.UnmarshalJSON also accepts, so
+// both shapes are read.
+func verdictState(value interface{}) string {
+	object, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Sprint(value)
+	}
+
+	state, ok := object["state"]
+	if !ok {
+		return ""
+	}
+
+	return fmt.Sprint(state)
+}
+
 // applyCPUChange folds one delta's changed fields into the running state. The
 // first observation ADDS every field and later ones MODIFY the few that moved,
 // so both maps are read.
@@ -121,7 +140,7 @@ func applyCPUChange(into *cpuObservation, changes *storage.Diff) {
 		case "message":
 			into.Message = fmt.Sprint(value)
 		case "verdict":
-			into.Verdict = fmt.Sprint(value)
+			into.Verdict = verdictState(value)
 		case "reason":
 			into.Reason = fmt.Sprint(value)
 		case "degraded":

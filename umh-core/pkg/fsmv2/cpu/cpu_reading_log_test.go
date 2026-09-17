@@ -109,14 +109,14 @@ var _ = Describe("a completed CPU poll's reading log", func() {
 		Expect(err).NotTo(HaveOccurred())
 		// The recorded fields must carry what this tick actually produced, so
 		// pin that the tick produced something before reading it back.
-		Expect(status.Verdict).NotTo(BeEmpty(), "a completed tick must reach a verdict for one to be recorded")
+		Expect(status.Verdict.State).NotTo(BeEmpty(), "a completed tick must reach a verdict for one to be recorded")
 		Expect(status.Message).NotTo(BeEmpty(), "a completed tick must compose a message for one to be recorded")
 
 		readings := cpuReadings(spy)
 		Expect(readings).To(HaveLen(1), "a completed poll emits exactly one cpu_reading Debug entry")
 		// Both field VALUES are asserted — never just the entry's presence —
 		// so an entry emitted with empty fields fails here.
-		Expect(readings[0].fields["verdict"]).To(Equal(status.Verdict),
+		Expect(readings[0].fields["verdict"]).To(Equal(string(status.Verdict.State)),
 			"the entry's verdict field is the verdict the poll reached")
 		Expect(readings[0].fields["message"]).To(Equal(status.Message),
 			"the entry's message field is the message the poll composed")
