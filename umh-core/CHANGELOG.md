@@ -4,7 +4,7 @@
 
 ### New Features
 
-- The instance now reports the state of its historian database alongside the connection check it already ran: the Postgres and TimescaleDB versions, how much disk the database occupies, and per table its chunk count, chunk interval, compression saving, and compression and retention intervals. Whether retention is configured at all is now visible, so a historian that quietly grows forever can be spotted. A failing compression or retention job reports the reason rather than only a count. The figures refresh once a minute rather than every second, since none of them move faster than that, and a database that answers but refuses the reads reports the reason instead of going unhealthy
+- The instance now reports the state of its historian database alongside the connection check it already ran: the Postgres and TimescaleDB versions, how much disk the database occupies, and per table its chunk count, chunk interval, compression saving, compression and retention intervals, and how long ago it last received a write. Whether retention is configured at all is now visible, so a historian that quietly grows forever can be spotted. Each background job is reported with the table it runs on, its schedule, when it last succeeded, when it runs next and how often it has failed, and a failing job reports the reason rather than only a count. The figures refresh once a minute rather than every second, since none of them move faster than that, and a database that answers but refuses the reads reports the reason instead of going unhealthy
 
 ## [0.44.38]
 
