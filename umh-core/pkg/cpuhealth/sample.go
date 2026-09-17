@@ -129,12 +129,47 @@ type Sample struct {
 	// of /sys/class/dmi/id/product_name naming a known hypervisor. An unreadable
 	// cpuinfo is no evidence and reads false.
 	Virtualized bool
+
+	// Troubleshooting is what a failure report carries. Nothing in the judging
+	// path reads it: Decide, the signals and the message work from the
+	// measurements above.
+	Troubleshooting ReadTroubleshooting
+}
+
+// ReadTroubleshooting is what the sampler captured for a failure report rather
+// than for a verdict: the text of the files it did not parse, the tree it read
+// them from, and how each read ended.
+type ReadTroubleshooting struct {
+	// The file text the sampler captured but did not parse. An empty string
+	// means either the read failed or the file held nothing, and that read's
+	// entry in Reads says which.
+	CgroupControllersRaw string
+	CPUMaxRaw            string
+	CPUStatRaw           string
+	ProcSelfCgroupRaw    string
+
+	// CgroupBaseDirEntryCount is -1 when the directory was not read. Zero is a real
+	// reading, of a directory that exists and is empty.
+	CgroupBaseDirEntryCount int
+
+	// CgroupBase is the cgroup tree this sample was read from, as passed to
+	// NewLinuxSampler. A report names its files against this, so an instance
+	// reading a non-default tree reports the paths it actually opened.
+	CgroupBase string
+
+	// Reads is one entry per member of allReadOperations, in that order, and
+	// empty on a Sample no linuxSampler produced. Read seeds every entry to
+	// ReadNotAttempted and overwrites in place, so a read that never ran still
+	// has an entry.
+	Reads []ReadResult
 }
 
 // Sampler reads one tick of CPU health signals: a cgroup's own accounting
 // (cpu.max, cpu.stat, cpu.pressure, cpuset.cpus.effective) and the host's
 // machine-wide state (/proc/stat, /proc/cpuinfo, and the DMI identity files),
-// both stamped with the one Timestamp the tick was read at.
+// both stamped with the one Timestamp the tick was read at. A file it cannot
+// read leaves its readings absent; only an unparsable cpu.stat and a cancelled
+// tick return an error.
 type Sampler interface {
 	Read(ctx context.Context) (Sample, error)
 }

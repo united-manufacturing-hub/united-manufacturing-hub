@@ -17,10 +17,12 @@ package fsmv2cpu
 import (
 	"context"
 	"errors"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -30,14 +32,42 @@ import (
 // filesystem words a failure this way.
 var errRefusedByStub = errors.New("stub filesystem: every read refused")
 
-// stubFilesystem refuses every read. The embedded Service is left nil so that a
-// sampler which grew a second kind of call would panic here rather than pass
-// quietly on a method this stub never meant to answer.
+// stubFilesystem refuses every read. The embedded Service is nil so a sampler
+// growing a second kind of call panics here rather than passing quietly on a
+// method this stub never meant to answer.
 type stubFilesystem struct {
 	filesystem.Service
 }
 
 func (stubFilesystem) ReadFile(context.Context, string) ([]byte, error) {
+	return nil, errRefusedByStub
+}
+
+// ReadDir refuses the sampler's directory listing, keeping the contract: every
+// access fails, in a way no real filesystem words.
+func (stubFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, error) {
+	return nil, errRefusedByStub
+}
+
+// stubStatMarker is a cpu.stat counter value no cgroup writes, so an error
+// quoting it names the stub below as the filesystem that was read.
+const stubStatMarker = "not-a-number-from-the-stub"
+
+// markedStatFilesystem serves one cpu.stat carrying stubStatMarker and refuses
+// every other read.
+type markedStatFilesystem struct {
+	filesystem.Service
+}
+
+func (markedStatFilesystem) ReadFile(_ context.Context, path string) ([]byte, error) {
+	if path == cgroupBase+"/cpu.stat" {
+		return []byte("usage_usec " + stubStatMarker + "\n"), nil
+	}
+
+	return nil, errRefusedByStub
+}
+
+func (markedStatFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, error) {
 	return nil, errRefusedByStub
 }
 
@@ -50,8 +80,8 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 
 	It("samples through a published filesystem rather than the real one", func() {
 		// The registry outlives the spec and SetDeps overwrites, so publishing
-		// without clearing would hand this stub to every later spec here.
-		register.SetDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
+		// without clearing hands this stub to every later spec.
+		register.SetDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
 		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
@@ -59,9 +89,22 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).To(HaveOccurred(),
-			"the published stub refuses cpu.stat, so the sample must fail")
-		Expect(err).To(MatchError(errRefusedByStub),
-			"only the published stub words a failure this way; the real filesystem never does")
+			"the published stub serves a cpu.stat that cannot parse, so the sample must fail")
+		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
+			"only the published stub serves this counter value; the real cgroup never does")
+	})
+
+	It("reports a filesystem that refuses every read as healthy and unmeasured, not degraded", func() {
+		// A failed poll degrades the instance and blocks every bridge on it. A
+		// host that keeps its CPU accounting outside this cgroup has none of
+		// these files, so the poll succeeds carrying no capacity instead.
+		register.SetDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
+		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+
+		id, bd := newBaseDeps()
+		status, err := Poll(context.Background(), NewDeps(id, bd), CPUConfig{})
+		Expect(err).NotTo(HaveOccurred(), "an unreadable cgroup must not degrade the instance")
+		Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy))
 	})
 
 	It("falls back to the real filesystem when nothing was published", func() {
@@ -74,11 +117,10 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		Expect(d.sampler).NotTo(BeNil(), "an unpublished filesystem still yields a sampler")
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")
 
-		// errors.Is rather than NotTo(MatchError), because MatchError rejects a
-		// nil actual even under NotTo: Poll returns nil on a host with a cgroup
-		// v2 mount and an error on one without, and this must hold for both.
-		// The assertion has teeth only against a fallback that kept serving a
-		// previously published filesystem.
+		// errors.Is rather than NotTo(MatchError): MatchError rejects a nil actual
+		// even under NotTo, and Poll returns nil with a cgroup v2 mount and an
+		// error without one, so this must hold for both. It has teeth only
+		// against a fallback still serving a previously published filesystem.
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(errors.Is(err, errRefusedByStub)).To(BeFalse(),
 			"with nothing published the sampler must reach the real filesystem")

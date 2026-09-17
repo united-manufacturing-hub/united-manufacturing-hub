@@ -6,6 +6,12 @@
 
 - CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, CPU pressure, throttling and how busy the machine is. Requires `USE_FSMV2_CPU=true` and `USE_FSMV2_TRANSPORT=true`
 
+### Fixes
+
+- Adding a data model with a name longer than 53 characters is now rejected with an explanation, instead of only being blocked in the Management Console.
+
+- Instances on some hosts are no longer reported as degraded, which previously stopped every bridge on them from running. Where CPU usage cannot be read, the instance keeps running and reports CPU monitoring as unavailable
+
 ## [0.44.39]
 
 ### Fixes
