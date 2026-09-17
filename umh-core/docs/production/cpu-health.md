@@ -37,12 +37,13 @@ CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can us
 
 Technical Details:
 Instance headroom 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degrades below 0).
+Instance usage not measured (throttling already shows whether this instance is hitting its CPU limit, so this rough estimate is not needed).
 Throttling 2% (degrades above 5%).
 Pressure 4% (degrades above 20%).
 Steal not measured (this instance is not running in a virtual machine, so no other virtual machine can take its CPU).
 ```
 
-Which lines appear depends on what the machine can measure: a machine whose core count is readable also gets a Machine headroom line, and an instance with no CPU limit gets neither the instance headroom nor the throttling line.
+Only the headroom lines are conditional: a machine whose core count is readable also gets a Machine headroom line, and an instance with no CPU limit gets no Instance headroom line. Every other signal keeps its line whether or not this machine can measure it.
 
 A signal that has already fired shows what would clear it instead, for example
 `Throttling 12% (recovers below 3%)`. A signal this machine cannot measure names the fact that stops it being measured, rather than
