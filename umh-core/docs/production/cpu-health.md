@@ -91,9 +91,6 @@ stat -fc %T /sys/fs/cgroup
 `cgroup2fs` means only PSI is missing: set `psi=1`. `tmpfs` means the machine runs cgroup v1, where
 `cpu.pressure` does not exist at all.
 
-Docker runs containers on a cgroup v2 host only from version 20.10. On an older engine the machine
-reboots into a state where UMH Core does not start, so check `docker version` first.
-
 Without cgroup v2, UMH still reports machine headroom and steal, which it reads from `/proc/stat`. It
 loses CPU pressure, throttling and the container's own CPU limit.
 
