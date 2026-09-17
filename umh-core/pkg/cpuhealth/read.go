@@ -120,8 +120,9 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// absent, which reads empty and carries on.
 		return sample, fmt.Errorf("parse %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
-	// A cancelled tick fails every read, which is the same shape as a host with
-	// none of these files. Without this the sample reports the second.
+	// Check whether the reading was cancelled, and if so return the cancellation
+	// error. A cancelled read fails every file, which looks the same as a host
+	// that has none of them, and the sample would report the second.
 	if cancelErr := ctx.Err(); cancelErr != nil {
 		return sample, cancelErr
 	}
