@@ -104,6 +104,15 @@ func runCPUScenario(run cpuScenarioRun) storage.TriangularStoreInterface {
 		Store:        store,
 	})
 	Expect(err).NotTo(HaveOccurred())
+
+	// Nilaway does not read Gomega assertions, so the explicit check is what
+	// tells it result is non-nil. The Expect has already failed the spec by
+	// the time the return below could run.
+	Expect(result).NotTo(BeNil())
+	if result == nil {
+		return store
+	}
+
 	Eventually(result.Done, run.DoneWithin).Should(BeClosed())
 
 	return store
