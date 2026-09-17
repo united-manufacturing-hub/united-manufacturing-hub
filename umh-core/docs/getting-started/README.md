@@ -21,7 +21,7 @@ No kubectl, no Kubernetes setup, just a single Docker container. Almost anything
 
 **CPU health reporting (early access):**
 
-UMH Core installs and runs on any of the above. Its CPU pressure signal needs two more things, Linux pressure stats (PSI) and cgroup v2, which the Red Hat family ships switched off. Without them CPU health still reports, from throttling, steal and headroom; an instance that also has no CPU limit set reports limited visibility instead of a full reading. The [CPU Health](../production/cpu-health.md) page explains how to check and switch them on, and which flag turns this reporting on.
+UMH Core runs on any of the above. Its CPU pressure signal also needs Linux pressure stats (PSI) and cgroup v2, which the Red Hat family ships off. Without them CPU health still reports from throttling, steal and headroom, and an instance with no CPU limit reports limited visibility. [CPU Health](../production/cpu-health.md) covers how to check, how to switch them on, and which flag enables this reporting.
 
 For detailed sizing recommendations, see the [Sizing Guide](../production/sizing-guide.md).
 
