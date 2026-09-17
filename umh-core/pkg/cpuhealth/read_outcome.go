@@ -51,9 +51,30 @@ const (
 // A read can fail with no errno: the syscall succeeds and the content is
 // unusable. Returning nil there would report a failed read as a good one.
 var (
-	errEmptyRead      = errors.New("cpuhealth: file empty")
-	errUnparsableRead = errors.New("cpuhealth: content did not parse")
+	errEmptyRead      = errors.New("file is empty")
+	errUnparsableRead = errors.New("content did not parse")
 )
+
+// pathErrorFor gives a failure the shape Go uses for a failed file operation,
+// "read <path>: <reason>", so a read that failed on its content reads the same
+// way one that failed on an errno does. The reason is the whole value of a
+// report: it reaches Sentry as the event's subtitle, and the fingerprint is
+// built from error TYPES, so wording one well costs no extra issues.
+//
+// An error that already names its file, which is every error the kernel
+// returns, is returned unchanged rather than wrapped twice.
+func pathErrorFor(base string, operation ReadOperation, readErr error) error {
+	if readErr == nil {
+		return nil
+	}
+
+	var pathErr *fs.PathError
+	if errors.As(readErr, &pathErr) {
+		return readErr
+	}
+
+	return &fs.PathError{Op: "read", Path: PathOf(base, operation), Err: readErr}
+}
 
 // classifyRead maps an unrecognised error to ReadError rather than to the
 // closest-looking cause, so nothing arrives at a report misattributed.
@@ -79,17 +100,17 @@ func classifyRead(err error) ReadOutcome {
 //
 // A file that exists and holds nothing reads ReadEmpty, not ReadOK, which is
 // what readQuota, readCpuset and readPSI report for the same case.
-func readRawFile(ctx context.Context, fsys filesystem.Service, path string) (string, ReadOutcome) {
+func readRawFile(ctx context.Context, fsys filesystem.Service, path string) (string, ReadOutcome, error) {
 	data, err := fsys.ReadFile(ctx, path)
 	if err != nil {
-		return "", classifyRead(err)
+		return "", classifyRead(err), err
 	}
 
 	if len(data) == 0 {
-		return "", ReadEmpty
+		return "", ReadEmpty, errEmptyRead
 	}
 
-	return string(data), ReadOK
+	return string(data), ReadOK, nil
 }
 
 // ReadOperation names one reported read by its file, not by the function

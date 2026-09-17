@@ -71,7 +71,7 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadUnparsable},
 		))
 		Expect(unparsable).To(HaveLen(1))
-		Expect(unparsable[0].Message).To(Equal(sampleFailedTag))
+		Expect(unparsable[0].Message).To(Equal(sampleFailedTag + "::unparsable"))
 
 		// Will not open: the three readings taken from cpu.stat go absent and
 		// the sample carries on, so the host is not degraded over a file it was
@@ -80,14 +80,14 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadMissing},
 		))
 		Expect(unreadable).To(HaveLen(1))
-		Expect(unreadable[0].Message).To(Equal(readFailedTag))
+		Expect(unreadable[0].Message).To(Equal(readFailedTag + "::missing"))
 
 		// Read fine, no usage figure: the sample survives without a usage rate.
 		valueless := failedReads(withReads(
 			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadEmpty},
 		))
 		Expect(valueless).To(HaveLen(1))
-		Expect(valueless[0].Message).To(Equal(readFailedTag))
+		Expect(valueless[0].Message).To(Equal(readFailedTag + "::empty"))
 	})
 
 	It("leaves a sibling failure under its own message when cpu.stat voided the tick", func() {
@@ -97,8 +97,8 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 		))
 
 		Expect(got).To(HaveLen(2))
-		Expect(got[0].Message).To(Equal(readFailedTag), "cpu.pressure cost one signal, not the sample")
-		Expect(got[1].Message).To(Equal(sampleFailedTag))
+		Expect(got[0].Message).To(Equal(readFailedTag+"::permission_denied"), "cpu.pressure cost one signal, not the sample")
+		Expect(got[1].Message).To(Equal(sampleFailedTag + "::unparsable"))
 	})
 })
 

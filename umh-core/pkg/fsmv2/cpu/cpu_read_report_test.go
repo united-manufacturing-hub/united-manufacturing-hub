@@ -199,17 +199,16 @@ func buildWithFiles(fileOverrides map[string][]byte) *[]recorded {
 	return events
 }
 
-// msgs renders each event the way a reader identifies it: the message, then
-// the read it was about. Only the message reaches the Sentry fingerprint; the
-// operation and the outcome are fields, so one failed read does not mint its own
-// issue. Reconstructing the pair here keeps these specs asserting WHICH read
-// failed, which is what they are about.
+// msgs renders each event the way a reader identifies it: the message, which
+// already names the sad path and the outcome, then the read it was about. Only
+// the message reaches the Sentry fingerprint; WHICH read failed stays a field,
+// so one failed read does not mint its own issue. Appending the operation here
+// keeps these specs asserting which read failed, which is what they are about.
 func msgs(events *[]recorded) []string {
 	out := []string{}
 	for _, e := range *events {
 		operation, _ := e.Fields["read_op"].(string)
-		outcome, _ := e.Fields["read_outcome"].(string)
-		out = append(out, e.Msg+"::"+operation+"::"+outcome)
+		out = append(out, e.Msg+"::"+operation)
 	}
 
 	return out
@@ -218,8 +217,9 @@ func msgs(events *[]recorded) []string {
 var _ = Describe("the message carries the sad path, the fields carry the read", func() {
 	It("names only the sad path in the message", func() {
 		// The message is the Sentry fingerprint. Naming the operation and the outcome
-		// in it gives every pair its own issue; as fields they stay searchable
-		// while one failure stays one issue.
+		// in it gives every pair its own issue. The outcome is in the message
+		// because the error's type cannot carry it; WHICH read failed stays a
+		// field, so one read's failure does not mint an issue of its own.
 		cpuset := cgroupBase + "/cpuset.cpus.effective"
 		events, _, _ := build(map[string]error{
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
@@ -228,7 +228,8 @@ var _ = Describe("the message carries the sad path, the fields carry the read", 
 		Expect(*events).To(HaveLen(1))
 		e := (*events)[0]
 
-		Expect(e.Msg).To(Equal("cpu::read_failed"), "the fingerprint is the sad path, nothing else")
+		Expect(e.Msg).To(Equal("cpu::read_failed::missing"),
+			"the fingerprint is the sad path and the outcome, never which read")
 		Expect(e.Fields).To(HaveKeyWithValue("read_op", "cpuset_cpus_effective"))
 		Expect(e.Fields).To(HaveKeyWithValue("read_outcome", "missing"))
 	})
@@ -238,7 +239,7 @@ var _ = Describe("the message carries the sad path, the fields carry the read", 
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec abc\n")})
 
 		Expect(*events).To(HaveLen(1))
-		Expect((*events)[0].Msg).To(Equal("cpu::sample_failed"))
+		Expect((*events)[0].Msg).To(Equal("cpu::sample_failed::unparsable"))
 		Expect((*events)[0].Fields).To(HaveKeyWithValue("read_op", "cpu_stat"))
 	})
 })
@@ -257,7 +258,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpuset_cpus_effective::missing"),
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::missing::cpuset_cpus_effective"),
 			"one failed read is one event; ConsistOf also fails if a sibling read reported")
 	})
 
@@ -285,15 +286,15 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
 
-		// The fingerprint is the message, so this is also where the message's
-		// shape is load-bearing: naming the operation and the outcome in it would put
-		// them in the fingerprint and split one failure into an issue per
-		// combination. errorTypes is EMPTY on purpose, as these events carry no
-		// error value.
+		// The message stays the bare tag: naming the operation and the outcome in
+		// it would put them in the fingerprint and split one failure into an issue
+		// per read. The outcome is in the message because the error's type cannot
+		// carry it: a missing file and an unreadable one are both *fs.PathError,
+		// so only the message separates them.
 		want := strings.Join(fsmv2sentry.BuildFingerprint(
 			zapcore.WarnLevel, string(deps.FeatureSupportCPU),
-			"cpu::read_failed",
-			"",
+			"cpu::read_failed::missing",
+			"*fs.PathError|syscall.Errno",
 		), "|")
 
 		Expect(hook.Debouncer().ShouldCapture(want)).To(BeFalse(),
@@ -316,7 +317,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			psi: &fs.PathError{Op: "open", Path: psi, Err: syscall.EACCES},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::cpu_pressure::permission_denied"),
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::permission_denied::cpu_pressure"),
 			"only ENOENT is excused for pressure; a present-but-unreadable file is a real failure")
 	})
 
@@ -327,7 +328,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 			"/proc/stat": &fs.PathError{Op: "open", Path: "/proc/stat", Err: syscall.EACCES},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::proc_stat::permission_denied"))
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::permission_denied::proc_stat"))
 	})
 
 	It("never puts a path or a raw value in the message", func() {
