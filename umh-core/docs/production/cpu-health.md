@@ -96,6 +96,10 @@ means the machine runs cgroup v1, so both are missing: set `psi=1` and, on a sys
 8 of RHEL, Rocky, AlmaLinux and Oracle Linux boots cgroup v1 by default, and version 9 and later
 boots cgroup v2.
 
+A cgroup v1 machine is not left unmonitored. UMH still judges machine headroom and steal, which it
+reads from `/proc/stat` rather than from the cgroup. What it cannot see there is CPU pressure,
+throttling, and the container's own CPU limit.
+
 ### Set the kernel parameters
 
 Each operating system sets kernel parameters differently. Follow yours, then reboot:
