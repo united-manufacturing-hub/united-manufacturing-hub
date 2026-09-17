@@ -198,16 +198,16 @@ type TopicInfo struct {
 	Name string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	// Aggregated Kafka-header *metadata* for this topic.
 	// ───────────────────────────────────────────────────
-	//   - Every time the tag_processor sees a Kafka header on this topic it stores
-	//     the *latest* value here, keyed by header name.
-	//   - The map therefore holds "last known" values for headers such as
-	//     `unit`, `serial_number`, `plc_address`, …—anything a bridge, PLC or
-	//     stream-processor chose to add.
-	//   - The front-end can search or facet by these keys without scanning live
-	//     event traffic; it only needs the TopicInfo cache.
-	//   - This is *not* duplicated data: EventKafka.headers (inside EventTableEntry)
-	//     keeps the raw per-event headers for debugging, whereas this field is
-	//     a compact, topic-level index optimised for look-ups and UI filters.
+	// • Every time the tag_processor sees a Kafka header on this topic it stores
+	//   the *latest* value here, keyed by header name.
+	// • The map therefore holds "last known" values for headers such as
+	//   `unit`, `serial_number`, `plc_address`, …—anything a bridge, PLC or
+	//   stream-processor chose to add.
+	// • The front-end can search or facet by these keys without scanning live
+	//   event traffic; it only needs the TopicInfo cache.
+	// • This is *not* duplicated data: EventKafka.headers (inside EventTableEntry)
+	//   keeps the raw per-event headers for debugging, whereas this field is
+	//   a compact, topic-level index optimised for look-ups and UI filters.
 	Metadata      map[string]string `protobuf:"bytes,6,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

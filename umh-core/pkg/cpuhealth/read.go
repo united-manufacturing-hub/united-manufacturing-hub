@@ -70,8 +70,9 @@ type linuxSampler struct {
 
 // Read samples the cgroup and the machine once.
 //
-// A non-nil error means cpu.stat could not be read or parsed, and this tick has
-// no measurement. Sample.Troubleshooting.Reads still records what every read
+// A non-nil error means cpu.stat opened and would not parse, and this tick has
+// no measurement. A cpu.stat that will not open at all is not an error: the
+// three readings taken from it stay absent and the rest of the sample reads. Sample.Troubleshooting.Reads still records what every read
 // produced, so diagnose a failed read from there, not from the error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var sample Sample
@@ -104,12 +105,28 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
 	sample.Troubleshooting.CPUStatRaw = stat.Raw
-	sample.record(OperationCPUStat, statOutcome(stat, statErr), statErr)
-	if statErr != nil {
-		// cpu.stat is primary: a read failure there fails the WHOLE sample,
-		// never a silent drop of the throttle counters as absent no-signal.
-		return sample, fmt.Errorf("read %s/cpu.stat: %w", s.cgroup.base, statErr)
+	statReadOutcome := statOutcome(stat, statErr)
+	sample.record(OperationCPUStat, statReadOutcome, statErr)
+	if statReadOutcome == ReadUnparsable {
+		// A cpu.stat that opens and does not parse is corrupt, and every number
+		// derived from it would be a guess. A cpu.stat that will not open is a
+		// different thing: the three readings below stay absent and the sample
+		// carries on, so a host keeping its CPU accounting elsewhere is not
+		// degraded over a file it was never going to have.
+		//
+		// Unparsable is a key present with a value that is not a number
+		// ("usage_usec abc"), which no kernel writes. A cgroup v1 cpu.stat does
+		// not land here: its counters are numeric and usage_usec is simply
+		// absent, which reads empty and carries on.
+		return sample, fmt.Errorf("parse %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
+	// Check whether the reading was cancelled, and if so return the cancellation
+	// error. A cancelled read fails every file, which looks the same as a host
+	// that has none of them, and the sample would report the second.
+	if cancelErr := ctx.Err(); cancelErr != nil {
+		return sample, cancelErr
+	}
+
 	sample.NrPeriods = stat.Periods
 	sample.NrThrottled = stat.Throttled
 	sample.UsageUsec = stat.Usage
@@ -150,6 +167,10 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.Quota = quota.Limit
 	sample.Troubleshooting.CPUMaxRaw = quota.Raw
 	sample.record(OperationCPUMax, cpuMaxOutcome, cpuMaxErr)
+
+	if cancelErr := ctx.Err(); cancelErr != nil {
+		return sample, cancelErr
+	}
 
 	return sample, nil
 }

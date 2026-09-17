@@ -23,19 +23,29 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// cpu.stat is the one read whose failure voids the whole sample; the others drop
-// one signal and leave the measurement usable. The verb says which, so the issue
-// title tells a reader whether any measurement exists.
+// A cpu.stat that opens and will not parse is the one read whose failure voids
+// the whole sample; every other failure drops one signal and leaves the
+// measurement usable. The verb says which, so the issue title tells a reader
+// whether any measurement exists.
 var _ = Describe("cpu.stat reports under a verb that says what its failure cost", func() {
 	statPath := cgroupBase + "/cpu.stat"
 
-	It("uses sample_failed when the read itself failed", func() {
+	It("uses sample_failed when the file would not parse", func() {
+		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec abc\n")})
+
+		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::unparsable::cpu_stat"),
+			"one event: the four reads after cpu.stat never happened, so they have nothing to report")
+	})
+
+	It("uses read_failed when the file will not open, since the sample survives it", func() {
+		// A host that keeps its CPU accounting outside this cgroup has no
+		// cpu.stat, and the sample is still usable without it. sample_failed
+		// here would tell a reader no measurement exists when one does.
 		events, _, _ := build(map[string]error{
 			statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT},
 		})
 
-		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::missing::cpu_stat"),
-			"one event: the reads after cpu.stat never happened, so they have nothing to report")
+		Expect(msgs(events)).To(ConsistOf("cpu::read_failed::missing::cpu_stat"))
 	})
 
 	It("leaves a failed PSI read under read_failed when cpu.stat voided the sample", func() {
@@ -43,14 +53,14 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		// tick cost one signal, so its own event must not claim the sample died
 		// with it: the verb belongs to the read it is reported under.
 		pressurePath := cgroupBase + "/cpu.pressure"
-		events, _, _ := build(map[string]error{
-			pressurePath: &fs.PathError{Op: "open", Path: pressurePath, Err: syscall.EACCES},
-			statPath:     &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT},
-		})
+		events := buildReportEvents(
+			map[string]error{pressurePath: &fs.PathError{Op: "open", Path: pressurePath, Err: syscall.EACCES}},
+			map[string][]byte{statPath: []byte("usage_usec abc\n")},
+		)
 
 		Expect(msgs(events)).To(ConsistOf(
 			"cpu::read_failed::permission_denied::cpu_pressure",
-			"cpu::sample_failed::missing::cpu_stat",
+			"cpu::sample_failed::unparsable::cpu_stat",
 		))
 	})
 
@@ -80,11 +90,10 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 	})
 
 	It("classifies a malformed counter apart from an I/O failure", func() {
-		// Both land in the cpu::sample_failed issue, so read_outcome is the only
-		// thing telling a garbage counter from an unreadable file: the first is
-		// a kernel or cgroup-shape problem, the second is the host. Every other
-		// reader maps a parse failure to unparsable; cpu.stat is the one that
-		// must agree, or the facet reads error and says nothing.
+		// A garbage counter and an unreadable file must not mint one issue: the
+		// first is a kernel or cgroup-shape problem, the second is the host.
+		// Every other reader maps a parse failure to unparsable; cpu.stat is the
+		// one that must agree, or the facet reads error and says nothing.
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec notanumber\n")})
 
 		Expect(msgs(events)).To(ConsistOf("cpu::sample_failed::unparsable::cpu_stat"))

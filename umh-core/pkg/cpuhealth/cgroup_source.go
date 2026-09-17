@@ -22,6 +22,7 @@ package cpuhealth
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -188,6 +189,9 @@ func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 			v, err := strconv.ParseFloat(fields[1], 64)
 			if err != nil {
 				return diagnosis.Unknown(), fmt.Errorf("%w: %s value %q: %w", errUnparsableRead, key, fields[1], err)
+			}
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				return diagnosis.Unknown(), fmt.Errorf("%w: %s value %q is non-finite", errUnparsableRead, key, fields[1])
 			}
 			return diagnosis.Known(v), nil
 		}

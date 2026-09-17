@@ -178,8 +178,9 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 // NewDeps calls this before setting d.engine, so d.engine is nil here.
 func containerOrHostLimit(ctx context.Context, sampler cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
 	// The error is discarded because it carries nothing the sample does not:
-	// it is non-nil only when cpu.stat failed, which reportFailedReads reads
-	// off sample.Troubleshooting.Reads.
+	// an unparsable cpu.stat is recorded on sample.Troubleshooting.Reads, which
+	// is where reportFailedReads reads it, and a cancelled tick is a shutdown
+	// rather than a failure.
 	sample, _ := sampler.Read(ctx)
 	d.reportFailedReads(ctx, sample)
 

@@ -185,6 +185,14 @@ func buildPollable(errFn func(string) error) (*[]recorded, *CPUDeps) {
 	return events, d
 }
 
+// buildReportEvents is buildWithFiles plus read errors, for the specs that need
+// one file to fail to open while another fails to parse.
+func buildReportEvents(overrides map[string]error, fileOverrides map[string][]byte) *[]recorded {
+	events, _, _, _ := buildReport(overrides, fileOverrides, nil)
+
+	return events
+}
+
 func buildWithFiles(fileOverrides map[string][]byte) *[]recorded {
 	events, _, _, _ := buildReport(nil, fileOverrides, nil)
 
@@ -228,12 +236,10 @@ var _ = Describe("the message carries the sad path, the fields carry the read", 
 
 	It("keeps a voided sample under its own message", func() {
 		statPath := cgroupBase + "/cpu.stat"
-		events, _, _ := build(map[string]error{
-			statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT},
-		})
+		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec abc\n")})
 
 		Expect(*events).To(HaveLen(1))
-		Expect((*events)[0].Msg).To(Equal("cpu::sample_failed::missing"))
+		Expect((*events)[0].Msg).To(Equal("cpu::sample_failed::unparsable"))
 		Expect((*events)[0].Fields).To(HaveKeyWithValue("read_op", "cpu_stat"))
 	})
 })

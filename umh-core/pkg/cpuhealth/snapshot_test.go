@@ -66,7 +66,7 @@ var _ = Describe("one snapshot per tick", func() {
 		return cpuhealth.NewLinuxSampler(fs, base)
 	}
 
-	It("stamps one timestamp, builds the environment from three facts, and fails the whole snapshot only on cpu.stat", func() {
+	It("stamps one timestamp, builds the environment from three facts, and fails the whole snapshot only on an unparsable cpu.stat", func() {
 		// a real Read builds every field off one read, and the
 		// snapshot is constructible from OUTSIDE pkg/diagnosis through Known and
 		// Unknown. The single Timestamp is set once per tick.
@@ -138,8 +138,9 @@ var _ = Describe("one snapshot per tick", func() {
 		Expect(smp2.NrPeriods).To(Equal(diagnosis.Known(10)))
 		Expect(smp2.NrThrottled).To(Equal(diagnosis.Known(2)))
 
-		// a fake filesystem whose cpu.stat is missing returns a non-nil
-		// error and no usable snapshot.
+		// a fake filesystem whose cpu.stat is missing returns err == nil with
+		// the three readings taken from it absent, the same as any other source
+		// failing.
 		noStat := sampler(func(fs *filesystem.MockFileSystem) {
 			fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
 				if path == base+"/cpu.stat" {
@@ -152,8 +153,12 @@ var _ = Describe("one snapshot per tick", func() {
 				return inner, err
 			}
 		})
-		_, err = noStat.Read(ctx)
-		Expect(err).To(HaveOccurred())
+		smp3, err := noStat.Read(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(smp3.UsageUsec).To(Equal(diagnosis.Unknown()))
+		Expect(smp3.NrPeriods).To(Equal(diagnosis.Unknown()))
+		Expect(smp3.NrThrottled).To(Equal(diagnosis.Unknown()))
+		Expect(smp3.Quota).To(Equal(diagnosis.Known(2)), "a lost cpu.stat must not cost the quota cpu.max carried")
 
 		// a fake filesystem whose cpu.stat is readable but whose
 		// value cannot be parsed (non-numeric usage_usec) also fails the

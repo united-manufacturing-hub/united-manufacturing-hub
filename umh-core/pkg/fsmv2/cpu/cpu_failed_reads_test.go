@@ -66,12 +66,21 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 		))).To(HaveLen(1), "a cpu.pressure that exists and will not open is a real failure")
 	})
 
-	It("calls the tick voided only for a cpu.stat that could not be read", func() {
+	It("calls the tick voided only for a cpu.stat that would not parse", func() {
+		unparsable := failedReads(withReads(
+			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadUnparsable},
+		))
+		Expect(unparsable).To(HaveLen(1))
+		Expect(unparsable[0].Message).To(Equal(sampleFailedTag + "::unparsable"))
+
+		// Will not open: the three readings taken from cpu.stat go absent and
+		// the sample carries on, so the host is not degraded over a file it was
+		// never going to have.
 		unreadable := failedReads(withReads(
 			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadMissing},
 		))
 		Expect(unreadable).To(HaveLen(1))
-		Expect(unreadable[0].Message).To(Equal(sampleFailedTag + "::missing"))
+		Expect(unreadable[0].Message).To(Equal(readFailedTag + "::missing"))
 
 		// Read fine, no usage figure: the sample survives without a usage rate.
 		valueless := failedReads(withReads(
@@ -84,12 +93,12 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 	It("leaves a sibling failure under its own message when cpu.stat voided the tick", func() {
 		got := failedReads(withReads(
 			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUPressure, Outcome: cpuhealth.ReadPermissionDenied},
-			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadMissing},
+			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadUnparsable},
 		))
 
 		Expect(got).To(HaveLen(2))
 		Expect(got[0].Message).To(Equal(readFailedTag+"::permission_denied"), "cpu.pressure cost one signal, not the sample")
-		Expect(got[1].Message).To(Equal(sampleFailedTag + "::missing"))
+		Expect(got[1].Message).To(Equal(sampleFailedTag + "::unparsable"))
 	})
 })
 
