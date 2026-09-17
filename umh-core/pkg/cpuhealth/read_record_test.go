@@ -76,6 +76,19 @@ var _ = Describe("the sample records what each read produced", func() {
 		return sample
 	}
 
+	// readWith replaces the content of the named files, for the failures a
+	// filesystem error cannot express: a file that reads fine and holds
+	// something no reader can use.
+	readWith := func(content map[string][]byte) Sample {
+		files := healthyFiles(base)
+		for path, data := range content {
+			files[path] = data
+		}
+		sample, _ := NewLinuxSampler(fsServing(files, nil), base).Read(ctx)
+
+		return sample
+	}
+
 	// Structural, not a hand-written length: a new read operation added to
 	// allReadOperations without being recorded fails here.
 	It("records exactly one entry per declared read operation", func() {
@@ -128,13 +141,27 @@ var _ = Describe("the sample records what each read produced", func() {
 		Expect(outcomeFor(sample, OperationCpusetCPUs)).To(Equal(ReadNotAttempted))
 	})
 
-	It("marks every downstream read not_attempted when cpu.stat failed", func() {
-		// cpu.stat is the one read whose failure returns from Read, so the reads
-		// after it never happen.
+	It("records the reads after a cpu.stat that will not open, since they still happen", func() {
+		// A cpu.stat that will not open no longer returns from Read, so every
+		// read after it runs and records its own cause. not_attempted here would
+		// claim files were never opened that were.
 		statPath := base + "/cpu.stat"
 		sample := read(map[string]error{statPath: &fs.PathError{Op: "open", Path: statPath, Err: syscall.ENOENT}})
 
 		Expect(outcomeFor(sample, OperationCPUStat)).To(Equal(ReadMissing))
+		for _, operation := range []ReadOperation{OperationProcStat, OperationCpusetCPUs, OperationProcCpuinfo, OperationCPUMax} {
+			Expect(outcomeFor(sample, operation)).NotTo(Equal(ReadNotAttempted),
+				"read %q runs whether or not cpu.stat opened", operation)
+		}
+	})
+
+	It("marks every downstream read not_attempted when cpu.stat will not parse", func() {
+		// An unparsable cpu.stat is the one failure that returns from Read, so
+		// the reads after it never happen.
+		statPath := base + "/cpu.stat"
+		sample := readWith(map[string][]byte{statPath: []byte("usage_usec abc\n")})
+
+		Expect(outcomeFor(sample, OperationCPUStat)).To(Equal(ReadUnparsable))
 		for _, operation := range []ReadOperation{OperationProcStat, OperationCpusetCPUs, OperationProcCpuinfo, OperationCPUMax} {
 			Expect(outcomeFor(sample, operation)).To(Equal(ReadNotAttempted),
 				"read %q happens after cpu.stat, which returned early", operation)

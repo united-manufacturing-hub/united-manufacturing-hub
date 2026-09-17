@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Instances on some hosts are no longer reported as degraded, which previously stopped every bridge on them from running. Where CPU usage cannot be read, the instance keeps running and reports CPU monitoring as unavailable
+
 ## [0.44.39]
 
 ### Fixes

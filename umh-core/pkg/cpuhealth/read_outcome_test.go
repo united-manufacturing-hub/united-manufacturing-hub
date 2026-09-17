@@ -164,6 +164,16 @@ var _ = Describe("a failed read reports its cause", func() {
 			_, ok := stat.Usage.Get()
 			Expect(ok).To(BeFalse())
 		})
+
+		It("reports a NaN counter as unparsable", func() {
+			_, err := newCgroupSource(oneFile(statPath, []byte("usage_usec NaN\nnr_periods 0\nnr_throttled 0\n"), nil), base).readStat(ctx)
+			Expect(err).To(MatchError(errUnparsableRead))
+		})
+
+		It("reports an infinite counter as unparsable", func() {
+			_, err := newCgroupSource(oneFile(statPath, []byte("usage_usec 5000000\nnr_periods +Inf\nnr_throttled 0\n"), nil), base).readStat(ctx)
+			Expect(err).To(MatchError(errUnparsableRead))
+		})
 	})
 
 	Describe("readHost", func() {
