@@ -73,14 +73,17 @@ physical machine that signal reads "not possible" rather than 0%.
 UMH reads CPU pressure from the container's own `/sys/fs/cgroup/cpu.pressure`. Two things have to be
 true for that file to exist: the kernel was booted with Pressure Stall Information (PSI) switched on,
 and the machine runs cgroup v2, the Linux facility that meters a container's CPU, memory and disk
-use. Ubuntu 22.04 and Fedora 33 ship both, as do their later releases. RHEL, Rocky, AlmaLinux,
-Oracle Linux, Debian and Void may ship either one switched off.
+use. Most current distributions ship both switched on. The Red Hat family is the common exception:
+RHEL, Rocky, AlmaLinux and Oracle Linux ship PSI off, and version 8 of each also boots cgroup v1.
 
-Those are a guide. Check the machine you have:
+Rather than trust a list, check the machine you have:
 
 ```bash
 docker exec umh-core cat /sys/fs/cgroup/cpu.pressure
 ```
+
+`umh-core` is the name the Docker install gives the container. A Docker Compose install names it
+after the project, as `<project>-umh-1`; `docker ps` shows which name yours has.
 
 A line beginning `some avg10=` means UMH can read CPU pressure, and there is nothing to do here. `No
 such file or directory` means at least one of the two is missing. Find out which, on the host that
@@ -93,8 +96,11 @@ stat -fc %T /sys/fs/cgroup
 `cgroup2fs` means the machine already runs cgroup v2, so only PSI is missing: set `psi=1`. `tmpfs`
 means the machine runs cgroup v1, so both are missing: set `psi=1` and, on a systemd distribution,
 `systemd.unified_cgroup_hierarchy=1`. Setting both at once costs one reboot instead of two. Version
-8 of RHEL, Rocky, AlmaLinux and Oracle Linux boots cgroup v1 by default, and version 9 and later
-boots cgroup v2.
+8 of RHEL, Rocky and AlmaLinux boots cgroup v1 by default, and version 9 and later boots cgroup v2.
+
+Check the container runtime before switching a machine to cgroup v2. Docker runs containers on a
+cgroup v2 host only from version 20.10; on an older engine the machine reboots into a state where
+UMH Core does not start at all. `docker version` reports what is installed.
 
 A cgroup v1 machine is not left unmonitored. UMH still judges machine headroom and steal, which it
 reads from `/proc/stat` rather than from the cgroup. What it cannot see there is CPU pressure,
@@ -107,8 +113,12 @@ Each operating system sets kernel parameters differently. Follow yours, then reb
 | Operating system | Instructions |
 |------------------|--------------|
 | RHEL, Rocky, AlmaLinux, Oracle Linux, Fedora | [Configuring kernel command-line parameters](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_monitoring_and_updating_the_kernel/configuring-kernel-command-line-parameters_managing-monitoring-and-updating-the-kernel) — `sudo grubby --update-kernel=ALL --args="psi=1"` |
-| Debian, Ubuntu, and other systems booting with GRUB | [GRUB 2 setup](https://help.ubuntu.com/community/Grub2/Setup) — add `psi=1` to `GRUB_CMDLINE_LINUX` in `/etc/default/grub`, then run `sudo update-grub` |
+| Debian and Ubuntu | [GRUB 2 setup](https://help.ubuntu.com/community/Grub2/Setup) — add `psi=1` to `GRUB_CMDLINE_LINUX` in `/etc/default/grub`, then run `sudo update-grub` |
 | Void Linux | [Void Handbook: kernel](https://docs.voidlinux.org/config/kernel.html) |
+
+`update-grub` is a Debian and Ubuntu wrapper. On any other machine booting with GRUB, add the
+parameter to `GRUB_CMDLINE_LINUX` the same way and regenerate the configuration with
+`grub-mkconfig -o /boot/grub/grub.cfg`.
 
 ### Confirm UMH can read the file
 
@@ -119,6 +129,11 @@ The Management Console shows the same result: on the instance's detail page, the
 `Pressure` line changes from `Pressure not available (not possible).` to a percentage. `Pressure not
 available (measuring).` means UMH can now read the file and is filling its 60-second window. Wait a
 minute and look again.
+
+If the file is still missing after the reboot, run `cat /proc/pressure/cpu` on the host. Output means
+PSI is on and cgroup v2 is what is missing. `No such file or directory` means the kernel did not take
+`psi=1`, which happens on a kernel built without PSI support. Setting a CPU limit on the container is
+the other way to get full monitoring, and it needs no kernel change.
 
 ## When UMH refuses a new bridge
 

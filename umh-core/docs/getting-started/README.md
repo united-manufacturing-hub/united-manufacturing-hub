@@ -19,9 +19,9 @@ No kubectl, no Kubernetes setup, just a single Docker container. Almost anything
 * x86_64 (Intel/AMD 64-bit)
 * ARM64 (64-bit ARM, but NOT Raspberry Pi - Redpanda requires 48-bit virtual address space)
 
-**CPU health reporting (optional):**
+**CPU health reporting (early access):**
 
-UMH Core installs and runs on any of the above. Full CPU health reporting needs two more things, Linux pressure stats (PSI) and cgroup v2, which some distributions ship switched off. Without them CPU health reads "limited visibility". The [CPU Health](../production/cpu-health.md) page explains how to check and switch them on.
+UMH Core installs and runs on any of the above. Its CPU pressure signal needs two more things, Linux pressure stats (PSI) and cgroup v2, which the Red Hat family ships switched off. Without them CPU health still reports, from throttling, steal and headroom; an instance that also has no CPU limit set reports limited visibility instead of a full reading. The [CPU Health](../production/cpu-health.md) page explains how to check and switch them on, and which flag turns this reporting on.
 
 For detailed sizing recommendations, see the [Sizing Guide](../production/sizing-guide.md).
 
