@@ -309,6 +309,6 @@ var _ = Describe("a failure names the file it happened to", func() {
 	})
 
 	It("returns nil for a read that did not fail", func() {
-		Expect(pathErrorFor(base, OperationCPUMax, nil)).To(BeNil())
+		Expect(pathErrorFor(base, OperationCPUMax, nil)).To(Succeed())
 	})
 })
