@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- The CPU status of an instance whose operating system does not report CPU-pressure statistics now links to instructions for switching them on
+
 ## [0.44.40]
 
 ### Fixes

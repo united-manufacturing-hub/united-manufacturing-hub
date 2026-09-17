@@ -19,6 +19,10 @@ No kubectl, no Kubernetes setup, just a single Docker container. Almost anything
 * x86_64 (Intel/AMD 64-bit)
 * ARM64 (64-bit ARM, but NOT Raspberry Pi - Redpanda requires 48-bit virtual address space)
 
+**CPU health reporting:**
+
+Needs Linux pressure stats (PSI) and cgroup v2. Ubuntu 22.04+ and Fedora 33+ have both; RHEL, Rocky, AlmaLinux, Oracle Linux, Debian and Void need them switched on, which the [CPU Health](../production/cpu-health.md) page walks through. Without them UMH Core still runs, and reports CPU health as "limited visibility".
+
 For detailed sizing recommendations, see the [Sizing Guide](../production/sizing-guide.md).
 
 ## Installation using the Management Console

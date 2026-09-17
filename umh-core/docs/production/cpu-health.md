@@ -68,6 +68,53 @@ Steal uses the 95th percentile once 20 samples are in, and the mean before that,
 instance is judgeable within seconds of starting. Bare metal reports no steal at all, so on a
 physical machine that signal reads "not possible" rather than 0%.
 
+## Enabling CPU pressure stats
+
+UMH reads pressure from the container's own `/sys/fs/cgroup/cpu.pressure`. Two things have to be
+true for that file to exist: the kernel was booted with pressure stall information switched on, and
+the machine runs cgroup v2. Ubuntu 22.04 and later and Fedora 33 and later ship both. RHEL, Rocky,
+AlmaLinux, Oracle Linux, Debian and Void need one or both switched on.
+
+Check the machine you have rather than trusting a list:
+
+```bash
+docker exec umh-core cat /sys/fs/cgroup/cpu.pressure
+```
+
+A line beginning `some avg10=` means UMH can read pressure and there is nothing to do here. `No such
+file or directory` means one of the two conditions is missing.
+
+### Switch pressure stats on
+
+The kernel parameter is `psi=1`, and it takes effect on the next reboot. How you set a kernel
+parameter is the operating system's own business, so follow its instructions:
+
+| Operating system | Instructions |
+|------------------|--------------|
+| RHEL, Rocky, AlmaLinux, Oracle Linux | [Configuring kernel command-line parameters](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_monitoring_and_updating_the_kernel/configuring-kernel-command-line-parameters_managing-monitoring-and-updating-the-kernel) — `sudo grubby --update-kernel=ALL --args="psi=1"` |
+| Debian, Ubuntu, and other systems booting with GRUB | [GRUB manual: simple configuration](https://www.gnu.org/software/grub/manual/grub/grub.html#Simple-configuration) — add `psi=1` to `GRUB_CMDLINE_LINUX`, then run `update-grub` |
+| Void Linux | [Void Handbook: kernel](https://docs.voidlinux.org/config/kernel.html) |
+
+### Switch cgroup v2 on
+
+RHEL, Rocky and AlmaLinux 8 boot cgroup v1 by default. There, `psi=1` fills `/proc/pressure/` on the
+host and the container's `cpu.pressure` still does not appear, so the CPU status does not change.
+Version 9 and later boot cgroup v2. To see which one a machine is using:
+
+```bash
+stat -fc %T /sys/fs/cgroup
+```
+
+`cgroup2fs` is cgroup v2. `tmpfs` is cgroup v1: add `systemd.unified_cgroup_hierarchy=1` to the
+kernel command line next to `psi=1`.
+
+### Confirm UMH can read it
+
+After the reboot, run the `docker exec` check above again. Checking the kernel command line instead
+only proves the kernel took the flag, which is not the same as the container being able to read the
+file. The Management Console confirms the end of that path: on the instance's detail page, the
+Technical Details `Pressure` line changes from "not available" to a percentage.
+
 ## When UMH refuses a new bridge
 
 While CPU is degraded, UMH will not start an additional bridge on the instance, because it would

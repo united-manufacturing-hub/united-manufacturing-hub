@@ -159,7 +159,7 @@ var _ = Describe("the healthy headline", func() {
 		details.LimitedVisibility = true
 		msg := composeHealthy(details)
 		Expect(msg).To(ContainSubstring(
-			"Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."))
+			"Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring: https://docs.umh.app/production/cpu-health"))
 		// The advisory sits between the headline and the Technical Details separator.
 		head := strings.Index(msg, "CPU healthy.")
 		adv := strings.Index(msg, "Limited visibility:")

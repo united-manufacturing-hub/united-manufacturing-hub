@@ -745,7 +745,7 @@ const (
 
 	// The limited-visibility advisory: an annotation on a healthy verdict,
 	// never a state.
-	limitedVisibilityNote = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
+	limitedVisibilityNote = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring: https://docs.umh.app/production/cpu-health"
 
 	// The headline subjects in no-limit mode ("The machine") and limit mode
 	// ("This instance").
