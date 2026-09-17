@@ -19,6 +19,7 @@ package fsmv2cpu
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
@@ -91,9 +92,9 @@ type CPUStatus struct {
 
 // CPUDeps is the per-instance state Poll reads.
 //
-// TDeps must be *CPUDeps, never the value: simple.MonitorSpec passes TDeps to
-// Poll by value, so state a field holds directly, rather than behind a pointer,
-// would die with that copy. Nothing enforces this.
+// TDeps is *CPUDeps rather than the value because simple.MonitorSpec passes
+// TDeps to Poll by value: state held directly in a field, rather than behind a
+// pointer, would die with that copy.
 type CPUDeps struct {
 	*deps.BaseDependencies
 
@@ -107,6 +108,10 @@ type CPUDeps struct {
 	// that will not build has to surface at the next Poll instead, which reports
 	// it could not measure.
 	engineErr error
+	// reportedReads holds every {operation, outcome} already reported, so a failure
+	// repeating each tick reports once. Startup and Poll share this one map;
+	// two maps would re-report a startup failure on the first tick.
+	reportedReads sync.Map // map[cpuhealth.ReadResult]struct{}
 }
 
 // Poll samples the cgroup once and reports the verdict Decide judged. On a
@@ -119,6 +124,11 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}
 
 	sample, err := d.sampler.Read(ctx)
+
+	// Called before the error return below: Read fills Sample.Troubleshooting.Reads even when it
+	// errors, so the read that broke is named either way.
+	d.reportFailedReads(ctx, sample)
+
 	if err != nil {
 		return CPUStatus{}, err
 	}
@@ -137,9 +147,9 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 // (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
 // it, and builds the table and engine.
 //
-// A failed startup read yields cores=0, quota=0, which drops the two capacity
-// signals from this instance's table for its whole lifetime; a later
-// successful read does not restore them (ENG-5752).
+// A read that fails at startup leaves its own figure zero, which drops that
+// capacity signal from this instance's table for its whole lifetime; a later
+// successful read does not restore it (ENG-5752).
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
@@ -153,30 +163,38 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 		sampler:          sampler,
 	}
 
-	cores, quota := containerOrHostLimit(context.Background(), sampler, bd)
+	cores, quota := containerOrHostLimit(context.Background(), sampler, d)
 	table := cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(table)
 
 	return d
 }
 
-// containerOrHostLimit decides which limit cpuhealth judges CPU use against:
-// the container's own resource limit, or the host's capacity. cpuhealth needs
-// that answer in advance, because the table is built from it once and never
-// rebuilt.
-func containerOrHostLimit(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
-	smp, err := s.Read(ctx)
-	if err != nil {
-		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
-			"cpu: startup cgroup snapshot failed; quota signals omitted", deps.Err(err))
+// containerOrHostLimit takes the one snapshot the table is built from, and
+// reports any read that failed while taking it. Each figure comes from its own
+// read and is zero when that read gave nothing; NewDeps says what a zero costs
+// the instance (ENG-5752).
+//
+// NewDeps calls this before setting d.engine, so d.engine is nil here.
+func containerOrHostLimit(ctx context.Context, sampler cpuhealth.Sampler, d *CPUDeps) (cores, quota float64) {
+	// The error is discarded because it carries nothing the sample does not:
+	// an unparsable cpu.stat is recorded on sample.Troubleshooting.Reads, which
+	// is where reportFailedReads reads it, and a cancelled tick is a shutdown
+	// rather than a failure.
+	sample, _ := sampler.Read(ctx)
+	d.reportFailedReads(ctx, sample)
+
+	return limitsFromSample(sample)
+}
+
+// limitsFromSample reads the capacity figures off one sample.
+func limitsFromSample(sample cpuhealth.Sample) (cores, quota float64) {
+	if logicalCpus, ok := sample.LogicalCpus.Get(); ok {
+		cores = logicalCpus
 	}
 
-	if lc, ok := smp.LogicalCpus.Get(); ok {
-		cores = lc
-	}
-
-	if q, ok := smp.Quota.Get(); ok && q > 0 {
-		quota = q
+	if limit, ok := sample.Quota.Get(); ok && limit > 0 {
+		quota = limit
 	}
 
 	return cores, quota
