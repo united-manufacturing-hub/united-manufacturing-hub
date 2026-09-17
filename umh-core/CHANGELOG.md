@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- Instances on hosts whose CPU accounting sits outside the container's own cgroup are no longer reported as degraded, which previously blocked every bridge on them. Such a host keeps the CPU signals it can still read, machine headroom and steal, and reports CPU monitoring as unavailable only where it can read none of them
+- Instances on some hosts are no longer reported as degraded, which previously stopped every bridge on them from running. Where CPU usage cannot be read, the instance keeps running and reports CPU monitoring as unavailable
 
 ## [0.44.39]
 
