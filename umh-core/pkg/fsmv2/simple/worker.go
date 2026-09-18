@@ -42,6 +42,7 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 	id deps.Identity,
 	logger deps.FSMLogger,
 	sr deps.StateReader,
+	runDeps map[string]any,
 ) (*simpleWorker[TConfig, TStatus, TDeps], error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
@@ -52,7 +53,7 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 	bd := w.InitBase(id, logger, sr)
 
 	if spec.NewDeps != nil {
-		w.BindDeps(spec.NewDeps(id, bd))
+		w.BindDeps(spec.NewDeps(id, bd, runDeps))
 	}
 
 	return w, nil
