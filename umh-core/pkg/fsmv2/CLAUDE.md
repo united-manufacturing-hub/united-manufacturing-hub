@@ -264,7 +264,7 @@ same call:
 ```go
 func init() {
     register.Worker[MyConfig, MyStatus, *MyDependencies]("myworker",
-        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
             return NewMyWorker(id, logger, sr)
         })
 }
@@ -275,6 +275,12 @@ func init() {
 dependency payload — use `register.NoDeps` for workers without per-instance
 dependencies. The constructor returns `(fsmv2.Worker, error)`; a non-nil error
 or nil worker at instantiation time panics with a contextualised message.
+
+The fourth parameter is the dependency map this worker instance was created
+with: the supervisor's own for a top-level worker, and the parent's merged with
+the child's for a child. The workers above take nothing from it, so they name it
+`_`. A worker that does reads a value out with `config.GetDependency` and a
+typed key, and falls back to its real implementation when the key is absent.
 
 The folder name must match the worker type (e.g., `transport/` for type
 `"transport"`).
@@ -292,7 +298,7 @@ Transport / push canonical example:
 // transport/worker.go
 func init() {
     register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies]("transport",
-        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
             w, err := NewTransportWorker(id, logger, sr)
             if err != nil {
                 return nil, err
@@ -305,7 +311,7 @@ func init() {
 // transport/push/worker.go
 func init() {
     register.Worker[snapshot.PushDesiredState, snapshot.PushStatus, *PushDependencies]("push",
-        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
             builder, ok := register.GlobalDepsBuilder("push")
             if !ok {
                 return nil, errors.New("push deps builder missing")
