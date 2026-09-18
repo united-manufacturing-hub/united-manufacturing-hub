@@ -39,7 +39,17 @@ type MockRelayServer struct {
 	authCalls         int
 	nextError         int
 	slowDelay         time.Duration
-	mu                sync.Mutex
+	// bandwidthBytesPerSecond stays in effect until changed, where nextError and
+	// slowDelay above clear themselves after one request. Set by
+	// SimulateBandwidthLimitation, which describes what it does.
+	bandwidthBytesPerSecond int
+	mu                      sync.Mutex
+	// closing is closed once, at the start of Close, to release any request
+	// parked in the bandwidth hold below. Without it, Close waits out the
+	// full hold of every in-flight request, since nothing else cancels their
+	// contexts.
+	closing     chan struct{}
+	closingOnce sync.Once
 }
 
 // NewMockRelayServer creates and starts a new mock relay server.
@@ -52,6 +62,7 @@ func NewMockRelayServer() *MockRelayServer {
 		// Bug #6 fix: Default backend UUID - different from any placeholder UUID
 		backendUUID: "backend-real-uuid-12345678",
 		backendName: "Mock Instance Name",
+		closing:     make(chan struct{}),
 	}
 
 	m.server = httptest.NewServer(http.HandlerFunc(m.handler))
@@ -74,6 +85,29 @@ func (m *MockRelayServer) handler(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	m.connectionHeaders = append(m.connectionHeaders, r.Header.Get("Connection"))
 	m.mu.Unlock()
+
+	// Hold requests whose body has a declared length, to simulate a bandwidth-limited
+	// uplink rather than a slow server: a bigger body waits longer. This has no path
+	// exemption, unlike the error/slow-response faults below. It does not need one:
+	// keying the hold on body size already confines its effect to push, since push is
+	// the only endpoint whose request declares a length. login has no body and pull is
+	// a GET with a nil body, so both report zero bytes, and zero bytes at any rate is
+	// no delay.
+	m.mu.Lock()
+	bytesPerSecond := m.bandwidthBytesPerSecond
+	m.mu.Unlock()
+
+	if bytesPerSecond > 0 && r.ContentLength > 0 {
+		holdDuration := time.Duration(r.ContentLength) * time.Second / time.Duration(bytesPerSecond)
+
+		select {
+		case <-time.After(holdDuration):
+		case <-r.Context().Done():
+			return
+		case <-m.closing:
+			return
+		}
+	}
 
 	// Check for injected errors (except for login endpoint)
 	if r.URL.Path != "/v2/instance/login" {
@@ -215,8 +249,13 @@ func (m *MockRelayServer) URL() string {
 	return m.server.URL
 }
 
-// Close shuts down the mock server.
+// Close shuts down the mock server. Safe to call more than once: it releases
+// any request parked in the bandwidth hold before waiting for handlers to
+// return, so a closing server never blocks on its own held requests.
 func (m *MockRelayServer) Close() {
+	m.closingOnce.Do(func() {
+		close(m.closing)
+	})
 	m.server.Close()
 }
 
@@ -278,6 +317,18 @@ func (m *MockRelayServer) SimulateSlowResponse(delay time.Duration) {
 	defer m.mu.Unlock()
 
 	m.slowDelay = delay
+}
+
+// SimulateBandwidthLimitation models a slow uplink rather than a slow server: every
+// request whose body has a declared length is held for ContentLength/maxBytesPerSecond
+// before it is answered, so a bigger request takes proportionally longer. Unlike
+// SimulateServerError and SimulateSlowResponse, it is not one-time — it stays in effect
+// for every request until changed. Pass 0 to disable it.
+func (m *MockRelayServer) SimulateBandwidthLimitation(maxBytesPerSecond int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.bandwidthBytesPerSecond = maxBytesPerSecond
 }
 
 // GetReceivedConnectionHeaders returns all Connection headers received from requests.
