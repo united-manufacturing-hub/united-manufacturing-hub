@@ -155,7 +155,7 @@ func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	register.Worker[snapshot.PushDesiredState, snapshot.PushStatus, *PushDependencies]("push",
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			builder, ok := register.GlobalDepsBuilder("push")
 			if !ok {
 				return nil, errors.New("push worker requires deps builder; transport worker must initialise before push instantiation")

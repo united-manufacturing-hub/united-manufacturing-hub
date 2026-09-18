@@ -226,7 +226,7 @@ func init() {
 	fsmv2.RegisterObservationInterval(WorkerTypeName, channelusage.SampleInterval)
 
 	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			w, err := NewTransportWorker(id, logger, sr)
 			if err != nil {
 				return nil, err

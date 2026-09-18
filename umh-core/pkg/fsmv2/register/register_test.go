@@ -53,7 +53,7 @@ type regTestWorker struct {
 	fsmv2.WorkerBase[regTestConfig, regTestStatus, register.NoDeps]
 }
 
-func newRegTestWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+func newRegTestWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 	w := &regTestWorker{}
 	w.InitBase(id, logger, sr)
 
@@ -103,7 +103,7 @@ var _ = Describe("register.Worker", func() {
 
 	It("panics on field name collision", func() {
 		Expect(func() {
-			register.Worker[regTestConfig, collidingStatus, register.NoDeps]("regtest-collision", func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			register.Worker[regTestConfig, collidingStatus, register.NoDeps]("regtest-collision", func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 				return nil, nil
 			})
 		}).To(PanicWith(ContainSubstring("collide")))
@@ -132,7 +132,7 @@ var _ = Describe("register.Worker", func() {
 	It("panics when constructor returns an error at factory call time", func() {
 		constructorErr := errors.New("device unreachable")
 		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-errconstructor",
-			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) (fsmv2.Worker, error) {
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 				return nil, constructorErr
 			},
 		)
@@ -152,7 +152,7 @@ var _ = Describe("register.Worker", func() {
 
 	It("panics when constructor returns nil worker without error", func() {
 		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-nilworker",
-			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) (fsmv2.Worker, error) {
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 				return nil, nil
 			},
 		)
