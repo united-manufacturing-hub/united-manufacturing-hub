@@ -80,9 +80,10 @@ func (s *tickSampler) Read(context.Context) (cpuhealth.Sample, error) {
 // ends up with its own pattern of values across these ticks, which is what lets
 // the spec catch two flags published under each other's names.
 //
-// Three ticks is the floor. Two ticks offer four patterns and there are five
-// flags, and within a single tick there is no equivalent of the distinct number
-// per field richSample stages, because a boolean has two values.
+// Two ticks offer four patterns and there are six flags, and within a single
+// tick there is no equivalent of the distinct number per field richSample
+// stages, because a boolean has two values. Three ticks still leave two flags
+// sharing a pattern, which is what the fourth is for.
 func flagTicks() []cpuhealth.Sample {
 	// Tick 1 is the engine's first. The two ring flags and the throttle flag
 	// all read false here whatever is staged: a mean needs two readings and a
@@ -116,7 +117,22 @@ func flagTicks() []cpuhealth.Sample {
 	third.NrPeriods = diagnosis.Known(300)
 	third.NrThrottled = diagnosis.Known(5)
 
-	return []cpuhealth.Sample{first, second, third}
+	// Tick 4 restores the /proc/stat read while cpu.pressure stays unreadable.
+	// Over the first three ticks cpu_host_busy_cores_available and
+	// cpu_pressure_signal_ready read the same three values; this is the tick
+	// that separates them, because the host-busy figure is readable here and
+	// the pressure figure is not. Both throttle counters advance past tick 3's,
+	// so the throttle window keeps its points rather than restarting.
+	fourth := richSample()
+	fourth.Timestamp = third.Timestamp.Add(time.Second)
+	fourth.CpuScope = cpuhealth.ScopeAffinity
+	fourth.UsageCores = diagnosis.Known(1.3)
+	fourth.HostBusy = diagnosis.Known(0.7)
+	fourth.Pressure = diagnosis.Unknown()
+	fourth.NrPeriods = diagnosis.Known(600)
+	fourth.NrThrottled = diagnosis.Known(10)
+
+	return []cpuhealth.Sample{first, second, third, fourth}
 }
 
 var _ = Describe("the CPU worker publishes its evidence as worker gauges", func() {
@@ -161,14 +177,12 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 		// here. Counting trues and falses instead would pass with any two of
 		// the three flags that read false on a single tick swapped.
 		want := map[deps.GaugeName][]float64{
-			deps.GaugeCPUUsageRingActive:    {0, 1, 1},
-			deps.GaugeCPUHostBusyRingActive: {0, 1, 0},
-			// Reports CPU scope, not readability: unlike the four flags around
-			// it, it qualifies no measurement. See its declaration in
-			// pkg/fsmv2/deps for what a 0 there means.
-			deps.GaugeCPUHostHeadroomAvailable: {1, 0, 0},
-			deps.GaugeCPUThrottleSignalReady:   {0, 0, 1},
-			deps.GaugeCPUPressureSignalReady:   {1, 1, 0},
+			deps.GaugeCPUUsageRingActive:        {0, 1, 1, 1},
+			deps.GaugeCPUHostBusyRingActive:     {0, 1, 0, 1},
+			deps.GaugeCPUHostHeadroomAvailable:  {1, 0, 0, 0},
+			deps.GaugeCPUThrottleSignalReady:    {0, 0, 1, 1},
+			deps.GaugeCPUPressureSignalReady:    {1, 1, 0, 0},
+			deps.GaugeCPUHostBusyCoresAvailable: {1, 1, 0, 1},
 		}
 
 		rows := make(map[string]deps.GaugeName, len(want))
@@ -207,21 +221,22 @@ var _ = Describe("the CPU worker publishes its evidence as worker gauges", func(
 		// which is the whole point: an expectation derived from the thing under
 		// test cannot see it change.
 		want := map[deps.GaugeName]string{
-			deps.GaugeCPUAvgUsageCores:         "cpu_avg_usage_cores",
-			deps.GaugeCPUAvgUsageFraction:      "cpu_avg_usage_fraction",
-			deps.GaugeCPUThrottleRatio:         "cpu_throttle_ratio",
-			deps.GaugeCPUPressureAvg60:         "cpu_pressure_avg60_ratio",
-			deps.GaugeCPUHostHeadroomCores:     "cpu_host_headroom_cores",
-			deps.GaugeCPUAvgHostBusyCores:      "cpu_avg_host_busy_cores",
-			deps.GaugeCPUCapacityCores:         "cpu_capacity_cores",
-			deps.GaugeCPUReserveCores:          "cpu_reserve_cores",
-			deps.GaugeCPUHostCpus:              "cpu_host_cpus",
-			deps.GaugeCPULastSampleUnix:        "cpu_last_sample_unix",
-			deps.GaugeCPUUsageRingActive:       "cpu_usage_ring_active",
-			deps.GaugeCPUHostBusyRingActive:    "cpu_host_busy_ring_active",
-			deps.GaugeCPUHostHeadroomAvailable: "cpu_host_headroom_available",
-			deps.GaugeCPUThrottleSignalReady:   "cpu_throttle_signal_ready",
-			deps.GaugeCPUPressureSignalReady:   "cpu_pressure_signal_ready",
+			deps.GaugeCPUAvgUsageCores:          "cpu_avg_usage_cores",
+			deps.GaugeCPUAvgUsageFraction:       "cpu_avg_usage_fraction",
+			deps.GaugeCPUThrottleRatio:          "cpu_throttle_ratio",
+			deps.GaugeCPUPressureAvg60:          "cpu_pressure_avg60_ratio",
+			deps.GaugeCPUHostHeadroomCores:      "cpu_host_headroom_cores",
+			deps.GaugeCPUAvgHostBusyCores:       "cpu_avg_host_busy_cores",
+			deps.GaugeCPUCapacityCores:          "cpu_capacity_cores",
+			deps.GaugeCPUReserveCores:           "cpu_reserve_cores",
+			deps.GaugeCPUHostCpus:               "cpu_host_cpus",
+			deps.GaugeCPULastSampleUnix:         "cpu_last_sample_unix",
+			deps.GaugeCPUUsageRingActive:        "cpu_usage_ring_active",
+			deps.GaugeCPUHostBusyRingActive:     "cpu_host_busy_ring_active",
+			deps.GaugeCPUHostHeadroomAvailable:  "cpu_host_headroom_available",
+			deps.GaugeCPUThrottleSignalReady:    "cpu_throttle_signal_ready",
+			deps.GaugeCPUPressureSignalReady:    "cpu_pressure_signal_ready",
+			deps.GaugeCPUHostBusyCoresAvailable: "cpu_host_busy_cores_available",
 		}
 
 		for constant, literal := range want {

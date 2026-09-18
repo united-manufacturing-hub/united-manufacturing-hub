@@ -215,6 +215,10 @@ const (
 
 	// GaugeCPUHostHeadroomCores tracks cores free on the host after the reserve.
 	// Unclamped: a full box reports a negative number rather than 0.
+	//
+	// This series has no flag of its own. Trust it only on a tick where
+	// cpu_host_headroom_available, cpu_host_busy_cores_available and
+	// cpu_host_busy_ring_active all read 1.
 	GaugeCPUHostHeadroomCores GaugeName = "cpu_host_headroom_cores"
 
 	// GaugeCPUAvgHostBusyCores tracks the whole machine's 60s mean busy time, in cores.
@@ -235,24 +239,37 @@ const (
 	GaugeCPULastSampleUnix GaugeName = "cpu_last_sample_unix"
 )
 
-// CPU worker readability flags, 1 for true and 0 for false. *_ring_active: the 60s
-// window reduced to a trusted number. *_signal_ready: the signal could be read.
+// CPU worker flags, 1 for true and 0 for false. A 0 on any of them means the
+// measurement it names is not worth acting on this tick. The suffix says what
+// makes it 0:
+//
+//	_ring_active   the 60s window has not reduced to a trusted number.
+//	_signal_ready  the signal has no trusted reading. On a box that has no
+//	               instrument for it at all, such as a bare-metal host with no
+//	               cgroup throttle counters, it never turns 1.
+//	_available     the sample could not supply the figure at all.
 const (
-	// GaugeCPUUsageRingActive qualifies cpu_avg_usage_cores.
+	// GaugeCPUUsageRingActive applies to cpu_avg_usage_cores.
 	GaugeCPUUsageRingActive GaugeName = "cpu_usage_ring_active"
 
-	// GaugeCPUHostBusyRingActive qualifies cpu_avg_host_busy_cores.
+	// GaugeCPUHostBusyRingActive applies to cpu_avg_host_busy_cores.
 	GaugeCPUHostBusyRingActive GaugeName = "cpu_host_busy_ring_active"
 
-	// GaugeCPUHostHeadroomAvailable reports whether this container sees the whole
-	// machine, reading 0 when it is pinned to a subset of CPUs.
-	GaugeCPUHostHeadroomAvailable GaugeName = "cpu_host_headroom_available"
-
-	// GaugeCPUThrottleSignalReady qualifies cpu_throttle_ratio.
+	// GaugeCPUThrottleSignalReady applies to cpu_throttle_ratio.
 	GaugeCPUThrottleSignalReady GaugeName = "cpu_throttle_signal_ready"
 
-	// GaugeCPUPressureSignalReady qualifies cpu_pressure_avg60_ratio.
+	// GaugeCPUPressureSignalReady applies to cpu_pressure_avg60_ratio.
 	GaugeCPUPressureSignalReady GaugeName = "cpu_pressure_signal_ready"
+
+	// GaugeCPUHostHeadroomAvailable reads 0 when this container is pinned to a
+	// subset of the machine's CPUs, and 0 when the machine's CPU count could not
+	// be read. It applies to cpu_host_headroom_cores.
+	GaugeCPUHostHeadroomAvailable GaugeName = "cpu_host_headroom_available"
+
+	// GaugeCPUHostBusyCoresAvailable reads 1 when this tick's read produced a
+	// host-busy figure. It applies to cpu_avg_host_busy_cores and to
+	// cpu_host_headroom_cores.
+	GaugeCPUHostBusyCoresAvailable GaugeName = "cpu_host_busy_cores_available"
 )
 
 // =============================================================================
@@ -356,6 +373,16 @@ func (r *MetricsRecorder) SetGauge(name GaugeName, value float64) {
 	defer r.mu.Unlock()
 
 	r.gauges[string(name)] = value
+}
+
+// SetGaugeFlag sets a gauge to 1 for true and 0 for false.
+func (r *MetricsRecorder) SetGaugeFlag(name GaugeName, on bool) {
+	value := 0.0
+	if on {
+		value = 1
+	}
+
+	r.SetGauge(name, value)
 }
 
 // DrainResult holds the buffered metrics from a Drain() operation.

@@ -137,7 +137,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
-	recordGauges(d.MetricsRecorder(), sample.Timestamp, details)
+	recordMetrics(d.MetricsRecorder(), sample.Timestamp, details)
 
 	return CPUStatus{
 		Verdict: verdict,
@@ -146,12 +146,12 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	}, nil
 }
 
-// recordGauges publishes the measured evidence for the framework's worker-metrics
+// recordMetrics publishes the evidence for the framework's worker-metrics
 // exporter, which turns each name into umh_fsmv2_worker_<name>
 // (WorkerMetricsExporter.getOrCreateGauge, pkg/fsmv2/supervisor/metrics/metrics.go).
-func recordGauges(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.Details) {
+func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.Details) {
 	// GaugeCPULastSampleUnix freezes along with every gauge below when a tick
-	// cannot measure: Poll returns before recordGauges runs, and the collector
+	// cannot measure: Poll returns before recordMetrics runs, and the collector
 	// reloads and re-publishes the previous gauge values instead
 	// (Collector.wrapNewObservation, pkg/fsmv2/supervisor/internal/collection/collector.go).
 	// Its age is what reveals the freeze.
@@ -167,19 +167,12 @@ func recordGauges(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.De
 	m.SetGauge(deps.GaugeCPUReserveCores, det.ReserveCores)
 	m.SetGauge(deps.GaugeCPUHostCpus, det.HostCpus)
 
-	m.SetGauge(deps.GaugeCPUUsageRingActive, gaugeBool(det.UsageRingActive))
-	m.SetGauge(deps.GaugeCPUHostBusyRingActive, gaugeBool(det.HostBusyRingActive))
-	m.SetGauge(deps.GaugeCPUHostHeadroomAvailable, gaugeBool(det.HostHeadroomAvailable))
-	m.SetGauge(deps.GaugeCPUThrottleSignalReady, gaugeBool(det.ThrottleSignalReady))
-	m.SetGauge(deps.GaugeCPUPressureSignalReady, gaugeBool(det.PressureSignalReady))
-}
-
-func gaugeBool(b bool) float64 {
-	if b {
-		return 1
-	}
-
-	return 0
+	m.SetGaugeFlag(deps.GaugeCPUUsageRingActive, det.UsageRingActive)
+	m.SetGaugeFlag(deps.GaugeCPUHostBusyRingActive, det.HostBusyRingActive)
+	m.SetGaugeFlag(deps.GaugeCPUHostBusyCoresAvailable, det.HostBusyCoresAvailable)
+	m.SetGaugeFlag(deps.GaugeCPUHostHeadroomAvailable, det.HostHeadroomAvailable)
+	m.SetGaugeFlag(deps.GaugeCPUThrottleSignalReady, det.ThrottleSignalReady)
+	m.SetGaugeFlag(deps.GaugeCPUPressureSignalReady, det.PressureSignalReady)
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
