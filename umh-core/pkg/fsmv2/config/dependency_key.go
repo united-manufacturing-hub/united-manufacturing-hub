@@ -42,7 +42,15 @@ func PutDependency[T any](m map[string]any, key DependencyKey[T], value T) {
 	m[key.name] = value
 }
 
-// GetDependency reads the value stored under key.
+// GetDependency reads the value stored under key. The second return is false
+// when the map holds nothing under that name.
 func GetDependency[T any](m map[string]any, key DependencyKey[T]) (T, bool) {
-	return m[key.name].(T), true
+	value, present := m[key.name]
+	if !present {
+		var zero T
+
+		return zero, false
+	}
+
+	return value.(T), true
 }

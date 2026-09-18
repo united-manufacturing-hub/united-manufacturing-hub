@@ -43,4 +43,10 @@ var _ = Describe("DependencyKey", func() {
 		Expect(ok).To(BeTrue())
 		Expect(got.Sample()).To(Equal(7))
 	})
+
+	It("reports absent when nothing was put under the key", func() {
+		got, ok := config.GetDependency(map[string]any{}, samplerKey)
+		Expect(ok).To(BeFalse())
+		Expect(got).To(BeNil())
+	})
 })
