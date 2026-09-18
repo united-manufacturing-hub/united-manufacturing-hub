@@ -66,10 +66,10 @@ var _ = Describe("containerHealthMessage", func() {
 		s := healthy()
 		s.OverallHealth = models.Degraded
 		s.CPUHealth = models.Degraded
-		s.CPU.Health = health("CPU degraded.\nTechnical Details:\nUsage 96% of capacity (degrades above 70%).", models.Degraded)
+		s.CPU.Health = health("CPU degraded.\nTechnical Details:\nInstance usage 96% of capacity (degrades above 70%).", models.Degraded)
 
 		Expect(containerHealthMessage(s)).To(Equal(
-			"CPU degraded: CPU degraded.\nTechnical Details:\nUsage 96% of capacity (degrades above 70%)."))
+			"CPU degraded: CPU degraded.\nTechnical Details:\nInstance usage 96% of capacity (degrades above 70%)."))
 	})
 
 	It("should stack several degraded components one per line, in CPU, memory, disk order", func() {
