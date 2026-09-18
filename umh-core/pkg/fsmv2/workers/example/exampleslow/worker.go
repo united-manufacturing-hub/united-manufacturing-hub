@@ -139,7 +139,7 @@ func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 
 func init() {
 	register.Worker[ExampleslowConfig, ExampleslowStatus, *ExampleslowDependencies]("exampleslow",
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewExampleslowWorker(id, &DefaultConnectionPool{}, logger, sr)
 		})
 }

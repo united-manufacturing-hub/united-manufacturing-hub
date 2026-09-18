@@ -171,7 +171,7 @@ func (w *FailingWorker) updateDependenciesFromConfig(cfg ExamplefailingConfig) {
 
 func init() {
 	register.Worker[ExamplefailingConfig, ExamplefailingStatus, *FailingDependencies](workerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewFailingWorker(id, &DefaultConnectionPool{}, logger, sr)
 		})
 }

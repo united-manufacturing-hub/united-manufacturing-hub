@@ -108,7 +108,7 @@ func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TD
 	}
 
 	register.Worker[TConfig, Status[TStatus], TDeps](spec.WorkerType,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return newSimpleWorker(spec, id, logger, sr)
 		})
 
