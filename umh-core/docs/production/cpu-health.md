@@ -37,15 +37,16 @@ CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can us
 
 Technical Details:
 Instance headroom 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degrades below 0).
+Instance usage not measured (throttling already shows whether this instance is hitting its CPU limit, so this rough estimate is not needed).
 Throttling 2% (degrades above 5%).
 Pressure 4% (degrades above 20%).
-Steal not available (not possible).
+Steal not measured (this instance is not running in a virtual machine, so no other virtual machine can take its CPU).
 ```
 
-Which lines appear depends on what the machine can measure: a machine whose core count is readable also gets a Machine headroom line, and an instance with no CPU limit gets neither the instance headroom nor the throttling line.
+Only the headroom lines are conditional: a machine whose core count is readable also gets a Machine headroom line, and an instance with no CPU limit gets no Instance headroom line. Every other signal keeps its line whether or not this machine can measure it.
 
 A signal that has already fired shows what would clear it instead, for example
-`Throttling 12% (recovers below 3%)`. A signal this machine cannot measure says so rather than
+`Throttling 12% (recovers below 3%)`. A signal this machine cannot measure names the fact that stops it being measured, rather than
 reading zero.
 
 ## Thresholds
@@ -62,11 +63,11 @@ to pass a threshold, not merely reach it, except where the table says "at".
 | **CPU steal** | above 10% | below 6% | the machine is a virtual machine |
 | **Machine headroom** | less than 1 core free | 1.5 cores free | the machine's core count is readable |
 | **Limit headroom** | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
-| **Usage of the machine** | at 70% | below 60% | host statistics are unreadable (fallback for machine headroom) |
+| **Instance usage** | at 70% | below 60% | no CPU limit is set and the kernel publishes no PSI (last-resort fallback for machine headroom) |
 
 Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a fresh
 instance is judgeable within seconds of starting. Bare metal reports no steal at all, so on a
-physical machine that signal reads "not possible" rather than 0%.
+physical machine that signal reads "not measured" with its reason rather than 0%.
 
 ## Enabling CPU pressure stats
 

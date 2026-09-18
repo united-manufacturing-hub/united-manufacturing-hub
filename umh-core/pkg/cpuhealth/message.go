@@ -211,9 +211,9 @@ func usageMeasured(details Details) bool {
 // cpuRule is one line of the Technical Details table: a rule that can degrade
 // this instance's CPU, against the threshold applying to it now.
 //
-// applies and ready must never be read as each other: applies is whether the box
-// can run the rule at all, ready is whether this tick produced a value. An
-// absent line says which of the two it is.
+// notApplicableBecause and ready must never be read as each other: the first is
+// whether the box can run the rule at all, ready is whether this tick produced a
+// value. An absent line says which of the two it is.
 type cpuRule struct {
 	// label opens the line, and names the rule rather than the instrument: an
 	// operator reading "Steal" need not know which of the two steal arms
@@ -224,9 +224,13 @@ type cpuRule struct {
 	measured string
 	// marks is the pair the engine judged this rule against, carried whole so
 	// the line states the live threshold rather than a copy of it.
-	marks   diagnosis.Marks
-	applies bool
-	ready   bool
+	marks diagnosis.Marks
+	// notApplicableBecause is the fact about this box that stops the rule
+	// running, and is empty where the rule runs. One field rather than a flag
+	// beside a reason: the absent line is assembled from it, so a rule that does
+	// not apply cannot fail to say why.
+	notApplicableBecause string
+	ready                bool
 	// latched is whether the SIGNAL this line belongs to has fired and not yet
 	// released. It picks which of the two marks the line states, and it is read
 	// per signal, so both lines of a two-instrument signal state the same side.
@@ -241,13 +245,18 @@ type cpuRule struct {
 
 // render writes one line of the table. A rule that has not fired shows the mark
 // that would fire it; a rule that has fired shows the mark that would clear it.
-// A rule with no reading says which kind of absence it is: "measuring" while its
-// window is still filling, "held" once it has fired and not yet cleared. An
-// operator is then never told that a fired signal is still warming up.
+// A rule with no reading says which kind of absence it is: the fact about the
+// box that stops the rule running, "measuring" while its window is still
+// filling, "held" once it has fired and not yet cleared. An operator is then
+// never told that a fired signal is still warming up.
+//
+// A rule the box cannot run reads "not measured" and never "not available":
+// "available" was read as a failed read of the figure itself, and the figure was
+// there (ENG-5896).
 func (r cpuRule) render() string {
 	switch {
-	case !r.applies && !r.firedHere:
-		return r.label + " not available (not possible)."
+	case r.notApplicableBecause != "" && !r.firedHere:
+		return fmt.Sprintf("%s not measured (%s).", r.label, r.notApplicableBecause)
 	case !r.ready && !r.latched:
 		return r.label + " not available (measuring)."
 	case !r.ready:
@@ -360,7 +369,7 @@ func cpuRules(causes []Cause, details Details) []cpuRule {
 
 	return append(rules,
 		cpuRule{
-			label:    "Usage",
+			label:    labelUsage,
 			measured: fmt.Sprintf("%d%% of capacity", toPercent(details.AvgUsageFraction)),
 			marks:    usageFractionMarks,
 			// usage-fraction is evidence of last resort: it is declared only
@@ -368,7 +377,7 @@ func cpuRules(causes []Cause, details Details) []cpuRule {
 			// to read the harm off, which is exactly what
 			// Details.LimitedVisibility holds. A box with a CPU limit therefore
 			// never runs this rule.
-			applies: details.LimitedVisibility,
+			notApplicableBecause: usageRuleAbsence(details),
 			// usage-fraction reduces the same sample field over the same span as
 			// the usage-cores measurement, so one window's state answers for
 			// both.
@@ -377,49 +386,70 @@ func cpuRules(causes []Cause, details Details) []cpuRule {
 			firedHere: usageFired,
 		},
 		cpuRule{
-			label:     "Throttling",
-			measured:  fmt.Sprintf("%d%%", toPercent(details.ThrottleRatio)),
-			marks:     throttleMarks,
-			applies:   details.LimitApplies,
-			ready:     details.ThrottleSignalReady,
-			latched:   throttlingFired,
-			firedHere: throttlingFired,
+			label:                labelThrottling,
+			measured:             fmt.Sprintf("%d%%", toPercent(details.ThrottleRatio)),
+			marks:                throttleMarks,
+			notApplicableBecause: absentUnless(details.LimitApplies, reasonNoCpuLimit),
+			ready:                details.ThrottleSignalReady,
+			latched:              throttlingFired,
+			firedHere:            throttlingFired,
 		},
 		cpuRule{
-			label:     "Pressure",
-			measured:  fmt.Sprintf("%d%%", toPercent(details.PressureAvg60)),
-			marks:     pressureMarks,
-			applies:   details.PressureApplies,
-			ready:     details.PressureSignalReady,
-			latched:   pressureFired,
-			firedHere: pressureFired,
+			label:                labelPressure,
+			measured:             fmt.Sprintf("%d%%", toPercent(details.PressureAvg60)),
+			marks:                pressureMarks,
+			notApplicableBecause: absentUnless(details.PressureApplies, reasonNoPressureStats),
+			ready:                details.PressureSignalReady,
+			latched:              pressureFired,
+			firedHere:            pressureFired,
 		},
 		cpuRule{
-			label:     "Steal",
-			measured:  fmt.Sprintf("%d%%", toPercent(stealValue)),
-			marks:     stealMarks,
-			applies:   details.StealApplies,
-			ready:     details.StealSignalReady,
-			latched:   stealFired,
-			firedHere: stealFired,
+			label:                labelSteal,
+			measured:             fmt.Sprintf("%d%%", toPercent(stealValue)),
+			marks:                stealMarks,
+			notApplicableBecause: absentUnless(details.StealApplies, reasonNotVirtualized),
+			ready:                details.StealSignalReady,
+			latched:              stealFired,
+			firedHere:            stealFired,
 		},
 	)
+}
+
+// absentUnless reads as its call site does: the rule is absent unless the box
+// can run it, because of the fact named. Empty means the rule runs.
+func absentUnless(applies bool, because string) string {
+	if applies {
+		return ""
+	}
+
+	return because
+}
+
+// usageRuleAbsence says why the usage rule is not running, or empty where it is.
+func usageRuleAbsence(details Details) string {
+	switch {
+	case details.LimitedVisibility:
+		return ""
+	case details.LimitApplies:
+		return reasonJudgedAgainstLimit
+	}
+
+	return reasonJudgedByPressure
 }
 
 // headroomRule builds one headroom line: the subtraction its budget spells out,
 // against the mark pair the signal measuring that ceiling declares.
 //
-// applies is true by construction: the caller appends a line only where the
-// declared-ceiling test passed, and a ceiling that fails it gets no slot at
-// all. That the engine then judges the rule is the usual case, not a guarantee
-// - hostCpuFullDeclared has the exception.
+// A headroom rule always applies, so it names no reason it does not: the caller
+// appends a line only where the declared-ceiling test passed, and a ceiling that
+// fails it gets no slot at all. That the engine then judges the rule is the
+// usual case, not a guarantee - hostCpuFullDeclared has the exception.
 func headroomRule(label string, b budgetCores, marks diagnosis.Marks, ready, latched, firedHere bool) cpuRule {
 	return cpuRule{
 		label: label,
 		measured: fmt.Sprintf("%s cores = %s total - %s used - %s reserved",
 			fmtCores1(b.headroom), fmtCoresTotal(b.total), fmtCores1(b.used), fmtCores1(b.reserve)),
 		marks:     marks,
-		applies:   true,
 		ready:     ready,
 		latched:   latched,
 		firedHere: firedHere,
@@ -774,6 +804,26 @@ const (
 	// machine".
 	labelInstanceHeadroom = "Instance headroom"
 	labelMachineHeadroom  = "Machine headroom"
+
+	// The four single-rule labels. labelUsage names its subject rather than
+	// reading "Usage", which the CPU panel's own "avg usage" row already means:
+	// one word over two different things sent a reader looking for the figure
+	// they had just been shown (ENG-5896).
+	labelUsage      = "Instance usage"
+	labelThrottling = "Throttling"
+	labelPressure   = "Pressure"
+	labelSteal      = "Steal"
+
+	// Why a rule is not measured on this box, one sentence per reason a rule can
+	// be absent. Each names a fact about the box and what follows from it: a
+	// reader who does not know that throttling needs a limit, or that the usage
+	// estimate stands in for pressure, cannot get there from the fact alone.
+	// None of them says "unavailable": nothing here failed to read.
+	reasonNoCpuLimit         = "this instance has no CPU limit set, so it can never be throttled"
+	reasonNoPressureStats    = "this operating system does not report CPU pressure stats"
+	reasonNotVirtualized     = "this instance is not running in a virtual machine, so no other virtual machine can take its CPU"
+	reasonJudgedAgainstLimit = "throttling already shows whether this instance is hitting its CPU limit, so this rough estimate is not needed"
+	reasonJudgedByPressure   = "pressure already shows whether work is waiting for a free CPU core, so this rough estimate is not needed"
 
 	// The degraded headlines, one per CauseKind. headlineGeneric is the default
 	// arm, unreachable through today's five kinds but still written so the enum
