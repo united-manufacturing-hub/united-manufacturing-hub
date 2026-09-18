@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -285,8 +286,19 @@ type panicOnSentryErrorCollectorLogger struct {
 	panicked atomic.Bool
 }
 
-func (p *panicOnSentryErrorCollectorLogger) Debug(msg string, fields ...deps.Field)     {}
-func (p *panicOnSentryErrorCollectorLogger) Info(msg string, fields ...deps.Field)       {}
+func (p *panicOnSentryErrorCollectorLogger) Debug(msg string, fields ...deps.Field) {}
+func (p *panicOnSentryErrorCollectorLogger) Info(msg string, fields ...deps.Field)  {}
+func (p *panicOnSentryErrorCollectorLogger) Sentry(id telemetry.Identifier, _ deps.Feature, _ string, _ error, _ ...deps.Field) {
+	if id.Severity == telemetry.SeverityWarning {
+		return
+	}
+
+	if !p.panicked.Load() {
+		p.panicked.Store(true)
+		panic("logger Sentry panicked in collector")
+	}
+}
+
 func (p *panicOnSentryErrorCollectorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {
 }
 func (p *panicOnSentryErrorCollectorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {

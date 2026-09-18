@@ -335,6 +335,9 @@ cleanup-data:
 
 cleanup-all: cleanup-ci cleanup-tmp cleanup-data
 
+generate-telemetry:
+	cd pkg/telemetry && go generate .
+
 vet:
 	go vet -tags=test ./...
 
