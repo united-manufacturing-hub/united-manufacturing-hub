@@ -164,7 +164,7 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 
 func init() {
 	register.Worker[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies](workerTypeName,
-		func(id depspkg.Identity, logger depspkg.FSMLogger, sr depspkg.StateReader) (fsmv2.Worker, error) {
+		func(id depspkg.Identity, logger depspkg.FSMLogger, sr depspkg.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
 			// Transport creation and auth are handled by TransportWorker (ENG-4264).
 			return NewCommunicatorWorker(id, nil, logger, sr)

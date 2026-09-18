@@ -235,7 +235,7 @@ var _ = Describe("register deps registry", func() {
 			register.SetGlobalDeps[*depsRegistryDeps](workerType, published)
 
 			register.Worker[depsRegistryConfig, depsRegistryStatus, *depsRegistryDeps](workerType,
-				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 					constructorRan = true
 					d := register.GlobalDeps[*depsRegistryDeps](workerType)
 					capturedDeps = d
@@ -266,7 +266,7 @@ var _ = Describe("register deps registry", func() {
 			var constructorRan bool
 
 			register.Worker[depsRegistryConfig, depsRegistryStatus, *depsRegistryDeps](workerType,
-				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 					constructorRan = true
 					d := register.GlobalDeps[*depsRegistryDeps](workerType)
 					capturedDeps = d
