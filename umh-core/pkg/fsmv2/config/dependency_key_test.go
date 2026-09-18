@@ -34,6 +34,11 @@ func (s fixedSampler) Sample() int { return s.value }
 
 var samplerKey = config.NewDependencyKey[sampler]("test.sampler")
 
+// wronglyTypedSamplerKey is the mistake this guards against: two keys agree on
+// the name and disagree on the type, which is what happens when the side that
+// hands a dependency in and the side that reads it declare their own keys.
+var wronglyTypedSamplerKey = config.NewDependencyKey[string]("test.sampler")
+
 var _ = Describe("DependencyKey", func() {
 	It("reads back the value that was put under the same key", func() {
 		m := map[string]any{}
@@ -46,6 +51,15 @@ var _ = Describe("DependencyKey", func() {
 
 	It("reports absent when nothing was put under the key", func() {
 		got, ok := config.GetDependency(map[string]any{}, samplerKey)
+		Expect(ok).To(BeFalse())
+		Expect(got).To(BeNil())
+	})
+
+	It("reports absent when the stored value is not the key's type", func() {
+		m := map[string]any{}
+		config.PutDependency(m, wronglyTypedSamplerKey, "not a sampler")
+
+		got, ok := config.GetDependency(m, samplerKey)
 		Expect(ok).To(BeFalse())
 		Expect(got).To(BeNil())
 	})
