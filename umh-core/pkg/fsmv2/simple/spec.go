@@ -68,7 +68,12 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// The framework never releases the returned value. Read "Resources in the
 	// deps value" in the package doc before holding a connection pool or
 	// anything else with a background goroutine.
-	NewDeps func(id deps.Identity, bd *deps.BaseDependencies) TDeps
+	//
+	// runDeps is the dependency map this instance was created with. Read a value
+	// out of it with config.GetDependency and a typed key, and fall back to the
+	// real implementation when the key is absent -- that is how a test hands this
+	// worker a mock without leaving one behind for whatever runs next.
+	NewDeps func(id deps.Identity, bd *deps.BaseDependencies, runDeps map[string]any) TDeps
 	// Poll observes the target once and returns the status. d is a copy: TDeps is
 	// passed by value, so a resource assigned to a non-pointer field of d is
 	// discarded when Poll returns. A non-nil error drives the worker degraded
@@ -108,8 +113,8 @@ func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TD
 	}
 
 	register.Worker[TConfig, Status[TStatus], TDeps](spec.WorkerType,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
-			return newSimpleWorker(spec, id, logger, sr)
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, runDeps map[string]any) (fsmv2.Worker, error) {
+			return newSimpleWorker(spec, id, logger, sr, runDeps)
 		})
 
 	fsmv2.RegisterInitialState(spec.WorkerType, &runningState[TConfig, TStatus]{})

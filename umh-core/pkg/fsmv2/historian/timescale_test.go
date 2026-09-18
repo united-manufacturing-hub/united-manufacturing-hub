@@ -136,8 +136,8 @@ func baseUnder(parent string) *deps.BaseDependencies {
 
 var _ = Describe("newDeps, the helper", func() {
 	It("hands every instance the same pool holder", func() {
-		a := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
-		b := newDeps(idUnder("parent-b"), baseUnder("parent-b"))
+		a := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
+		b := newDeps(idUnder("parent-b"), baseUnder("parent-b"), nil)
 
 		Expect(a.pool).NotTo(BeNil(), "the holder exists, so the comparison below is not vacuous")
 		Expect(a.pool).To(BeIdenticalTo(b.pool),
@@ -147,7 +147,7 @@ var _ = Describe("newDeps, the helper", func() {
 	It("keeps the BaseDependencies it was handed rather than building its own logger", func() {
 		bd := baseUnder("parent-a")
 
-		d := newDeps(idUnder("parent-a"), bd)
+		d := newDeps(idUnder("parent-a"), bd, nil)
 
 		Expect(d.BaseDependencies).To(BeIdenticalTo(bd),
 			"the deps carry the framework's own BaseDependencies, so Poll's logger is the one enriched with this worker's identity, not a package global")
@@ -207,7 +207,7 @@ var _ = Describe("Poll", func() {
 		}}
 
 		status, err := Poll(context.Background(),
-			newDeps(idUnder("parent-a"), baseUnder("parent-a")), cfg)
+			newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil), cfg)
 
 		Expect(err).To(MatchError(ContainSubstring(cfg.Timescale.Host)),
 			"the error names the host, so the degraded verdict names the cause")
@@ -239,7 +239,7 @@ var _ = Describe("Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
 
 		_, err := Poll(ctx, d, cfg)
 		Expect(err).To(MatchError(ContainSubstring("timescale query")),
