@@ -71,7 +71,7 @@ type Deps struct {
 	*deps.BaseDependencies
 }
 
-func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
+func newDeps(_ deps.Identity, bd *deps.BaseDependencies, _ map[string]any) Deps {
 	return Deps{BaseDependencies: bd}
 }
 

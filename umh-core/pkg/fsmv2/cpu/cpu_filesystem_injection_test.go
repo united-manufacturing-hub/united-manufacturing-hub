@@ -90,7 +90,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
-		d := NewDeps(id, bd)
+		d := NewDeps(id, bd, nil)
 
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).To(HaveOccurred(),
@@ -104,7 +104,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
-		_, err := Poll(context.Background(), NewDeps(id, bd), CPUConfig{})
+		_, err := Poll(context.Background(), NewDeps(id, bd, nil), CPUConfig{})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(errRefusedByStub.Error()))
 	})
@@ -114,7 +114,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 			"precondition: no earlier spec may have left a filesystem in the registry")
 
 		id, bd := newBaseDeps()
-		d := NewDeps(id, bd)
+		d := NewDeps(id, bd, nil)
 
 		Expect(d.sampler).NotTo(BeNil(), "an unpublished filesystem still yields a sampler")
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")
