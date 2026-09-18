@@ -52,7 +52,9 @@ type NoDeps = struct{}
 // without a process-global setter. Workers with custom ObservedState types must use
 // factory.RegisterWorkerType directly.
 //
-// The map is also still readable via register.GetDeps, the older process-global route.
+// SetGlobalDeps and GlobalDeps are a separate store, keyed by worker type and living for
+// the life of the process. They are unchanged, and the workers using them keep
+// using them.
 //
 // Panics at init time when:
 //   - workerType is the empty string,
