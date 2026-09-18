@@ -2,7 +2,7 @@
 
 ## What is an Instance?
 
-An instance is a running UMH Core container - a single Docker container that hosts your entire Unified Namespace. Each instance is identified by its location path (like `enterprise.site.area.line`) which determines where data is organized in your industrial data infrastructure.
+An instance is a running UMH Core container - a single Docker container that hosts your entire Unified Namespace. Each instance has a location path like `enterprise.site.area.line`. The location path determines where data is organized in your industrial data infrastructure. An instance can further be uniquely identified by it's Instance UUID.
 
 ## How an instance connects
 
@@ -10,13 +10,15 @@ An instance authenticates with an `AUTH_TOKEN`, not with a user account. The Man
 
 The token does two things:
 
-- It proves the instance's identity, so the console accepts its status and hands it the configuration meant for it.
-- It encrypts the credentials the instance stores, such as PLC passwords. The key is derived from the token, so the instance can decrypt its own credentials and the console cannot.
+- It proves the instance's identity, so the Management Console accepts its status and hands it the configuration meant for it.
+- It encrypts the instance's authorization certificate and private key. The key is derived from the token, so the instance can decrypt its own credentials and the Management Console cannot.
 
 Keep the token somewhere you can find it again, such as your password manager. For storage and rotation on the instance, see [AUTH_TOKEN in Environment Variable](../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
 
 ## Instance Overview Page
+<!-- TODO: Needs Instance Filtering explanation -->
 
+<!-- TODO: Needs new screenshot, UI outdated -->
 ![Instance Overview](./images/instance-overview.png)
 
 The instance overview shows all your UMH instances at a glance:
@@ -41,7 +43,7 @@ The instance overview shows all your UMH instances at a glance:
 - Delete
 
 ## Instance Details Page
-
+<!-- TODO: Needs new screenshot, UI outdated -->
 ![Instance Details](./images/instance-detail.png)
 
 The instance details page provides comprehensive monitoring and management:

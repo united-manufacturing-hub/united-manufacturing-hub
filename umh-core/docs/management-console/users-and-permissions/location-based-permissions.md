@@ -16,7 +16,7 @@ Add more levels if your organization needs them.
 
 ## Roles
 
-Three roles decide what a user or instance may do at the locations they are assigned to. Admin has full control including inviting others, Editor can create and change resources but not manage users, and Viewer can only read. The full capability list is in the [Roles Reference](roles-reference.md).
+The full capability list is in the [Roles Reference](roles-reference.md).
 
 A user can hold different roles at different locations, for example Admin at `ACME.Munich.Assembly.Line1` and Viewer at `ACME.Munich.Assembly.Line2`.
 

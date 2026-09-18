@@ -12,7 +12,7 @@ Relevant standards: NIST SP 800-63B, IEC 62443-3-3 SR 1.1, OWASP Authentication 
 | NIST SP 800-63B AAL2 | Multi-factor authentication | Available through our identity provider's risk-based challenges, and enforceable for every user through your own identity provider once single sign-on is configured |
 | NIST SP 800-63B AAL2 | Session timeout of 24 hours or less | **Not met**, see [Where we fall short](#where-we-fall-short) |
 | IEC 62443-3-3 SR 1.1 | Identify and authenticate human users | Our identity provider issues a unique identity per user |
-| IEC 62443-3-3 SR 1.1 RE 2 | Multi-factor on untrusted networks, SL2 and above | Available through our identity provider, and enforced by your own identity provider when single sign-on is configured. The default email one-time code is a single factor |
+| IEC 62443-3-3 SR 1.1 RE 2 | Multi-factor on untrusted networks, SL2 and above | Available through our identity provider, and enforced by your own identity provider when single sign-on is configured. The default email code is a single factor |
 
 ## Authorization
 
