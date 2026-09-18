@@ -37,7 +37,8 @@ func NewDependencyKey[T any](name string) DependencyKey[T] {
 	return DependencyKey[T]{name: name}
 }
 
-// PutDependency stores value under key.
+// PutDependency stores value under key. m must be non-nil, as for any map
+// assignment.
 func PutDependency[T any](m map[string]any, key DependencyKey[T], value T) {
 	m[key.name] = value
 }
