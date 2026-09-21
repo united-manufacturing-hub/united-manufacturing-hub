@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New Features
+
+- The Historian page can now read the state of the connected TimescaleDB on request: the Postgres and TimescaleDB versions, how much disk the database occupies, how much compression saves, and per table its chunk count, chunk interval, compression and retention intervals, and how long ago it last received a write. Whether retention is configured at all is now visible, so a historian that quietly grows forever can be spotted, and each background job is reported with the table it runs on, its schedule, when it last succeeded, when it runs next and how often it has failed. The figures are read when the page asks for them rather than published continuously, so an instance with a large historian sends no more data than before
+
 ### Improvements
 
 - The CPU status of an instance whose operating system does not report CPU pressure stats now links to instructions for switching them on
