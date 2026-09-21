@@ -25,6 +25,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// Querier is the read surface this package needs. Both *pgx.Conn and
+// *pgxpool.Pool satisfy it, so a one-shot caller opens a single connection while
+// a long-lived one keeps its pool.
+type Querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // Table is one hypertable's storage, chunking and policy settings. The
 // aggregates beside it answer whether the historian as a whole compresses and
 // expires data; this answers which table does not.
@@ -160,9 +168,9 @@ const lastJobErrorQuery = `SELECT e.err_message
  LIMIT 1`
 
 // tablesQuery reads every hypertable's storage, chunking and policies in one pass.
-// It reads _timescaledb_catalog rather than hypertable_detailed_size, which stats
-// the files behind every chunk and measured 2105-2980ms cold at 7112 chunks, past
-// the observation deadline; this returns in 17ms at the same scale.
+// The sizes come from the catalog, which holds them per chunk already; the size
+// functions in timescaledb_information stat every chunk's files to answer the
+// same question and cost two orders of magnitude more at a few thousand chunks.
 const tablesQuery = `SELECT h.table_name,
        coalesce(sum(s.uncompressed_heap_size + s.uncompressed_index_size + s.uncompressed_toast_size), 0)::bigint,
        coalesce(sum(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size), 0)::bigint,
@@ -184,9 +192,8 @@ const tablesQuery = `SELECT h.table_name,
  GROUP BY h.table_name
  ORDER BY h.table_name`
 
-// dataSpanQuery reads the chunk time range from _timescaledb_catalog rather than
-// timescaledb_information.chunks: the same answer, 7ms against 57ms at 7112 chunks.
-// The dimension_slice bounds are microseconds since the epoch.
+// dataSpanQuery reads the span from the chunk catalog, whose dimension_slice
+// bounds are microseconds since the epoch.
 const dataSpanQuery = `SELECT coalesce((max(ds.range_end) - min(ds.range_start)) / 1000000, 0)
   FROM _timescaledb_catalog.dimension_slice ds
   JOIN _timescaledb_catalog.dimension d ON d.id = ds.dimension_id
@@ -231,9 +238,9 @@ const tsHypertablesQuery = `SELECT h.table_name
 // tableRowsQuery counts rows per hypertable without scanning one. A compressed
 // chunk records its own pre-compression count, which is exact; an uncompressed
 // chunk contributes the planner's estimate, which autovacuum maintains and which
-// is -1 until it first runs. approximate_row_count is not used: it assumes every
-// compression batch is full, and reported 189011 rows for a 200-row table whose
-// chunks each held seven.
+// is -1 until it first runs. The catalog count is exact for compressed chunks
+// because it is what the compressor recorded; an estimate derived from batch
+// counts is not, since a batch holds anything up to a thousand rows.
 const tableRowsQuery = `SELECT h.table_name,
        coalesce(sum(s.numrows_pre_compression), 0)
      + coalesce(sum(CASE WHEN ch.compressed_chunk_id IS NULL
@@ -264,66 +271,20 @@ func safeTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
 }
 
-func withFreshness(tables []Table, writes map[string]int64, now time.Time) []Table {
-	applied := make([]Table, 0, len(tables))
-
-	for _, table := range tables {
-		written, ok := writes[table.Name]
-		if ok && written > 0 {
-			table.LastWriteAt = time.Unix(written, 0).UTC().Format(time.RFC3339)
-		}
-
-		applied = append(applied, table)
-	}
-
-	return applied
-}
-
-func collectFreshness(ctx context.Context, pool Querier, tables []Table) (map[string]int64, error) {
-	readable, err := timeColumnTables(ctx, pool)
-	if err != nil {
-		return nil, err
-	}
-
-	selects := make([]string, 0, len(tables))
-
-	for _, table := range tables {
-		if !table.IsHypertable || !readable[table.Name] || !safeTableName(table.Name) {
+// withWriteTime stamps an epoch reported per table onto the field set names,
+// as an RFC 3339 instant. A zero epoch means no row was found and leaves the
+// field empty, which a reader must not mistake for a write at the epoch.
+func withWriteTime(tables []Table, epochs map[string]int64, set func(*Table, string)) []Table {
+	for i := range tables {
+		epoch, ok := epochs[tables[i].Name]
+		if !ok || epoch <= 0 {
 			continue
 		}
 
-		selects = append(selects, fmt.Sprintf(
-			lastWriteQuery, table.Name, historianSchema, table.Name))
+		set(&tables[i], time.Unix(epoch, 0).UTC().Format(time.RFC3339))
 	}
 
-	if len(selects) == 0 {
-		return map[string]int64{}, nil
-	}
-
-	rows, err := pool.Query(ctx, strings.Join(selects, " UNION ALL "))
-	if err != nil {
-		return nil, fmt.Errorf("read freshness: %w", err)
-	}
-	defer rows.Close()
-
-	writes := make(map[string]int64, len(selects))
-
-	for rows.Next() {
-		var name string
-
-		var written int64
-		if err := rows.Scan(&name, &written); err != nil {
-			return nil, fmt.Errorf("scan freshness: %w", err)
-		}
-
-		writes[name] = written
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read freshness: %w", err)
-	}
-
-	return writes, nil
+	return tables
 }
 
 // collectMetrics reads the historian database's aggregate operational picture.
@@ -333,11 +294,97 @@ func collectFreshness(ctx context.Context, pool Querier, tables []Table) (map[st
 // database, which tracks chunk count rather than stored bytes. A deployment large
 // enough to make it slow therefore loses only DatabaseBytes, and returns every
 // metric collected before it.
-func collectMetrics(ctx context.Context, pool Querier) (Metrics, error) {
+// collectPerTable runs one statement built from a per-table select, joined with
+// UNION ALL, and returns the value each table reported. A table name cannot be
+// bound as a parameter, so keep decides which tables qualify and safeTableName
+// guards every name that reaches the format string.
+func collectPerTable(
+	ctx context.Context,
+	db Querier,
+	tables []Table,
+	query string,
+	what string,
+	keep func(Table) bool,
+) (map[string]int64, error) {
+	selects := make([]string, 0, len(tables))
+
+	for _, table := range tables {
+		if !safeTableName(table.Name) || !keep(table) {
+			continue
+		}
+
+		selects = append(selects, fmt.Sprintf(query, table.Name, historianSchema, table.Name))
+	}
+
+	if len(selects) == 0 {
+		return map[string]int64{}, nil
+	}
+
+	rows, err := db.Query(ctx, strings.Join(selects, " UNION ALL "))
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", what, err)
+	}
+	defer rows.Close()
+
+	values := make(map[string]int64, len(selects))
+
+	for rows.Next() {
+		var name string
+
+		var value int64
+		if err := rows.Scan(&name, &value); err != nil {
+			return nil, fmt.Errorf("scan %s: %w", what, err)
+		}
+
+		values[name] = value
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read %s: %w", what, err)
+	}
+
+	return values, nil
+}
+
+// collectFreshness reads when each hypertable was last written. Only hypertables
+// with a ts column qualify: the others carry no time column to take a max of.
+func collectFreshness(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
+	readable, err := timeColumnTables(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	return collectPerTable(ctx, db, tables, lastWriteQuery, "freshness",
+		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
+}
+
+// collectFirstWrites reads when each hypertable was first written.
+func collectFirstWrites(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
+	readable, err := timeColumnTables(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	return collectPerTable(ctx, db, tables, firstWriteQuery, "first writes",
+		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
+}
+
+// countLookupTables counts the historian's own plain tables exactly. The planner
+// estimate they would otherwise carry stays zero until autovacuum first analyses
+// them, which on a small, rarely-written lookup table may never happen, leaving a
+// populated table reporting no rows at all. They are bounded by how many distinct
+// tags exist rather than by ingest rate, so counting them outright is affordable
+// where counting a hypertable is not.
+func countLookupTables(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
+	return collectPerTable(ctx, db, tables, lookupCountQuery, "lookup table counts",
+		func(table Table) bool { return !table.IsHypertable && historianCreated(table.Name) })
+}
+
+func collectMetrics(ctx context.Context, db Querier) (Metrics, error) {
 	var metrics Metrics
 
 	var timescaleVersion *string
-	if err := pool.QueryRow(ctx, versionQuery).Scan(&metrics.ServerVersion, &timescaleVersion); err != nil {
+	if err := db.QueryRow(ctx, versionQuery).Scan(&metrics.ServerVersion, &timescaleVersion); err != nil {
 		return metrics, fmt.Errorf("read versions: %w", err)
 	}
 
@@ -347,22 +394,22 @@ func collectMetrics(ctx context.Context, pool Querier) (Metrics, error) {
 
 	metrics.TimescaleVersion = *timescaleVersion
 
-	if err := pool.QueryRow(ctx, countsQuery, historianSchema).
+	if err := db.QueryRow(ctx, countsQuery, historianSchema).
 		Scan(&metrics.Hypertables, &metrics.Chunks, &metrics.CompressedChunks); err != nil {
 		return metrics, fmt.Errorf("read table counts: %w", err)
 	}
 
-	if err := pool.QueryRow(ctx, compressionQuery, historianSchema).
+	if err := db.QueryRow(ctx, compressionQuery, historianSchema).
 		Scan(&metrics.UncompressedBytes, &metrics.CompressedBytes); err != nil {
 		return metrics, fmt.Errorf("read compression totals: %w", err)
 	}
 
-	if err := pool.QueryRow(ctx, jobsQuery, historianSchema).
+	if err := db.QueryRow(ctx, jobsQuery, historianSchema).
 		Scan(&metrics.Jobs, &metrics.FailedJobs); err != nil {
 		return metrics, fmt.Errorf("read job status: %w", err)
 	}
 
-	if err := pool.QueryRow(ctx, policyQuery, historianSchema).Scan(
+	if err := db.QueryRow(ctx, policyQuery, historianSchema).Scan(
 		&metrics.CompressionJobs,
 		&metrics.RetentionJobs,
 		&metrics.PoliciesUniform,
@@ -371,38 +418,38 @@ func collectMetrics(ctx context.Context, pool Querier) (Metrics, error) {
 	}
 
 	// No failure recorded is the normal case, not an error.
-	if err := pool.QueryRow(ctx, lastJobErrorQuery, historianSchema).Scan(&metrics.LastJobError); err != nil &&
+	if err := db.QueryRow(ctx, lastJobErrorQuery, historianSchema).Scan(&metrics.LastJobError); err != nil &&
 		!errors.Is(err, pgx.ErrNoRows) {
 		return metrics, fmt.Errorf("read last job error: %w", err)
 	}
 
-	if err := pool.QueryRow(ctx, dataSpanQuery, historianSchema).Scan(&metrics.DataSpanSeconds); err != nil {
+	if err := db.QueryRow(ctx, dataSpanQuery, historianSchema).Scan(&metrics.DataSpanSeconds); err != nil {
 		return metrics, fmt.Errorf("read data span: %w", err)
 	}
 
-	tables, err := collectTables(ctx, pool)
+	tables, err := collectTables(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
 
 	metrics.Tables = tables
 
-	jobs, err := collectJobs(ctx, pool)
+	jobs, err := collectJobs(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
 
 	metrics.JobList = jobs
 
-	if err := pool.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {
+	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {
 		return metrics, fmt.Errorf("read database size: %w", err)
 	}
 
 	return metrics, nil
 }
 
-func collectJobs(ctx context.Context, pool Querier) ([]Job, error) {
-	rows, err := pool.Query(ctx, jobsListQuery, historianSchema)
+func collectJobs(ctx context.Context, db Querier) ([]Job, error) {
+	rows, err := db.Query(ctx, jobsListQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read jobs: %w", err)
 	}
@@ -434,8 +481,8 @@ func collectJobs(ctx context.Context, pool Querier) ([]Job, error) {
 	return jobs, nil
 }
 
-func collectTables(ctx context.Context, pool Querier) ([]Table, error) {
-	rows, err := pool.Query(ctx, tablesQuery, historianSchema)
+func collectTables(ctx context.Context, db Querier) ([]Table, error) {
+	rows, err := db.Query(ctx, tablesQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read tables: %w", err)
 	}
@@ -466,7 +513,7 @@ func collectTables(ctx context.Context, pool Querier) ([]Table, error) {
 		return nil, fmt.Errorf("read tables: %w", err)
 	}
 
-	regular, err := collectRegularTables(ctx, pool)
+	regular, err := collectRegularTables(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -474,8 +521,8 @@ func collectTables(ctx context.Context, pool Querier) ([]Table, error) {
 	return append(tables, regular...), nil
 }
 
-func timeColumnTables(ctx context.Context, pool Querier) (map[string]bool, error) {
-	rows, err := pool.Query(ctx, tsHypertablesQuery, historianSchema)
+func timeColumnTables(ctx context.Context, db Querier) (map[string]bool, error) {
+	rows, err := db.Query(ctx, tsHypertablesQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read time columns: %w", err)
 	}
@@ -499,8 +546,8 @@ func timeColumnTables(ctx context.Context, pool Querier) (map[string]bool, error
 	return readable, nil
 }
 
-func collectRegularTables(ctx context.Context, pool Querier) ([]Table, error) {
-	rows, err := pool.Query(ctx, regularTablesQuery, historianSchema)
+func collectRegularTables(ctx context.Context, db Querier) ([]Table, error) {
+	rows, err := db.Query(ctx, regularTablesQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read regular tables: %w", err)
 	}
@@ -524,53 +571,47 @@ func collectRegularTables(ctx context.Context, pool Querier) ([]Table, error) {
 	return tables, nil
 }
 
-// Querier is the read surface this package needs. Both *pgx.Conn and
-// *pgxpool.Pool satisfy it, so a one-shot caller opens a single connection while
-// a long-lived one keeps its pool.
-type Querier interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
-
 // Collect reads every figure the historian metrics view shows: the catalog
-// aggregates, per-table storage and policies, the background jobs, and how long
-// ago each hypertable last received a write. It runs on demand rather than on the
-// monitor's tick, so it carries no time budget of its own beyond ctx.
-func Collect(ctx context.Context, pool Querier) (Metrics, error) {
-	metrics, err := collectMetrics(ctx, pool)
+// aggregates, per-table storage and policies, the background jobs, and when each
+// hypertable was first and last written. Its only bound is ctx.
+func Collect(ctx context.Context, db Querier) (Metrics, error) {
+	metrics, err := collectMetrics(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
 
-	writes, err := collectFreshness(ctx, pool, metrics.Tables)
-	if err != nil {
-		return metrics, fmt.Errorf("read freshness: %w", err)
-	}
-
-	now := time.Now()
-	metrics.Tables = withFreshness(metrics.Tables, writes, now)
-
-	stats, err := tableStats(ctx, pool, metrics.Tables)
+	lastWrites, err := collectFreshness(ctx, db, metrics.Tables)
 	if err != nil {
 		return metrics, err
 	}
 
-	counts, err := tableRows(ctx, pool)
+	firstWrites, err := collectFirstWrites(ctx, db, metrics.Tables)
 	if err != nil {
 		return metrics, err
 	}
 
-	lookupCounts, err := countLookupTables(ctx, pool, metrics.Tables)
+	rowCounts, err := tableRows(ctx, db)
+	if err != nil {
+		return metrics, err
+	}
+
+	lookupCounts, err := countLookupTables(ctx, db, metrics.Tables)
 	if err != nil {
 		return metrics, err
 	}
 
 	for name, count := range lookupCounts {
-		counts[name] = count
+		rowCounts[name] = count
 	}
 
-	metrics.Tables, metrics.OtherTables = splitForeignTables(
-		withRows(withTableStats(metrics.Tables, stats, now), counts))
+	metrics.Tables = withWriteTime(metrics.Tables, lastWrites, func(table *Table, at string) {
+		table.LastWriteAt = at
+	})
+	metrics.Tables = withWriteTime(metrics.Tables, firstWrites, func(table *Table, at string) {
+		table.FirstWriteAt = at
+	})
+	metrics.Tables = withRows(metrics.Tables, rowCounts)
+	metrics.Tables, metrics.OtherTables = splitForeignTables(metrics.Tables)
 
 	return metrics, nil
 }
@@ -619,77 +660,8 @@ func splitForeignTables(tables []Table) ([]Table, OtherTables) {
 	return kept, others
 }
 
-// tableStatsQuery reads each table's oldest row and approximate row count. The
-// oldest row is read without the freshness window: the whole point is how far
-// back the table reaches, which is usually further than any window.
-func tableStats(ctx context.Context, pool Querier, tables []Table) (map[string]tableStat, error) {
-	readable, err := timeColumnTables(ctx, pool)
-	if err != nil {
-		return nil, err
-	}
-
-	selects := make([]string, 0, len(tables))
-
-	for _, table := range tables {
-		if !table.IsHypertable || !readable[table.Name] || !safeTableName(table.Name) {
-			continue
-		}
-
-		selects = append(selects, fmt.Sprintf(
-			firstWriteQuery, table.Name, historianSchema, table.Name))
-	}
-
-	if len(selects) == 0 {
-		return map[string]tableStat{}, nil
-	}
-
-	rows, err := pool.Query(ctx, strings.Join(selects, " UNION ALL "))
-	if err != nil {
-		return nil, fmt.Errorf("read table stats: %w", err)
-	}
-	defer rows.Close()
-
-	stats := make(map[string]tableStat, len(selects))
-
-	for rows.Next() {
-		var name string
-
-		var stat tableStat
-		if err := rows.Scan(&name, &stat.firstWrite); err != nil {
-			return nil, fmt.Errorf("scan table stats: %w", err)
-		}
-
-		stats[name] = stat
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read table stats: %w", err)
-	}
-
-	return stats, nil
-}
-
-type tableStat struct {
-	firstWrite int64
-}
-
-func withTableStats(tables []Table, stats map[string]tableStat, now time.Time) []Table {
-	for i, table := range tables {
-		stat, ok := stats[table.Name]
-		if !ok {
-			continue
-		}
-
-		if stat.firstWrite > 0 {
-			tables[i].FirstWriteAt = time.Unix(stat.firstWrite, 0).UTC().Format(time.RFC3339)
-		}
-	}
-
-	return tables
-}
-
-func tableRows(ctx context.Context, pool Querier) (map[string]int64, error) {
-	rows, err := pool.Query(ctx, tableRowsQuery, historianSchema)
+func tableRows(ctx context.Context, db Querier) (map[string]int64, error) {
+	rows, err := db.Query(ctx, tableRowsQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read table rows: %w", err)
 	}
@@ -726,52 +698,4 @@ func withRows(tables []Table, counts map[string]int64) []Table {
 	}
 
 	return tables
-}
-
-// countLookupTables reads the exact row count of the historian's own plain tables.
-// The planner estimate they would otherwise carry is zero until autovacuum first
-// analyses them, which on a small, rarely-written lookup table may never happen:
-// tag and topic both held ten rows and reported reltuples of zero. These tables
-// are bounded by how many distinct tags exist rather than by ingest rate, so
-// counting them outright is affordable where counting a hypertable is not.
-func countLookupTables(ctx context.Context, pool Querier, tables []Table) (map[string]int64, error) {
-	selects := make([]string, 0, len(tables))
-
-	for _, table := range tables {
-		if table.IsHypertable || !historianCreated(table.Name) || !safeTableName(table.Name) {
-			continue
-		}
-
-		selects = append(selects, fmt.Sprintf(
-			lookupCountQuery, table.Name, historianSchema, table.Name))
-	}
-
-	if len(selects) == 0 {
-		return map[string]int64{}, nil
-	}
-
-	rows, err := pool.Query(ctx, strings.Join(selects, " UNION ALL "))
-	if err != nil {
-		return nil, fmt.Errorf("count lookup tables: %w", err)
-	}
-	defer rows.Close()
-
-	counts := map[string]int64{}
-
-	for rows.Next() {
-		var name string
-
-		var count int64
-		if err := rows.Scan(&name, &count); err != nil {
-			return nil, fmt.Errorf("scan lookup table count: %w", err)
-		}
-
-		counts[name] = count
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("count lookup tables: %w", err)
-	}
-
-	return counts, nil
 }
