@@ -49,7 +49,7 @@ var _ = Describe("GetHistorianMetrics", func() {
 		}
 	})
 
-	newAction := func(cfg config.FullConfig, collect actions.HistorianMetricsCollector) *actions.GetHistorianMetricsAction {
+	newAction := func(cfg config.FullConfig, collect func(context.Context, string) (timescalemetrics.Metrics, error)) *actions.GetHistorianMetricsAction {
 		action := actions.NewGetHistorianMetricsAction(
 			"test@example.com", uuid.New(), uuid.New(), outboundChannel,
 			config.NewMockConfigManager().WithConfig(cfg))

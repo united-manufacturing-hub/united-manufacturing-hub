@@ -14,9 +14,8 @@
 
 // GetHistorianMetrics reads the state of the configured historian database on
 // request: its versions, storage, compression and retention policies, background
-// jobs, and per-table detail. It runs the queries when asked rather than on the
-// connection monitor's tick, so nothing is published while nobody is looking and
-// the reads carry no observation deadline.
+// jobs, and per-table detail. The queries run only when a caller asks, so an
+// instance whose historian nobody is looking at does no work and sends nothing.
 
 package actions
 
@@ -37,15 +36,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// HistorianMetricsCollector reads one database and returns what it found. The
-// seam exists so the action can be tested without a database.
-type HistorianMetricsCollector func(ctx context.Context, dsn string) (timescalemetrics.Metrics, error)
+// historianMetricsCollector reads one database and returns what it found. The
+// action's own behaviour is reading config, building a DSN and mapping a failure
+// to a reply; keeping the read behind a field lets specs exercise that without a
+// database.
+type historianMetricsCollector func(ctx context.Context, dsn string) (timescalemetrics.Metrics, error)
 
 // GetHistorianMetricsAction implements the Action interface for reading the
 // historian database state. All fields are immutable after construction.
 type GetHistorianMetricsAction struct {
 	configManager   config.ConfigManager
-	collect         HistorianMetricsCollector
+	collect         historianMetricsCollector
 	outboundChannel chan *models.UMHMessage
 	actionLogger    *zap.SugaredLogger
 
@@ -74,15 +75,9 @@ func NewGetHistorianMetricsAction(
 }
 
 // collectOverNewConnection dials the historian for this one request and hangs up
-// again. One connection rather than a pool, because the reads are sequential on a
-// single goroutine and nothing outlives the request. The connection monitor's own
-// pool is not reused either: it belongs to a worker on its own goroutine and
-// serves a liveness check every second, which a long catalog read must not block.
-//
-// pgx.Connect rather than pgxpool.New, because the pool connects lazily: it
-// returns no error for an unreachable host, so a wrong host or password would be
-// reported as whichever query happened to run first rather than as a failure to
-// connect.
+// again. pgx.Connect establishes the connection here, so an unreachable host or a
+// rejected password is reported as a failure to connect; a pool would defer the
+// dial to its first acquire and surface it as a failed query instead.
 func collectOverNewConnection(ctx context.Context, dsn string) (timescalemetrics.Metrics, error) {
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
