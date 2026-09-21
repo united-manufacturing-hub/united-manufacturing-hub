@@ -1,0 +1,550 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package timescalemetrics
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+)
+
+const (
+	timescaleImage = "timescale/timescaledb:2.24.0-pg17"
+	postgresImage  = "postgres:17-alpine"
+)
+
+// historianSchemaDDL mirrors the shape benthos-umh's historian output creates: two
+// hypertables per contract, 168h chunks, compression enabled and applied.
+const historianSchemaDDL = `
+CREATE SCHEMA IF NOT EXISTS umh;
+CREATE TABLE umh.value_bench (
+  topic_id BIGINT NOT NULL, ts TIMESTAMPTZ NOT NULL, value_num DOUBLE PRECISION,
+  PRIMARY KEY (topic_id, ts));
+SELECT create_hypertable('umh.value_bench', 'ts', chunk_time_interval => INTERVAL '168h');
+CREATE TABLE umh.attribute_bench (
+  topic_id BIGINT NOT NULL, ts TIMESTAMPTZ NOT NULL, attribute JSONB NOT NULL,
+  PRIMARY KEY (topic_id, ts));
+SELECT create_hypertable('umh.attribute_bench', 'ts', chunk_time_interval => INTERVAL '168h');
+INSERT INTO umh.value_bench SELECT g, now() - (g * INTERVAL '24h'), random()
+  FROM generate_series(1, 200) g;
+INSERT INTO umh.attribute_bench SELECT g, now() - (g * INTERVAL '24h'), '{"unit":"degC"}'::jsonb
+  FROM generate_series(1, 200) g;
+ALTER TABLE umh.value_bench SET (timescaledb.compress);
+ALTER TABLE umh.attribute_bench SET (timescaledb.compress);
+SELECT add_compression_policy('umh.value_bench', INTERVAL '168h');
+SELECT add_compression_policy('umh.attribute_bench', INTERVAL '168h');
+SELECT compress_chunk(c) FROM show_chunks('umh.value_bench', older_than => INTERVAL '168h') c;
+`
+
+// retentionSchemaDDL adds a retention policy to the value hypertable only, so a
+// spec can tell a historian that expires data from one that grows forever.
+const retentionSchemaDDL = `
+SELECT add_retention_policy('umh.value_bench', INTERVAL '720h');
+`
+
+// driftedPolicyDDL gives the two hypertables different compression intervals, the
+// drift an operator creates by hand that a single reported interval would hide.
+const driftedPolicyDDL = `
+SELECT remove_compression_policy('umh.attribute_bench');
+SELECT add_compression_policy('umh.attribute_bench', INTERVAL '336h');
+`
+
+// startDatabase runs image as a throwaway Postgres and returns a pool pointed at it
+// plus the config a worker would dial it with. The container and pool are torn down
+// when the spec finishes.
+func startDatabase(image string) *pgxpool.Pool {
+	_, pool := startDatabaseWithConfig(image)
+
+	return pool
+}
+
+func startDatabaseWithConfig(image string) (config.HistorianConfig, *pgxpool.Pool) {
+	ctx := context.Background()
+
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		Started: true,
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        image,
+			ExposedPorts: []string{"5432/tcp"},
+			Env: map[string]string{
+				"POSTGRES_USER":     "umh_owner",
+				"POSTGRES_PASSWORD": "secret",
+				"POSTGRES_DB":       "umh",
+			},
+			WaitingFor: wait.ForListeningPort("5432/tcp").WithStartupTimeout(2 * time.Minute),
+		},
+	})
+	Expect(err).NotTo(HaveOccurred(), "the database container starts")
+	if container == nil {
+		Fail("testcontainers.GenericContainer returned a nil container")
+	}
+
+	DeferCleanup(func() { _ = container.Terminate(context.Background()) })
+
+	var dialled config.HistorianConfig
+
+	host, err := container.Host(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	port, err := container.MappedPort(ctx, "5432/tcp")
+	Expect(err).NotTo(HaveOccurred())
+
+	dsn := fmt.Sprintf("postgres://umh_owner:secret@%s:%s/umh?sslmode=disable", host, port.Port())
+
+	var pool *pgxpool.Pool
+
+	Eventually(func() error {
+		p, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			return err
+		}
+
+		if err := p.Ping(ctx); err != nil {
+			p.Close()
+
+			return err
+		}
+
+		pool = p
+
+		return nil
+	}, 2*time.Minute, time.Second).Should(Succeed(), "the database accepts connections")
+
+	DeferCleanup(pool.Close)
+
+	portNumber, err := strconv.ParseUint(port.Port(), 10, 16)
+	Expect(err).NotTo(HaveOccurred(), "the mapped port is numeric")
+
+	dialled = config.HistorianConfig{Timescale: config.TimescaleConfig{
+		Host:     host,
+		Port:     uint16(portNumber),
+		Database: "umh",
+		Username: "umh_owner",
+		Password: "secret",
+		SSLMode:  config.HistorianSSLModeDisable,
+	}}
+
+	return dialled, pool
+}
+
+var _ = Describe("Metrics collection", Label("integration"), func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("reports versions, table counts and compression against a historian schema", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred(), "the historian schema is created")
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.ServerVersion).To(HavePrefix("17."))
+		Expect(metrics.TimescaleVersion).To(Equal("2.24.0"))
+		Expect(metrics.Hypertables).To(Equal(2))
+		Expect(metrics.Chunks).To(BeNumerically(">", 0))
+		Expect(metrics.CompressedChunks).To(BeNumerically(">", 0))
+		Expect(metrics.UncompressedBytes).To(BeNumerically(">", 0))
+		Expect(metrics.CompressedBytes).To(BeNumerically(">", 0))
+		Expect(metrics.DatabaseBytes).To(BeNumerically(">", 0))
+	})
+
+	It("counts no failed jobs when every umh job is succeeding", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.Jobs).To(Equal(2), "one compression policy per hypertable")
+		Expect(metrics.FailedJobs).To(BeZero())
+	})
+
+	It("reads the last write per table", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectFreshness(ctx, pool, metrics.Tables)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(writes).To(HaveKey("value_bench"))
+		Expect(writes["value_bench"]).To(BeNumerically(">", 0), "the fixture wrote rows inside the freshness window")
+	})
+
+	It("skips regular tables, which have no time column", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY, name text)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectFreshness(ctx, pool, metrics.Tables)
+
+		Expect(err).NotTo(HaveOccurred(), "a regular table must not fail the whole read")
+		Expect(writes).To(HaveKey("value_bench"))
+		Expect(writes).NotTo(HaveKey("tag"))
+	})
+
+	It("refuses to build the freshness query from a name it cannot vouch for", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectFreshness(ctx, pool, []Table{
+			{Name: `value"; DROP TABLE umh.value_bench; --`},
+		})
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(writes).To(BeEmpty())
+
+		var survives int
+		Expect(pool.QueryRow(ctx, `SELECT count(*) FROM umh.value_bench`).Scan(&survives)).To(Succeed())
+		Expect(survives).To(BeNumerically(">", 0), "the table is untouched")
+	})
+
+	It("lists regular tables alongside the hypertables", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY, name text)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		byName := map[string]Table{}
+		for _, table := range metrics.Tables {
+			byName[table.Name] = table
+		}
+
+		Expect(byName).To(HaveKey("tag"))
+		Expect(byName["tag"].IsHypertable).To(BeFalse())
+		Expect(byName["tag"].UncompressedBytes).To(BeNumerically(">", 0))
+		Expect(byName["value_bench"].IsHypertable).To(BeTrue())
+		Expect(metrics.Hypertables).To(Equal(2), "a regular table is not counted as a hypertable")
+	})
+
+	It("leaves the migration bookkeeping table out of the listing", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.schema_migrations (version bigint PRIMARY KEY)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		names := []string{}
+		for _, table := range metrics.Tables {
+			names = append(names, table.Name)
+		}
+
+		Expect(names).NotTo(ContainElement("schema_migrations"))
+		Expect(names).To(ContainElement("tag"), "other plain tables are still listed")
+	})
+
+	It("survives a hypertable whose time column is not ts", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.custom_metric (device_id bigint, event_time timestamptz NOT NULL, v double precision)`)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, `SELECT create_hypertable('umh.custom_metric', 'event_time')`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectFreshness(ctx, pool, metrics.Tables)
+
+		Expect(err).NotTo(HaveOccurred(), "one unreadable table must not fail every table's freshness")
+		Expect(writes).To(HaveKey("value_bench"))
+		Expect(writes).NotTo(HaveKey("custom_metric"))
+	})
+
+	It("lists every job, including the ones that are succeeding", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.Jobs).To(Equal(2))
+		Expect(metrics.JobList).To(HaveLen(2), "a healthy job is still worth reporting")
+		for _, job := range metrics.JobList {
+			Expect(job.Table).To(BeElementOf("value_bench", "attribute_bench"))
+			Expect(job.ScheduleSeconds).To(BeNumerically(">", 0))
+			Expect(job.Failures).To(BeZero())
+			Expect(job.Procedure).To(HaveSuffix(".policy_compression"),
+				"the schema-qualified procedure names the algorithm the job runs")
+		}
+	})
+
+	It("lists a job that has failed", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		var jobID int
+		Expect(pool.QueryRow(ctx,
+			`SELECT job_id FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh' ORDER BY job_id LIMIT 1`,
+		).Scan(&jobID)).To(Succeed())
+
+		_, err = pool.Exec(ctx, `SELECT alter_job($1, scheduled => false)`, jobID)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
+			(job_id, last_start, last_finish, next_start, last_successful_finish, last_run_success,
+			 total_runs, total_duration, total_duration_failures, total_successes, total_failures,
+			 total_crashes, consecutive_failures, consecutive_crashes, flags)
+			VALUES ($1, now(), now(), now() + interval '1 hour', '-infinity', false,
+			 3, interval '0', interval '0', 0, 3, 0, 3, 0, 0)
+			ON CONFLICT (job_id) DO UPDATE SET last_run_success = false, total_failures = 3`, jobID)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.JobList).To(HaveLen(2), "the healthy job is listed alongside the failing one")
+		Expect(metrics.JobList[0].Failures).To(Equal(3), "the failing job sorts first")
+		Expect(metrics.JobList[0].Kind).To(Equal("compression"))
+		Expect(metrics.JobList[0].Table).To(BeElementOf("value_bench", "attribute_bench"))
+		Expect(metrics.JobList[0].ScheduleSeconds).To(BeNumerically(">", 0))
+		Expect(metrics.JobList[1].Failures).To(BeZero())
+	})
+
+	It("ignores the built-in telemetry job, which fails on an air-gapped host", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		var telemetryFailures int
+		Expect(pool.QueryRow(ctx,
+			`SELECT count(*) FROM timescaledb_information.jobs WHERE proc_name = 'policy_telemetry'`,
+		).Scan(&telemetryFailures)).To(Succeed())
+		Expect(telemetryFailures).To(Equal(1), "the telemetry job exists and is not counted below")
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.Jobs).To(Equal(2), "only the two umh compression policies")
+	})
+
+	It("fails against a plain Postgres with no TimescaleDB extension", func() {
+		pool := startDatabase(postgresImage)
+
+		_, err := collectMetrics(ctx, pool)
+
+		Expect(err).To(HaveOccurred())
+	})
+})
+
+var _ = Describe("Policy reporting", Label("integration"), func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("reports a historian that compresses but never expires data", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.CompressionJobs).To(Equal(2))
+		Expect(metrics.CompressAfterSeconds).To(Equal(int64(604800)), "168h")
+		Expect(metrics.RetentionJobs).To(BeZero(), "nothing expires, so the database grows forever")
+		Expect(metrics.DropAfterSeconds).To(BeZero())
+		Expect(metrics.PoliciesUniform).To(BeTrue())
+	})
+
+	It("reports the retention interval when one is configured", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, retentionSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.RetentionJobs).To(Equal(1))
+		Expect(metrics.DropAfterSeconds).To(Equal(int64(2592000)), "720h")
+	})
+
+	It("flags tables that disagree on an interval", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, driftedPolicyDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.PoliciesUniform).To(BeFalse(), "one table compresses at 168h, the other at 336h")
+		Expect(metrics.CompressAfterSeconds).To(Equal(int64(604800)), "the shortest of the two")
+	})
+
+	It("reports no job error on a healthy database", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.LastJobError).To(BeEmpty())
+	})
+})
+
+// tableNamed returns the reported entry for one hypertable, failing the spec when
+// it is absent so the assertion that follows reads against a real value.
+func tableNamed(metrics Metrics, name string) Table {
+	for _, table := range metrics.Tables {
+		if table.Name == name {
+			return table
+		}
+	}
+
+	Fail("no reported table named " + name)
+
+	return Table{}
+}
+
+var _ = Describe("Per-table reporting", Label("integration"), func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("reports one entry per hypertable, named", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.Tables).To(HaveLen(2))
+		Expect([]string{metrics.Tables[0].Name, metrics.Tables[1].Name}).
+			To(ConsistOf("attribute_bench", "value_bench"))
+	})
+
+	It("reports storage and compression for each table", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		value := tableNamed(metrics, "value_bench")
+		Expect(value.Chunks).To(BeNumerically(">", 0))
+		Expect(value.CompressedChunks).To(BeNumerically(">", 0))
+		Expect(value.UncompressedBytes).To(BeNumerically(">", 0))
+		Expect(value.CompressedBytes).To(BeNumerically(">", 0))
+	})
+
+	It("reports the chunk interval each table was created with", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(tableNamed(metrics, "value_bench").ChunkIntervalSeconds).To(Equal(int64(604800)), "168h")
+	})
+
+	It("reports each table's own policies, so a table without retention is visible", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, retentionSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
+		Expect(tableNamed(metrics, "attribute_bench").DropAfterSeconds).To(BeZero(),
+			"this table expires nothing, which the aggregate alone would hide")
+		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
+	})
+})
+
+var _ = Describe("Data span reporting", Label("integration"), func() {
+	It("reports how much history the hypertables cover", func() {
+		ctx := context.Background()
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		// The schema writes 200 daily points, so the chunks covering them span
+		// roughly 200 days; the newest chunk reaches into the future by up to its
+		// 168h width, so the figure is bounded rather than exact.
+		Expect(metrics.DataSpanSeconds).To(BeNumerically(">", int64(195*24*3600)))
+		Expect(metrics.DataSpanSeconds).To(BeNumerically("<", int64(215*24*3600)))
+	})
+
+	It("reports no span when nothing has been written", func() {
+		ctx := context.Background()
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS umh;`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.DataSpanSeconds).To(BeZero())
+	})
+})
