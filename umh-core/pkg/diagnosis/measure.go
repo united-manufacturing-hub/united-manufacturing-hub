@@ -137,9 +137,11 @@ var (
 	P95 = Reduction{Name: "p95", Min: 20, fold: foldP95, ordered: true}
 	// P99 is the nearest-rank 99th percentile, Min 100 for the same reason.
 	P99 = Reduction{Name: "p99", Min: 100, fold: foldP99, ordered: true}
+	// Max is the highest stored reading. Min is 1: one reading is its own maximum.
+	Max = Reduction{Name: "max", Min: 1, fold: foldMax}
 )
 
-// NewReduction builds a seventh calculation over a single series: divides stays
+// NewReduction builds an eighth calculation over a single series: divides stays
 // false. It refuses a minimum below one and a nil function.
 func NewReduction(name string, min int, fold func([]Point) float64) (Reduction, error) {
 	if min < 1 {
@@ -154,6 +156,15 @@ func NewReduction(name string, min int, fold func([]Point) float64) (Reduction, 
 }
 
 func foldLast(points []Point) float64 { return points[len(points)-1].Value }
+
+func foldMax(points []Point) float64 {
+	highest := points[0].Value
+	for _, p := range points[1:] {
+		highest = max(highest, p.Value)
+	}
+
+	return highest
+}
 
 func foldMean(points []Point) float64 {
 	var sum float64

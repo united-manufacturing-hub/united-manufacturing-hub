@@ -73,6 +73,7 @@ type mockPushDeps struct {
 	lastErrorType         types.ErrorType
 
 	pendingMessages   []*types.UMHMessage
+	recordedDepths    []int
 	resetGeneration   uint64
 	resetCleared      bool
 	lastRetryAfter    time.Duration
@@ -112,6 +113,10 @@ func (m *mockPushDeps) GetHierarchyPath() string {
 
 func (m *mockPushDeps) GetWorkerType() string {
 	return "push"
+}
+
+func (m *mockPushDeps) RecordOutboundDepth(length int) {
+	m.recordedDepths = append(m.recordedDepths, length)
 }
 
 func (m *mockPushDeps) GetOutboundChan() <-chan *types.UMHMessage {
@@ -229,6 +234,17 @@ var _ = Describe("PushAction", func() {
 			Expect(drained.Counters[string(deps.CounterMessagesPushed)]).To(Equal(int64(2)))
 			Expect(drained.Counters[string(deps.CounterBytesPushed)]).To(BeNumerically(">", 0))
 			Expect(drained.Gauges[string(deps.GaugeLastPushLatencyMs)]).To(BeNumerically(">=", 0))
+		})
+	})
+
+	Describe("Outbound depth", func() {
+		It("records the channel's depth once per drain", func() {
+			for range 3 {
+				outboundBi <- &types.UMHMessage{InstanceUUID: "uuid", Content: "msg"}
+			}
+
+			Expect(act.Execute(context.Background(), mockDeps)).To(Succeed())
+			Expect(mockDeps.recordedDepths).To(Equal([]int{3}))
 		})
 	})
 
