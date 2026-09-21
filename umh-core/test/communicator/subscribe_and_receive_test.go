@@ -196,6 +196,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			topicBrowserCommunicator,
 			nil, // fsmOutboundChannel - nil for legacy mode test
 			nil, // gatekeeperOutboundChannel
+			nil, // transportOutbound
 			nil, // featureUsage
 		)
 		subHandler.StartNotifier()

@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/channelusage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -36,10 +37,13 @@ type StatusCollectorType struct {
 	configManager            config.ConfigManager
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator
 	featureUsage             *models.FeatureUsage
+	outboundUsage            *channelusage.Monitor
+	subscriberCount          func() int
 }
 
 // NewStatusCollector creates a status collector that generates periodic status payloads
 // including system snapshots, topic browser data, and feature usage metrics.
+// subscriberCount may be nil.
 func NewStatusCollector(
 	dog watchdog.Iface,
 	systemSnapshotManager *fsm.SnapshotManager,
@@ -47,6 +51,8 @@ func NewStatusCollector(
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 	featureUsage *models.FeatureUsage,
+	outboundUsage *channelusage.Monitor,
+	subscriberCount func() int,
 ) *StatusCollectorType {
 	collector := &StatusCollectorType{
 		dog:                      dog,
@@ -55,9 +61,19 @@ func NewStatusCollector(
 		configManager:            configManager,
 		topicBrowserCommunicator: topicBrowserCommunicator,
 		featureUsage:             featureUsage,
+		outboundUsage:            outboundUsage,
+		subscriberCount:          subscriberCount,
 	}
 
 	return collector
+}
+
+func (s *StatusCollectorType) subscribers() int {
+	if s.subscriberCount == nil {
+		return 0
+	}
+
+	return s.subscriberCount()
 }
 
 // UpdateTopicBrowserCache processes new topic browser data using the communicator
@@ -246,6 +262,8 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		featureUsage = &fu
 	}
 
+	communicatorData := CommunicatorFromMonitor(s.outboundUsage, s.subscribers())
+
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
@@ -253,6 +271,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
+			Communicator:  communicatorData,
 			Container:     containerData,
 			Dfcs:          dfcData,
 			Redpanda:      redpandaData,

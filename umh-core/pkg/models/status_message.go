@@ -28,7 +28,9 @@ type Core struct {
 	FeatureUsage *FeatureUsage `json:"featureUsage,omitempty"`
 	// Historian reports the reachability of the configured historian endpoint.
 	// Nil when no historian is configured or no observation exists yet.
-	Historian     *Historian     `json:"historian,omitempty"`
+	Historian *Historian `json:"historian,omitempty"`
+	// Communicator reports outbound queue usage and subscriber count.
+	Communicator  *Communicator  `json:"communicator,omitempty"`
 	Container     Container      `json:"container"`
 	TopicBrowser  TopicBrowser   `json:"topicBrowser"`
 	Release       Release        `json:"release"`
@@ -150,6 +152,23 @@ type Container struct {
 	Memory       *Memory               `json:"memory"`
 	Hwid         string                `json:"hwid"`         // Hardware identifier
 	Architecture ContainerArchitecture `json:"architecture"` // Processor architecture
+}
+
+// Communicator reports how full the outbound message queue to the Management
+// Console is. A full queue drops status updates and action replies.
+type Communicator struct {
+	// Health is Neutral until enough readings exist; the figures below are
+	// zero until then.
+	Health *Health `json:"health"`
+	// SubscriberCount is the number of subscribers when the message is built.
+	// Each one adds a copy of every status message to the queue.
+	SubscriberCount int `json:"subscriberCount"`
+	// OutboundChannelFillPercent is the 95th percentile fill level over the
+	// last 30 seconds, 0 to 100.
+	OutboundChannelFillPercent float64 `json:"outboundChannelFillPercent"`
+	// OutboundChannelPeakPercent is the highest fill level over the last 30
+	// seconds, 0 to 100.
+	OutboundChannelPeakPercent float64 `json:"outboundChannelPeakPercent"`
 }
 
 // CPU carries either the fsmv2 CPU worker's reporting or the legacy reporting,

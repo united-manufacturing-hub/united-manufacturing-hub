@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/channelusage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -43,9 +44,11 @@ type Handler struct {
 	pusher                     *push.Pusher
 	fsmOutboundChannel         chan<- *types.UMHMessage        // FSMv2 without gatekeeper (nil for legacy mode)
 	gatekeeperOutboundChannel  chan<- *types.MessageWithSender // FSMv2 with gatekeeper (nil when gatekeeper disabled)
+	transportOutbound          chan<- *types.UMHMessage        // sampled only, never written to (nil for legacy mode)
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
+	outboundUsage              *channelusage.Monitor
 	logger                     *zap.SugaredLogger
 	instanceUUIDMu             sync.RWMutex
 	instanceUUID               uuid.UUID
@@ -68,6 +71,7 @@ func NewHandler(
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 without gatekeeper (nil for legacy mode)
 	gatekeeperOutboundChannel chan<- *types.MessageWithSender, // FSMv2 with gatekeeper (nil when gatekeeper disabled)
+	transportOutbound chan<- *types.UMHMessage, // sampled only, never written to (nil for legacy mode)
 	featureUsage *models.FeatureUsage,
 ) *Handler {
 	s := &Handler{}
@@ -76,11 +80,20 @@ func NewHandler(
 	s.pusher = pusher
 	s.fsmOutboundChannel = fsmOutboundChannel
 	s.gatekeeperOutboundChannel = gatekeeperOutboundChannel
+	s.transportOutbound = transportOutbound
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
 	s.topicBrowserCommunicator = topicBrowserCommunicator
 	s.logger = logger
+
+	outboundUsage, err := channelusage.NewMonitor()
+	if err != nil {
+		logger.Errorf("Failed to build the outbound channel monitor, outbound queue usage will not be reported: %v", err)
+	}
+
+	s.outboundUsage = outboundUsage
+
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
 		systemSnapshotManager,
@@ -88,13 +101,18 @@ func NewHandler(
 		logger,
 		topicBrowserCommunicator,
 		featureUsage,
+		s.outboundUsage,
+		s.subscriberRegistry.Length,
 	)
 
 	return s
 }
 
+// StartNotifier starts the status message loop and the outbound queue sampler.
+// The sampler runs far faster than status messages are built.
 func (s *Handler) StartNotifier() {
 	go s.notifySubscribers()
+	go s.sampleOutboundChannelLoop()
 }
 
 func (s *Handler) AddOrRefreshSubscriber(identifier string, bootstrapped bool) {
@@ -146,6 +164,35 @@ func (s *Handler) notifySubscribers() {
 		s.notify()
 		// The ticker will automatically fire at 1 second intervals
 		// This prevents large message queues from building up
+	}
+}
+
+// sampleOutboundChannelLoop needs no watchdog heartbeat: if it stops, the
+// monitor's window empties and the status message reports Neutral.
+func (s *Handler) sampleOutboundChannelLoop() {
+	ticker := time.NewTicker(channelusage.SampleInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.sampleOutboundChannel()
+	}
+}
+
+// OutboundUsage returns the outbound queue monitor.
+func (s *Handler) OutboundUsage() *channelusage.Monitor {
+	return s.outboundUsage
+}
+
+// sampleOutboundChannel samples the queue all backend-bound messages drain
+// into: the transport channel under FSMv2, the pusher's channel otherwise.
+func (s *Handler) sampleOutboundChannel() {
+	now := time.Now()
+
+	switch {
+	case s.transportOutbound != nil:
+		s.outboundUsage.Observe(len(s.transportOutbound), cap(s.transportOutbound), now)
+	case s.pusher != nil:
+		s.outboundUsage.Observe(s.pusher.QueueLen(), s.pusher.QueueCap(), now)
 	}
 }
 
