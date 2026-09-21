@@ -143,10 +143,6 @@ datamodels:
           pressure:
             inlet:
               _payloadshape: timeseries-number
-          motor:           # Include the motor model
-            _refModel:
-              name: motor
-              version: v1
 ```
 
 Topics created:
