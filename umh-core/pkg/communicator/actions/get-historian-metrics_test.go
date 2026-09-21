@@ -50,9 +50,12 @@ var _ = Describe("GetHistorianMetrics", func() {
 	})
 
 	newAction := func(cfg config.FullConfig, collect actions.HistorianMetricsCollector) *actions.GetHistorianMetricsAction {
-		return actions.NewGetHistorianMetricsActionWithCollector(
+		action := actions.NewGetHistorianMetricsAction(
 			"test@example.com", uuid.New(), uuid.New(), outboundChannel,
-			config.NewMockConfigManager().WithConfig(cfg), collect)
+			config.NewMockConfigManager().WithConfig(cfg))
+		action.SetCollector(collect)
+
+		return action
 	}
 
 	It("returns the figures the collector read from the database", func() {

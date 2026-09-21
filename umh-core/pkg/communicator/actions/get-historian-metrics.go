@@ -61,26 +61,13 @@ func NewGetHistorianMetricsAction(
 	outboundChannel chan *models.UMHMessage,
 	configManager config.ConfigManager,
 ) *GetHistorianMetricsAction {
-	return NewGetHistorianMetricsActionWithCollector(
-		userEmail, actionUUID, instanceUUID, outboundChannel, configManager, collectOverNewPool)
-}
-
-// NewGetHistorianMetricsActionWithCollector allows injection of a collector.
-func NewGetHistorianMetricsActionWithCollector(
-	userEmail string,
-	actionUUID uuid.UUID,
-	instanceUUID uuid.UUID,
-	outboundChannel chan *models.UMHMessage,
-	configManager config.ConfigManager,
-	collect HistorianMetricsCollector,
-) *GetHistorianMetricsAction {
 	return &GetHistorianMetricsAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
-		collect:         collect,
+		collect:         collectOverNewPool,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
 	}
 }

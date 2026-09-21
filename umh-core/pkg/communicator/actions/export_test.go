@@ -53,3 +53,9 @@ func (a *EditProtocolConverterAction) CompareProtocolConverterDFCConfig(pcSnapsh
 func (a *EditProtocolConverterAction) LastRenderErr() error {
 	return a.lastRenderErr
 }
+
+// SetCollector replaces the database read so specs can exercise the action
+// without a database.
+func (a *GetHistorianMetricsAction) SetCollector(collect HistorianMetricsCollector) {
+	a.collect = collect
+}
