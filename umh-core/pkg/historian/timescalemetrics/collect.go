@@ -108,9 +108,9 @@ type Metrics struct {
 	// create, so the database size stays explainable without listing them.
 	OtherTables OtherTables `json:"otherTables"`
 	JobList     []Job       `json:"jobList"`
-	// PoliciesUniform reports whether every hypertable agrees on its intervals.
-	// When false the single reported interval describes only the shortest table,
-	// and the rest have to be read from the database.
+	// PoliciesUniform is false when hypertables disagree on how soon they compress
+	// or expire data. The per-table intervals say which, but drift between two
+	// tables that both have policies is easy to miss in a long list.
 	PoliciesUniform bool `json:"policiesUniform"`
 }
 
@@ -271,20 +271,38 @@ func safeTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
 }
 
-// withWriteTime stamps an epoch reported per table onto the field set names,
-// as an RFC 3339 instant. A zero epoch means no row was found and leaves the
-// field empty, which a reader must not mistake for a write at the epoch.
-func withWriteTime(tables []Table, epochs map[string]int64, set func(*Table, string)) []Table {
-	for i := range tables {
-		epoch, ok := epochs[tables[i].Name]
-		if !ok || epoch <= 0 {
-			continue
-		}
-
-		set(&tables[i], time.Unix(epoch, 0).UTC().Format(time.RFC3339))
+// writeTimeAt turns a Unix epoch into an RFC 3339 instant, or an empty string
+// when there is none. Empty means no row was found, which is not the same as a
+// row written in 1970.
+func writeTimeAt(epoch int64) string {
+	if epoch <= 0 {
+		return ""
 	}
 
-	return tables
+	return time.Unix(epoch, 0).UTC().Format(time.RFC3339)
+}
+
+func assignFirstWrites(tables []Table, epochs map[string]int64) {
+	for i := range tables {
+		tables[i].FirstWriteAt = writeTimeAt(epochs[tables[i].Name])
+	}
+}
+
+func assignLastWrites(tables []Table, epochs map[string]int64) {
+	for i := range tables {
+		tables[i].LastWriteAt = writeTimeAt(epochs[tables[i].Name])
+	}
+}
+
+// assignRowCounts fills in the row count of every table the counts cover. A table
+// the map does not mention keeps the count it already has: the hypertable and
+// plain-table counts are read separately, and one must not blank the other.
+func assignRowCounts(tables []Table, counts map[string]int64) {
+	for i := range tables {
+		if count, ok := counts[tables[i].Name]; ok {
+			tables[i].Rows = count
+		}
+	}
 }
 
 // collectMetrics reads the historian database's aggregate operational picture.
@@ -306,6 +324,30 @@ func collectPerTable(
 	what string,
 	keep func(Table) bool,
 ) (map[string]int64, error) {
+	statement := perTableStatement(tables, query, keep)
+	if statement == "" {
+		return map[string]int64{}, nil
+	}
+
+	rows, err := db.Query(ctx, statement)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", what, err)
+	}
+	defer rows.Close()
+
+	values, err := scanNamedValues(rows)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", what, err)
+	}
+
+	return values, nil
+}
+
+// perTableStatement joins one copy of query per qualifying table with UNION ALL,
+// filling in the table name three times: once as the literal that labels the row
+// and twice as the identifier. It returns an empty string when no table
+// qualifies, which the caller reads as nothing to ask.
+func perTableStatement(tables []Table, query string, keep func(Table) bool) string {
 	selects := make([]string, 0, len(tables))
 
 	for _, table := range tables {
@@ -316,34 +358,25 @@ func collectPerTable(
 		selects = append(selects, fmt.Sprintf(query, table.Name, historianSchema, table.Name))
 	}
 
-	if len(selects) == 0 {
-		return map[string]int64{}, nil
-	}
+	return strings.Join(selects, " UNION ALL ")
+}
 
-	rows, err := db.Query(ctx, strings.Join(selects, " UNION ALL "))
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", what, err)
-	}
-	defer rows.Close()
-
-	values := make(map[string]int64, len(selects))
+// scanNamedValues reads rows of (name, value) into a map.
+func scanNamedValues(rows pgx.Rows) (map[string]int64, error) {
+	values := map[string]int64{}
 
 	for rows.Next() {
 		var name string
 
 		var value int64
 		if err := rows.Scan(&name, &value); err != nil {
-			return nil, fmt.Errorf("scan %s: %w", what, err)
+			return nil, err
 		}
 
 		values[name] = value
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read %s: %w", what, err)
-	}
-
-	return values, nil
+	return values, rows.Err()
 }
 
 // collectFreshness reads when each hypertable was last written. Only hypertables
@@ -604,13 +637,10 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		rowCounts[name] = count
 	}
 
-	metrics.Tables = withWriteTime(metrics.Tables, lastWrites, func(table *Table, at string) {
-		table.LastWriteAt = at
-	})
-	metrics.Tables = withWriteTime(metrics.Tables, firstWrites, func(table *Table, at string) {
-		table.FirstWriteAt = at
-	})
-	metrics.Tables = withRows(metrics.Tables, rowCounts)
+	assignLastWrites(metrics.Tables, lastWrites)
+	assignFirstWrites(metrics.Tables, firstWrites)
+	assignRowCounts(metrics.Tables, rowCounts)
+
 	metrics.Tables, metrics.OtherTables = splitForeignTables(metrics.Tables)
 
 	return metrics, nil
@@ -667,35 +697,10 @@ func tableRows(ctx context.Context, db Querier) (map[string]int64, error) {
 	}
 	defer rows.Close()
 
-	counts := map[string]int64{}
-
-	for rows.Next() {
-		var name string
-
-		var count int64
-		if err := rows.Scan(&name, &count); err != nil {
-			return nil, fmt.Errorf("scan table rows: %w", err)
-		}
-
-		counts[name] = count
-	}
-
-	if err := rows.Err(); err != nil {
+	counts, err := scanNamedValues(rows)
+	if err != nil {
 		return nil, fmt.Errorf("read table rows: %w", err)
 	}
 
 	return counts, nil
-}
-
-func withRows(tables []Table, counts map[string]int64) []Table {
-	for i, table := range tables {
-		count, ok := counts[table.Name]
-		if !ok {
-			continue
-		}
-
-		tables[i].Rows = count
-	}
-
-	return tables
 }
