@@ -15,100 +15,58 @@
 package actions_test
 
 import (
-	"context"
-	"errors"
-
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 var _ = Describe("GetHistorianMetrics", func() {
-	var (
-		outboundChannel chan *models.UMHMessage
-		configured      config.FullConfig
-	)
+	var outboundChannel chan *models.UMHMessage
 
 	BeforeEach(func() {
 		outboundChannel = make(chan *models.UMHMessage, 10)
-		configured = config.FullConfig{
-			Historian: &config.HistorianConfig{
-				Timescale: config.TimescaleConfig{
-					Host:     "timescale.example.com",
-					Password: "secret",
-					Port:     5432,
-					Database: "umh",
-					Username: "umh_owner",
-					SSLMode:  config.HistorianSSLModeRequire,
-				},
-			},
-		}
 	})
 
-	newAction := func(cfg config.FullConfig, collect func(context.Context, string) (timescalemetrics.Metrics, error)) *actions.GetHistorianMetricsAction {
-		action := actions.NewGetHistorianMetricsAction(
+	newAction := func(cfg config.FullConfig) *actions.GetHistorianMetricsAction {
+		return actions.NewGetHistorianMetricsAction(
 			"test@example.com", uuid.New(), uuid.New(), outboundChannel,
 			config.NewMockConfigManager().WithConfig(cfg))
-		action.SetCollector(collect)
-
-		return action
 	}
 
-	It("returns the figures the collector read from the database", func() {
-		collected := timescalemetrics.Metrics{
-			TimescaleVersion: "2.24.0",
-			DatabaseBytes:    961000000,
-			Hypertables:      4,
-			Tables:           []timescalemetrics.Table{{Name: "value_pump", Chunks: 105}},
-		}
-		action := newAction(configured, func(context.Context, string) (timescalemetrics.Metrics, error) {
-			return collected, nil
-		})
+	unreachable := config.FullConfig{
+		Historian: &config.HistorianConfig{
+			Timescale: config.TimescaleConfig{
+				Host:     "127.0.0.1",
+				Port:     1,
+				Database: "umh",
+				Username: "umh_owner",
+				Password: "secret",
+				SSLMode:  config.HistorianSSLModeDisable,
+			},
+		},
+	}
 
-		result, _, err := action.Execute()
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(result).To(Equal(collected))
-	})
-
-	It("dials the host the historian config names", func() {
-		var dialled string
-		action := newAction(configured, func(_ context.Context, dsn string) (timescalemetrics.Metrics, error) {
-			dialled = dsn
-
-			return timescalemetrics.Metrics{}, nil
-		})
-
-		_, _, err := action.Execute()
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(dialled).To(ContainSubstring("timescale.example.com"))
-	})
-
-	It("reports a collection failure instead of returning empty figures", func() {
-		action := newAction(configured, func(context.Context, string) (timescalemetrics.Metrics, error) {
-			return timescalemetrics.Metrics{}, errors.New("permission denied for schema umh")
-		})
-
-		_, _, err := action.Execute()
+	It("reports a database it cannot reach instead of returning empty figures", func() {
+		result, _, err := newAction(unreachable).Execute()
 
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("permission denied"))
+		Expect(err.Error()).To(ContainSubstring("Failed to read the historian database"))
+		Expect(result).To(BeNil(), "a caller must not mistake a failed read for an empty database")
+	})
+
+	It("names the host it could not reach, so a misconfigured port is visible", func() {
+		_, _, err := newAction(unreachable).Execute()
+
+		Expect(err.Error()).To(ContainSubstring("127.0.0.1"))
 	})
 
 	It("fails when no historian is configured, because there is nothing to read", func() {
-		action := newAction(config.FullConfig{}, func(context.Context, string) (timescalemetrics.Metrics, error) {
-			Fail("the collector must not run without a configured historian")
-
-			return timescalemetrics.Metrics{}, nil
-		})
-
-		_, _, err := action.Execute()
+		_, _, err := newAction(config.FullConfig{}).Execute()
 
 		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("No historian is configured"))
 	})
 })
