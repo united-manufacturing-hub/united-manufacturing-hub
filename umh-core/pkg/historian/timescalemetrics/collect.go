@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Table is one hypertable's storage, chunking and policy settings. The
@@ -268,7 +267,7 @@ func withFreshness(tables []Table, writes map[string]int64, now time.Time) []Tab
 	return applied
 }
 
-func collectFreshness(ctx context.Context, pool *pgxpool.Pool, tables []Table) (map[string]int64, error) {
+func collectFreshness(ctx context.Context, pool Querier, tables []Table) (map[string]int64, error) {
 	readable, err := timeColumnTables(ctx, pool)
 	if err != nil {
 		return nil, err
@@ -324,7 +323,7 @@ func collectFreshness(ctx context.Context, pool *pgxpool.Pool, tables []Table) (
 // database, which tracks chunk count rather than stored bytes. A deployment large
 // enough to make it slow therefore loses only DatabaseBytes, and returns every
 // metric collected before it.
-func collectMetrics(ctx context.Context, pool *pgxpool.Pool) (Metrics, error) {
+func collectMetrics(ctx context.Context, pool Querier) (Metrics, error) {
 	var metrics Metrics
 
 	var timescaleVersion *string
@@ -392,7 +391,7 @@ func collectMetrics(ctx context.Context, pool *pgxpool.Pool) (Metrics, error) {
 	return metrics, nil
 }
 
-func collectJobs(ctx context.Context, pool *pgxpool.Pool) ([]Job, error) {
+func collectJobs(ctx context.Context, pool Querier) ([]Job, error) {
 	rows, err := pool.Query(ctx, jobsListQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read jobs: %w", err)
@@ -425,7 +424,7 @@ func collectJobs(ctx context.Context, pool *pgxpool.Pool) ([]Job, error) {
 	return jobs, nil
 }
 
-func collectTables(ctx context.Context, pool *pgxpool.Pool) ([]Table, error) {
+func collectTables(ctx context.Context, pool Querier) ([]Table, error) {
 	rows, err := pool.Query(ctx, tablesQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read tables: %w", err)
@@ -465,7 +464,7 @@ func collectTables(ctx context.Context, pool *pgxpool.Pool) ([]Table, error) {
 	return append(tables, regular...), nil
 }
 
-func timeColumnTables(ctx context.Context, pool *pgxpool.Pool) (map[string]bool, error) {
+func timeColumnTables(ctx context.Context, pool Querier) (map[string]bool, error) {
 	rows, err := pool.Query(ctx, tsHypertablesQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read time columns: %w", err)
@@ -490,7 +489,7 @@ func timeColumnTables(ctx context.Context, pool *pgxpool.Pool) (map[string]bool,
 	return readable, nil
 }
 
-func collectRegularTables(ctx context.Context, pool *pgxpool.Pool) ([]Table, error) {
+func collectRegularTables(ctx context.Context, pool Querier) ([]Table, error) {
 	rows, err := pool.Query(ctx, regularTablesQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read regular tables: %w", err)
@@ -515,11 +514,19 @@ func collectRegularTables(ctx context.Context, pool *pgxpool.Pool) ([]Table, err
 	return tables, nil
 }
 
+// Querier is the read surface this package needs. Both *pgx.Conn and
+// *pgxpool.Pool satisfy it, so a one-shot caller opens a single connection while
+// a long-lived one keeps its pool.
+type Querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // Collect reads every figure the historian metrics view shows: the catalog
 // aggregates, per-table storage and policies, the background jobs, and how long
 // ago each hypertable last received a write. It runs on demand rather than on the
 // monitor's tick, so it carries no time budget of its own beyond ctx.
-func Collect(ctx context.Context, pool *pgxpool.Pool) (Metrics, error) {
+func Collect(ctx context.Context, pool Querier) (Metrics, error) {
 	metrics, err := collectMetrics(ctx, pool)
 	if err != nil {
 		return metrics, err
@@ -605,7 +612,7 @@ func splitForeignTables(tables []Table) ([]Table, OtherTables) {
 // tableStatsQuery reads each table's oldest row and approximate row count. The
 // oldest row is read without the freshness window: the whole point is how far
 // back the table reaches, which is usually further than any window.
-func tableStats(ctx context.Context, pool *pgxpool.Pool, tables []Table) (map[string]tableStat, error) {
+func tableStats(ctx context.Context, pool Querier, tables []Table) (map[string]tableStat, error) {
 	readable, err := timeColumnTables(ctx, pool)
 	if err != nil {
 		return nil, err
@@ -673,7 +680,7 @@ func withTableStats(tables []Table, stats map[string]tableStat, now time.Time) [
 	return tables
 }
 
-func tableRows(ctx context.Context, pool *pgxpool.Pool) (map[string]int64, error) {
+func tableRows(ctx context.Context, pool Querier) (map[string]int64, error) {
 	rows, err := pool.Query(ctx, tableRowsQuery, historianSchema)
 	if err != nil {
 		return nil, fmt.Errorf("read table rows: %w", err)
@@ -719,7 +726,7 @@ func withRows(tables []Table, counts map[string]int64) []Table {
 // tag and topic both held ten rows and reported reltuples of zero. These tables
 // are bounded by how many distinct tags exist rather than by ingest rate, so
 // counting them outright is affordable where counting a hypertable is not.
-func countLookupTables(ctx context.Context, pool *pgxpool.Pool, tables []Table) (map[string]int64, error) {
+func countLookupTables(ctx context.Context, pool Querier, tables []Table) (map[string]int64, error) {
 	selects := make([]string, 0, len(tables))
 
 	for _, table := range tables {
