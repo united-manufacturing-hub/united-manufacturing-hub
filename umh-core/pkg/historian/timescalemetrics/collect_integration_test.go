@@ -397,7 +397,6 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)), "168h")
 		Expect(metrics.RetentionJobs).To(BeZero(), "nothing expires, so the database grows forever")
 		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(BeZero())
-		Expect(metrics.PoliciesUniform).To(BeTrue())
 	})
 
 	It("reports the retention interval when one is configured", func() {
@@ -414,7 +413,7 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
 	})
 
-	It("flags tables that disagree on an interval", func() {
+	It("reports each table's own interval when they disagree", func() {
 		pool := startDatabase(timescaleImage)
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
@@ -424,7 +423,6 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.PoliciesUniform).To(BeFalse(), "one table compresses at 168h, the other at 336h")
 		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
 		Expect(tableNamed(metrics, "attribute_bench").CompressAfterSeconds).To(Equal(int64(1209600)),
 			"the drift is visible per table, which is where the console reads it")
@@ -526,14 +524,12 @@ var _ = Describe("Data span reporting", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		metrics, err := Collect(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		// The schema writes 200 daily points, so the chunks covering them span
-		// roughly 200 days; the newest chunk reaches into the future by up to its
-		// 168h width, so the figure is bounded rather than exact.
-		Expect(metrics.DataSpanSeconds).To(BeNumerically(">", int64(195*24*3600)))
-		Expect(metrics.DataSpanSeconds).To(BeNumerically("<", int64(215*24*3600)))
+		// The schema writes 200 daily points, and the span is taken from the rows
+		// themselves, so it is the interval between the first and the last.
+		Expect(metrics.DataSpanSeconds).To(BeNumerically("~", 199*24*3600, 24*3600))
 	})
 
 	It("reports no span when nothing has been written", func() {
@@ -542,7 +538,7 @@ var _ = Describe("Data span reporting", Label("integration"), func() {
 		_, err := pool.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS umh;`)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		metrics, err := Collect(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(metrics.DataSpanSeconds).To(BeZero())
