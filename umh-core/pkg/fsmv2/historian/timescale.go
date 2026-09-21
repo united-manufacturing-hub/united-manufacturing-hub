@@ -59,6 +59,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -109,6 +110,11 @@ type TimescaleStatus struct {
 	// or the server rejected the credentials/database (an auth fault). It is
 	// false only for network or timeout faults, where nothing answered.
 	Reachable bool `json:"reachable"`
+	// Summary carries the two figures reported without being asked: which tables
+	// the historian holds, and how many of its background jobs are failing. It is
+	// read on a slower schedule than the connection check and keeps its last value
+	// between reads, so it is empty only until the first one completes.
+	timescalemetrics.Summary
 }
 
 // sharedPool is the one holder every worker instance polls through. The
@@ -136,7 +142,8 @@ var sharedPool = &poolHolder{}
 type Deps struct {
 	*deps.BaseDependencies
 
-	pool *poolHolder
+	pool    *poolHolder
+	summary *summarySchedule
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -148,6 +155,7 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 	return Deps{
 		BaseDependencies: bd,
 		pool:             sharedPool,
+		summary:          sharedSummary,
 	}
 }
 
@@ -295,13 +303,38 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		deps.String("auth", string(models.TimescaleAuthValid)),
 		deps.Float64("latency_ms", elapsedMs))
 
+	if d.summary.claimNextRun(time.Now()) {
+		d.summary.remember(pollSummary(ctx, d, pool, host))
+	}
+
 	return TimescaleStatus{
 		Host:      host,
 		Auth:      models.TimescaleAuthValid,
 		LatencyMs: elapsedMs,
 		Port:      port,
 		Reachable: true,
+		Summary:   d.summary.latest(),
 	}, nil
+}
+
+// pollSummary reads the table names and failing job count, returning the previous
+// values when the read fails. The error is logged and discarded rather than
+// returned: a summary that cannot be read is not a connection fault, and a poll
+// error would drive the worker degraded for a database that is answering.
+func pollSummary(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) timescalemetrics.Summary {
+	summaryCtx, cancel := context.WithTimeout(ctx, summaryBudget)
+	defer cancel()
+
+	summary, err := timescalemetrics.CollectSummary(summaryCtx, pool)
+	if err != nil {
+		d.GetLogger().Debug("timescale summary",
+			deps.String("host", host),
+			deps.Err(err))
+
+		return d.summary.latest()
+	}
+
+	return summary
 }
 
 func init() {
@@ -311,4 +344,58 @@ func init() {
 		Poll:       Poll,
 		NewDeps:    newDeps,
 	})
+}
+
+// summaryInterval is how often the worker reads the table names and the failing
+// job count. Neither moves faster than this: a table appears when a contract is
+// deployed, and a job that starts failing is not urgent to the second.
+const summaryInterval = 60 * time.Second
+
+// summaryBudget bounds the summary read so it cannot consume the poll budget. The
+// framework cancels the whole observation at supervisor.DefaultObservationTimeout,
+// which would surface as a poll error and drive the worker degraded -- a table
+// listing must never do that.
+const summaryBudget = 500 * time.Millisecond
+
+// sharedSummary matches sharedPool: one instance of this worker type runs, and
+// the schedule has to outlive a single Poll to remember when it last ran.
+var sharedSummary = &summarySchedule{interval: summaryInterval}
+
+type summarySchedule struct {
+	lastRun  time.Time
+	last     timescalemetrics.Summary
+	interval time.Duration
+	mu       sync.Mutex
+}
+
+// claimNextRun reports whether the interval has elapsed, and records the attempt
+// so a failed read waits its turn like a successful one rather than retrying
+// every second.
+func (s *summarySchedule) claimNextRun(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.lastRun.IsZero() && now.Sub(s.lastRun) < s.interval {
+		return false
+	}
+
+	s.lastRun = now
+
+	return true
+}
+
+// remember keeps a completed read. A failed one leaves the previous value in
+// place: the tables did not stop existing because one read did not finish.
+func (s *summarySchedule) remember(summary timescalemetrics.Summary) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.last = summary
+}
+
+func (s *summarySchedule) latest() timescalemetrics.Summary {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.last
 }

@@ -80,11 +80,13 @@ func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.His
 				DesiredState:  "active",
 				Category:      healthCat,
 			},
-			Host:      result.Host,
-			Auth:      result.Auth,
-			Latency:   result.LatencyMs,
-			Port:      result.Port,
-			Reachable: result.Reachable,
+			Host:       result.Host,
+			Auth:       result.Auth,
+			Latency:    result.LatencyMs,
+			Port:       result.Port,
+			Reachable:  result.Reachable,
+			TableNames: result.TableNames,
+			FailedJobs: result.FailedJobs,
 		},
 	}
 }
