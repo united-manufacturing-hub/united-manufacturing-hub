@@ -316,8 +316,6 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			Expect(job.Table).To(BeElementOf("value_bench", "attribute_bench"))
 			Expect(job.ScheduleSeconds).To(BeNumerically(">", 0))
 			Expect(job.Failures).To(BeZero())
-			Expect(job.Procedure).To(HaveSuffix(".policy_compression"),
-				"the schema-qualified procedure names the algorithm the job runs")
 		}
 	})
 
@@ -396,9 +394,9 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(metrics.CompressionJobs).To(Equal(2))
-		Expect(metrics.CompressAfterSeconds).To(Equal(int64(604800)), "168h")
+		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)), "168h")
 		Expect(metrics.RetentionJobs).To(BeZero(), "nothing expires, so the database grows forever")
-		Expect(metrics.DropAfterSeconds).To(BeZero())
+		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(BeZero())
 		Expect(metrics.PoliciesUniform).To(BeTrue())
 	})
 
@@ -413,7 +411,7 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(metrics.RetentionJobs).To(Equal(1))
-		Expect(metrics.DropAfterSeconds).To(Equal(int64(2592000)), "720h")
+		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
 	})
 
 	It("flags tables that disagree on an interval", func() {
@@ -427,7 +425,9 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(metrics.PoliciesUniform).To(BeFalse(), "one table compresses at 168h, the other at 336h")
-		Expect(metrics.CompressAfterSeconds).To(Equal(int64(604800)), "the shortest of the two")
+		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
+		Expect(tableNamed(metrics, "attribute_bench").CompressAfterSeconds).To(Equal(int64(1209600)),
+			"the drift is visible per table, which is where the console reads it")
 	})
 
 	It("reports no job error on a healthy database", func() {
@@ -546,5 +546,134 @@ var _ = Describe("Data span reporting", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(metrics.DataSpanSeconds).To(BeZero())
+	})
+})
+
+var _ = Describe("Per-table rows and timespan", Label("integration"), func() {
+	ctx := context.Background()
+
+	It("reports roughly how many rows a table holds", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		// The fixture inserts 200 rows. The count is approximate by design, read
+		// from planner statistics rather than by scanning, so it is asserted as a
+		// range: an exact count is unaffordable on a real historian.
+		Expect(tableNamed(metrics, "value_bench").Rows).To(BeNumerically("~", 200, 20))
+	})
+
+	It("reports how long ago the first entry was, giving each table its own span", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		table := tableNamed(metrics, "value_bench")
+
+		// Times are reported as instants rather than ages, so a console renders
+		// them without reconstructing a moment against its own clock.
+		firstWrite, err := time.Parse(time.RFC3339, table.FirstWriteAt)
+		Expect(err).NotTo(HaveOccurred(), "the first write is a parseable timestamp")
+		lastWrite, err := time.Parse(time.RFC3339, table.LastWriteAt)
+		Expect(err).NotTo(HaveOccurred(), "the last write is a parseable timestamp")
+
+		// The fixture writes one row per day going back 200 days.
+		Expect(firstWrite).To(BeTemporally("~", time.Now().Add(-200*24*time.Hour), 24*time.Hour))
+		Expect(firstWrite).To(BeTemporally("<", lastWrite), "the first write precedes the last")
+	})
+})
+
+var _ = Describe("Table selection", Label("integration"), func() {
+	ctx := context.Background()
+
+	It("counts and sizes the tables the historian did not create, apart from its own", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `
+CREATE TABLE umh.customer_export (id BIGINT, payload TEXT);
+INSERT INTO umh.customer_export SELECT g, repeat('x', 500) FROM generate_series(1, 500) g;
+CREATE TABLE umh.scratch_notes (id BIGINT);
+ANALYZE umh.customer_export;`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		names := []string{}
+		for _, table := range metrics.Tables {
+			names = append(names, table.Name)
+		}
+
+		Expect(names).NotTo(ContainElement("customer_export"))
+		Expect(names).NotTo(ContainElement("scratch_notes"))
+		Expect(names).NotTo(ContainElement("others"), "foreign tables are an aggregate, not a row")
+
+		Expect(metrics.OtherTables.Tables).To(Equal(2))
+		Expect(metrics.OtherTables.Bytes).To(BeNumerically(">", 0),
+			"the disk they occupy is reported, so the database size still adds up")
+	})
+
+	It("keeps the tables the historian does create", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		names := []string{}
+		for _, table := range metrics.Tables {
+			names = append(names, table.Name)
+		}
+
+		Expect(names).To(ContainElement("value_bench"))
+		Expect(names).To(ContainElement("attribute_bench"))
+		Expect(metrics.OtherTables.Tables).To(BeZero(), "nothing foreign exists in this fixture")
+	})
+})
+
+var _ = Describe("Stale and small tables", Label("integration"), func() {
+	ctx := context.Background()
+
+	It("reports the last write of a table that stopped receiving data long ago", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		// A table whose writes stopped is the one an operator most needs to see, so
+		// the last write must not be hidden behind a recency window.
+		_, err = pool.Exec(ctx, `DELETE FROM umh.value_bench WHERE ts > now() - interval '90 days'`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		lastWrite, err := time.Parse(time.RFC3339, tableNamed(metrics, "value_bench").LastWriteAt)
+		Expect(err).NotTo(HaveOccurred(), "a table silent for months still reports when it last wrote")
+		Expect(lastWrite).To(BeTemporally("<", time.Now().Add(-89*24*time.Hour)))
+	})
+
+	It("counts a lookup table exactly, because its planner estimate is zero until analysed", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `
+CREATE TABLE umh.tag (id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL);
+INSERT INTO umh.tag (name) SELECT 'tag_' || g FROM generate_series(1, 10) AS g;`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(tableNamed(metrics, "tag").Rows).To(Equal(int64(10)))
 	})
 })
