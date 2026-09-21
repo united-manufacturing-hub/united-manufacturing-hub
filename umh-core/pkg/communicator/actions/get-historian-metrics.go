@@ -31,6 +31,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -122,23 +123,42 @@ func (a *GetHistorianMetricsAction) Execute() (interface{}, map[string]interface
 
 	cfg, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
-		return a.fail(fmt.Sprintf("Failed to read configuration: %v", err), models.ErrConfigFileInvalid)
+		return a.fail(fmt.Sprintf("Failed to read configuration: %v", err),
+			models.ErrConfigFileInvalid, err, "historian_metrics_config_read_failed")
 	}
 
+	// A missing historian is a client mistake, not an instance fault: the console
+	// only offers this page once one is configured. Reporting it would fill Sentry
+	// with other people's misrouted requests.
 	if cfg.Historian == nil {
-		return a.fail("No historian is configured on this instance", models.ErrHistorianMetricsFailed)
+		return a.fail("No historian is configured on this instance",
+			models.ErrHistorianMetricsFailed, nil, "")
 	}
 
 	metrics, err := a.collect(ctx, cfg.Historian.Timescale.ToDSN())
 	if err != nil {
-		return a.fail(fmt.Sprintf("Failed to read the historian database: %v", err), models.ErrHistorianMetricsFailed)
+		return a.fail(fmt.Sprintf("Failed to read the historian database: %v", err),
+			models.ErrHistorianMetricsFailed, err, "historian_metrics_read_failed")
 	}
 
 	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
 	return metrics, nil, nil
 }
 
-func (a *GetHistorianMetricsAction) fail(message string, code string) (interface{}, map[string]interface{}, error) {
+// fail replies to the caller and, when cause is non-nil, reports the failure to
+// Sentry under the historian feature so a database nobody can read is visible
+// without waiting for someone to notice an empty page.
+func (a *GetHistorianMetricsAction) fail(
+	message string,
+	code string,
+	cause error,
+	event string,
+) (interface{}, map[string]interface{}, error) {
+	if cause != nil {
+		communicatorFSMLogger().SentryError(
+			deps.FeatureSupportHistorian, communicatorHierarchyPath, cause, event)
+	}
+
 	SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 		message, code, nil, a.outboundChannel, models.GetHistorianMetrics, nil)
 
