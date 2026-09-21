@@ -91,10 +91,8 @@ type Metrics struct {
 	DatabaseBytes     int64  `json:"databaseBytes"`
 	UncompressedBytes int64  `json:"uncompressedBytes"`
 	CompressedBytes   int64  `json:"compressedBytes"`
-	// DataSpanSeconds is how much history the hypertables cover, from the oldest
-	// chunk's start to the newest chunk's end. Divided into DatabaseBytes it gives a
-	// growth rate. It reads slightly long, because the newest chunk extends into the
-	// future by up to its own width.
+	// DataSpanSeconds is the period the data covers, from the oldest row in any
+	// table to the newest. Divided into DatabaseBytes it gives a growth rate.
 	DataSpanSeconds  int64   `json:"dataSpanSeconds"`
 	Hypertables      int     `json:"hypertables"`
 	Chunks           int     `json:"chunks"`
@@ -108,10 +106,6 @@ type Metrics struct {
 	// create, so the database size stays explainable without listing them.
 	OtherTables OtherTables `json:"otherTables"`
 	JobList     []Job       `json:"jobList"`
-	// PoliciesUniform is false when hypertables disagree on how soon they compress
-	// or expire data. The per-table intervals say which, but drift between two
-	// tables that both have policies is easy to miss in a long list.
-	PoliciesUniform bool `json:"policiesUniform"`
 }
 
 const historianSchema = "umh"
@@ -145,14 +139,11 @@ const jobsQuery = `SELECT count(*), count(*) FILTER (WHERE s.last_run_status = '
   LEFT JOIN timescaledb_information.job_stats s USING (job_id)
  WHERE j.hypertable_schema = $1`
 
-// policyQuery reports the compression and retention policies as aggregates. The
-// intervals are the shortest any hypertable uses, so the figure is the soonest a
-// chunk is compressed or dropped rather than a flattering maximum; PoliciesUniform
-// says whether one figure describes every table.
+// policyQuery counts how many hypertables compress and how many expire data.
+// Zero of either is a historian that keeps everything it is given.
 const policyQuery = `SELECT
        count(*) FILTER (WHERE proc_name = 'policy_compression'),
-       count(*) FILTER (WHERE proc_name = 'policy_retention'),
-       count(DISTINCT config->>'compress_after') <= 1 AND count(DISTINCT config->>'drop_after') <= 1
+       count(*) FILTER (WHERE proc_name = 'policy_retention')
   FROM timescaledb_information.jobs
  WHERE hypertable_schema = $1`
 
@@ -191,14 +182,6 @@ const tablesQuery = `SELECT h.table_name,
  WHERE h.schema_name = $1
  GROUP BY h.table_name
  ORDER BY h.table_name`
-
-// dataSpanQuery reads the span from the chunk catalog, whose dimension_slice
-// bounds are microseconds since the epoch.
-const dataSpanQuery = `SELECT coalesce((max(ds.range_end) - min(ds.range_start)) / 1000000, 0)
-  FROM _timescaledb_catalog.dimension_slice ds
-  JOIN _timescaledb_catalog.dimension d ON d.id = ds.dimension_id
-  JOIN _timescaledb_catalog.hypertable h ON h.id = d.hypertable_id
- WHERE h.schema_name = $1`
 
 const jobsListQuery = `SELECT
        CASE j.proc_name
@@ -445,7 +428,6 @@ func collectMetrics(ctx context.Context, db Querier) (Metrics, error) {
 	if err := db.QueryRow(ctx, policyQuery, historianSchema).Scan(
 		&metrics.CompressionJobs,
 		&metrics.RetentionJobs,
-		&metrics.PoliciesUniform,
 	); err != nil {
 		return metrics, fmt.Errorf("read policies: %w", err)
 	}
@@ -454,10 +436,6 @@ func collectMetrics(ctx context.Context, db Querier) (Metrics, error) {
 	if err := db.QueryRow(ctx, lastJobErrorQuery, historianSchema).Scan(&metrics.LastJobError); err != nil &&
 		!errors.Is(err, pgx.ErrNoRows) {
 		return metrics, fmt.Errorf("read last job error: %w", err)
-	}
-
-	if err := db.QueryRow(ctx, dataSpanQuery, historianSchema).Scan(&metrics.DataSpanSeconds); err != nil {
-		return metrics, fmt.Errorf("read data span: %w", err)
 	}
 
 	tables, err := collectTables(ctx, db)
@@ -637,6 +615,8 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		rowCounts[name] = count
 	}
 
+	metrics.DataSpanSeconds = dataSpanSeconds(firstWrites, lastWrites)
+
 	assignLastWrites(metrics.Tables, lastWrites)
 	assignFirstWrites(metrics.Tables, firstWrites)
 	assignRowCounts(metrics.Tables, rowCounts)
@@ -703,4 +683,29 @@ func tableRows(ctx context.Context, db Querier) (map[string]int64, error) {
 	}
 
 	return counts, nil
+}
+
+// dataSpanSeconds is the period between the oldest row in any table and the
+// newest. It is taken from the rows themselves rather than from chunk boundaries,
+// which reach into the future by up to one chunk width and so read long.
+func dataSpanSeconds(firstWrites, lastWrites map[string]int64) int64 {
+	var oldest, newest int64
+
+	for _, epoch := range firstWrites {
+		if epoch > 0 && (oldest == 0 || epoch < oldest) {
+			oldest = epoch
+		}
+	}
+
+	for _, epoch := range lastWrites {
+		if epoch > newest {
+			newest = epoch
+		}
+	}
+
+	if oldest == 0 || newest <= oldest {
+		return 0
+	}
+
+	return newest - oldest
 }
