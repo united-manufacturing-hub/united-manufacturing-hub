@@ -246,6 +246,18 @@ const tableRowsQuery = `SELECT h.table_name,
  WHERE h.schema_name = $1
  GROUP BY h.table_name`
 
+// The three queries below are per-table selects, joined with UNION ALL into one
+// statement. A table name cannot be bound as a parameter, so each is a format
+// string taking the table name, the schema, and the table name again -- the
+// first as the literal that labels the row, the last two as the identifier.
+// Every name is checked against safeTableName before it is interpolated.
+
+const lastWriteQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
+
+const firstWriteQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
+
+const lookupCountQuery = `SELECT '%s', count(*)::bigint FROM %s.%s`
+
 var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 func safeTableName(name string) bool {
@@ -281,9 +293,7 @@ func collectFreshness(ctx context.Context, pool Querier, tables []Table) (map[st
 		}
 
 		selects = append(selects, fmt.Sprintf(
-			`SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`,
-			table.Name, historianSchema, table.Name,
-		))
+			lastWriteQuery, table.Name, historianSchema, table.Name))
 	}
 
 	if len(selects) == 0 {
@@ -626,9 +636,7 @@ func tableStats(ctx context.Context, pool Querier, tables []Table) (map[string]t
 		}
 
 		selects = append(selects, fmt.Sprintf(
-			`SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`,
-			table.Name, historianSchema, table.Name,
-		))
+			firstWriteQuery, table.Name, historianSchema, table.Name))
 	}
 
 	if len(selects) == 0 {
@@ -735,7 +743,7 @@ func countLookupTables(ctx context.Context, pool Querier, tables []Table) (map[s
 		}
 
 		selects = append(selects, fmt.Sprintf(
-			`SELECT '%s', count(*)::bigint FROM %s.%s`, table.Name, historianSchema, table.Name))
+			lookupCountQuery, table.Name, historianSchema, table.Name))
 	}
 
 	if len(selects) == 0 {
