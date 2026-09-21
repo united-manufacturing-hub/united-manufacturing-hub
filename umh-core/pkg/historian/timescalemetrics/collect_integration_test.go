@@ -675,3 +675,32 @@ INSERT INTO umh.tag (name) SELECT 'tag_' || g FROM generate_series(1, 10) AS g;`
 		Expect(tableNamed(metrics, "tag").Rows).To(Equal(int64(10)))
 	})
 })
+
+var _ = Describe("Summary collection", Label("integration"), func() {
+	ctx := context.Background()
+
+	It("reports the tables and the failing job count", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		summary, err := CollectSummary(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(summary.FailedJobs).To(BeZero())
+		Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
+	})
+
+	It("lists only the tables the historian created", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.customer_export (id BIGINT)`)
+		Expect(err).NotTo(HaveOccurred())
+
+		summary, err := CollectSummary(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(summary.TableNames).NotTo(ContainElement("customer_export"))
+	})
+})
