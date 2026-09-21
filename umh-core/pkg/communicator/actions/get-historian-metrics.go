@@ -26,7 +26,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -67,23 +67,29 @@ func NewGetHistorianMetricsAction(
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
-		collect:         collectOverNewPool,
+		collect:         collectOverNewConnection,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
 	}
 }
 
-// collectOverNewPool opens a pool for this one request and closes it again. The
-// connection monitor's pool is not reused: it belongs to a worker on its own
-// goroutine, and a long catalog read must not occupy the connection the liveness
-// check needs every second.
-func collectOverNewPool(ctx context.Context, dsn string) (timescalemetrics.Metrics, error) {
-	pool, err := pgxpool.New(ctx, dsn)
+// collectOverNewConnection dials the historian for this one request and hangs up
+// again. One connection rather than a pool, because the reads are sequential on a
+// single goroutine and nothing outlives the request. The connection monitor's own
+// pool is not reused either: it belongs to a worker on its own goroutine and
+// serves a liveness check every second, which a long catalog read must not block.
+//
+// pgx.Connect rather than pgxpool.New, because the pool connects lazily: it
+// returns no error for an unreachable host, so a wrong host or password would be
+// reported as whichever query happened to run first rather than as a failure to
+// connect.
+func collectOverNewConnection(ctx context.Context, dsn string) (timescalemetrics.Metrics, error) {
+	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		return timescalemetrics.Metrics{}, fmt.Errorf("connect to the historian database: %w", err)
 	}
-	defer pool.Close()
+	defer func() { _ = conn.Close(ctx) }()
 
-	return timescalemetrics.Collect(ctx, pool)
+	return timescalemetrics.Collect(ctx, conn)
 }
 
 // Parse implements the Action interface. GetHistorianMetrics carries no payload.
