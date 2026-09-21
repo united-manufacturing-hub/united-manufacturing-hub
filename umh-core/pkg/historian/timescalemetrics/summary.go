@@ -17,6 +17,8 @@ package timescalemetrics
 import (
 	"context"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Summary is the part of a historian's state reported without being asked: which
@@ -66,23 +68,21 @@ func summaryTableNames(ctx context.Context, db Querier) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read table names: %w", err)
 	}
-	defer rows.Close()
 
+	all, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("read table names: %w", err)
+	}
+
+	// The schema holds whatever the customer put there. historianCreated is the
+	// one definition of which tables are ours, shared with the split the on-demand
+	// read performs, so the answer cannot drift between the two paths.
 	names := []string{}
 
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan table name: %w", err)
-		}
-
+	for _, name := range all {
 		if historianCreated(name) {
 			names = append(names, name)
 		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read table names: %w", err)
 	}
 
 	return names, nil
