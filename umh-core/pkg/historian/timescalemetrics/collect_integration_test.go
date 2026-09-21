@@ -576,8 +576,6 @@ var _ = Describe("Per-table rows and timespan", Label("integration"), func() {
 
 		table := tableNamed(metrics, "value_bench")
 
-		// Times are reported as instants rather than ages, so a console renders
-		// them without reconstructing a moment against its own clock.
 		firstWrite, err := time.Parse(time.RFC3339, table.FirstWriteAt)
 		Expect(err).NotTo(HaveOccurred(), "the first write is a parseable timestamp")
 		lastWrite, err := time.Parse(time.RFC3339, table.LastWriteAt)
