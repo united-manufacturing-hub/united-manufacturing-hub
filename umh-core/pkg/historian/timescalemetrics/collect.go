@@ -97,10 +97,8 @@ type Metrics struct {
 	Hypertables      int     `json:"hypertables"`
 	Chunks           int     `json:"chunks"`
 	CompressedChunks int     `json:"compressedChunks"`
-	Jobs             int     `json:"jobs"`
 	CompressionJobs  int     `json:"compressionJobs"`
 	RetentionJobs    int     `json:"retentionJobs"`
-	FailedJobs       int     `json:"failedJobs"`
 	Tables           []Table `json:"tables"`
 	// OtherTables aggregates every table in the schema the historian did not
 	// create, so the database size stays explainable without listing them.
@@ -418,11 +416,6 @@ func collectMetrics(ctx context.Context, db Querier) (Metrics, error) {
 	if err := db.QueryRow(ctx, compressionQuery, historianSchema).
 		Scan(&metrics.UncompressedBytes, &metrics.CompressedBytes); err != nil {
 		return metrics, fmt.Errorf("read compression totals: %w", err)
-	}
-
-	if err := db.QueryRow(ctx, jobsQuery, historianSchema).
-		Scan(&metrics.Jobs, &metrics.FailedJobs); err != nil {
-		return metrics, fmt.Errorf("read job status: %w", err)
 	}
 
 	if err := db.QueryRow(ctx, policyQuery, historianSchema).Scan(

@@ -182,8 +182,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.Jobs).To(Equal(2), "one compression policy per hypertable")
-		Expect(metrics.FailedJobs).To(BeZero())
+		Expect(metrics.JobList).To(HaveLen(2), "one compression policy per hypertable")
 	})
 
 	It("reads the last write per table", func() {
@@ -310,7 +309,6 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.Jobs).To(Equal(2))
 		Expect(metrics.JobList).To(HaveLen(2), "a healthy job is still worth reporting")
 		for _, job := range metrics.JobList {
 			Expect(job.Table).To(BeElementOf("value_bench", "attribute_bench"))
@@ -366,7 +364,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.Jobs).To(Equal(2), "only the two umh compression policies")
+		Expect(metrics.JobList).To(HaveLen(2), "only the two umh compression policies")
 	})
 
 	It("fails against a plain Postgres with no TimescaleDB extension", func() {
