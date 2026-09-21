@@ -36,18 +36,30 @@ type Table struct {
 	ChunkIntervalSeconds int64  `json:"chunkIntervalSeconds"`
 	CompressAfterSeconds int64  `json:"compressAfterSeconds"`
 	DropAfterSeconds     int64  `json:"dropAfterSeconds"`
-	LastWriteSeconds     int64  `json:"lastWriteSeconds"`
-	Chunks               int    `json:"chunks"`
-	CompressedChunks     int    `json:"compressedChunks"`
-	IsHypertable         bool   `json:"isHypertable"`
+	// LastWriteAt and FirstWriteAt are RFC 3339 instants, not ages. A reader that
+	// receives an age has to resolve it against its own clock, which puts the
+	// reported moment out by however far that clock is wrong. Empty means no row
+	// was found, which is not the same as a row written this second.
+	LastWriteAt  string `json:"lastWriteAt"`
+	FirstWriteAt string `json:"firstWriteAt"`
+	// Rows is approximate, read from planner statistics rather than by counting:
+	// an exact count scans every chunk, which a historian cannot afford.
+	Rows             int64 `json:"rows"`
+	Chunks           int   `json:"chunks"`
+	CompressedChunks int   `json:"compressedChunks"`
+	IsHypertable     bool  `json:"isHypertable"`
+}
+
+// OtherTables summarises the tables in the historian schema that this product did
+// not create.
+type OtherTables struct {
+	Tables int   `json:"tables"`
+	Bytes  int64 `json:"bytes"`
+	Rows   int64 `json:"rows"`
 }
 
 type Job struct {
-	Kind string `json:"kind"`
-	// Procedure is the schema-qualified function TimescaleDB runs for this job,
-	// such as _timescaledb_functions.policy_compression. Kind groups jobs for
-	// display; this names the algorithm being executed.
-	Procedure          string `json:"procedure"`
+	Kind               string `json:"kind"`
 	Table              string `json:"table"`
 	Status             string `json:"status"`
 	ScheduleSeconds    int64  `json:"scheduleSeconds"`
@@ -72,13 +84,6 @@ type Metrics struct {
 	DatabaseBytes     int64  `json:"databaseBytes"`
 	UncompressedBytes int64  `json:"uncompressedBytes"`
 	CompressedBytes   int64  `json:"compressedBytes"`
-	// CompressAfterSeconds and DropAfterSeconds are the shortest interval any
-	// hypertable uses, so the reported figure is the soonest chunks are compressed
-	// or dropped rather than a flattering maximum. Zero means no such policy
-	// exists: a zero DropAfterSeconds with RetentionJobs zero is a database that
-	// grows forever.
-	CompressAfterSeconds int64 `json:"compressAfterSeconds"`
-	DropAfterSeconds     int64 `json:"dropAfterSeconds"`
 	// DataSpanSeconds is how much history the hypertables cover, from the oldest
 	// chunk's start to the newest chunk's end. Divided into DatabaseBytes it gives a
 	// growth rate. It reads slightly long, because the newest chunk extends into the
@@ -92,7 +97,10 @@ type Metrics struct {
 	RetentionJobs    int     `json:"retentionJobs"`
 	FailedJobs       int     `json:"failedJobs"`
 	Tables           []Table `json:"tables"`
-	JobList          []Job   `json:"jobList"`
+	// OtherTables aggregates every table in the schema the historian did not
+	// create, so the database size stays explainable without listing them.
+	OtherTables OtherTables `json:"otherTables"`
+	JobList     []Job       `json:"jobList"`
 	// PoliciesUniform reports whether every hypertable agrees on its intervals.
 	// When false the single reported interval describes only the shortest table,
 	// and the rest have to be read from the database.
@@ -137,8 +145,6 @@ const jobsQuery = `SELECT count(*), count(*) FILTER (WHERE s.last_run_status = '
 const policyQuery = `SELECT
        count(*) FILTER (WHERE proc_name = 'policy_compression'),
        count(*) FILTER (WHERE proc_name = 'policy_retention'),
-       coalesce(min(EXTRACT(EPOCH FROM (config->>'compress_after')::interval))::bigint, 0),
-       coalesce(min(EXTRACT(EPOCH FROM (config->>'drop_after')::interval))::bigint, 0),
        count(DISTINCT config->>'compress_after') <= 1 AND count(DISTINCT config->>'drop_after') <= 1
   FROM timescaledb_information.jobs
  WHERE hypertable_schema = $1`
@@ -194,7 +200,6 @@ const jobsListQuery = `SELECT
          WHEN 'policy_retention' THEN 'retention'
          ELSE j.proc_name
        END,
-       coalesce(j.proc_schema, '') || '.' || coalesce(j.proc_name, ''),
        coalesce(j.hypertable_name, ''),
        coalesce(s.last_run_status, ''),
        coalesce(extract(epoch FROM j.schedule_interval)::bigint, 0),
@@ -210,7 +215,7 @@ const jobsListQuery = `SELECT
 
 const databaseSizeQuery = `SELECT pg_database_size(current_database())`
 
-const regularTablesQuery = `SELECT c.relname, pg_total_relation_size(c.oid)::bigint
+const regularTablesQuery = `SELECT c.relname, pg_total_relation_size(c.oid)::bigint, greatest(c.reltuples, 0)::bigint
   FROM pg_class c
   JOIN pg_namespace n ON n.oid = c.relnamespace
  WHERE n.nspname = $1 AND c.relkind = 'r'
@@ -224,7 +229,23 @@ const tsHypertablesQuery = `SELECT h.table_name
   JOIN _timescaledb_catalog.dimension d ON d.hypertable_id = h.id
  WHERE h.schema_name = $1 AND d.column_name = 'ts'`
 
-const freshnessWindow = "30 days"
+// tableRowsQuery counts rows per hypertable without scanning one. A compressed
+// chunk records its own pre-compression count, which is exact; an uncompressed
+// chunk contributes the planner's estimate, which autovacuum maintains and which
+// is -1 until it first runs. approximate_row_count is not used: it assumes every
+// compression batch is full, and reported 189011 rows for a 200-row table whose
+// chunks each held seven.
+const tableRowsQuery = `SELECT h.table_name,
+       coalesce(sum(s.numrows_pre_compression), 0)
+     + coalesce(sum(CASE WHEN ch.compressed_chunk_id IS NULL
+                         THEN greatest(c.reltuples, 0)::bigint ELSE 0 END), 0)
+  FROM _timescaledb_catalog.hypertable h
+  JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND NOT ch.dropped
+  LEFT JOIN _timescaledb_catalog.compression_chunk_size s ON s.chunk_id = ch.id
+  LEFT JOIN pg_namespace n ON n.nspname = ch.schema_name
+  LEFT JOIN pg_class c ON c.relname = ch.table_name AND c.relnamespace = n.oid
+ WHERE h.schema_name = $1
+ GROUP BY h.table_name`
 
 var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
@@ -238,10 +259,7 @@ func withFreshness(tables []Table, writes map[string]int64, now time.Time) []Tab
 	for _, table := range tables {
 		written, ok := writes[table.Name]
 		if ok && written > 0 {
-			age := now.Unix() - written
-			if age > 0 {
-				table.LastWriteSeconds = age
-			}
+			table.LastWriteAt = time.Unix(written, 0).UTC().Format(time.RFC3339)
 		}
 
 		applied = append(applied, table)
@@ -264,8 +282,8 @@ func collectFreshness(ctx context.Context, pool *pgxpool.Pool, tables []Table) (
 		}
 
 		selects = append(selects, fmt.Sprintf(
-			`SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s WHERE ts > now() - interval '%s'`,
-			table.Name, historianSchema, table.Name, freshnessWindow,
+			`SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`,
+			table.Name, historianSchema, table.Name,
 		))
 	}
 
@@ -338,8 +356,6 @@ func collectMetrics(ctx context.Context, pool *pgxpool.Pool) (Metrics, error) {
 	if err := pool.QueryRow(ctx, policyQuery, historianSchema).Scan(
 		&metrics.CompressionJobs,
 		&metrics.RetentionJobs,
-		&metrics.CompressAfterSeconds,
-		&metrics.DropAfterSeconds,
 		&metrics.PoliciesUniform,
 	); err != nil {
 		return metrics, fmt.Errorf("read policies: %w", err)
@@ -389,7 +405,6 @@ func collectJobs(ctx context.Context, pool *pgxpool.Pool) ([]Job, error) {
 		var job Job
 		if err := rows.Scan(
 			&job.Kind,
-			&job.Procedure,
 			&job.Table,
 			&job.Status,
 			&job.ScheduleSeconds,
@@ -486,7 +501,7 @@ func collectRegularTables(ctx context.Context, pool *pgxpool.Pool) ([]Table, err
 
 	for rows.Next() {
 		var table Table
-		if err := rows.Scan(&table.Name, &table.UncompressedBytes); err != nil {
+		if err := rows.Scan(&table.Name, &table.UncompressedBytes, &table.Rows); err != nil {
 			return nil, fmt.Errorf("scan regular table: %w", err)
 		}
 
@@ -515,7 +530,233 @@ func Collect(ctx context.Context, pool *pgxpool.Pool) (Metrics, error) {
 		return metrics, fmt.Errorf("read freshness: %w", err)
 	}
 
-	metrics.Tables = withFreshness(metrics.Tables, writes, time.Now())
+	now := time.Now()
+	metrics.Tables = withFreshness(metrics.Tables, writes, now)
+
+	stats, err := tableStats(ctx, pool, metrics.Tables)
+	if err != nil {
+		return metrics, err
+	}
+
+	counts, err := tableRows(ctx, pool)
+	if err != nil {
+		return metrics, err
+	}
+
+	lookupCounts, err := countLookupTables(ctx, pool, metrics.Tables)
+	if err != nil {
+		return metrics, err
+	}
+
+	for name, count := range lookupCounts {
+		counts[name] = count
+	}
+
+	metrics.Tables, metrics.OtherTables = splitForeignTables(
+		withRows(withTableStats(metrics.Tables, stats, now), counts))
 
 	return metrics, nil
+}
+
+// historianTables names what benthos-umh's historian output creates: two
+// hypertables per data contract, plus the shared lookup tables.
+var historianTablePrefixes = []string{"value_", "attribute_"}
+
+var historianTableNames = map[string]bool{"tag": true, "topic": true, "location": true}
+
+func historianCreated(name string) bool {
+	if historianTableNames[name] {
+		return true
+	}
+
+	for _, prefix := range historianTablePrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// splitForeignTables separates the historian's own tables from everything else in
+// the schema. The rest are counted and summed rather than listed: they are not
+// this product's to explain, but they occupy disk the reported database size
+// includes, so dropping them silently would leave the total unaccounted for.
+func splitForeignTables(tables []Table) ([]Table, OtherTables) {
+	kept := make([]Table, 0, len(tables))
+
+	var others OtherTables
+
+	for _, table := range tables {
+		if historianCreated(table.Name) {
+			kept = append(kept, table)
+
+			continue
+		}
+
+		others.Tables++
+		others.Bytes += table.UncompressedBytes + table.CompressedBytes
+		others.Rows += table.Rows
+	}
+
+	return kept, others
+}
+
+// tableStatsQuery reads each table's oldest row and approximate row count. The
+// oldest row is read without the freshness window: the whole point is how far
+// back the table reaches, which is usually further than any window.
+func tableStats(ctx context.Context, pool *pgxpool.Pool, tables []Table) (map[string]tableStat, error) {
+	readable, err := timeColumnTables(ctx, pool)
+	if err != nil {
+		return nil, err
+	}
+
+	selects := make([]string, 0, len(tables))
+
+	for _, table := range tables {
+		if !table.IsHypertable || !readable[table.Name] || !safeTableName(table.Name) {
+			continue
+		}
+
+		selects = append(selects, fmt.Sprintf(
+			`SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`,
+			table.Name, historianSchema, table.Name,
+		))
+	}
+
+	if len(selects) == 0 {
+		return map[string]tableStat{}, nil
+	}
+
+	rows, err := pool.Query(ctx, strings.Join(selects, " UNION ALL "))
+	if err != nil {
+		return nil, fmt.Errorf("read table stats: %w", err)
+	}
+	defer rows.Close()
+
+	stats := make(map[string]tableStat, len(selects))
+
+	for rows.Next() {
+		var name string
+
+		var stat tableStat
+		if err := rows.Scan(&name, &stat.firstWrite); err != nil {
+			return nil, fmt.Errorf("scan table stats: %w", err)
+		}
+
+		stats[name] = stat
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read table stats: %w", err)
+	}
+
+	return stats, nil
+}
+
+type tableStat struct {
+	firstWrite int64
+}
+
+func withTableStats(tables []Table, stats map[string]tableStat, now time.Time) []Table {
+	for i, table := range tables {
+		stat, ok := stats[table.Name]
+		if !ok {
+			continue
+		}
+
+		if stat.firstWrite > 0 {
+			tables[i].FirstWriteAt = time.Unix(stat.firstWrite, 0).UTC().Format(time.RFC3339)
+		}
+	}
+
+	return tables
+}
+
+func tableRows(ctx context.Context, pool *pgxpool.Pool) (map[string]int64, error) {
+	rows, err := pool.Query(ctx, tableRowsQuery, historianSchema)
+	if err != nil {
+		return nil, fmt.Errorf("read table rows: %w", err)
+	}
+	defer rows.Close()
+
+	counts := map[string]int64{}
+
+	for rows.Next() {
+		var name string
+
+		var count int64
+		if err := rows.Scan(&name, &count); err != nil {
+			return nil, fmt.Errorf("scan table rows: %w", err)
+		}
+
+		counts[name] = count
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read table rows: %w", err)
+	}
+
+	return counts, nil
+}
+
+func withRows(tables []Table, counts map[string]int64) []Table {
+	for i, table := range tables {
+		count, ok := counts[table.Name]
+		if !ok {
+			continue
+		}
+
+		tables[i].Rows = count
+	}
+
+	return tables
+}
+
+// countLookupTables reads the exact row count of the historian's own plain tables.
+// The planner estimate they would otherwise carry is zero until autovacuum first
+// analyses them, which on a small, rarely-written lookup table may never happen:
+// tag and topic both held ten rows and reported reltuples of zero. These tables
+// are bounded by how many distinct tags exist rather than by ingest rate, so
+// counting them outright is affordable where counting a hypertable is not.
+func countLookupTables(ctx context.Context, pool *pgxpool.Pool, tables []Table) (map[string]int64, error) {
+	selects := make([]string, 0, len(tables))
+
+	for _, table := range tables {
+		if table.IsHypertable || !historianCreated(table.Name) || !safeTableName(table.Name) {
+			continue
+		}
+
+		selects = append(selects, fmt.Sprintf(
+			`SELECT '%s', count(*)::bigint FROM %s.%s`, table.Name, historianSchema, table.Name))
+	}
+
+	if len(selects) == 0 {
+		return map[string]int64{}, nil
+	}
+
+	rows, err := pool.Query(ctx, strings.Join(selects, " UNION ALL "))
+	if err != nil {
+		return nil, fmt.Errorf("count lookup tables: %w", err)
+	}
+	defer rows.Close()
+
+	counts := map[string]int64{}
+
+	for rows.Next() {
+		var name string
+
+		var count int64
+		if err := rows.Scan(&name, &count); err != nil {
+			return nil, fmt.Errorf("scan lookup table count: %w", err)
+		}
+
+		counts[name] = count
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("count lookup tables: %w", err)
+	}
+
+	return counts, nil
 }
