@@ -36,17 +36,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// historianMetricsCollector reads one database and returns what it found. The
-// action's own behaviour is reading config, building a DSN and mapping a failure
-// to a reply; keeping the read behind a field lets specs exercise that without a
-// database.
-type historianMetricsCollector func(ctx context.Context, dsn string) (timescalemetrics.Metrics, error)
-
 // GetHistorianMetricsAction implements the Action interface for reading the
 // historian database state. All fields are immutable after construction.
 type GetHistorianMetricsAction struct {
 	configManager   config.ConfigManager
-	collect         historianMetricsCollector
 	outboundChannel chan *models.UMHMessage
 	actionLogger    *zap.SugaredLogger
 
@@ -69,7 +62,6 @@ func NewGetHistorianMetricsAction(
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
-		collect:         collectOverNewConnection,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
 	}
 }
@@ -130,7 +122,7 @@ func (a *GetHistorianMetricsAction) Execute() (interface{}, map[string]interface
 			models.ErrHistorianMetricsFailed, nil, "")
 	}
 
-	metrics, err := a.collect(ctx, cfg.Historian.Timescale.ToDSN())
+	metrics, err := collectOverNewConnection(ctx, cfg.Historian.Timescale.ToDSN())
 	if err != nil {
 		return a.fail(fmt.Sprintf("Failed to read the historian database: %v", err),
 			models.ErrHistorianMetricsFailed, err, "historian_metrics_read_failed")
