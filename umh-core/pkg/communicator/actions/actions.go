@@ -520,6 +520,8 @@ func newActionFromPayload(
 		return NewEditHistorianAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	case models.GetHistorian:
 		return NewGetHistorianAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.GetHistorianMetrics:
+		return NewGetHistorianMetricsAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	case models.DeleteHistorian:
 		return NewDeleteHistorianAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	}
