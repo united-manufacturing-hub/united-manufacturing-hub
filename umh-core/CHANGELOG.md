@@ -5,6 +5,7 @@
 ### Improvements
 
 - The CPU status of an instance whose operating system does not report CPU pressure stats now links to instructions for switching them on
+- Removed stale documentation on using references within data models
 
 ## [0.44.40]
 
