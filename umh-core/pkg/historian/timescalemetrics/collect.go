@@ -106,6 +106,31 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 	return metrics, nil
 }
 
+// queryAll runs one query and converts every row with row, naming the read in
+// both error paths so a failure says which of them it was. pgx closes the rows
+// and reports a mid-iteration failure through the returned error.
+// https://pkg.go.dev/github.com/jackc/pgx/v5#CollectRows
+func queryAll[T any](
+	ctx context.Context,
+	db Querier,
+	query string,
+	what string,
+	row pgx.RowToFunc[T],
+	args ...any,
+) ([]T, error) {
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", what, err)
+	}
+
+	values, err := pgx.CollectRows(rows, row)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", what, err)
+	}
+
+	return values, nil
+}
+
 func readVersions(ctx context.Context, db Querier, metrics *Metrics) error {
 	var timescaleVersion *string
 	if err := db.QueryRow(ctx, versionQuery).Scan(&metrics.ServerVersion, &timescaleVersion); err != nil {
@@ -122,156 +147,83 @@ func readVersions(ctx context.Context, db Querier, metrics *Metrics) error {
 }
 
 func readHypertables(ctx context.Context, db Querier) ([]Table, error) {
-	rows, err := db.Query(ctx, tablesQuery, historianSchema)
-	if err != nil {
-		return nil, fmt.Errorf("read tables: %w", err)
-	}
-	defer rows.Close()
+	return queryAll(ctx, db, tablesQuery, "tables", rowToHypertable, historianSchema)
+}
 
-	var tables []Table
+// rowToHypertable scans tablesQuery, whose columns are ordered to read as SQL
+// rather than to match Table field for field.
+func rowToHypertable(row pgx.CollectableRow) (Table, error) {
+	table := Table{IsHypertable: true}
+	err := row.Scan(
+		&table.Name,
+		&table.UncompressedBytes,
+		&table.CompressedBytes,
+		&table.Bytes,
+		&table.ChunkIntervalSeconds,
+		&table.CompressAfterSeconds,
+		&table.DropAfterSeconds,
+		&table.Chunks,
+		&table.CompressedChunks,
+	)
 
-	for rows.Next() {
-		table := Table{IsHypertable: true}
-		if err := rows.Scan(
-			&table.Name,
-			&table.UncompressedBytes,
-			&table.CompressedBytes,
-			&table.Bytes,
-			&table.ChunkIntervalSeconds,
-			&table.CompressAfterSeconds,
-			&table.DropAfterSeconds,
-			&table.Chunks,
-			&table.CompressedChunks,
-		); err != nil {
-			return nil, fmt.Errorf("scan table: %w", err)
-		}
-
-		tables = append(tables, table)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read tables: %w", err)
-	}
-
-	return tables, nil
+	return table, err
 }
 
 func readPlainTables(ctx context.Context, db Querier) ([]Table, error) {
-	rows, err := db.Query(ctx, regularTablesQuery, historianSchema)
-	if err != nil {
-		return nil, fmt.Errorf("read regular tables: %w", err)
-	}
-	defer rows.Close()
+	return queryAll(ctx, db, regularTablesQuery, "regular tables", rowToPlainTable, historianSchema)
+}
 
-	var tables []Table
+func rowToPlainTable(row pgx.CollectableRow) (Table, error) {
+	var table Table
+	err := row.Scan(&table.Name, &table.Bytes, &table.Rows)
 
-	for rows.Next() {
-		var table Table
-		if err := rows.Scan(&table.Name, &table.Bytes, &table.Rows); err != nil {
-			return nil, fmt.Errorf("scan regular table: %w", err)
-		}
-
-		tables = append(tables, table)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read regular tables: %w", err)
-	}
-
-	return tables, nil
+	return table, err
 }
 
 func readJobs(ctx context.Context, db Querier) ([]Job, error) {
-	rows, err := db.Query(ctx, jobsListQuery, historianSchema)
-	if err != nil {
-		return nil, fmt.Errorf("read jobs: %w", err)
-	}
-	defer rows.Close()
-
-	var jobs []Job
-
-	for rows.Next() {
-		var job Job
-		if err := rows.Scan(
-			&job.Kind,
-			&job.Table,
-			&job.Status,
-			&job.ScheduleSeconds,
-			&job.LastSuccessSeconds,
-			&job.NextRunSeconds,
-			&job.Failures,
-		); err != nil {
-			return nil, fmt.Errorf("scan job: %w", err)
-		}
-
-		jobs = append(jobs, job)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read jobs: %w", err)
-	}
-
-	return jobs, nil
+	return queryAll(ctx, db, jobsListQuery, "jobs", pgx.RowToStructByPos[Job], historianSchema)
 }
 
 // readTimeColumnTables names the hypertables whose time dimension is ts, which
 // is the column the per-table timestamp reads take a max and min of.
 func readTimeColumnTables(ctx context.Context, db Querier) (map[string]bool, error) {
-	rows, err := db.Query(ctx, tsHypertablesQuery, historianSchema)
+	names, err := queryAll(ctx, db, tsHypertablesQuery, "time columns", pgx.RowTo[string], historianSchema)
 	if err != nil {
-		return nil, fmt.Errorf("read time columns: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
 
-	readable := map[string]bool{}
-
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan time column: %w", err)
-		}
-
+	readable := make(map[string]bool, len(names))
+	for _, name := range names {
 		readable[name] = true
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read time columns: %w", err)
 	}
 
 	return readable, nil
 }
 
 func readTableRows(ctx context.Context, db Querier) (map[string]int64, error) {
-	rows, err := db.Query(ctx, tableRowsQuery, historianSchema)
+	pairs, err := queryAll(ctx, db, tableRowsQuery, "table rows", rowToNamedValue, historianSchema)
 	if err != nil {
-		return nil, fmt.Errorf("read table rows: %w", err)
-	}
-	defer rows.Close()
-
-	counts, err := scanNamedValues(rows)
-	if err != nil {
-		return nil, fmt.Errorf("read table rows: %w", err)
+		return nil, err
 	}
 
-	return counts, nil
+	return valuesByName(pairs), nil
 }
 
-// scanNamedValues reads rows of (name, value) into a map.
-func scanNamedValues(rows pgx.Rows) (map[string]int64, error) {
-	values := map[string]int64{}
+// namedValue is one row of a query that reports a single figure per table.
+type namedValue struct {
+	Name  string
+	Value int64
+}
 
-	for rows.Next() {
-		var name string
+var rowToNamedValue = pgx.RowToStructByPos[namedValue]
 
-		var value int64
-		if err := rows.Scan(&name, &value); err != nil {
-			return nil, err
-		}
-
-		values[name] = value
+func valuesByName(pairs []namedValue) map[string]int64 {
+	values := make(map[string]int64, len(pairs))
+	for _, pair := range pairs {
+		values[pair.Name] = pair.Value
 	}
 
-	return values, rows.Err()
+	return values
 }
 
 // timestampAt turns a Unix epoch into an RFC 3339 instant, or an empty string
