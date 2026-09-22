@@ -87,12 +87,8 @@ type Job struct {
 // Metrics is the aggregate operational picture of the historian database,
 // embedded into TimescaleStatus so its fields flatten to the top JSON level.
 type Metrics struct {
-	ServerVersion    string `json:"serverVersion"`
-	TimescaleVersion string `json:"timescaleVersion"`
-	// LastJobError is the most recent background-job failure message. A bare
-	// failure count says nothing an operator can act on; this names the table and
-	// the reason.
-	LastJobError      string `json:"lastJobError"`
+	ServerVersion     string `json:"serverVersion"`
+	TimescaleVersion  string `json:"timescaleVersion"`
 	DatabaseBytes     int64  `json:"databaseBytes"`
 	UncompressedBytes int64  `json:"uncompressedBytes"`
 	CompressedBytes   int64  `json:"compressedBytes"`
@@ -139,17 +135,6 @@ const jobsQuery = `SELECT count(*), count(*) FILTER (WHERE s.last_run_status = '
   FROM timescaledb_information.jobs j
   LEFT JOIN timescaledb_information.job_stats s USING (job_id)
  WHERE j.hypertable_schema = $1`
-
-// lastJobErrorQuery names the most recent background-job failure. job_errors has no
-// schema column, so scoping to the historian's own jobs means joining back to jobs
-// on job_id -- otherwise the built-in policy_telemetry job, which fails on every run
-// of an air-gapped deployment and carries an empty message, is what surfaces.
-const lastJobErrorQuery = `SELECT e.err_message
-  FROM timescaledb_information.job_errors e
-  JOIN timescaledb_information.jobs j USING (job_id)
- WHERE j.hypertable_schema = $1 AND coalesce(e.err_message, '') <> ''
- ORDER BY e.start_time DESC
- LIMIT 1`
 
 // tablesQuery reads every hypertable's storage, chunking and policies in one pass.
 // The before-and-after sizes come from the catalog, which holds them per chunk
@@ -418,12 +403,6 @@ func collectMetrics(ctx context.Context, db Querier) (Metrics, error) {
 	if err := db.QueryRow(ctx, compressionQuery, historianSchema).
 		Scan(&metrics.UncompressedBytes, &metrics.CompressedBytes); err != nil {
 		return metrics, fmt.Errorf("read compression totals: %w", err)
-	}
-
-	// No failure recorded is the normal case, not an error.
-	if err := db.QueryRow(ctx, lastJobErrorQuery, historianSchema).Scan(&metrics.LastJobError); err != nil &&
-		!errors.Is(err, pgx.ErrNoRows) {
-		return metrics, fmt.Errorf("read last job error: %w", err)
 	}
 
 	tables, err := collectTables(ctx, db)
