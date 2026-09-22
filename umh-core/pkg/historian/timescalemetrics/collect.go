@@ -33,9 +33,9 @@ type Querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// Table is one hypertable's storage, chunking and policy settings. The
-// aggregates beside it answer whether the historian as a whole compresses and
-// expires data; this answers which table does not.
+// Table is one table's storage, chunking and policy settings. A plain lookup
+// table carries only a name, a size and a row count: the rest describes chunking,
+// which it has none of.
 type Table struct {
 	Name string `json:"name"`
 	// Bytes is what the table occupies on disk now: the compressed chunks at their
@@ -58,8 +58,10 @@ type Table struct {
 	// the same as a row stamped in 1970.
 	NewestTimestamp string `json:"newestTimestamp"`
 	OldestTimestamp string `json:"oldestTimestamp"`
-	// Rows is approximate, read from planner statistics rather than by counting:
-	// an exact count scans every chunk, which a historian cannot afford.
+	// Rows is exact for a compressed chunk, which records its own pre-compression
+	// count, and for the small lookup tables, which are counted outright. The rest
+	// is the planner's estimate: counting every chunk is what a historian cannot
+	// afford.
 	Rows             int64 `json:"rows"`
 	Chunks           int   `json:"chunks"`
 	CompressedChunks int   `json:"compressedChunks"`
@@ -219,15 +221,10 @@ func timestampAt(epoch int64) string {
 	return time.Unix(epoch, 0).UTC().Format(time.RFC3339)
 }
 
-func assignOldestTimestamps(tables []Table, epochs map[string]int64) {
+func assignTimestamps(tables []Table, oldest, newest map[string]int64) {
 	for i := range tables {
-		tables[i].OldestTimestamp = timestampAt(epochs[tables[i].Name])
-	}
-}
-
-func assignNewestTimestamps(tables []Table, epochs map[string]int64) {
-	for i := range tables {
-		tables[i].NewestTimestamp = timestampAt(epochs[tables[i].Name])
+		tables[i].OldestTimestamp = timestampAt(oldest[tables[i].Name])
+		tables[i].NewestTimestamp = timestampAt(newest[tables[i].Name])
 	}
 }
 
@@ -242,13 +239,6 @@ func assignRowCounts(tables []Table, counts map[string]int64) {
 	}
 }
 
-// collectMetrics reads the historian database's aggregate operational picture.
-//
-// The reads run cheapest-first and pg_database_size runs last, because it is the
-// only one whose cost grows with the deployment: it stats every file backing the
-// database, which tracks chunk count rather than stored bytes. A deployment large
-// enough to make it slow therefore loses only DatabaseBytes, and returns every
-// metric collected before it.
 // collectPerTable runs one statement built from a per-table select, joined with
 // UNION ALL, and returns the value each table reported. A table name cannot be
 // bound as a parameter, so keep decides which tables qualify and safeTableName
@@ -316,27 +306,18 @@ func scanNamedValues(rows pgx.Rows) (map[string]int64, error) {
 	return values, rows.Err()
 }
 
-// collectNewestTimestamps reads the newest row of each hypertable. Only
-// hypertables with a ts column qualify: the others carry no time column to take a
-// max of.
-func collectNewestTimestamps(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
-	readable, err := timeColumnTables(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	return collectPerTable(ctx, db, tables, newestTimestampQuery, "newest timestamps",
-		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
-}
-
-// collectOldestTimestamps reads the oldest row of each hypertable.
-func collectOldestTimestamps(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
-	readable, err := timeColumnTables(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	return collectPerTable(ctx, db, tables, oldestTimestampQuery, "oldest timestamps",
+// collectTimestamps reads one end of each hypertable's time column. Only
+// hypertables that have one qualify, which is what readable names: the others
+// carry no ts to take a max or min of.
+func collectTimestamps(
+	ctx context.Context,
+	db Querier,
+	tables []Table,
+	query string,
+	what string,
+	readable map[string]bool,
+) (map[string]int64, error) {
+	return collectPerTable(ctx, db, tables, query, what,
 		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
 }
 
@@ -351,6 +332,13 @@ func countLookupTables(ctx context.Context, db Querier, tables []Table) (map[str
 		func(table Table) bool { return !table.IsHypertable && historianCreated(table.Name) })
 }
 
+// collectMetrics reads the historian database's aggregate operational picture.
+//
+// The reads run cheapest-first and pg_database_size runs last, because it is the
+// only one whose cost grows with the deployment: it stats every file backing the
+// database, which tracks chunk count rather than stored bytes. A deployment large
+// enough to make it slow therefore loses only DatabaseBytes, and returns every
+// metric collected before it.
 func collectMetrics(ctx context.Context, db Querier) (Metrics, error) {
 	var metrics Metrics
 
@@ -510,21 +498,33 @@ func collectRegularTables(ctx context.Context, db Querier) ([]Table, error) {
 	return tables, nil
 }
 
-// Collect reads every figure the historian metrics view shows: the catalog
-// aggregates, per-table storage and policies, the background jobs, and when each
-// hypertable was first and last written. Its only bound is ctx.
+// Collect reads every figure the historian metrics view shows: the versions and
+// database size, per-table storage and policies, the background jobs, and the
+// oldest and newest timestamp each hypertable holds. Its only bound is ctx.
+//
+// The tables this product did not create are dropped before the per-table reads,
+// so a customer's own table in the schema is never queried.
 func Collect(ctx context.Context, db Querier) (Metrics, error) {
 	metrics, err := collectMetrics(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
 
-	newest, err := collectNewestTimestamps(ctx, db, metrics.Tables)
+	metrics.Tables = historianTables(metrics.Tables)
+
+	readable, err := timeColumnTables(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
 
-	oldest, err := collectOldestTimestamps(ctx, db, metrics.Tables)
+	newest, err := collectTimestamps(ctx, db, metrics.Tables,
+		newestTimestampQuery, "newest timestamps", readable)
+	if err != nil {
+		return metrics, err
+	}
+
+	oldest, err := collectTimestamps(ctx, db, metrics.Tables,
+		oldestTimestampQuery, "oldest timestamps", readable)
 	if err != nil {
 		return metrics, err
 	}
@@ -545,11 +545,8 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 
 	metrics.DataSpanSeconds = dataSpanSeconds(oldest, newest)
 
-	assignNewestTimestamps(metrics.Tables, newest)
-	assignOldestTimestamps(metrics.Tables, oldest)
+	assignTimestamps(metrics.Tables, oldest, newest)
 	assignRowCounts(metrics.Tables, rowCounts)
-
-	metrics.Tables = historianTables(metrics.Tables)
 
 	return metrics, nil
 }

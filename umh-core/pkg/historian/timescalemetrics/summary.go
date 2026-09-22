@@ -25,8 +25,8 @@ import (
 //
 // FailedJobs counts jobs that exist and are not working. A historian with no
 // policies at all has no jobs to fail, so a zero here is not on its own proof
-// that data is being compressed or expired; the policy counts answer that and are
-// read on request.
+// that data is being compressed or expired; the job list read on request says
+// which policies exist.
 type Summary struct {
 	TableNames []string `json:"tableNames"`
 	FailedJobs int      `json:"failedJobs"`

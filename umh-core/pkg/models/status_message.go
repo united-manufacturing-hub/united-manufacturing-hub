@@ -68,8 +68,8 @@ type Timescale struct {
 	TableNames []string `json:"tableNames,omitempty"`
 	// FailedJobs counts background jobs that exist and are not working. A
 	// historian with no policies has no jobs to fail, so zero here is not proof
-	// that data is compressed or expired -- the policy counts answer that and are
-	// read on request.
+	// that data is compressed or expired -- the job list read on request says
+	// which policies exist.
 	FailedJobs int `json:"failedJobs"`
 }
 
