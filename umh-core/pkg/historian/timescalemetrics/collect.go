@@ -66,14 +66,6 @@ type Table struct {
 	IsHypertable     bool  `json:"isHypertable"`
 }
 
-// OtherTables summarises the tables in the historian schema that this product did
-// not create.
-type OtherTables struct {
-	Tables int   `json:"tables"`
-	Bytes  int64 `json:"bytes"`
-	Rows   int64 `json:"rows"`
-}
-
 type Job struct {
 	Kind               string `json:"kind"`
 	Table              string `json:"table"`
@@ -87,22 +79,14 @@ type Job struct {
 // Metrics is the aggregate operational picture of the historian database,
 // embedded into TimescaleStatus so its fields flatten to the top JSON level.
 type Metrics struct {
-	ServerVersion     string `json:"serverVersion"`
-	TimescaleVersion  string `json:"timescaleVersion"`
-	DatabaseBytes     int64  `json:"databaseBytes"`
-	UncompressedBytes int64  `json:"uncompressedBytes"`
-	CompressedBytes   int64  `json:"compressedBytes"`
+	ServerVersion    string `json:"serverVersion"`
+	TimescaleVersion string `json:"timescaleVersion"`
+	DatabaseBytes    int64  `json:"databaseBytes"`
 	// DataSpanSeconds is the period the data covers, from the oldest row in any
-	// table to the newest. Divided into DatabaseBytes it gives a growth rate.
-	DataSpanSeconds  int64   `json:"dataSpanSeconds"`
-	Hypertables      int     `json:"hypertables"`
-	Chunks           int     `json:"chunks"`
-	CompressedChunks int     `json:"compressedChunks"`
-	Tables           []Table `json:"tables"`
-	// OtherTables aggregates every table in the schema the historian did not
-	// create, so the database size stays explainable without listing them.
-	OtherTables OtherTables `json:"otherTables"`
-	JobList     []Job       `json:"jobList"`
+	// table to the newest.
+	DataSpanSeconds int64   `json:"dataSpanSeconds"`
+	Tables          []Table `json:"tables"`
+	JobList         []Job   `json:"jobList"`
 }
 
 const historianSchema = "umh"
@@ -113,20 +97,6 @@ var errTimescaleMissing = errors.New("timescaledb extension is not installed")
 
 const versionQuery = `SELECT current_setting('server_version'),
        (SELECT extversion FROM pg_extension WHERE extname = 'timescaledb')`
-
-const countsQuery = `SELECT count(DISTINCT h.id), count(ch.id), count(ch.compressed_chunk_id)
-  FROM _timescaledb_catalog.hypertable h
-  LEFT JOIN _timescaledb_catalog.chunk ch
-    ON ch.hypertable_id = h.id AND NOT ch.dropped
- WHERE h.schema_name = $1`
-
-const compressionQuery = `SELECT
-       coalesce(sum(s.uncompressed_heap_size + s.uncompressed_index_size + s.uncompressed_toast_size), 0),
-       coalesce(sum(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size), 0)
-  FROM _timescaledb_catalog.compression_chunk_size s
-  JOIN _timescaledb_catalog.chunk ch ON ch.id = s.chunk_id
-  JOIN _timescaledb_catalog.hypertable h ON h.id = ch.hypertable_id
- WHERE h.schema_name = $1`
 
 // jobsQuery is scoped to the historian schema so it excludes the built-in
 // policy_telemetry job, which carries no hypertable and fails on every run of an
@@ -395,16 +365,6 @@ func collectMetrics(ctx context.Context, db Querier) (Metrics, error) {
 
 	metrics.TimescaleVersion = *timescaleVersion
 
-	if err := db.QueryRow(ctx, countsQuery, historianSchema).
-		Scan(&metrics.Hypertables, &metrics.Chunks, &metrics.CompressedChunks); err != nil {
-		return metrics, fmt.Errorf("read table counts: %w", err)
-	}
-
-	if err := db.QueryRow(ctx, compressionQuery, historianSchema).
-		Scan(&metrics.UncompressedBytes, &metrics.CompressedBytes); err != nil {
-		return metrics, fmt.Errorf("read compression totals: %w", err)
-	}
-
 	tables, err := collectTables(ctx, db)
 	if err != nil {
 		return metrics, err
@@ -589,7 +549,7 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 	assignOldestTimestamps(metrics.Tables, oldest)
 	assignRowCounts(metrics.Tables, rowCounts)
 
-	metrics.Tables, metrics.OtherTables = splitForeignTables(metrics.Tables)
+	metrics.Tables = historianTables(metrics.Tables)
 
 	return metrics, nil
 }
@@ -614,28 +574,19 @@ func historianCreated(name string) bool {
 	return false
 }
 
-// splitForeignTables separates the historian's own tables from everything else in
-// the schema. The rest are counted and summed rather than listed: they are not
-// this product's to explain, but they occupy disk the reported database size
-// includes, so dropping them silently would leave the total unaccounted for.
-func splitForeignTables(tables []Table) ([]Table, OtherTables) {
+// historianTables drops every table in the schema this product did not create: a
+// customer's own table alongside ours says nothing about how the historian is
+// doing, and its columns would all read as absent.
+func historianTables(tables []Table) []Table {
 	kept := make([]Table, 0, len(tables))
-
-	var others OtherTables
 
 	for _, table := range tables {
 		if historianCreated(table.Name) {
 			kept = append(kept, table)
-
-			continue
 		}
-
-		others.Tables++
-		others.Bytes += table.Bytes
-		others.Rows += table.Rows
 	}
 
-	return kept, others
+	return kept
 }
 
 func tableRows(ctx context.Context, db Querier) (map[string]int64, error) {

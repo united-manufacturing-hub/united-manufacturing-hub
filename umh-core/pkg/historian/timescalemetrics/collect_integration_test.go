@@ -166,11 +166,6 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(metrics.ServerVersion).To(HavePrefix("17."))
 		Expect(metrics.TimescaleVersion).To(Equal("2.24.0"))
-		Expect(metrics.Hypertables).To(Equal(2))
-		Expect(metrics.Chunks).To(BeNumerically(">", 0))
-		Expect(metrics.CompressedChunks).To(BeNumerically(">", 0))
-		Expect(metrics.UncompressedBytes).To(BeNumerically(">", 0))
-		Expect(metrics.CompressedBytes).To(BeNumerically(">", 0))
 		Expect(metrics.DatabaseBytes).To(BeNumerically(">", 0))
 	})
 
@@ -255,7 +250,6 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		Expect(byName["tag"].IsHypertable).To(BeFalse())
 		Expect(byName["tag"].Bytes).To(BeNumerically(">", 0))
 		Expect(byName["value_bench"].IsHypertable).To(BeTrue())
-		Expect(metrics.Hypertables).To(Equal(2), "a regular table is not counted as a hypertable")
 	})
 
 	It("leaves the migration bookkeeping table out of the listing", func() {
@@ -614,11 +608,6 @@ ANALYZE umh.customer_export;`)
 
 		Expect(names).NotTo(ContainElement("customer_export"))
 		Expect(names).NotTo(ContainElement("scratch_notes"))
-		Expect(names).NotTo(ContainElement("others"), "foreign tables are an aggregate, not a row")
-
-		Expect(metrics.OtherTables.Tables).To(Equal(2))
-		Expect(metrics.OtherTables.Bytes).To(BeNumerically(">", 0),
-			"the disk they occupy is reported, so the database size still adds up")
 	})
 
 	It("keeps the tables the historian does create", func() {
@@ -636,7 +625,6 @@ ANALYZE umh.customer_export;`)
 
 		Expect(names).To(ContainElement("value_bench"))
 		Expect(names).To(ContainElement("attribute_bench"))
-		Expect(metrics.OtherTables.Tables).To(BeZero(), "nothing foreign exists in this fixture")
 	})
 })
 
