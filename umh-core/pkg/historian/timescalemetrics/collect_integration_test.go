@@ -161,7 +161,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred(), "the historian schema is created")
 
-		metrics, err := collectMetrics(ctx, pool)
+		metrics, err := Collect(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(metrics.ServerVersion).To(HavePrefix("17."))
@@ -174,10 +174,10 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		jobs, err := readJobs(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.JobList).To(HaveLen(2), "one compression policy per hypertable")
+		Expect(jobs).To(HaveLen(2), "one compression policy per hypertable")
 	})
 
 	It("reads the last write per table", func() {
@@ -185,13 +185,13 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		readable, err := timeColumnTables(ctx, pool)
+		readable, err := readTimeColumnTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectTimestamps(ctx, pool, metrics.Tables,
+		writes, err := collectTimestamps(ctx, pool, tables,
 			newestTimestampQuery, "newest timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -207,13 +207,13 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY, name text)`)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		readable, err := timeColumnTables(ctx, pool)
+		readable, err := readTimeColumnTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectTimestamps(ctx, pool, metrics.Tables,
+		writes, err := collectTimestamps(ctx, pool, tables,
 			newestTimestampQuery, "newest timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred(), "a regular table must not fail the whole read")
@@ -226,7 +226,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		readable, err := timeColumnTables(ctx, pool)
+		readable, err := readTimeColumnTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
 		writes, err := collectTimestamps(ctx, pool, []Table{
@@ -249,11 +249,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY, name text)`)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
 		byName := map[string]Table{}
-		for _, table := range metrics.Tables {
+		for _, table := range tables {
 			byName[table.Name] = table
 		}
 
@@ -274,11 +274,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY)`)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
 		names := []string{}
-		for _, table := range metrics.Tables {
+		for _, table := range tables {
 			names = append(names, table.Name)
 		}
 
@@ -296,13 +296,13 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err = pool.Exec(ctx, `SELECT create_hypertable('umh.custom_metric', 'event_time')`)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		readable, err := timeColumnTables(ctx, pool)
+		readable, err := readTimeColumnTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectTimestamps(ctx, pool, metrics.Tables,
+		writes, err := collectTimestamps(ctx, pool, tables,
 			newestTimestampQuery, "newest timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred(), "one unreadable table must not fail every table's freshness")
@@ -315,11 +315,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		jobs, err := readJobs(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.JobList).To(HaveLen(2), "a healthy job is still worth reporting")
-		for _, job := range metrics.JobList {
+		Expect(jobs).To(HaveLen(2), "a healthy job is still worth reporting")
+		for _, job := range jobs {
 			Expect(job.Table).To(BeElementOf("value_bench", "attribute_bench"))
 			Expect(job.ScheduleSeconds).To(BeNumerically(">", 0))
 			Expect(job.Failures).To(BeZero())
@@ -348,15 +348,15 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			ON CONFLICT (job_id) DO UPDATE SET last_run_success = false, total_failures = 3`, jobID)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		jobs, err := readJobs(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.JobList).To(HaveLen(2), "the healthy job is listed alongside the failing one")
-		Expect(metrics.JobList[0].Failures).To(Equal(3), "the failing job sorts first")
-		Expect(metrics.JobList[0].Kind).To(Equal("compression"))
-		Expect(metrics.JobList[0].Table).To(BeElementOf("value_bench", "attribute_bench"))
-		Expect(metrics.JobList[0].ScheduleSeconds).To(BeNumerically(">", 0))
-		Expect(metrics.JobList[1].Failures).To(BeZero())
+		Expect(jobs).To(HaveLen(2), "the healthy job is listed alongside the failing one")
+		Expect(jobs[0].Failures).To(Equal(3), "the failing job sorts first")
+		Expect(jobs[0].Kind).To(Equal("compression"))
+		Expect(jobs[0].Table).To(BeElementOf("value_bench", "attribute_bench"))
+		Expect(jobs[0].ScheduleSeconds).To(BeNumerically(">", 0))
+		Expect(jobs[1].Failures).To(BeZero())
 	})
 
 	It("ignores the built-in telemetry job, which fails on an air-gapped host", func() {
@@ -370,16 +370,16 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		).Scan(&telemetryFailures)).To(Succeed())
 		Expect(telemetryFailures).To(Equal(1), "the telemetry job exists and is not counted below")
 
-		metrics, err := collectMetrics(ctx, pool)
+		jobs, err := readJobs(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.JobList).To(HaveLen(2), "only the two umh compression policies")
+		Expect(jobs).To(HaveLen(2), "only the two umh compression policies")
 	})
 
 	It("fails against a plain Postgres with no TimescaleDB extension", func() {
 		pool := startDatabase(postgresImage)
 
-		_, err := collectMetrics(ctx, pool)
+		_, err := Collect(ctx, pool)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -397,11 +397,11 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)), "168h")
-		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(BeZero(),
+		Expect(tableNamed(tables, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)), "168h")
+		Expect(tableNamed(tables, "value_bench").DropAfterSeconds).To(BeZero(),
 			"nothing expires, so the database grows forever")
 	})
 
@@ -412,10 +412,10 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		_, err = pool.Exec(ctx, retentionSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
+		Expect(tableNamed(tables, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
 	})
 
 	It("reports each table's own interval when they disagree", func() {
@@ -425,19 +425,36 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		_, err = pool.Exec(ctx, driftedPolicyDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
-		Expect(tableNamed(metrics, "attribute_bench").CompressAfterSeconds).To(Equal(int64(1209600)),
+		Expect(tableNamed(tables, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
+		Expect(tableNamed(tables, "attribute_bench").CompressAfterSeconds).To(Equal(int64(1209600)),
 			"the drift is visible per table, which is where the console reads it")
 	})
 })
 
+// readTables is what the table listing looks like before Collect filters it: the
+// hypertables and the plain tables of the historian schema, foreign ones
+// included, which is what the specs below assert against.
+func readTables(ctx context.Context, db Querier) ([]Table, error) {
+	hypertables, err := readHypertables(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	plainTables, err := readPlainTables(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(hypertables, plainTables...), nil
+}
+
 // tableNamed returns the reported entry for one hypertable, failing the spec when
 // it is absent so the assertion that follows reads against a real value.
-func tableNamed(metrics Metrics, name string) Table {
-	for _, table := range metrics.Tables {
+func tableNamed(tables []Table, name string) Table {
+	for _, table := range tables {
 		if table.Name == name {
 			return table
 		}
@@ -460,11 +477,11 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.Tables).To(HaveLen(2))
-		Expect([]string{metrics.Tables[0].Name, metrics.Tables[1].Name}).
+		Expect(tables).To(HaveLen(2))
+		Expect([]string{tables[0].Name, tables[1].Name}).
 			To(ConsistOf("attribute_bench", "value_bench"))
 	})
 
@@ -473,10 +490,10 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		value := tableNamed(metrics, "value_bench")
+		value := tableNamed(tables, "value_bench")
 		Expect(value.Chunks).To(BeNumerically(">", 0))
 		Expect(value.CompressedChunks).To(BeNumerically(">", 0))
 		Expect(value.UncompressedBytes).To(BeNumerically(">", 0))
@@ -494,10 +511,10 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 			  FROM generate_series(1, 20000) n`)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		value := tableNamed(metrics, "value_bench")
+		value := tableNamed(tables, "value_bench")
 		Expect(value.CompressedChunks).To(BeNumerically("<", value.Chunks),
 			"the rows just written are in chunks no policy has compressed yet")
 		Expect(value.Bytes).To(BeNumerically(">", value.CompressedBytes),
@@ -509,10 +526,10 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(tableNamed(metrics, "value_bench").ChunkIntervalSeconds).To(Equal(int64(604800)), "168h")
+		Expect(tableNamed(tables, "value_bench").ChunkIntervalSeconds).To(Equal(int64(604800)), "168h")
 	})
 
 	It("reports each table's own policies, so a table without retention is visible", func() {
@@ -522,13 +539,13 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		_, err = pool.Exec(ctx, retentionSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := collectMetrics(ctx, pool)
+		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
-		Expect(tableNamed(metrics, "attribute_bench").DropAfterSeconds).To(BeZero(),
+		Expect(tableNamed(tables, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
+		Expect(tableNamed(tables, "attribute_bench").DropAfterSeconds).To(BeZero(),
 			"this table expires nothing, which the aggregate alone would hide")
-		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
+		Expect(tableNamed(tables, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
 	})
 })
 
@@ -574,7 +591,7 @@ var _ = Describe("Per-table rows and timespan", Label("integration"), func() {
 		// The fixture inserts 200 rows. The count is approximate by design, read
 		// from planner statistics rather than by scanning, so it is asserted as a
 		// range: an exact count is unaffordable on a real historian.
-		Expect(tableNamed(metrics, "value_bench").Rows).To(BeNumerically("~", 200, 20))
+		Expect(tableNamed(metrics.Tables, "value_bench").Rows).To(BeNumerically("~", 200, 20))
 	})
 
 	It("reports how long ago the first entry was, giving each table its own span", func() {
@@ -585,7 +602,7 @@ var _ = Describe("Per-table rows and timespan", Label("integration"), func() {
 		metrics, err := Collect(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		table := tableNamed(metrics, "value_bench")
+		table := tableNamed(metrics.Tables, "value_bench")
 
 		oldestRow, err := time.Parse(time.RFC3339, table.OldestTimestamp)
 		Expect(err).NotTo(HaveOccurred(), "the first write is a parseable timestamp")
@@ -659,7 +676,7 @@ var _ = Describe("Stale and small tables", Label("integration"), func() {
 		metrics, err := Collect(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		newestRow, err := time.Parse(time.RFC3339, tableNamed(metrics, "value_bench").NewestTimestamp)
+		newestRow, err := time.Parse(time.RFC3339, tableNamed(metrics.Tables, "value_bench").NewestTimestamp)
 		Expect(err).NotTo(HaveOccurred(), "a table silent for months still reports when it last wrote")
 		Expect(newestRow).To(BeTemporally("<", time.Now().Add(-89*24*time.Hour)))
 	})
@@ -677,7 +694,7 @@ INSERT INTO umh.tag (name) SELECT 'tag_' || g FROM generate_series(1, 10) AS g;`
 		metrics, err := Collect(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(tableNamed(metrics, "tag").Rows).To(Equal(int64(10)))
+		Expect(tableNamed(metrics.Tables, "tag").Rows).To(Equal(int64(10)))
 	})
 })
 

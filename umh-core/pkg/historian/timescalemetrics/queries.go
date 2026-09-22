@@ -50,14 +50,10 @@ const tablesQuery = `SELECT h.table_name,
  GROUP BY h.table_name
  ORDER BY h.table_name`
 
-// jobsQuery is scoped to the historian schema so it excludes the built-in
+// jobsListQuery is scoped to the historian schema so it excludes the built-in
 // policy_telemetry job, which carries no hypertable and fails on every run of an
-// air-gapped deployment. Counting it would report a permanent false failure.
-const jobsQuery = `SELECT count(*), count(*) FILTER (WHERE s.last_run_status = 'Failed')
-  FROM timescaledb_information.jobs j
-  LEFT JOIN timescaledb_information.job_stats s USING (job_id)
- WHERE j.hypertable_schema = $1`
-
+// air-gapped deployment. Listing it would report a permanent false failure. Its
+// column order matches Job field for field, which is what lets pgx map the row.
 const jobsListQuery = `SELECT
        CASE j.proc_name
          WHEN 'policy_compression' THEN 'compression'
