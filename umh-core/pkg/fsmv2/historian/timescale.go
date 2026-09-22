@@ -143,7 +143,7 @@ type Deps struct {
 	*deps.BaseDependencies
 
 	pool    *poolHolder
-	summary *summarySchedule
+	summary *summaryCache
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -303,38 +303,36 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		deps.String("auth", string(models.TimescaleAuthValid)),
 		deps.Float64("latency_ms", elapsedMs))
 
-	if d.summary.claimNextRun(time.Now()) {
-		d.summary.remember(pollSummary(ctx, d, pool, host))
-	}
-
 	return TimescaleStatus{
 		Host:      host,
 		Auth:      models.TimescaleAuthValid,
 		LatencyMs: elapsedMs,
 		Port:      port,
 		Reachable: true,
-		Summary:   d.summary.latest(),
+		Summary:   d.summary.refresh(time.Now(), summaryReader(ctx, d, pool, host)),
 	}, nil
 }
 
-// pollSummary reads the table names and failing job count, returning the previous
-// values when the read fails. The error is logged and discarded rather than
-// returned: a summary that cannot be read is not a connection fault, and a poll
-// error would drive the worker degraded for a database that is answering.
-func pollSummary(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) timescalemetrics.Summary {
-	summaryCtx, cancel := context.WithTimeout(ctx, summaryBudget)
-	defer cancel()
+// summaryReader reads the table names and failing job count. The error is logged
+// and discarded rather than returned: a summary that cannot be read is not a
+// connection fault, and a poll error would drive the worker degraded for a
+// database that is answering.
+func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
+	return func() (timescalemetrics.Summary, bool) {
+		summaryCtx, cancel := context.WithTimeout(ctx, summaryBudget)
+		defer cancel()
 
-	summary, err := timescalemetrics.CollectSummary(summaryCtx, pool)
-	if err != nil {
-		d.GetLogger().Debug("timescale summary",
-			deps.String("host", host),
-			deps.Err(err))
+		summary, err := timescalemetrics.CollectSummary(summaryCtx, pool)
+		if err != nil {
+			d.GetLogger().Debug("timescale summary",
+				deps.String("host", host),
+				deps.Err(err))
 
-		return d.summary.latest()
+			return timescalemetrics.Summary{}, false
+		}
+
+		return summary, true
 	}
-
-	return summary
 }
 
 func init() {
@@ -360,44 +358,36 @@ const summaryInterval = 60 * time.Second
 const summaryBudget = 100 * time.Millisecond
 
 // sharedSummary matches sharedPool: one instance of this worker type runs, and
-// the schedule has to outlive a single Poll to remember when it last ran.
-var sharedSummary = &summarySchedule{interval: summaryInterval}
+// the cache has to outlive a single Poll to hold what the last read found.
+var sharedSummary = &summaryCache{interval: summaryInterval}
 
-type summarySchedule struct {
-	lastRun  time.Time
-	last     timescalemetrics.Summary
+type summaryCache struct {
+	readAt   time.Time
+	value    timescalemetrics.Summary
 	interval time.Duration
 	mu       sync.Mutex
 }
 
-// claimNextRun reports whether the interval has elapsed, and records the attempt
-// so a failed read waits its turn like a successful one rather than retrying
-// every second.
-func (s *summarySchedule) claimNextRun(now time.Time) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// refresh answers with the summary the status message carries, reading a new one
+// when the interval has elapsed. A failed read keeps the previous value and waits
+// its turn like a successful one, rather than retrying every poll: the tables did
+// not stop existing because one read did not finish.
+func (c *summaryCache) refresh(
+	now time.Time,
+	read func() (timescalemetrics.Summary, bool),
+) timescalemetrics.Summary {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if !s.lastRun.IsZero() && now.Sub(s.lastRun) < s.interval {
-		return false
+	if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
+		return c.value
 	}
 
-	s.lastRun = now
+	c.readAt = now
 
-	return true
-}
+	if summary, ok := read(); ok {
+		c.value = summary
+	}
 
-// remember keeps a completed read. A failed one leaves the previous value in
-// place: the tables did not stop existing because one read did not finish.
-func (s *summarySchedule) remember(summary timescalemetrics.Summary) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.last = summary
-}
-
-func (s *summarySchedule) latest() timescalemetrics.Summary {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.last
+	return c.value
 }
