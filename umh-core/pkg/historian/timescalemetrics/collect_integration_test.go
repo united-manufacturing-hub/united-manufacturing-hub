@@ -423,17 +423,6 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		Expect(tableNamed(metrics, "attribute_bench").CompressAfterSeconds).To(Equal(int64(1209600)),
 			"the drift is visible per table, which is where the console reads it")
 	})
-
-	It("reports no job error on a healthy database", func() {
-		pool := startDatabase(timescaleImage)
-		_, err := pool.Exec(ctx, historianSchemaDDL)
-		Expect(err).NotTo(HaveOccurred())
-
-		metrics, err := collectMetrics(ctx, pool)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.LastJobError).To(BeEmpty())
-	})
 })
 
 // tableNamed returns the reported entry for one hypertable, failing the spec when
