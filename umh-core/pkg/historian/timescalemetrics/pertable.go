@@ -27,8 +27,9 @@ func safeTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
 }
 
-// historianTables names what benthos-umh's historian output creates: two
-// hypertables per data contract, plus the shared lookup tables.
+// historianTablePrefixes and historianTableNames name what benthos-umh's
+// historian output creates: two hypertables per data contract, plus the shared
+// lookup tables.
 var historianTablePrefixes = []string{"value_", "attribute_"}
 
 var historianTableNames = map[string]bool{"tag": true, "topic": true, "location": true}
@@ -79,18 +80,12 @@ func collectPerTable(
 		return map[string]int64{}, nil
 	}
 
-	rows, err := db.Query(ctx, statement)
+	pairs, err := queryAll(ctx, db, statement, what, rowToNamedValue)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", what, err)
-	}
-	defer rows.Close()
-
-	values, err := scanNamedValues(rows)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", what, err)
+		return nil, err
 	}
 
-	return values, nil
+	return valuesByName(pairs), nil
 }
 
 // perTableStatement joins one copy of query per qualifying table with UNION ALL,
