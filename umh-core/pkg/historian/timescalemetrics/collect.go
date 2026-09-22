@@ -106,8 +106,6 @@ type Metrics struct {
 	Hypertables      int     `json:"hypertables"`
 	Chunks           int     `json:"chunks"`
 	CompressedChunks int     `json:"compressedChunks"`
-	CompressionJobs  int     `json:"compressionJobs"`
-	RetentionJobs    int     `json:"retentionJobs"`
 	Tables           []Table `json:"tables"`
 	// OtherTables aggregates every table in the schema the historian did not
 	// create, so the database size stays explainable without listing them.
@@ -145,14 +143,6 @@ const jobsQuery = `SELECT count(*), count(*) FILTER (WHERE s.last_run_status = '
   FROM timescaledb_information.jobs j
   LEFT JOIN timescaledb_information.job_stats s USING (job_id)
  WHERE j.hypertable_schema = $1`
-
-// policyQuery counts how many hypertables compress and how many expire data.
-// Zero of either is a historian that keeps everything it is given.
-const policyQuery = `SELECT
-       count(*) FILTER (WHERE proc_name = 'policy_compression'),
-       count(*) FILTER (WHERE proc_name = 'policy_retention')
-  FROM timescaledb_information.jobs
- WHERE hypertable_schema = $1`
 
 // lastJobErrorQuery names the most recent background-job failure. job_errors has no
 // schema column, so scoping to the historian's own jobs means joining back to jobs
@@ -432,13 +422,6 @@ func collectMetrics(ctx context.Context, db Querier) (Metrics, error) {
 	if err := db.QueryRow(ctx, compressionQuery, historianSchema).
 		Scan(&metrics.UncompressedBytes, &metrics.CompressedBytes); err != nil {
 		return metrics, fmt.Errorf("read compression totals: %w", err)
-	}
-
-	if err := db.QueryRow(ctx, policyQuery, historianSchema).Scan(
-		&metrics.CompressionJobs,
-		&metrics.RetentionJobs,
-	); err != nil {
-		return metrics, fmt.Errorf("read policies: %w", err)
 	}
 
 	// No failure recorded is the normal case, not an error.
