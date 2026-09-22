@@ -18,6 +18,7 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 - **Virtual Path** = optional organizational segments in topics (e.g., `motor.electrical`)
 - **Tag** = single data point/sensor (industrial term)
 - **_raw** → **_devicemodel_v1** → **_businessmodel_v1** (data progression)
+- **Permission grant** (only in docs.umh.app) = what the Management Console issues so a user or instance can access instances. Never call it a certificate. "Certificate" is reserved for TLS. Describe what actually happens on the user's screen: "permission grant" or "unlocks access to your X"
 
 ## Non-Intuitive Patterns
 
@@ -141,7 +142,7 @@ Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` 
 
 ## Support & Troubleshooting Workflows
 
-This section covers umh-core-specific troubleshooting workflows. For universal team processes (Linear/Sentry integration, ticket routing), see `/Users/jeremytheocharis/Documents/git/troubleshooting/CLAUDE.md`.
+This section covers umh-core-specific troubleshooting workflows. For universal team processes (Linear/Sentry integration, ticket routing), see the `CLAUDE.md` in the internal `troubleshooting` repository.
 
 ### Instance Offline Troubleshooting
 
