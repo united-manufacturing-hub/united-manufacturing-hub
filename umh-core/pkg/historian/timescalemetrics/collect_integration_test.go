@@ -253,7 +253,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 
 		Expect(byName).To(HaveKey("tag"))
 		Expect(byName["tag"].IsHypertable).To(BeFalse())
-		Expect(byName["tag"].UncompressedBytes).To(BeNumerically(">", 0))
+		Expect(byName["tag"].Bytes).To(BeNumerically(">", 0))
 		Expect(byName["value_bench"].IsHypertable).To(BeTrue())
 		Expect(metrics.Hypertables).To(Equal(2), "a regular table is not counted as a hypertable")
 	})
@@ -485,6 +485,27 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		Expect(value.CompressedChunks).To(BeNumerically(">", 0))
 		Expect(value.UncompressedBytes).To(BeNumerically(">", 0))
 		Expect(value.CompressedBytes).To(BeNumerically(">", 0))
+		Expect(value.Bytes).To(BeNumerically(">=", value.CompressedBytes))
+	})
+
+	It("counts the chunks no policy has compressed into a table's size", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `INSERT INTO umh.value_bench
+			SELECT n, now() - (n || ' minutes')::interval, random()
+			  FROM generate_series(1, 20000) n`)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := collectMetrics(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		value := tableNamed(metrics, "value_bench")
+		Expect(value.CompressedChunks).To(BeNumerically("<", value.Chunks),
+			"the rows just written are in chunks no policy has compressed yet")
+		Expect(value.Bytes).To(BeNumerically(">", value.CompressedBytes),
+			"a size that counted only the compressed chunks would miss them")
 	})
 
 	It("reports the chunk interval each table was created with", func() {

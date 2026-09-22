@@ -37,12 +37,18 @@ type Querier interface {
 // aggregates beside it answer whether the historian as a whole compresses and
 // expires data; this answers which table does not.
 type Table struct {
-	Name                 string `json:"name"`
-	UncompressedBytes    int64  `json:"uncompressedBytes"`
-	CompressedBytes      int64  `json:"compressedBytes"`
-	ChunkIntervalSeconds int64  `json:"chunkIntervalSeconds"`
-	CompressAfterSeconds int64  `json:"compressAfterSeconds"`
-	DropAfterSeconds     int64  `json:"dropAfterSeconds"`
+	Name string `json:"name"`
+	// Bytes is what the table occupies on disk now: the compressed chunks at their
+	// compressed size plus the chunks no policy has compressed yet.
+	Bytes int64 `json:"bytes"`
+	// UncompressedBytes and CompressedBytes cover the compressed chunks only,
+	// because that is what TimescaleDB records a before size for. They answer how
+	// much compression saved, not how large the table is.
+	UncompressedBytes    int64 `json:"uncompressedBytes"`
+	CompressedBytes      int64 `json:"compressedBytes"`
+	ChunkIntervalSeconds int64 `json:"chunkIntervalSeconds"`
+	CompressAfterSeconds int64 `json:"compressAfterSeconds"`
+	DropAfterSeconds     int64 `json:"dropAfterSeconds"`
 	// LastWriteAt and FirstWriteAt are RFC 3339 instants, not ages. A reader that
 	// receives an age has to resolve it against its own clock, which puts the
 	// reported moment out by however far that clock is wrong. Empty means no row
@@ -157,12 +163,18 @@ const lastJobErrorQuery = `SELECT e.err_message
  LIMIT 1`
 
 // tablesQuery reads every hypertable's storage, chunking and policies in one pass.
-// The sizes come from the catalog, which holds them per chunk already; the size
-// functions in timescaledb_information stat every chunk's files to answer the
-// same question and cost two orders of magnitude more at a few thousand chunks.
+// The before-and-after sizes come from the catalog, which holds them per chunk
+// already; the size functions in timescaledb_information stat every chunk's files
+// to answer the same question and cost two orders of magnitude more at a few
+// thousand chunks. A chunk no policy has compressed yet has no catalog row, so its
+// size has to be read from the relation itself or the table reads as empty.
 const tablesQuery = `SELECT h.table_name,
        coalesce(sum(s.uncompressed_heap_size + s.uncompressed_index_size + s.uncompressed_toast_size), 0)::bigint,
        coalesce(sum(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size), 0)::bigint,
+       coalesce(sum(CASE WHEN ch.id IS NULL THEN 0
+                         WHEN ch.compressed_chunk_id IS NULL
+                         THEN coalesce(pg_total_relation_size(to_regclass(format('%I.%I', ch.schema_name, ch.table_name))), 0)
+                         ELSE s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size END), 0)::bigint,
        coalesce(max(EXTRACT(EPOCH FROM d.time_interval))::bigint, 0),
        coalesce(max(EXTRACT(EPOCH FROM (cj.config->>'compress_after')::interval))::bigint, 0),
        coalesce(max(EXTRACT(EPOCH FROM (rj.config->>'drop_after')::interval))::bigint, 0),
@@ -500,6 +512,7 @@ func collectTables(ctx context.Context, db Querier) ([]Table, error) {
 			&table.Name,
 			&table.UncompressedBytes,
 			&table.CompressedBytes,
+			&table.Bytes,
 			&table.ChunkIntervalSeconds,
 			&table.CompressAfterSeconds,
 			&table.DropAfterSeconds,
@@ -561,7 +574,7 @@ func collectRegularTables(ctx context.Context, db Querier) ([]Table, error) {
 
 	for rows.Next() {
 		var table Table
-		if err := rows.Scan(&table.Name, &table.UncompressedBytes, &table.Rows); err != nil {
+		if err := rows.Scan(&table.Name, &table.Bytes, &table.Rows); err != nil {
 			return nil, fmt.Errorf("scan regular table: %w", err)
 		}
 
@@ -656,7 +669,7 @@ func splitForeignTables(tables []Table) ([]Table, OtherTables) {
 		}
 
 		others.Tables++
-		others.Bytes += table.UncompressedBytes + table.CompressedBytes
+		others.Bytes += table.Bytes
 		others.Rows += table.Rows
 	}
 
