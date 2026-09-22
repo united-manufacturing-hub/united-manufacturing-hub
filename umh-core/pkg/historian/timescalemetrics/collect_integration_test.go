@@ -193,7 +193,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectFreshness(ctx, pool, metrics.Tables)
+		writes, err := collectNewestTimestamps(ctx, pool, metrics.Tables)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(HaveKey("value_bench"))
@@ -211,7 +211,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectFreshness(ctx, pool, metrics.Tables)
+		writes, err := collectNewestTimestamps(ctx, pool, metrics.Tables)
 
 		Expect(err).NotTo(HaveOccurred(), "a regular table must not fail the whole read")
 		Expect(writes).To(HaveKey("value_bench"))
@@ -223,7 +223,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectFreshness(ctx, pool, []Table{
+		writes, err := collectNewestTimestamps(ctx, pool, []Table{
 			{Name: `value"; DROP TABLE umh.value_bench; --`},
 		})
 
@@ -294,7 +294,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectFreshness(ctx, pool, metrics.Tables)
+		writes, err := collectNewestTimestamps(ctx, pool, metrics.Tables)
 
 		Expect(err).NotTo(HaveOccurred(), "one unreadable table must not fail every table's freshness")
 		Expect(writes).To(HaveKey("value_bench"))
@@ -591,14 +591,14 @@ var _ = Describe("Per-table rows and timespan", Label("integration"), func() {
 
 		table := tableNamed(metrics, "value_bench")
 
-		firstWrite, err := time.Parse(time.RFC3339, table.FirstWriteAt)
+		oldestRow, err := time.Parse(time.RFC3339, table.OldestTimestamp)
 		Expect(err).NotTo(HaveOccurred(), "the first write is a parseable timestamp")
-		lastWrite, err := time.Parse(time.RFC3339, table.LastWriteAt)
+		newestRow, err := time.Parse(time.RFC3339, table.NewestTimestamp)
 		Expect(err).NotTo(HaveOccurred(), "the last write is a parseable timestamp")
 
 		// The fixture writes one row per day going back 200 days.
-		Expect(firstWrite).To(BeTemporally("~", time.Now().Add(-200*24*time.Hour), 24*time.Hour))
-		Expect(firstWrite).To(BeTemporally("<", lastWrite), "the first write precedes the last")
+		Expect(oldestRow).To(BeTemporally("~", time.Now().Add(-200*24*time.Hour), 24*time.Hour))
+		Expect(oldestRow).To(BeTemporally("<", newestRow), "the oldest row precedes the newest")
 	})
 })
 
@@ -669,9 +669,9 @@ var _ = Describe("Stale and small tables", Label("integration"), func() {
 		metrics, err := Collect(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		lastWrite, err := time.Parse(time.RFC3339, tableNamed(metrics, "value_bench").LastWriteAt)
+		newestRow, err := time.Parse(time.RFC3339, tableNamed(metrics, "value_bench").NewestTimestamp)
 		Expect(err).NotTo(HaveOccurred(), "a table silent for months still reports when it last wrote")
-		Expect(lastWrite).To(BeTemporally("<", time.Now().Add(-89*24*time.Hour)))
+		Expect(newestRow).To(BeTemporally("<", time.Now().Add(-89*24*time.Hour)))
 	})
 
 	It("counts a lookup table exactly, because its planner estimate is zero until analysed", func() {

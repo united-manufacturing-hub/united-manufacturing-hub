@@ -49,12 +49,15 @@ type Table struct {
 	ChunkIntervalSeconds int64 `json:"chunkIntervalSeconds"`
 	CompressAfterSeconds int64 `json:"compressAfterSeconds"`
 	DropAfterSeconds     int64 `json:"dropAfterSeconds"`
-	// LastWriteAt and FirstWriteAt are RFC 3339 instants, not ages. A reader that
-	// receives an age has to resolve it against its own clock, which puts the
-	// reported moment out by however far that clock is wrong. Empty means no row
-	// was found, which is not the same as a row written this second.
-	LastWriteAt  string `json:"lastWriteAt"`
-	FirstWriteAt string `json:"firstWriteAt"`
+	// NewestTimestamp and OldestTimestamp are the max and min of the table's time
+	// column, not when it was written: Postgres records no write time for a table,
+	// and a bridge writing history backwards would make the two differ. They are
+	// RFC 3339 instants rather than ages, because a reader that receives an age
+	// resolves it against its own clock, which puts the reported moment out by
+	// however far that clock is wrong. Empty means no row was found, which is not
+	// the same as a row stamped in 1970.
+	NewestTimestamp string `json:"newestTimestamp"`
+	OldestTimestamp string `json:"oldestTimestamp"`
 	// Rows is approximate, read from planner statistics rather than by counting:
 	// an exact count scans every chunk, which a historian cannot afford.
 	Rows             int64 `json:"rows"`
@@ -252,9 +255,9 @@ const tableRowsQuery = `SELECT h.table_name,
 // first as the literal that labels the row, the last two as the identifier.
 // Every name is checked against safeTableName before it is interpolated.
 
-const lastWriteQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
+const newestTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
 
-const firstWriteQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
+const oldestTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
 
 const lookupCountQuery = `SELECT '%s', count(*)::bigint FROM %s.%s`
 
@@ -264,10 +267,10 @@ func safeTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
 }
 
-// writeTimeAt turns a Unix epoch into an RFC 3339 instant, or an empty string
+// timestampAt turns a Unix epoch into an RFC 3339 instant, or an empty string
 // when there is none. Empty means no row was found, which is not the same as a
-// row written in 1970.
-func writeTimeAt(epoch int64) string {
+// row stamped in 1970.
+func timestampAt(epoch int64) string {
 	if epoch <= 0 {
 		return ""
 	}
@@ -275,15 +278,15 @@ func writeTimeAt(epoch int64) string {
 	return time.Unix(epoch, 0).UTC().Format(time.RFC3339)
 }
 
-func assignFirstWrites(tables []Table, epochs map[string]int64) {
+func assignOldestTimestamps(tables []Table, epochs map[string]int64) {
 	for i := range tables {
-		tables[i].FirstWriteAt = writeTimeAt(epochs[tables[i].Name])
+		tables[i].OldestTimestamp = timestampAt(epochs[tables[i].Name])
 	}
 }
 
-func assignLastWrites(tables []Table, epochs map[string]int64) {
+func assignNewestTimestamps(tables []Table, epochs map[string]int64) {
 	for i := range tables {
-		tables[i].LastWriteAt = writeTimeAt(epochs[tables[i].Name])
+		tables[i].NewestTimestamp = timestampAt(epochs[tables[i].Name])
 	}
 }
 
@@ -372,26 +375,27 @@ func scanNamedValues(rows pgx.Rows) (map[string]int64, error) {
 	return values, rows.Err()
 }
 
-// collectFreshness reads when each hypertable was last written. Only hypertables
-// with a ts column qualify: the others carry no time column to take a max of.
-func collectFreshness(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
+// collectNewestTimestamps reads the newest row of each hypertable. Only
+// hypertables with a ts column qualify: the others carry no time column to take a
+// max of.
+func collectNewestTimestamps(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
 	readable, err := timeColumnTables(ctx, db)
 	if err != nil {
 		return nil, err
 	}
 
-	return collectPerTable(ctx, db, tables, lastWriteQuery, "freshness",
+	return collectPerTable(ctx, db, tables, newestTimestampQuery, "newest timestamps",
 		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
 }
 
-// collectFirstWrites reads when each hypertable was first written.
-func collectFirstWrites(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
+// collectOldestTimestamps reads the oldest row of each hypertable.
+func collectOldestTimestamps(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
 	readable, err := timeColumnTables(ctx, db)
 	if err != nil {
 		return nil, err
 	}
 
-	return collectPerTable(ctx, db, tables, firstWriteQuery, "first writes",
+	return collectPerTable(ctx, db, tables, oldestTimestampQuery, "oldest timestamps",
 		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
 }
 
@@ -597,12 +601,12 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	lastWrites, err := collectFreshness(ctx, db, metrics.Tables)
+	newest, err := collectNewestTimestamps(ctx, db, metrics.Tables)
 	if err != nil {
 		return metrics, err
 	}
 
-	firstWrites, err := collectFirstWrites(ctx, db, metrics.Tables)
+	oldest, err := collectOldestTimestamps(ctx, db, metrics.Tables)
 	if err != nil {
 		return metrics, err
 	}
@@ -621,10 +625,10 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		rowCounts[name] = count
 	}
 
-	metrics.DataSpanSeconds = dataSpanSeconds(firstWrites, lastWrites)
+	metrics.DataSpanSeconds = dataSpanSeconds(oldest, newest)
 
-	assignLastWrites(metrics.Tables, lastWrites)
-	assignFirstWrites(metrics.Tables, firstWrites)
+	assignNewestTimestamps(metrics.Tables, newest)
+	assignOldestTimestamps(metrics.Tables, oldest)
 	assignRowCounts(metrics.Tables, rowCounts)
 
 	metrics.Tables, metrics.OtherTables = splitForeignTables(metrics.Tables)
@@ -694,16 +698,16 @@ func tableRows(ctx context.Context, db Querier) (map[string]int64, error) {
 // dataSpanSeconds is the period between the oldest row in any table and the
 // newest. It is taken from the rows themselves rather than from chunk boundaries,
 // which reach into the future by up to one chunk width and so read long.
-func dataSpanSeconds(firstWrites, lastWrites map[string]int64) int64 {
+func dataSpanSeconds(oldestPerTable, newestPerTable map[string]int64) int64 {
 	var oldest, newest int64
 
-	for _, epoch := range firstWrites {
+	for _, epoch := range oldestPerTable {
 		if epoch > 0 && (oldest == 0 || epoch < oldest) {
 			oldest = epoch
 		}
 	}
 
-	for _, epoch := range lastWrites {
+	for _, epoch := range newestPerTable {
 		if epoch > newest {
 			newest = epoch
 		}
