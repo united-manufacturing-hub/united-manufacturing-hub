@@ -89,10 +89,6 @@ type Job struct {
 type Metrics struct {
 	ServerVersion    string `json:"serverVersion"`
 	TimescaleVersion string `json:"timescaleVersion"`
-	// MetricsError carries why the last collection failed, so a database that
-	// answers the connection check but refuses the metric reads explains itself
-	// instead of reporting zeros.
-	MetricsError string `json:"metricsError"`
 	// LastJobError is the most recent background-job failure message. A bare
 	// failure count says nothing an operator can act on; this names the table and
 	// the reason.
