@@ -188,7 +188,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectNewestTimestamps(ctx, pool, metrics.Tables)
+		readable, err := timeColumnTables(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectTimestamps(ctx, pool, metrics.Tables,
+			newestTimestampQuery, "newest timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(HaveKey("value_bench"))
@@ -206,7 +210,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectNewestTimestamps(ctx, pool, metrics.Tables)
+		readable, err := timeColumnTables(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectTimestamps(ctx, pool, metrics.Tables,
+			newestTimestampQuery, "newest timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred(), "a regular table must not fail the whole read")
 		Expect(writes).To(HaveKey("value_bench"))
@@ -218,9 +226,12 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectNewestTimestamps(ctx, pool, []Table{
+		readable, err := timeColumnTables(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectTimestamps(ctx, pool, []Table{
 			{Name: `value"; DROP TABLE umh.value_bench; --`},
-		})
+		}, newestTimestampQuery, "newest timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(BeEmpty())
@@ -288,7 +299,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectNewestTimestamps(ctx, pool, metrics.Tables)
+		readable, err := timeColumnTables(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		writes, err := collectTimestamps(ctx, pool, metrics.Tables,
+			newestTimestampQuery, "newest timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred(), "one unreadable table must not fail every table's freshness")
 		Expect(writes).To(HaveKey("value_bench"))
