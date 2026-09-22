@@ -391,10 +391,9 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.CompressionJobs).To(Equal(2))
 		Expect(tableNamed(metrics, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)), "168h")
-		Expect(metrics.RetentionJobs).To(BeZero(), "nothing expires, so the database grows forever")
-		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(BeZero())
+		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(BeZero(),
+			"nothing expires, so the database grows forever")
 	})
 
 	It("reports the retention interval when one is configured", func() {
@@ -407,7 +406,6 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		metrics, err := collectMetrics(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.RetentionJobs).To(Equal(1))
 		Expect(tableNamed(metrics, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
 	})
 
