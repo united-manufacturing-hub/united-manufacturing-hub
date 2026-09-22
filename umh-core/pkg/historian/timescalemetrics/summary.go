@@ -17,8 +17,6 @@ package timescalemetrics
 import (
 	"context"
 	"fmt"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // Summary is the part of a historian's state reported without being asked: which
@@ -34,56 +32,39 @@ type Summary struct {
 	FailedJobs int      `json:"failedJobs"`
 }
 
-// summaryTableNamesQuery lists the historian's hypertables and plain tables in
-// one pass, without the sizes and policies the per-table view reads.
-const summaryTableNamesQuery = `SELECT c.relname
-  FROM pg_class c
-  JOIN pg_namespace n ON n.oid = c.relnamespace
- WHERE n.nspname = $1 AND c.relkind = 'r' AND c.relname <> 'schema_migrations'
- ORDER BY c.relname`
+// summaryQuery reads both figures in one round trip. Neither subquery's cost
+// grows with how much data the historian holds: one counts jobs, the other lists
+// relation names.
+const summaryQuery = `SELECT
+       (SELECT count(*) FILTER (WHERE s.last_run_status = 'Failed')
+          FROM timescaledb_information.jobs j
+          LEFT JOIN timescaledb_information.job_stats s USING (job_id)
+         WHERE j.hypertable_schema = $1),
+       (SELECT coalesce(array_agg(c.relname ORDER BY c.relname), '{}')
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = $1 AND c.relkind = 'r' AND c.relname <> 'schema_migrations')`
 
-// CollectSummary reads what the status message carries. Two statements, neither
-// of whose cost grows with how much data the historian holds.
+// CollectSummary reads what the status message carries.
 func CollectSummary(ctx context.Context, db Querier) (Summary, error) {
 	var summary Summary
 
-	var jobs int
-	if err := db.QueryRow(ctx, jobsQuery, historianSchema).
-		Scan(&jobs, &summary.FailedJobs); err != nil {
-		return summary, fmt.Errorf("read job status: %w", err)
-	}
-
-	names, err := summaryTableNames(ctx, db)
-	if err != nil {
-		return summary, err
-	}
-
-	summary.TableNames = names
-
-	return summary, nil
-}
-
-func summaryTableNames(ctx context.Context, db Querier) ([]string, error) {
-	rows, err := db.Query(ctx, summaryTableNamesQuery, historianSchema)
-	if err != nil {
-		return nil, fmt.Errorf("read table names: %w", err)
-	}
-
-	all, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return nil, fmt.Errorf("read table names: %w", err)
+	var names []string
+	if err := db.QueryRow(ctx, summaryQuery, historianSchema).
+		Scan(&summary.FailedJobs, &names); err != nil {
+		return summary, fmt.Errorf("read historian summary: %w", err)
 	}
 
 	// The schema holds whatever the customer put there. historianCreated is the
 	// one definition of which tables are ours, shared with the split the on-demand
 	// read performs, so the answer cannot drift between the two paths.
-	names := []string{}
+	summary.TableNames = []string{}
 
-	for _, name := range all {
+	for _, name := range names {
 		if historianCreated(name) {
-			names = append(names, name)
+			summary.TableNames = append(summary.TableNames, name)
 		}
 	}
 
-	return names, nil
+	return summary, nil
 }

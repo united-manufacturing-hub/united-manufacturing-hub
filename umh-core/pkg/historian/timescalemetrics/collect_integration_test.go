@@ -704,6 +704,16 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 		Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
 	})
 
+	It("reports nothing rather than failing on a database with no historian", func() {
+		pool := startDatabase(timescaleImage)
+
+		summary, err := CollectSummary(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(summary.TableNames).To(BeEmpty())
+		Expect(summary.FailedJobs).To(BeZero())
+	})
+
 	It("lists only the tables the historian created", func() {
 		pool := startDatabase(timescaleImage)
 		_, err := pool.Exec(ctx, historianSchemaDDL)
