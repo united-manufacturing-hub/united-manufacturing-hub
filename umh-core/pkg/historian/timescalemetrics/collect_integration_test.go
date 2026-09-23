@@ -336,7 +336,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			`SELECT job_id FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh' ORDER BY job_id LIMIT 1`,
 		).Scan(&jobID)).To(Succeed())
 
-		_, err = pool.Exec(ctx, `SELECT alter_job($1, scheduled => false)`, jobID)
+		// Every umh job stops before the stat row below is written. A background
+		// run landing after it would record its own outcome over the one this spec
+		// is asserting on.
+		_, err = pool.Exec(ctx, `SELECT alter_job(job_id, scheduled => false, next_start => 'infinity')
+			  FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh'`)
 		Expect(err).NotTo(HaveOccurred())
 
 		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
@@ -369,7 +373,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			`SELECT job_id FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh' ORDER BY job_id LIMIT 1`,
 		).Scan(&jobID)).To(Succeed())
 
-		_, err = pool.Exec(ctx, `SELECT alter_job($1, scheduled => false)`, jobID)
+		// Every umh job stops before the stat row below is written. A background
+		// run landing after it would record its own outcome over the one this spec
+		// is asserting on.
+		_, err = pool.Exec(ctx, `SELECT alter_job(job_id, scheduled => false, next_start => 'infinity')
+			  FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh'`)
 		Expect(err).NotTo(HaveOccurred())
 
 		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
