@@ -145,30 +145,39 @@ func readVersions(ctx context.Context, db Querier, metrics *Metrics) error {
 // functions, which stat every chunk's files and cost two orders of magnitude more
 // at a few thousand chunks. An uncompressed chunk has no catalog row, so its size
 // has to come from the relation or the table reads as empty.
-const tablesQuery = `SELECT h.table_name,
-       coalesce(sum(s.uncompressed_heap_size + s.uncompressed_index_size + s.uncompressed_toast_size), 0)::bigint,
-       coalesce(sum(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size), 0)::bigint,
-       coalesce(sum(CASE WHEN ch.id IS NULL THEN 0
-                         WHEN ch.compressed_chunk_id IS NULL
-                         THEN coalesce(pg_total_relation_size(to_regclass(format('%I.%I', ch.schema_name, ch.table_name))), 0)
-                         ELSE s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size END), 0)::bigint,
-       coalesce(max(EXTRACT(EPOCH FROM d.time_interval))::bigint, 0),
-       coalesce(max(EXTRACT(EPOCH FROM (cj.config->>'compress_after')::interval))::bigint, 0),
-       coalesce(max(EXTRACT(EPOCH FROM (rj.config->>'drop_after')::interval))::bigint, 0),
-       count(ch.id),
-       count(ch.compressed_chunk_id)
-  FROM _timescaledb_catalog.hypertable h
-  LEFT JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND NOT ch.dropped
-  LEFT JOIN _timescaledb_catalog.compression_chunk_size s ON s.chunk_id = ch.id
+const tablesQuery = `WITH sizes AS (
+  SELECT h.id, h.schema_name, h.table_name,
+         coalesce(sum(s.uncompressed_heap_size + s.uncompressed_index_size + s.uncompressed_toast_size), 0)::bigint AS bytes_before_compression,
+         coalesce(sum(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size), 0)::bigint AS bytes_after_compression,
+         coalesce(sum(CASE WHEN ch.id IS NULL THEN 0
+                           WHEN ch.compressed_chunk_id IS NULL
+                           THEN coalesce(pg_total_relation_size(to_regclass(format('%I.%I', ch.schema_name, ch.table_name))), 0)
+                           ELSE s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size END), 0)::bigint AS disk_bytes,
+         count(ch.id) AS chunks,
+         count(ch.compressed_chunk_id) AS compressed_chunks
+    FROM _timescaledb_catalog.hypertable h
+    LEFT JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND NOT ch.dropped
+    LEFT JOIN _timescaledb_catalog.compression_chunk_size s ON s.chunk_id = ch.id
+   WHERE h.schema_name = $1
+   GROUP BY h.id
+)
+SELECT DISTINCT ON (t.table_name) t.table_name,
+       t.bytes_before_compression,
+       t.bytes_after_compression,
+       t.disk_bytes,
+       coalesce(EXTRACT(EPOCH FROM d.time_interval)::bigint, 0),
+       coalesce(EXTRACT(EPOCH FROM (cj.config->>'compress_after')::interval)::bigint, 0),
+       coalesce(EXTRACT(EPOCH FROM (rj.config->>'drop_after')::interval)::bigint, 0),
+       t.chunks,
+       t.compressed_chunks
+  FROM sizes t
   LEFT JOIN timescaledb_information.dimensions d
-    ON d.hypertable_schema = h.schema_name AND d.hypertable_name = h.table_name AND d.column_name = 'ts'
+    ON d.hypertable_schema = t.schema_name AND d.hypertable_name = t.table_name AND d.column_name = 'ts'
   LEFT JOIN timescaledb_information.jobs cj
-    ON cj.hypertable_schema = h.schema_name AND cj.hypertable_name = h.table_name AND cj.proc_name = 'policy_compression'
+    ON cj.hypertable_schema = t.schema_name AND cj.hypertable_name = t.table_name AND cj.proc_name = 'policy_compression'
   LEFT JOIN timescaledb_information.jobs rj
-    ON rj.hypertable_schema = h.schema_name AND rj.hypertable_name = h.table_name AND rj.proc_name = 'policy_retention'
- WHERE h.schema_name = $1
- GROUP BY h.table_name
- ORDER BY h.table_name`
+    ON rj.hypertable_schema = t.schema_name AND rj.hypertable_name = t.table_name AND rj.proc_name = 'policy_retention'
+ ORDER BY t.table_name`
 
 func readHypertables(ctx context.Context, db Querier) ([]Table, error) {
 	return queryAll(ctx, db, tablesQuery, "tables", rowToHypertable, historianSchema)
