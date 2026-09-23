@@ -110,26 +110,27 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 	return metrics, nil
 }
 
-// queryAll runs one query and converts every row with row, naming the read in
-// both error paths so a failure says which of them it was. pgx closes the rows
-// and reports a mid-iteration failure through the returned error.
+// queryAll runs one query and builds a T from each row it returns, using
+// toValue. Both failures are wrapped with subject, so an error says which read
+// it was. pgx closes the rows itself and reports a failure part way through
+// iteration in the error CollectRows returns.
 // https://pkg.go.dev/github.com/jackc/pgx/v5#CollectRows
 func queryAll[T any](
 	ctx context.Context,
 	db Querier,
 	query string,
-	what string,
-	row pgx.RowToFunc[T],
+	subject string,
+	toValue pgx.RowToFunc[T],
 	args ...any,
 ) ([]T, error) {
 	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", what, err)
+		return nil, fmt.Errorf("read %s: %w", subject, err)
 	}
 
-	values, err := pgx.CollectRows(rows, row)
+	values, err := pgx.CollectRows(rows, toValue)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", what, err)
+		return nil, fmt.Errorf("read %s: %w", subject, err)
 	}
 
 	return values, nil

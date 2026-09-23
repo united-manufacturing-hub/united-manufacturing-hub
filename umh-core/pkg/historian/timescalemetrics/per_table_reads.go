@@ -84,7 +84,7 @@ func collectPerTable(
 	db Querier,
 	tables []Table,
 	query string,
-	what string,
+	subject string,
 	keep func(Table) bool,
 ) (map[string]int64, error) {
 	statement := perTableStatement(tables, query, keep)
@@ -92,7 +92,7 @@ func collectPerTable(
 		return map[string]int64{}, nil
 	}
 
-	pairs, err := queryAll(ctx, db, statement, what, rowToNamedValue)
+	pairs, err := queryAll(ctx, db, statement, subject, rowToNamedValue)
 	if err != nil {
 		return nil, err
 	}
@@ -118,18 +118,18 @@ func perTableStatement(tables []Table, query string, keep func(Table) bool) stri
 	return strings.Join(selects, " UNION ALL ")
 }
 
-// collectTimestamps reads one end of each hypertable's time column. Only
-// hypertables that have one qualify, which is what readable names: the others
-// carry no ts to take a max or min of.
+// collectTimestamps reads one end of each hypertable's time column. Only the
+// hypertables readable names qualify: the others carry no ts column to take a
+// max or min of.
 func collectTimestamps(
 	ctx context.Context,
 	db Querier,
 	tables []Table,
 	query string,
-	what string,
+	subject string,
 	readable map[string]bool,
 ) (map[string]int64, error) {
-	return collectPerTable(ctx, db, tables, query, what,
+	return collectPerTable(ctx, db, tables, query, subject,
 		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
 }
 
