@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -376,4 +378,64 @@ func dataSpanSeconds(earliestPerTable, latestPerTable map[string]int64) int64 {
 	}
 
 	return latest - earliest
+}
+
+// The two queries below are per-table selects, joined with UNION ALL into one
+// statement. A table name cannot be bound as a parameter, so each is a format
+// string taking the table name, the schema, and the table name again -- the
+// first as the literal that labels the row, the last two as the identifier.
+// Every name is checked against safeTableName before it is interpolated.
+
+const latestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
+
+const earliestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
+
+var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
+
+func safeTableName(name string) bool {
+	return tableNamePattern.MatchString(name)
+}
+
+// collectTimestamps reads one end of the time column of every hypertable that
+// has one, as a single statement joining one select per table with UNION ALL,
+// and returns what each table reported. A table name cannot be bound as a
+// parameter, so safeTableName guards every name that reaches the format string.
+func collectTimestamps(
+	ctx context.Context,
+	db Querier,
+	tables []Table,
+	query string,
+	subject string,
+	readable map[string]bool,
+) (map[string]int64, error) {
+	statement := perTableStatement(tables, query, readable)
+	if statement == "" {
+		return map[string]int64{}, nil
+	}
+
+	pairs, err := queryAll(ctx, db, statement, subject, rowToNamedValue)
+	if err != nil {
+		return nil, err
+	}
+
+	return valuesByName(pairs), nil
+}
+
+// perTableStatement joins one copy of query per readable hypertable with UNION
+// ALL, filling in the table name three times: once as the literal that labels
+// the row and twice as the identifier. A table absent from readable carries no
+// ts column to take a max or min of. It returns an empty string when no table
+// qualifies, which the caller reads as nothing to ask.
+func perTableStatement(tables []Table, query string, readable map[string]bool) string {
+	selects := make([]string, 0, len(tables))
+
+	for _, table := range tables {
+		if !table.IsHypertable || !readable[table.Name] || !safeTableName(table.Name) {
+			continue
+		}
+
+		selects = append(selects, fmt.Sprintf(query, table.Name, historianSchema, table.Name))
+	}
+
+	return strings.Join(selects, " UNION ALL ")
 }
