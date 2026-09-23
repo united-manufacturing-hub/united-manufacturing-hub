@@ -256,7 +256,9 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	cfg = cfg.WithDefaults()
 	host, port := cfg.Timescale.Host, cfg.Timescale.Port
 
-	pool, err := d.pool.get(cfg.Timescale.ToDSN())
+	dsn := cfg.Timescale.ToDSN()
+
+	pool, err := d.pool.get(dsn)
 	if err != nil {
 		d.GetLogger().Debug("timescale connection check",
 			deps.String("host", host),
@@ -301,7 +303,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		LatencyMs: elapsedMs,
 		Port:      port,
 		Reachable: true,
-		Summary:   d.summary.refresh(time.Now(), summaryReader(ctx, d, pool, host)),
+		Summary:   d.summary.refresh(time.Now(), dsn, summaryReader(ctx, d, pool, host)),
 	}, nil
 }
 
@@ -354,24 +356,32 @@ const summaryBudget = 100 * time.Millisecond
 var sharedSummary = &summaryCache{interval: summaryInterval}
 
 type summaryCache struct {
-	readAt   time.Time
-	value    timescalemetrics.Summary
+	readAt time.Time
+	value  timescalemetrics.Summary
+	// dsn is the database the cached value was read from. A config edit repoints
+	// the pool at another database, and holding the value across that would
+	// report one database's tables beside the other's host.
+	dsn      string
 	interval time.Duration
 	mu       sync.Mutex
 }
 
 // refresh answers with the summary the status message carries, reading a new one
-// when the interval has elapsed. A failed read keeps the previous value and waits
-// its turn like a successful one, rather than retrying every poll: the tables did
-// not stop existing because one read did not finish.
+// when the interval has elapsed or the database changed. A failed read keeps the
+// previous value and waits its turn like a successful one, rather than retrying
+// every poll: the tables did not stop existing because one read did not finish.
 func (c *summaryCache) refresh(
 	now time.Time,
+	dsn string,
 	read func() (timescalemetrics.Summary, bool),
 ) timescalemetrics.Summary {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
+	if dsn != c.dsn {
+		c.dsn = dsn
+		c.value = timescalemetrics.Summary{}
+	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
 		return c.value
 	}
 
