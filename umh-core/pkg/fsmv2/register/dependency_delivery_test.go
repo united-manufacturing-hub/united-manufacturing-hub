@@ -59,13 +59,13 @@ var _ = Describe("dependency delivery through register.Worker", func() {
 
 	// buildWith registers the probe worker afresh and builds one instance with
 	// the dependencies a run would have handed in.
-	buildWith := func(runDeps map[string]any) *deliveryWorker {
+	buildWith := func(dependencies map[string]any) *deliveryWorker {
 		factory.ResetRegistry()
 		storage.ResetGlobalRegistry()
 
 		register.Worker[deliveryConfig, deliveryStatus, register.NoDeps](workerType,
 			func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, rd map[string]any) (fsmv2.Worker, error) {
-				label, _ := config.GetDependency(rd, deliveryLabelKey)
+				label, _ := config.LookupDependency(rd, deliveryLabelKey)
 
 				w := &deliveryWorker{Label: label}
 				w.InitBase(id, logger, sr)
@@ -77,7 +77,7 @@ var _ = Describe("dependency delivery through register.Worker", func() {
 			ID:         "probe-1",
 			Name:       "probe",
 			WorkerType: workerType,
-		}, deps.NewNopFSMLogger(), nil, runDeps)
+		}, deps.NewNopFSMLogger(), nil, dependencies)
 		Expect(err).NotTo(HaveOccurred())
 
 		probe, ok := w.(*deliveryWorker)
@@ -87,10 +87,10 @@ var _ = Describe("dependency delivery through register.Worker", func() {
 	}
 
 	It("hands the constructor the dependencies the caller supplied", func() {
-		runDeps := map[string]any{}
-		config.PutDependency(runDeps, deliveryLabelKey, "from-the-run")
+		dependencies := map[string]any{}
+		config.SetDependency(dependencies, deliveryLabelKey, "from-the-run")
 
-		Expect(buildWith(runDeps).Label).To(Equal("from-the-run"))
+		Expect(buildWith(dependencies).Label).To(Equal("from-the-run"))
 	})
 
 	It("hands the constructor nothing readable when the caller supplied none", func() {
