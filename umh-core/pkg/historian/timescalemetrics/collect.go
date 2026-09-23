@@ -321,13 +321,13 @@ func valuesByName(pairs []namedValue) map[string]int64 {
 	return values
 }
 
-// timestampAt returns an empty string for no row, which is not 1970.
-func timestampAt(epoch int64) string {
-	if epoch <= 0 {
+// timestampAt returns an empty string for a table with no rows, which is not 1970.
+func timestampAt(epoch *int64) string {
+	if epoch == nil {
 		return ""
 	}
 
-	return time.Unix(epoch, 0).UTC().Format(time.RFC3339)
+	return time.Unix(*epoch, 0).UTC().Format(time.RFC3339)
 }
 
 func assignTimestamps(tables []Table, spans map[string]rowSpan) {
@@ -351,30 +351,31 @@ func assignRowCounts(tables []Table, counts map[string]int64) {
 // Taken from the rows rather than the chunk boundaries, which reach up to one
 // chunk width into the future and so read long.
 func dataSpanSeconds(spans map[string]rowSpan) int64 {
-	var earliest, latest int64
+	var earliest, latest *int64
 
 	for _, span := range spans {
-		if span.Earliest > 0 && (earliest == 0 || span.Earliest < earliest) {
+		if span.Earliest != nil && (earliest == nil || *span.Earliest < *earliest) {
 			earliest = span.Earliest
 		}
 
-		if span.Latest > latest {
+		if span.Latest != nil && (latest == nil || *span.Latest > *latest) {
 			latest = span.Latest
 		}
 	}
 
-	if earliest == 0 || latest <= earliest {
+	if earliest == nil || latest == nil || *latest <= *earliest {
 		return 0
 	}
 
-	return latest - earliest
+	return *latest - *earliest
 }
 
 // A table name cannot be bound as a parameter, so this is a format string taking
 // the name three times: once as the literal labelling the row, twice as the
-// identifier. safeTableName guards every name that reaches it.
+// identifier. safeTableName guards every name that reaches it. min and max are
+// null for an empty table, which rowSpan carries as nil rather than as 1970.
 
-const rowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0), coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
+const rowTimestampQuery = `SELECT '%s', extract(epoch FROM min(ts))::bigint, extract(epoch FROM max(ts))::bigint FROM %s.%s`
 
 var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
@@ -398,15 +399,15 @@ func readRowTimestamps(ctx context.Context, db Querier, metrics *Metrics, readab
 
 // rowSpan is one table's first and last row timestamp as epoch seconds.
 type rowSpan struct {
-	Earliest int64
-	Latest   int64
+	Earliest *int64
+	Latest   *int64
 }
 
 // namedRowSpan is one row of rowTimestampQuery.
 type namedRowSpan struct {
 	Name     string
-	Earliest int64
-	Latest   int64
+	Earliest *int64
+	Latest   *int64
 }
 
 // readSpans asks both ends of the ts column of every readable table in one

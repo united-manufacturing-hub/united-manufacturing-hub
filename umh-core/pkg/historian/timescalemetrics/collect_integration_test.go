@@ -195,7 +195,8 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(HaveKey("value_bench"))
-		Expect(writes["value_bench"].Latest).To(BeNumerically(">", 0), "the fixture wrote rows inside the freshness window")
+		Expect(writes["value_bench"].Latest).NotTo(BeNil())
+		Expect(*writes["value_bench"].Latest).To(BeNumerically(">", 0), "the fixture wrote rows inside the freshness window")
 	})
 
 	It("skips regular tables, which have no time column", func() {
