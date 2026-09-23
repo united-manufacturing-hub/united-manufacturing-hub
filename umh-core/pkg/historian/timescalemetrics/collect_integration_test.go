@@ -625,6 +625,30 @@ var _ = Describe("Per-table rows and timespan", Label("integration"), func() {
 		Expect(tableNamed(metrics.Tables, "value_bench").Rows).To(BeNumerically("~", 200, 20))
 	})
 
+	It("counts rows written into a chunk nothing has analysed yet", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The planner's estimate for a relation it has never analysed is -1, which
+		// reads as no rows at all. This is the table an operator is most likely to
+		// be looking at: the one that started receiving data a moment ago.
+		_, err = pool.Exec(ctx, `INSERT INTO umh.value_bench
+			SELECT n, now() - (n || ' seconds')::interval, random()
+			  FROM generate_series(1, 50000) n`)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The statistics system flushes what a backend has counted at an interval,
+		// so the rows appear within a second of the write rather than instantly.
+		Eventually(func() int64 {
+			metrics, err := Collect(ctx, pool)
+			Expect(err).NotTo(HaveOccurred())
+
+			return tableNamed(metrics.Tables, "value_bench").Rows
+		}, "10s", "500ms").Should(BeNumerically(">=", 50000),
+			"every row just written is counted")
+	})
+
 	It("reports how long ago the first entry was, giving each table its own span", func() {
 		pool := startDatabase(timescaleImage)
 		_, err := pool.Exec(ctx, historianSchemaDDL)

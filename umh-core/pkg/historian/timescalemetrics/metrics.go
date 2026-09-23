@@ -50,9 +50,9 @@ type Table struct {
 	EarliestRowTimestamp string `json:"earliestRowTimestamp"`
 	LatestRowTimestamp   string `json:"latestRowTimestamp"`
 	// Rows is exact for a compressed chunk, which records its own pre-compression
-	// count, and for the small lookup tables, which are counted outright. The rest
-	// is the planner's estimate: counting every chunk is what a historian cannot
-	// afford.
+	// count, and for the lookup tables, which are counted outright. A chunk no
+	// policy has compressed yet contributes Postgres's live-tuple tracking, which
+	// follows the rows as they are written.
 	Rows             int64 `json:"rows"`
 	Chunks           int   `json:"chunks"`
 	CompressedChunks int   `json:"compressedChunks"`

@@ -275,21 +275,29 @@ func readTimeColumnTables(ctx context.Context, db Querier) (map[string]bool, err
 	return readable, nil
 }
 
-// tableRowsQuery counts rows per hypertable without scanning one. A compressed
-// chunk records its own pre-compression count, which is exact; an uncompressed
-// chunk contributes the planner's estimate, which autovacuum maintains and which
-// is -1 until it first runs. The catalog count is exact for compressed chunks
-// because it is what the compressor recorded; an estimate derived from batch
-// counts is not, since a batch holds anything up to a thousand rows.
+// tableRowsQuery counts rows per hypertable without scanning one, because
+// Postgres stores no row count: under MVCC a count walks the rows to see which
+// are visible, and that is what a historian cannot afford.
+//
+// A compressed chunk carries the count the compressor recorded, which is exact.
+// An uncompressed one contributes n_live_tup, which the cumulative statistics
+// system tracks as rows are inserted, so it is right before anything has
+// analysed the chunk, give or take the interval at which a backend flushes what
+// it has counted. reltuples stands beside it because it survives a
+// pg_stat_reset, which sets n_live_tup back to zero; whichever has seen the
+// rows reports the larger number.
+// https://www.postgresql.org/docs/current/monitoring-stats.html
 const tableRowsQuery = `SELECT h.table_name,
        coalesce(sum(s.numrows_pre_compression), 0)
      + coalesce(sum(CASE WHEN ch.compressed_chunk_id IS NULL
-                         THEN greatest(c.reltuples, 0)::bigint ELSE 0 END), 0)
+                         THEN greatest(coalesce(st.n_live_tup, 0), greatest(c.reltuples, 0)::bigint)
+                         ELSE 0 END), 0)
   FROM _timescaledb_catalog.hypertable h
   JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND NOT ch.dropped
   LEFT JOIN _timescaledb_catalog.compression_chunk_size s ON s.chunk_id = ch.id
   LEFT JOIN pg_namespace n ON n.nspname = ch.schema_name
   LEFT JOIN pg_class c ON c.relname = ch.table_name AND c.relnamespace = n.oid
+  LEFT JOIN pg_stat_all_tables st ON st.relid = c.oid
  WHERE h.schema_name = $1
  GROUP BY h.table_name`
 
