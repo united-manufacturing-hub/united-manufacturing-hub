@@ -27,9 +27,9 @@ import (
 // first as the literal that labels the row, the last two as the identifier.
 // Every name is checked against safeTableName before it is interpolated.
 
-const newestTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
+const latestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
 
-const oldestTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
+const earliestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
 
 const lookupCountQuery = `SELECT '%s', count(*)::bigint FROM %s.%s`
 

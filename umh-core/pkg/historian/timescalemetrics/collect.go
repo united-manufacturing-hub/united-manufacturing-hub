@@ -33,7 +33,7 @@ var errTimescaleMissing = errors.New("timescaledb extension is not installed")
 
 // Collect reads every figure the historian metrics view shows: the versions and
 // database size, per-table storage and policies, the background jobs, and the
-// oldest and newest timestamp each hypertable holds. Its only bound is ctx.
+// earliest and latest row timestamp each hypertable holds. Its only bound is ctx.
 //
 // The tables this product did not create are dropped before the per-table reads,
 // so a customer's own table in the schema is never queried.
@@ -72,14 +72,14 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	newest, err := collectTimestamps(ctx, db, metrics.Tables,
-		newestTimestampQuery, "newest timestamps", readable)
+	latest, err := collectTimestamps(ctx, db, metrics.Tables,
+		latestRowTimestampQuery, "latest row timestamps", readable)
 	if err != nil {
 		return metrics, err
 	}
 
-	oldest, err := collectTimestamps(ctx, db, metrics.Tables,
-		oldestTimestampQuery, "oldest timestamps", readable)
+	earliest, err := collectTimestamps(ctx, db, metrics.Tables,
+		earliestRowTimestampQuery, "earliest row timestamps", readable)
 	if err != nil {
 		return metrics, err
 	}
@@ -98,9 +98,9 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		rowCounts[name] = count
 	}
 
-	metrics.DataSpanSeconds = dataSpanSeconds(oldest, newest)
+	metrics.DataSpanSeconds = dataSpanSeconds(earliest, latest)
 
-	assignTimestamps(metrics.Tables, oldest, newest)
+	assignTimestamps(metrics.Tables, earliest, latest)
 	assignRowCounts(metrics.Tables, rowCounts)
 
 	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {
@@ -140,7 +140,7 @@ const versionQuery = `SELECT current_setting('server_version'),
 
 func readVersions(ctx context.Context, db Querier, metrics *Metrics) error {
 	var timescaleVersion *string
-	if err := db.QueryRow(ctx, versionQuery).Scan(&metrics.ServerVersion, &timescaleVersion); err != nil {
+	if err := db.QueryRow(ctx, versionQuery).Scan(&metrics.PostgresVersion, &timescaleVersion); err != nil {
 		return fmt.Errorf("read versions: %w", err)
 	}
 
@@ -194,12 +194,12 @@ func rowToHypertable(row pgx.CollectableRow) (Table, error) {
 	table := Table{IsHypertable: true}
 	err := row.Scan(
 		&table.Name,
-		&table.UncompressedBytes,
-		&table.CompressedBytes,
-		&table.Bytes,
+		&table.BytesBeforeCompression,
+		&table.BytesAfterCompression,
+		&table.DiskBytes,
 		&table.ChunkIntervalSeconds,
 		&table.CompressAfterSeconds,
-		&table.DropAfterSeconds,
+		&table.RetentionSeconds,
 		&table.Chunks,
 		&table.CompressedChunks,
 	)
@@ -222,7 +222,7 @@ func readPlainTables(ctx context.Context, db Querier) ([]Table, error) {
 
 func rowToPlainTable(row pgx.CollectableRow) (Table, error) {
 	var table Table
-	err := row.Scan(&table.Name, &table.Bytes, &table.Rows)
+	err := row.Scan(&table.Name, &table.DiskBytes, &table.Rows)
 
 	return table, err
 }
@@ -330,10 +330,10 @@ func timestampAt(epoch int64) string {
 	return time.Unix(epoch, 0).UTC().Format(time.RFC3339)
 }
 
-func assignTimestamps(tables []Table, oldest, newest map[string]int64) {
+func assignTimestamps(tables []Table, earliest, latest map[string]int64) {
 	for i := range tables {
-		tables[i].OldestTimestamp = timestampAt(oldest[tables[i].Name])
-		tables[i].NewestTimestamp = timestampAt(newest[tables[i].Name])
+		tables[i].EarliestRowTimestamp = timestampAt(earliest[tables[i].Name])
+		tables[i].LatestRowTimestamp = timestampAt(latest[tables[i].Name])
 	}
 }
 
@@ -348,27 +348,27 @@ func assignRowCounts(tables []Table, counts map[string]int64) {
 	}
 }
 
-// dataSpanSeconds is the period between the oldest row in any table and the
-// newest. It is taken from the rows themselves rather than from chunk boundaries,
+// dataSpanSeconds is the period between the earliest row in any table and the
+// latest. It is taken from the rows themselves rather than from chunk boundaries,
 // which reach into the future by up to one chunk width and so read long.
-func dataSpanSeconds(oldestPerTable, newestPerTable map[string]int64) int64 {
-	var oldest, newest int64
+func dataSpanSeconds(earliestPerTable, latestPerTable map[string]int64) int64 {
+	var earliest, latest int64
 
-	for _, epoch := range oldestPerTable {
-		if epoch > 0 && (oldest == 0 || epoch < oldest) {
-			oldest = epoch
+	for _, epoch := range earliestPerTable {
+		if epoch > 0 && (earliest == 0 || epoch < earliest) {
+			earliest = epoch
 		}
 	}
 
-	for _, epoch := range newestPerTable {
-		if epoch > newest {
-			newest = epoch
+	for _, epoch := range latestPerTable {
+		if epoch > latest {
+			latest = epoch
 		}
 	}
 
-	if oldest == 0 || newest <= oldest {
+	if earliest == 0 || latest <= earliest {
 		return 0
 	}
 
-	return newest - oldest
+	return latest - earliest
 }

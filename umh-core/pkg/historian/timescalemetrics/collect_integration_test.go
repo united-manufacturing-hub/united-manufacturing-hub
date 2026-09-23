@@ -164,7 +164,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := Collect(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.ServerVersion).To(HavePrefix("17."))
+		Expect(metrics.PostgresVersion).To(HavePrefix("17."))
 		Expect(metrics.TimescaleVersion).To(Equal("2.24.0"))
 		Expect(metrics.DatabaseBytes).To(BeNumerically(">", 0))
 	})
@@ -192,7 +192,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		writes, err := collectTimestamps(ctx, pool, tables,
-			newestTimestampQuery, "newest timestamps", readable)
+			latestRowTimestampQuery, "latest row timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(HaveKey("value_bench"))
@@ -214,7 +214,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		writes, err := collectTimestamps(ctx, pool, tables,
-			newestTimestampQuery, "newest timestamps", readable)
+			latestRowTimestampQuery, "latest row timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred(), "a regular table must not fail the whole read")
 		Expect(writes).To(HaveKey("value_bench"))
@@ -231,7 +231,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 
 		writes, err := collectTimestamps(ctx, pool, []Table{
 			{Name: `value"; DROP TABLE umh.value_bench; --`},
-		}, newestTimestampQuery, "newest timestamps", readable)
+		}, latestRowTimestampQuery, "latest row timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(BeEmpty())
@@ -259,7 +259,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 
 		Expect(byName).To(HaveKey("tag"))
 		Expect(byName["tag"].IsHypertable).To(BeFalse())
-		Expect(byName["tag"].Bytes).To(BeNumerically(">", 0))
+		Expect(byName["tag"].DiskBytes).To(BeNumerically(">", 0))
 		Expect(byName["value_bench"].IsHypertable).To(BeTrue())
 	})
 
@@ -303,7 +303,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		writes, err := collectTimestamps(ctx, pool, tables,
-			newestTimestampQuery, "newest timestamps", readable)
+			latestRowTimestampQuery, "latest row timestamps", readable)
 
 		Expect(err).NotTo(HaveOccurred(), "one unreadable table must not fail every table's freshness")
 		Expect(writes).To(HaveKey("value_bench"))
@@ -401,7 +401,7 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(tableNamed(tables, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)), "168h")
-		Expect(tableNamed(tables, "value_bench").DropAfterSeconds).To(BeZero(),
+		Expect(tableNamed(tables, "value_bench").RetentionSeconds).To(BeZero(),
 			"nothing expires, so the database grows forever")
 	})
 
@@ -415,7 +415,7 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 		tables, err := readTables(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(tableNamed(tables, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
+		Expect(tableNamed(tables, "value_bench").RetentionSeconds).To(Equal(int64(2592000)), "720h")
 	})
 
 	It("reports each table's own interval when they disagree", func() {
@@ -496,9 +496,9 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		value := tableNamed(tables, "value_bench")
 		Expect(value.Chunks).To(BeNumerically(">", 0))
 		Expect(value.CompressedChunks).To(BeNumerically(">", 0))
-		Expect(value.UncompressedBytes).To(BeNumerically(">", 0))
-		Expect(value.CompressedBytes).To(BeNumerically(">", 0))
-		Expect(value.Bytes).To(BeNumerically(">=", value.CompressedBytes))
+		Expect(value.BytesBeforeCompression).To(BeNumerically(">", 0))
+		Expect(value.BytesAfterCompression).To(BeNumerically(">", 0))
+		Expect(value.DiskBytes).To(BeNumerically(">=", value.BytesAfterCompression))
 	})
 
 	It("counts the chunks no policy has compressed into a table's size", func() {
@@ -517,7 +517,7 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		value := tableNamed(tables, "value_bench")
 		Expect(value.CompressedChunks).To(BeNumerically("<", value.Chunks),
 			"the rows just written are in chunks no policy has compressed yet")
-		Expect(value.Bytes).To(BeNumerically(">", value.CompressedBytes),
+		Expect(value.DiskBytes).To(BeNumerically(">", value.BytesAfterCompression),
 			"a size that counted only the compressed chunks would miss them")
 	})
 
@@ -542,8 +542,8 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		tables, err := readTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(tableNamed(tables, "value_bench").DropAfterSeconds).To(Equal(int64(2592000)), "720h")
-		Expect(tableNamed(tables, "attribute_bench").DropAfterSeconds).To(BeZero(),
+		Expect(tableNamed(tables, "value_bench").RetentionSeconds).To(Equal(int64(2592000)), "720h")
+		Expect(tableNamed(tables, "attribute_bench").RetentionSeconds).To(BeZero(),
 			"this table expires nothing, which the aggregate alone would hide")
 		Expect(tableNamed(tables, "value_bench").CompressAfterSeconds).To(Equal(int64(604800)))
 	})
@@ -604,9 +604,9 @@ var _ = Describe("Per-table rows and timespan", Label("integration"), func() {
 
 		table := tableNamed(metrics.Tables, "value_bench")
 
-		oldestRow, err := time.Parse(time.RFC3339, table.OldestTimestamp)
+		oldestRow, err := time.Parse(time.RFC3339, table.EarliestRowTimestamp)
 		Expect(err).NotTo(HaveOccurred(), "the first write is a parseable timestamp")
-		newestRow, err := time.Parse(time.RFC3339, table.NewestTimestamp)
+		newestRow, err := time.Parse(time.RFC3339, table.LatestRowTimestamp)
 		Expect(err).NotTo(HaveOccurred(), "the last write is a parseable timestamp")
 
 		// The fixture writes one row per day going back 200 days.
@@ -676,7 +676,7 @@ var _ = Describe("Stale and small tables", Label("integration"), func() {
 		metrics, err := Collect(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		newestRow, err := time.Parse(time.RFC3339, tableNamed(metrics.Tables, "value_bench").NewestTimestamp)
+		newestRow, err := time.Parse(time.RFC3339, tableNamed(metrics.Tables, "value_bench").LatestRowTimestamp)
 		Expect(err).NotTo(HaveOccurred(), "a table silent for months still reports when it last wrote")
 		Expect(newestRow).To(BeTemporally("<", time.Now().Add(-89*24*time.Hour)))
 	})

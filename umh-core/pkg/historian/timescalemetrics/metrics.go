@@ -33,26 +33,22 @@ type Querier interface {
 // which it has none of.
 type Table struct {
 	Name string `json:"name"`
-	// Bytes is what the table occupies on disk now: the compressed chunks at their
-	// compressed size plus the chunks no policy has compressed yet.
-	Bytes int64 `json:"bytes"`
-	// UncompressedBytes and CompressedBytes cover the compressed chunks only,
-	// because that is what TimescaleDB records a before size for. They answer how
-	// much compression saved, not how large the table is.
-	UncompressedBytes    int64 `json:"uncompressedBytes"`
-	CompressedBytes      int64 `json:"compressedBytes"`
-	ChunkIntervalSeconds int64 `json:"chunkIntervalSeconds"`
-	CompressAfterSeconds int64 `json:"compressAfterSeconds"`
-	DropAfterSeconds     int64 `json:"dropAfterSeconds"`
-	// NewestTimestamp and OldestTimestamp are the max and min of the table's time
-	// column, not when it was written: Postgres records no write time for a table,
-	// and a bridge writing history backwards would make the two differ. They are
-	// RFC 3339 instants rather than ages, because a reader that receives an age
-	// resolves it against its own clock, which puts the reported moment out by
-	// however far that clock is wrong. Empty means no row was found, which is not
-	// the same as a row stamped in 1970.
-	NewestTimestamp string `json:"newestTimestamp"`
-	OldestTimestamp string `json:"oldestTimestamp"`
+	// DiskBytes is the compressed chunks at their compressed size plus the chunks
+	// no policy has compressed yet.
+	DiskBytes int64 `json:"diskBytes"`
+	// BytesBeforeCompression and BytesAfterCompression cover the compressed chunks
+	// only, because a chunk is the only thing TimescaleDB records a before size
+	// for. They answer how much compression saved, not how large the table is.
+	BytesBeforeCompression int64 `json:"bytesBeforeCompression"`
+	BytesAfterCompression  int64 `json:"bytesAfterCompression"`
+	ChunkIntervalSeconds   int64 `json:"chunkIntervalSeconds"`
+	CompressAfterSeconds   int64 `json:"compressAfterSeconds"`
+	RetentionSeconds       int64 `json:"retentionSeconds"`
+	// RFC 3339 instants, empty when the table holds no rows. A reader handed an
+	// age instead would resolve it against its own clock, which puts the reported
+	// moment out by however far that clock is wrong.
+	EarliestRowTimestamp string `json:"earliestRowTimestamp"`
+	LatestRowTimestamp   string `json:"latestRowTimestamp"`
 	// Rows is exact for a compressed chunk, which records its own pre-compression
 	// count, and for the small lookup tables, which are counted outright. The rest
 	// is the planner's estimate: counting every chunk is what a historian cannot
@@ -76,11 +72,11 @@ type Job struct {
 // Metrics is the aggregate operational picture of the historian database,
 // embedded into TimescaleStatus so its fields flatten to the top JSON level.
 type Metrics struct {
-	ServerVersion    string `json:"serverVersion"`
+	PostgresVersion  string `json:"postgresVersion"`
 	TimescaleVersion string `json:"timescaleVersion"`
 	DatabaseBytes    int64  `json:"databaseBytes"`
-	// DataSpanSeconds is the period the data covers, from the oldest row in any
-	// table to the newest.
+	// DataSpanSeconds is the period the data covers, from the earliest row in any
+	// table to the latest.
 	DataSpanSeconds int64   `json:"dataSpanSeconds"`
 	Tables          []Table `json:"tables"`
 	JobList         []Job   `json:"jobList"`
