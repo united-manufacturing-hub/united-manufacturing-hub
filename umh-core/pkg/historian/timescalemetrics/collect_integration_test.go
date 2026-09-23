@@ -191,12 +191,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		readable, err := readTimeColumnTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectTimestamps(ctx, pool, tables,
-			latestRowTimestampQuery, "latest row timestamps", readable)
+		writes, err := readSpans(ctx, pool, tables, readable)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(HaveKey("value_bench"))
-		Expect(writes["value_bench"]).To(BeNumerically(">", 0), "the fixture wrote rows inside the freshness window")
+		Expect(writes["value_bench"].Latest).To(BeNumerically(">", 0), "the fixture wrote rows inside the freshness window")
 	})
 
 	It("skips regular tables, which have no time column", func() {
@@ -213,8 +212,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		readable, err := readTimeColumnTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectTimestamps(ctx, pool, tables,
-			latestRowTimestampQuery, "latest row timestamps", readable)
+		writes, err := readSpans(ctx, pool, tables, readable)
 
 		Expect(err).NotTo(HaveOccurred(), "a regular table must not fail the whole read")
 		Expect(writes).To(HaveKey("value_bench"))
@@ -229,9 +227,9 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		readable, err := readTimeColumnTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectTimestamps(ctx, pool, []Table{
+		writes, err := readSpans(ctx, pool, []Table{
 			{Name: `value"; DROP TABLE umh.value_bench; --`},
-		}, latestRowTimestampQuery, "latest row timestamps", readable)
+		}, readable)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(BeEmpty())
@@ -302,8 +300,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		readable, err := readTimeColumnTables(ctx, pool)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := collectTimestamps(ctx, pool, tables,
-			latestRowTimestampQuery, "latest row timestamps", readable)
+		writes, err := readSpans(ctx, pool, tables, readable)
 
 		Expect(err).NotTo(HaveOccurred(), "one unreadable table must not fail every table's freshness")
 		Expect(writes).To(HaveKey("value_bench"))
