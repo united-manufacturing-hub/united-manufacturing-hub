@@ -200,12 +200,7 @@ var _ = Describe("the registered worker type", func() {
 })
 
 var _ = Describe("Poll", func() {
-	It("reports unreachable with authentication unknown when the DSN does not parse", func() {
-		// A colon in the host reaches Poll in production: TimescaleConfig.Validate
-		// only requires host to be non-empty, and net.JoinHostPort then brackets the
-		// value into what pgx reads as a malformed IPv6 literal. Pool creation parses
-		// the DSN without dialling, so this covers the early return with no database
-		// and no network.
+	It("reports unreachable with authentication unknown when the host is malformed", func() {
 		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
 			Host:     "host:with:colons",
 			Password: "unlikely-to-appear-by-accident",
@@ -214,11 +209,11 @@ var _ = Describe("Poll", func() {
 		status, err := Poll(context.Background(),
 			newDeps(idUnder("parent-a"), baseUnder("parent-a")), cfg)
 
-		Expect(err).To(MatchError(ContainSubstring("parse timescale dsn")),
-			"the error wraps the parse failure, so the degraded verdict names the cause")
+		Expect(err).To(MatchError(ContainSubstring(cfg.Timescale.Host)),
+			"the error names the host, so the degraded verdict names the cause")
 		Expect(err).NotTo(MatchError(ContainSubstring(cfg.Timescale.Password)),
-			"the error quotes the DSN, which carries the password: pgx masks it, and this error is logged")
-		Expect(status.Reachable).To(BeFalse(), "nothing was dialled, so the endpoint is not proven reachable")
+			"this error is logged, so it must not carry the password")
+		Expect(status.Reachable).To(BeFalse(), "no server answered, so the endpoint is not proven reachable")
 		Expect(status.Auth).To(Equal(models.TimescaleAuthUnknown),
 			"no server answered, so the credentials stay unverified rather than rejected")
 	})
