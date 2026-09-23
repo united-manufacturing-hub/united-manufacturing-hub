@@ -89,15 +89,6 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	lookupCounts, err := countLookupTables(ctx, db, metrics.Tables)
-	if err != nil {
-		return metrics, err
-	}
-
-	for name, count := range lookupCounts {
-		rowCounts[name] = count
-	}
-
 	metrics.DataSpanSeconds = dataSpanSeconds(earliest, latest)
 
 	assignTimestamps(metrics.Tables, earliest, latest)
