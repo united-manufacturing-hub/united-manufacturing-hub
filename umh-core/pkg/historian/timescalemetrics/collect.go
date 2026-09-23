@@ -208,9 +208,14 @@ func rowToHypertable(row pgx.CollectableRow) (Table, error) {
 	return table, err
 }
 
-const regularTablesQuery = `SELECT c.relname, pg_total_relation_size(c.oid)::bigint, greatest(c.reltuples, 0)::bigint
+// A lookup table's rows come from the same live-tuple tracking as a chunk's,
+// which matters more here: these are written rarely enough that autovacuum may
+// never analyse them, leaving reltuples at zero for a populated table.
+const regularTablesQuery = `SELECT c.relname, pg_total_relation_size(c.oid)::bigint,
+       greatest(coalesce(st.n_live_tup, 0), greatest(c.reltuples, 0)::bigint)
   FROM pg_class c
   JOIN pg_namespace n ON n.oid = c.relnamespace
+  LEFT JOIN pg_stat_all_tables st ON st.relid = c.oid
  WHERE n.nspname = $1 AND c.relkind = 'r'
    AND c.relname <> 'schema_migrations'
    AND NOT EXISTS (SELECT 1 FROM _timescaledb_catalog.hypertable h
