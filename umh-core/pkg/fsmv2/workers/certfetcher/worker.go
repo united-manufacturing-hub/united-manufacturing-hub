@@ -129,7 +129,7 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 func init() {
 	register.Worker[CertFetcherConfig, CertFetcherStatus, *CertFetcherDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
-			d := register.GetDeps[*CertFetcherDependencies](WorkerTypeName)
+			d := register.GlobalDeps[*CertFetcherDependencies](WorkerTypeName)
 
 			return NewCertFetcherWorker(id, logger, sr, d)
 		})

@@ -40,7 +40,7 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 	AfterEach(func() {
 		// The configworker deps key is process-global; clear it so a failed run
 		// does not leak the registry into later integration specs.
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	It("drives one helloworld child through create->Running, update->observed-change, then Delete while the kernel survives", func() {

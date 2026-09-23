@@ -735,7 +735,7 @@ children:
 		yamlConfig += `  - name: "certfetcher"
     workerType: "certfetcher"
 `
-		register.SetDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
+		register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
 			certfetcher.NewCertHandlerSeedDependencies(communicationState.Gatekeeper.CertificateHandler()))
 	}
 
@@ -771,7 +771,7 @@ children:
 	fsmv2Deps := map[string]any{}
 
 	if configData.Agent.UseFSMv2MemoryCleanup {
-		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
+		register.SetGlobalDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 	}
 
 	// Publish the dynamicchildren registry under the configworker deps key and
@@ -784,7 +784,7 @@ children:
 	// registry; the cleanup clears both and must run after the supervisor has
 	// stopped (the caller runs cleanup after appSup.Run returns).
 	dynWriter := dynamicchildren.NewWriter()
-	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
+	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
 	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
 
 	// Publish the config manager the config worker polls each tick to reconcile
@@ -794,11 +794,11 @@ children:
 	// error path below alongside the other deps keys.
 	// TODO(ENG-4400): remove this wiring once the config worker reads
 	// config.yaml directly instead of polling the manager.
-	register.SetDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
+	register.SetGlobalDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
 
 	// Published before NewApplicationSupervisor, like the keys above: the
 	// config worker reads this key when it is constructed.
-	register.SetDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
+	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
 
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
@@ -822,9 +822,9 @@ children:
 	})
 	if err != nil {
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
+		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -837,9 +837,9 @@ children:
 		// Clear the client and the configworker deps key after the supervisor
 		// has stopped (the caller runs cleanup after appSup.Run returns).
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
+		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
 		fsmv2Hook.Stop()
 	}
 

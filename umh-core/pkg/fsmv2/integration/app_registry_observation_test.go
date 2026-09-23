@@ -71,7 +71,7 @@ var _ = Describe("Application worker surfaces the shared registry into Applicati
 	const configWorkerKey = "configworker"
 
 	AfterEach(func() {
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	It("carries DynamicChildren and sets RegistryConfigured=true when a registry is published", func() {
@@ -83,7 +83,7 @@ var _ = Describe("Application worker surfaces the shared registry into Applicati
 		reg := dynamicchildren.NewWriter()
 		ref := dynamicchildren.Ref{WorkerType: "example", Name: "example-child"}
 		Expect(reg.Upsert(ref, map[string]any{"value": 1})).To(Succeed())
-		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, reg.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, reg.Registry())
 
 		sup, store, appID := newAppSupervisorWithStore(logger)
 
@@ -114,8 +114,8 @@ var _ = Describe("Application worker surfaces the shared registry into Applicati
 		ctx := context.Background()
 		logger := deps.NewNopFSMLogger()
 
-		// No SetDeps: the collector's register.GetDeps returns a nil handle.
-		register.ClearDeps(configWorkerKey)
+		// No SetGlobalDeps: the collector's register.GlobalDeps returns a nil handle.
+		register.ClearGlobalDeps(configWorkerKey)
 
 		sup, store, appID := newAppSupervisorWithStore(logger)
 
