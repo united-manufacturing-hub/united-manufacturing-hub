@@ -408,7 +408,7 @@ func collectTimestamps(
 	subject string,
 	readable map[string]bool,
 ) (map[string]int64, error) {
-	statement := perTableStatement(tables, query, readable)
+	statement := unionOverTables(tables, query, readable)
 	if statement == "" {
 		return map[string]int64{}, nil
 	}
@@ -421,12 +421,11 @@ func collectTimestamps(
 	return valuesByName(pairs), nil
 }
 
-// perTableStatement joins one copy of query per readable hypertable with UNION
-// ALL, filling in the table name three times: once as the literal that labels
-// the row and twice as the identifier. A table absent from readable carries no
-// ts column to take a max or min of. It returns an empty string when no table
+// unionOverTables asks query of every readable hypertable in one statement,
+// filling the table name into each select. A table absent from readable carries
+// no ts column to take a max or min of. It returns an empty string when no table
 // qualifies, which the caller reads as nothing to ask.
-func perTableStatement(tables []Table, query string, readable map[string]bool) string {
+func unionOverTables(tables []Table, query string, readable map[string]bool) string {
 	selects := make([]string, 0, len(tables))
 
 	for _, table := range tables {
