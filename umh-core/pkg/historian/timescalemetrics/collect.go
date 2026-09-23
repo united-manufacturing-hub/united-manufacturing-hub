@@ -65,13 +65,7 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	readable, err := readTimeColumnTables(ctx, db)
-	if err != nil {
-		return metrics, err
-	}
-
-	spans, err := readSpans(ctx, db, metrics.Tables, readable)
-	if err != nil {
+	if err := readRowTimestamps(ctx, db, &metrics); err != nil {
 		return metrics, err
 	}
 
@@ -80,9 +74,6 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	metrics.DataSpanSeconds = dataSpanSeconds(spans)
-
-	assignTimestamps(metrics.Tables, spans)
 	assignRowCounts(metrics.Tables, rowCounts)
 
 	readDatabaseSize(ctx, db, &metrics)
@@ -378,6 +369,25 @@ var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 func safeTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
+}
+
+// readRowTimestamps records both ends of every readable table's ts column, and
+// the span across all of them.
+func readRowTimestamps(ctx context.Context, db Querier, metrics *Metrics) error {
+	readable, err := readTimeColumnTables(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	spans, err := readSpans(ctx, db, metrics.Tables, readable)
+	if err != nil {
+		return err
+	}
+
+	assignTimestamps(metrics.Tables, spans)
+	metrics.DataSpanSeconds = dataSpanSeconds(spans)
+
+	return nil
 }
 
 // rowSpan is one table's first and last row timestamp as epoch seconds.
