@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// GetHistorianMetrics reads the state of the configured historian database on
-// request: its versions, storage, compression and retention policies, background
-// jobs, and per-table detail. The queries run only when a caller asks, so an
-// instance whose historian nobody is looking at does no work and sends nothing.
+// GetHistorianMetrics reads the configured historian database on request:
+// versions, storage, policies, background jobs and per-table detail. Nothing runs
+// until a caller asks.
 
 package actions
 
@@ -66,10 +65,9 @@ func NewGetHistorianMetricsAction(
 	}
 }
 
-// collectOverNewConnection dials the historian for this one request and hangs up
-// again. pgx.Connect establishes the connection here, so an unreachable host or a
-// rejected password is reported as a failure to connect; a pool would defer the
-// dial to its first acquire and surface it as a failed query instead.
+// pgx.Connect dials here, so an unreachable host or a rejected password is
+// reported as a failure to connect; a pool would defer the dial to its first
+// acquire and surface it as a failed query.
 func collectOverNewConnection(ctx context.Context, dsn string) (timescalemetrics.Metrics, error) {
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -114,9 +112,8 @@ func (a *GetHistorianMetricsAction) Execute() (interface{}, map[string]interface
 			models.ErrConfigFileInvalid, err, "historian_metrics_config_read_failed")
 	}
 
-	// A missing historian is a client mistake, not an instance fault: the console
-	// only offers this page once one is configured. Reporting it would fill Sentry
-	// with other people's misrouted requests.
+	// A client mistake, not an instance fault: reporting it would fill Sentry with
+	// misrouted requests.
 	if cfg.Historian == nil {
 		return a.fail("No historian is configured on this instance",
 			models.ErrHistorianMetricsFailed, nil, "")
@@ -132,9 +129,8 @@ func (a *GetHistorianMetricsAction) Execute() (interface{}, map[string]interface
 	return metrics, nil, nil
 }
 
-// fail replies to the caller and, when cause is non-nil, reports the failure to
-// Sentry under the historian feature so a database nobody can read is visible
-// without waiting for someone to notice an empty page.
+// fail replies to the caller and, when cause is non-nil, reports to Sentry, so a
+// database nobody can read does not wait for someone to notice an empty page.
 func (a *GetHistorianMetricsAction) fail(
 	message string,
 	code string,

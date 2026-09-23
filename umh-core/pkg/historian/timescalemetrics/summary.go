@@ -19,22 +19,18 @@ import (
 	"fmt"
 )
 
-// Summary is the part of a historian's state reported without being asked: which
-// tables it holds, and whether its background jobs are failing. Everything else --
-// sizes, policies, per-table detail, the job list -- is read on request.
+// Summary is the part of a historian's state reported without being asked.
+// Everything else is read on request, through Collect.
 //
-// FailedJobs counts jobs that exist and are not working. A historian with no
-// policies at all has no jobs to fail, so a zero here is not on its own proof
-// that data is being compressed or expired; the job list read on request says
-// which policies exist.
+// A historian with no policies has no jobs to fail, so FailedJobs at zero is not
+// proof that data is compressed or expired.
 type Summary struct {
 	TableNames []string `json:"tableNames"`
 	FailedJobs int      `json:"failedJobs"`
 }
 
-// summaryQuery reads both figures in one round trip. Neither subquery's cost
-// grows with how much data the historian holds: one counts jobs, the other lists
-// relation names.
+// Both figures in one round trip, and neither subquery's cost grows with how
+// much data the historian holds.
 const summaryQuery = `SELECT
        (SELECT count(*) FILTER (WHERE s.last_run_status = 'Failed')
           FROM timescaledb_information.jobs j
@@ -55,9 +51,8 @@ func CollectSummary(ctx context.Context, db Querier) (Summary, error) {
 		return summary, fmt.Errorf("read historian summary: %w", err)
 	}
 
-	// The schema holds whatever the customer put there. historianCreated is the
-	// one definition of which tables are ours, shared with the split the on-demand
-	// read performs, so the answer cannot drift between the two paths.
+	// The schema holds whatever the customer put there. historianCreated is the one
+	// definition of which tables are ours, so the two read paths cannot drift.
 	summary.TableNames = []string{}
 
 	for _, name := range names {

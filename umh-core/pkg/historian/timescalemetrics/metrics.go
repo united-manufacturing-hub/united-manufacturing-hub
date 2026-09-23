@@ -20,39 +20,30 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Querier is the read surface this package needs. Both *pgx.Conn and
-// *pgxpool.Pool satisfy it, so a one-shot caller opens a single connection while
-// a long-lived one keeps its pool.
+// Querier is the read surface this package needs. *pgx.Conn and *pgxpool.Pool
+// both satisfy it.
 type Querier interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// Table is one table's storage, chunking and policy settings. A plain lookup
-// table carries only a name, a size and a row count: the rest describes chunking,
-// which it has none of.
+// Table is one table's storage, chunking and policy settings. A lookup table has
+// no chunks, so everything describing chunking is zero for it.
 type Table struct {
 	Name string `json:"name"`
-	// DiskBytes is the compressed chunks at their compressed size plus the chunks
-	// no policy has compressed yet.
+	// Compressed chunks at their compressed size, plus the chunks still uncompressed.
 	DiskBytes int64 `json:"diskBytes"`
-	// BytesBeforeCompression and BytesAfterCompression cover the compressed chunks
-	// only, because a chunk is the only thing TimescaleDB records a before size
-	// for. They answer how much compression saved, not how large the table is.
+	// Compressed chunks only, which is all TimescaleDB records a before size for.
 	BytesBeforeCompression int64 `json:"bytesBeforeCompression"`
 	BytesAfterCompression  int64 `json:"bytesAfterCompression"`
 	ChunkIntervalSeconds   int64 `json:"chunkIntervalSeconds"`
 	CompressAfterSeconds   int64 `json:"compressAfterSeconds"`
 	RetentionSeconds       int64 `json:"retentionSeconds"`
-	// RFC 3339 instants, empty when the table holds no rows. A reader handed an
-	// age instead would resolve it against its own clock, which puts the reported
-	// moment out by however far that clock is wrong.
+	// RFC 3339, empty when the table holds no rows.
 	EarliestRowTimestamp string `json:"earliestRowTimestamp"`
 	LatestRowTimestamp   string `json:"latestRowTimestamp"`
-	// Rows is exact for a compressed chunk, which records its own pre-compression
-	// count, and for the lookup tables, which are counted outright. A chunk no
-	// policy has compressed yet contributes Postgres's live-tuple tracking, which
-	// follows the rows as they are written.
+	// Exact for a compressed chunk, which records its own count; Postgres's
+	// live-tuple tracking for everything else.
 	Rows             int64 `json:"rows"`
 	Chunks           int   `json:"chunks"`
 	CompressedChunks int   `json:"compressedChunks"`
@@ -69,14 +60,12 @@ type Job struct {
 	LastRunFailed      bool   `json:"lastRunFailed"`
 }
 
-// Metrics is the aggregate operational picture of the historian database,
-// embedded into TimescaleStatus so its fields flatten to the top JSON level.
+// Metrics is everything Collect reads, returned to the console on request.
 type Metrics struct {
 	PostgresVersion  string `json:"postgresVersion"`
 	TimescaleVersion string `json:"timescaleVersion"`
 	DatabaseBytes    int64  `json:"databaseBytes"`
-	// DataSpanSeconds is the period the data covers, from the earliest row in any
-	// table to the latest.
+	// From the earliest row in any table to the latest.
 	DataSpanSeconds int64   `json:"dataSpanSeconds"`
 	Tables          []Table `json:"tables"`
 	JobList         []Job   `json:"jobList"`
