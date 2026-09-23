@@ -70,14 +70,7 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	latest, err := collectTimestamps(ctx, db, metrics.Tables,
-		latestRowTimestampQuery, "latest row timestamps", readable)
-	if err != nil {
-		return metrics, err
-	}
-
-	earliest, err := collectTimestamps(ctx, db, metrics.Tables,
-		earliestRowTimestampQuery, "earliest row timestamps", readable)
+	spans, err := readSpans(ctx, db, metrics.Tables, readable)
 	if err != nil {
 		return metrics, err
 	}
@@ -87,9 +80,9 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	metrics.DataSpanSeconds = dataSpanSeconds(earliest, latest)
+	metrics.DataSpanSeconds = dataSpanSeconds(spans)
 
-	assignTimestamps(metrics.Tables, earliest, latest)
+	assignTimestamps(metrics.Tables, spans)
 	assignRowCounts(metrics.Tables, rowCounts)
 
 	readDatabaseSize(ctx, db, &metrics)
@@ -335,10 +328,11 @@ func timestampAt(epoch int64) string {
 	return time.Unix(epoch, 0).UTC().Format(time.RFC3339)
 }
 
-func assignTimestamps(tables []Table, earliest, latest map[string]int64) {
+func assignTimestamps(tables []Table, spans map[string]rowSpan) {
 	for i := range tables {
-		tables[i].EarliestRowTimestamp = timestampAt(earliest[tables[i].Name])
-		tables[i].LatestRowTimestamp = timestampAt(latest[tables[i].Name])
+		span := spans[tables[i].Name]
+		tables[i].EarliestRowTimestamp = timestampAt(span.Earliest)
+		tables[i].LatestRowTimestamp = timestampAt(span.Latest)
 	}
 }
 
@@ -354,18 +348,16 @@ func assignRowCounts(tables []Table, counts map[string]int64) {
 
 // Taken from the rows rather than the chunk boundaries, which reach up to one
 // chunk width into the future and so read long.
-func dataSpanSeconds(earliestPerTable, latestPerTable map[string]int64) int64 {
+func dataSpanSeconds(spans map[string]rowSpan) int64 {
 	var earliest, latest int64
 
-	for _, epoch := range earliestPerTable {
-		if epoch > 0 && (earliest == 0 || epoch < earliest) {
-			earliest = epoch
+	for _, span := range spans {
+		if span.Earliest > 0 && (earliest == 0 || span.Earliest < earliest) {
+			earliest = span.Earliest
 		}
-	}
 
-	for _, epoch := range latestPerTable {
-		if epoch > latest {
-			latest = epoch
+		if span.Latest > latest {
+			latest = span.Latest
 		}
 	}
 
@@ -376,13 +368,11 @@ func dataSpanSeconds(earliestPerTable, latestPerTable map[string]int64) int64 {
 	return latest - earliest
 }
 
-// A table name cannot be bound as a parameter, so these two are format strings
-// taking the name three times: once as the literal labelling the row, twice as
-// the identifier. safeTableName guards every name that reaches them.
+// A table name cannot be bound as a parameter, so this is a format string taking
+// the name three times: once as the literal labelling the row, twice as the
+// identifier. safeTableName guards every name that reaches it.
 
-const latestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
-
-const earliestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
+const rowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0), coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
 
 var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
@@ -390,32 +380,49 @@ func safeTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
 }
 
-// collectTimestamps reads one end of the ts column of every readable hypertable
-// and returns what each reported.
-func collectTimestamps(
+// rowSpan is one table's first and last row timestamp as epoch seconds.
+type rowSpan struct {
+	Earliest int64
+	Latest   int64
+}
+
+// namedRowSpan is one row of rowTimestampQuery.
+type namedRowSpan struct {
+	Name     string
+	Earliest int64
+	Latest   int64
+}
+
+// readSpans asks both ends of the ts column of every readable hypertable in one
+// statement. A table absent from the result reported nothing.
+func readSpans(
 	ctx context.Context,
 	db Querier,
 	tables []Table,
-	query string,
-	subject string,
 	readable map[string]bool,
-) (map[string]int64, error) {
-	statement := unionOverTables(tables, query, readable)
+) (map[string]rowSpan, error) {
+	statement := unionOverTables(tables, readable)
 	if statement == "" {
-		return map[string]int64{}, nil
+		return map[string]rowSpan{}, nil
 	}
 
-	pairs, err := queryAll(ctx, db, statement, subject, rowToNamedValue)
+	rows, err := queryAll(ctx, db, statement, "row timestamps", pgx.RowToStructByPos[namedRowSpan])
 	if err != nil {
 		return nil, err
 	}
 
-	return valuesByName(pairs), nil
+	spans := make(map[string]rowSpan, len(rows))
+	for _, row := range rows {
+		spans[row.Name] = rowSpan{Earliest: row.Earliest, Latest: row.Latest}
+	}
+
+	return spans, nil
 }
 
-// unionOverTables asks query of every readable hypertable in one statement.
-// Empty when no table qualifies, which the caller reads as nothing to ask.
-func unionOverTables(tables []Table, query string, readable map[string]bool) string {
+// unionOverTables asks rowTimestampQuery of every readable hypertable in one
+// statement. Empty when no table qualifies, which the caller reads as nothing to
+// ask.
+func unionOverTables(tables []Table, readable map[string]bool) string {
 	selects := make([]string, 0, len(tables))
 
 	for _, table := range tables {
@@ -423,7 +430,7 @@ func unionOverTables(tables []Table, query string, readable map[string]bool) str
 			continue
 		}
 
-		selects = append(selects, fmt.Sprintf(query, table.Name, historianSchema, table.Name))
+		selects = append(selects, fmt.Sprintf(rowTimestampQuery, table.Name, historianSchema, table.Name))
 	}
 
 	return strings.Join(selects, " UNION ALL ")
