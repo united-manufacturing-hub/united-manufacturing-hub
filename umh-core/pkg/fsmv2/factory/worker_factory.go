@@ -121,7 +121,7 @@ func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interfa
 
 // NewWorkerByType creates a worker instance by runtime string type name.
 // For compile-time type-safe creation, use GetFactory[TObserved, TDesired]() instead.
-func NewWorkerByType(workerType string, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, deps map[string]any) (fsmv2.Worker, error) {
+func NewWorkerByType(workerType string, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, dependencies map[string]any) (fsmv2.Worker, error) {
 	if workerType == "" {
 		return nil, errors.New("worker type cannot be empty")
 	}
@@ -136,7 +136,7 @@ func NewWorkerByType(workerType string, identity deps.Identity, logger deps.FSML
 		return nil, errors.New("unknown worker type")
 	}
 
-	w := factoryFunc(identity, logger, stateReader, deps)
+	w := factoryFunc(identity, logger, stateReader, dependencies)
 	if w == nil {
 		return nil, fmt.Errorf("factory for type %q returned nil worker", workerType)
 	}

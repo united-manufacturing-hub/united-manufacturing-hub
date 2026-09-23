@@ -42,24 +42,24 @@ var wronglyTypedSamplerKey = config.NewDependencyKey[string]("test.sampler")
 var _ = Describe("DependencyKey", func() {
 	It("reads back the value that was put under the same key", func() {
 		m := map[string]any{}
-		config.PutDependency(m, samplerKey, sampler(fixedSampler{value: 7}))
+		config.SetDependency(m, samplerKey, sampler(fixedSampler{value: 7}))
 
-		got, ok := config.GetDependency(m, samplerKey)
+		got, ok := config.LookupDependency(m, samplerKey)
 		Expect(ok).To(BeTrue())
 		Expect(got.Sample()).To(Equal(7))
 	})
 
 	It("reports absent when nothing was put under the key", func() {
-		got, ok := config.GetDependency(map[string]any{}, samplerKey)
+		got, ok := config.LookupDependency(map[string]any{}, samplerKey)
 		Expect(ok).To(BeFalse())
 		Expect(got).To(BeNil())
 	})
 
 	It("reports absent when the stored value is not the key's type", func() {
 		m := map[string]any{}
-		config.PutDependency(m, wronglyTypedSamplerKey, "not a sampler")
+		config.SetDependency(m, wronglyTypedSamplerKey, "not a sampler")
 
-		got, ok := config.GetDependency(m, samplerKey)
+		got, ok := config.LookupDependency(m, samplerKey)
 		Expect(ok).To(BeFalse())
 		Expect(got).To(BeNil())
 	})

@@ -37,20 +37,20 @@ func NewDependencyKey[T any](name string) DependencyKey[T] {
 	return DependencyKey[T]{name: name}
 }
 
-// PutDependency stores value under key. m must be non-nil, as for any map
+// SetDependency stores value under key. m must be non-nil, as for any map
 // assignment.
-func PutDependency[T any](m map[string]any, key DependencyKey[T], value T) {
+func SetDependency[T any](m map[string]any, key DependencyKey[T], value T) {
 	m[key.name] = value
 }
 
-// GetDependency reads the value stored under key. The second return is false
+// LookupDependency reads the value stored under key. The second return is false
 // when the map holds nothing under that name, and also when it holds something
 // of another type.
 //
 // A mismatched type reads as absent rather than panicking so that a worker
 // whose dependency was wired up wrongly stays on its real implementation. The
 // alternative is a panic in front of whoever is running the process.
-func GetDependency[T any](m map[string]any, key DependencyKey[T]) (T, bool) {
+func LookupDependency[T any](m map[string]any, key DependencyKey[T]) (T, bool) {
 	// A name the map does not hold reads as a nil any, which fails this
 	// assertion the same way a wrong type does. Both answers are the same to a
 	// caller, so neither needs its own branch.

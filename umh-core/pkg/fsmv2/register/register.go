@@ -48,7 +48,7 @@ type NoDeps = struct{}
 //
 // Constructor receives the standard framework dependencies (identity, logger, stateReader)
 // and the dependency map this worker was created with. Read a value out of that map
-// with config.GetDependency and a typed key; it is how a test hands a worker a mock
+// with config.LookupDependency and a typed key; it is how a test hands a worker a mock
 // without a process-global setter. Workers with custom ObservedState types must use
 // factory.RegisterWorkerType directly.
 //
@@ -78,8 +78,8 @@ func Worker[TConfig any, TStatus any, TDeps any](
 		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
 	}
 
-	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, runDeps map[string]any) fsmv2.Worker {
-		w, err := constructor(id, logger, sr, runDeps)
+	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, dependencies map[string]any) fsmv2.Worker {
+		w, err := constructor(id, logger, sr, dependencies)
 		if err != nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}
