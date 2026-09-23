@@ -66,10 +66,7 @@ type Job struct {
 	ScheduleSeconds    int64  `json:"scheduleSeconds"`
 	LastSuccessSeconds int64  `json:"lastSuccessSeconds"`
 	NextRunSeconds     int64  `json:"nextRunSeconds"`
-	// LastRunFailed reports the outcome of the most recent run, which is what a
-	// reader acts on. A lifetime failure count keeps flagging a job that failed
-	// once and has succeeded ever since.
-	LastRunFailed bool `json:"lastRunFailed"`
+	LastRunFailed      bool   `json:"lastRunFailed"`
 }
 
 // Metrics is the aggregate operational picture of the historian database,
