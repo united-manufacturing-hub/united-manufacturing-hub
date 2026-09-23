@@ -21,7 +21,7 @@ import (
 	"strings"
 )
 
-// The three queries below are per-table selects, joined with UNION ALL into one
+// The two queries below are per-table selects, joined with UNION ALL into one
 // statement. A table name cannot be bound as a parameter, so each is a format
 // string taking the table name, the schema, and the table name again -- the
 // first as the literal that labels the row, the last two as the identifier.
@@ -30,8 +30,6 @@ import (
 const latestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
 
 const earliestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
-
-const lookupCountQuery = `SELECT '%s', count(*)::bigint FROM %s.%s`
 
 var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
@@ -131,15 +129,4 @@ func collectTimestamps(
 ) (map[string]int64, error) {
 	return collectPerTable(ctx, db, tables, query, subject,
 		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
-}
-
-// countLookupTables counts the historian's own plain tables exactly. The planner
-// estimate they would otherwise carry stays zero until autovacuum first analyses
-// them, which on a small, rarely-written lookup table may never happen, leaving a
-// populated table reporting no rows at all. They are bounded by how many distinct
-// tags exist rather than by ingest rate, so counting them outright is affordable
-// where counting a hypertable is not.
-func countLookupTables(ctx context.Context, db Querier, tables []Table) (map[string]int64, error) {
-	return collectPerTable(ctx, db, tables, lookupCountQuery, "lookup table counts",
-		func(table Table) bool { return !table.IsHypertable && historianCreated(table.Name) })
 }

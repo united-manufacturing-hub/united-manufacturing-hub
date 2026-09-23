@@ -754,10 +754,15 @@ CREATE TABLE umh.tag (id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL);
 INSERT INTO umh.tag (name) SELECT 'tag_' || g FROM generate_series(1, 10) AS g;`)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := Collect(ctx, pool)
+		// Nothing analyses a table this small, so the planner's estimate stays at
+		// zero for it. The statistics system flushes what a backend has counted at
+		// an interval, so the rows appear within a second of the write.
+		Eventually(func() int64 {
+			metrics, err := Collect(ctx, pool)
+			Expect(err).NotTo(HaveOccurred())
 
-		Expect(err).NotTo(HaveOccurred())
-		Expect(tableNamed(metrics.Tables, "tag").Rows).To(Equal(int64(10)))
+			return tableNamed(metrics.Tables, "tag").Rows
+		}, "10s", "500ms").Should(Equal(int64(10)))
 	})
 })
 
