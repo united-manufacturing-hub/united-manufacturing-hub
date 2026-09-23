@@ -73,19 +73,19 @@ func historianTables(tables []Table) []Table {
 	return kept
 }
 
-// collectPerTable runs one statement built from a per-table select, joined with
-// UNION ALL, and returns the value each table reported. A table name cannot be
-// bound as a parameter, so keep decides which tables qualify and safeTableName
-// guards every name that reaches the format string.
-func collectPerTable(
+// collectTimestamps reads one end of the time column of every hypertable that
+// has one, as a single statement joining one select per table with UNION ALL,
+// and returns what each table reported. A table name cannot be bound as a
+// parameter, so safeTableName guards every name that reaches the format string.
+func collectTimestamps(
 	ctx context.Context,
 	db Querier,
 	tables []Table,
 	query string,
 	subject string,
-	keep func(Table) bool,
+	readable map[string]bool,
 ) (map[string]int64, error) {
-	statement := perTableStatement(tables, query, keep)
+	statement := perTableStatement(tables, query, readable)
 	if statement == "" {
 		return map[string]int64{}, nil
 	}
@@ -98,15 +98,16 @@ func collectPerTable(
 	return valuesByName(pairs), nil
 }
 
-// perTableStatement joins one copy of query per qualifying table with UNION ALL,
-// filling in the table name three times: once as the literal that labels the row
-// and twice as the identifier. It returns an empty string when no table
+// perTableStatement joins one copy of query per readable hypertable with UNION
+// ALL, filling in the table name three times: once as the literal that labels
+// the row and twice as the identifier. A table absent from readable carries no
+// ts column to take a max or min of. It returns an empty string when no table
 // qualifies, which the caller reads as nothing to ask.
-func perTableStatement(tables []Table, query string, keep func(Table) bool) string {
+func perTableStatement(tables []Table, query string, readable map[string]bool) string {
 	selects := make([]string, 0, len(tables))
 
 	for _, table := range tables {
-		if !safeTableName(table.Name) || !keep(table) {
+		if !table.IsHypertable || !readable[table.Name] || !safeTableName(table.Name) {
 			continue
 		}
 
@@ -114,19 +115,4 @@ func perTableStatement(tables []Table, query string, keep func(Table) bool) stri
 	}
 
 	return strings.Join(selects, " UNION ALL ")
-}
-
-// collectTimestamps reads one end of each hypertable's time column. Only the
-// hypertables readable names qualify: the others carry no ts column to take a
-// max or min of.
-func collectTimestamps(
-	ctx context.Context,
-	db Querier,
-	tables []Table,
-	query string,
-	subject string,
-	readable map[string]bool,
-) (map[string]int64, error) {
-	return collectPerTable(ctx, db, tables, query, subject,
-		func(table Table) bool { return table.IsHypertable && readable[table.Name] })
 }
