@@ -322,7 +322,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		for _, job := range jobs {
 			Expect(job.Table).To(BeElementOf("value_bench", "attribute_bench"))
 			Expect(job.ScheduleSeconds).To(BeNumerically(">", 0))
-			Expect(job.Failures).To(BeZero())
+			Expect(job.LastRunFailed).To(BeFalse())
 		}
 	})
 
@@ -352,11 +352,42 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(jobs).To(HaveLen(2), "the healthy job is listed alongside the failing one")
-		Expect(jobs[0].Failures).To(Equal(3), "the failing job sorts first")
+		Expect(jobs[0].LastRunFailed).To(BeTrue(), "the failing job sorts first")
 		Expect(jobs[0].Kind).To(Equal("compression"))
 		Expect(jobs[0].Table).To(BeElementOf("value_bench", "attribute_bench"))
 		Expect(jobs[0].ScheduleSeconds).To(BeNumerically(">", 0))
-		Expect(jobs[1].Failures).To(BeZero())
+		Expect(jobs[1].LastRunFailed).To(BeFalse())
+	})
+
+	It("clears a job that failed before but whose last run succeeded", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		var jobID int
+		Expect(pool.QueryRow(ctx,
+			`SELECT job_id FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh' ORDER BY job_id LIMIT 1`,
+		).Scan(&jobID)).To(Succeed())
+
+		_, err = pool.Exec(ctx, `SELECT alter_job($1, scheduled => false)`, jobID)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
+			(job_id, last_start, last_finish, next_start, last_successful_finish, last_run_success,
+			 total_runs, total_duration, total_duration_failures, total_successes, total_failures,
+			 total_crashes, consecutive_failures, consecutive_crashes, flags)
+			VALUES ($1, now(), now(), now() + interval '1 hour', now(), true,
+			 4, interval '0', interval '0', 1, 3, 0, 0, 0, 0)
+			ON CONFLICT (job_id) DO UPDATE SET last_run_success = true, total_failures = 3`, jobID)
+		Expect(err).NotTo(HaveOccurred())
+
+		jobs, err := readJobs(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		for _, job := range jobs {
+			Expect(job.LastRunFailed).To(BeFalse(),
+				"three failures in this job's history are not a reason to flag it while it is succeeding")
+		}
 	})
 
 	It("ignores the built-in telemetry job, which fails on an air-gapped host", func() {

@@ -244,11 +244,11 @@ const jobsListQuery = `SELECT
             ELSE greatest(extract(epoch FROM (now() - s.last_successful_finish))::bigint, 0) END,
        CASE WHEN s.next_start IS NULL OR s.next_start = '-infinity'::timestamptz OR s.next_start = 'infinity'::timestamptz THEN 0
             ELSE greatest(extract(epoch FROM (s.next_start - now()))::bigint, 0) END,
-       coalesce(s.total_failures, 0)
+       coalesce(s.last_run_status = 'Failed', false)
   FROM timescaledb_information.jobs j
   LEFT JOIN timescaledb_information.job_stats s USING (job_id)
  WHERE j.hypertable_schema = $1
- ORDER BY coalesce(s.total_failures, 0) DESC, j.hypertable_name, j.job_id`
+ ORDER BY coalesce(s.last_run_status = 'Failed', false) DESC, j.hypertable_name, j.job_id`
 
 func readJobs(ctx context.Context, db Querier) ([]Job, error) {
 	return queryAll(ctx, db, jobsListQuery, "jobs", pgx.RowToStructByPos[Job], historianSchema)
