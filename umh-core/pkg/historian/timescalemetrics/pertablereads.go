@@ -21,6 +21,18 @@ import (
 	"strings"
 )
 
+// The three queries below are per-table selects, joined with UNION ALL into one
+// statement. A table name cannot be bound as a parameter, so each is a format
+// string taking the table name, the schema, and the table name again -- the
+// first as the literal that labels the row, the last two as the identifier.
+// Every name is checked against safeTableName before it is interpolated.
+
+const newestTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
+
+const oldestTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM min(ts))::bigint, 0) FROM %s.%s`
+
+const lookupCountQuery = `SELECT '%s', count(*)::bigint FROM %s.%s`
+
 var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 func safeTableName(name string) bool {
