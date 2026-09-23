@@ -181,7 +181,7 @@ func RunCertFetcherScenario(ctx context.Context, cfg CertFetcherRunConfig) *Cert
 
 	mockHandler := NewMockCertHandler(cfg.SubscriberEmails, cfg.FetchError)
 
-	register.SetDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
+	register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
 		certfetcher.NewCertHandlerSeedDependencies(mockHandler))
 
 	store := SetupStore(logger)

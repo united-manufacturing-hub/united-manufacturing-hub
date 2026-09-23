@@ -85,8 +85,8 @@ func without(files map[string]string, paths ...string) map[string]string {
 
 var _ = Describe("a CPU file the worker cannot read", func() {
 	poll := func(files map[string]string) (CPUStatus, error) {
-		register.SetDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
-		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
+		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id := deps.Identity{ID: "cpu-unreadable", WorkerType: WorkerType}
 
@@ -107,8 +107,8 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 
 	DescribeTable("returns the same result on four polls in a row",
 		func(files map[string]string, wantErr bool) {
-			register.SetDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
-			DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+			register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
+			DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 			id := deps.Identity{ID: "cpu-unreadable-ticks", WorkerType: WorkerType}
 			d := NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id))

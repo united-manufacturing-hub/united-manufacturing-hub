@@ -52,7 +52,7 @@ func NewPullWorker(
 	}
 
 	if dependencies == nil {
-		return nil, errors.New("pull worker requires non-nil dependencies; ensure transport worker has published deps via register.SetDeps[*TransportDependencies] before pull instantiation")
+		return nil, errors.New("pull worker requires non-nil dependencies; ensure transport worker has published deps via register.SetGlobalDeps[*TransportDependencies] before pull instantiation")
 	}
 
 	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
@@ -156,7 +156,7 @@ func (w *PullWorker) GetInitialState() fsmv2.State[any, any] {
 func init() {
 	register.Worker[snapshot.PullDesiredState, snapshot.PullStatus, *PullDependencies]("pull",
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
-			builder, ok := register.GetDepsBuilder("pull")
+			builder, ok := register.GlobalDepsBuilder("pull")
 			if !ok {
 				return nil, errors.New("pull worker requires deps builder; transport worker must initialise before pull instantiation")
 			}
@@ -171,9 +171,9 @@ func init() {
 			return NewPullWorker(id, logger, sr, pdeps)
 		})
 
-	register.SetDepsBuilder[*PullDependencies]("pull",
+	register.SetGlobalDepsBuilder[*PullDependencies]("pull",
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PullDependencies {
-			parentDeps := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
+			parentDeps := register.GlobalDeps[*transport_pkg.TransportDependencies]("transport")
 			if parentDeps == nil {
 				logger.SentryError(deps.FeatureForWorker("pull"), id.HierarchyPath,
 					errors.New("parent transport deps not published"),

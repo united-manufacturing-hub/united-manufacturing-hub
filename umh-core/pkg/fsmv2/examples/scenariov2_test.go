@@ -80,7 +80,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 	// would otherwise leak it into every later spec in this process.
 	BeforeEach(func() {
 		DeferCleanup(func() {
-			register.ClearDeps(configworker.WorkerTypeName)
+			register.ClearGlobalDeps(configworker.WorkerTypeName)
 		})
 	})
 
@@ -155,7 +155,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// registry is still published under the process-global key. The
 		// BeforeEach DeferCleanup clears the key after this spec.
 		firstRunWriter := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, firstRunWriter.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, firstRunWriter.Registry())
 
 		driverRan := false
 		overlapping := examples.ScenarioV2{
@@ -184,7 +184,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// The first run's registry must survive untouched: a replaced or
 		// cleared key would cross-wire the still-active first run.
-		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(
 			BeIdenticalTo(firstRunWriter.Registry()),
 			"the failed run must not replace or clear the already-published registry")
 	})
@@ -270,9 +270,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"cancelling the caller ctx must trigger a complete teardown")
 
-		// The supervisor must be fully stopped: ClearDeps runs strictly
+		// The supervisor must be fully stopped: ClearGlobalDeps runs strictly
 		// after supDone, so a cleared key proves the supervisor exited.
-		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
 			"the deps key must be cleared after the cancellation-triggered teardown")
 
 		// The graceful drain must run against a LIVE tick loop. If the tick
@@ -353,8 +353,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// Teardown check: the runner published the dynamicchildren registry
 		// under the configworker deps key, so after the run it must clear it,
 		// otherwise the next scenario inherits a stale registry.
-		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearDeps the configworker key during teardown")
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+			"the v2 runner must ClearGlobalDeps the configworker key during teardown")
 	})
 
 	It("reports ShutdownClean=true after a clean v2 run", func() {
@@ -420,8 +420,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// The error path is a full teardown path: a leaked key would
 		// cross-wire every later v2 run in this process.
-		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearDeps the configworker key on driver failure")
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+			"the v2 runner must ClearGlobalDeps the configworker key on driver failure")
 	})
 
 	It("runs forever with Duration=0 and tears down on context cancellation", func() {
@@ -457,8 +457,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// Shutdown waits on Done, so after Done is closed it must return
 		// promptly with the deps key already cleared.
 		result.Shutdown()
-		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearDeps the configworker key after ctx cancellation")
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+			"the v2 runner must ClearGlobalDeps the configworker key after ctx cancellation")
 	})
 
 	It("tears down and clears the deps key when the driver panics", func() {
@@ -488,8 +488,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// A panic is a full teardown path too: a leaked key would
 		// cross-wire every later v2 run in this process.
-		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearDeps the configworker key on driver panic")
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+			"the v2 runner must ClearGlobalDeps the configworker key on driver panic")
 	})
 
 	It("blocks a mid-Duration Shutdown until the deps key is cleared", func() {
@@ -522,7 +522,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		result.Shutdown()
 		Expect(result.Done).To(BeClosed(),
 			"Shutdown must not return before Done is closed")
-		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
 			"the deps key must already be cleared when Shutdown returns")
 	})
 
@@ -573,7 +573,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Eventually(result2.Done, "55s").Should(BeClosed(),
 			"run 2 must complete after run 1 in the same process")
 
-		Expect(register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
 			"run 2 must clear the deps key just like run 1 did")
 	})
 })

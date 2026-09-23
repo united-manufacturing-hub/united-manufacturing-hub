@@ -54,7 +54,7 @@ func NewCertFetcherDependencies(
 // NewCertHandlerSeedDependencies builds a seed dependency holding only the cert
 // handler. The certfetcher worker constructor rebuilds full dependencies with the
 // worker's BaseDependencies. Used by main.go to inject the cert handler via
-// register.SetDeps before the worker is constructed.
+// register.SetGlobalDeps before the worker is constructed.
 func NewCertHandlerSeedDependencies(certHandler certificatehandler.Handler) *CertFetcherDependencies {
 	if certHandler == nil {
 		panic("NewCertHandlerSeedDependencies: certHandler cannot be nil")
