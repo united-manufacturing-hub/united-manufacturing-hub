@@ -58,14 +58,14 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	metrics.Tables = historianTables(append(hypertables, plainTables...))
+	metrics.Tables = historianTables(append(tablesOf(hypertables), plainTables...))
 
 	metrics.JobList, err = readJobs(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
 
-	if err := readRowTimestamps(ctx, db, &metrics); err != nil {
+	if err := readRowTimestamps(ctx, db, &metrics, timeColumnTables(hypertables)); err != nil {
 		return metrics, err
 	}
 
@@ -161,7 +161,8 @@ SELECT DISTINCT ON (t.table_name) t.table_name,
        coalesce(EXTRACT(EPOCH FROM (cj.config->>'compress_after')::interval)::bigint, 0),
        coalesce(EXTRACT(EPOCH FROM (rj.config->>'drop_after')::interval)::bigint, 0),
        t.chunks,
-       t.compressed_chunks
+       t.compressed_chunks,
+       d.column_name IS NOT NULL
   FROM sizes t
   LEFT JOIN timescaledb_information.dimensions d
     ON d.hypertable_schema = t.schema_name AND d.hypertable_name = t.table_name AND d.column_name = 'ts'
@@ -171,26 +172,56 @@ SELECT DISTINCT ON (t.table_name) t.table_name,
     ON rj.hypertable_schema = t.schema_name AND rj.hypertable_name = t.table_name AND rj.proc_name = 'policy_retention'
  ORDER BY t.table_name`
 
-func readHypertables(ctx context.Context, db Querier) ([]Table, error) {
+// hypertable is a Table plus the one fact only tablesQuery knows and the wire
+// format does not carry: whether the time dimension is the ts column, which is
+// what makes the row-timestamp read safe to ask of it.
+type hypertable struct {
+	Table
+	HasTimeColumn bool
+}
+
+func readHypertables(ctx context.Context, db Querier) ([]hypertable, error) {
 	return queryAll(ctx, db, tablesQuery, "tables", rowToHypertable, historianSchema)
 }
 
 // tablesQuery orders its columns to read as SQL, not to match Table.
-func rowToHypertable(row pgx.CollectableRow) (Table, error) {
-	table := Table{IsHypertable: true}
+func rowToHypertable(row pgx.CollectableRow) (hypertable, error) {
+	read := hypertable{Table: Table{IsHypertable: true}}
 	err := row.Scan(
-		&table.Name,
-		&table.BytesBeforeCompression,
-		&table.BytesAfterCompression,
-		&table.DiskBytes,
-		&table.ChunkIntervalSeconds,
-		&table.CompressAfterSeconds,
-		&table.RetentionSeconds,
-		&table.Chunks,
-		&table.CompressedChunks,
+		&read.Name,
+		&read.BytesBeforeCompression,
+		&read.BytesAfterCompression,
+		&read.DiskBytes,
+		&read.ChunkIntervalSeconds,
+		&read.CompressAfterSeconds,
+		&read.RetentionSeconds,
+		&read.Chunks,
+		&read.CompressedChunks,
+		&read.HasTimeColumn,
 	)
 
-	return table, err
+	return read, err
+}
+
+func tablesOf(hypertables []hypertable) []Table {
+	tables := make([]Table, 0, len(hypertables))
+	for _, read := range hypertables {
+		tables = append(tables, read.Table)
+	}
+
+	return tables
+}
+
+// timeColumnTables names the hypertables whose time dimension is ts.
+func timeColumnTables(hypertables []hypertable) map[string]bool {
+	readable := make(map[string]bool, len(hypertables))
+	for _, read := range hypertables {
+		if read.HasTimeColumn {
+			readable[read.Name] = true
+		}
+	}
+
+	return readable
 }
 
 // Lookup tables are written rarely enough that autovacuum may never analyse
@@ -241,26 +272,6 @@ const jobsListQuery = `SELECT
 
 func readJobs(ctx context.Context, db Querier) ([]Job, error) {
 	return queryAll(ctx, db, jobsListQuery, "jobs", pgx.RowToStructByPos[Job], historianSchema)
-}
-
-const tsHypertablesQuery = `SELECT h.table_name
-  FROM _timescaledb_catalog.hypertable h
-  JOIN _timescaledb_catalog.dimension d ON d.hypertable_id = h.id
- WHERE h.schema_name = $1 AND d.column_name = 'ts'`
-
-// readTimeColumnTables names the hypertables whose time dimension is ts.
-func readTimeColumnTables(ctx context.Context, db Querier) (map[string]bool, error) {
-	names, err := queryAll(ctx, db, tsHypertablesQuery, "time columns", pgx.RowTo[string], historianSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	readable := make(map[string]bool, len(names))
-	for _, name := range names {
-		readable[name] = true
-	}
-
-	return readable, nil
 }
 
 // Counting rows outright is what a historian cannot afford: Postgres stores no
@@ -373,12 +384,7 @@ func safeTableName(name string) bool {
 
 // readRowTimestamps records both ends of every readable table's ts column, and
 // the span across all of them.
-func readRowTimestamps(ctx context.Context, db Querier, metrics *Metrics) error {
-	readable, err := readTimeColumnTables(ctx, db)
-	if err != nil {
-		return err
-	}
-
+func readRowTimestamps(ctx context.Context, db Querier, metrics *Metrics, readable map[string]bool) error {
 	spans, err := readSpans(ctx, db, metrics.Tables, readable)
 	if err != nil {
 		return err
@@ -403,7 +409,7 @@ type namedRowSpan struct {
 	Latest   int64
 }
 
-// readSpans asks both ends of the ts column of every readable hypertable in one
+// readSpans asks both ends of the ts column of every readable table in one
 // statement. A table absent from the result reported nothing.
 func readSpans(
 	ctx context.Context,
@@ -429,14 +435,14 @@ func readSpans(
 	return spans, nil
 }
 
-// unionOverTables asks rowTimestampQuery of every readable hypertable in one
+// unionOverTables asks rowTimestampQuery of every readable table in one
 // statement. Empty when no table qualifies, which the caller reads as nothing to
 // ask.
 func unionOverTables(tables []Table, readable map[string]bool) string {
 	selects := make([]string, 0, len(tables))
 
 	for _, table := range tables {
-		if !table.IsHypertable || !readable[table.Name] || !safeTableName(table.Name) {
+		if !readable[table.Name] || !safeTableName(table.Name) {
 			continue
 		}
 
