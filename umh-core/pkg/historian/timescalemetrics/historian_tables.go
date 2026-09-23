@@ -16,9 +16,8 @@ package timescalemetrics
 
 import "strings"
 
-// historianTablePrefixes and historianTableNames name what benthos-umh's
-// historian output creates: two hypertables per data contract, plus the shared
-// lookup tables.
+// What benthos-umh's historian output creates: two hypertables per data
+// contract, plus the shared lookup tables.
 var historianTablePrefixes = []string{"value_", "attribute_"}
 
 var historianTableNames = map[string]bool{"tag": true, "topic": true, "location": true}
@@ -37,9 +36,8 @@ func historianCreated(name string) bool {
 	return false
 }
 
-// historianTables drops every table in the schema this product did not create: a
-// customer's own table alongside ours says nothing about how the historian is
-// doing, and its columns would all read as absent.
+// historianTables drops the tables this product did not create: every column
+// this package reads would be absent for them.
 func historianTables(tables []Table) []Table {
 	kept := make([]Table, 0, len(tables))
 

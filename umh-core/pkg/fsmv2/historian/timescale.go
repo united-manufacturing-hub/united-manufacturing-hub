@@ -22,19 +22,14 @@
 //
 // # Scope: connection health, plus two figures
 //
-// Per tick this worker checks the connection and nothing else: reachability,
-// latency, and whether the credentials and database name are accepted. Its
-// per-tick cost is a single `SELECT 1` over one pooled, long-lived connection.
+// Per tick this worker checks the connection and nothing else: one `SELECT 1`
+// over a pooled connection for reachability, latency, and whether the
+// credentials and database name are accepted. On a slower schedule it also reads
+// the historian's table names and its failing job count, both catalog reads
+// whose cost does not grow with the data held.
 //
-// On a slower schedule it also reads two figures the console needs before anyone
-// asks for them: the historian's table names and how many of its background jobs
-// are failing. Both are catalog reads whose cost does not grow with how much data
-// the historian holds.
-//
-// Everything else -- sizes, policies, per-table detail, the job list -- is read on
-// request by the get-historian-metrics action, so an instance nobody is looking at
-// does no work. Those queries cost far more than a `SELECT 1`, which is why they
-// do not share this monitor's cadence.
+// Everything else is read on request by the get-historian-metrics action, so an
+// instance nobody is looking at does no work.
 package fsmv2timescale
 
 import (
@@ -102,9 +97,7 @@ type TimescaleStatus struct {
 	// or the server rejected the credentials/database (an auth fault). It is
 	// false only for network or timeout faults, where nothing answered.
 	Reachable bool `json:"reachable"`
-	// Summary carries the two figures reported without being asked: which tables
-	// the historian holds, and how many of its background jobs are failing. It is
-	// read on a slower schedule than the connection check and keeps its last value
+	// Read on a slower schedule than the connection check, keeping its last value
 	// between reads, so it is empty only until the first one completes.
 	timescalemetrics.Summary
 }
@@ -307,9 +300,8 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	}, nil
 }
 
-// summaryReader reads the table names and failing job count. The error is logged
-// and discarded rather than returned: a summary that cannot be read is not a
-// connection fault, and a poll error would drive the worker degraded for a
+// The error is logged and discarded: a summary that cannot be read is not a
+// connection fault, and returning it would drive the worker degraded for a
 // database that is answering.
 func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
 	return func() (timescalemetrics.Summary, bool) {
@@ -338,38 +330,31 @@ func init() {
 	})
 }
 
-// summaryInterval is how often the worker reads the table names and the failing
-// job count. Neither moves faster than this: a table appears when a contract is
-// deployed, and a job that starts failing is not urgent to the second.
+// Neither figure moves faster than this: a table appears when a contract is
+// deployed, and a failing job is not urgent to the second.
 const summaryInterval = 60 * time.Second
 
-// summaryBudget bounds the summary read. It is sized against the poll cycle rather
-// than the observation deadline: a read that blocks delays the next connection
-// check, which is the reading this worker exists to produce. The two statements
-// measure under 6ms on a cold cache, so this leaves room for a deployment with
-// far more jobs while keeping the block to a tenth of the cycle. Exceeding it
-// costs nothing beyond a stale summary, since the previous value is kept.
+// Sized against the poll cycle, not the observation deadline: a read that blocks
+// delays the connection check this worker exists to produce. Exceeding it costs
+// nothing beyond a stale summary, since the previous value is kept.
 const summaryBudget = 100 * time.Millisecond
 
-// sharedSummary matches sharedPool: one instance of this worker type runs, and
-// the cache has to outlive a single Poll to hold what the last read found.
+// sharedSummary matches sharedPool: the cache has to outlive a single Poll.
 var sharedSummary = &summaryCache{interval: summaryInterval}
 
 type summaryCache struct {
 	readAt time.Time
 	value  timescalemetrics.Summary
-	// dsn is the database the cached value was read from. A config edit repoints
-	// the pool at another database, and holding the value across that would
-	// report one database's tables beside the other's host.
+	// A config edit repoints the pool at another database; holding the value across
+	// that would report one database's tables beside the other's host.
 	dsn      string
 	interval time.Duration
 	mu       sync.Mutex
 }
 
-// refresh answers with the summary the status message carries, reading a new one
-// when the interval has elapsed or the database changed. A failed read keeps the
-// previous value and waits its turn like a successful one, rather than retrying
-// every poll: the tables did not stop existing because one read did not finish.
+// refresh reads again once the interval has elapsed or the database changed. A
+// failed read keeps the previous value and waits its turn rather than retrying
+// every poll.
 func (c *summaryCache) refresh(
 	now time.Time,
 	dsn string,

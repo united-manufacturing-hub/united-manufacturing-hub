@@ -29,22 +29,17 @@ const historianSchema = "umh"
 
 const databaseSizeQuery = `SELECT pg_database_size(current_database())`
 
-// errTimescaleMissing reports a Postgres that answers but carries no TimescaleDB
-// extension, so none of the catalog reads below would resolve.
+// errTimescaleMissing reports a Postgres with no TimescaleDB extension, where
+// every catalog read below would fail.
 var errTimescaleMissing = errors.New("timescaledb extension is not installed")
 
-// Collect reads every figure the historian metrics view shows: the versions and
-// database size, per-table storage and policies, the background jobs, and the
-// earliest and latest row timestamp each hypertable holds. Its only bound is ctx.
+// Collect reads the whole picture: versions, database size, per-table storage
+// and policies, the background jobs, and each hypertable's row timestamps. Its
+// only bound is ctx.
 //
-// The tables this product did not create are dropped before the per-table reads,
-// so a customer's own table in the schema is never queried.
-//
-// pg_database_size runs last because it is the only read whose cost grows with
-// the deployment: it stats every file backing the database, which tracks chunk
-// count rather than stored bytes. A deployment large enough to make it slow
-// therefore loses only DatabaseBytes, and still returns every other metric
-// alongside the error.
+// Foreign tables are dropped before the per-table reads, so a customer's own
+// table is never queried. pg_database_size runs last because it stats every file
+// backing the database: when it is slow, only DatabaseBytes is lost.
 func Collect(ctx context.Context, db Querier) (Metrics, error) {
 	var metrics Metrics
 
@@ -103,10 +98,9 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 	return metrics, nil
 }
 
-// queryAll runs one query and builds a T from each row it returns, using
-// toValue. Both failures are wrapped with subject, so an error says which read
-// it was. pgx closes the rows itself and reports a failure part way through
-// iteration in the error CollectRows returns.
+// queryAll runs one query and builds a T from each row with toValue, naming the
+// read as subject in either error. CollectRows closes the rows and reports a
+// failure part way through iteration.
 // https://pkg.go.dev/github.com/jackc/pgx/v5#CollectRows
 func queryAll[T any](
 	ctx context.Context,
@@ -147,12 +141,10 @@ func readVersions(ctx context.Context, db Querier, metrics *Metrics) error {
 	return nil
 }
 
-// tablesQuery reads every hypertable's storage, chunking and policies in one pass.
-// The before-and-after sizes come from the catalog, which holds them per chunk
-// already; the size functions in timescaledb_information stat every chunk's files
-// to answer the same question and cost two orders of magnitude more at a few
-// thousand chunks. A chunk no policy has compressed yet has no catalog row, so its
-// size has to be read from the relation itself or the table reads as empty.
+// Sizes come from the catalog rather than timescaledb_information's size
+// functions, which stat every chunk's files and cost two orders of magnitude more
+// at a few thousand chunks. An uncompressed chunk has no catalog row, so its size
+// has to come from the relation or the table reads as empty.
 const tablesQuery = `SELECT h.table_name,
        coalesce(sum(s.uncompressed_heap_size + s.uncompressed_index_size + s.uncompressed_toast_size), 0)::bigint,
        coalesce(sum(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size), 0)::bigint,
@@ -182,8 +174,7 @@ func readHypertables(ctx context.Context, db Querier) ([]Table, error) {
 	return queryAll(ctx, db, tablesQuery, "tables", rowToHypertable, historianSchema)
 }
 
-// rowToHypertable scans tablesQuery, whose columns are ordered to read as SQL
-// rather than to match Table field for field.
+// tablesQuery orders its columns to read as SQL, not to match Table.
 func rowToHypertable(row pgx.CollectableRow) (Table, error) {
 	table := Table{IsHypertable: true}
 	err := row.Scan(
@@ -201,9 +192,8 @@ func rowToHypertable(row pgx.CollectableRow) (Table, error) {
 	return table, err
 }
 
-// A lookup table's rows come from the same live-tuple tracking as a chunk's,
-// which matters more here: these are written rarely enough that autovacuum may
-// never analyse them, leaving reltuples at zero for a populated table.
+// Lookup tables are written rarely enough that autovacuum may never analyse
+// them, which leaves reltuples at zero for a populated table.
 const regularTablesQuery = `SELECT c.relname, pg_total_relation_size(c.oid)::bigint,
        greatest(coalesce(st.n_live_tup, 0), greatest(c.reltuples, 0)::bigint)
   FROM pg_class c
@@ -226,10 +216,9 @@ func rowToPlainTable(row pgx.CollectableRow) (Table, error) {
 	return table, err
 }
 
-// jobsListQuery is scoped to the historian schema so it excludes the built-in
-// policy_telemetry job, which carries no hypertable and fails on every run of an
-// air-gapped deployment. Listing it would report a permanent false failure. Its
-// column order matches Job field for field, which is what lets pgx map the row.
+// Scoping to the historian schema excludes the built-in policy_telemetry job,
+// which fails on every run of an air-gapped deployment. The column order matches
+// Job field for field, which is what lets pgx map the row.
 const jobsListQuery = `SELECT
        CASE j.proc_name
          WHEN 'policy_compression' THEN 'compression'
@@ -258,8 +247,7 @@ const tsHypertablesQuery = `SELECT h.table_name
   JOIN _timescaledb_catalog.dimension d ON d.hypertable_id = h.id
  WHERE h.schema_name = $1 AND d.column_name = 'ts'`
 
-// readTimeColumnTables names the hypertables whose time dimension is ts, which
-// is the column the per-table timestamp reads take a max and min of.
+// readTimeColumnTables names the hypertables whose time dimension is ts.
 func readTimeColumnTables(ctx context.Context, db Querier) (map[string]bool, error) {
 	names, err := queryAll(ctx, db, tsHypertablesQuery, "time columns", pgx.RowTo[string], historianSchema)
 	if err != nil {
@@ -274,17 +262,12 @@ func readTimeColumnTables(ctx context.Context, db Querier) (map[string]bool, err
 	return readable, nil
 }
 
-// tableRowsQuery counts rows per hypertable without scanning one, because
-// Postgres stores no row count: under MVCC a count walks the rows to see which
-// are visible, and that is what a historian cannot afford.
-//
-// A compressed chunk carries the count the compressor recorded, which is exact.
-// An uncompressed one contributes n_live_tup, which the cumulative statistics
-// system tracks as rows are inserted, so it is right before anything has
-// analysed the chunk, give or take the interval at which a backend flushes what
-// it has counted. reltuples stands beside it because it survives a
-// pg_stat_reset, which sets n_live_tup back to zero; whichever has seen the
-// rows reports the larger number.
+// Counting rows outright is what a historian cannot afford: Postgres stores no
+// count, so under MVCC a count walks every row. A compressed chunk carries the
+// count the compressor recorded; an uncompressed one contributes n_live_tup,
+// which tracks inserts and so is right before anything analyses the chunk, a
+// flush interval behind. reltuples stands beside it because it survives a
+// pg_stat_reset, which zeroes n_live_tup.
 // https://www.postgresql.org/docs/current/monitoring-stats.html
 const tableRowsQuery = `SELECT h.table_name,
        coalesce(sum(s.numrows_pre_compression), 0)
@@ -326,9 +309,7 @@ func valuesByName(pairs []namedValue) map[string]int64 {
 	return values
 }
 
-// timestampAt turns a Unix epoch into an RFC 3339 instant, or an empty string
-// when there is none. Empty means no row was found, which is not the same as a
-// row stamped in 1970.
+// timestampAt returns an empty string for no row, which is not 1970.
 func timestampAt(epoch int64) string {
 	if epoch <= 0 {
 		return ""
@@ -344,9 +325,8 @@ func assignTimestamps(tables []Table, earliest, latest map[string]int64) {
 	}
 }
 
-// assignRowCounts fills in the row count of every table the counts cover. A table
-// the map does not mention keeps the count it already has: the hypertable and
-// plain-table counts are read separately, and one must not blank the other.
+// A table the counts do not mention keeps what it has: hypertable and plain-table
+// counts are read separately, and one must not blank the other.
 func assignRowCounts(tables []Table, counts map[string]int64) {
 	for i := range tables {
 		if count, ok := counts[tables[i].Name]; ok {
@@ -355,9 +335,8 @@ func assignRowCounts(tables []Table, counts map[string]int64) {
 	}
 }
 
-// dataSpanSeconds is the period between the earliest row in any table and the
-// latest. It is taken from the rows themselves rather than from chunk boundaries,
-// which reach into the future by up to one chunk width and so read long.
+// Taken from the rows rather than the chunk boundaries, which reach up to one
+// chunk width into the future and so read long.
 func dataSpanSeconds(earliestPerTable, latestPerTable map[string]int64) int64 {
 	var earliest, latest int64
 
@@ -380,11 +359,9 @@ func dataSpanSeconds(earliestPerTable, latestPerTable map[string]int64) int64 {
 	return latest - earliest
 }
 
-// The two queries below are per-table selects, joined with UNION ALL into one
-// statement. A table name cannot be bound as a parameter, so each is a format
-// string taking the table name, the schema, and the table name again -- the
-// first as the literal that labels the row, the last two as the identifier.
-// Every name is checked against safeTableName before it is interpolated.
+// A table name cannot be bound as a parameter, so these two are format strings
+// taking the name three times: once as the literal labelling the row, twice as
+// the identifier. safeTableName guards every name that reaches them.
 
 const latestRowTimestampQuery = `SELECT '%s', coalesce(extract(epoch FROM max(ts))::bigint, 0) FROM %s.%s`
 
@@ -396,10 +373,8 @@ func safeTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
 }
 
-// collectTimestamps reads one end of the time column of every hypertable that
-// has one, as a single statement joining one select per table with UNION ALL,
-// and returns what each table reported. A table name cannot be bound as a
-// parameter, so safeTableName guards every name that reaches the format string.
+// collectTimestamps reads one end of the ts column of every readable hypertable
+// and returns what each reported.
 func collectTimestamps(
 	ctx context.Context,
 	db Querier,
@@ -421,10 +396,8 @@ func collectTimestamps(
 	return valuesByName(pairs), nil
 }
 
-// unionOverTables asks query of every readable hypertable in one statement,
-// filling the table name into each select. A table absent from readable carries
-// no ts column to take a max or min of. It returns an empty string when no table
-// qualifies, which the caller reads as nothing to ask.
+// unionOverTables asks query of every readable hypertable in one statement.
+// Empty when no table qualifies, which the caller reads as nothing to ask.
 func unionOverTables(tables []Table, query string, readable map[string]bool) string {
 	selects := make([]string, 0, len(tables))
 
