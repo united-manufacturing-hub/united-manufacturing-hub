@@ -37,9 +37,10 @@ var errTimescaleMissing = errors.New("timescaledb extension is not installed")
 // and policies, the background jobs, and each hypertable's row timestamps. Its
 // only bound is ctx.
 //
-// Foreign tables are dropped before the per-table reads, so a customer's own
-// table is never queried. pg_database_size runs last because it stats every file
-// backing the database: when it is slow, only DatabaseBytes is lost.
+// Tables this product did not create are dropped before the per-table reads, so
+// a customer's own table is never queried. pg_database_size runs last and its
+// failure is tolerated, because it stats every file backing the database: when
+// it is slow, only DatabaseBytes is lost.
 func Collect(ctx context.Context, db Querier) (Metrics, error) {
 	var metrics Metrics
 
@@ -91,11 +92,18 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 	assignTimestamps(metrics.Tables, earliest, latest)
 	assignRowCounts(metrics.Tables, rowCounts)
 
-	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {
-		return metrics, fmt.Errorf("read database size: %w", err)
-	}
+	readDatabaseSize(ctx, db, &metrics)
 
 	return metrics, nil
+}
+
+// readDatabaseSize leaves DatabaseBytes at zero when the read fails. Every other
+// figure is already collected by the time it runs, and the caller discards the
+// whole Metrics on an error, so reporting this one would cost all of them.
+func readDatabaseSize(ctx context.Context, db Querier, metrics *Metrics) {
+	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {
+		metrics.DatabaseBytes = 0
+	}
 }
 
 // queryAll runs one query and builds a T from each row with toValue, naming the
