@@ -20,29 +20,16 @@
 // configuration faults (Auth=TimescaleAuthInvalid) rather than transient network
 // faults, which leave authentication unverified (Auth=TimescaleAuthUnknown).
 //
-// # Scope: connection health only
+// # Scope: connection health, plus two figures
 //
-// This worker checks the connection and nothing else: reachability, latency,
-// and whether the credentials and database name are accepted. Its per-tick cost
-// is a single `SELECT 1` over one pooled, long-lived connection.
+// Per tick this worker checks the connection and nothing else: one `SELECT 1`
+// over a pooled connection for reachability, latency, and whether the
+// credentials and database name are accepted. On a slower schedule it also reads
+// the historian's table names and its failing job count, both catalog reads
+// whose cost does not grow with the data held.
 //
-// Database metrics (long-running queries, compression ratios, background job
-// state, especially aborted compression jobs, and the rest of the operational
-// signals on the Timescale Grafana dashboard) are deliberately NOT collected here.
-// They belong to a separate future worker (TODO(ENG-5320): the timescale metrics
-// monitor), for two reasons:
-//
-//   - Cost. Those metrics need involved SQL that costs far more CPU on the
-//     server than a `SELECT 1`. The metrics worker will run on its own, slower
-//     tick so heavy queries never share this monitor's cadence. Splitting the
-//     workers keeps connection health cheap and always-fresh regardless of how
-//     expensive metrics collection becomes.
-//   - Sequencing. Which metrics to expose still needs discussion with the VEs.
-//     Keeping that out of this worker means it does not block Historian
-//     integration.
-//
-// Running two workers adds only one extra pooled connection to the database, so
-// the overhead is minimal and worth the isolation.
+// Everything else is read on request by the get-historian-metrics action, so an
+// instance nobody is looking at does no work.
 package fsmv2timescale
 
 import (
@@ -59,6 +46,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -109,6 +97,9 @@ type TimescaleStatus struct {
 	// or the server rejected the credentials/database (an auth fault). It is
 	// false only for network or timeout faults, where nothing answered.
 	Reachable bool `json:"reachable"`
+	// Read on a slower schedule than the connection check, keeping its last value
+	// between reads, so it is empty only until the first one completes.
+	timescalemetrics.Summary
 }
 
 // sharedPool is the one holder every worker instance polls through. The
@@ -136,7 +127,8 @@ var sharedPool = &poolHolder{}
 type Deps struct {
 	*deps.BaseDependencies
 
-	pool *poolHolder
+	pool    *poolHolder
+	summary *summaryCache
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -148,6 +140,7 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 	return Deps{
 		BaseDependencies: bd,
 		pool:             sharedPool,
+		summary:          sharedSummary,
 	}
 }
 
@@ -256,7 +249,9 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	cfg = cfg.WithDefaults()
 	host, port := cfg.Timescale.Host, cfg.Timescale.Port
 
-	pool, err := d.pool.get(cfg.Timescale.ToDSN())
+	dsn := cfg.Timescale.ToDSN()
+
+	pool, err := d.pool.get(dsn)
 	if err != nil {
 		d.GetLogger().Debug("timescale connection check",
 			deps.String("host", host),
@@ -301,7 +296,29 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		LatencyMs: elapsedMs,
 		Port:      port,
 		Reachable: true,
+		Summary:   d.summary.refresh(time.Now(), dsn, summaryReader(ctx, d, pool, host)),
 	}, nil
+}
+
+// The error is logged and discarded: a summary that cannot be read is not a
+// connection fault, and returning it would drive the worker degraded for a
+// database that is answering.
+func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
+	return func() (timescalemetrics.Summary, bool) {
+		summaryCtx, cancel := context.WithTimeout(ctx, summaryBudget)
+		defer cancel()
+
+		summary, err := timescalemetrics.CollectSummary(summaryCtx, pool)
+		if err != nil {
+			d.GetLogger().Debug("timescale summary",
+				deps.String("host", host),
+				deps.Err(err))
+
+			return timescalemetrics.Summary{}, false
+		}
+
+		return summary, true
+	}
 }
 
 func init() {
@@ -311,4 +328,53 @@ func init() {
 		Poll:       Poll,
 		NewDeps:    newDeps,
 	})
+}
+
+// Neither figure moves faster than this: a table appears when a contract is
+// deployed, and a failing job is not urgent to the second.
+const summaryInterval = 60 * time.Second
+
+// Sized against the poll cycle, not the observation deadline: a read that blocks
+// delays the connection check this worker exists to produce. Exceeding it costs
+// nothing beyond a stale summary, since the previous value is kept.
+const summaryBudget = 100 * time.Millisecond
+
+// sharedSummary matches sharedPool: the cache has to outlive a single Poll.
+var sharedSummary = &summaryCache{interval: summaryInterval}
+
+type summaryCache struct {
+	readAt time.Time
+	value  timescalemetrics.Summary
+	// A config edit repoints the pool at another database; holding the value across
+	// that would report one database's tables beside the other's host.
+	dsn      string
+	interval time.Duration
+	mu       sync.Mutex
+}
+
+// refresh reads again once the interval has elapsed or the database changed. A
+// failed read keeps the previous value and waits its turn rather than retrying
+// every poll.
+func (c *summaryCache) refresh(
+	now time.Time,
+	dsn string,
+	read func() (timescalemetrics.Summary, bool),
+) timescalemetrics.Summary {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if dsn != c.dsn {
+		c.dsn = dsn
+		c.value = timescalemetrics.Summary{}
+	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
+		return c.value
+	}
+
+	c.readAt = now
+
+	if summary, ok := read(); ok {
+		c.value = summary
+	}
+
+	return c.value
 }

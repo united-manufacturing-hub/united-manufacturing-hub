@@ -63,6 +63,14 @@ type Timescale struct {
 	Latency   float64            `json:"latency"`
 	Port      uint16             `json:"port"`
 	Reachable bool               `json:"reachable"`
+	// TableNames is every table the historian created, so an instance can be
+	// inventoried without opening it. Absent until the first summary read.
+	TableNames []string `json:"tableNames,omitempty"`
+	// FailedJobs counts background jobs that exist and are not working. A
+	// historian with no policies has no jobs to fail, so zero here is not proof
+	// that data is compressed or expired -- the job list read on request says
+	// which policies exist.
+	FailedJobs int `json:"failedJobs"`
 }
 
 type Agent struct {

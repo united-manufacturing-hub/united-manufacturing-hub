@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -259,5 +260,70 @@ var _ = Describe("Poll", func() {
 
 		Expect(pooledBy(d.pool)).To(BeIdenticalTo(first),
 			"the second poll reused the cached pool rather than building a second one")
+	})
+})
+
+var _ = Describe("the summary cache", func() {
+	const (
+		dsnA = "postgres://umh@host-a:5432/umh"
+		dsnB = "postgres://umh@host-b:5432/umh"
+	)
+
+	var readAt time.Time
+
+	BeforeEach(func() {
+		readAt = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	})
+
+	// reads answers with one summary and counts how often it was asked.
+	reads := func(tables []string, calls *int) func() (timescalemetrics.Summary, bool) {
+		return func() (timescalemetrics.Summary, bool) {
+			*calls++
+
+			return timescalemetrics.Summary{TableNames: tables}, true
+		}
+	}
+
+	failsToRead := func(calls *int) func() (timescalemetrics.Summary, bool) {
+		return func() (timescalemetrics.Summary, bool) {
+			*calls++
+
+			return timescalemetrics.Summary{}, false
+		}
+	}
+
+	It("keeps the summary it read for the same database until the interval elapses", func() {
+		cache := &summaryCache{interval: time.Minute}
+		first, second := 0, 0
+
+		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
+		summary := cache.refresh(readAt.Add(time.Second), dsnA, reads([]string{"value_other"}, &second))
+
+		Expect(second).To(BeZero(), "the second poll answered from the cache")
+		Expect(summary.TableNames).To(ConsistOf("value_bench"))
+	})
+
+	It("reads again when the database changed, however recent the cached summary", func() {
+		cache := &summaryCache{interval: time.Minute}
+		first, second := 0, 0
+
+		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
+		summary := cache.refresh(readAt.Add(time.Second), dsnB, reads([]string{"value_other"}, &second))
+
+		Expect(second).To(Equal(1),
+			"a config edit repoints the pool at another database, and the tables of the one before it are not this one's")
+		Expect(summary.TableNames).To(ConsistOf("value_other"))
+	})
+
+	It("reports nothing rather than the previous database when the first read of the new one fails", func() {
+		cache := &summaryCache{interval: time.Minute}
+		first, second := 0, 0
+
+		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
+		summary := cache.refresh(readAt.Add(time.Second), dsnB, failsToRead(&second))
+
+		Expect(second).To(Equal(1))
+		Expect(summary.TableNames).To(BeEmpty(),
+			"keeping the last value across a failed read must not carry one database's tables onto another")
 	})
 })
