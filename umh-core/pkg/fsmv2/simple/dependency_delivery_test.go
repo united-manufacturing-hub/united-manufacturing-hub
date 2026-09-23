@@ -46,13 +46,13 @@ var _ = Describe("dependency delivery to a monitor worker", func() {
 	// one instance with the dependencies a run would have handed in. Each spec
 	// needs its own name: Register also publishes an initial state, and that
 	// registry has no reset.
-	buildWith := func(workerType string, runDeps map[string]any) *deliveryDeps {
+	buildWith := func(workerType string, dependencies map[string]any) *deliveryDeps {
 		var built *deliveryDeps
 
 		Register(MonitorSpec[probeConfig, probeStatus, *deliveryDeps]{
 			WorkerType: workerType,
 			NewDeps: func(_ deps.Identity, _ *deps.BaseDependencies, rd map[string]any) *deliveryDeps {
-				label, _ := config.GetDependency(rd, deliveryLabelKey)
+				label, _ := config.LookupDependency(rd, deliveryLabelKey)
 				built = &deliveryDeps{label: label}
 
 				return built
@@ -66,7 +66,7 @@ var _ = Describe("dependency delivery to a monitor worker", func() {
 			ID:         "monitor-001",
 			Name:       "monitor",
 			WorkerType: workerType,
-		}, deps.NewNopFSMLogger(), nil, runDeps)
+		}, deps.NewNopFSMLogger(), nil, dependencies)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(w).NotTo(BeNil(), "an instance exists, so the assertion below is not vacuous")
 		Expect(built).NotTo(BeNil(), "NewDeps ran")
@@ -75,10 +75,10 @@ var _ = Describe("dependency delivery to a monitor worker", func() {
 	}
 
 	It("hands NewDeps the dependencies the run supplied", func() {
-		runDeps := map[string]any{}
-		config.PutDependency(runDeps, deliveryLabelKey, "from-the-run")
+		dependencies := map[string]any{}
+		config.SetDependency(dependencies, deliveryLabelKey, "from-the-run")
 
-		Expect(buildWith("simpleworker_delivery_supplied", runDeps).label).To(Equal("from-the-run"))
+		Expect(buildWith("simpleworker_delivery_supplied", dependencies).label).To(Equal("from-the-run"))
 	})
 
 	It("hands NewDeps nothing readable when the run supplied none", func() {
