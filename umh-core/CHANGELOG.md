@@ -6,6 +6,7 @@
 
 - The CPU status of an instance whose operating system does not report CPU pressure stats now links to instructions for switching them on
 - CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, CPU pressure, throttling and how busy the machine is. Requires `USE_FSMV2_CPU=true` and `USE_FSMV2_TRANSPORT=true`
+- Removed stale documentation on using references within data models
 
 ## [0.44.40]
 
