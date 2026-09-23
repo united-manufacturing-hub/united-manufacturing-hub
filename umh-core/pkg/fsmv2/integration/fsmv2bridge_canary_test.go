@@ -55,7 +55,7 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		// The configworker deps key and the client singleton are process-global;
 		// a spec that fails mid-run would otherwise leak them into later specs.
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
 	})
 
 	It("drives a helloworld child through the client: Upsert, Fresh+Running, Delete, Unregistered, reap, respawn with a new mood", func() {
@@ -68,7 +68,7 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		// configworker kernel and enables dynamic spawning) and publish the
 		// process-scoped client bound to this store.
 		dynWriter := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
 
 		sup.TestMarkAsStarted()

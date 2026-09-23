@@ -281,8 +281,8 @@ The folder name must match the worker type (e.g., `transport/` for type
 
 ### Parent-Child Typed Deps
 
-Parents publish their dependencies via `register.SetDeps[T]`; children retrieve
-them via `register.GetDeps[T]` inside a `SetDepsBuilder` closure. The closure
+Parents publish their dependencies via `register.SetGlobalDeps[T]`; children retrieve
+them via `register.GlobalDeps[T]` inside a `SetGlobalDepsBuilder` closure. The closure
 runs at child instantiation time (not at `init()` time), so the publisher
 always wins the race when parent and child are wired in the same supervisor.
 
@@ -297,7 +297,7 @@ func init() {
             if err != nil {
                 return nil, err
             }
-            register.SetDeps[*TransportDependencies]("transport", w.GetDependencies())
+            register.SetGlobalDeps[*TransportDependencies]("transport", w.GetDependencies())
             return w, nil
         })
 }
@@ -306,7 +306,7 @@ func init() {
 func init() {
     register.Worker[snapshot.PushDesiredState, snapshot.PushStatus, *PushDependencies]("push",
         func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
-            builder, ok := register.GetDepsBuilder("push")
+            builder, ok := register.GlobalDepsBuilder("push")
             if !ok {
                 return nil, errors.New("push deps builder missing")
             }
@@ -314,9 +314,9 @@ func init() {
             return NewPushWorker(id, logger, sr, pdeps)
         })
 
-    register.SetDepsBuilder[*PushDependencies]("push",
+    register.SetGlobalDepsBuilder[*PushDependencies]("push",
         func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PushDependencies {
-            parent := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
+            parent := register.GlobalDeps[*transport_pkg.TransportDependencies]("transport")
             if parent == nil {
                 return nil
             }

@@ -61,24 +61,24 @@ var _ = Describe("register deps registry", func() {
 	})
 
 	Context("CRUD", func() {
-		It("SetDeps stores, GetDeps reads, ClearDeps removes", func() {
+		It("SetGlobalDeps stores, GlobalDeps reads, ClearGlobalDeps removes", func() {
 			d := &depsRegistryDeps{Label: "primary", Value: 7}
 
-			register.SetDeps[*depsRegistryDeps]("crud-worker", d)
-			Expect(register.GetDeps[*depsRegistryDeps]("crud-worker")).To(BeIdenticalTo(d))
+			register.SetGlobalDeps[*depsRegistryDeps]("crud-worker", d)
+			Expect(register.GlobalDeps[*depsRegistryDeps]("crud-worker")).To(BeIdenticalTo(d))
 
-			register.ClearDeps("crud-worker")
-			Expect(register.GetDeps[*depsRegistryDeps]("crud-worker")).To(BeNil())
+			register.ClearGlobalDeps("crud-worker")
+			Expect(register.GlobalDeps[*depsRegistryDeps]("crud-worker")).To(BeNil())
 		})
 
 		It("ResetRegistry clears all published keys", func() {
-			register.SetDeps[*depsRegistryDeps]("reset-a", &depsRegistryDeps{Label: "a"})
-			register.SetDeps[*depsRegistryDeps]("reset-b", &depsRegistryDeps{Label: "b"})
+			register.SetGlobalDeps[*depsRegistryDeps]("reset-a", &depsRegistryDeps{Label: "a"})
+			register.SetGlobalDeps[*depsRegistryDeps]("reset-b", &depsRegistryDeps{Label: "b"})
 
 			register.ResetRegistry()
 
-			Expect(register.GetDeps[*depsRegistryDeps]("reset-a")).To(BeNil())
-			Expect(register.GetDeps[*depsRegistryDeps]("reset-b")).To(BeNil())
+			Expect(register.GlobalDeps[*depsRegistryDeps]("reset-a")).To(BeNil())
+			Expect(register.GlobalDeps[*depsRegistryDeps]("reset-b")).To(BeNil())
 		})
 	})
 
@@ -86,8 +86,8 @@ var _ = Describe("register deps registry", func() {
 		It("returns the exact same pointer instance for pointer TDeps", func() {
 			original := &depsRegistryDeps{Label: "identity", Value: 42}
 
-			register.SetDeps[*depsRegistryDeps]("roundtrip-ptr", original)
-			got := register.GetDeps[*depsRegistryDeps]("roundtrip-ptr")
+			register.SetGlobalDeps[*depsRegistryDeps]("roundtrip-ptr", original)
+			got := register.GlobalDeps[*depsRegistryDeps]("roundtrip-ptr")
 
 			Expect(got).To(BeIdenticalTo(original))
 		})
@@ -95,41 +95,41 @@ var _ = Describe("register deps registry", func() {
 		It("round-trips value-type TDeps by value", func() {
 			type valueDeps struct{ N int }
 
-			register.SetDeps[valueDeps]("roundtrip-val", valueDeps{N: 99})
-			got := register.GetDeps[valueDeps]("roundtrip-val")
+			register.SetGlobalDeps[valueDeps]("roundtrip-val", valueDeps{N: 99})
+			got := register.GlobalDeps[valueDeps]("roundtrip-val")
 
 			Expect(got).To(Equal(valueDeps{N: 99}))
 		})
 	})
 
 	Context("zero-value fallback", func() {
-		It("returns Go-native nil for pointer TDeps when never SetDeps", func() {
-			got := register.GetDeps[*depsRegistryDeps]("never-set")
+		It("returns Go-native nil for pointer TDeps when never SetGlobalDeps", func() {
+			got := register.GlobalDeps[*depsRegistryDeps]("never-set")
 
 			Expect(got).To(BeNil())
 		})
 
-		It("returns struct{} zero value for register.NoDeps when never SetDeps", func() {
-			got := register.GetDeps[register.NoDeps]("never-set-nodeps")
+		It("returns struct{} zero value for register.NoDeps when never SetGlobalDeps", func() {
+			got := register.GlobalDeps[register.NoDeps]("never-set-nodeps")
 
 			Expect(got).To(Equal(register.NoDeps{}))
 		})
 
-		It("returns value-type zero for value TDeps when never SetDeps", func() {
+		It("returns value-type zero for value TDeps when never SetGlobalDeps", func() {
 			type zeroCheck struct {
 				S string
 				I int
 			}
 
-			got := register.GetDeps[zeroCheck]("never-set-value")
+			got := register.GlobalDeps[zeroCheck]("never-set-value")
 
 			Expect(got).To(Equal(zeroCheck{}))
 		})
 
-		It("returns nil interface for interface-typed TDeps when never SetDeps", func() {
+		It("returns nil interface for interface-typed TDeps when never SetGlobalDeps", func() {
 			type someIface interface{ Ping() }
 
-			got := register.GetDeps[someIface]("never-set-iface")
+			got := register.GlobalDeps[someIface]("never-set-iface")
 
 			Expect(got).To(BeNil())
 		})
@@ -149,7 +149,7 @@ var _ = Describe("register deps registry", func() {
 
 					for k := range keysPerGoroutine {
 						key := "concurrent-writer-" + strconv.Itoa(id) + "-" + strconv.Itoa(k)
-						register.SetDeps[*depsRegistryDeps](key, &depsRegistryDeps{
+						register.SetGlobalDeps[*depsRegistryDeps](key, &depsRegistryDeps{
 							Label: key,
 							Value: id*100 + k,
 						})
@@ -161,7 +161,7 @@ var _ = Describe("register deps registry", func() {
 
 					for k := range keysPerGoroutine {
 						key := "concurrent-reader-" + strconv.Itoa(id) + "-" + strconv.Itoa(k)
-						_ = register.GetDeps[*depsRegistryDeps](key)
+						_ = register.GlobalDeps[*depsRegistryDeps](key)
 					}
 				}(g)
 			}
@@ -187,7 +187,7 @@ var _ = Describe("register deps registry", func() {
 				defer wg.Done()
 
 				for range iterations {
-					register.ClearDeps(key)
+					register.ClearGlobalDeps(key)
 				}
 			}()
 
@@ -196,7 +196,7 @@ var _ = Describe("register deps registry", func() {
 					defer wg.Done()
 
 					for i := range iterations {
-						register.SetDeps[*depsRegistryDeps](key, &depsRegistryDeps{
+						register.SetGlobalDeps[*depsRegistryDeps](key, &depsRegistryDeps{
 							Label: key,
 							Value: id*1000 + i,
 						})
@@ -209,7 +209,7 @@ var _ = Describe("register deps registry", func() {
 					defer wg.Done()
 
 					for range iterations {
-						_ = register.GetDeps[*depsRegistryDeps](key)
+						_ = register.GlobalDeps[*depsRegistryDeps](key)
 					}
 				}()
 			}
@@ -224,7 +224,7 @@ var _ = Describe("register deps registry", func() {
 			storage.ResetGlobalRegistry()
 		})
 
-		It("SetDeps publishes deps that reach the user constructor via the factory closure", func() {
+		It("SetGlobalDeps publishes deps that reach the user constructor via the factory closure", func() {
 			const workerType = "depsreg-factory-positive"
 
 			published := &depsRegistryDeps{Label: "from-parent-wiring", Value: 123}
@@ -232,12 +232,12 @@ var _ = Describe("register deps registry", func() {
 			var capturedDeps *depsRegistryDeps
 			var constructorRan bool
 
-			register.SetDeps[*depsRegistryDeps](workerType, published)
+			register.SetGlobalDeps[*depsRegistryDeps](workerType, published)
 
 			register.Worker[depsRegistryConfig, depsRegistryStatus, *depsRegistryDeps](workerType,
 				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 					constructorRan = true
-					d := register.GetDeps[*depsRegistryDeps](workerType)
+					d := register.GlobalDeps[*depsRegistryDeps](workerType)
 					capturedDeps = d
 					w := &depsRegistryWorker{receivedDeps: d}
 					w.InitBase(id, logger, sr)
@@ -259,7 +259,7 @@ var _ = Describe("register deps registry", func() {
 			Expect(capturedDeps).To(BeIdenticalTo(published))
 		})
 
-		It("constructor receives typed nil when SetDeps is never called", func() {
+		It("constructor receives typed nil when SetGlobalDeps is never called", func() {
 			const workerType = "depsreg-factory-nildefault"
 
 			var capturedDeps *depsRegistryDeps
@@ -268,7 +268,7 @@ var _ = Describe("register deps registry", func() {
 			register.Worker[depsRegistryConfig, depsRegistryStatus, *depsRegistryDeps](workerType,
 				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 					constructorRan = true
-					d := register.GetDeps[*depsRegistryDeps](workerType)
+					d := register.GlobalDeps[*depsRegistryDeps](workerType)
 					capturedDeps = d
 					w := &depsRegistryWorker{receivedDeps: d}
 					w.InitBase(id, logger, sr)

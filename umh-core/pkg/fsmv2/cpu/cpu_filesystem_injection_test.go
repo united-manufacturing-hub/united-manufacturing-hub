@@ -79,10 +79,10 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 	}
 
 	It("samples through a published filesystem rather than the real one", func() {
-		// The registry outlives the spec and SetDeps overwrites, so publishing
+		// The registry outlives the spec and SetGlobalDeps overwrites, so publishing
 		// without clearing hands this stub to every later spec.
-		register.SetDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
-		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
+		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
 		d := NewDeps(id, bd)
@@ -98,8 +98,8 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		// A failed poll degrades the instance and blocks every bridge on it. A
 		// host that keeps its CPU accounting outside this cgroup has none of
 		// these files, so the poll succeeds carrying no capacity instead.
-		register.SetDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
-		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
+		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
 		status, err := Poll(context.Background(), NewDeps(id, bd), CPUConfig{})
@@ -108,7 +108,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 	})
 
 	It("falls back to the real filesystem when nothing was published", func() {
-		Expect(register.GetDeps[filesystem.Service](FilesystemDepsKey)).To(BeNil(),
+		Expect(register.GlobalDeps[filesystem.Service](FilesystemDepsKey)).To(BeNil(),
 			"precondition: no earlier spec may have left a filesystem in the registry")
 
 		id, bd := newBaseDeps()

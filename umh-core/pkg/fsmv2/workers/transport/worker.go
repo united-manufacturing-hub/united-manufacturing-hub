@@ -216,7 +216,7 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
 
-// Children retrieve transport dependencies through register.GetDeps keyed on
+// Children retrieve transport dependencies through register.GlobalDeps keyed on
 // this constant. Defined here so push/pull stay in sync with the publisher.
 const transportDepsKey = "transport"
 
@@ -228,7 +228,7 @@ func init() {
 				return nil, err
 			}
 
-			register.SetDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
+			register.SetGlobalDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
 
 			return w, nil
 		})
