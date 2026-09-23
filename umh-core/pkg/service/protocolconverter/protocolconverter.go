@@ -1196,13 +1196,10 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 		return true, "Container health status unavailable"
 	}
 
-	// Check if container FSM state is degraded (overall system state)
-	currentState := containerInstance.CurrentState
-	if currentState == "degraded" {
-		return true, "System in degraded state"
-	}
-
-	// Check individual resource health from observed state
+	// Check individual resource health before the container's own state, so
+	// that a refusal names its cause. A degraded resource also degrades the
+	// container, so the state check would otherwise match first and the
+	// refusal would read only "System in degraded state".
 	if containerInstance.LastObservedState != nil {
 		if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
 			serviceInfo := &containerObserved.ServiceInfoSnapshot
@@ -1255,6 +1252,11 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				return true, "Overall system resources degraded"
 			}
 		}
+	}
+
+	// Check if container FSM state is degraded (overall system state)
+	if containerInstance.CurrentState == "degraded" {
+		return true, "System in degraded state"
 	}
 
 	// Check bridge count limits
