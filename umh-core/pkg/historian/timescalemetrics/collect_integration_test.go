@@ -484,7 +484,18 @@ func readTables(ctx context.Context, db Querier) ([]Table, error) {
 		return nil, err
 	}
 
-	return append(hypertables, plainTables...), nil
+	return append(tablesOf(hypertables), plainTables...), nil
+}
+
+// readTimeColumnTables names the hypertables the row-timestamp read may ask,
+// which Collect takes from the table read it has already made.
+func readTimeColumnTables(ctx context.Context, db Querier) (map[string]bool, error) {
+	hypertables, err := readHypertables(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	return timeColumnTables(hypertables), nil
 }
 
 // tableNamed returns the reported entry for one hypertable, failing the spec when
