@@ -77,7 +77,7 @@ type RunResult struct {
 // Run executes a scenario with the given configuration.
 //
 // For a v1 Scenario, creates an ApplicationSupervisor with the scenario's
-// YAML config, or delegates to CustomRunner if set. For a ScenarioV2 (Driver
+// YAML config, or delegates to CustomRunner if set. For a ScenarioV2 (Run
 // set), takes the kernel-only v2 path (see runV2). Exactly one of Scenario
 // and ScenarioV2 may be populated; setting both is an error.
 //
@@ -94,24 +94,24 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	hasYAML := cfg.Scenario.YAMLConfig != ""
 	hasCustom := cfg.Scenario.CustomRunner != nil
 	hasV1 := hasYAML || hasCustom
-	hasV2 := cfg.ScenarioV2.Driver != nil || cfg.ScenarioV2.Name != ""
+	hasV2 := cfg.ScenarioV2.Run != nil || cfg.ScenarioV2.Name != ""
 
 	if hasV1 && hasV2 {
 		return nil, fmt.Errorf("conflicting configuration: both Scenario %q and ScenarioV2 %q are set (only one allowed)",
 			cfg.Scenario.Name, cfg.ScenarioV2.Name)
 	}
 
-	if hasV2 && cfg.ScenarioV2.Driver == nil {
-		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Name is set but Driver is nil",
+	if hasV2 && cfg.ScenarioV2.Run == nil {
+		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Name is set but Run is nil",
 			cfg.ScenarioV2.Name)
 	}
 
-	if cfg.ScenarioV2.Driver != nil && cfg.ScenarioV2.Name == "" {
+	if cfg.ScenarioV2.Run != nil && cfg.ScenarioV2.Name == "" {
 		return nil, errors.New("v2 scenario is not properly configured: " +
-			"Driver is set but Name is empty, so logs and the supervisor ID could not name the scenario")
+			"Run is set but Name is empty, so logs and the supervisor ID could not name the scenario")
 	}
 
-	if cfg.ScenarioV2.Driver != nil {
+	if cfg.ScenarioV2.Run != nil {
 		return runV2(ctx, cfg)
 	}
 
@@ -232,19 +232,19 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // runV2 keeps the process-global configworker deps key published for exactly
 // the supervisor's lifetime: the dynamicchildren registry is published under
 // the key before the supervisor starts (the application worker reads it every
-// tick), and the key is cleared on EVERY exit path, including a Driver panic,
+// tick), and the key is cleared on EVERY exit path, including a Run panic,
 // strictly after the supervisor has stopped. Clearing the key earlier flips
 // the application worker's RegistryConfigured observation mid-shutdown; a key
 // that is never cleared makes every later runV2 in the same process fail its
 // already-published check below.
 //
 // The supervisor runs on a context detached from the caller's ctx. The
-// caller's ctx drives the Driver, the Duration wait, and the teardown
+// caller's ctx drives Run, the Duration wait, and the teardown
 // trigger, but never the tick loop: if the tick loop shared the caller's
 // ctx, cancelling it would stop ticking before Shutdown runs, and the
 // graceful drain would wait out its full timeout against a stopped loop.
 //
-// After the Driver returns nil, the runner waits RunConfig.Duration (or
+// After Run returns nil, the runner waits RunConfig.Duration (or
 // until ctx is cancelled; 0 means ctx-only), then shuts the supervisor down.
 //
 // Because the deps key is process-global, v2 runs must not overlap within a
@@ -309,7 +309,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		register.ClearGlobalDeps(configworker.WorkerTypeName)
 	}
 
-	// The Driver is user-authored code, so it may return an error or panic.
+	// Run is user-authored code, so it may return an error or panic.
 	// Either way the supervisor must stop and the deps key must be cleared
 	// before runV2's frame unwinds, otherwise every later runV2 in this
 	// process fails its already-published check. The flag stays false until
@@ -323,8 +323,8 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}()
 
 	client := fsmv2client.NewFSMv2Client(writer, cfg.Store)
-	if err := cfg.ScenarioV2.Driver(ctx, Env{Client: client, Logger: cfg.Logger}); err != nil {
-		return nil, fmt.Errorf("scenario %q driver failed: %w", cfg.ScenarioV2.Name, err)
+	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: cfg.Logger}); err != nil {
+		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, err)
 	}
 
 	teardownOwnedByGoroutine = true
