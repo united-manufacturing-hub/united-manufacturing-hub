@@ -330,7 +330,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}()
 
 	client := fsmv2client.NewFSMv2Client(writer, cfg.Store)
-	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: cfg.Logger}); err != nil {
+	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: cfg.Logger, Dependencies: scenarioDeps}); err != nil {
 		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, err)
 	}
 

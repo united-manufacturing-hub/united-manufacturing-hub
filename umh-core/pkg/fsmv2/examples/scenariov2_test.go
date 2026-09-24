@@ -111,6 +111,17 @@ type scenarioDepsProbeRecord struct {
 // goroutine.
 var scenarioDepsProbeSeen atomic.Pointer[scenarioDepsProbeRecord]
 
+// scenarioEnvMock is the mutable mock the Env.Dependencies spec builds in
+// Dependencies and Run reaches through env.Dependencies. It is a pointer,
+// so the change Run makes through the map is the change the spec's own
+// variable sees.
+type scenarioEnvMock struct {
+	touched bool
+}
+
+// scenarioEnvMockKey names the mock in the map Dependencies returns.
+var scenarioEnvMockKey = config.NewDependencyKey[*scenarioEnvMock]("examples.test.env_deps_mock")
+
 // The probe registers once for the test binary, not per spec: its constructor
 // publishes the label it was handed, so the spec can ask whether the map
 // ScenarioV2.Dependencies returned survived the trip into a worker the Run
@@ -677,5 +688,93 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(record.present).To(BeTrue(),
 			"the value ScenarioV2.Dependencies returned must reach the constructor of a worker the Run upserts")
 		Expect(record.label).To(Equal("from-the-scenario"))
+	})
+
+	It("hands Run the map Dependencies returned, so Run can reach and change its mocks", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		// returnedDeps is the exact map the Dependencies closure below hands
+		// the runner. runV2 calls Dependencies and Run on the same goroutine
+		// as examples.Run, so the spec reads it without synchronization.
+		returnedDeps := map[string]any{}
+		mock := &scenarioEnvMock{}
+
+		reaching := examples.ScenarioV2{
+			Name:        "env-deps-reach",
+			Description: "test-local Run for the Env.Dependencies handoff",
+			Dependencies: func() (map[string]any, func(), error) {
+				config.SetDependency(returnedDeps, scenarioEnvMockKey, mock)
+
+				return returnedDeps, nil, nil
+			},
+			Run: func(_ context.Context, env examples.Env) error {
+				if env.Dependencies == nil {
+					return errors.New("env.Dependencies is nil")
+				}
+
+				reached, ok := config.LookupDependency(env.Dependencies, scenarioEnvMockKey)
+				if !ok {
+					return errors.New("the mock key is missing from env.Dependencies")
+				}
+
+				reached.touched = true
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   reaching,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		cancel()
+		Eventually(result.Done, "55s").Should(BeClosed())
+
+		// Reach: Run must have found the mock under the key in
+		// env.Dependencies and changed it through that handle.
+		Expect(mock.touched).To(BeTrue(),
+			"Run must reach the mock Dependencies built through env.Dependencies")
+	})
+
+	It("hands Run a nil map when the scenario declares no Dependencies", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		// Run runs on the caller's goroutine (as the spec above notes), so
+		// the spec reads recordedDeps without synchronization.
+		var recordedDeps map[string]any
+
+		envNone := examples.ScenarioV2{
+			Name:        "env-deps-none",
+			Description: "test-local Run for the nil-Dependencies handoff",
+			Run: func(_ context.Context, env examples.Env) error {
+				recordedDeps = env.Dependencies
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   envNone,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		cancel()
+		Eventually(result.Done, "55s").Should(BeClosed())
+		Expect(recordedDeps).To(BeNil())
 	})
 })
