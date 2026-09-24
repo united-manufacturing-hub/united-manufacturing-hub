@@ -50,8 +50,9 @@ type NoDeps = struct{}
 // and the dependency map this worker was created with. Read a value out of that map
 // with config.LookupDependency and a typed key; it is how a test hands a worker a mock
 // without a process-global setter. The constructor reads the map once, when it builds
-// the worker, and must not write to it. Workers with custom ObservedState types must use
-// factory.RegisterWorkerType directly.
+// the worker, and must not write to it: on a restart the map is the supervisor's own,
+// so a write would reach every worker it builds afterwards. Workers with custom
+// ObservedState types must use factory.RegisterWorkerType directly.
 //
 // SetGlobalDeps and GlobalDeps are a separate store that lives for the life of
 // the process, keyed by a string, usually the worker type.
