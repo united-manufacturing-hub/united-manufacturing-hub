@@ -60,8 +60,31 @@ func NewDependencyKey[T any](name string) DependencyKey[T] {
 
 // SetDependency stores value under key. m must be non-nil, as for any map
 // assignment.
+//
+// A nil value panics, because LookupDependency would report it as present and
+// the worker would call it instead of falling back to its real implementation.
 func SetDependency[T any](m map[string]any, key DependencyKey[T], value T) {
+	if isNil(value) {
+		panic(fmt.Sprintf("config.SetDependency(%q): value is nil", key.name))
+	}
+
 	m[key.name] = value
+}
+
+// isNil reports whether value is nil, including a nil pointer held in an
+// interface.
+func isNil(value any) bool {
+	v := reflect.ValueOf(value)
+	if !v.IsValid() {
+		return true
+	}
+
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // LookupDependency reads the value stored under key. The second return is false
