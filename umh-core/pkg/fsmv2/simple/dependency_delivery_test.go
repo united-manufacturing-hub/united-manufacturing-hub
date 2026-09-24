@@ -28,8 +28,8 @@ import (
 // A monitor worker does not reach its dependencies the way every other worker
 // does. Register builds its own constructor closure and hands that to
 // register.Worker, so the run's dependency map has a second place it can be
-// dropped -- and dropping it there excludes every monitor worker, cpu,
-// historian and nmap among them, while the framework looks like it delivers.
+// dropped -- and dropping it there excludes every monitor worker, cpu and
+// historian among them, while the framework looks like it delivers.
 //
 // These specs go through Register and the factory rather than calling
 // newSimpleWorker, because that closure is the thing under test. A spec that

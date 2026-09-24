@@ -25,19 +25,20 @@
 // Two fields are required, three are optional:
 //
 //	MonitorSpec[TConfig, TStatus, TDeps]{
-//	    WorkerType string                                                       // required
-//	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)             // required
-//	    Health     func(cfg TConfig, status TStatus) Health                     // optional
-//	    NewDeps    func(id deps.Identity, bd *deps.BaseDependencies) TDeps      // optional (built once per instance)
-//	    Interval   time.Duration                                               // optional (collector default if 0)
+//	    WorkerType string                                                                                // required
+//	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)                                      // required
+//	    Health     func(cfg TConfig, status TStatus) Health                                              // optional
+//	    NewDeps    func(id deps.Identity, bd *deps.BaseDependencies, dependencies map[string]any) TDeps  // optional (built once per instance)
+//	    Interval   time.Duration                                                                         // optional (collector default if 0)
 //	}
 //
 // A poll that needs no dependencies instantiates TDeps as struct{} and leaves
 // NewDeps unset, so Poll receives the zero value. NewDeps is handed the
 // framework's BaseDependencies for the instance, so a dependency value that
 // needs the worker's logger takes it from there rather than from a package-level
-// logger. Poll takes TDeps by value, so state it mutates has to sit behind a
-// pointer.
+// logger. NewDeps is also handed the instance's dependency map, and reads a mock
+// out of it with config.LookupDependency. Poll takes TDeps by value, so state it
+// mutates has to sit behind a pointer.
 //
 // TStatus must be a struct (Register panics otherwise): the framework flattens
 // it to top-level JSON for CSE delta sync.
