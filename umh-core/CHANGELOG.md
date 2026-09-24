@@ -4,9 +4,14 @@
 
 ### Improvements
 
+- The community Beckhoff ADS plugin was replaced by our own implementation. It is still in an experimental state. Refer to the benthos-umh repository for more information.
 - The CPU status of an instance whose operating system does not report CPU pressure stats now links to instructions for switching them on
 - CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, CPU pressure, throttling and how busy the machine is. Requires `USE_FSMV2_CPU=true` and `USE_FSMV2_TRANSPORT=true`
 - Removed stale documentation on using references within data models
+
+### Fixes
+
+- Sparkplug B input: metric datatypes now survive from BIRTH to DATA for devices that repeat the metric name in NDATA/DDATA. The alias cache restored the datatype only when the DATA metric arrived without a name, so devices sending name and alias together kept losing it, leaving `spb_datatype` missing and decoding signed integers as their unsigned wire value (an `Int32` of `-12` surfaced as `4294967284`). Devices sending the alias alone were already correct.
 
 ## [0.44.40]
 
