@@ -31,7 +31,7 @@ import (
 // The supervisor hands a worker's dependencies to factory.NewWorkerByType, and
 // register.Worker is what stands between that call and the developer's
 // constructor. These specs go through both, because the closure register.Worker
-// builds is the thing that used to drop the map. A spec that called the
+// builds is what passes the map on. A spec that called the
 // constructor itself would step over that closure and pass either way.
 
 type deliveryConfig struct {
