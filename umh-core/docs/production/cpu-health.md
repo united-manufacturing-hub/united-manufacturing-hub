@@ -17,7 +17,7 @@ What UMH measures headroom against depends on whether the container has a CPU li
 | Status | What it means | What to do |
 |--------|---------------|------------|
 | **CPU healthy** | The instance has the CPU it needs. Usage is shown for context, for example "1.2 of 4 cores". | Nothing. |
-| **CPU healthy, limited visibility** | The instance looks fine, but UMH cannot fully measure CPU health here: no CPU limit is set and the operating system is not reporting CPU-pressure statistics. | For full monitoring, set a CPU limit, or boot the operating system with `psi=1`. |
+| **CPU healthy, limited visibility** | The instance looks fine, but UMH cannot fully measure CPU health here: no CPU limit is set and the operating system is not reporting CPU-pressure statistics. | For full monitoring, set a CPU limit, or [enable CPU pressure stats](#enabling-cpu-pressure-stats). |
 | **CPU limited** | The instance hit its CPU limit and was paused until the next scheduling cycle, for example in 12% of cycles over the last minute. Work is being delayed. | Raise the CPU limit, or reduce the load on the instance. |
 | **CPU contention** | Tasks inside the instance spent time waiting for a free CPU core, for example 23% of the last minute. | Reduce the load, or give the instance more CPU. Workloads sharing the server may be competing for it. |
 | **CPU taken by the server** | Other virtual machines on the same physical server took CPU this instance needed. | On your virtualization platform, give this VM more guaranteed CPU, or move the other VMs off the server. |
@@ -37,15 +37,16 @@ CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can us
 
 Technical Details:
 Instance headroom 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degrades below 0).
+Instance usage not measured (throttling already shows whether this instance is hitting its CPU limit, so this rough estimate is not needed).
 Throttling 2% (degrades above 5%).
 Pressure 4% (degrades above 20%).
-Steal not available (not possible).
+Steal not measured (this instance is not running in a virtual machine, so no other virtual machine can take its CPU).
 ```
 
-Which lines appear depends on what the machine can measure: a machine whose core count is readable also gets a Machine headroom line, and an instance with no CPU limit gets neither the instance headroom nor the throttling line.
+Only the headroom lines are conditional: a machine whose core count is readable also gets a Machine headroom line, and an instance with no CPU limit gets no Instance headroom line. Every other signal keeps its line whether or not this machine can measure it.
 
 A signal that has already fired shows what would clear it instead, for example
-`Throttling 12% (recovers below 3%)`. A signal this machine cannot measure says so rather than
+`Throttling 12% (recovers below 3%)`. A signal this machine cannot measure names the fact that stops it being measured, rather than
 reading zero.
 
 ## Thresholds
@@ -58,15 +59,67 @@ to pass a threshold, not merely reach it, except where the table says "at".
 | Signal | Degrades | Recovers | Measured only when |
 |--------|----------|----------|--------------------|
 | **Throttling** | above 5% of scheduling periods | below 3% | a CPU limit is set |
-| **CPU pressure** | above 20% (PSI `avg60`) | below 12% | the kernel publishes PSI |
+| **CPU pressure** | above 20% (PSI `avg60`) | below 12% | the container can read `cpu.pressure` (see [Enabling CPU pressure stats](#enabling-cpu-pressure-stats)) |
 | **CPU steal** | above 10% | below 6% | the machine is a virtual machine |
 | **Machine headroom** | less than 1 core free | 1.5 cores free | the machine's core count is readable |
 | **Limit headroom** | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
-| **Usage of the machine** | at 70% | below 60% | host statistics are unreadable (fallback for machine headroom) |
+| **Instance usage** | at 70% | below 60% | no CPU limit is set and the kernel publishes no PSI (last-resort fallback for machine headroom) |
 
 Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a fresh
 instance is judgeable within seconds of starting. Bare metal reports no steal at all, so on a
-physical machine that signal reads "not possible" rather than 0%.
+physical machine that signal reads "not measured" with its reason rather than 0%.
+
+## Enabling CPU pressure stats
+
+UMH reads CPU pressure from the container's own `/sys/fs/cgroup/cpu.pressure`. That file exists only
+if the kernel booted with Pressure Stall Information (PSI) on and the machine runs cgroup v2. Most
+distributions ship both on. The Red Hat family is the exception: RHEL, Rocky, AlmaLinux and Oracle
+Linux ship PSI off, and version 8 of each also boots cgroup v1.
+
+Check your own machine:
+
+```bash
+docker exec umh-core cat /sys/fs/cgroup/cpu.pressure
+```
+
+A line beginning `some avg10=` means there is nothing to do. `No such file or directory` means one or
+both are missing. Find out which, on the host:
+
+```bash
+stat -fc %T /sys/fs/cgroup
+```
+
+`cgroup2fs` means only PSI is missing: set `psi=1`. `tmpfs` means the machine runs cgroup v1, where
+`cpu.pressure` does not exist at all.
+
+Without cgroup v2, UMH still reports machine headroom and steal, which it reads from `/proc/stat`. It
+loses CPU pressure, throttling and the container's own CPU limit.
+
+### Set the kernel parameters
+
+Each operating system sets kernel parameters differently. Follow yours, then reboot:
+
+| Operating system | Instructions |
+|------------------|--------------|
+| RHEL, Rocky, AlmaLinux, Oracle Linux, Fedora | [Configuring kernel command-line parameters](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_monitoring_and_updating_the_kernel/configuring-kernel-command-line-parameters_managing-monitoring-and-updating-the-kernel): `sudo grubby --update-kernel=ALL --args="psi=1"` |
+| Debian and Ubuntu | [GRUB 2 setup](https://help.ubuntu.com/community/Grub2/Setup): add `psi=1` to `GRUB_CMDLINE_LINUX` in `/etc/default/grub`, then run `sudo update-grub` |
+
+`update-grub` is a Debian and Ubuntu wrapper. On another GRUB machine, edit `GRUB_CMDLINE_LINUX` the
+same way and run `grub-mkconfig -o /boot/grub/grub.cfg`.
+
+### Confirm UMH can read the file
+
+Run the `docker exec` check again. It reads the same file UMH reads.
+
+The Management Console shows the result on the instance's detail page. The Technical Details
+`Pressure` line changes from `Pressure not available (not possible).` to a percentage. `Pressure not
+available (measuring).` means UMH can read the file and is filling its 60-second window, so wait a
+minute and look again.
+
+If the file is still missing, run `cat /proc/pressure/cpu` on the host. Output means PSI is on and
+cgroup v2 is what is missing. `No such file or directory` means the kernel ignored `psi=1`, which
+happens on a kernel built without PSI. Setting a CPU limit on the container is the other route to
+full monitoring, and it needs no kernel change.
 
 ## When UMH refuses a new bridge
 

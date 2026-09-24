@@ -129,10 +129,10 @@ var _ = Describe("two capacity causes on one tick", func() {
 					"\nTechnical Details:\n"+
 					"Machine headroom -0.8 cores = 4 total - 3.8 used - 1.0 reserved (recovers above 0.5).\n"+
 					"Instance headroom -0.2 cores = 2 total - 2.0 used - 0.2 reserved (recovers above 0.1).\n"+
-					"Usage not available (not possible).\n"+
+					"Instance usage not measured (throttling already shows whether this instance is hitting its CPU limit, so this rough estimate is not needed).\n"+
 					"Throttling not available (measuring).\n"+
-					"Pressure not available (not possible).\n"+
-					"Steal not available (not possible)."),
+					"Pressure not measured (this operating system does not report CPU pressure stats).\n"+
+					"Steal not measured (this instance is not running in a virtual machine, so no other virtual machine can take its CPU)."),
 				"limit row first: %v", limitFirst)
 			Expect(BlockReason(verdict.Causes, details)).To(Equal(
 				"Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."),

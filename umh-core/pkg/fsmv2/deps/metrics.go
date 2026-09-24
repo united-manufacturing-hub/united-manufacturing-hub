@@ -197,6 +197,81 @@ const (
 	GaugePendingMessages GaugeName = "pending_messages"
 )
 
+// CPU worker gauge names for the evidence behind a CPU health verdict.
+const (
+	// GaugeCPUAvgUsageCores tracks this container's own 60s mean usage, in absolute cores.
+	GaugeCPUAvgUsageCores GaugeName = "cpu_avg_usage_cores"
+
+	// GaugeCPUAvgUsageFraction tracks the 60s mean usage as a 0..1 fraction of the CPUs this container may run on.
+	GaugeCPUAvgUsageFraction GaugeName = "cpu_avg_usage_fraction"
+
+	// GaugeCPUThrottleRatio tracks the 60s nr_throttled/nr_periods delta, 0..1.
+	GaugeCPUThrottleRatio GaugeName = "cpu_throttle_ratio"
+
+	// GaugeCPUPressureAvg60 tracks the kernel's cpu-some avg60 pressure-stall
+	// figure as a 0..1 fraction: the percentage in /proc/pressure/cpu, divided
+	// by 100.
+	GaugeCPUPressureAvg60 GaugeName = "cpu_pressure_avg60_ratio"
+
+	// GaugeCPUHostHeadroomCores tracks cores free on the host after the reserve.
+	// Unclamped: a full box reports a negative number rather than 0.
+	//
+	// This series has no flag of its own. Trust it only on a tick where
+	// cpu_host_headroom_available, cpu_host_busy_cores_available and
+	// cpu_host_busy_ring_active all read 1.
+	GaugeCPUHostHeadroomCores GaugeName = "cpu_host_headroom_cores"
+
+	// GaugeCPUAvgHostBusyCores tracks the whole machine's 60s mean busy time, in cores.
+	GaugeCPUAvgHostBusyCores GaugeName = "cpu_avg_host_busy_cores"
+
+	// GaugeCPUCapacityCores tracks the ceiling the verdict judged against: the
+	// quota when one applies, else the CPU count.
+	GaugeCPUCapacityCores GaugeName = "cpu_capacity_cores"
+
+	// GaugeCPUReserveCores tracks the headroom held back from cpu_capacity_cores.
+	GaugeCPUReserveCores GaugeName = "cpu_reserve_cores"
+
+	// GaugeCPUHostCpus tracks the machine's CPU count, which exceeds this container's when it is pinned to a subset.
+	GaugeCPUHostCpus GaugeName = "cpu_host_cpus"
+
+	// GaugeCPULastSampleUnix carries the unix seconds of the last tick that measured.
+	// Every other cpu_* gauge holds its last value until then, so its age reveals a freeze.
+	GaugeCPULastSampleUnix GaugeName = "cpu_last_sample_unix"
+)
+
+// CPU worker flags, 1 for true and 0 for false. A 0 on any of them means the
+// measurement it names is not worth acting on this tick. The suffix says what
+// makes it 0:
+//
+//	_ring_active   the 60s window has not reduced to a trusted number.
+//	_signal_ready  the signal has no trusted reading. On a box that has no
+//	               instrument for it at all, such as a bare-metal host with no
+//	               cgroup throttle counters, it never turns 1.
+//	_available     the sample could not supply the figure at all.
+const (
+	// GaugeCPUUsageRingActive applies to cpu_avg_usage_cores.
+	GaugeCPUUsageRingActive GaugeName = "cpu_usage_ring_active"
+
+	// GaugeCPUHostBusyRingActive applies to cpu_avg_host_busy_cores.
+	GaugeCPUHostBusyRingActive GaugeName = "cpu_host_busy_ring_active"
+
+	// GaugeCPUThrottleSignalReady applies to cpu_throttle_ratio.
+	GaugeCPUThrottleSignalReady GaugeName = "cpu_throttle_signal_ready"
+
+	// GaugeCPUPressureSignalReady applies to cpu_pressure_avg60_ratio.
+	GaugeCPUPressureSignalReady GaugeName = "cpu_pressure_signal_ready"
+
+	// GaugeCPUHostHeadroomAvailable reads 0 when this container is pinned to a
+	// subset of the machine's CPUs, and 0 when the machine's CPU count could not
+	// be read. It applies to cpu_host_headroom_cores.
+	GaugeCPUHostHeadroomAvailable GaugeName = "cpu_host_headroom_available"
+
+	// GaugeCPUHostBusyCoresAvailable reads 1 when this tick's read produced a
+	// host-busy figure. It applies to cpu_avg_host_busy_cores and to
+	// cpu_host_headroom_cores.
+	GaugeCPUHostBusyCoresAvailable GaugeName = "cpu_host_busy_cores_available"
+)
+
 // =============================================================================
 // METRICS INFRASTRUCTURE
 // =============================================================================
@@ -298,6 +373,16 @@ func (r *MetricsRecorder) SetGauge(name GaugeName, value float64) {
 	defer r.mu.Unlock()
 
 	r.gauges[string(name)] = value
+}
+
+// SetGaugeFlag sets a gauge to 1 for true and 0 for false.
+func (r *MetricsRecorder) SetGaugeFlag(name GaugeName, on bool) {
+	value := 0.0
+	if on {
+		value = 1
+	}
+
+	r.SetGauge(name, value)
 }
 
 // DrainResult holds the buffered metrics from a Drain() operation.

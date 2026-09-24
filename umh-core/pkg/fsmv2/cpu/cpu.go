@@ -115,9 +115,10 @@ type CPUDeps struct {
 }
 
 // Poll samples the cgroup once and reports the verdict Decide judged. On a
-// NewEngine construction error or a non-nil Read error it stores no verdict and
-// reports it could not measure, never a healthy zero. One absent field (e.g.
-// Pressure) on a nil error is not a failure: it reports what Decide produced.
+// NewEngine construction error or a non-nil Read error it stores no verdict,
+// publishes no gauges, and reports it could not measure, never a healthy zero.
+// One absent field (e.g. Pressure) on a nil error is not a failure: it reports
+// what Decide produced.
 func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	if d.engineErr != nil {
 		return CPUStatus{}, d.engineErr
@@ -136,11 +137,42 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
+	recordMetrics(d.MetricsRecorder(), sample.Timestamp, details)
+
 	return CPUStatus{
 		Verdict: verdict,
 		Message: cpuhealth.ComposeMessage(verdict, details),
 		Details: details,
 	}, nil
+}
+
+// recordMetrics publishes the evidence for the framework's worker-metrics
+// exporter, which turns each name into umh_fsmv2_worker_<name>
+// (WorkerMetricsExporter.getOrCreateGauge, pkg/fsmv2/supervisor/metrics/metrics.go).
+func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.Details) {
+	// GaugeCPULastSampleUnix freezes along with every gauge below when a tick
+	// cannot measure: Poll returns before recordMetrics runs, and the collector
+	// reloads and re-publishes the previous gauge values instead
+	// (Collector.wrapNewObservation, pkg/fsmv2/supervisor/internal/collection/collector.go).
+	// Its age is what reveals the freeze.
+	m.SetGauge(deps.GaugeCPULastSampleUnix, float64(sampledAt.Unix()))
+
+	m.SetGauge(deps.GaugeCPUAvgUsageCores, det.AvgUsageCores)
+	m.SetGauge(deps.GaugeCPUAvgUsageFraction, det.AvgUsageFraction)
+	m.SetGauge(deps.GaugeCPUThrottleRatio, det.ThrottleRatio)
+	m.SetGauge(deps.GaugeCPUPressureAvg60, det.PressureAvg60)
+	m.SetGauge(deps.GaugeCPUHostHeadroomCores, det.HostHeadroomCores)
+	m.SetGauge(deps.GaugeCPUAvgHostBusyCores, det.AvgHostBusyCores)
+	m.SetGauge(deps.GaugeCPUCapacityCores, det.CapacityCores)
+	m.SetGauge(deps.GaugeCPUReserveCores, det.ReserveCores)
+	m.SetGauge(deps.GaugeCPUHostCpus, det.HostCpus)
+
+	m.SetGaugeFlag(deps.GaugeCPUUsageRingActive, det.UsageRingActive)
+	m.SetGaugeFlag(deps.GaugeCPUHostBusyRingActive, det.HostBusyRingActive)
+	m.SetGaugeFlag(deps.GaugeCPUHostBusyCoresAvailable, det.HostBusyCoresAvailable)
+	m.SetGaugeFlag(deps.GaugeCPUHostHeadroomAvailable, det.HostHeadroomAvailable)
+	m.SetGaugeFlag(deps.GaugeCPUThrottleSignalReady, det.ThrottleSignalReady)
+	m.SetGaugeFlag(deps.GaugeCPUPressureSignalReady, det.PressureSignalReady)
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
