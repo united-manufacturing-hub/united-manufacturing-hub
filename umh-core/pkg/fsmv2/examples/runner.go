@@ -324,14 +324,9 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// ClearGlobalDeps strictly after supDone: clearing earlier flips the
 		// application worker's RegistryConfigured observation mid-shutdown.
 		register.ClearGlobalDeps(configworker.WorkerTypeName)
-		// The scenario's cleanup runs exactly once per runV2, strictly after
-		// the supervisor has stopped. Only the exits after the supervisor has
-		// started funnel through this closure: the deferred call on Run error
-		// or panic, and the goroutine after Duration elapses, ctx is
-		// cancelled, or the supervisor stops on its own. Of the two earlier
-		// returns, only a supervisor build error calls the cleanup itself; a
-		// Dependencies error returns without calling it. Only one of these
-		// exits ever fires.
+		// The scenario's cleanup runs once, after the supervisor has stopped.
+		// The two early returns, a Dependencies error and a supervisor build
+		// error, do not reach it.
 		if scenarioCleanup != nil {
 			scenarioCleanup()
 		}

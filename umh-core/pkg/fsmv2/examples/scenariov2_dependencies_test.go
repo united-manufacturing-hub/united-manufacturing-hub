@@ -38,7 +38,7 @@ var _ = Describe("ScenarioV2 Dependencies failure", func() {
 		store := examples.SetupStore(logger)
 
 		depsErr := errors.New("dependency setup failed")
-		driverRan := false
+		runRan := false
 		failing := examples.ScenarioV2{
 			Name:        "deps-error",
 			Description: "test-local Run for the Dependencies error path",
@@ -46,7 +46,7 @@ var _ = Describe("ScenarioV2 Dependencies failure", func() {
 				return nil, nil, depsErr
 			},
 			Run: func(_ context.Context, _ examples.Env) error {
-				driverRan = true
+				runRan = true
 
 				// An error makes the buggy path tear down immediately, so a
 				// red run of this spec leaks no supervisor into later specs.
@@ -70,7 +70,7 @@ var _ = Describe("ScenarioV2 Dependencies failure", func() {
 			"the error must name the scenario whose dependencies failed")
 		Expect(result).To(BeNil(),
 			"a failed Dependencies must not return a run result")
-		Expect(driverRan).To(BeFalse(),
+		Expect(runRan).To(BeFalse(),
 			"the run must fail before the scenario's Run is invoked")
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
 			"a failed Dependencies must not leave the configworker deps key behind")
