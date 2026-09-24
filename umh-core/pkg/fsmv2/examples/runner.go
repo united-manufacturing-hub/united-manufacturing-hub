@@ -266,8 +266,9 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 	// Acquire the scenario's dependency map before anything is published.
 	var scenarioDeps map[string]any
+	var scenarioCleanup func()
 	if cfg.ScenarioV2.Dependencies != nil {
-		scenarioDeps, _, _ = cfg.ScenarioV2.Dependencies()
+		scenarioDeps, scenarioCleanup, _ = cfg.ScenarioV2.Dependencies()
 	}
 
 	writer := dynamicchildren.NewWriter()
@@ -314,6 +315,14 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// ClearGlobalDeps strictly after supDone: clearing earlier flips the
 		// application worker's RegistryConfigured observation mid-shutdown.
 		register.ClearGlobalDeps(configworker.WorkerTypeName)
+		// The scenario's cleanup runs exactly once per runV2, strictly after
+		// the supervisor has stopped: every exit path funnels through this
+		// closure (the deferred call on Run error or panic, the goroutine
+		// after Duration elapses or ctx is cancelled), and only one of those
+		// ever fires.
+		if scenarioCleanup != nil {
+			scenarioCleanup()
+		}
 	}
 
 	// Run is user-authored code, so it may return an error or panic.
