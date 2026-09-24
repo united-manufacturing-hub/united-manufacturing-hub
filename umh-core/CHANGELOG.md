@@ -4,9 +4,12 @@
 
 ## [0.44.41]
 
-### Improvements
+### New Features
 
 - The community Beckhoff ADS plugin was replaced by our own implementation. It is still in an experimental state. Refer to the benthos-umh repository for more information.
+
+### Improvements
+
 - The CPU status of an instance whose operating system does not report CPU pressure stats now links to instructions for switching them on
 - CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, CPU pressure, throttling and how busy the machine is. Requires `USE_FSMV2_CPU=true` and `USE_FSMV2_TRANSPORT=true`
 - Removed stale documentation on using references within data models
