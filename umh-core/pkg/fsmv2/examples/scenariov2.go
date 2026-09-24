@@ -35,6 +35,12 @@ type Env struct {
 	// Logger is the run's logger (the same logger RunConfig.Logger carries),
 	// so Runs log into the same stream the post-run log checks read.
 	Logger deps.FSMLogger
+
+	// Dependencies is the map the scenario's Dependencies returned, or nil when
+	// the scenario declares none. The supervisor reads the same map while it
+	// builds workers, so Run must not write to it: Run reads a mock out with
+	// config.LookupDependency and changes the mock itself.
+	Dependencies map[string]any
 }
 
 // ScenarioV2 defines a Run-based scenario. Instead of declaring children
