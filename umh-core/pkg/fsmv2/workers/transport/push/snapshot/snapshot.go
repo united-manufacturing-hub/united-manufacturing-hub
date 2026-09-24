@@ -26,6 +26,9 @@ import (
 type PushDependencies interface {
 	deps.Dependencies
 	GetOutboundChan() <-chan *types.UMHMessage
+	// RecordOutboundDepth reports the outbound channel's length right before
+	// a drain.
+	RecordOutboundDepth(length int)
 	GetTransport() types.Transport
 	RecordTypedError(errType types.ErrorType, retryAfter time.Duration, statusCode int, errorDetail string)
 	RecordSuccess()

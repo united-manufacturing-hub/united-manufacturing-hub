@@ -20,34 +20,64 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/channelusage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/generator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/channelusage"
+	pullsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	pushsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-func monitorAt(fillPercent int) *channelusage.Monitor {
-	monitor, err := channelusage.NewMonitor()
-	Expect(err).NotTo(HaveOccurred())
+var _ = Describe("CommunicatorFromObservations", func() {
+	measured := snapshot.TransportStatus{OutboundQueue: channelusage.Verdict{Measured: true, FillPercent: 40}}
+	fullQueue := snapshot.TransportStatus{OutboundQueue: channelusage.Verdict{Measured: true, Degraded: true, FillPercent: 100}}
 
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	for range int(channelusage.Window / channelusage.SampleInterval) {
-		monitor.Observe(fillPercent, 100, at)
-		at = at.Add(channelusage.SampleInterval)
+	fromTransport := func(state string, status snapshot.TransportStatus) *models.Communicator {
+		return generator.CommunicatorFromObservations(
+			fsmv2.Observation[snapshot.TransportStatus]{State: state, Status: status},
+			fsmv2.Observation[pushsnapshot.PushStatus]{},
+			fsmv2.Observation[pullsnapshot.PullStatus]{},
+		)
 	}
 
-	return monitor
-}
-
-var _ = Describe("CommunicatorFromMonitor", func() {
-	DescribeTable("reports health from the monitor verdict",
-		func(monitor func() *channelusage.Monitor, fillPercent float64, expected models.HealthCategory) {
-			communicator := generator.CommunicatorFromMonitor(monitor(), 2)
-			Expect(communicator.SubscriberCount).To(Equal(2))
-			Expect(communicator.OutboundChannelFillPercent).To(BeNumerically("~", fillPercent, 0.001))
-			Expect(communicator.Health.Category).To(Equal(expected))
+	DescribeTable("derives health from the transport state and the outbound queue",
+		func(state string, status snapshot.TransportStatus, expected models.HealthCategory) {
+			Expect(fromTransport(state, status).Health.Category).To(Equal(expected))
 		},
-		Entry("no monitor", func() *channelusage.Monitor { return nil }, 0.0, models.Neutral),
-		Entry("healthy queue", func() *channelusage.Monitor { return monitorAt(40) }, 40.0, models.Active),
-		Entry("full queue", func() *channelusage.Monitor { return monitorAt(100) }, 100.0, models.Degraded),
+		Entry("running, queue measured", "Running", measured, models.Active),
+		Entry("running, queue not measured yet", "Running", snapshot.TransportStatus{}, models.Neutral),
+		Entry("degraded, queue full", "Degraded", fullQueue, models.Degraded),
+		Entry("degraded, children unhealthy", "Degraded", measured, models.Degraded),
+		Entry("authentication failed", "AuthFailed", snapshot.TransportStatus{}, models.Degraded),
+		Entry("starting", "Starting", snapshot.TransportStatus{}, models.Neutral),
 	)
+
+	It("maps an observed push child and leaves an unobserved pull child nil", func() {
+		push := fsmv2.Observation[pushsnapshot.PushStatus]{
+			CollectedAt: time.Now(),
+			State:       "Degraded",
+			Status: pushsnapshot.PushStatus{
+				ConsecutiveErrors: 4, LastErrorType: types.ErrorTypeServerError, LastStatusCode: 503, PendingMessageCount: 120,
+			},
+		}
+		push.Metrics.Worker = deps.Metrics{
+			Counters: map[string]int64{string(deps.CounterMessagesPushed): 900, string(deps.CounterMessagesDropped): 7},
+			Gauges:   map[string]float64{string(deps.GaugeLastPushLatencyMs): 250},
+		}
+
+		result := generator.CommunicatorFromObservations(
+			fsmv2.Observation[snapshot.TransportStatus]{State: "Degraded"},
+			push,
+			fsmv2.Observation[pullsnapshot.PullStatus]{},
+		)
+
+		Expect(result.Pull).To(BeNil())
+		Expect(result.Push).To(Equal(&models.CommunicatorChannel{
+			State: "Degraded", LastErrorType: types.ErrorTypeServerError.String(), Messages: 900, MessagesDropped: 7,
+			PendingMessages: 120, ConsecutiveErrors: 4, LastStatusCode: 503, LastLatencyMs: 250,
+		}))
+	})
 })

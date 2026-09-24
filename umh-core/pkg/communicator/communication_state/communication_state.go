@@ -248,7 +248,7 @@ func (c *CommunicationState) UpdateTopicBrowserCache() error {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers.
-func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, fsmOutboundChannel chan<- *types.UMHMessage, gatekeeperOutboundChannel chan<- *types.MessageWithSender, transportOutbound chan<- *types.UMHMessage) {
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, fsmOutboundChannel chan<- *types.UMHMessage, gatekeeperOutboundChannel chan<- *types.MessageWithSender) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -301,7 +301,6 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		topicBrowserCommunicator,
 		fsmOutboundChannel,        // FSMv2 direct channel (nil for legacy mode)
 		gatekeeperOutboundChannel, // Gatekeeper channel (nil when gatekeeper disabled)
-		transportOutbound,         // sampled for queue usage (nil for legacy mode)
 		c.FeatureUsage,
 	)
 	if c.SubscriberHandler == nil {

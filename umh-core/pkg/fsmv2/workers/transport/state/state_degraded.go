@@ -50,14 +50,14 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 				snap.Status.ConsecutiveErrors, snap.Status.LastErrorType), childrenAlive(snap.Config, snap.Status))
 	}
 
-	// If all children are now healthy, transition back to Running
-	if snap.ChildrenUnhealthy == 0 {
+	// If all children and the outbound queue are healthy, transition back to Running
+	if snap.ChildrenUnhealthy == 0 && !snap.Status.OutboundQueue.Degraded {
 		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running", childrenAlive(snap.Config, snap.Status))
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("degraded: %d unhealthy children, %d consecutive errors",
-			snap.ChildrenUnhealthy, snap.Status.ConsecutiveErrors), childrenAlive(snap.Config, snap.Status))
+		fmt.Sprintf("degraded: %d unhealthy children, %d consecutive errors, outbound queue degraded=%t",
+			snap.ChildrenUnhealthy, snap.Status.ConsecutiveErrors, snap.Status.OutboundQueue.Degraded), childrenAlive(snap.Config, snap.Status))
 }
 
 // String returns the state name derived from the type.

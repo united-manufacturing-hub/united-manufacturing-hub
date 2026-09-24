@@ -114,6 +114,8 @@ func (m *mockPushDeps) GetWorkerType() string {
 	return "push"
 }
 
+func (m *mockPushDeps) RecordOutboundDepth(int) {}
+
 func (m *mockPushDeps) GetOutboundChan() <-chan *types.UMHMessage {
 	return m.outboundChan
 }

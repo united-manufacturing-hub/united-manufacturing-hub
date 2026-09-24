@@ -20,7 +20,6 @@
 package channelusage
 
 import (
-	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
@@ -45,14 +44,16 @@ const (
 	// PeakClearPercent is where a degraded peak recovers.
 	PeakClearPercent = 70.0
 
-	// Window is the span the p95 is taken over.
+	// Window is the span the p95 and the peak are taken over. A full queue
+	// delays its own report, so the peak must outlive the backlog to reach the
+	// frontend.
 	Window = 30 * time.Second
-	// PeakWindow is how long the peak is remembered. A full queue delays its own
-	// report, so the peak must outlive the backlog to reach the frontend.
-	PeakWindow = 30 * time.Second
 	// SampleInterval is the rate callers must sample at; the engine validates
-	// the table against it. Backlogs shorter than one interval are invisible.
-	SampleInterval = 100 * time.Millisecond
+	// the table against it. The transport worker samples once per observation,
+	// so this is also its observation interval. Each sample is the highest
+	// depth since the previous one, so backlogs that fill and drain between
+	// samples still count.
+	SampleInterval = 1 * time.Second
 	// demoteSpan is how long the signal may go unsampled before its window
 	// empties.
 	demoteSpan = 60 * time.Second
@@ -63,25 +64,25 @@ type Sample struct {
 	FillPercent diagnosis.Reading
 }
 
-// Verdict is the monitor's judgement of the channel after a sample.
+// Verdict is the monitor's judgement of the channel after a sample. The figures
+// are zero until Measured is true.
 type Verdict struct {
-	// P95FillPercent is the 95th percentile fill level over Window, 0 to 100.
-	P95FillPercent float64
-	// PeakFillPercent is the highest fill level over PeakWindow, 0 to 100.
-	PeakFillPercent float64
+	// Measured reports whether enough samples exist to compute the p95.
+	Measured bool `json:"measured"`
 	// Degraded reports whether the p95 or the peak has fired and not yet
 	// cleared.
-	Degraded bool
+	Degraded bool `json:"degraded"`
+	// FillPercent is the 95th percentile fill level over Window, 0 to 100.
+	FillPercent float64 `json:"fill_percent"`
+	// PeakPercent is the highest fill level over Window, 0 to 100.
+	PeakPercent float64 `json:"peak_percent"`
 }
 
 // Monitor judges one channel's fill level. Observe must be called from a single
-// goroutine; Verdict is safe from any.
+// goroutine.
 type Monitor struct {
-	engine  *diagnosis.Engine[Sample]
-	env     diagnosis.Environment
-	mu      sync.RWMutex
-	verdict Verdict
-	known   bool
+	engine *diagnosis.Engine[Sample]
+	env    diagnosis.Environment
 }
 
 // NewMonitor builds a monitor. It fails only on a malformed table.
@@ -147,7 +148,7 @@ func table() (diagnosis.Table[Sample], error) {
 					Name:      instrumentPeak,
 					Extract:   func(s Sample) diagnosis.Reading { return s.FillPercent },
 					Reduction: peak,
-					Span:      PeakWindow,
+					Span:      Window,
 				},
 				Marks: diagnosis.Marks{
 					Unit:     "%",
@@ -161,11 +162,12 @@ func table() (diagnosis.Table[Sample], error) {
 	}, nil
 }
 
-// Observe records one reading from len(ch) and cap(ch). A capacity of 0 records
-// as 0%.
-func (m *Monitor) Observe(length, capacity int, at time.Time) {
+// Observe records one reading of a channel length against its capacity and
+// returns the resulting verdict. A capacity of 0 records as 0%. A nil monitor
+// returns an unmeasured verdict.
+func (m *Monitor) Observe(length, capacity int, at time.Time) Verdict {
 	if m == nil {
-		return
+		return Verdict{}
 	}
 
 	var fillPercent float64
@@ -175,39 +177,17 @@ func (m *Monitor) Observe(length, capacity int, at time.Time) {
 
 	fired, _ := m.engine.Observe(Sample{FillPercent: diagnosis.Known(fillPercent)}, m.env, at)
 
-	p95FillPercent, state := m.engine.Reduction(signalOutboundFull, instrumentFillPercent).Get()
-	peakFillPercent, peakState := m.engine.Reduction(signalOutboundPeak, instrumentPeak).Get()
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	p95, state := m.engine.Reduction(signalOutboundFull, instrumentFillPercent).Get()
 	if state != diagnosis.StateValue {
-		m.known = false
-
-		return
+		return Verdict{}
 	}
 
-	if peakState != diagnosis.StateValue {
-		peakFillPercent = p95FillPercent
+	peak, _ := m.engine.Reduction(signalOutboundPeak, instrumentPeak).Get()
+
+	return Verdict{
+		Measured:    true,
+		Degraded:    len(fired) > 0,
+		FillPercent: p95,
+		PeakPercent: peak,
 	}
-
-	m.verdict = Verdict{
-		P95FillPercent:  p95FillPercent,
-		PeakFillPercent: peakFillPercent,
-		Degraded:        len(fired) > 0,
-	}
-	m.known = true
-}
-
-// Verdict returns the last verdict, or false until enough samples exist to
-// compute the p95.
-func (m *Monitor) Verdict() (Verdict, bool) {
-	if m == nil {
-		return Verdict{}, false
-	}
-
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	return m.verdict, m.known
 }

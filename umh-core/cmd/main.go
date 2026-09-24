@@ -611,7 +611,7 @@ func enableBackendConnection(ctx context.Context, config *config.FullConfig, com
 
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, nil, nil, nil) // nil = legacy mode uses Pusher
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, nil, nil) // nil = legacy mode uses Pusher
 		communicationState.InitialiseAndStartRouter()
 		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
 
@@ -878,7 +878,6 @@ func wireFSMv2Communicator(
 			communicationState.ConfigManager,
 			nil, // no legacy FSMv2 channel when gatekeeper is active
 			communicationState.Gatekeeper.VerifiedOutboundChan(), // Gatekeeper mode: write MessageWithSender
-			channelAdapter.GetOutboundWriteChannel(),             // sampled for queue usage
 		)
 		communicationState.Gatekeeper.CertificateHandler().SetSubHandler(communicationState.SubscriberHandler)
 	} else {
@@ -890,7 +889,6 @@ func wireFSMv2Communicator(
 			communicationState.ConfigManager,
 			channelAdapter.GetOutboundWriteChannel(), // FSMv2 without gatekeeper
 			nil,                                      // no gatekeeper channel
-			channelAdapter.GetOutboundWriteChannel(), // sampled for queue usage
 		)
 	}
 	communicationState.InitializeRouterForFSMv2()

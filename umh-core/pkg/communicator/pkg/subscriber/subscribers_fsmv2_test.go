@@ -63,9 +63,8 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				logger,
 				nil, // topicBrowserCommunicator
 				fsmOutboundChannel,
-				nil,                // gatekeeperOutboundChannel
-				fsmOutboundChannel, // transportOutbound
-				nil,                // featureUsage
+				nil, // gatekeeperOutboundChannel
+				nil, // featureUsage
 			)
 		})
 
@@ -103,7 +102,6 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				nil, // topicBrowserCommunicator
 				nil, // fsmOutboundChannel - nil for legacy mode
 				nil, // gatekeeperOutboundChannel
-				nil, // transportOutbound
 				nil, // featureUsage
 			)
 		})
@@ -137,7 +135,6 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				nil,
 				nil, // legacy mode
 				nil, // gatekeeperOutboundChannel
-				nil, // transportOutbound
 				nil, // featureUsage
 			)
 
@@ -158,9 +155,8 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				logger,
 				nil,
 				fsmv2Channel, // FSMv2 mode
-				nil,          // gatekeeperOutboundChannel
-				fsmv2Channel, // transportOutbound
-				nil,          // featureUsage
+				nil, // gatekeeperOutboundChannel
+				nil, // featureUsage
 			)
 
 			// Both handlers should work independently

@@ -29,7 +29,8 @@ type Core struct {
 	// Historian reports the reachability of the configured historian endpoint.
 	// Nil when no historian is configured or no observation exists yet.
 	Historian *Historian `json:"historian,omitempty"`
-	// Communicator reports outbound queue usage and subscriber count.
+	// Communicator reports the link to the Management Console. Nil when the
+	// fsmv2 communicator is not running.
 	Communicator  *Communicator  `json:"communicator,omitempty"`
 	Container     Container      `json:"container"`
 	TopicBrowser  TopicBrowser   `json:"topicBrowser"`
@@ -154,21 +155,57 @@ type Container struct {
 	Architecture ContainerArchitecture `json:"architecture"` // Processor architecture
 }
 
-// Communicator reports how full the outbound message queue to the Management
-// Console is. A full queue drops status updates and action replies.
+// Communicator reports the link to the Management Console, read from the fsmv2
+// transport worker: its health, how full the outbound message queue is, and
+// the push and pull workers below it. A full queue drops status updates and
+// action replies.
 type Communicator struct {
-	// Health is Neutral until enough readings exist; the figures below are
-	// zero until then.
+	// Health is Degraded when the transport is degraded, authentication failed,
+	// or the outbound queue is close to full. It is Neutral while the queue is
+	// not yet measured; the queue figures are zero until then.
 	Health *Health `json:"health"`
+	// State is the transport worker's FSM state, for example "Running".
+	State string `json:"state,omitempty"`
 	// SubscriberCount is the number of subscribers when the message is built.
 	// Each one adds a copy of every status message to the queue.
 	SubscriberCount int `json:"subscriberCount"`
+	// ConsecutiveErrors is the number of transport errors since the last success.
+	ConsecutiveErrors int `json:"consecutiveErrors"`
+	// LastErrorType names the last transport error while errors are ongoing.
+	LastErrorType string `json:"lastErrorType,omitempty"`
 	// OutboundChannelFillPercent is the 95th percentile fill level over the
 	// last 30 seconds, 0 to 100.
 	OutboundChannelFillPercent float64 `json:"outboundChannelFillPercent"`
 	// OutboundChannelPeakPercent is the highest fill level over the last 30
 	// seconds, 0 to 100.
 	OutboundChannelPeakPercent float64 `json:"outboundChannelPeakPercent"`
+	// Push reports the push worker. Nil until it has been observed.
+	Push *CommunicatorChannel `json:"push,omitempty"`
+	// Pull reports the pull worker. Nil until it has been observed.
+	Pull *CommunicatorChannel `json:"pull,omitempty"`
+}
+
+// CommunicatorChannel reports the push or pull worker.
+type CommunicatorChannel struct {
+	// State is the worker's FSM state, for example "Running" or "Degraded".
+	State string `json:"state"`
+	// LastErrorType names the last error while errors are ongoing.
+	LastErrorType string `json:"lastErrorType,omitempty"`
+	// Messages is the total number of messages pushed or pulled.
+	Messages int64 `json:"messages"`
+	// MessagesDropped is the total number of messages the worker dropped.
+	MessagesDropped int64 `json:"messagesDropped"`
+	// PendingMessages is the number of messages waiting for a retry.
+	PendingMessages int `json:"pendingMessages"`
+	// ConsecutiveErrors is the number of failures since the last success.
+	ConsecutiveErrors int `json:"consecutiveErrors"`
+	// LastStatusCode is the HTTP status code of the last request.
+	LastStatusCode int `json:"lastStatusCode"`
+	// LastLatencyMs is the duration of the last request.
+	LastLatencyMs float64 `json:"lastLatencyMs"`
+	// Backpressured reports whether the pull worker is pausing because the
+	// inbound channel is full.
+	Backpressured bool `json:"backpressured,omitempty"`
 }
 
 // CPU carries either the fsmv2 CPU worker's reporting or the legacy reporting,

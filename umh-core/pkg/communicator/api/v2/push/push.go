@@ -80,17 +80,6 @@ func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundC
 func (p *Pusher) UpdateJWT(jwt string) {
 	p.jwt.Store(jwt)
 }
-
-// QueueLen returns the number of messages waiting in the outbound channel.
-func (p *Pusher) QueueLen() int {
-	return len(p.outboundMessageChannel)
-}
-
-// QueueCap returns the buffer size of the outbound channel.
-func (p *Pusher) QueueCap() int {
-	return cap(p.outboundMessageChannel)
-}
-
 func (p *Pusher) Start() {
 	go p.push()
 }
