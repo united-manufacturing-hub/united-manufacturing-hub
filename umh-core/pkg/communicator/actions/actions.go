@@ -66,10 +66,10 @@ func initCommunicatorFSMLogger() deps.FSMLogger {
 	return deps.NewFSMLogger(wrapped)
 }
 
-// communicatorFSMLogger returns the FSMLogger whose underlying zap core is
+// CommunicatorFSMLogger returns the FSMLogger whose underlying zap core is
 // wrapped with the package-level SentryHook. First call constructs the hook
 // and the wrapped logger; subsequent calls return the same instance.
-func communicatorFSMLogger() deps.FSMLogger {
+func CommunicatorFSMLogger() deps.FSMLogger {
 	return communicatorFSMLoggerFn()
 }
 
@@ -114,7 +114,7 @@ type Action interface {
 // Error handling for each step is done within this function.
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
-	fsmLogger := communicatorFSMLogger()
+	fsmLogger := CommunicatorFSMLogger()
 
 	// Panic recovery. Converts any uncaught panic in this goroutine into a
 	// Sentry event, a counter increment, and a non-blocking failure reply so
