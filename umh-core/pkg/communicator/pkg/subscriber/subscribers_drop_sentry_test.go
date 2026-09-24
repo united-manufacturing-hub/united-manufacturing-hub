@@ -88,10 +88,26 @@ func (l *recordingFSMLogger) hasFSMv2OutboundDropWarn() bool {
 	return ok
 }
 
-// fsmv2OutboundDropWarn returns the first recorded call that carries exactly
-// the feature, hierarchy path, message, and channel_len/channel_cap fields the
-// FSMv2 drop site must send.
 func (l *recordingFSMLogger) fsmv2OutboundDropWarn() (recordedSentryWarn, bool) {
+	return l.outboundDropWarn("fsmv2_outbound_channel_full")
+}
+
+// hasGatekeeperOutboundDropWarn reports whether any recorded call matches the
+// behavioral contract for the gatekeeper drop site.
+func (l *recordingFSMLogger) hasGatekeeperOutboundDropWarn() bool {
+	_, ok := l.gatekeeperOutboundDropWarn()
+
+	return ok
+}
+
+func (l *recordingFSMLogger) gatekeeperOutboundDropWarn() (recordedSentryWarn, bool) {
+	return l.outboundDropWarn("gatekeeper_outbound_channel_full")
+}
+
+// outboundDropWarn returns the first recorded call that carries exactly the
+// feature, hierarchy path, the given message, and channel_len/channel_cap
+// fields of 1 an outbound drop site must send.
+func (l *recordingFSMLogger) outboundDropWarn(message string) (recordedSentryWarn, bool) {
 	for _, w := range l.snapshot() {
 		if w.feature != deps.FeatureFSMv1Communicator {
 			continue
@@ -101,7 +117,7 @@ func (l *recordingFSMLogger) fsmv2OutboundDropWarn() (recordedSentryWarn, bool) 
 			continue
 		}
 
-		if w.message != "fsmv2_outbound_channel_full" {
+		if w.message != message {
 			continue
 		}
 
@@ -203,6 +219,110 @@ var _ = Describe("FSMv2 outbound channel drop Sentry warning", func() {
 		Expect(call.feature).To(Equal(deps.FeatureFSMv1Communicator))
 		Expect(call.hierarchyPath).To(Equal("fsmv1.Communicator"))
 		Expect(call.message).To(Equal("fsmv2_outbound_channel_full"))
+
+		fieldValues := make(map[string]any, len(call.fields))
+		for _, f := range call.fields {
+			fieldValues[f.Key] = f.Value
+		}
+
+		Expect(fieldValues).To(HaveLen(2), "the drop warning must carry exactly channel_len and channel_cap")
+		Expect(fieldValues["channel_len"]).To(BeAssignableToTypeOf(0))
+		Expect(fieldValues["channel_len"]).To(Equal(1))
+		Expect(fieldValues["channel_cap"]).To(BeAssignableToTypeOf(0))
+		Expect(fieldValues["channel_cap"]).To(Equal(1))
+
+		for _, w := range fsmLogger.snapshot() {
+			for _, f := range w.fields {
+				Expect(fmt.Sprintf("%v", f.Value)).NotTo(ContainSubstring(email),
+					"no Sentry field value may contain the subscriber email")
+			}
+		}
+	})
+})
+
+var _ = Describe("Gatekeeper outbound channel drop Sentry warning", func() {
+	It("sends gatekeeper_outbound_channel_full through the injected FSMLogger when the channel is full, and delivers without warning while it has room", func() {
+		zapLogger, err := zap.NewDevelopment()
+		Expect(err).NotTo(HaveOccurred())
+		logger := zapLogger.Sugar()
+
+		snapshotManager := fsm.NewSnapshotManager()
+		snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{
+			SnapshotTime: time.Now(),
+			Managers: map[string]fsm.ManagerSnapshot{
+				"GatekeeperDropSentryManager": &fsm.BaseManagerSnapshot{Name: "GatekeeperDropSentryManager", SnapshotTime: time.Now()},
+			},
+		})
+
+		fsmLogger := &recordingFSMLogger{}
+		ch := make(chan *types.MessageWithSender, 1)
+
+		handler := subscriber.NewHandler(
+			&mockWatchdog{},
+			nil,
+			uuid.New(),
+			time.Minute,
+			time.Minute,
+			config.ReleaseChannelStable,
+			false,
+			snapshotManager,
+			config.NewMockConfigManager(),
+			logger,
+			topicbrowser.NewTopicBrowserCommunicatorWithSimulator(logger),
+			nil,
+			ch,
+			nil,
+			fsmLogger,
+		)
+
+		const email = "gatekeeper-drop-test@example.com"
+		handler.AddOrRefreshSubscriber(email, true)
+
+		var received int32
+		stopConsumer := make(chan struct{})
+		var consumerWG sync.WaitGroup
+		consumerWG.Add(1)
+		go func() {
+			defer consumerWG.Done()
+			for {
+				select {
+				case <-ch:
+					atomic.AddInt32(&received, 1)
+				case <-stopConsumer:
+					return
+				}
+			}
+		}()
+
+		handler.StartNotifier()
+
+		// Positive control: with room in the channel the notify path must
+		// deliver a status message, so the drop assertions below cannot pass
+		// or fail vacuously on a notify path that never sends.
+		Eventually(func() int32 { return atomic.LoadInt32(&received) }, 5*time.Second, 100*time.Millisecond).
+			Should(BeNumerically(">=", 1), "the notify path should deliver a status message while the gatekeeper channel has room")
+		Consistently(func() int { return fsmLogger.warnCount() }, 2*time.Second, 200*time.Millisecond).
+			Should(Equal(0), "a successful send must not SentryWarn")
+
+		// Drop: stop draining, fill the capacity-1 channel so the next notify
+		// tick finds it full. A notify tick may have delivered the message
+		// itself; the channel is full either way.
+		close(stopConsumer)
+		consumerWG.Wait()
+
+		select {
+		case ch <- &types.MessageWithSender{SenderEmail: "gatekeeper-drop-prefill"}:
+		default:
+		}
+
+		Eventually(func() bool { return fsmLogger.hasGatekeeperOutboundDropWarn() }, 5*time.Second, 100*time.Millisecond).
+			Should(BeTrue(), "a full gatekeeperOutboundChannel must SentryWarn gatekeeper_outbound_channel_full with channel_len=1 and channel_cap=1")
+
+		call, ok := fsmLogger.gatekeeperOutboundDropWarn()
+		Expect(ok).To(BeTrue())
+		Expect(call.feature).To(Equal(deps.FeatureFSMv1Communicator))
+		Expect(call.hierarchyPath).To(Equal("fsmv1.Communicator"))
+		Expect(call.message).To(Equal("gatekeeper_outbound_channel_full"))
 
 		fieldValues := make(map[string]any, len(call.fields))
 		for _, f := range call.fields {

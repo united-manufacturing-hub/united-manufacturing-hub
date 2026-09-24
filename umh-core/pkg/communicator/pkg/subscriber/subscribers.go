@@ -208,7 +208,13 @@ func (s *Handler) notify() {
 			case s.gatekeeperOutboundChannel <- msg:
 				// Successfully sent to gatekeeper
 			default:
-				s.logger.Warnf("Gatekeeper outbound channel full, dropping message for subscriber %s", email)
+				s.fsmLogger.SentryWarn(
+					deps.FeatureFSMv1Communicator,
+					"fsmv1.Communicator",
+					"gatekeeper_outbound_channel_full",
+					deps.Int("channel_len", len(s.gatekeeperOutboundChannel)),
+					deps.Int("channel_cap", cap(s.gatekeeperOutboundChannel)),
+				)
 
 				return
 			}
