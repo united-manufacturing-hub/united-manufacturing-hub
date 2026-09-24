@@ -32,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -302,6 +303,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		fsmOutboundChannel,        // FSMv2 direct channel (nil for legacy mode)
 		gatekeeperOutboundChannel, // Gatekeeper channel (nil when gatekeeper disabled)
 		c.FeatureUsage,
+		deps.NewNopFSMLogger(), // fsmLogger
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")

@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"go.uber.org/zap"
 )
 
@@ -59,10 +60,11 @@ var _ = Describe("SubscriberHandler Race Condition", func() {
 			nil, // systemSnapshotManager
 			nil, // configManager
 			logger,
-			nil, // topicBrowserCommunicator
-			nil, // fsmOutboundChannel - nil for legacy mode test
-			nil, // gatekeeperOutboundChannel
-			nil, // featureUsage
+			nil,                    // topicBrowserCommunicator
+			nil,                    // fsmOutboundChannel - nil for legacy mode test
+			nil,                    // gatekeeperOutboundChannel
+			nil,                    // featureUsage
+			deps.NewNopFSMLogger(), // fsmLogger
 		)
 	})
 
