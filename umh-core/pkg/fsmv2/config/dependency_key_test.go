@@ -74,6 +74,48 @@ var _ = Describe("DependencyKey", func() {
 		}).To(PanicWith(ContainSubstring("test.redeclare.interface")))
 	})
 
+	It("rejects a nil pointer stored under an interface key", func() {
+		key := config.NewDependencyKey[sampler]("test.nil.interface")
+		var missing *fixedSampler
+
+		Expect(func() {
+			config.SetDependency(map[string]any{}, key, sampler(missing))
+		}).To(PanicWith(ContainSubstring("test.nil.interface")))
+	})
+
+	It("rejects a nil pointer stored under a pointer key", func() {
+		key := config.NewDependencyKey[*fixedSampler]("test.nil.pointer")
+
+		Expect(func() {
+			config.SetDependency(map[string]any{}, key, nil)
+		}).To(PanicWith(ContainSubstring("test.nil.pointer")))
+	})
+
+	It("rejects a nil map", func() {
+		key := config.NewDependencyKey[map[string]int]("test.nil.map")
+
+		Expect(func() {
+			config.SetDependency(map[string]any{}, key, nil)
+		}).To(PanicWith(ContainSubstring("test.nil.map")))
+	})
+
+	It("stores a zero value that is not nil", func() {
+		textKey := config.NewDependencyKey[string]("test.zero.string")
+		countKey := config.NewDependencyKey[int]("test.zero.int")
+		m := map[string]any{}
+
+		config.SetDependency(m, textKey, "")
+		config.SetDependency(m, countKey, 0)
+
+		text, ok := config.LookupDependency(m, textKey)
+		Expect(ok).To(BeTrue())
+		Expect(text).To(Equal(""))
+
+		count, ok := config.LookupDependency(m, countKey)
+		Expect(ok).To(BeTrue())
+		Expect(count).To(Equal(0))
+	})
+
 	It("reports absent when the stored value is not the key's type", func() {
 		// A key cannot store a wrong type, but code that writes the map by name
 		// can, and LookupDependency must still read that as absent.
