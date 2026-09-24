@@ -21,14 +21,17 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
@@ -73,6 +76,60 @@ func logContainsEvent(logOutput, msg string) bool {
 	}
 
 	return false
+}
+
+// scenarioDepsKey names the value the dependency-delivery spec stores in the
+// map ScenarioV2.Dependencies returns and the probe worker reads back out of
+// the map its constructor receives.
+var scenarioDepsKey = config.NewDependencyKey[string]("examples.test.scenario_deps")
+
+// scenarioDepsProbeType names the monitor worker the dependency-delivery spec
+// upserts. simple.Register wires its factory, supervisor and CSE type, so the
+// spec drives a real worker rather than a mock.
+const scenarioDepsProbeType = "scenariov2-deps-probe"
+
+type scenarioDepsProbeConfig struct{}
+
+type scenarioDepsProbeDeps struct {
+	label string
+}
+
+type scenarioDepsProbeStatus struct {
+	ReceivedLabel string `json:"receivedLabel"`
+}
+
+// scenarioDepsProbeRecord is what the probe worker published from its
+// constructor: the label it found under scenarioDepsKey, and whether the key
+// was there at all.
+type scenarioDepsProbeRecord struct {
+	label   string
+	present bool
+}
+
+// scenarioDepsProbeSeen carries the record across goroutines: the constructor
+// runs on the supervisor's tick loop while the spec reads it from the test
+// goroutine.
+var scenarioDepsProbeSeen atomic.Pointer[scenarioDepsProbeRecord]
+
+// The probe registers once for the test binary, not per spec: its constructor
+// publishes the label it was handed, so the spec can ask whether the map
+// ScenarioV2.Dependencies returned survived the trip into a worker the Run
+// created. register.Worker panics on a duplicate worker type, so a re-run of
+// the suite in one process (go test -count=2) must not reach simple.Register
+// a second time.
+func init() {
+	simple.Register(simple.MonitorSpec[scenarioDepsProbeConfig, scenarioDepsProbeStatus, scenarioDepsProbeDeps]{
+		WorkerType: scenarioDepsProbeType,
+		NewDeps: func(_ deps.Identity, _ *deps.BaseDependencies, rd map[string]any) scenarioDepsProbeDeps {
+			label, ok := config.LookupDependency(rd, scenarioDepsKey)
+			scenarioDepsProbeSeen.Store(&scenarioDepsProbeRecord{label: label, present: ok})
+
+			return scenarioDepsProbeDeps{label: label}
+		},
+		Poll: func(_ context.Context, d scenarioDepsProbeDeps, _ scenarioDepsProbeConfig) (scenarioDepsProbeStatus, error) {
+			return scenarioDepsProbeStatus{ReceivedLabel: d.label}, nil
+		},
+	})
 }
 
 var _ = Describe("ScenarioV2 framework", func() {
@@ -573,5 +630,52 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
 			"run 2 must clear the deps key just like run 1 did")
+	})
+
+	It("hands a worker created with env.Client.Upsert the value Dependencies returned", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		delivering := examples.ScenarioV2{
+			Name:        "deps-delivery",
+			Description: "test-local Run for the dependency-delivery path",
+			Dependencies: func() (map[string]any, func(), error) {
+				scenarioDeps := map[string]any{}
+				config.SetDependency(scenarioDeps, scenarioDepsKey, "from-the-scenario")
+
+				return scenarioDeps, nil, nil
+			},
+			Run: func(_ context.Context, env examples.Env) error {
+				ref := dynamicchildren.Ref{WorkerType: scenarioDepsProbeType, Name: "probe"}
+				return env.Client.Upsert(ref, nil)
+			},
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   delivering,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Settle gate: wait until the upserted child's constructor ran before
+		// tearing down, so the verdict below is about delivery, not about a
+		// race between Upsert and teardown.
+		Eventually(func() *scenarioDepsProbeRecord {
+			return scenarioDepsProbeSeen.Load()
+		}, "30s").ShouldNot(BeNil(),
+			"the upserted child's constructor must run while the scenario's supervisor is live")
+
+		cancel()
+		Eventually(result.Done, "55s").Should(BeClosed())
+
+		record := scenarioDepsProbeSeen.Load()
+		Expect(record.present).To(BeTrue(),
+			"the value ScenarioV2.Dependencies returned must reach the constructor of a worker the Run upserts")
+		Expect(record.label).To(Equal("from-the-scenario"))
 	})
 })
