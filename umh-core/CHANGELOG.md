@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Log messages for stopped flows in bridges are now more consistent
+
 ## [0.44.41]
 
 ### New Features
