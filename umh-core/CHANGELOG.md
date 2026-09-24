@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.41]
+
 ### Improvements
 
 - The community Beckhoff ADS plugin was replaced by our own implementation. It is still in an experimental state. Refer to the benthos-umh repository for more information.
