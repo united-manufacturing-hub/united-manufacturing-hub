@@ -14,6 +14,16 @@
 
 package config
 
+import (
+	"fmt"
+	"reflect"
+	"sync"
+)
+
+// dependencyKeyTypes maps each declared key name to the type it was first
+// declared with.
+var dependencyKeyTypes sync.Map
+
 // DependencyKey names one entry in a dependency map and records the type stored
 // under it.
 //
@@ -25,6 +35,9 @@ package config
 // Declare one as a package-level var next to the worker that reads it:
 //
 //	var FilesystemKey = config.NewDependencyKey[filesystem.Service]("helloworld.filesystem")
+//
+// One name has one type: the side that writes and the side that reads share
+// the same key, and NewDependencyKey panics on a second type.
 type DependencyKey[T any] struct {
 	name string
 }
@@ -33,7 +46,15 @@ type DependencyKey[T any] struct {
 //
 // Prefix the name with the worker type, as in "helloworld.filesystem", so two
 // workers cannot collide in a map they share.
+//
+// Declaring a name again with a different type panics, because a value stored
+// under one of the two keys would read as absent through the other.
 func NewDependencyKey[T any](name string) DependencyKey[T] {
+	t := reflect.TypeFor[T]()
+	if prev, loaded := dependencyKeyTypes.LoadOrStore(name, t); loaded && prev != t {
+		panic(fmt.Sprintf("config.NewDependencyKey(%q): already declared with type %s, now %s", name, prev, t))
+	}
+
 	return DependencyKey[T]{name: name}
 }
 

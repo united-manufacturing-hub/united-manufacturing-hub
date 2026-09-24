@@ -34,11 +34,6 @@ func (s fixedSampler) Sample() int { return s.value }
 
 var samplerKey = config.NewDependencyKey[sampler]("test.sampler")
 
-// wronglyTypedSamplerKey is the mistake this guards against: two keys agree on
-// the name and disagree on the type, which is what happens when the side that
-// hands a dependency in and the side that reads it declare their own keys.
-var wronglyTypedSamplerKey = config.NewDependencyKey[string]("test.sampler")
-
 var _ = Describe("DependencyKey", func() {
 	It("reads back the value that was put under the same key", func() {
 		m := map[string]any{}
@@ -55,9 +50,34 @@ var _ = Describe("DependencyKey", func() {
 		Expect(got).To(BeNil())
 	})
 
+	It("rejects a name declared again with a different type and allows the same type again", func() {
+		// A name persists for the life of the test binary, so no other spec may
+		// use these names.
+		Expect(func() {
+			config.NewDependencyKey[string]("test.redeclare.mismatch")
+			config.NewDependencyKey[int]("test.redeclare.mismatch")
+		}).To(PanicWith(And(
+			ContainSubstring("test.redeclare.mismatch"),
+			ContainSubstring("string"),
+			ContainSubstring("int"),
+		)))
+
+		first := config.NewDependencyKey[string]("test.redeclare.same")
+		second := config.NewDependencyKey[string]("test.redeclare.same")
+		Expect(first).To(Equal(second))
+	})
+
+	It("rejects a name declared as an interface and then as a type that implements it", func() {
+		Expect(func() {
+			config.NewDependencyKey[sampler]("test.redeclare.interface")
+			config.NewDependencyKey[fixedSampler]("test.redeclare.interface")
+		}).To(PanicWith(ContainSubstring("test.redeclare.interface")))
+	})
+
 	It("reports absent when the stored value is not the key's type", func() {
-		m := map[string]any{}
-		config.SetDependency(m, wronglyTypedSamplerKey, "not a sampler")
+		// A key cannot store a wrong type, but code that writes the map by name
+		// can, and LookupDependency must still read that as absent.
+		m := map[string]any{"test.sampler": "not a sampler"}
 
 		got, ok := config.LookupDependency(m, samplerKey)
 		Expect(ok).To(BeFalse())
