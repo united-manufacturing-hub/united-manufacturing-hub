@@ -101,7 +101,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		result, err := examples.Run(context.Background(), examples.RunConfig{
 			Scenario:   examples.Scenario{Name: "v1", YAMLConfig: "children: []"},
-			ScenarioV2: examples.ScenarioV2{Name: "v2", Driver: func(_ context.Context, _ examples.Env) error { return nil }},
+			ScenarioV2: examples.ScenarioV2{Name: "v2", Run: func(_ context.Context, _ examples.Env) error { return nil }},
 			Logger:     logger,
 			Store:      store,
 		})
@@ -109,7 +109,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(result).To(BeNil())
 	})
 
-	It("rejects a ScenarioV2 with a Name but no Driver, naming the scenario", func() {
+	It("rejects a ScenarioV2 with a Name but no Run, naming the scenario", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -122,7 +122,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(result).To(BeNil())
 	})
 
-	It("rejects a ScenarioV2 with a Driver but no Name", func() {
+	It("rejects a ScenarioV2 with a Run but no Name", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -132,7 +132,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		driverRan := false
 		result, err := examples.Run(context.Background(), examples.RunConfig{
 			ScenarioV2: examples.ScenarioV2{
-				Driver: func(_ context.Context, _ examples.Env) error {
+				Run: func(_ context.Context, _ examples.Env) error {
 					driverRan = true
 
 					return nil
@@ -141,10 +141,10 @@ var _ = Describe("ScenarioV2 framework", func() {
 			Logger: logger,
 			Store:  store,
 		})
-		Expect(err).To(MatchError(ContainSubstring("Driver is set but Name is empty")))
+		Expect(err).To(MatchError(ContainSubstring("Run is set but Name is empty")))
 		Expect(result).To(BeNil())
 		Expect(driverRan).To(BeFalse(),
-			"a nameless v2 scenario must be rejected before its driver runs")
+			"a nameless v2 scenario must be rejected before its Run runs")
 	})
 
 	It("fails loudly when the configworker deps key is already published by an overlapping run", func() {
@@ -160,8 +160,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		driverRan := false
 		overlapping := examples.ScenarioV2{
 			Name:        "overlapping",
-			Description: "test-local driver that must never run",
-			Driver: func(_ context.Context, _ examples.Env) error {
+			Description: "test-local Run that must never run",
+			Run: func(_ context.Context, _ examples.Env) error {
 				driverRan = true
 
 				return nil
@@ -180,7 +180,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the error must name the scenario that could not start")
 		Expect(result).To(BeNil())
 		Expect(driverRan).To(BeFalse(),
-			"the overlapping run must fail before starting a supervisor or its driver")
+			"the overlapping run must fail before starting a supervisor or its Run")
 
 		// The first run's registry must survive untouched: a replaced or
 		// cleared key would cross-wire the still-active first run.
@@ -196,8 +196,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		dumpRequested := examples.ScenarioV2{
 			Name:        "dump-requested",
-			Description: "test-local driver for the DumpStore warning path",
-			Driver: func(_ context.Context, _ examples.Env) error {
+			Description: "test-local Run for the DumpStore warning path",
+			Run: func(_ context.Context, _ examples.Env) error {
 				return nil
 			},
 		}
@@ -230,8 +230,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		cancelMidRun := examples.ScenarioV2{
 			Name:        "cancel-mid-run",
-			Description: "test-local driver for the caller-ctx cancellation path",
-			Driver: func(_ context.Context, _ examples.Env) error {
+			Description: "test-local Run for the caller-ctx cancellation path",
+			Run: func(_ context.Context, _ examples.Env) error {
 				return nil
 			},
 		}
@@ -281,7 +281,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the supervisor must drain via a live tick loop, not time out against a dead one")
 	})
 
-	It("lists noop in the merged registry and runs a v2 driver end-to-end on the kernel-only supervisor", func() {
+	It("lists noop in the merged registry and runs a v2 scenario end-to-end on the kernel-only supervisor", func() {
 		// Part (a): the v2 noop scenario must appear in the same listing the
 		// CLI reads, so --list and --scenario find v1 and v2 scenarios alike.
 		listing := examples.ListScenarios()
@@ -289,8 +289,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"merged ListScenarios must contain the v2 noop scenario")
 
 		// Part (b): run a test-local v2 scenario through the v2 runner. The
-		// sentinel bool proves the runner actually invoked the driver; noop's
-		// own driver returns nil immediately, so it cannot prove execution.
+		// sentinel bool proves the runner actually invoked Run; noop's
+		// own Run returns nil immediately, so it cannot prove execution.
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -299,8 +299,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		loggerWasSet := false
 		sentinel := examples.ScenarioV2{
 			Name:        "sentinel",
-			Description: "test-local driver that records execution",
-			Driver: func(_ context.Context, env examples.Env) error {
+			Description: "test-local Run that records execution",
+			Run: func(_ context.Context, env examples.Env) error {
 				driverRan = true
 				// Upsert through the running supervisor is covered by the
 				// dynamic-children scenario, not this test.
@@ -326,11 +326,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the v2 runner must wait RunConfig.Duration and then tear down on its own")
 
 		Expect(driverRan).To(BeTrue(),
-			"the v2 runner must execute the scenario Driver")
+			"the v2 runner must execute the scenario Run")
 		Expect(clientWasSet).To(BeTrue(),
-			"Env must carry a non-nil fsmv2client for the driver")
+			"Env must carry a non-nil fsmv2client for Run")
 		Expect(loggerWasSet).To(BeTrue(),
-			"Env must carry the run's logger for the driver")
+			"Env must carry the run's logger for Run")
 
 		// Store check: with no YAML children declared, the only child the
 		// application supervisor spawns is the config worker kernel, so the
@@ -365,8 +365,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		cleanRun := examples.ScenarioV2{
 			Name:        "clean-shutdown",
-			Description: "test-local driver for the ShutdownClean plumbing",
-			Driver: func(_ context.Context, _ examples.Env) error {
+			Description: "test-local Run for the ShutdownClean plumbing",
+			Run: func(_ context.Context, _ examples.Env) error {
 				return nil
 			},
 		}
@@ -388,15 +388,15 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"a clean v2 run must report ShutdownClean=true, proving the field is wired to the supervisor's drain outcome")
 	})
 
-	It("tears down and clears the deps key when the driver fails", func() {
+	It("tears down and clears the deps key when Run fails", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
 		driverErr := errors.New("boom")
 		failing := examples.ScenarioV2{
-			Name:        "failing-driver",
-			Description: "test-local driver that returns an error",
-			Driver: func(_ context.Context, _ examples.Env) error {
+			Name:        "failing-run",
+			Description: "test-local Run that returns an error",
+			Run: func(_ context.Context, _ examples.Env) error {
 				return driverErr
 			},
 		}
@@ -411,15 +411,15 @@ var _ = Describe("ScenarioV2 framework", func() {
 			Store:        store,
 		})
 		Expect(err).To(MatchError(driverErr),
-			"the runner must wrap and propagate the driver error")
-		Expect(err.Error()).To(ContainSubstring("failing-driver"),
+			"the runner must wrap and propagate the Run error")
+		Expect(err.Error()).To(ContainSubstring("failing-run"),
 			"the error must name the failing scenario")
 		Expect(result).To(BeNil())
 
 		// The error path is a full teardown path: a leaked key would
 		// cross-wire every later v2 run in this process.
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearGlobalDeps the configworker key on driver failure")
+			"the v2 runner must ClearGlobalDeps the configworker key on Run failure")
 	})
 
 	It("runs forever with Duration=0 and tears down on context cancellation", func() {
@@ -428,8 +428,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		runForever := examples.ScenarioV2{
 			Name:        "run-forever",
-			Description: "test-local driver for the Duration=0 ctx-cancel path",
-			Driver: func(_ context.Context, _ examples.Env) error {
+			Description: "test-local Run for the Duration=0 ctx-cancel path",
+			Run: func(_ context.Context, _ examples.Env) error {
 				return nil
 			},
 		}
@@ -459,15 +459,15 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the v2 runner must ClearGlobalDeps the configworker key after ctx cancellation")
 	})
 
-	It("tears down and clears the deps key when the driver panics", func() {
+	It("tears down and clears the deps key when Run panics", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
 		panicking := examples.ScenarioV2{
-			Name:        "panicking-driver",
-			Description: "test-local driver that panics",
-			Driver: func(_ context.Context, _ examples.Env) error {
-				panic("driver exploded")
+			Name:        "panicking-run",
+			Description: "test-local Run that panics",
+			Run: func(_ context.Context, _ examples.Env) error {
+				panic("Run exploded")
 			},
 		}
 
@@ -481,13 +481,13 @@ var _ = Describe("ScenarioV2 framework", func() {
 				Logger:       logger,
 				Store:        store,
 			})
-		}).To(PanicWith("driver exploded"),
-			"the runner must not swallow a driver panic")
+		}).To(PanicWith("Run exploded"),
+			"the runner must not swallow a Run panic")
 
 		// A panic is a full teardown path too: a leaked key would
 		// cross-wire every later v2 run in this process.
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearGlobalDeps the configworker key on driver panic")
+			"the v2 runner must ClearGlobalDeps the configworker key on Run panic")
 	})
 
 	It("blocks a mid-Duration Shutdown until the deps key is cleared", func() {
@@ -496,8 +496,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		longRun := examples.ScenarioV2{
 			Name:        "long-run",
-			Description: "test-local driver for the mid-Duration Shutdown path",
-			Driver: func(_ context.Context, _ examples.Env) error {
+			Description: "test-local Run for the mid-Duration Shutdown path",
+			Run: func(_ context.Context, _ examples.Env) error {
 				return nil
 			},
 		}
@@ -530,8 +530,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		scenario := examples.ScenarioV2{
 			Name:        "back-to-back",
-			Description: "test-local driver for sequential v2 runs",
-			Driver: func(_ context.Context, _ examples.Env) error {
+			Description: "test-local Run for sequential v2 runs",
+			Run: func(_ context.Context, _ examples.Env) error {
 				return nil
 			},
 		}

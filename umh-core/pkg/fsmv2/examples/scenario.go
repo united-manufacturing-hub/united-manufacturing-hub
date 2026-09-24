@@ -305,7 +305,7 @@ type RunConfig struct {
 	Store        storage.TriangularStoreInterface
 	Logger       deps.FSMLogger
 	Scenario     Scenario
-	ScenarioV2   ScenarioV2    // When Driver is set, Run takes the v2 kernel-only path
+	ScenarioV2   ScenarioV2    // When Run is set, Run takes the v2 kernel-only path
 	Duration     time.Duration // 0 means run forever (until context cancelled)
 	TickInterval time.Duration
 	// GracefulShutdownTimeout is the per-level drain base propagated to the

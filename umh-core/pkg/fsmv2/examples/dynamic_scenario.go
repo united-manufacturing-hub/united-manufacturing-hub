@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	// dynamicHelloChildName is the helloworld child the dynamic driver drives
+	// dynamicHelloChildName is the helloworld child the dynamic scenario drives
 	// through create -> update -> delete. The dynamic_scenario_v2 battery reads
 	// the child back under this same name.
 	dynamicHelloChildName = "dynamic-hello"
@@ -56,15 +56,15 @@ const (
 var DynamicScenarioV2 = ScenarioV2{
 	Name:        "dynamic",
 	Description: "Drives a helloworld child through create/update/delete via the migration-API client (v2)",
-	Driver:      driveDynamicHello,
+	Run:         runDynamicHello,
 }
 
-// driveDynamicHello runs the create -> update -> delete lifecycle against the
+// runDynamicHello runs the create -> update -> delete lifecycle against the
 // running kernel-only supervisor through env.Client. The UPDATE leg changes a
 // real helloworld config field (moodFilePath) to a different file, so the
 // observed mood change is driven by a config Upsert through the API, not by an
 // out-of-band mutation of a fixed file.
-func driveDynamicHello(ctx context.Context, env Env) error {
+func runDynamicHello(ctx context.Context, env Env) error {
 	ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: dynamicHelloChildName}
 
 	dir, err := os.MkdirTemp("", "dynamic-hello-mood")
