@@ -21,11 +21,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 )
 
-// Env carries exactly the user-facing API a ScenarioV2 Run may touch: the
-// client and a logger. Run plays the role FSMv1 plays in production:
-// it drives the system but must not assert on it. Correctness is judged
-// after the run by log checks and store checks, which is why Env
-// deliberately has no store handle and no supervisor handle.
+// Env carries the client, the logger and the run's dependency map. Run
+// changes its mocks through Dependencies and checks the result through
+// Client. Env has no store handle and no supervisor handle, so a check
+// reads what a user of the client could read.
 type Env struct {
 	// Client is the migration-API client wired to the run's dynamicchildren
 	// Writer and store, so Runs can Upsert/Delete child specs and read
@@ -43,11 +42,10 @@ type Env struct {
 	Dependencies map[string]any
 }
 
-// ScenarioV2 defines a Run-based scenario. Instead of declaring children
-// via YAMLConfig, a v2 scenario receives an Env and drives the running
-// kernel-only supervisor through the fsmv2client. Run only simulates
-// the user; correctness is judged after the run by log checks and store
-// checks, so Run gets no handle that could assert on internals.
+// ScenarioV2 defines a Run-based scenario. A scenario builds its mocks in
+// Dependencies, creates its workers through env.Client, and in Run changes
+// the mocks and checks the store. When a check fails, Run returns an error
+// whose text names the check.
 type ScenarioV2 struct {
 	// Run runs against the started supervisor. After a nil return, the
 	// runner waits RunConfig.Duration (or until ctx is cancelled; 0 means
@@ -65,8 +63,14 @@ type ScenarioV2 struct {
 	// Dependencies optionally returns a map of named dependencies that the
 	// runner injects into the supervisor before it starts, so the map reaches
 	// the constructor of every worker Run creates via env.Client.Upsert (see
-	// config.DependencyKey for the typed read/write helpers).
-	// Optional - nil means Run-created workers get no scenario dependencies.
+	// config.DependencyKey for the typed read/write helpers). A nil
+	// Dependencies means Run-created workers get no scenario dependencies.
+	//
+	// When Dependencies returns an error, it releases whatever it built
+	// itself, and the runner ignores its other return values and starts
+	// nothing. When it succeeds, the runner calls cleanup (if non-nil) once,
+	// after the supervisor has stopped, or right away if the supervisor
+	// fails to build.
 	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 
@@ -74,7 +78,8 @@ type ScenarioV2 struct {
 // application worker spawns only its config worker kernel child.
 //
 // This scenario is kept permanently as the copy-paste template for scenario
-// authors: copy it, rename it, and put your driving logic in Run.
+// authors: copy it, rename it, put your mocks in Dependencies, and put the
+// steps and checks in Run.
 var NoopScenarioV2 = ScenarioV2{
 	Name:        "noop",
 	Description: "Runs the kernel-only supervisor with no Run actions (v2)",

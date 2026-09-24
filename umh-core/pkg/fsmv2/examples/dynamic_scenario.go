@@ -24,7 +24,9 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	hello_state "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
@@ -45,6 +47,10 @@ const (
 	// points at. Observing this exact value in the child's persisted status is
 	// the load-bearing proof that a runtime Upsert reached a live child.
 	dynamicHelloUpdatedMood = "cheerful"
+
+	// configWorkerName is the application worker's kernel child's name, from
+	// workers/application/state/children.go.
+	configWorkerName = "config-worker"
 )
 
 // DynamicScenarioV2 drives one helloworld child through the migration-API
@@ -119,6 +125,15 @@ func runDynamicHello(ctx context.Context, env Env) error {
 	// calls Delete; proving the store-side reap (the worker gone from the store)
 	// is deferred to ENG-5107, which builds the despawn-tombstone subsystem.
 	env.Client.Delete(ref)
+
+	// The config worker must still be readable after the child's lifecycle;
+	// its absence is the kernel-failure signal this scenario exists to catch.
+	if _, err := fsmv2client.Get[snapshot.ConfigworkerStatus](ctx, env.Client, dynamicchildren.Ref{
+		WorkerType: configworker.WorkerTypeName,
+		Name:       configWorkerName,
+	}); err != nil {
+		return fmt.Errorf("check config worker survived the child's lifecycle: %w", err)
+	}
 
 	return nil
 }

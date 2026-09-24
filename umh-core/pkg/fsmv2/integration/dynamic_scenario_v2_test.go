@@ -21,15 +21,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 
 	// Blank-import the state packages so their init() registrations exist before
-	// the supervisor ticks. The config worker and helloworld worker packages are
-	// already imported by name above, which runs their init() too.
+	// the supervisor ticks.
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/state"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
@@ -103,25 +100,11 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		// error. The store-side reap proof (the deleted ref returning ErrNotObserved
 		// and the worker gone from the store) is deferred to ENG-5107.
 
-		// KERNEL SURVIVAL PROOF: the config worker and the supervisor outlived the
-		// child's lifecycle with no panic and no unexpected error/warning. The
-		// battery reuses the EXISTING whitelist; the dynamic scenario must not
-		// loosen it.
-		Expect(configWorkerPresentInStore(store)).To(BeTrue(),
-			"the config_worker kernel must survive the dynamic child's full lifecycle")
+		// The config worker check happens inside Run: an error from it fails
+		// the run above. The error and state checks stay here until they move
+		// into the runner. The battery reuses the EXISTING whitelist; the
+		// dynamic scenario must not loosen it.
 		verifyNoErrorsOrWarnings(testLogger)
 		verifyStateFieldsAreValid(store)
 	})
 })
-
-// configWorkerPresentInStore reports whether the kernel config worker survived
-// the run with a document still in the store.
-func configWorkerPresentInStore(store storage.TriangularStoreInterface) bool {
-	for _, w := range getWorkersFromStore(store) {
-		if w.WorkerType == configworker.WorkerTypeName {
-			return true
-		}
-	}
-
-	return false
-}
