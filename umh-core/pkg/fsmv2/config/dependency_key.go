@@ -71,8 +71,8 @@ func SetDependency[T any](m map[string]any, key DependencyKey[T], value T) {
 	m[key.name] = value
 }
 
-// isNil reports whether value is nil, including a nil pointer held in an
-// interface.
+// isNil reports whether value is nil. Unlike value == nil, it also catches a nil
+// pointer, map or other nilable value held in an interface.
 func isNil(value any) bool {
 	v := reflect.ValueOf(value)
 	if !v.IsValid() {

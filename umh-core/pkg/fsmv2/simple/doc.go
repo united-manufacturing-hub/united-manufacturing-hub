@@ -36,9 +36,9 @@
 // NewDeps unset, so Poll receives the zero value. NewDeps is handed the
 // framework's BaseDependencies for the instance, so a dependency value that
 // needs the worker's logger takes it from there rather than from a package-level
-// logger. NewDeps is also handed the instance's dependency map, and reads a mock
-// out of it with config.LookupDependency. Poll takes TDeps by value, so state it
-// mutates has to sit behind a pointer.
+// logger. NewDeps is also handed the instance's dependency map; a NewDeps that
+// needs a value from it reads it with config.LookupDependency. Poll takes TDeps by
+// value, so state it mutates has to sit behind a pointer.
 //
 // TStatus must be a struct (Register panics otherwise): the framework flattens
 // it to top-level JSON for CSE delta sync.
