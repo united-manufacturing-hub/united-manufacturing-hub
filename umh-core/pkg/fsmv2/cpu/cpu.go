@@ -182,7 +182,7 @@ func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.D
 // A read that fails at startup leaves its own figure zero, which drops that
 // capacity signal from this instance's table for its whole lifetime; a later
 // successful read does not restore it (ENG-5752).
-func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
+func NewDeps(_ deps.Identity, bd *deps.BaseDependencies, _ map[string]any) *CPUDeps {
 	fs := register.GlobalDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
 		fs = filesystem.NewDefaultService()

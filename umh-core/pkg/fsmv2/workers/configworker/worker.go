@@ -227,7 +227,7 @@ func syncHistorian(client *fsmv2client.FSMv2Client, cfg config.FullConfig) error
 
 func init() {
 	register.Worker[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps](WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewConfigworkerWorker(id, logger, sr)
 		})
 }

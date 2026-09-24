@@ -144,7 +144,7 @@ type Deps struct {
 // names the worker, and hands out sharedPool rather than building a holder,
 // because the framework never releases what a worker holds. The identity is
 // unused: nothing else here varies per instance.
-func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
+func newDeps(_ deps.Identity, bd *deps.BaseDependencies, _ map[string]any) Deps {
 	return Deps{
 		BaseDependencies: bd,
 		pool:             sharedPool,

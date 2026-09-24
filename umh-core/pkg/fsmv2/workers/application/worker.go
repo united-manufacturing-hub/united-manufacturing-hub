@@ -225,7 +225,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[fsmv
 
 func init() {
 	register.Worker[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps](WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewApplicationWorker(id, logger, sr), nil
 		})
 }

@@ -143,7 +143,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 
 func init() {
 	register.Worker[ExamplechildConfig, ExamplechildStatus, *ExamplechildDependencies]("examplechild",
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewChildWorker(id, &DefaultConnectionPool{}, logger, sr)
 		})
 }

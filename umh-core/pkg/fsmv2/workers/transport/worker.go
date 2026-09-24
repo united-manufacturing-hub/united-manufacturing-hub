@@ -222,7 +222,7 @@ const transportDepsKey = "transport"
 
 func init() {
 	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](transportDepsKey,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			w, err := NewTransportWorker(id, logger, sr)
 			if err != nil {
 				return nil, err
