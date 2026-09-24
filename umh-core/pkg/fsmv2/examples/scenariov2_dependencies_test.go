@@ -25,7 +25,57 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
+
+// This spec pins the error half of ScenarioV2.Dependencies: a failed build
+// must stop the run before anything is published or started.
+var _ = Describe("ScenarioV2 Dependencies failure", func() {
+	It("fails the run before the supervisor starts when Dependencies returns an error, naming the scenario", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		depsErr := errors.New("dependency setup failed")
+		driverRan := false
+		failing := examples.ScenarioV2{
+			Name:        "deps-error",
+			Description: "test-local Run for the Dependencies error path",
+			Dependencies: func() (map[string]any, func(), error) {
+				return nil, nil, depsErr
+			},
+			Run: func(_ context.Context, _ examples.Env) error {
+				driverRan = true
+
+				// An error makes the buggy path tear down immediately, so a
+				// red run of this spec leaks no supervisor into later specs.
+				return errors.New("Run must not be reached when Dependencies failed")
+			},
+		}
+
+		// The configworker deps key is process-global; a regression that
+		// publishes it on this path would leak it into every later spec.
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		result, err := examples.Run(context.Background(), examples.RunConfig{
+			ScenarioV2:   failing,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).To(MatchError(depsErr),
+			"the runner must propagate the Dependencies error")
+		Expect(err.Error()).To(ContainSubstring("deps-error"),
+			"the error must name the scenario whose dependencies failed")
+		Expect(result).To(BeNil(),
+			"a failed Dependencies must not return a run result")
+		Expect(driverRan).To(BeFalse(),
+			"the run must fail before the scenario's Run is invoked")
+		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
+			"a failed Dependencies must not leave the configworker deps key behind")
+	})
+})
 
 // These specs pin the cleanup half of ScenarioV2.Dependencies: whatever the
 // closure allocated, the runner must release it exactly once, after the

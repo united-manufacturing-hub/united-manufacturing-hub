@@ -268,7 +268,11 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	var scenarioDeps map[string]any
 	var scenarioCleanup func()
 	if cfg.ScenarioV2.Dependencies != nil {
-		scenarioDeps, scenarioCleanup, _ = cfg.ScenarioV2.Dependencies()
+		var err error
+		scenarioDeps, scenarioCleanup, err = cfg.ScenarioV2.Dependencies()
+		if err != nil {
+			return nil, fmt.Errorf("scenario %q dependencies: %w", cfg.ScenarioV2.Name, err)
+		}
 	}
 
 	writer := dynamicchildren.NewWriter()
@@ -286,6 +290,11 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	})
 	if err != nil {
 		register.ClearGlobalDeps(configworker.WorkerTypeName)
+		// No spec can reach this branch: it fails only when AddWorker fails on
+		// a fresh supervisor.
+		if scenarioCleanup != nil {
+			scenarioCleanup()
+		}
 
 		return nil, err
 	}
@@ -316,10 +325,13 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// application worker's RegistryConfigured observation mid-shutdown.
 		register.ClearGlobalDeps(configworker.WorkerTypeName)
 		// The scenario's cleanup runs exactly once per runV2, strictly after
-		// the supervisor has stopped: every exit path funnels through this
-		// closure (the deferred call on Run error or panic, the goroutine
-		// after Duration elapses or ctx is cancelled), and only one of those
-		// ever fires.
+		// the supervisor has stopped. Only the exits after the supervisor has
+		// started funnel through this closure: the deferred call on Run error
+		// or panic, and the goroutine after Duration elapses, ctx is
+		// cancelled, or the supervisor stops on its own. Of the two earlier
+		// returns, only a supervisor build error calls the cleanup itself; a
+		// Dependencies error returns without calling it. Only one of these
+		// exits ever fires.
 		if scenarioCleanup != nil {
 			scenarioCleanup()
 		}
