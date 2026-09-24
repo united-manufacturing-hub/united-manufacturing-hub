@@ -55,6 +55,13 @@ type ScenarioV2 struct {
 
 	// Description explains what this scenario tests (shown in CLI output).
 	Description string
+
+	// Dependencies optionally returns a map of named dependencies that the
+	// runner injects into the supervisor before it starts, so the map reaches
+	// the constructor of every worker Run creates via env.Client.Upsert (see
+	// config.DependencyKey for the typed read/write helpers).
+	// Optional - nil means Run-created workers get no scenario dependencies.
+	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 
 // NoopScenarioV2 starts the kernel-only supervisor and drives nothing: the

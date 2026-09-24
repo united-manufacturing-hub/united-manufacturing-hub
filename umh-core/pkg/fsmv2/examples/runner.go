@@ -264,6 +264,12 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			deps.String("impact", "no_store_dump_printed"))
 	}
 
+	// Acquire the scenario's dependency map before anything is published.
+	var scenarioDeps map[string]any
+	if cfg.ScenarioV2.Dependencies != nil {
+		scenarioDeps, _, _ = cfg.ScenarioV2.Dependencies()
+	}
+
 	writer := dynamicchildren.NewWriter()
 	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
 
@@ -273,6 +279,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		Store:                   cfg.Store,
 		Logger:                  cfg.Logger,
 		TickInterval:            cfg.TickInterval,
+		Dependencies:            scenarioDeps,
 		EnableTraceLogging:      cfg.EnableTraceLogging,
 		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
