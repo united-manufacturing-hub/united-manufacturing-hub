@@ -143,9 +143,11 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
+
 			if fs, ok := config.LookupDependency(m, FilesystemKey); ok {
 				w.fs = fs
 			}
+
 			return w, nil
 		})
 }

@@ -42,7 +42,9 @@ var HelloworldScenarioV2 = ScenarioV2{
 		moodFS.SetFile(moodFilePath, "happy")
 
 		deps := map[string]any{}
+
 		var fsService filesystem.Service = moodFS
+
 		config.SetDependency(deps, hello_world.FilesystemKey, fsService)
 
 		return deps, nil, nil
@@ -64,6 +66,7 @@ var HelloworldScenarioV2 = ScenarioV2{
 		ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
 
 		env.Step("create helloworld with mood happy")
+
 		if err := env.Client.Upsert(ref, map[string]any{
 			"state":        "running",
 			"moodFilePath": moodFilePath,
@@ -93,6 +96,7 @@ var HelloworldScenarioV2 = ScenarioV2{
 
 		env.Step("change mood file to grumpy")
 		moodFS.SetFile(moodFilePath, "grumpy")
+
 		if err := waitForMood("grumpy"); err != nil {
 			return err
 		}

@@ -28,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
-// Every scenario registered in RegistryV2 must survive a plain run. One spec
+// Every scenario registered in RegistryV2 must complete a plain run. One spec
 // per scenario runs it end to end, so a scenario that only breaks under the
 // runner fails here by name, and an empty registry fails the guard spec
 // instead of silently running nothing.
@@ -42,11 +42,10 @@ var _ = Describe("RegistryV2 scenarios", func() {
 	for name := range examples.RegistryV2 {
 		names = append(names, name)
 	}
+
 	sort.Strings(names)
 
 	for _, name := range names {
-		name := name
-
 		It("runs the registered scenario "+name+" from start to a clean end", func() {
 			DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
