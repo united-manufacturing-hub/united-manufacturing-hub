@@ -507,7 +507,9 @@ go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=10s
 go run pkg/fsmv2/cmd/runner/main.go --scenario=communicator --log-level=debug
 ```
 
-Built-in scenarios: `helloworld`, `simple`, `failing`, `panic`, `slow`, `cascade`, `timeout`, `configerror`, `inheritance`, `communicator`, `concurrent`, `persistence`
+Scenarios in the current format: `noop`, `dynamic`, `helloworld`
+
+Older scenarios, still to be moved: `simple`, `failing`, `panic`, `slow`, `cascade`, `timeout`, `configerror`, `inheritance`, `communicator`, `concurrent`, `persistence`
 
 ### Unit tests
 
