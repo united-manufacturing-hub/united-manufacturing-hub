@@ -1,3 +1,17 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package examples
 
 import (
@@ -10,14 +24,14 @@ import (
 
 // validWorkerStates lists the state names each worker type the runner runs may
 // report. It duplicates the integration battery's list in
-// integration/scenarios_test.go until the v1 specs go; no registry of a type's
-// states exists to read instead. "unknown" is allowed for every type, because
-// the supervisor reports it until a worker's first tick. A worker type missing
-// from the map is skipped: its stored states cannot be validated.
+// integration/scenarios_test.go until the v1 integration specs are migrated
+// (ENG-5114); no registry of a type's states exists to read instead. "unknown"
+// is allowed for every type, because the supervisor reports it until a
+// worker's first tick. A worker type missing from the map is skipped: its
+// stored states cannot be validated.
 var validWorkerStates = map[string]map[string]bool{
 	"application": {
-		"TryingToStart": true, "Running": true,
-		"TryingToStop": true, "Stopped": true,
+		"Running": true, "Degraded": true, "Stopped": true,
 		"unknown": true,
 	},
 	"configworker": {
@@ -39,11 +53,7 @@ var validWorkerStates = map[string]map[string]bool{
 func checkStoredWorkerStates(ctx context.Context, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
 	dump, err := DumpScenario(ctx, store, 0)
 	if err != nil {
-		logger.SentryWarn(deps.FeatureExamples, "", "stored_state_check_dump_failed",
-			deps.Err(err),
-			deps.String("impact", "stored_states_not_validated"))
-
-		return nil
+		return fmt.Errorf("read stored workers for the state check: %w", err)
 	}
 
 	for _, w := range dump.Workers {

@@ -73,11 +73,13 @@ type RunResult struct {
 	// after Done closes.
 	ShutdownClean bool
 
-	// Err is the first warning or error-level log the run recorded and the
-	// scenario did not expect, or nil when none was logged. On the v2 path it
-	// is set before Done closes, so read it after Done closes. Unlike an
-	// unexpected error logged before Run returns, it does not fail the run:
-	// the CLI's exit-code mapping turns a set Err into exit code 1.
+	// Err is the first unexpected error or warning the run logged, or a
+	// stored-state failure found after the supervisor stopped; nil when
+	// neither was seen. When both an error and a warning were logged, it is
+	// the error. On the v2 path it is set before Done closes, so read it
+	// after Done closes. Unlike an unexpected error logged before Run
+	// returns, it does not fail the run: the CLI's exit-code mapping turns a
+	// set Err into exit code 1.
 	Err error
 }
 

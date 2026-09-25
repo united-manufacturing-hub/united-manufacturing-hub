@@ -88,6 +88,7 @@ func runDynamicHello(ctx context.Context, env Env) error {
 	// CREATE: Upsert the child pointing at the initial mood file, wait until it
 	// reaches Running.
 	env.Step("create the child with the initial mood file")
+
 	if err := env.Client.Upsert(ref, map[string]any{
 		"state":        "running",
 		"moodFilePath": initialMoodPath,
@@ -115,6 +116,7 @@ func runDynamicHello(ctx context.Context, env Env) error {
 	// until the new mood lands in observed status. The config field itself
 	// changes here; the worker re-reads the new path in CollectObservedState.
 	env.Step("upsert a mood file with updated contents")
+
 	if err := env.Client.Upsert(ref, map[string]any{
 		"state":        "running",
 		"moodFilePath": updatedMoodPath,
@@ -148,7 +150,7 @@ func runDynamicHello(ctx context.Context, env Env) error {
 		WorkerType: configworker.WorkerTypeName,
 		Name:       configWorkerName,
 	}); err != nil {
-		return fmt.Errorf("check config worker survived the child's lifecycle: %w", err)
+		return fmt.Errorf("check the config worker is still readable after the child's lifecycle: %w", err)
 	}
 
 	return nil

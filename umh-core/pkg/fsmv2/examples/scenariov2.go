@@ -69,10 +69,10 @@ type runRecorder struct {
 
 	// loggedMu guards loggedErr and loggedWarn, because the supervisor's tick
 	// loop logs on its own goroutines while WaitFor, the runner's post-Run
-	// check and the teardown goroutine's end-of-run check read them. scenario,
-	// lastStep, expectedErrors and expectedWarnings carry no lock: the runner
-	// sets each of them once, before the supervisor starts, and nothing
-	// changes them afterwards.
+	// check and the teardown goroutine's end-of-run check read them. The
+	// runner sets scenario, expectedErrors and expectedWarnings once, before
+	// the supervisor starts, and nothing changes them afterwards; lastStep
+	// changes on every Step but only Run's goroutine reads and writes it.
 	loggedMu sync.Mutex
 
 	// loggedErr is the first error the run's logger reported at error level
@@ -86,10 +86,10 @@ type runRecorder struct {
 	loggedWarn error
 }
 
-// alwaysAllowedErrors lists the message substrings every run may log at error
-// level without failing: the collector reports these while it does its job,
-// so no scenario should have to declare them.
-var alwaysAllowedErrors = []string{
+// alwaysAllowedMessages lists the message substrings every run may log at
+// error or warning level without failing: the collector reports these while
+// it does its job, so no scenario should have to declare them.
+var alwaysAllowedMessages = []string{
 	"data_stale",
 	"collector_observation_failed",
 	"collector_stop_skipped",
@@ -108,7 +108,7 @@ func (r *runRecorder) recordLoggedError(err error, msg string) {
 	defer r.loggedMu.Unlock()
 
 	if r.loggedErr == nil {
-		r.loggedErr = fmt.Errorf("the scenario does not expect this error: %s (%v)", msg, err)
+		r.loggedErr = fmt.Errorf("the scenario does not expect this error: %s (%w)", msg, err)
 	}
 }
 
@@ -122,7 +122,7 @@ func (r *runRecorder) errorAllowed(msg string) bool {
 		}
 	}
 
-	for _, substr := range alwaysAllowedErrors {
+	for _, substr := range alwaysAllowedMessages {
 		if strings.Contains(msg, substr) {
 			return true
 		}
@@ -157,7 +157,7 @@ func (r *runRecorder) warningAllowed(msg string) bool {
 		}
 	}
 
-	for _, substr := range alwaysAllowedErrors {
+	for _, substr := range alwaysAllowedMessages {
 		if strings.Contains(msg, substr) {
 			return true
 		}
@@ -166,8 +166,7 @@ func (r *runRecorder) warningAllowed(msg string) bool {
 	return false
 }
 
-// loggedWarning returns the first warning the run logged and the scenario
-// does not expect, or nil when none was logged.
+// loggedWarning returns the first unexpected logged warning, or nil.
 func (r *runRecorder) loggedWarning() error {
 	r.loggedMu.Lock()
 	defer r.loggedMu.Unlock()
@@ -175,8 +174,7 @@ func (r *runRecorder) loggedWarning() error {
 	return r.loggedWarn
 }
 
-// loggedError returns the first error the run logged at error level and the
-// scenario does not expect, or nil when none was logged.
+// loggedError returns the first unexpected logged error, or nil.
 func (r *runRecorder) loggedError() error {
 	r.loggedMu.Lock()
 	defer r.loggedMu.Unlock()
@@ -217,8 +215,8 @@ func (l *runErrorLogger) With(fields ...deps.Field) deps.FSMLogger {
 // check.
 const waitForPollInterval = 50 * time.Millisecond
 
-// waitForTimeout is the longest a single check may take before it fails the
-// run.
+// waitForTimeout bounds one WaitFor call: the longest a single wait may run
+// before it fails the run.
 var waitForTimeout = 30 * time.Second
 
 // Step logs one line naming the change the scenario is about to make, and
@@ -261,8 +259,8 @@ func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Co
 		select {
 		case <-waitCtx.Done():
 			if ctx.Err() != nil {
-				return fmt.Errorf("wait %q after step %q did not complete before ctx ended: last seen %q",
-					check, e.recorder.lastStep, lastSeen)
+				return fmt.Errorf("wait %q after step %q did not complete before ctx ended: last seen %q: %w",
+					check, e.recorder.lastStep, lastSeen, ctx.Err())
 			}
 
 			return fmt.Errorf("wait %q after step %q timed out after %s: last seen %q",

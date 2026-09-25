@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
@@ -129,7 +130,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 			Description: "test-local Run for the unexpected-error check",
 		}, "probe_unexpected_error", true)
 
-		// Part (a): the logged error failed the next wait before its check
+		// the logged error failed the next wait before its check
 		// completed, and the failure names the error, the step and the check,
 		// as every wait failure does.
 		Expect(waitErr).To(HaveOccurred(),
@@ -141,7 +142,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		Expect(waitErr.Error()).To(ContainSubstring("store shows the grumpy mood"),
 			"the wait's failure must name the check that was running")
 
-		// Part (b): the recorder kept the logged error, so the run failed once
+		// the recorder kept the logged error, so the run failed once
 		// more after Run returned nil, even though the scenario swallowed the
 		// wait failure the error caused.
 		Expect(runErr).To(HaveOccurred(),
@@ -384,5 +385,54 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"a run whose store holds only states its workers may report must leave RunResult.Err nil")
+	})
+})
+
+// failingDeltasStore wraps a real store and fails every GetDeltas call, so a
+// spec can drive the stored-state check into its read-error branch.
+type failingDeltasStore struct {
+	storage.TriangularStoreInterface
+}
+
+func (failingDeltasStore) GetDeltas(_ context.Context, _ storage.Subscription) (storage.DeltasResponse, error) {
+	return storage.DeltasResponse{}, errors.New("the deltas are unreadable")
+}
+
+var _ = Describe("ScenarioV2 store-read failure", func() {
+	It("sets RunResult.Err when the stored-state check cannot read the store", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logger := deps.NewNopFSMLogger()
+		inner := examples.SetupStore(logger)
+		store := failingDeltasStore{TriangularStoreInterface: inner}
+
+		noop := examples.ScenarioV2{
+			Name:        "store-read-fails",
+			Description: "test-local Run for the store-read failure check",
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   noop,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a store the check cannot read must not fail the run; it surfaces through RunResult.Err")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a store the stored-state check cannot read must set RunResult.Err")
+		Expect(result.Err.Error()).To(ContainSubstring("read stored workers"),
+			"the set Err must name the failed store read")
 	})
 })

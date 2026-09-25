@@ -40,7 +40,7 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		register.ClearGlobalDeps(configWorkerKey)
 	})
 
-	It("drives one helloworld child through create->Running, update->observed-change, then Delete while the kernel survives", func() {
+	It("drives one helloworld child through create->Running, update->observed-change, then Delete while the kernel keeps running", func() {
 		// The dynamic scenario must be registered beside noop and reachable
 		// through the same merged listing the CLI reads. A missing entry here is
 		// the first thing this rung adds.

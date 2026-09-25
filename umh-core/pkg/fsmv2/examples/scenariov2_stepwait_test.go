@@ -115,11 +115,11 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the run must tear down once its ctx ends")
 
-		// Part (a): the never-done check failed the wait once ctx ended.
+		// the never-done check failed the wait once ctx ended.
 		Expect(waitErr).To(HaveOccurred(),
 			"a check that never reports done must fail its wait when ctx ends first")
 
-		// Part (b): the failure names the last step, the check and the last
+		// the failure names the last step, the check and the last
 		// value seen, so an operator can tell which change the scenario was
 		// waiting on and what the store last showed.
 		Expect(waitErr.Error()).To(ContainSubstring("remove the mood file"),
@@ -129,12 +129,12 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		Expect(waitErr.Error()).To(ContainSubstring("mood=grumpy"),
 			"the error must name the last value the check saw")
 
-		// Part (c): the first wait polled until done instead of stopping after
+		// the first wait polled until done instead of stopping after
 		// one not-done poll.
 		Expect(firstWaitPolls.Load()).To(BeNumerically(">=", int32(3)),
 			"WaitFor must poll its check until the check reports done")
 
-		// Part (d): each Step logged a line naming its change. The first step
+		// each Step logged a line naming its change. The first step
 		// is the exact-count case: its wait succeeded, so nothing else quotes
 		// its description. The second step is a floor: the failing wait's own
 		// log line, if it has one, names the step too.
@@ -143,7 +143,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		Expect(logLinesNaming(logBuf.String(), "remove the mood file")).To(BeNumerically(">=", 1),
 			"Step must log a line naming the change")
 
-		// Part (e): the step line also names its scenario, so a log from a
+		// the step line also names its scenario, so a log from a
 		// process running several scenarios can attribute every change.
 		var stepLine string
 
@@ -279,6 +279,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		}
 
 		outcome := make(chan runOutcome, 1)
+
 		go func() {
 			result, err := examples.Run(context.Background(), examples.RunConfig{
 				ScenarioV2:   neverDone,
@@ -299,5 +300,56 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 			"the failure must name the check that never completed")
 		Expect(done.err.Error()).To(ContainSubstring("timed out after 300ms"),
 			"the failure must name the wait's own timeout")
+	})
+})
+
+var _ = Describe("ScenarioV2 wait context", func() {
+	It("keeps ctx.Err in a wait the caller's ctx cancelled", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		// Run runs on the caller's goroutine (as the steps and waits specs
+		// note), so the spec reads waitErr without synchronization.
+		var waitErr error
+
+		cancelled := examples.ScenarioV2{
+			Name:        "wait-ctx-cancelled",
+			Description: "test-local Run for the ctx-cancelled wait",
+			Run: func(ctx context.Context, env examples.Env) error {
+				env.Step("wait on a check that never passes")
+
+				// The poll never reports done, so the ctx the spec cancels
+				// is the only thing that can end this wait.
+				waitErr = env.WaitFor(ctx, "store shows the grumpy mood",
+					func(_ context.Context) (bool, string, error) {
+						return false, "mood=still-happy", nil
+					})
+
+				return waitErr
+			},
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		go func() {
+			time.Sleep(150 * time.Millisecond)
+			cancel()
+		}()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   cancelled,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).To(HaveOccurred(),
+			"a wait the caller's ctx cancelled must fail the run")
+		Expect(err.Error()).To(ContainSubstring("store shows the grumpy mood"),
+			"the failure must name the check that never completed")
+		Expect(errors.Is(err, context.Canceled)).To(BeTrue(),
+			"the wrapped error must still be findable as context.Canceled, so the CLI can read an interrupt as a clean exit")
+		Expect(result).To(BeNil())
 	})
 })

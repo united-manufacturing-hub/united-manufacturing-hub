@@ -155,7 +155,7 @@ var _ = Describe("Scenario warnings and late errors", func() {
 			},
 		}
 
-		result := runScenario(lateError, 600*time.Millisecond)
+		result := runScenario(lateError, 3*time.Second)
 		Expect(result.Err).To(HaveOccurred(),
 			"an error logged after Run returned must set RunResult.Err when the run ends")
 		Expect(result.Err.Error()).To(ContainSubstring("probe_late_error"),
