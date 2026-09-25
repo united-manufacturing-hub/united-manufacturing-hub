@@ -436,3 +436,82 @@ var _ = Describe("ScenarioV2 store-read failure", func() {
 			"the set Err must name the failed store read")
 	})
 })
+
+var _ = Describe("ScenarioV2 empty expected entries", func() {
+	It("fails the run when an expected entry is the empty string", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		// An empty ExpectedErrors entry must not allow every message: an
+		// unexpected error still fails the run.
+		emptyExpectation := examples.ScenarioV2{
+			Name:           "empty-expected",
+			Description:    "test-local Run for the empty expected entry check",
+			ExpectedErrors: []string{""},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "",
+					errors.New("the mood file is corrupt"), "probe_unexpected_error")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   emptyExpectation,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).To(HaveOccurred(),
+			"an empty expected entry must not make every error expected")
+		Expect(err.Error()).To(ContainSubstring("probe_unexpected_error"),
+			"the failure must name the error that was logged")
+		Expect(result).To(BeNil())
+	})
+})
+
+var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
+	It("ends with no stored-state failure when the caller cancels after Run returned", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		// Duration 0: the run ends when the caller cancels, and the
+		// stored-state check then runs with that cancelled ctx.
+		returning := examples.ScenarioV2{
+			Name:        "cancel-after-return",
+			Description: "test-local Run for the post-return cancellation",
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   returning,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned must succeed")
+
+		// The caller cancels after Run returned; the teardown wakes on that
+		// cancellation and reads the store for the state check.
+		cancel()
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its ctx is cancelled")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"cancelling after Run returned must not turn into a failed store read; a Ctrl+C is not a failed run")
+	})
+})

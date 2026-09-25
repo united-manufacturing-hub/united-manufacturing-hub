@@ -426,9 +426,13 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// The store's final state is checked once the run has ended, the way
 		// the recorded warning is: a stored state that is not a state name its
 		// worker type may report does not fail the run, but surfaces here. The
-		// first cause recorded wins.
+		// first cause recorded wins. The check runs on a fresh context, so a
+		// caller cancelling after Run returned cannot fail the store read.
 		if result.Err == nil {
-			result.Err = checkStoredWorkerStates(ctx, cfg.Store, cfg.Logger)
+			checkCtx, checkCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+
+			result.Err = checkStoredWorkerStates(checkCtx, cfg.Store, cfg.Logger)
+			checkCancel()
 		}
 
 		close(done)

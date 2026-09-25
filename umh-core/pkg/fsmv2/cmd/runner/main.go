@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -200,7 +201,17 @@ func main() {
 			return
 		}
 
-		logger.Fatal("Failed to start scenario", zap.Error(err))
+		// The v2 runner wraps a failed run's error as `scenario "<name>"
+		// failed: ...`, which is the run failing rather than the startup.
+		fatalMsg := "Failed to start scenario"
+
+		if prefix := "scenario \""; len(err.Error()) > len(prefix) &&
+			strings.HasPrefix(err.Error(), prefix) &&
+			strings.Contains(err.Error(), "\" failed") {
+			fatalMsg = "Scenario failed"
+		}
+
+		logger.Fatal(fatalMsg, zap.Error(err))
 	}
 
 	<-result.Done
