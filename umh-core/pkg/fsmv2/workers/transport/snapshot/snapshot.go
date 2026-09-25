@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/channelusage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
@@ -170,6 +171,9 @@ type TransportStatus struct {
 	TotalMessagesPushed int64             `json:"total_messages_pushed"`
 	TotalMessagesPulled int64             `json:"total_messages_pulled"`
 	ConsecutiveErrors   int               `json:"consecutive_errors"`
+	// OutboundQueue is the channelusage verdict on the outbound channel the
+	// push child drains.
+	OutboundQueue channelusage.Verdict `json:"outbound_queue"`
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.

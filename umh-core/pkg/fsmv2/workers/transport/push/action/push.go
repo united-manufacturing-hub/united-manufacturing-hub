@@ -102,22 +102,7 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 		return errors.New("outbound channel is nil")
 	}
 
-	var messagesToPush []*types.UMHMessage
-
-drainLoop:
-	for {
-		select {
-		case msg, ok := <-outChan:
-			if !ok {
-				break drainLoop
-			}
-
-			messagesToPush = append(messagesToPush, msg)
-		default:
-			break drainLoop
-		}
-	}
-
+	messagesToPush := drainOutbound(pushDeps)
 	if len(messagesToPush) == 0 {
 		return nil
 	}
@@ -284,29 +269,36 @@ func (a *PushAction) retryPending(ctx context.Context, t types.Transport, pushDe
 // subscribers drop messages, and MC shows the instance as offline even
 // though it is healthy (ENG-4741).
 func (a *PushAction) drainChannelToPending(pushDeps snapshot.PushDependencies, metrics *depspkg.MetricsRecorder) {
+	drained := drainOutbound(pushDeps)
+	if len(drained) > 0 {
+		pushDeps.StorePendingMessages(drained)
+		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
+	}
+}
+
+// drainOutbound empties the outbound channel without blocking and skips nil
+// messages. It records the channel's length first: the drain is the channel's
+// only reader, so that length is the highest it reached since the previous
+// drain.
+func drainOutbound(pushDeps snapshot.PushDependencies) []*types.UMHMessage {
 	outChan := pushDeps.GetOutboundChan()
+	pushDeps.RecordOutboundDepth(len(outChan))
 
 	var drained []*types.UMHMessage
 
-drainLoop:
 	for {
 		select {
 		case msg, ok := <-outChan:
 			if !ok {
-				break drainLoop
+				return drained
 			}
 
 			if msg != nil {
 				drained = append(drained, msg)
 			}
 		default:
-			break drainLoop
+			return drained
 		}
-	}
-
-	if len(drained) > 0 {
-		pushDeps.StorePendingMessages(drained)
-		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 	}
 }
 

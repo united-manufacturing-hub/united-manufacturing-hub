@@ -77,6 +77,12 @@ func (d *PushDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 	return d.parentDeps.GetOutboundChan()
 }
 
+// RecordOutboundDepth forwards the outbound channel's length before a drain to
+// the parent, which reports the queue's fill level.
+func (d *PushDependencies) RecordOutboundDepth(length int) {
+	d.parentDeps.RecordOutboundDepth(length)
+}
+
 // GetTransport returns the parent's transport implementation.
 func (d *PushDependencies) GetTransport() types.Transport {
 	return d.parentDeps.GetTransport()

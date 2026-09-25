@@ -17,11 +17,13 @@ package transport
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry/failurerate"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/channelusage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
@@ -67,6 +69,12 @@ type TransportDependencies struct {
 	authFailureRate *failurerate.Tracker
 	inboundChan     chan<- *types.UMHMessage
 	outboundChan    <-chan *types.UMHMessage
+	// outboundUsage is nil when its table fails to build, which leaves the
+	// queue unmeasured.
+	outboundUsage *channelusage.Monitor
+	// outboundHighWater is the deepest the outbound channel has been since the
+	// last sample, as recorded by the push child before each drain.
+	outboundHighWater atomic.Int64
 
 	failedAuthToken    string
 	failedRelayURL     string
@@ -95,13 +103,40 @@ func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies) *Tra
 
 	inbound, outbound := provider.GetChannels(bd.GetWorkerID())
 
+	outboundUsage, err := channelusage.NewMonitor()
+	if err != nil {
+		bd.GetLogger().SentryError(deps.FeatureForWorker("transport"), bd.GetHierarchyPath(), err, "outbound_queue_monitor_creation_failed")
+	}
+
 	return &TransportDependencies{
 		BaseDependencies: bd,
 		transport:        t,
 		authFailureRate:  failurerate.New(AuthFailureRateConfig),
 		inboundChan:      inbound,
 		outboundChan:     outbound,
+		outboundUsage:    outboundUsage,
 	}
+}
+
+// RecordOutboundDepth raises the outbound high-water mark to length. The push
+// child calls it right before draining the channel.
+func (d *TransportDependencies) RecordOutboundDepth(length int) {
+	for {
+		current := d.outboundHighWater.Load()
+		if int64(length) <= current || d.outboundHighWater.CompareAndSwap(current, int64(length)) {
+			return
+		}
+	}
+}
+
+// SampleOutboundQueue records the deepest the outbound channel has been since
+// the previous sample and returns the resulting verdict. The collector calls it
+// once per observation, which keeps the monitor on the single goroutine it
+// requires.
+func (d *TransportDependencies) SampleOutboundQueue(at time.Time) channelusage.Verdict {
+	depth := max(len(d.outboundChan), int(d.outboundHighWater.Swap(0)))
+
+	return d.outboundUsage.Observe(depth, cap(d.outboundChan), at)
 }
 
 // SetTransport sets the transport instance.

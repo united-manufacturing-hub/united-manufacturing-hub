@@ -61,6 +61,11 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			fmt.Sprintf("children unhealthy (%d), transitioning to Degraded", snap.ChildrenUnhealthy), childrenAlive(snap.Config, snap.Status))
 	}
 
+	if queue := snap.Status.OutboundQueue; queue.Degraded {
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("outbound queue degraded (fill %.0f%%, peak %.0f%%), transitioning to Degraded", queue.FillPercent, queue.PeakPercent), childrenAlive(snap.Config, snap.Status))
+	}
+
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "All children healthy, transport running", childrenAlive(snap.Config, snap.Status))
 }
 

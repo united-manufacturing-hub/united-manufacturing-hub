@@ -36,6 +36,7 @@ type StatusCollectorType struct {
 	configManager            config.ConfigManager
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator
 	featureUsage             *models.FeatureUsage
+	subscriberCount          func() int
 }
 
 // NewStatusCollector creates a status collector that generates periodic status payloads
@@ -47,6 +48,7 @@ func NewStatusCollector(
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 	featureUsage *models.FeatureUsage,
+	subscriberCount func() int,
 ) *StatusCollectorType {
 	collector := &StatusCollectorType{
 		dog:                      dog,
@@ -55,6 +57,7 @@ func NewStatusCollector(
 		configManager:            configManager,
 		topicBrowserCommunicator: topicBrowserCommunicator,
 		featureUsage:             featureUsage,
+		subscriberCount:          subscriberCount,
 	}
 
 	return collector
@@ -246,6 +249,8 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		featureUsage = &fu
 	}
 
+	communicatorData := CommunicatorFromFSMv2(ctx, s.logger, s.subscriberCount())
+
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
@@ -253,6 +258,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
+			Communicator:  communicatorData,
 			Container:     containerData,
 			Dfcs:          dfcData,
 			Redpanda:      redpandaData,
