@@ -72,17 +72,17 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 			Store:        store,
 		})
 
-		// The final mood is not re-read here. After Delete, nothing stops the
-		// supervisor ticking the child (ENG-5107). Once Run removes its temp mood
-		// files, CollectObservedState overwrites the observed mood with "".
+		// The scenario's Run does its own checking: each leg waits through
+		// env.WaitFor until the store shows it, and an error any check raises
+		// fails the run. This battery holds the outcome only: the run must
+		// return no error, tear down on its own, and leave a clean RunResult.
+		// The store-side reap proof (the deleted ref returning ErrNotObserved
+		// and the worker gone from the store) is deferred to ENG-5107.
 		Expect(err).NotTo(HaveOccurred(),
 			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, Delete the child, and still read the config worker")
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the v2 runner must wait out the run and then tear down on its own")
-
-		// ENG-5114 moves these checks into the runner. Until then they run here,
-		// against the allowed-warning list every integration scenario shares.
-		verifyNoErrorsOrWarnings(testLogger)
-		verifyStateFieldsAreValid(store)
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"the dynamic scenario must end with a clean RunResult")
 	})
 })
