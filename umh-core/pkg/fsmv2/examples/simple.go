@@ -39,10 +39,8 @@ package examples
 // ## 2. Scenario Registry (scenario.go)
 //
 // All scenarios are registered in the Registry map, making them available to
-// both tests and CLI. To add a new scenario:
-//   - Create a new file (e.g., stress.go)
-//   - Define your Scenario
-//   - Add it to Registry in scenario.go
+// both tests and CLI. The v1 format is kept only for scenarios not yet moved;
+// new scenarios are v2, see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 //
 // ## 3. Test Usage
 //

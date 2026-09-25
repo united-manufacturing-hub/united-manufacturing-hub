@@ -403,6 +403,57 @@ The shutdown flow:
 3. Request worker shutdown and drain on the remainder (warn and break out on exhaustion, including when the level has children but no workers of its own)
 4. Cancel context, join the tick loop and metrics reporter
 
+## Writing a scenario
+
+A scenario runs the real supervisor and real workers against mocks, and checks
+what the store shows. It runs from the CLI with `--scenario <name>` and from
+the spec that runs every registered scenario (`examples/registry_run_test.go`).
+
+A scenario is a `ScenarioV2` with `Name`, `Description`, optional
+`Dependencies`, `Run`, and optional `ExpectedErrors` / `ExpectedWarnings`.
+Register it in `RegistryV2` (`examples/scenariov2.go`). The running example is
+`HelloworldScenarioV2` in `examples/helloworld.go`.
+
+### Mocks
+
+`Dependencies` builds the mocks and returns the dependency map (and optionally
+a cleanup). A mock implements the interface the worker already uses; for
+helloworld that is its `filesystem.Service` (`examples/mock_filesystem.go`).
+The worker declares a typed key (`hello_world.FilesystemKey`), reads it in its
+constructor with `config.LookupDependency`, and falls back to the real
+implementation when the key is absent. `Run` changes the mock, never the map:
+the supervisor reads the same map while it builds workers.
+
+### Run
+
+`Run` creates workers with `env.Client.Upsert`, the way a user's config does.
+Before each change call `env.Step` with the change in words. After it call
+`env.WaitFor` with a check that reads the store through the client and returns
+what it saw; a poll that has not observed the worker yet returns not-done. Each
+wait fails after 30 seconds.
+
+### What fails a run
+
+An error or warning the run logs that the scenario does not list as expected
+(`data_stale`, `collector_observation_failed` and `collector_stop_skipped` are
+always allowed), a stored state that is not a valid state name, and any error
+`Run` returns. Warnings and late errors set `RunResult.Err` instead of failing
+`examples.Run`; the CLI exits 1 on a set `Err`.
+
+### Running it
+
+```bash
+go run ./pkg/fsmv2/cmd/runner --scenario=helloworld --duration=5s
+go test -tags=test -count=1 -v ./pkg/fsmv2/examples/ -ginkgo.focus="helloworld"
+```
+
+### Rules
+
+- No global setters for mocks: `register.SetGlobalDeps` is not for scenarios.
+- No store handle: read through the client.
+- One change per `Step`.
+- A new scenario is always v2; the frozen-registry spec enforces it.
+
 ## Testing Patterns
 
 - Use Ginkgo/Gomega for tests
