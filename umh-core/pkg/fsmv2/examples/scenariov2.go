@@ -257,12 +257,9 @@ type ScenarioV2 struct {
 	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 
-// NoopScenarioV2 starts the kernel-only supervisor and drives nothing: the
-// application worker spawns only its config worker kernel child.
-//
-// This scenario is kept permanently as the copy-paste template for scenario
-// authors: copy it, rename it, put your mocks in Dependencies, and put the
-// steps and checks in Run.
+// NoopScenarioV2 starts the kernel-only supervisor and changes nothing: the
+// application worker spawns only its config worker kernel child. The example
+// to copy is HelloworldScenarioV2 in helloworld.go.
 var NoopScenarioV2 = ScenarioV2{
 	Name:        "noop",
 	Description: "Runs the kernel-only supervisor and changes nothing (v2)",
