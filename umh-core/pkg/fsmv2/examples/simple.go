@@ -174,20 +174,8 @@ package examples
 //
 // ## 5. Use in Scenario
 //
-//	import _ "path/to/myworker"
-//
-//	var MyScenario = Scenario{
-//	    Name: "my-scenario",
-//	    YAMLConfig: `
-//	children:
-//	  - name: "my-worker-1"
-//	    workerType: "myworker"
-//	    userSpec:
-//	      config: |
-//	        setting1: "value"
-//	        setting2: 42
-//	`,
-//	}
+// To use the worker in a scenario, see pkg/fsmv2/CLAUDE.md, "Writing a
+// scenario"; HelloworldScenarioV2 in helloworld.go is the example.
 //
 // # Store Injection for Assertions
 //
