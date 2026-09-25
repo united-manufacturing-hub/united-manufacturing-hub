@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // scenarioErrorProbeType names the monitor worker the worker-logged error
@@ -253,5 +254,135 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		Expect(err.Error()).To(ContainSubstring("probe_worker_error"),
 			"the run's failure must name the error the worker logged")
 		Expect(result).To(BeNil())
+	})
+})
+
+// This spec pins the run's stored-state check: when the store holds a state
+// that is not a valid state name for its worker type, the run does not fail,
+// but RunResult.Err is set once the run has ended, the way an unexpected
+// warning sets it.
+var _ = Describe("ScenarioV2 stored-state check", func() {
+	It("sets RunResult.Err when the store holds a state that is not a valid state name for its worker type", func() {
+		// The configworker deps key is process-global; a spec that fails
+		// mid-run would otherwise leak it into every later spec.
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		// badStateName is not a state name any worker reports. A configworker
+		// reports Running and Stopped (and "unknown" before its first tick), so
+		// a stored "NotAValidState" for one is what the check exists to catch.
+		const badStateName = "NotAValidState"
+		const probeWorkerID = "bad-state-probe"
+
+		storingBadState := examples.ScenarioV2{
+			Name:        "invalid-stored-state",
+			Description: "test-local Run for the stored-state check",
+			Run: func(ctx context.Context, env examples.Env) error {
+				// Settle gate: wait until the kernel config worker reports its
+				// real Running state, so the store also holds a valid state. The
+				// check must flag the invalid state stored below without
+				// flagging this one.
+				if err := env.WaitFor(ctx, "the kernel config worker reports Running",
+					func(ctx context.Context) (bool, string, error) {
+						dump, err := examples.DumpScenario(ctx, store, 0)
+						if err != nil {
+							return false, "", err
+						}
+
+						for _, w := range dump.Workers {
+							if w.WorkerType == configworker.WorkerTypeName && w.Observed["state"] == "Running" {
+								return true, "state=Running", nil
+							}
+						}
+
+						return false, "the config worker has not reported Running yet", nil
+					}); err != nil {
+					return err
+				}
+
+				env.Step("store a config worker state that is not a valid state name")
+
+				// The bad state lands on a worker no supervisor manages. A
+				// managed worker's next tick would overwrite a corrupted state
+				// before the run ends, so the check is probed on a worker only
+				// the store knows. The identity comes first, because workers are
+				// discovered through their deltas and read through LoadSnapshot,
+				// both of which expect it.
+				identityDoc := persistence.Document{
+					"id":             probeWorkerID,
+					"name":           probeWorkerID,
+					"worker_type":    configworker.WorkerTypeName,
+					"hierarchy_path": "scenariov2-invalid-stored-state/" + probeWorkerID,
+				}
+				if err := store.SaveIdentity(ctx, configworker.WorkerTypeName, probeWorkerID, identityDoc); err != nil {
+					return err
+				}
+
+				_, err := store.SaveObserved(ctx, configworker.WorkerTypeName, probeWorkerID, persistence.Document{
+					"state": badStateName,
+				})
+
+				return err
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   storingBadState,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a stored state that is not a valid state name must not fail the run; it surfaces through RunResult.Err when the run ends")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends, which is when the stored-state check runs")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a stored state that is not a valid state name for its worker type must set RunResult.Err when the run ends")
+		Expect(result.Err.Error()).To(ContainSubstring(badStateName),
+			"the set Err must name the invalid state the store held")
+		Expect(result.Err.Error()).To(ContainSubstring(probeWorkerID),
+			"the set Err must name the worker whose stored state is not valid")
+	})
+
+	It("leaves RunResult.Err nil after a run that stores only valid states", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		noop := examples.ScenarioV2{
+			Name:        "valid-stored-state",
+			Description: "test-local Run for the clean stored-state check",
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   noop,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run that stores only valid states must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"a run whose store holds only states its workers may report must leave RunResult.Err nil")
 	})
 })
