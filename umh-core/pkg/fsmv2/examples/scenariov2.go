@@ -17,6 +17,8 @@ package examples
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -30,8 +32,9 @@ type Env struct {
 	// Writer and store.
 	Client *fsmv2client.FSMv2Client
 
-	// Logger is the run's logger (the same logger RunConfig.Logger carries),
-	// so Run logs into the same stream the post-run log checks read.
+	// Logger wraps the logger RunConfig.Logger carries, so every error a Run
+	// logs feeds the run's error checks while all output still flows to the
+	// underlying logger.
 	Logger deps.FSMLogger
 
 	// Dependencies is the map the scenario's Dependencies returned, or nil when
@@ -55,6 +58,97 @@ type runRecorder struct {
 
 	// lastStep is the description of the last change Step announced.
 	lastStep string
+
+	// expectedErrors lists the message substrings the run's scenario
+	// declared through ScenarioV2.ExpectedErrors.
+	expectedErrors []string
+
+	// loggedMu guards loggedErr, because the supervisor's tick loop logs on
+	// its own goroutines while Run, WaitFor and the runner's post-Run check
+	// read on the caller's goroutine. scenario, lastStep and expectedErrors
+	// carry no lock: the runner sets each of them once, before the supervisor
+	// starts, and nothing changes them afterwards.
+	loggedMu sync.Mutex
+
+	// loggedErr is the first error the run's logger reported at error level
+	// and the scenario does not expect, or nil when none was logged. Both
+	// checks act on that first error, so later ones are not kept.
+	loggedErr error
+}
+
+// alwaysAllowedErrors lists the message substrings every run may log at error
+// level without failing: the collector reports these while it does its job,
+// so no scenario should have to declare them.
+var alwaysAllowedErrors = []string{
+	"data_stale",
+	"collector_observation_failed",
+	"collector_stop_skipped",
+}
+
+// recordLoggedError stores one error a SentryError call logged during the run,
+// shaped so a wait or run failure names the logged message. An error whose
+// message matches a substring the scenario expects, or one every run allows,
+// is not stored: it does not fail the run.
+func (r *runRecorder) recordLoggedError(err error, msg string) {
+	if r.errorAllowed(msg) {
+		return
+	}
+
+	r.loggedMu.Lock()
+	defer r.loggedMu.Unlock()
+
+	if r.loggedErr == nil {
+		r.loggedErr = fmt.Errorf("the scenario does not expect this error: %s (%v)", msg, err)
+	}
+}
+
+// errorAllowed reports whether a logged error's message contains a substring
+// the scenario declared in ExpectedErrors, or one of the messages every run
+// allows.
+func (r *runRecorder) errorAllowed(msg string) bool {
+	for _, substr := range r.expectedErrors {
+		if strings.Contains(msg, substr) {
+			return true
+		}
+	}
+
+	for _, substr := range alwaysAllowedErrors {
+		if strings.Contains(msg, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// loggedError returns the first error the run logged at error level and the
+// scenario does not expect, or nil when none was logged.
+func (r *runRecorder) loggedError() error {
+	r.loggedMu.Lock()
+	defer r.loggedMu.Unlock()
+
+	return r.loggedErr
+}
+
+// runErrorLogger wraps the run's logger so every error the run logs, from
+// the scenario's own code or from the supervisor's workers, reaches the
+// recorder, while all output still flows to the underlying logger.
+type runErrorLogger struct {
+	deps.FSMLogger
+	recorder *runRecorder
+}
+
+// SentryError records the error for the run's checks before delegating, so
+// both the wait and the post-Run check can fail on it.
+func (l *runErrorLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
+	l.recorder.recordLoggedError(err, msg)
+
+	l.FSMLogger.SentryError(feature, hierarchyPath, err, msg, fields...)
+}
+
+// With wraps again, so a logger carrying context fields records too.
+func (l *runErrorLogger) With(fields ...deps.Field) deps.FSMLogger {
+	return &runErrorLogger{FSMLogger: l.FSMLogger.With(fields...), recorder: l.recorder}
 }
 
 // waitForPollInterval is how long WaitFor waits between two polls of its
@@ -72,12 +166,18 @@ func (e Env) Step(description string) {
 }
 
 // WaitFor polls check until it reports done or ctx ends. check returns what it
-// last saw, so a failure can say it. When ctx ends first, the returned error
-// names the last Step, the check and the last value seen.
+// last saw, so a failure can say it. An error the run logged before or during
+// the wait fails it on the next poll, before the check runs again. When ctx
+// ends first, the returned error names the last Step, the check and the last
+// value seen.
 func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Context) (done bool, seen string, err error)) error {
 	var lastSeen string
 
 	for {
+		if logged := e.recorder.loggedError(); logged != nil {
+			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStep, logged)
+		}
+
 		done, seen, err := poll(ctx)
 		if err != nil {
 			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStep, err)
@@ -106,6 +206,10 @@ type ScenarioV2 struct {
 	// supervisor down. Run must honor ctx cancellation: teardown cannot start
 	// until Run returns.
 	Run func(ctx context.Context, env Env) error
+
+	// ExpectedErrors lists substrings of error log messages this scenario
+	// expects. Any other error logged during the run fails it.
+	ExpectedErrors []string
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
 	Name string

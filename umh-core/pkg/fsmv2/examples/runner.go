@@ -282,11 +282,17 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	writer := dynamicchildren.NewWriter()
 	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
 
+	// The recorder and the wrapped logger exist before the supervisor starts,
+	// so an error any worker logs from the first tick on fails the run's
+	// checks, not just one the scenario's Run logs itself.
+	recorder := &runRecorder{scenario: cfg.ScenarioV2.Name, expectedErrors: cfg.ScenarioV2.ExpectedErrors}
+	runLogger := &runErrorLogger{FSMLogger: cfg.Logger, recorder: recorder}
+
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:                      "scenariov2-" + cfg.ScenarioV2.Name,
 		Name:                    cfg.ScenarioV2.Name,
 		Store:                   cfg.Store,
-		Logger:                  cfg.Logger,
+		Logger:                  runLogger,
 		TickInterval:            cfg.TickInterval,
 		Dependencies:            scenarioDeps,
 		EnableTraceLogging:      cfg.EnableTraceLogging,
@@ -341,8 +347,19 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}()
 
 	client := fsmv2client.NewFSMv2Client(writer, cfg.Store)
-	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: cfg.Logger, Dependencies: scenarioDeps, recorder: &runRecorder{scenario: cfg.ScenarioV2.Name}}); err != nil {
+	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: runLogger, Dependencies: scenarioDeps, recorder: recorder}); err != nil {
 		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, err)
+	}
+
+	// The recorder kept the first unexpected error the run logged before Run
+	// returned, so it is checked once more here: a scenario that swallows the
+	// wait failure the error caused cannot hide it. An error logged after this
+	// check, during the Duration window, is not caught here. A wait failure
+	// with no logged error behind it is not re-caught on this path. The
+	// deferred teardown still runs, so the supervisor stops and the deps key
+	// is cleared before Run returns.
+	if logged := recorder.loggedError(); logged != nil {
+		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, logged)
 	}
 
 	teardownOwnedByGoroutine = true
