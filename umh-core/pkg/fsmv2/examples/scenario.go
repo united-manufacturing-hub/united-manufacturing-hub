@@ -177,7 +177,6 @@ type Scenario struct {
 // Registry contains all available scenarios.
 // Add new scenarios here to make them available in both tests and CLI.
 var Registry = map[string]Scenario{
-	"helloworld":   HelloworldScenario,
 	"simple":       SimpleScenario,
 	"failing":      FailingScenario,
 	"panic":        PanicScenario,
