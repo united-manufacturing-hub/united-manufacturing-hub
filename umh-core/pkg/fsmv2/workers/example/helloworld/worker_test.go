@@ -16,15 +16,31 @@ package hello_world_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
+
+// fakeMoodFilesystem is a filesystem.Service whose ReadFile returns fixed
+// contents, so a test can hand the worker a mood without a file on disk.
+type fakeMoodFilesystem struct {
+	filesystem.Service
+	contents string
+}
+
+func (f fakeMoodFilesystem) ReadFile(_ context.Context, _ string) ([]byte, error) {
+	return []byte(f.contents), nil
+}
 
 var _ = Describe("HelloworldWorker", func() {
 	var (
@@ -180,6 +196,43 @@ var _ = Describe("HelloworldWorker", func() {
 			err = hello_world.SayHello(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(d.HasSaidHello()).To(BeTrue())
+		})
+	})
+
+	Describe("mood file dependency", func() {
+		buildWorker := func(dependencies map[string]any) fsmv2.Worker {
+			identity := deps.Identity{ID: "mood-worker", Name: "mood-worker", WorkerType: "helloworld"}
+			w, err := factory.NewWorkerByType("helloworld", identity, logger, nil, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
+			return w
+		}
+
+		moodOf := func(w fsmv2.Worker, moodFilePath string) string {
+			desired := &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
+				Config: hello_world.HelloworldConfig{MoodFilePath: moodFilePath},
+			}
+			obs, err := w.CollectObservedState(context.Background(), desired)
+			Expect(err).NotTo(HaveOccurred())
+
+			typedObs, ok := obs.(fsmv2.Observation[hello_world.HelloworldStatus])
+			Expect(ok).To(BeTrue())
+
+			return typedObs.Status.Mood
+		}
+
+		It("reads the mood through the filesystem under the dependency key, and through the real filesystem without it", func() {
+			missingPath := filepath.Join(GinkgoT().TempDir(), "mood.txt")
+
+			dependencies := map[string]any{}
+			config.SetDependency(dependencies, hello_world.FilesystemKey, filesystem.Service(fakeMoodFilesystem{contents: "grumpy"}))
+
+			Expect(moodOf(buildWorker(dependencies), missingPath)).To(Equal("grumpy"))
+
+			realPath := filepath.Join(GinkgoT().TempDir(), "real-mood.txt")
+			Expect(os.WriteFile(realPath, []byte("cheerful"), 0o600)).To(Succeed())
+
+			Expect(moodOf(buildWorker(nil), realPath)).To(Equal("cheerful"))
 		})
 	})
 })
