@@ -16,6 +16,8 @@ package examples
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -37,6 +39,63 @@ type Env struct {
 	// builds workers, so Run must not write to it: Run reads a mock out with
 	// config.LookupDependency and changes the mock itself.
 	Dependencies map[string]any
+
+	// recorder carries the per-run state that Step and WaitFor share. Run
+	// receives Env by value, so the state lives behind a pointer; the runner
+	// sets it before a scenario's Run function sees this Env.
+	recorder *runRecorder
+}
+
+// runRecorder holds the per-run state that Step and WaitFor share across the
+// value copies of Env.
+type runRecorder struct {
+	// scenario is the name of the run's scenario, so a step line can be
+	// attributed when several scenarios run in one process.
+	scenario string
+
+	// lastStep is the description of the last change Step announced.
+	lastStep string
+}
+
+// waitForPollInterval is how long WaitFor waits between two polls of its
+// check.
+const waitForPollInterval = 50 * time.Millisecond
+
+// Step logs one line naming the change the scenario is about to make, and
+// remembers it, so a later failed wait can name the change it followed.
+func (e Env) Step(description string) {
+	e.recorder.lastStep = description
+
+	e.Logger.Info("scenario_step",
+		deps.String("scenario", e.recorder.scenario),
+		deps.String("step", description))
+}
+
+// WaitFor polls check until it reports done or ctx ends. check returns what it
+// last saw, so a failure can say it. When ctx ends first, the returned error
+// names the last Step, the check and the last value seen.
+func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Context) (done bool, seen string, err error)) error {
+	var lastSeen string
+
+	for {
+		done, seen, err := poll(ctx)
+		if err != nil {
+			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStep, err)
+		}
+
+		lastSeen = seen
+
+		if done {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wait %q after step %q did not complete before ctx ended: last seen %q",
+				check, e.recorder.lastStep, lastSeen)
+		case <-time.After(waitForPollInterval):
+		}
+	}
 }
 
 // ScenarioV2 is a scenario that drives the kernel-only supervisor.
