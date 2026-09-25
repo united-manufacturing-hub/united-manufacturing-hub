@@ -427,18 +427,21 @@ the supervisor reads the same map while it builds workers.
 ### Run
 
 `Run` creates workers with `env.Client.Upsert`, the way a user's config does.
-Before each change call `env.Step` with the change in words. After it call
-`env.WaitFor` with a check that reads the store through the client and returns
-what it saw; a poll that has not observed the worker yet returns not-done. Each
-wait fails after 30 seconds.
+Before each change, call `env.Step` with a short description of the change.
+After the change, call `env.WaitFor` with a check that reads the store through
+the client and returns what it saw. A check that has not seen the worker yet
+reports that it is not done. Each wait fails after 30 seconds.
 
 ### What fails a run
 
 An error or warning the run logs that the scenario does not list as expected
 (`data_stale`, `collector_observation_failed` and `collector_stop_skipped` are
 always allowed), a stored state that is not a valid state name, and any error
-`Run` returns. Warnings and late errors set `RunResult.Err` instead of failing
-`examples.Run`; the CLI exits 1 on a set `Err`.
+`Run` returns. The valid state names are listed per worker type in
+`examples/state_check.go`; a worker type not in that list is not checked, so a
+scenario for a new worker type adds its states there. Warnings and late errors
+set `RunResult.Err` instead of failing `examples.Run`; the CLI exits 1 on a
+set `Err`.
 
 ### Running it
 
