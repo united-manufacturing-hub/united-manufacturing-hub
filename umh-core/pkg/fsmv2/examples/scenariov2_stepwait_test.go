@@ -246,4 +246,58 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		Expect(polls.Load()).To(Equal(int32(3)),
 			"WaitFor must poll exactly until the check reports done")
 	})
+
+	It("fails a wait that never completes within its own timeout, with no deadline on the caller's ctx", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		restore := examples.SetWaitForTimeoutForTest(300 * time.Millisecond)
+		defer restore()
+
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		neverDone := examples.ScenarioV2{
+			Name:        "wait-never-done",
+			Description: "test-local Run for the wait timeout",
+			Run: func(ctx context.Context, env examples.Env) error {
+				env.Step("wait for a check that never passes")
+
+				return env.WaitFor(ctx, "store shows the grumpy mood",
+					func(_ context.Context) (bool, string, error) {
+						return false, "mood=still-happy", nil
+					})
+			},
+		}
+
+		// The caller's ctx has no deadline, so nothing but the wait's own
+		// timeout can end it. The run call sits in a goroutine because the
+		// pre-change WaitFor would otherwise hang the spec; Eventually bounds
+		// the red run too.
+		type runOutcome struct {
+			result *examples.RunResult
+			err    error
+		}
+
+		outcome := make(chan runOutcome, 1)
+		go func() {
+			result, err := examples.Run(context.Background(), examples.RunConfig{
+				ScenarioV2:   neverDone,
+				TickInterval: 50 * time.Millisecond,
+				Logger:       logger,
+				Store:        store,
+			})
+			outcome <- runOutcome{result: result, err: err}
+		}()
+
+		var done runOutcome
+		Eventually(outcome, "10s").Should(Receive(&done),
+			"a wait whose check never passes must end its run on its own, not hang forever")
+
+		Expect(done.err).To(HaveOccurred(),
+			"a wait that never completes must fail the run")
+		Expect(done.err.Error()).To(ContainSubstring("store shows the grumpy mood"),
+			"the failure must name the check that never completed")
+		Expect(done.err.Error()).To(ContainSubstring("timed out after 300ms"),
+			"the failure must name the wait's own timeout")
+	})
 })

@@ -217,6 +217,10 @@ func (l *runErrorLogger) With(fields ...deps.Field) deps.FSMLogger {
 // check.
 const waitForPollInterval = 50 * time.Millisecond
 
+// waitForTimeout is the longest a single check may take before it fails the
+// run.
+var waitForTimeout = 30 * time.Second
+
 // Step logs one line naming the change the scenario is about to make, and
 // remembers it, so a later failed wait can name the change it followed.
 func (e Env) Step(description string) {
@@ -227,12 +231,15 @@ func (e Env) Step(description string) {
 		deps.String("step", description))
 }
 
-// WaitFor polls check until it reports done or ctx ends. check returns what it
-// last saw, so a failure can say it. An error the run logged before or during
-// the wait fails it on the next poll, before the check runs again. When ctx
-// ends first, the returned error names the last Step, the check and the last
-// value seen.
+// WaitFor polls check until it reports done, ctx ends, or the wait exceeds
+// waitForTimeout. check returns what it last saw, so a failure can say it. An
+// error the run logged before or during the wait fails it on the next poll,
+// before the check runs again. A failure names the last Step, the check and
+// the last value seen.
 func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Context) (done bool, seen string, err error)) error {
+	waitCtx, cancel := context.WithTimeout(ctx, waitForTimeout)
+	defer cancel()
+
 	var lastSeen string
 
 	for {
@@ -240,7 +247,7 @@ func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Co
 			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStep, logged)
 		}
 
-		done, seen, err := poll(ctx)
+		done, seen, err := poll(waitCtx)
 		if err != nil {
 			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStep, err)
 		}
@@ -252,9 +259,14 @@ func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Co
 		}
 
 		select {
-		case <-ctx.Done():
-			return fmt.Errorf("wait %q after step %q did not complete before ctx ended: last seen %q",
-				check, e.recorder.lastStep, lastSeen)
+		case <-waitCtx.Done():
+			if ctx.Err() != nil {
+				return fmt.Errorf("wait %q after step %q did not complete before ctx ended: last seen %q",
+					check, e.recorder.lastStep, lastSeen)
+			}
+
+			return fmt.Errorf("wait %q after step %q timed out after %s: last seen %q",
+				check, e.recorder.lastStep, waitForTimeout, lastSeen)
 		case <-time.After(waitForPollInterval):
 		}
 	}
