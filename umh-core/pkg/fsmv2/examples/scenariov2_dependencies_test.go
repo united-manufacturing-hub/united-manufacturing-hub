@@ -128,7 +128,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		driverErr := errors.New("boom")
+		runErr := errors.New("boom")
 		var cleanupCalls atomic.Int32
 		failing := examples.ScenarioV2{
 			Name:        "cleanup-error",
@@ -139,7 +139,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 				}, nil
 			},
 			Run: func(_ context.Context, _ examples.Env) error {
-				return driverErr
+				return runErr
 			},
 		}
 
@@ -152,7 +152,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 			Logger:       logger,
 			Store:        store,
 		})
-		Expect(err).To(MatchError(driverErr),
+		Expect(err).To(MatchError(runErr),
 			"the runner must propagate the Run error")
 
 		Expect(cleanupCalls.Load()).To(Equal(int32(1)),

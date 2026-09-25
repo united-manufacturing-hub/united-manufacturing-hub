@@ -100,10 +100,10 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		// error. The store-side reap proof (the deleted ref returning ErrNotObserved
 		// and the worker gone from the store) is deferred to ENG-5107.
 
-		// The config worker check happens inside Run: an error from it fails
-		// the run above. The error and state checks stay here until they move
-		// into the runner. The battery reuses the EXISTING whitelist; the
-		// dynamic scenario must not loosen it.
+		// The config worker check happens inside Run: an error from it fails the
+		// run above. The error, warning and state checks below move into the
+		// runner in the next PR of ENG-5114; until then they run here, with the
+		// same allowed-warning list as every other integration scenario.
 		verifyNoErrorsOrWarnings(testLogger)
 		verifyStateFieldsAreValid(store)
 	})
