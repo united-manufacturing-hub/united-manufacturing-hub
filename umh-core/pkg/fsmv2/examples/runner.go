@@ -72,6 +72,13 @@ type RunResult struct {
 	// graceful_shutdown_timeout or graceful_shutdown_budget_exhausted. Read it
 	// after Done closes.
 	ShutdownClean bool
+
+	// Err is the first warning or error-level log the run recorded and the
+	// scenario did not expect, or nil when none was logged. On the v2 path it
+	// is set before Done closes, so read it after Done closes. Unlike an
+	// unexpected error logged before Run returns, it does not fail the run:
+	// the CLI's exit-code mapping turns a set Err into exit code 1.
+	Err error
 }
 
 // Run executes a scenario with the given configuration.
@@ -285,7 +292,11 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// The recorder and the wrapped logger exist before the supervisor starts,
 	// so an error any worker logs from the first tick on fails the run's
 	// checks, not just one the scenario's Run logs itself.
-	recorder := &runRecorder{scenario: cfg.ScenarioV2.Name, expectedErrors: cfg.ScenarioV2.ExpectedErrors}
+	recorder := &runRecorder{
+		scenario:         cfg.ScenarioV2.Name,
+		expectedErrors:   cfg.ScenarioV2.ExpectedErrors,
+		expectedWarnings: cfg.ScenarioV2.ExpectedWarnings,
+	}
 	runLogger := &runErrorLogger{FSMLogger: cfg.Logger, recorder: recorder}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
@@ -398,6 +409,18 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			deps.String("wake_reason", wakeReason))
 
 		teardown()
+
+		// The recorder kept the first unexpected warning and the first
+		// unexpected error the run logged, including one logged after Run
+		// returned, inside the Duration window. The recorded error becomes
+		// result.Err; when both were logged, Err carries the error. Err is
+		// written before close(done) so a caller reading Err after Done
+		// observes it.
+		result.Err = recorder.loggedError()
+		if result.Err == nil {
+			result.Err = recorder.loggedWarning()
+		}
+
 		close(done)
 	}()
 
