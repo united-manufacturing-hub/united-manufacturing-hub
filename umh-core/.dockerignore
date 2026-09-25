@@ -15,6 +15,7 @@ metrics.txt
 .gitattributes
 
 # Documentation and non-code assets
+architecture/
 docs/
 examples/
 changelog-images/
