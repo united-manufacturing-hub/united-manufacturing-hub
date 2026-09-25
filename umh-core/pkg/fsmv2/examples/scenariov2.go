@@ -100,7 +100,7 @@ var alwaysAllowedMessages = []string{
 // message matches a substring the scenario expects, or one every run allows,
 // is not stored: it does not fail the run.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
-	if r.errorAllowed(msg) {
+	if r.messageAllowed(msg, r.expectedErrors) {
 		return
 	}
 
@@ -112,12 +112,13 @@ func (r *runRecorder) recordLoggedError(err error, msg string) {
 	}
 }
 
-// errorAllowed reports whether a logged error's message contains a substring
-// the scenario declared in ExpectedErrors, or one of the messages every run
-// allows.
-func (r *runRecorder) errorAllowed(msg string) bool {
-	for _, substr := range r.expectedErrors {
-		if strings.Contains(msg, substr) {
+// messageAllowed reports whether a logged message contains a substring the
+// scenario declared in ExpectedErrors or ExpectedWarnings, or one of the
+// messages every run allows. An empty entry matches nothing: it must not make
+// every message expected.
+func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
+	for _, substr := range expected {
+		if substr != "" && strings.Contains(msg, substr) {
 			return true
 		}
 	}
@@ -135,7 +136,7 @@ func (r *runRecorder) errorAllowed(msg string) bool {
 // run. A warning whose message matches a substring the scenario declared in
 // ExpectedWarnings, or one every run allows, is not stored.
 func (r *runRecorder) recordLoggedWarning(msg string) {
-	if r.warningAllowed(msg) {
+	if r.messageAllowed(msg, r.expectedWarnings) {
 		return
 	}
 
@@ -145,25 +146,6 @@ func (r *runRecorder) recordLoggedWarning(msg string) {
 	if r.loggedWarn == nil {
 		r.loggedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
 	}
-}
-
-// warningAllowed reports whether a logged warning's message contains a
-// substring the scenario declared in ExpectedWarnings, or one of the
-// messages every run allows.
-func (r *runRecorder) warningAllowed(msg string) bool {
-	for _, substr := range r.expectedWarnings {
-		if strings.Contains(msg, substr) {
-			return true
-		}
-	}
-
-	for _, substr := range alwaysAllowedMessages {
-		if strings.Contains(msg, substr) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // loggedWarning returns the first unexpected logged warning, or nil.
@@ -216,7 +198,9 @@ func (l *runErrorLogger) With(fields ...deps.Field) deps.FSMLogger {
 const waitForPollInterval = 50 * time.Millisecond
 
 // waitForTimeout bounds one WaitFor call: the longest a single wait may run
-// before it fails the run.
+// before it fails the run. The limit is checked between polls, so a poll that
+// blocks longer than the limit delays the failure until it returns; a poll
+// should honour the ctx it is given.
 var waitForTimeout = 30 * time.Second
 
 // Step logs one line naming the change the scenario is about to make, and
