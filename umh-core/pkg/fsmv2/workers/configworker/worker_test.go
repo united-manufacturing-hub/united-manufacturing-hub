@@ -43,7 +43,7 @@ const workerType = "configworker"
 //     that factory.NewWorkerByType can resolve).
 //  2. Its healthy state derives the state name "Running" (not "Connected").
 //  3. A constructed worker holds the non-nil shared registry published via the
-//     typed-deps wiring (register.SetDeps -> register.GetDeps).
+//     typed-deps wiring (register.SetGlobalDeps -> register.GlobalDeps).
 func TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy(t *testing.T) {
 	// Behavior 2: the healthy state's derived name is "Running".
 	if got := helpers.DeriveStateName(&state.RunningState{}); got != "Running" {
@@ -51,10 +51,10 @@ func TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy(t *testing.T) {
 	}
 
 	// Publish the shared registry under the worker type so the constructor's
-	// register.GetDeps wiring can pick it up; tear it down afterwards.
+	// register.GlobalDeps wiring can pick it up; tear it down afterwards.
 	shared := dynamicchildren.NewWriter().Registry()
-	register.SetDeps[*dynamicchildren.Registry](workerType, shared)
-	t.Cleanup(func() { register.ClearDeps(workerType) })
+	register.SetGlobalDeps[*dynamicchildren.Registry](workerType, shared)
+	t.Cleanup(func() { register.ClearGlobalDeps(workerType) })
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
 	logger := deps.NewNopFSMLogger()
@@ -90,7 +90,7 @@ func TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy(t *testing.T) {
 // returns a non-nil error and a nil worker instead of a worker holding a nil
 // registry handle.
 func TestNewConfigworkerWorkerFailsWithoutRegistry(t *testing.T) {
-	register.ClearDeps(workerType)
+	register.ClearGlobalDeps(workerType)
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
 	logger := deps.NewNopFSMLogger()
@@ -155,8 +155,8 @@ func TestCollectObservedStateReconcilesHistorian(t *testing.T) {
 	// client is observable via the worker's registry (as in production wiring).
 	dynWriter := dynamicchildren.NewWriter()
 	shared := dynWriter.Registry()
-	register.SetDeps[*dynamicchildren.Registry](workerType, shared)
-	t.Cleanup(func() { register.ClearDeps(workerType) })
+	register.SetGlobalDeps[*dynamicchildren.Registry](workerType, shared)
+	t.Cleanup(func() { register.ClearGlobalDeps(workerType) })
 
 	historianCfg := config.FullConfig{
 		Historian: &config.HistorianConfig{
@@ -164,8 +164,8 @@ func TestCollectObservedStateReconcilesHistorian(t *testing.T) {
 		},
 	}
 	mockCM := config.NewMockConfigManager().WithConfig(historianCfg)
-	register.SetDeps[config.ConfigManager](worker.ConfigManagerDepsKey, mockCM)
-	t.Cleanup(func() { register.ClearDeps(worker.ConfigManagerDepsKey) })
+	register.SetGlobalDeps[config.ConfigManager](worker.ConfigManagerDepsKey, mockCM)
+	t.Cleanup(func() { register.ClearGlobalDeps(worker.ConfigManagerDepsKey) })
 
 	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, nil))
 	t.Cleanup(func() { fsmv2client.SetClient(nil) })
@@ -205,8 +205,8 @@ func newConstructedWorker(t *testing.T) *worker.ConfigworkerWorker {
 	t.Helper()
 
 	shared := dynamicchildren.NewWriter().Registry()
-	register.SetDeps[*dynamicchildren.Registry](workerType, shared)
-	t.Cleanup(func() { register.ClearDeps(workerType) })
+	register.SetGlobalDeps[*dynamicchildren.Registry](workerType, shared)
+	t.Cleanup(func() { register.ClearGlobalDeps(workerType) })
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
 	w, err := worker.NewConfigworkerWorker(identity, deps.NewNopFSMLogger(), nil)

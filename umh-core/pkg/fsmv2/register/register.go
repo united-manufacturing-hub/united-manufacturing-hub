@@ -47,7 +47,7 @@ type NoDeps = struct{}
 // embed inside the worker struct. By convention, callers pass the same TDeps in both places.
 //
 // Constructor receives the standard framework dependencies (identity, logger, stateReader).
-// Workers that need parent-injected deps fetch them via register.GetDeps inside the
+// Workers that need parent-injected deps fetch them via register.GlobalDeps inside the
 // constructor closure. Workers with custom ObservedState types must use
 // factory.RegisterWorkerType directly.
 //
@@ -106,19 +106,19 @@ func Worker[TConfig any, TStatus any, TDeps any](
 	}
 }
 
-// SetDepsBuilder registers a typed deps builder function for workerType.
+// SetGlobalDepsBuilder registers a typed deps builder function for workerType.
 // The builder receives the standard framework deps so workers can wire per-instance
 // resources (metrics recorders keyed by identity, loggers, state readers).
 // T is the concrete deps type (e.g., *MyDeps).
 //
 // Panics if workerType is empty or builderFn is nil (fail-fast at init time).
-func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {
+func SetGlobalDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {
 	if workerType == "" {
-		panic("register.SetDepsBuilder: workerType must be non-empty")
+		panic("register.SetGlobalDepsBuilder: workerType must be non-empty")
 	}
 
 	if builderFn == nil {
-		panic("register.SetDepsBuilder: builderFn must be non-nil")
+		panic("register.SetGlobalDepsBuilder: builderFn must be non-nil")
 	}
 
 	wrapped := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) any {
@@ -127,9 +127,9 @@ func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps
 	depsBuilderRegistry.Store(workerType, wrapped)
 }
 
-// GetDepsBuilder retrieves the deps builder function for workerType.
+// GlobalDepsBuilder retrieves the deps builder function for workerType.
 // Returns (nil, false) if no builder was registered for this worker type.
-func GetDepsBuilder(workerType string) (func(deps.Identity, deps.FSMLogger, deps.StateReader) any, bool) {
+func GlobalDepsBuilder(workerType string) (func(deps.Identity, deps.FSMLogger, deps.StateReader) any, bool) {
 	v, ok := depsBuilderRegistry.Load(workerType)
 	if !ok {
 		return nil, false

@@ -253,7 +253,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // concurrent runV2 calls, because the check and the publish are two separate
 // lock acquisitions. Concurrent runV2 calls are not supported.
 func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-	if register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName) != nil {
+	if register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName) != nil {
 		return nil, fmt.Errorf("v2 scenario %q cannot start: the configworker deps key is already published, "+
 			"so another v2 run is still active in this process", cfg.ScenarioV2.Name)
 	}
@@ -265,7 +265,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	writer := dynamicchildren.NewWriter()
-	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
+	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:                      "scenariov2-" + cfg.ScenarioV2.Name,
@@ -277,7 +277,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
 	if err != nil {
-		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
 
 		return nil, err
 	}
@@ -304,9 +304,9 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// spent during Shutdown's synchronous phases, which complete before
 		// the tick loop signals supDone.
 		result.ShutdownClean = appSup.DrainOutcomeClean()
-		// ClearDeps strictly after supDone: clearing earlier flips the
+		// ClearGlobalDeps strictly after supDone: clearing earlier flips the
 		// application worker's RegistryConfigured observation mid-shutdown.
-		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
 	}
 
 	// The Driver is user-authored code, so it may return an error or panic.
@@ -368,7 +368,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 	// Shutdown waits for Done so the deps key is already cleared when the
 	// caller starts the next v2 run; returning earlier would let this run's
-	// late ClearDeps delete the next run's freshly published key.
+	// late ClearGlobalDeps delete the next run's freshly published key.
 	result.Shutdown = func() {
 		appSup.Shutdown()
 		<-done

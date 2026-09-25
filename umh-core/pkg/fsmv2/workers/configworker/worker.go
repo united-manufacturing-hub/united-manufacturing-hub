@@ -60,7 +60,7 @@ import (
 // the shared registry published under this deps key.
 const WorkerTypeName = "configworker"
 
-// ConfigManagerDepsKey is the register.SetDeps key under which parent wiring
+// ConfigManagerDepsKey is the register.SetGlobalDeps key under which parent wiring
 // publishes the config.ConfigManager the worker polls each tick. It is
 // distinct from WorkerTypeName (which holds the shared registry) because the
 // typed deps registry keys on the string alone, so the two payloads cannot
@@ -71,7 +71,7 @@ const WorkerTypeName = "configworker"
 // cmd/main.go go away.
 const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 
-// CPUEnabledDepsKey is the register.SetDeps key holding the bool for whether
+// CPUEnabledDepsKey is the register.SetGlobalDeps key holding the bool for whether
 // the fsmv2 CPU monitor child should run (USE_FSMV2_CPU). It is a key of its
 // own rather than a second payload under ConfigManagerDepsKey, for the reason
 // given there.
@@ -96,7 +96,7 @@ type ConfigworkerWorker struct {
 }
 
 // NewConfigworkerWorker creates a config worker holding the registry published
-// under WorkerTypeName via register.SetDeps. It fails when no registry was published,
+// under WorkerTypeName via register.SetGlobalDeps. It fails when no registry was published,
 // surfacing the missing wiring at construction instead of at the first registry
 // read (a nil *Registry would otherwise panic on a method call far from the cause).
 func NewConfigworkerWorker(
@@ -104,16 +104,16 @@ func NewConfigworkerWorker(
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*ConfigworkerWorker, error) {
-	shared := register.GetDeps[*dynamicchildren.Registry](WorkerTypeName)
+	shared := register.GlobalDeps[*dynamicchildren.Registry](WorkerTypeName)
 	if shared == nil {
-		return nil, fmt.Errorf("no registry published for worker type %q: call register.SetDeps before constructing", WorkerTypeName)
+		return nil, fmt.Errorf("no registry published for worker type %q: call register.SetGlobalDeps before constructing", WorkerTypeName)
 	}
 
 	// The config manager is optional: FF-off paths and unit tests never publish
 	// one, and the historian reconcile in CollectObservedState no-ops when it is
 	// nil (mirroring the fsmv2client.GetClient nil guard).
-	configManager := register.GetDeps[config.ConfigManager](ConfigManagerDepsKey)
-	cpuEnabled := register.GetDeps[bool](CPUEnabledDepsKey)
+	configManager := register.GlobalDeps[config.ConfigManager](ConfigManagerDepsKey)
+	cpuEnabled := register.GlobalDeps[bool](CPUEnabledDepsKey)
 
 	w := &ConfigworkerWorker{
 		registry:      shared,

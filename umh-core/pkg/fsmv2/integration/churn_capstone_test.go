@@ -42,7 +42,7 @@ var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end",
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	It("Upserts K=3 helloworld workers to Running, then Deletes all and converges to exactly the kernel", func() {
@@ -54,7 +54,7 @@ var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end",
 		// non-nil handle and the kernel is emitted. The config-worker kernel and
 		// the application read the same registry instance.
 		w := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		// An fsmv2Client over that Writer (writes) and the supervisor's store
 		// (reads) -- built once the store exists below. HEADLESS: no Agent block,

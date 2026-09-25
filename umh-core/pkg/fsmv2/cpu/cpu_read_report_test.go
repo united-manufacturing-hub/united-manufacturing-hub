@@ -145,8 +145,8 @@ func buildReport(overrides map[string]error, fileOverrides map[string][]byte, er
 	hooked := deps.NewFSMLogger(zap.New(core).WithOptions(zap.WrapCore(hook.Wrap)).Sugar())
 
 	var svc filesystem.Service = reportFS{files: withFiles(fileOverrides), overrides: overrides, errFn: errFn, reads: &reads}
-	register.SetDeps[filesystem.Service](FilesystemDepsKey, svc)
-	DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+	register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, svc)
+	DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 	id := deps.Identity{ID: "cpu-report", WorkerType: WorkerType}
 	bd := deps.NewBaseDependencies(recordingLogger{FSMLogger: hooked, events: events}, nil, id)

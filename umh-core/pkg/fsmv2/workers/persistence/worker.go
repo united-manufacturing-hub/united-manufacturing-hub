@@ -231,7 +231,7 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 func init() {
 	register.Worker[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
-			d := register.GetDeps[*PersistenceDependencies](WorkerTypeName)
+			d := register.GlobalDeps[*PersistenceDependencies](WorkerTypeName)
 
 			return NewPersistenceWorker(id, logger, sr, d)
 		})

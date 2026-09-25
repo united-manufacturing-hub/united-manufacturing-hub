@@ -40,7 +40,7 @@ var _ = Describe("Application supervisor tears down a registry-deleted worker", 
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	It("removes the helloworld child after Delete while the config-worker kernel survives", func() {
@@ -51,7 +51,7 @@ var _ = Describe("Application supervisor tears down a registry-deleted worker", 
 		// app supervisor constructs the application worker (so the COS read sees
 		// a non-nil handle).
 		w := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		// Upsert a helloworld child and drive the supervisor on its started
 		// context so the spawned child's action executor runs.
