@@ -32,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -43,6 +44,7 @@ type Handler struct {
 	pusher                     *push.Pusher
 	fsmOutboundChannel         chan<- *types.UMHMessage        // FSMv2 without gatekeeper (nil for legacy mode)
 	gatekeeperOutboundChannel  chan<- *types.MessageWithSender // FSMv2 with gatekeeper (nil when gatekeeper disabled)
+	fsmLogger                  deps.FSMLogger                  // Sentry-routed logger for the FSMv2 drop site
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
@@ -69,6 +71,7 @@ func NewHandler(
 	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 without gatekeeper (nil for legacy mode)
 	gatekeeperOutboundChannel chan<- *types.MessageWithSender, // FSMv2 with gatekeeper (nil when gatekeeper disabled)
 	featureUsage *models.FeatureUsage,
+	fsmLogger deps.FSMLogger, // Sentry-routed logger for the FSMv2 drop warning
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
@@ -76,6 +79,7 @@ func NewHandler(
 	s.pusher = pusher
 	s.fsmOutboundChannel = fsmOutboundChannel
 	s.gatekeeperOutboundChannel = gatekeeperOutboundChannel
+	s.fsmLogger = fsmLogger
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
@@ -204,7 +208,13 @@ func (s *Handler) notify() {
 			case s.gatekeeperOutboundChannel <- msg:
 				// Successfully sent to gatekeeper
 			default:
-				s.logger.Warnf("Gatekeeper outbound channel full, dropping message for subscriber %s", email)
+				s.fsmLogger.SentryWarn(
+					deps.FeatureFSMv1Communicator,
+					"fsmv1.Communicator",
+					"gatekeeper_outbound_channel_full",
+					deps.Int("channel_len", len(s.gatekeeperOutboundChannel)),
+					deps.Int("channel_cap", cap(s.gatekeeperOutboundChannel)),
+				)
 
 				return
 			}
@@ -230,7 +240,13 @@ func (s *Handler) notify() {
 				case s.fsmOutboundChannel <- msg:
 					// Successfully sent to FSMv2 transport
 				default:
-					s.logger.Warnf("FSMv2 outbound channel full, dropping message for subscriber %s", email)
+					s.fsmLogger.SentryWarn(
+						deps.FeatureFSMv1Communicator,
+						"fsmv1.Communicator",
+						"fsmv2_outbound_channel_full",
+						deps.Int("channel_len", len(s.fsmOutboundChannel)),
+						deps.Int("channel_cap", cap(s.fsmOutboundChannel)),
+					)
 
 					return
 				}
