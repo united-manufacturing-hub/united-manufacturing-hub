@@ -182,11 +182,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 		store := examples.SetupStore(logger)
 
 		result, err := examples.Run(context.Background(), examples.RunConfig{
-			ScenarioV2: examples.ScenarioV2{Name: "driverless"},
+			ScenarioV2: examples.ScenarioV2{Name: "no-run"},
 			Logger:     logger,
 			Store:      store,
 		})
-		Expect(err).To(MatchError(ContainSubstring("driverless")))
+		Expect(err).To(MatchError(ContainSubstring("no-run")))
 		Expect(result).To(BeNil())
 	})
 
@@ -197,11 +197,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// An anonymous run would produce the supervisor ID "scenariov2-" and
 		// log lines naming an empty scenario, which post-run log checks
 		// cannot attribute.
-		driverRan := false
+		runRan := false
 		result, err := examples.Run(context.Background(), examples.RunConfig{
 			ScenarioV2: examples.ScenarioV2{
 				Run: func(_ context.Context, _ examples.Env) error {
-					driverRan = true
+					runRan = true
 
 					return nil
 				},
@@ -211,7 +211,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).To(MatchError(ContainSubstring("Run is set but Name is empty")))
 		Expect(result).To(BeNil())
-		Expect(driverRan).To(BeFalse(),
+		Expect(runRan).To(BeFalse(),
 			"a nameless v2 scenario must be rejected before its Run runs")
 	})
 
@@ -225,12 +225,18 @@ var _ = Describe("ScenarioV2 framework", func() {
 		firstRunWriter := dynamicchildren.NewWriter()
 		register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, firstRunWriter.Registry())
 
-		driverRan := false
+		var depsCalled atomic.Bool
+		runRan := false
 		overlapping := examples.ScenarioV2{
 			Name:        "overlapping",
 			Description: "test-local Run that must never run",
+			Dependencies: func() (map[string]any, func(), error) {
+				depsCalled.Store(true)
+
+				return nil, nil, nil
+			},
 			Run: func(_ context.Context, _ examples.Env) error {
-				driverRan = true
+				runRan = true
 
 				return nil
 			},
@@ -247,8 +253,10 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(err.Error()).To(ContainSubstring("overlapping"),
 			"the error must name the scenario that could not start")
 		Expect(result).To(BeNil())
-		Expect(driverRan).To(BeFalse(),
+		Expect(runRan).To(BeFalse(),
 			"the overlapping run must fail before starting a supervisor or its Run")
+		Expect(depsCalled.Load()).To(BeFalse(),
+			"a run blocked by the already-published key must not call the scenario's Dependencies")
 
 		// The first run's registry must survive untouched: a replaced or
 		// cleared key would cross-wire the still-active first run.
@@ -362,14 +370,14 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		driverRan := false
+		runRan := false
 		clientWasSet := false
 		loggerWasSet := false
 		sentinel := examples.ScenarioV2{
 			Name:        "sentinel",
 			Description: "test-local Run that records execution",
 			Run: func(_ context.Context, env examples.Env) error {
-				driverRan = true
+				runRan = true
 				// Upsert through the running supervisor is covered by the
 				// dynamic-children scenario, not this test.
 				clientWasSet = env.Client != nil
@@ -393,7 +401,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the v2 runner must wait RunConfig.Duration and then tear down on its own")
 
-		Expect(driverRan).To(BeTrue(),
+		Expect(runRan).To(BeTrue(),
 			"the v2 runner must execute the scenario Run")
 		Expect(clientWasSet).To(BeTrue(),
 			"Env must carry a non-nil fsmv2client for Run")
@@ -460,12 +468,12 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		driverErr := errors.New("boom")
+		runErr := errors.New("boom")
 		failing := examples.ScenarioV2{
 			Name:        "failing-run",
 			Description: "test-local Run that returns an error",
 			Run: func(_ context.Context, _ examples.Env) error {
-				return driverErr
+				return runErr
 			},
 		}
 
@@ -478,7 +486,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 			Logger:       logger,
 			Store:        store,
 		})
-		Expect(err).To(MatchError(driverErr),
+		Expect(err).To(MatchError(runErr),
 			"the runner must wrap and propagate the Run error")
 		Expect(err.Error()).To(ContainSubstring("failing-run"),
 			"the error must name the failing scenario")
@@ -644,6 +652,10 @@ var _ = Describe("ScenarioV2 framework", func() {
 	})
 
 	It("hands a worker created with env.Client.Upsert the value Dependencies returned", func() {
+		// A record from an earlier run of this spec in the same process would
+		// otherwise satisfy the settle gate below.
+		scenarioDepsProbeSeen.Store(nil)
+
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 

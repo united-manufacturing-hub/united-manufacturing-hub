@@ -82,7 +82,7 @@ type ScenarioV2 struct {
 // steps and checks in Run.
 var NoopScenarioV2 = ScenarioV2{
 	Name:        "noop",
-	Description: "Runs the kernel-only supervisor with no Run actions (v2)",
+	Description: "Runs the kernel-only supervisor and changes nothing (v2)",
 	Run: func(_ context.Context, _ Env) error {
 		return nil
 	},

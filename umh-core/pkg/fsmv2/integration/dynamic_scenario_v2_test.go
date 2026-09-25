@@ -95,10 +95,10 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		// app_removal_marks_deleted_test.go, app_shutdown_marks_deleted_test.go
 		// and churn_capstone_test.go.
 
-		// The config worker check happens inside Run: an error from it fails
-		// the run above. The error and state checks stay here until they move
-		// into the runner. The battery reuses the EXISTING whitelist; the
-		// dynamic scenario must not loosen it.
+		// The config worker check happens inside Run: an error from it fails the
+		// run above. The error, warning and state checks below move into the
+		// runner in the next PR of ENG-5114; until then they run here, with the
+		// same allowed-warning list as every other integration scenario.
 		verifyNoErrorsOrWarnings(testLogger)
 		verifyStateFieldsAreValid(store)
 	})
