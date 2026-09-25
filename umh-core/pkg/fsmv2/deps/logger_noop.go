@@ -14,6 +14,10 @@
 
 package deps
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/telemetry"
+)
+
 // nopLogger implements FSMLogger but discards all output.
 // Use this in unit tests where log output is not needed.
 type nopLogger struct{}
@@ -30,6 +34,8 @@ func NewNopFSMLogger() FSMLogger {
 func (l *nopLogger) Debug(_ string, _ ...Field) {}
 
 func (l *nopLogger) Info(_ string, _ ...Field) {}
+
+func (l *nopLogger) Sentry(_ telemetry.Identifier, _ Feature, _ string, _ error, _ ...Field) {}
 
 func (l *nopLogger) SentryWarn(_ Feature, _ string, _ string, _ ...Field) {}
 
