@@ -63,17 +63,27 @@ type runRecorder struct {
 	// declared through ScenarioV2.ExpectedErrors.
 	expectedErrors []string
 
-	// loggedMu guards loggedErr, because the supervisor's tick loop logs on
-	// its own goroutines while Run, WaitFor and the runner's post-Run check
-	// read on the caller's goroutine. scenario, lastStep and expectedErrors
-	// carry no lock: the runner sets each of them once, before the supervisor
-	// starts, and nothing changes them afterwards.
+	// expectedWarnings lists the message substrings the run's scenario
+	// declared through ScenarioV2.ExpectedWarnings.
+	expectedWarnings []string
+
+	// loggedMu guards loggedErr and loggedWarn, because the supervisor's tick
+	// loop logs on its own goroutines while WaitFor, the runner's post-Run
+	// check and the teardown goroutine's end-of-run check read them. scenario,
+	// lastStep, expectedErrors and expectedWarnings carry no lock: the runner
+	// sets each of them once, before the supervisor starts, and nothing
+	// changes them afterwards.
 	loggedMu sync.Mutex
 
 	// loggedErr is the first error the run's logger reported at error level
 	// and the scenario does not expect, or nil when none was logged. Both
 	// checks act on that first error, so later ones are not kept.
 	loggedErr error
+
+	// loggedWarn is the first warning the run's logger reported and the
+	// scenario does not expect, or nil when none was logged. Only the first
+	// warning is kept.
+	loggedWarn error
 }
 
 // alwaysAllowedErrors lists the message substrings every run may log at error
@@ -121,6 +131,50 @@ func (r *runRecorder) errorAllowed(msg string) bool {
 	return false
 }
 
+// recordLoggedWarning stores one warning a SentryWarn call logged during the
+// run. A warning whose message matches a substring the scenario declared in
+// ExpectedWarnings, or one every run allows, is not stored.
+func (r *runRecorder) recordLoggedWarning(msg string) {
+	if r.warningAllowed(msg) {
+		return
+	}
+
+	r.loggedMu.Lock()
+	defer r.loggedMu.Unlock()
+
+	if r.loggedWarn == nil {
+		r.loggedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
+	}
+}
+
+// warningAllowed reports whether a logged warning's message contains a
+// substring the scenario declared in ExpectedWarnings, or one of the
+// messages every run allows.
+func (r *runRecorder) warningAllowed(msg string) bool {
+	for _, substr := range r.expectedWarnings {
+		if strings.Contains(msg, substr) {
+			return true
+		}
+	}
+
+	for _, substr := range alwaysAllowedErrors {
+		if strings.Contains(msg, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// loggedWarning returns the first warning the run logged and the scenario
+// does not expect, or nil when none was logged.
+func (r *runRecorder) loggedWarning() error {
+	r.loggedMu.Lock()
+	defer r.loggedMu.Unlock()
+
+	return r.loggedWarn
+}
+
 // loggedError returns the first error the run logged at error level and the
 // scenario does not expect, or nil when none was logged.
 func (r *runRecorder) loggedError() error {
@@ -144,6 +198,14 @@ func (l *runErrorLogger) SentryError(feature deps.Feature, hierarchyPath string,
 	l.recorder.recordLoggedError(err, msg)
 
 	l.FSMLogger.SentryError(feature, hierarchyPath, err, msg, fields...)
+}
+
+// SentryWarn records the warning for the run's end-of-run check before
+// delegating, so a warning the scenario does not expect reaches RunResult.Err.
+func (l *runErrorLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
+	l.recorder.recordLoggedWarning(msg)
+
+	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
 }
 
 // With wraps again, so a logger carrying context fields records too.
@@ -210,6 +272,11 @@ type ScenarioV2 struct {
 	// ExpectedErrors lists substrings of error log messages this scenario
 	// expects. Any other error logged during the run fails it.
 	ExpectedErrors []string
+
+	// ExpectedWarnings lists substrings of warning log messages this
+	// scenario expects. Any other warning logged during the run sets
+	// RunResult.Err once the run has ended.
+	ExpectedWarnings []string
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
 	Name string

@@ -28,8 +28,9 @@ import (
 
 // TestShutdownExitCode locks the exit-code mapping for a completed scenario
 // run. A run whose supervisor did not drain cleanly within its budget
-// (ShutdownClean=false) must exit non-zero so an outer harness/CI can detect a
-// degraded shutdown; every other case (nil result, or a clean drain) exits 0.
+// (ShutdownClean=false) must exit non-zero so an outer harness/CI can detect
+// a degraded shutdown, and so must a clean drain whose RunResult.Err is set.
+// A nil result and a clean drain with no Err exit 0.
 func TestShutdownExitCode(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -45,6 +46,14 @@ func TestShutdownExitCode(t *testing.T) {
 			name:   "clean drain exits zero",
 			result: &examples.RunResult{ShutdownClean: true},
 			want:   0,
+		},
+		{
+			name: "clean drain with Err exits non-zero",
+			result: &examples.RunResult{
+				ShutdownClean: true,
+				Err:           errors.New("the scenario does not expect this warning: probe"),
+			},
+			want: 1,
 		},
 		{
 			name:   "unclean drain exits non-zero",
