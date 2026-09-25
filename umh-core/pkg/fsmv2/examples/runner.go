@@ -421,6 +421,14 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			result.Err = recorder.loggedWarning()
 		}
 
+		// The store's final state is checked once the run has ended, the way
+		// the recorded warning is: a stored state that is not a state name its
+		// worker type may report does not fail the run, but surfaces here. The
+		// first cause recorded wins.
+		if result.Err == nil {
+			result.Err = checkStoredWorkerStates(ctx, cfg.Store, cfg.Logger)
+		}
+
 		close(done)
 	}()
 
