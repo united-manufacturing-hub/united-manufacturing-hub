@@ -29,12 +29,13 @@ import (
 // omits are listed as fields on somebody else's event and never get one of
 // their own.
 var reportedReadOperations = map[cpuhealth.ReadOperation]struct{}{
-	cpuhealth.OperationProcStat:    {},
-	cpuhealth.OperationProcCpuinfo: {},
-	cpuhealth.OperationCPUStat:     {},
-	cpuhealth.OperationCPUMax:      {},
-	cpuhealth.OperationCPUPressure: {},
-	cpuhealth.OperationCpusetCPUs:  {},
+	cpuhealth.OperationProcStat:     {},
+	cpuhealth.OperationProcCpuinfo:  {},
+	cpuhealth.OperationCPUStat:      {},
+	cpuhealth.OperationCPUAcctUsage: {},
+	cpuhealth.OperationCPUMax:       {},
+	cpuhealth.OperationCPUPressure:  {},
+	cpuhealth.OperationCpusetCPUs:   {},
 }
 
 // excusedReads are the failures that report nothing, because the file is
@@ -105,14 +106,15 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 	return failures
 }
 
-// messageFor says what a failed read cost. A cpu.stat that opens and does not
-// parse is the one read whose failure voids the sample: its counters are
-// corrupt, so every number derived from them would be a guess. A cpu.stat that
-// will not open at all leaves its three readings absent and the sample usable,
-// the same as any other file the sampler cannot read, so it stays read_failed
-// along with every other failure.
+// messageFor says what a failed read cost. A cpu.stat, or v1's cpuacct.usage,
+// that opens and does not parse is the one read whose failure voids the
+// sample: its counters are corrupt, so every number derived from them would be
+// a guess. A file that will not open at all leaves its readings absent and the
+// sample usable, the same as any other file the sampler cannot read, so it
+// stays read_failed along with every other failure.
 func messageFor(read cpuhealth.ReadResult) string {
-	if read.Operation == cpuhealth.OperationCPUStat && read.Outcome == cpuhealth.ReadUnparsable {
+	voidsSample := read.Operation == cpuhealth.OperationCPUStat || read.Operation == cpuhealth.OperationCPUAcctUsage
+	if voidsSample && read.Outcome == cpuhealth.ReadUnparsable {
 		return sampleFailedTag + "::" + string(read.Outcome)
 	}
 

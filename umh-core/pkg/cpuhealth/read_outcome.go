@@ -129,6 +129,9 @@ const (
 	OperationProcCpuinfo ReadOperation = "proc_cpuinfo"
 	// OperationCPUStat is the cgroup's cpu.stat read.
 	OperationCPUStat ReadOperation = "cpu_stat"
+	// OperationCPUAcctUsage is the cgroup v1 cpuacct.usage read. On v2 the
+	// usage total is in cpu.stat, so this read never happens there.
+	OperationCPUAcctUsage ReadOperation = "cpuacct_usage"
 	// OperationCPUMax is the cgroup's cpu.max read.
 	OperationCPUMax ReadOperation = "cpu_max"
 	// OperationCPUPressure is the cgroup's cpu.pressure read.
@@ -169,6 +172,7 @@ var allReadOperations = []readOperationSpec{
 	{Operation: OperationCgroupBaseDir, cgroupRelative: true},
 	{Operation: OperationCPUPressure, name: "/cpu.pressure", cgroupRelative: true},
 	{Operation: OperationCPUStat, name: "/cpu.stat", cgroupRelative: true},
+	{Operation: OperationCPUAcctUsage},
 	{Operation: OperationProcStat, name: "/proc/stat"},
 	{Operation: OperationCpusetCPUs, name: "/cpuset.cpus.effective", cgroupRelative: true},
 	{Operation: OperationProcCpuinfo, name: "/proc/cpuinfo"},

@@ -86,13 +86,13 @@ var _ = Describe("the sample carries the reads that mint no signal", func() {
 		return sample
 	}
 
-	It("declares the three unreported operations alongside the six reported reads", func() {
+	It("declares the three unreported operations alongside the seven reported reads", func() {
 		operations := make([]ReadOperation, 0, len(allReadOperations))
 		for _, spec := range allReadOperations {
 			operations = append(operations, spec.Operation)
 		}
 
-		Expect(operations).To(HaveLen(9))
+		Expect(operations).To(HaveLen(10))
 		Expect(operations).To(ContainElements(OperationCgroupControllers, OperationProcSelfCgroup, OperationCgroupBaseDir))
 	})
 

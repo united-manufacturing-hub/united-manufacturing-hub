@@ -23,6 +23,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 )
 
 var _ = Describe("usage as a rate on cgroup v1", func() {
@@ -69,11 +71,24 @@ var _ = Describe("usage as a rate on cgroup v1", func() {
 		Expect(usage).To(Equal(5_000_000.0))
 	})
 
-	It("leaves usage absent when cpuacct.usage cannot be read", func() {
+	It("records a missing cpuacct.usage against its own read, not against cpu.stat", func() {
 		smp, err := v1Sampler(v1Files{statPath: "nr_periods 10\nnr_throttled 0\n"}).Read(context.Background())
 
 		Expect(err).NotTo(HaveOccurred())
 		_, ok := smp.UsageUsec.Get()
 		Expect(ok).To(BeFalse(), "no cpuacct.usage is no usage, never a trusted 0")
+		Expect(smp.Troubleshooting.Reads).To(ContainElements(
+			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadOK},
+			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUAcctUsage, Outcome: cpuhealth.ReadMissing},
+		))
+	})
+
+	It("fails the sample when cpuacct.usage will not parse, as v2 does for usage_usec", func() {
+		_, err := v1Sampler(v1Files{
+			statPath:  "nr_periods 10\nnr_throttled 0\n",
+			usagePath: "abc\n",
+		}).Read(context.Background())
+
+		Expect(err).To(MatchError(ContainSubstring(usagePath)))
 	})
 })

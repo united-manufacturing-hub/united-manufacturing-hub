@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
@@ -249,6 +250,12 @@ var _ = Describe("the message carries the sad path, the fields carry the read", 
 		Expect(*events).To(HaveLen(1))
 		Expect((*events)[0].Msg).To(Equal("cpu::sample_failed::unparsable"))
 		Expect((*events)[0].Fields).To(HaveKeyWithValue("read_op", "cpu_stat"))
+	})
+
+	It("keeps an unparsable v1 cpuacct.usage under the voided-sample message", func() {
+		read := cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUAcctUsage, Outcome: cpuhealth.ReadUnparsable}
+
+		Expect(messageFor(read)).To(Equal("cpu::sample_failed::unparsable"))
 	})
 })
 

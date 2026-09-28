@@ -151,6 +151,11 @@ type statRead struct {
 	// Sample.Troubleshooting.CPUStatRaw. It is set whenever the read succeeded,
 	// a failed parse included.
 	Raw string
+
+	// UsageFromCPUAcct is set on cgroup v1, whose usage total is a separate
+	// read of cpuacct.usage, and UsageErr is what that read returned.
+	UsageFromCPUAcct bool
+	UsageErr         error
 }
 
 // readStat reads cpu.stat once. A non-nil error means either the read or a

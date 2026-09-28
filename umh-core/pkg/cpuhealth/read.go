@@ -84,10 +84,12 @@ type linuxSampler struct {
 
 // Read samples the cgroup and the machine once.
 //
-// A non-nil error means cpu.stat opened and would not parse, and this tick has
-// no measurement. A cpu.stat that will not open at all is not an error: the
-// three readings taken from it stay absent and the rest of the sample reads. Sample.Troubleshooting.Reads still records what every read
-// produced, so diagnose a failed read from there, not from the error.
+// A non-nil error means cpu.stat or v1's cpuacct.usage opened and would not
+// parse, or the tick was cancelled, and this tick has no measurement. A file
+// that will not open is not an error: the readings taken from it stay absent
+// and the rest of the sample reads. Sample.Troubleshooting.Reads still records
+// what every read produced, so diagnose a failed read from there, not from the
+// error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var sample Sample
 	sample.Troubleshooting.CgroupBase = s.base
@@ -123,6 +125,14 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.Troubleshooting.CPUStatRaw = stat.Raw
 	statReadOutcome := statOutcome(stat, statErr)
 	sample.record(OperationCPUStat, statReadOutcome, statErr)
+	usageReadOutcome := ReadNotAttempted
+	if stat.UsageFromCPUAcct {
+		usageReadOutcome = classifyRead(stat.UsageErr)
+		sample.record(OperationCPUAcctUsage, usageReadOutcome, stat.UsageErr)
+	}
+	if usageReadOutcome == ReadUnparsable {
+		return sample, fmt.Errorf("parse cpuacct.usage: %w", sample.Troubleshooting.ReadErrors[OperationCPUAcctUsage])
+	}
 	if statReadOutcome == ReadUnparsable {
 		// A cpu.stat that opens and does not parse is corrupt, and every number
 		// derived from it would be a guess. A cpu.stat that will not open is a
@@ -265,6 +275,10 @@ func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
 func statOutcome(stat statRead, err error) ReadOutcome {
 	if err != nil {
 		return classifyRead(err)
+	}
+
+	if stat.UsageFromCPUAcct {
+		return ReadOK
 	}
 
 	if _, ok := stat.Usage.Get(); !ok {

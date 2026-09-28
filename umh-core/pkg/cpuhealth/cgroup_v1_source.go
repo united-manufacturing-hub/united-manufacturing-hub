@@ -90,8 +90,14 @@ func quotaAndPeriodRaw(quotaRaw, periodRaw string) string {
 // keys v2 does. The usage total comes from cpuacct.usage instead, so a cpu.stat
 // that will not open still leaves usage readable.
 func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
-	usage := c.readUsage(ctx)
-	failed := statRead{Usage: usage, Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
+	usage, usageErr := c.readUsage(ctx)
+	failed := statRead{
+		Usage:            usage,
+		Periods:          diagnosis.Unknown(),
+		Throttled:        diagnosis.Unknown(),
+		UsageFromCPUAcct: true,
+		UsageErr:         usageErr,
+	}
 	path := c.path(c.locations.cpuDir, "cpu.stat")
 
 	data, err := c.fs.ReadFile(ctx, path)
@@ -109,20 +115,23 @@ func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
 		return failed, contentError(path, err)
 	}
 
-	return statRead{Usage: usage, Periods: periods, Throttled: throttled, Raw: string(data)}, nil
+	read := failed
+	read.Periods = periods
+	read.Throttled = throttled
+
+	return read, nil
 }
 
 // readUsage reads cpuacct.usage, which v1 writes in nanoseconds.
-func (c *cgroupV1Source) readUsage(ctx context.Context) diagnosis.Reading {
+func (c *cgroupV1Source) readUsage(ctx context.Context) (diagnosis.Reading, error) {
 	nanoseconds, _, err := c.readInt(ctx, c.path(c.locations.cpuacctDir, "cpuacct.usage"))
 	if err != nil {
-		return diagnosis.Unknown()
+		return diagnosis.Unknown(), err
 	}
 
-	return diagnosis.Known(float64(nanoseconds) / 1e3)
+	return diagnosis.Known(float64(nanoseconds) / 1e3), nil
 }
 
-// readPSI reports no pressure: v1 publishes no per-cgroup pressure file.
 func (c *cgroupV1Source) readPSI(context.Context) (fraction float64, err error) {
 	return 0, errNoPressureFile
 }
