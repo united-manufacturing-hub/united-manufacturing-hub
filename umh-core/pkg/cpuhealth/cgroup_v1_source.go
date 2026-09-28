@@ -54,28 +54,38 @@ func newCgroupV1Source(fs filesystem.Service, base, cpuDir string) *cgroupV1Sour
 // period, over cpu.cfs_period_us. A positive quota reads as a capacity in
 // cores, -1 as a present no-limit, and either file unreadable as absent.
 func (c *cgroupV1Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome, error) {
-	quota, raw, err := c.readInt(ctx, c.path(c.cpuDir, "cpu.cfs_quota_us"))
+	quota, quotaRaw, err := c.readInt(ctx, c.path(c.cpuDir, "cpu.cfs_quota_us"))
 	if err != nil {
-		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(err), err
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: quotaRaw}, classifyRead(err), err
 	}
+
+	periodPath := c.path(c.cpuDir, "cpu.cfs_period_us")
+	period, periodRaw, periodErr := c.readInt(ctx, periodPath)
+	raw := quotaAndPeriodRaw(quotaRaw, periodRaw)
 
 	if quota <= 0 {
 		// -1 means uncapped: a definite no-limit, never a positive capacity.
 		return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK, nil
 	}
 
-	periodPath := c.path(c.cpuDir, "cpu.cfs_period_us")
-	period, _, err := c.readInt(ctx, periodPath)
-	if err != nil {
-		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(err), err
+	if periodErr != nil {
+		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, classifyRead(periodErr), periodErr
 	}
 	if period <= 0 {
-		periodErr := contentError(periodPath, errUnparsableRead)
+		periodErr = contentError(periodPath, errUnparsableRead)
 
 		return quotaRead{Limit: diagnosis.Unknown(), Raw: raw}, ReadUnparsable, periodErr
 	}
 
 	return quotaRead{Limit: diagnosis.Known(float64(quota) / float64(period)), Raw: raw}, ReadOK, nil
+}
+
+func quotaAndPeriodRaw(quotaRaw, periodRaw string) string {
+	if periodRaw == "" {
+		return quotaRaw
+	}
+
+	return strings.TrimSpace(quotaRaw) + " " + strings.TrimSpace(periodRaw)
 }
 
 // readStat reads cpu.stat, which carries the same nr_periods and nr_throttled

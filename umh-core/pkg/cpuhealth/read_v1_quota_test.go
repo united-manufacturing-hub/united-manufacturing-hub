@@ -106,6 +106,17 @@ var _ = Describe("the cgroup v1 CPU limit", func() {
 		Expect(ok).To(BeFalse(), "a quota with no period is no capacity, never a bare 200000")
 	})
 
+	It("publishes quota and period as the raw limit text, the way v2 cpu.max holds both", func() {
+		smp, err := v1Sampler(v1Files{
+			statPath:   "nr_periods 10\nnr_throttled 0\n",
+			quotaPath:  "200000\n",
+			periodPath: "abc\n",
+		}).Read(context.Background())
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(smp.Troubleshooting.CPUMaxRaw).To(Equal("200000 abc"))
+	})
+
 	It("reads an empty quota file as empty, the way v2 reads an empty cpu.max", func() {
 		smp, err := v1Sampler(v1Files{
 			statPath:   "nr_periods 10\nnr_throttled 0\n",
