@@ -67,10 +67,10 @@ var FailingScenarioV2 = ScenarioV2{
 		env.Step("create the restart worker, which is restarted after five failures")
 
 		if err := env.Client.Upsert(restartRef, map[string]any{
-			"state":                   "running",
-			"should_fail":             true,
-			"max_failures":            999999,
-			"restart_after_failures":  5,
+			"state":                  "running",
+			"should_fail":            true,
+			"max_failures":           999999,
+			"restart_after_failures": 5,
 		}); err != nil {
 			return fmt.Errorf("upsert restart worker: %w", err)
 		}
