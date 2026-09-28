@@ -44,9 +44,8 @@ const (
 	// publish a fixture and forgot gets no error, and that instance silently
 	// reads the real machine instead. NewDeps does the lookup.
 	//
-	// The key is not WorkerType: the typed deps registry keys on the string
-	// alone, so two payloads cannot share one key. Same convention as
-	// configworker.ConfigManagerDepsKey.
+	// A key holds one value, so each payload gets its own key rather than
+	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1

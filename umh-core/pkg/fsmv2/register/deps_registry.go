@@ -25,19 +25,15 @@ import (
 // factory.NewWorkerByType(workerType, ...) runs; the closure then calls
 // GlobalDeps[TDeps](workerType) and forwards the value to the user-defined
 // constructor.
-//
-// Workers that never call SetGlobalDeps receive the Go-native zero value of TDeps,
-// preserving the legacy factory closure behaviour for workers that have no
-// parent-injected payload.
 
 var (
 	depsRegistryMu sync.RWMutex
 	depsRegistry   = map[string]any{}
 )
 
-// SetGlobalDeps publishes typed deps for workerType. Parent wiring calls this
-// before the register.Worker factory closure runs for that type. Thread-safe.
-// Overwrites any prior value for the same key.
+// SetGlobalDeps stores deps under workerType and replaces any earlier value.
+// Every worker in the process can read it until ClearGlobalDeps or ResetRegistry
+// removes it. Safe for concurrent use.
 func SetGlobalDeps[TDeps any](workerType string, deps TDeps) {
 	depsRegistryMu.Lock()
 	defer depsRegistryMu.Unlock()
@@ -45,14 +41,10 @@ func SetGlobalDeps[TDeps any](workerType string, deps TDeps) {
 	depsRegistry[workerType] = deps
 }
 
-// GlobalDeps retrieves typed deps for workerType. Returns the Go-native zero
-// value of TDeps when no SetGlobalDeps call has happened for the key - intentionally
-// `var zero TDeps` rather than reflect.Zero so pointer-TDeps callers see a
-// predictable Go-native nil (comparable via `== nil`).
+// GlobalDeps returns the value stored under workerType. When nothing is stored,
+// it returns the zero value of TDeps, so a pointer TDeps gets nil.
 //
-// Panics when SetGlobalDeps published a value under workerType whose dynamic type
-// does not match TDeps. The panic names the registry key, the stored type,
-// and the requested type so the call-site is obvious from the stack trace.
+// It panics when the stored value's type is not TDeps.
 func GlobalDeps[TDeps any](workerType string) TDeps {
 	depsRegistryMu.RLock()
 	defer depsRegistryMu.RUnlock()
@@ -72,7 +64,7 @@ func GlobalDeps[TDeps any](workerType string) TDeps {
 	return zero
 }
 
-// ClearGlobalDeps removes a single workerType from the registry. Test cleanup hook.
+// ClearGlobalDeps removes the value stored under workerType.
 func ClearGlobalDeps(workerType string) {
 	depsRegistryMu.Lock()
 	defer depsRegistryMu.Unlock()
