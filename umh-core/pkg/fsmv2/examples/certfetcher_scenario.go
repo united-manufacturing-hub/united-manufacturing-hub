@@ -130,19 +130,18 @@ func (m *MockCertHandler) FetchCallCount() int {
 }
 
 // errCertFetchSimulated is the fetch error the degraded scenario's handler
-// returns. The fetch action returns the handler's error unwrapped, so the
-// executor's action_failed error carries this cause.
+// returns.
 var errCertFetchSimulated = errors.New("simulated cert fetch failure")
 
 // certFetcherDependencies builds the dependency map one certfetcher scenario
-// runs against: a MockCertHandler with the given subscribers and fetch
-// error, stored under the worker's CertHandlerKey. The var declaration keeps
-// SetDependency's type parameter the Handler interface, not the mock.
+// runs against: a MockCertHandler stored under the worker's CertHandlerKey.
 func certFetcherDependencies(emails []string, fetchErr error) (map[string]any, func(), error) {
 	handler := NewMockCertHandler(emails, fetchErr)
 
 	deps := map[string]any{}
 
+	// Declared as the interface: a *MockCertHandler argument does not match
+	// the key's type, so SetDependency would not compile.
 	var h certificatehandler.Handler = handler
 
 	config.SetDependency(deps, certfetcher.CertHandlerKey, h)
@@ -178,8 +177,7 @@ func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.R
 }
 
 // CertFetcherHealthyScenarioV2 runs one certfetcher worker whose handler has
-// a subscriber and whose fetch succeeds: the worker reaches Running and
-// completes a fetch.
+// a subscriber and whose fetch succeeds.
 var CertFetcherHealthyScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-healthy",
 	Description: "Cert fetcher with a subscriber: reaches Running and fetches",
@@ -222,14 +220,11 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 }
 
 // CertFetcherDegradedScenarioV2 runs one certfetcher worker whose handler
-// has a subscriber but fails every fetch: three consecutive failures reach
-// the error threshold and the worker enters Degraded.
+// has a subscriber but fails every fetch.
 var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-degraded",
 	Description: "Cert fetcher whose fetches fail: enters Degraded after the threshold",
 
-	// Each failed fetch makes the executor log action_failed with the
-	// handler's error, which carries errCertFetchSimulated.
 	ExpectedErrorCauses: []error{errCertFetchSimulated},
 
 	Dependencies: func() (map[string]any, func(), error) {
@@ -245,14 +240,14 @@ var CertFetcherDegradedScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// Three consecutive failed fetches reach DegradedThreshold
-		// (the worker's RunningState).
+		// The worker enters Degraded once its consecutive failed fetches
+		// reach DegradedThreshold (certfetcher/state/state_running.go).
 		return waitForCertFetcherState(ctx, env, ref, "Degraded")
 	},
 }
 
 // CertFetcherNoSubscribersScenarioV2 runs one certfetcher worker whose
-// handler has no sub handler, so the worker never leaves Stopped.
+// handler has no sub handler.
 var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-no-subscribers",
 	Description: "Cert fetcher without a subscriber handler: stays in Stopped",
@@ -271,9 +266,7 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 		}
 
 		// StoppedState leaves Stopped only when the handler has a sub
-		// handler (the worker's state_stopped.go), so a worker whose handler
-		// has none stays in Stopped by construction. The wait samples it: a
-		// single observation in any other state fails at once.
+		// handler (certfetcher/state/state_stopped.go).
 		polls := 0
 
 		return env.WaitFor(ctx, "the worker stays in Stopped across 20 polls",
