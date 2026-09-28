@@ -27,12 +27,10 @@ import (
 )
 
 // CascadeScenarioV2 runs one exampleparent whose two children are
-// examplefailing workers that each fail three times, in two cycles. The
-// parent reports Degraded when its children leave Connected for the next
+// examplefailing workers that each fail three times in each of two cycles.
+// The parent reports Degraded when its children leave Connected for the next
 // cycle while it is Running, and the second cycle's failures keep them
-// unhealthy until they reconnect. The final wait checks each child's cycle
-// and attempt count, so a scenario whose children merely cycle without
-// failing again does not pass.
+// unhealthy until they reconnect.
 var CascadeScenarioV2 = ScenarioV2{
 	Name:        "cascade",
 	Description: "Shows cascade failure: child failures propagate to parent state, parent recovery when children heal",
@@ -60,10 +58,9 @@ var CascadeScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert parent: %w", err)
 		}
 
-		// Degraded can only follow Running, so this wait also carries the
-		// parent through its start: Stopped, then TryingToStart while the
-		// children run their first failure cycle, then Running, and into
-		// the second cycle that makes the parent degraded.
+		// Degraded can only follow Running, so this wait also covers the
+		// parent's start. The parent stays in TryingToStart until the
+		// children finish their first failure cycle.
 		if err := env.WaitFor(ctx, "the parent reaches Degraded",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
@@ -95,12 +92,12 @@ var CascadeScenarioV2 = ScenarioV2{
 		for _, name := range []string{"child-0", "child-1"} {
 			childRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: name}
 
-			// Attempts accumulate across cycles: the first cycle's three
-			// failures bring the counter past 3, so Connected in cycle 1
-			// (CurrentCycle, zero based) with more than 3 attempts proves
-			// the child failed its three second-cycle attempts before it
-			// reconnected. A child that never cycles again stays at
-			// CurrentCycle 0.
+			// ConnectAttempts restarts at zero when examplefailing's
+			// AdvanceCycle starts a new cycle, and with max_failures 3 the
+			// fourth attempt connects. Connected in cycle 1 (CurrentCycle is
+			// zero based) with more than 3 attempts therefore means the child
+			// failed three times again before it reconnected. A child that
+			// never cycles again stays at CurrentCycle 0.
 			if err := env.WaitFor(ctx, "the child "+name+" reconnected in its second cycle after failing again",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, childRef)

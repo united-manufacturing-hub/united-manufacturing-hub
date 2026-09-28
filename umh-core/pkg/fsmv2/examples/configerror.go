@@ -26,18 +26,17 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// ConfigErrorScenarioV2 runs one valid parent next to three badly configured
-// workers. A bad config is rejected when the supervisor derives the worker's
-// desired state: the worker never starts, and the rejection is logged on
-// every reconciliation tick. The valid parent and its children come up
-// normally beside them, and the empty-config parent runs with zero children.
+// ConfigErrorScenarioV2 runs a valid parent beside workers with invalid
+// configs and a parent with an empty config. An invalid config is rejected
+// when the supervisor derives the worker's desired state: the worker never
+// starts, and the rejection is logged on every reconciliation tick. The
+// empty-config parent is accepted and gets zero children.
 var ConfigErrorScenarioV2 = ScenarioV2{
 	Name:        "configerror",
 	Description: "Demonstrates configuration validation and error handling patterns",
 
-	// Nothing narrower than these messages is available: the underlying
-	// error is a yaml type error with no sentinel value, so the messages
-	// are the only handle on it.
+	// The underlying error is a yaml type error with no sentinel value, so
+	// ExpectedErrorCauses cannot name it.
 	ExpectedErrors: []string{
 		"worker_add_derive_desired_failed",
 		"child_supervisor_add_worker_failed",
@@ -116,11 +115,9 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 			}
 		}
 
-		// A parent with zero children never meets the ChildrenHealthy > 0
-		// condition in state_trying_to_start.go, so the empty-config parent
-		// stays in TryingToStart forever and this wait must not ask for
-		// Running. It reaches TryingToStart after its five seconds in
-		// Stopped.
+		// A parent with zero children never meets TryingToStartState's
+		// ChildrenHealthy > 0 condition, so the empty-config parent stays in
+		// TryingToStart. It gets there once StoppedWaitDuration has passed.
 		if err := env.WaitFor(ctx, "the empty-config parent settles in TryingToStart",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, emptyRef)
@@ -137,10 +134,9 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// The two invalid-config workers never start, so neither is ever
-		// observed. This check runs after the valid parent reached Running,
-		// so the invalid ones have had the same time to appear, and a
-		// worker that appears now is one the config failed to reject.
+		// An invalid-config worker never starts, so it is never observed.
+		// This check runs after the valid parent reached Running, so the
+		// invalid ones have had the same time to appear.
 		polls := 0
 
 		return env.WaitFor(ctx, "the two invalid-config workers stay unobserved across 20 polls",
