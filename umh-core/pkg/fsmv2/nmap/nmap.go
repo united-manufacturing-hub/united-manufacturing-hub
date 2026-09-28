@@ -70,7 +70,8 @@ type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
-// DialerKey names the Dialer this worker dials its target through.
+// DialerKey is where a scenario or test stores its own Dialer, to fake or
+// observe the dial.
 var DialerKey = fsmv2config.NewDependencyKey[Dialer]("nmap.dialer")
 
 // Deps is the per-instance value Poll receives.
@@ -81,8 +82,7 @@ type Deps struct {
 }
 
 // newDeps builds the Deps Poll dials through: the Dialer stored under DialerKey
-// in m, or a net.Dialer with the key absent. A scenario or test injects its
-// own Dialer under the key to observe or fake the dial.
+// in m, or a net.Dialer with the key absent.
 func newDeps(_ deps.Identity, bd *deps.BaseDependencies, m map[string]any) Deps {
 	var dialer Dialer = &net.Dialer{}
 
