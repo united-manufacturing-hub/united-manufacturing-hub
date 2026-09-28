@@ -45,7 +45,7 @@ var CascadeScenarioV2 = ScenarioV2{
 		childConfig := "should_fail: true\n" +
 			"max_failures: 3\n" +
 			"failure_cycles: 2\n" +
-			"recovery_delay_observations: 3\n"
+			"recovery_delay_observations: 12\n"
 
 		env.Step("create the parent with two failing children")
 
@@ -58,10 +58,11 @@ var CascadeScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert parent: %w", err)
 		}
 
-		// Degraded can only follow Running, so this wait also covers the
-		// parent's start. The parent stays in TryingToStart until the
-		// children finish their first failure cycle.
-		if err := env.WaitFor(ctx, "the parent reaches Degraded",
+		// The parent stays Degraded for only one observation period, so the
+		// wait reads the transition counter, which survives every later
+		// observation, instead of the state itself. Degraded can only
+		// follow Running, so this wait also covers the parent's start.
+		if err := env.WaitFor(ctx, "the parent has been Degraded once",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
 				if err != nil {
@@ -72,7 +73,9 @@ var CascadeScenarioV2 = ScenarioV2{
 					return false, "", err
 				}
 
-				return obs.State == "Degraded", "state=" + obs.State, nil
+				degradedCount := obs.Metrics.Framework.TransitionsByState["Degraded"]
+
+				return degradedCount >= 1, fmt.Sprintf("state=%s degraded_transitions=%d", obs.State, degradedCount), nil
 			}); err != nil {
 			return err
 		}
@@ -92,9 +95,10 @@ var CascadeScenarioV2 = ScenarioV2{
 		for _, name := range []string{"child-0", "child-1"} {
 			childRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: name}
 
-			// Cycle 2 is reached only after the child failed again in
-			// cycle 1, and it is the state the child stays in.
-			if err := env.WaitFor(ctx, "the child "+name+" settles in Connected after its second failure round",
+			// Cycle 2 is reached only through the second failure round,
+			// and CurrentCycle keeps that value until the parent's next
+			// cycle respawns the children, which outlasts this wait.
+			if err := env.WaitFor(ctx, "the child "+name+" reaches its second failure round",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, childRef)
 					if err != nil {
@@ -105,8 +109,7 @@ var CascadeScenarioV2 = ScenarioV2{
 						return false, "", err
 					}
 
-					done := obs.State == "Connected" &&
-						obs.Status.CurrentCycle == 2
+					done := obs.Status.CurrentCycle == 2
 
 					return done, fmt.Sprintf("state=%s cycle=%d attempts=%d", obs.State, obs.Status.CurrentCycle, obs.Status.ConnectAttempts), nil
 				}); err != nil {
