@@ -67,6 +67,26 @@ func TestShutdownExitCode(t *testing.T) {
 	}
 }
 
+// TestFatalMessage checks fatalMessage for a scenario that failed after it
+// started and for one that could not start.
+func TestFatalMessage(t *testing.T) {
+	failedRun := fmt.Errorf("scenario %q %w: %w", "probe", examples.ErrScenarioFailed, errors.New("the mood file is corrupt"))
+	if got := fatalMessage(failedRun); got != "Scenario failed" {
+		t.Errorf("fatalMessage(%v) = %q, want %q", failedRun, got, "Scenario failed")
+	}
+
+	_, notStarted := examples.Run(context.Background(), examples.RunConfig{
+		ScenarioV2: examples.ScenarioV2{Name: "probe"},
+	})
+	if notStarted == nil {
+		t.Fatal("examples.Run must reject a v2 scenario whose Run is nil")
+	}
+
+	if got := fatalMessage(notStarted); got != "Failed to start scenario" {
+		t.Errorf("fatalMessage(%v) = %q, want %q", notStarted, got, "Failed to start scenario")
+	}
+}
+
 // TestRunnerCLIRouting locks the three routing seams the runner must expose so
 // that duration routing and signal/exit routing are decidable without os.Exit
 // or real OS signals:

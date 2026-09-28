@@ -82,6 +82,11 @@ type RunResult struct {
 	Err error
 }
 
+// ErrScenarioFailed marks an error from Run for a v2 scenario that started and
+// then failed. An error that kept the scenario from starting does not wrap it.
+// Its text is the word "failed" in `scenario "<name>" failed: ...`.
+var ErrScenarioFailed = errors.New("failed")
+
 // Run executes a scenario with the given configuration.
 //
 // For a v1 Scenario, creates an ApplicationSupervisor with the scenario's
@@ -360,13 +365,13 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 	client := fsmv2client.NewFSMv2Client(writer, cfg.Store)
 	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: runLogger, Dependencies: scenarioDeps, recorder: recorder}); err != nil {
-		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, err)
+		return nil, fmt.Errorf("scenario %q %w: %w", cfg.ScenarioV2.Name, ErrScenarioFailed, err)
 	}
 
 	// Checked again after Run returned, so a scenario that swallows the wait
 	// failure cannot hide the error. A later error sets RunResult.Err instead.
 	if logged := recorder.loggedError(); logged != nil {
-		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, logged)
+		return nil, fmt.Errorf("scenario %q %w: %w", cfg.ScenarioV2.Name, ErrScenarioFailed, logged)
 	}
 
 	teardownOwnedByGoroutine = true

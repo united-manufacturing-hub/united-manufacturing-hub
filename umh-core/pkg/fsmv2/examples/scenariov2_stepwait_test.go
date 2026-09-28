@@ -183,6 +183,8 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 			"the error must carry the poll's own error")
 		Expect(errors.Is(err, pollErr)).To(BeTrue(),
 			"the poll's error must stay findable through the wrapping")
+		Expect(errors.Is(err, examples.ErrScenarioFailed)).To(BeTrue(),
+			"a Run that returned an error must wrap ErrScenarioFailed, so the CLI reports a failed scenario and not a failed start")
 		Expect(result).To(BeNil())
 	})
 
