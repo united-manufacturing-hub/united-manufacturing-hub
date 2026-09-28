@@ -37,6 +37,11 @@ var validWorkerStates = map[string]map[string]bool{
 		"Running": true, "Stopped": true,
 		"unknown": true,
 	},
+	"examplefailing": {
+		"TryingToConnect": true, "Connected": true, "Disconnected": true,
+		"TriggeringNextCycle": true, "TryingToStop": true, "Stopped": true,
+		"unknown": true,
+	},
 	"exampleslow": {
 		"TryingToConnect": true, "Connected": true, "Disconnected": true,
 		"TryingToStop": true, "Stopped": true,
