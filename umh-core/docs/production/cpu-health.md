@@ -92,8 +92,9 @@ stat -fc %T /sys/fs/cgroup
 `cgroup2fs` means only PSI is missing: set `psi=1`. `tmpfs` means the machine runs cgroup v1, where
 `cpu.pressure` does not exist at all.
 
-Without cgroup v2, UMH still reports machine headroom and steal, which it reads from `/proc/stat`. It
-loses CPU pressure, throttling and the container's own CPU limit.
+On cgroup v1, UMH reads the container's usage, throttling and CPU limit from the v1 controller files,
+and machine headroom and steal from `/proc/stat`. It loses only CPU pressure, because cgroup v1 has no
+per-container pressure file.
 
 ### Set the kernel parameters
 
@@ -118,8 +119,8 @@ minute and look again.
 
 If the file is still missing, run `cat /proc/pressure/cpu` on the host. Output means PSI is on and
 cgroup v2 is what is missing. `No such file or directory` means the kernel ignored `psi=1`, which
-happens on a kernel built without PSI. Setting a CPU limit on the container is the other route to
-full monitoring, and it needs no kernel change.
+happens on a kernel built without PSI. Setting a CPU limit on the container needs no kernel change:
+UMH then judges the container against its limit, and pressure stays unavailable.
 
 ## When UMH refuses a new bridge
 
