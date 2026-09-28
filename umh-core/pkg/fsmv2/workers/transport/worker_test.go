@@ -63,13 +63,13 @@ var _ = Describe("TransportWorker", func() {
 		Context("dependency validation", func() {
 			It("should create a worker with valid dependencies", func() {
 				var err error
-				worker, err = transport.NewTransportWorker(identity, logger, nil)
+				worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(worker).NotTo(BeNil())
 			})
 
 			It("should reject nil logger", func() {
-				_, err := transport.NewTransportWorker(identity, nil, nil)
+				_, err := transport.NewTransportWorker(identity, nil, nil, nil)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("logger"))
 			})
@@ -79,7 +79,7 @@ var _ = Describe("TransportWorker", func() {
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -140,7 +140,7 @@ var _ = Describe("TransportWorker", func() {
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -357,7 +357,7 @@ authToken: "test-token"`,
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -384,7 +384,7 @@ authToken: "test-token"`,
 	Describe("Pointer receivers", func() {
 		It("should use pointer receiver for all Worker methods", func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -404,12 +404,15 @@ authToken: "test-token"`,
 
 // recordingChannelProvider implements transport.ChannelProvider and records the
 // worker IDs its methods are called with, so a test can tell which of two
-// providers the worker actually used.
+// providers the worker actually used. It keeps the channels GetChannels
+// returned, so a test can also check the worker was wired to them.
 type recordingChannelProvider struct {
 	getChannelsIDs     []string
 	getInboundStatsIDs []string
 	inboundCapacity    int
 	inboundLength      int
+	inbound            chan<- *types.UMHMessage
+	outbound           <-chan *types.UMHMessage
 }
 
 func newRecordingChannelProvider(capacity int, length int) *recordingChannelProvider {
@@ -424,10 +427,10 @@ func (p *recordingChannelProvider) GetChannels(workerID string) (
 	outbound <-chan *types.UMHMessage,
 ) {
 	p.getChannelsIDs = append(p.getChannelsIDs, workerID)
-	inbound = make(chan *types.UMHMessage, 1)
-	outbound = make(chan *types.UMHMessage, 1)
+	p.inbound = make(chan *types.UMHMessage, 1)
+	p.outbound = make(chan *types.UMHMessage, 1)
 
-	return inbound, outbound
+	return p.inbound, p.outbound
 }
 
 func (p *recordingChannelProvider) GetInboundStats(workerID string) (capacity int, length int) {
@@ -462,6 +465,8 @@ var _ = Describe("TransportWorker channel provider dependency", func() {
 
 		Expect(mapProvider.getChannelsIDs).To(ContainElement("map-provider-worker"))
 		Expect(globalProvider.getChannelsIDs).To(BeEmpty())
+		Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(mapProvider.inbound))
+		Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(mapProvider.outbound))
 
 		capacity, length := workerDeps.GetInboundChanStats()
 		Expect(capacity).To(Equal(7))
@@ -469,7 +474,7 @@ var _ = Describe("TransportWorker channel provider dependency", func() {
 		Expect(mapProvider.getInboundStatsIDs).To(ContainElement("map-provider-worker"))
 		Expect(globalProvider.getInboundStatsIDs).To(BeEmpty())
 
-		Expect(transport.GetChannelProvider()).To(Equal(globalProvider))
+		Expect(transport.GetChannelProvider()).To(BeIdenticalTo(globalProvider))
 	})
 
 	It("falls back to the global provider when the dependency map holds none", func() {
