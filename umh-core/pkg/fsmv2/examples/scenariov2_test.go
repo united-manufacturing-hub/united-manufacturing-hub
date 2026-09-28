@@ -78,14 +78,10 @@ func logContainsEvent(logOutput, msg string) bool {
 	return false
 }
 
-// scenarioDepsKey names the value the dependency-delivery spec stores in the
-// map ScenarioV2.Dependencies returns and the probe worker reads back out of
-// the map its constructor receives.
+// scenarioDepsKey is the key the dependency-delivery spec sets and the probe worker reads.
 var scenarioDepsKey = config.NewDependencyKey[string]("examples.test.scenario_deps")
 
-// scenarioDepsProbeType names the monitor worker the dependency-delivery spec
-// upserts. simple.Register wires its factory, supervisor and CSE type, so the
-// spec drives a real worker rather than a mock.
+// scenarioDepsProbeType is the worker type the dependency-delivery spec upserts.
 const scenarioDepsProbeType = "scenariov2-deps-probe"
 
 type scenarioDepsProbeConfig struct{}
@@ -98,9 +94,7 @@ type scenarioDepsProbeStatus struct {
 	ReceivedLabel string `json:"receivedLabel"`
 }
 
-// scenarioDepsProbeRecord is what the probe worker published from its
-// constructor: the label it found under scenarioDepsKey, and whether the key
-// was there at all.
+// scenarioDepsProbeRecord is what the probe's constructor found under scenarioDepsKey.
 type scenarioDepsProbeRecord struct {
 	label   string
 	present bool
@@ -111,10 +105,8 @@ type scenarioDepsProbeRecord struct {
 // goroutine.
 var scenarioDepsProbeSeen atomic.Pointer[scenarioDepsProbeRecord]
 
-// scenarioEnvMock is the mutable mock the Env.Dependencies spec builds in
-// Dependencies and Run reaches through env.Dependencies. It is a pointer,
-// so the change Run makes through the map is the change the spec's own
-// variable sees.
+// scenarioEnvMock is the mock the Env.Dependencies spec stores in the map by
+// pointer, so the spec sees the change Run makes.
 type scenarioEnvMock struct {
 	touched bool
 }
@@ -122,12 +114,9 @@ type scenarioEnvMock struct {
 // scenarioEnvMockKey names the mock in the map Dependencies returns.
 var scenarioEnvMockKey = config.NewDependencyKey[*scenarioEnvMock]("examples.test.env_deps_mock")
 
-// The probe registers once for the test binary, not per spec: its constructor
-// publishes the label it was handed, so the spec can ask whether the map
-// ScenarioV2.Dependencies returned survived the trip into a worker the Run
-// created. register.Worker panics on a duplicate worker type, so a re-run of
-// the suite in one process (go test -count=2) must not reach simple.Register
-// a second time.
+// The probe registers in init, once per test binary. register.Worker panics
+// on a duplicate worker type, so registering per spec would panic on the
+// second run under go test -count=2.
 func init() {
 	simple.Register(simple.MonitorSpec[scenarioDepsProbeConfig, scenarioDepsProbeStatus, scenarioDepsProbeDeps]{
 		WorkerType: scenarioDepsProbeType,
@@ -652,8 +641,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 	})
 
 	It("hands a worker created with env.Client.Upsert the value Dependencies returned", func() {
-		// A record from an earlier run of this spec in the same process would
-		// otherwise satisfy the settle gate below.
+		// Reset the record, so one from an earlier run of this spec cannot satisfy the wait below.
 		scenarioDepsProbeSeen.Store(nil)
 
 		logger := deps.NewNopFSMLogger()
@@ -685,9 +673,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Settle gate: wait until the upserted child's constructor ran before
-		// tearing down, so the verdict below is about delivery, not about a
-		// race between Upsert and teardown.
+		// Wait for the probe's constructor before cancelling, so teardown cannot race the Upsert.
 		Eventually(func() *scenarioDepsProbeRecord {
 			return scenarioDepsProbeSeen.Load()
 		}, "30s").ShouldNot(BeNil(),
@@ -706,9 +692,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// returnedDeps is the exact map the Dependencies closure below hands
-		// the runner. runV2 calls Dependencies and Run on the same goroutine
-		// as examples.Run, so the spec reads it without synchronization.
+		// The runner calls Dependencies and Run on the caller's goroutine, so the
+		// spec reads mock.touched without synchronization.
 		returnedDeps := map[string]any{}
 		mock := &scenarioEnvMock{}
 
@@ -750,8 +735,6 @@ var _ = Describe("ScenarioV2 framework", func() {
 		cancel()
 		Eventually(result.Done, "55s").Should(BeClosed())
 
-		// Reach: Run must have found the mock under the key in
-		// env.Dependencies and changed it through that handle.
 		Expect(mock.touched).To(BeTrue(),
 			"Run must reach the mock Dependencies built through env.Dependencies")
 	})
@@ -760,8 +743,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// Run runs on the caller's goroutine (as the spec above notes), so
-		// the spec reads recordedDeps without synchronization.
+		// Run runs on the caller's goroutine, so the spec reads recordedDeps
+		// without synchronization.
 		var recordedDeps map[string]any
 
 		envNone := examples.ScenarioV2{

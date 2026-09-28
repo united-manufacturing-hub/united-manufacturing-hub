@@ -30,8 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
 
-// This spec pins the error half of ScenarioV2.Dependencies: a failed build
-// must stop the run before anything is published or started.
 var _ = Describe("ScenarioV2 Dependencies failure", func() {
 	It("fails the run before the supervisor starts when Dependencies returns an error, naming the scenario", func() {
 		logger := deps.NewNopFSMLogger()
@@ -48,8 +46,8 @@ var _ = Describe("ScenarioV2 Dependencies failure", func() {
 			Run: func(_ context.Context, _ examples.Env) error {
 				runRan = true
 
-				// An error makes the buggy path tear down immediately, so a
-				// red run of this spec leaks no supervisor into later specs.
+				// Returning an error makes the runner tear down at once. If a
+				// regression reaches Run, no supervisor outlives this spec.
 				return errors.New("Run must not be reached when Dependencies failed")
 			},
 		}
@@ -77,9 +75,6 @@ var _ = Describe("ScenarioV2 Dependencies failure", func() {
 	})
 })
 
-// These specs pin the cleanup half of ScenarioV2.Dependencies: whatever the
-// closure allocated, the runner must release it exactly once, after the
-// supervisor has stopped, on every exit a Run can take.
 var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 	It("calls the cleanup exactly once after the supervisor stopped following a normal run", func() {
 		logger := deps.NewNopFSMLogger()
@@ -111,9 +106,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Run has returned, but the supervisor keeps running for Duration. A
-		// cleanup that already ran here would mean the runner released the
-		// scenario's resources while the run was still in flight.
+		// Run has returned, but the supervisor keeps running for Duration.
 		Expect(cleanupCalls.Load()).To(Equal(int32(0)),
 			"the cleanup must not run while the run's Duration is still elapsing")
 
