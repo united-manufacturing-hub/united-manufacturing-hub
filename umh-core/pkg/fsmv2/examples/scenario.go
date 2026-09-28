@@ -66,10 +66,6 @@ import (
 //	    return RunScenarioThatUsesApplicationSupervisor(ctx, cfg)
 //	}
 //
-// Example: CommunicatorScenarioEntry uses this pattern - it wraps
-// RunCommunicatorScenario which creates a mock server but still runs
-// the communicator worker via ApplicationSupervisor.
-//
 // ## Pattern 2: Full Custom Execution (USE SPARINGLY)
 //
 // CustomRunner implements its own execution loop without ApplicationSupervisor.
