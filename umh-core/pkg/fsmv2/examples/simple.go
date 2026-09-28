@@ -14,8 +14,8 @@
 
 package examples
 
-// This file defines the SimpleScenario, which serves as both a working example
-// and documentation for creating FSM v2 test scenarios.
+// This file defines SimpleScenario, a v1 scenario, and documents the v1
+// scenario format and how to write a custom test worker.
 //
 // # What is a Scenario?
 //
@@ -38,9 +38,8 @@ package examples
 //
 // ## 2. Scenario Registry (scenario.go)
 //
-// All scenarios are registered in the Registry map, making them available to
-// both tests and CLI. The v1 format is kept only for scenarios not yet moved;
-// new scenarios are v2, see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
+// v1 scenarios are registered in the Registry map, making them available to
+// both tests and CLI.
 //
 // ## 3. Test Usage
 //
@@ -174,8 +173,7 @@ package examples
 //
 // ## 5. Use in Scenario
 //
-// To use the worker in a scenario, see pkg/fsmv2/CLAUDE.md, "Writing a
-// scenario"; HelloworldScenarioV2 in helloworld.go is the example.
+// See pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 //
 // # Store Injection for Assertions
 //
