@@ -325,9 +325,6 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 }
 
 // ensureNonNilDeps returns deps if non-nil, or an initialized empty map.
-// The map is never nil, so code that reads it needs no nil check. This is
-// consistent with how other maps in the supervisor (children, pendingRemoval,
-// etc.) are always initialized.
 func ensureNonNilDeps(deps map[string]any) map[string]any {
 	if deps == nil {
 		return make(map[string]any)

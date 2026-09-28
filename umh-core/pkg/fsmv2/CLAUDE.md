@@ -282,10 +282,9 @@ or nil worker at instantiation time panics with a contextualised message.
 
 The fourth parameter is the dependency map this worker instance was created with.
 A child gets its parent's map merged with the map in its own spec. A top-level
-worker gets the supervisor's map when the supervisor restarts it. The workers
-above take nothing from it, so they name it `_`. A worker that needs a value
-reads it out with `config.LookupDependency` and a typed key, and falls back to
-its real implementation when the key is absent.
+worker gets the supervisor's map when the supervisor restarts it.
+`register.Worker`'s doc says how to read the map and why a constructor must not
+write to it.
 
 The folder name must match the worker type (e.g., `transport/` for type
 `"transport"`).
