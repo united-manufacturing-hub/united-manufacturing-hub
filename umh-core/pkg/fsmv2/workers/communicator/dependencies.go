@@ -32,10 +32,10 @@ type CommunicatorDependencies struct {
 }
 
 // NewCommunicatorDependencies creates dependencies for the communicator worker,
-// acquiring channels from the global channel provider.
-// The worker must have a provider before it is built: set the global with
-// SetChannelProvider, or store one under ChannelProviderKey in the worker's
-// dependency map; otherwise this (or the map path) panics.
+// acquiring channels from the global channel provider set with SetChannelProvider.
+// Panics when that global is unset. Callers supplying their own provider, such as
+// the worker factory when the dependency map holds one under ChannelProviderKey,
+// use newCommunicatorDependenciesWithProvider instead.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies) *CommunicatorDependencies {
 	return newCommunicatorDependenciesWithProvider(t, bd, GetChannelProvider())
