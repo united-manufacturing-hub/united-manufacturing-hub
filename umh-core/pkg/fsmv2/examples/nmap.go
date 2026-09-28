@@ -35,7 +35,6 @@ type mockDialer struct {
 	open atomic.Bool
 }
 
-// DialContext answers as the port's current state says it would.
 func (m *mockDialer) DialContext(_ context.Context, _, _ string) (net.Conn, error) {
 	if !m.open.Load() {
 		return nil, errors.New("connection refused")
@@ -71,8 +70,6 @@ var NmapScenarioV2 = ScenarioV2{
 	},
 
 	Run: func(ctx context.Context, env Env) error {
-		// Assert the Dialer back to *mockDialer, so Run can close the port the
-		// worker dials.
 		d, ok := config.LookupDependency(env.Dependencies, fsmv2nmap.DialerKey)
 		if !ok {
 			return errors.New("the nmap scenario's dependency map holds no dialer under fsmv2nmap.DialerKey")
@@ -109,8 +106,8 @@ var NmapScenarioV2 = ScenarioV2{
 						return false, "", err
 					}
 
-					// Target pins the check to this Upsert's status: an
-					// observation from before it cannot pass.
+					// mockDialer answers every address, so only Target shows
+					// this poll dialed the Upserted config.
 					done := obs.Status.Result.Target == "10.0.0.1" &&
 						obs.Status.Result.PortState == want
 
