@@ -70,12 +70,13 @@ func resolveLayout(ctx context.Context, fs filesystem.Service, base string) (cgr
 		return layoutV2, v1Locations{}
 	}
 
+	// A kernel built without CONFIG_CFS_BANDWIDTH writes no v1 cpu.stat, and
+	// still writes cpuacct.usage.
 	cpuDir, hasCPUStat := firstDirHolding(ctx, fs, base, v1CPUDirs, "cpu.stat")
-	if !hasCPUStat {
+	cpuacctDir, hasCPUAcctUsage := firstDirHolding(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
+	if !hasCPUStat && !hasCPUAcctUsage {
 		return layoutNone, v1Locations{}
 	}
-
-	cpuacctDir, _ := firstDirHolding(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
 
 	return layoutV1, v1Locations{
 		cpuDir:     cpuDir,

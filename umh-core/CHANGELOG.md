@@ -5,7 +5,7 @@
 ### Fixes
 
 - Log messages for stopped flows in bridges are now more consistent
-- CPU usage, limit and throttling now read on hosts using the older cgroup v1 hierarchy, such as RHEL 8 and CentOS 7, where the CPU panel previously showed N/A. Pressure stays unavailable there, since that kernel publishes no per-container pressure figure
+- CPU usage, limit and throttling now read on hosts using the older cgroup v1 hierarchy, such as RHEL 8, where the CPU panel previously showed N/A. Pressure stays unavailable there, since that kernel publishes no per-container pressure figure
 
 ## [0.44.41]
 

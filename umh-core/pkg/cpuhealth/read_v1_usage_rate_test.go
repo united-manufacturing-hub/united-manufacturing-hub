@@ -60,6 +60,15 @@ var _ = Describe("usage as a rate on cgroup v1", func() {
 			"one second of CPU time over the elapsed interval is the rate in cores")
 	})
 
+	It("reads usage on a v1 host whose kernel writes no cpu.stat", func() {
+		smp, err := v1Sampler(v1Files{usagePath: "5000000000\n"}).Read(context.Background())
+
+		Expect(err).NotTo(HaveOccurred())
+		usage, ok := smp.UsageUsec.Get()
+		Expect(ok).To(BeTrue())
+		Expect(usage).To(Equal(5_000_000.0))
+	})
+
 	It("leaves usage absent when cpuacct.usage cannot be read", func() {
 		smp, err := v1Sampler(v1Files{statPath: "nr_periods 10\nnr_throttled 0\n"}).Read(context.Background())
 
