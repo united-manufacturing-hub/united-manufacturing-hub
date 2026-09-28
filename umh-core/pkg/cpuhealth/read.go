@@ -53,6 +53,8 @@ const (
 // NewLinuxSampler returns a Sampler reading via fs from base.
 func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 	return &linuxSampler{
+		fs:     fs,
+		base:   base,
 		cgroup: newCgroupSource(fs, base),
 		host:   newHostSource(fs),
 	}
@@ -64,8 +66,16 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 // exists only to stamp the tick's single Timestamp and derive CPU scope, the
 // one fact that needs both sources' reads to compute.
 type linuxSampler struct {
-	cgroup *cgroupSource
+	fs   filesystem.Service
+	base string
+
+	cgroup cgroupReader
 	host   *hostSource
+
+	// psiAvailable is sticky: set true on the first successful cpu.pressure
+	// read and never cleared, even when a later read fails. It belongs to the
+	// machine rather than to a reader, which is why it is held here.
+	psiAvailable bool
 }
 
 // Read samples the cgroup and the machine once.
@@ -76,7 +86,7 @@ type linuxSampler struct {
 // produced, so diagnose a failed read from there, not from the error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var sample Sample
-	sample.Troubleshooting.CgroupBase = s.cgroup.base
+	sample.Troubleshooting.CgroupBase = s.base
 	sample.Troubleshooting.Reads = seedReads()
 
 	// First because a cpu.stat failure returns before every read below it, and
@@ -96,11 +106,11 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	if psiErr != nil {
 		sample.Pressure = diagnosis.Unknown()
 	} else {
-		s.cgroup.psiAvailable = true
+		s.psiAvailable = true
 		sample.Pressure = diagnosis.Known(fraction)
 	}
 	sample.record(OperationCPUPressure, classifyRead(psiErr), psiErr)
-	sample.PsiAvailable = s.cgroup.psiAvailable
+	sample.PsiAvailable = s.psiAvailable
 
 	stat, statErr := s.cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
@@ -118,7 +128,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// ("usage_usec abc"), which no kernel writes. A cgroup v1 cpu.stat does
 		// not land here: its counters are numeric and usage_usec is simply
 		// absent, which reads empty and carries on.
-		return sample, fmt.Errorf("parse %s/cpu.stat: %w", s.cgroup.base, statErr)
+		return sample, fmt.Errorf("parse %s/cpu.stat: %w", s.base, statErr)
 	}
 	// Check whether the reading was cancelled, and if so return the cancellation
 	// error. A cancelled read fails every file, which looks the same as a host
@@ -209,7 +219,7 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machi
 // verbatim, and the base directory kept as an entry count. They describe the
 // machine on a failure report, and nothing here judges them.
 func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
-	controllers, controllersOutcome, controllersErr := s.cgroup.readControllers(ctx)
+	controllers, controllersOutcome, controllersErr := readControllers(ctx, s.fs, s.base)
 	sample.Troubleshooting.CgroupControllersRaw = controllers
 	sample.record(OperationCgroupControllers, controllersOutcome, controllersErr)
 
@@ -217,7 +227,7 @@ func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
 	sample.Troubleshooting.ProcSelfCgroupRaw = procSelf
 	sample.record(OperationProcSelfCgroup, procSelfOutcome, procSelfErr)
 
-	baseEntries, baseDirOutcome, baseDirErr := s.cgroup.readBaseDirEntryCount(ctx)
+	baseEntries, baseDirOutcome, baseDirErr := readBaseDirEntryCount(ctx, s.fs, s.base)
 	sample.Troubleshooting.CgroupBaseDirEntryCount = baseEntries
 	sample.record(OperationCgroupBaseDir, baseDirOutcome, baseDirErr)
 }

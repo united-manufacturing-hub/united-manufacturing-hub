@@ -114,21 +114,21 @@ var _ = Describe("a failed read reports its cause", func() {
 			// means the parent delegated no controllers, which is the broken mount
 			// this read exists to show; reporting ok would hide it behind the raw
 			// string.
-			text, outcome, _ := newCgroupSource(oneFile(ctrlPath, []byte(""), nil), base).readControllers(ctx)
+			text, outcome, _ := readControllers(ctx, oneFile(ctrlPath, []byte(""), nil), base)
 
 			Expect(outcome).To(Equal(ReadEmpty))
 			Expect(text).To(BeEmpty())
 		})
 
 		It("keeps ok for a file that holds something", func() {
-			text, outcome, _ := newCgroupSource(oneFile(ctrlPath, []byte("cpu memory\n"), nil), base).readControllers(ctx)
+			text, outcome, _ := readControllers(ctx, oneFile(ctrlPath, []byte("cpu memory\n"), nil), base)
 
 			Expect(outcome).To(Equal(ReadOK))
 			Expect(text).To(Equal("cpu memory\n"))
 		})
 
 		It("still names the cause when the file cannot be read", func() {
-			_, outcome, _ := newCgroupSource(oneFile(ctrlPath, nil, pathErr(ctrlPath, syscall.EACCES)), base).readControllers(ctx)
+			_, outcome, _ := readControllers(ctx, oneFile(ctrlPath, nil, pathErr(ctrlPath, syscall.EACCES)), base)
 
 			Expect(outcome).To(Equal(ReadPermissionDenied))
 		})

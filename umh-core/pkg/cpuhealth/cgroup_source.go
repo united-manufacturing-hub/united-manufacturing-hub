@@ -38,10 +38,6 @@ type cgroupSource struct {
 	base string
 
 	usageBase usageBaseline
-
-	// psiAvailable is sticky: set true on the first successful cpu.pressure
-	// read and never cleared, even when a later read fails.
-	psiAvailable bool
 }
 
 // newCgroupSource returns a cgroupSource reading via fs from base.
@@ -272,17 +268,17 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 }
 
 // readControllers returns cgroup.controllers verbatim: the controllers the
-// parent delegated to this cgroup. Any outcome other than ReadOK means no text
-// was read, and names the cause.
-func (c *cgroupSource) readControllers(ctx context.Context) (string, ReadOutcome, error) {
-	return readRawFile(ctx, c.fs, PathOf(c.base, OperationCgroupControllers))
+// parent delegated to the cgroup at base. Any outcome other than ReadOK means
+// no text was read, and names the cause.
+func readControllers(ctx context.Context, fs filesystem.Service, base string) (string, ReadOutcome, error) {
+	return readRawFile(ctx, fs, PathOf(base, OperationCgroupControllers))
 }
 
 // readBaseDirEntryCount keeps only the entry count. A mounted cgroup v2 tree
 // holds dozens of files, so a directory holding two or three says the mount is
 // not the one we expect. An unlistable directory yields -1, never 0.
-func (c *cgroupSource) readBaseDirEntryCount(ctx context.Context) (int, ReadOutcome, error) {
-	entries, err := c.fs.ReadDir(ctx, PathOf(c.base, OperationCgroupBaseDir))
+func readBaseDirEntryCount(ctx context.Context, fs filesystem.Service, base string) (int, ReadOutcome, error) {
+	entries, err := fs.ReadDir(ctx, PathOf(base, OperationCgroupBaseDir))
 	if err != nil {
 		return -1, classifyRead(err), err
 	}
