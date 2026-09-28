@@ -173,7 +173,6 @@ var Registry = map[string]Scenario{
 	"simple":       SimpleScenario,
 	"failing":      FailingScenario,
 	"panic":        PanicScenario,
-	"slow":         SlowScenario,
 	"cascade":      CascadeScenario,
 	"timeout":      TimeoutScenario,
 	"configerror":  ConfigErrorScenario,
