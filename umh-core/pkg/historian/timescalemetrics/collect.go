@@ -40,7 +40,7 @@ var errTimescaleMissing = errors.New("timescaledb extension is not installed")
 // Tables this product did not create are dropped before the per-table reads, so
 // a customer's own table is never queried. pg_database_size runs last and its
 // failure is tolerated, because it stats every file backing the database: when
-// it is slow, only DatabaseBytes is lost.
+// it is slow, only DatabaseOccupiedDiskBytes is lost.
 func Collect(ctx context.Context, db Database) (Metrics, error) {
 	var metrics Metrics
 
@@ -81,12 +81,12 @@ func Collect(ctx context.Context, db Database) (Metrics, error) {
 	return metrics, nil
 }
 
-// readDatabaseSize leaves DatabaseBytes at zero when the read fails. Every other
+// readDatabaseSize leaves DatabaseOccupiedDiskBytes at zero when the read fails. Every other
 // figure is already collected by the time it runs, and the caller discards the
 // whole Metrics on an error, so reporting this one would cost all of them.
 func readDatabaseSize(ctx context.Context, db Database, metrics *Metrics) {
-	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {
-		metrics.DatabaseBytes = 0
+	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseOccupiedDiskBytes); err != nil {
+		metrics.DatabaseOccupiedDiskBytes = 0
 	}
 }
 

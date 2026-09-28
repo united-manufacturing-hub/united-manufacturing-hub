@@ -166,7 +166,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(metrics.PostgresVersion).To(HavePrefix("17."))
 		Expect(metrics.TimescaleVersion).To(Equal("2.24.0"))
-		Expect(metrics.DatabaseBytes).To(BeNumerically(">", 0))
+		Expect(metrics.DatabaseOccupiedDiskBytes).To(BeNumerically(">", 0))
 	})
 
 	It("counts no failed jobs when every umh job is succeeding", func() {
