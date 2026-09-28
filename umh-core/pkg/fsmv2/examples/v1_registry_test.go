@@ -26,7 +26,7 @@ import (
 
 // Remove a name here when its scenario moves to RegistryV2 (ENG-5114).
 var frozenV1ScenarioNames = []string{
-	"simple", "panic", "cascade",
+	"simple", "cascade",
 	"configerror", "inheritance", "communicator", "concurrent", "persistence",
 }
 

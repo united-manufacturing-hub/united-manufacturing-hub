@@ -306,5 +306,6 @@ var RegistryV2 = map[string]ScenarioV2{
 	"failing":    FailingScenarioV2,
 	"slow":       SlowScenarioV2,
 	"timeout":    TimeoutScenarioV2,
+	"panic":      PanicScenarioV2,
 	"dynamic":    DynamicScenarioV2,
 }
