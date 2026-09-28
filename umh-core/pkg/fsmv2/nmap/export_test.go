@@ -14,6 +14,5 @@
 
 package fsmv2nmap
 
-// NewDepsForTest exposes newDeps to the external test package, which cannot
-// reach the unexported original.
+// NewDepsForTest exposes newDeps to package fsmv2nmap_test.
 var NewDepsForTest = newDeps
