@@ -27,7 +27,7 @@ import (
 // Remove a name here when its scenario moves to RegistryV2 (ENG-5114).
 var frozenV1ScenarioNames = []string{
 	"simple", "cascade",
-	"configerror", "inheritance", "communicator", "concurrent", "persistence",
+	"configerror", "inheritance", "communicator", "persistence",
 }
 
 var _ = Describe("the v1 scenario registry", func() {

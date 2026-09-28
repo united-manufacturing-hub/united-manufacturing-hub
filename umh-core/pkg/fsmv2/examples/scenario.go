@@ -175,7 +175,6 @@ var Registry = map[string]Scenario{
 	"configerror":  ConfigErrorScenario,
 	"inheritance":  InheritanceScenario,
 	"communicator": CommunicatorScenarioEntry,
-	"concurrent":   ConcurrentScenario,
 	"persistence":  PersistenceScenarioEntry,
 }
 
