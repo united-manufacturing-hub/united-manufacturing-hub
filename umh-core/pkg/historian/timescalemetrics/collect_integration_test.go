@@ -343,12 +343,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			  FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh'`)
 		Expect(err).NotTo(HaveOccurred())
 
-		//nolint:dupword
 		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
 			(job_id, last_start, last_finish, next_start, last_successful_finish, last_run_success,
 			 total_runs, total_duration, total_duration_failures, total_successes, total_failures,
 			 total_crashes, consecutive_failures, consecutive_crashes, flags)
-			VALUES ($1, now(), now(), now() + interval '1 hour', '-infinity', false,
+			VALUES ($1, now() - interval '1 minute', now(), now() + interval '1 hour', '-infinity', false,
 			 3, interval '0', interval '0', 0, 3, 0, 3, 0, 0)
 			ON CONFLICT (job_id) DO UPDATE SET last_run_success = false, total_failures = 3`, jobID)
 		Expect(err).NotTo(HaveOccurred())
@@ -381,12 +380,11 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			  FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh'`)
 		Expect(err).NotTo(HaveOccurred())
 
-		//nolint:dupword
 		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
 			(job_id, last_start, last_finish, next_start, last_successful_finish, last_run_success,
 			 total_runs, total_duration, total_duration_failures, total_successes, total_failures,
 			 total_crashes, consecutive_failures, consecutive_crashes, flags)
-			VALUES ($1, now(), now(), now() + interval '1 hour', now(), true,
+			VALUES ($1, now() - interval '1 minute', now(), now() + interval '1 hour', now(), true,
 			 4, interval '0', interval '0', 1, 3, 0, 0, 0, 0)
 			ON CONFLICT (job_id) DO UPDATE SET last_run_success = true, total_failures = 3`, jobID)
 		Expect(err).NotTo(HaveOccurred())
