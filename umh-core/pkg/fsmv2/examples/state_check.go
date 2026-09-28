@@ -62,6 +62,10 @@ var validWorkerStates = map[string]map[string]bool{
 		"TryingToStop": true, "Stopped": true,
 		"unknown": true,
 	},
+	"communicator": {
+		"Stopped": true, "Syncing": true, "Recovering": true,
+		"unknown": true,
+	},
 	"helloworld": {
 		"TryingToStart": true, "Running": true,
 		"Degraded": true, "Stopped": true,

@@ -42,7 +42,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // ScenarioRunner executes scenarios that need infrastructure setup beyond
@@ -170,69 +169,8 @@ type Scenario struct {
 // Registry holds the v1 scenarios not yet moved to v2 (ENG-5114). New
 // scenarios go in RegistryV2; see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 var Registry = map[string]Scenario{
-	"inheritance":  InheritanceScenario,
-	"communicator": CommunicatorScenarioEntry,
-	"persistence":  PersistenceScenarioEntry,
-}
-
-// CommunicatorScenarioEntry registers the communicator scenario for CLI access.
-//
-// Uses a CustomRunner that wraps RunCommunicatorScenario:
-//  1. Creates an embedded mock relay server
-//  2. Builds dynamic YAMLConfig with the mock server URL
-//  3. Runs via ApplicationSupervisor
-//
-// # CLI Usage
-//
-//	go run pkg/fsmv2/cmd/runner/main.go --scenario communicator --duration 5s
-//
-// # What Gets Tested
-//
-//   - FSMv2 communicator worker state machine (Stopped -> Authenticating -> Syncing)
-//   - Authentication with relay server via HTTPTransport
-//   - Message pulling (backend -> edge) and pushing (edge -> backend) via TransportWorker
-//   - Metrics collection and observability
-var CommunicatorScenarioEntry = Scenario{
-	Name:        "communicator",
-	Description: "Tests FSMv2 communicator worker with embedded mock server (uses ApplicationSupervisor)",
-	YAMLConfig:  "", // Config built dynamically by RunCommunicatorScenario with mock server URL
-	CustomRunner: func(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-		result := RunCommunicatorScenario(ctx, CommunicatorRunConfig{
-			Duration:     cfg.Duration,
-			TickInterval: cfg.TickInterval,
-			Logger:       cfg.Logger,
-			// Add test messages for metrics visibility in CLI scenario
-			InitialPullMessages: []*types.UMHMessage{
-				{InstanceUUID: "test-instance-uuid", Content: "test-action-1"},
-				{InstanceUUID: "test-instance-uuid", Content: "test-action-2"},
-				{InstanceUUID: "test-instance-uuid", Content: "test-action-3"},
-			},
-			InitialOutboundMessages: []*types.UMHMessage{
-				{InstanceUUID: "test-instance-uuid", Content: "test-status-1"},
-				{InstanceUUID: "test-instance-uuid", Content: "test-status-2"},
-			},
-		})
-
-		if result.Error != nil {
-			return nil, result.Error
-		}
-
-		if cfg.Logger != nil {
-			go func() {
-				<-result.Done
-				cfg.Logger.Info("scenario_complete",
-					deps.Int("auth_calls", result.AuthCallCount),
-					deps.Int("pushed_messages", len(result.PushedMessages)),
-					deps.Int("received_messages", len(result.ReceivedMessages)),
-				)
-			}()
-		}
-
-		return &RunResult{
-			Done:     result.Done,
-			Shutdown: result.Shutdown, // Delegate to RunCommunicatorScenario's Shutdown
-		}, nil
-	},
+	"inheritance": InheritanceScenario,
+	"persistence": PersistenceScenarioEntry,
 }
 
 // PersistenceScenarioEntry registers the persistence scenario for CLI access.
