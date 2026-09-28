@@ -136,6 +136,7 @@ jobs:
           # Monorepo: scope the commit scan to umh-core; ignore helm chart and
           # classic commits.
           args=(sync --json
+            --timeout=180
             "--release-version=${VERSION}"
             "--name=${VERSION}"
             --release-notes-file "$RUNNER_TEMP/notes.md"

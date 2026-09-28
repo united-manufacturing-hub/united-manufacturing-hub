@@ -165,12 +165,34 @@ jobs:
           commit-message: "sync: add umh-core ${{ steps.version.outputs.version }} changelog entry"
           delete-branch: true
 
-      - name: Enable auto-merge
+      - name: Merge changelog PR
         if: github.event.inputs.dry_run != 'true' && steps.create-pr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
         run: |
+          # changelog.umh.app does not allow auto-merge, so merge directly.
+          # Right after the PR is created, GitHub reports mergeStateStatus
+          # UNKNOWN until it has computed mergeability.
+          # Check the state up to 30 times, 2s apart, which takes a minute or more.
+          # A failed lookup or an empty result counts as UNKNOWN and is retried.
+          # If the state is still UNKNOWN after the last check, the step fails
+          # without merging.
+          # Any other state goes to gh pr merge, which fails on its own for
+          # states such as DIRTY or BLOCKED.
+          for _ in $(seq 1 30); do
+            state=$(gh pr view "$PR_NUMBER" \
+              --repo united-manufacturing-hub/changelog.umh.app \
+              --json mergeStateStatus --jq .mergeStateStatus) || state=UNKNOWN
+            state=${state:-UNKNOWN}
+            [ "$state" != "UNKNOWN" ] && break
+            sleep 2
+          done
+          echo "mergeStateStatus: $state"
+          if [ "$state" = "UNKNOWN" ]; then
+            echo "::error::changelog PR #$PR_NUMBER mergeStateStatus still UNKNOWN after 30 checks"
+            exit 1
+          fi
           gh pr merge "$PR_NUMBER" \
             --repo united-manufacturing-hub/changelog.umh.app \
-            --auto --squash
+            --squash
