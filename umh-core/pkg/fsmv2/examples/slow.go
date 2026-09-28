@@ -14,35 +14,96 @@
 
 package examples
 
-// SlowScenario demonstrates long-running action handling and context cancellation.
-//
-// # Flow
-//
-//  1. Worker starts in Stopped state
-//  2. Worker transitions to TryingToConnect (desired state is "running")
-//  3. ConnectAction executes with 2-second delay
-//  4. Action sleeps, checking for context cancellation
-//  5. After delay completes, action succeeds
-//  6. Worker transitions to Connected state
-//
-// # What to Observe
-//
-// In logs: "connect_attempting" with delay_seconds: 2, 2-second pause,
-// "Connect delay completed successfully", state transition to Connected.
-//
-// On shutdown during delay: Action returns ctx.Err() immediately,
-// worker transitions to TryingToStop instead of Connected.
-var SlowScenario = Scenario{
-	Name: "slow",
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
 
-	Description: "Demonstrates long-running action handling and context cancellation",
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
+)
 
-	YAMLConfig: `
-children:
-  - name: "slow-worker-1"
-    workerType: "exampleslow"
-    userSpec:
-      config: |
-        delaySeconds: 2
-`,
+// SlowScenarioV2 runs one slow worker whose connect action sleeps two
+// seconds, next to a control worker whose connect sleeps none. Spawning a
+// worker takes about two seconds by itself, so the gap between the two first
+// Connected readings is the only proof the delay ran.
+var SlowScenarioV2 = ScenarioV2{
+	Name:        "slow",
+	Description: "Demonstrates a long-running action and checks its delay ran",
+
+	Run: func(ctx context.Context, env Env) error {
+		slowRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "slow-worker-1"}
+		controlRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "slow-control"}
+
+		env.Step("create the slow worker and a delay-0 control worker")
+
+		if err := env.Client.Upsert(slowRef, map[string]any{
+			"state":        "running",
+			"delaySeconds": 2,
+		}); err != nil {
+			return fmt.Errorf("upsert slow worker: %w", err)
+		}
+
+		if err := env.Client.Upsert(controlRef, map[string]any{
+			"state":        "running",
+			"delaySeconds": 0,
+		}); err != nil {
+			return fmt.Errorf("upsert control worker: %w", err)
+		}
+
+		// firstConnected waits for one worker to reach Connected and returns
+		// when its poll first saw that state.
+		firstConnected := func(ref dynamicchildren.Ref) (time.Time, error) {
+			var first time.Time
+
+			err := env.WaitFor(ctx, "the worker "+ref.Name+" reaches Connected",
+				func(ctx context.Context) (bool, string, error) {
+					obs, err := fsmv2client.Get[example_slow.ExampleslowStatus](ctx, env.Client, ref)
+					if err != nil {
+						if errors.Is(err, fsmv2client.ErrNotObserved) {
+							return false, "the worker has not published an observation yet", nil
+						}
+
+						return false, "", err
+					}
+
+					if obs.State != "Connected" {
+						return false, "state=" + obs.State, nil
+					}
+
+					if first.IsZero() {
+						first = time.Now()
+					}
+
+					return true, "state=" + obs.State, nil
+				})
+
+			return first, err
+		}
+
+		// The control worker connects first. Waiting for the slow worker
+		// first would push the control's first reading past that wait, and
+		// the gap would measure the wait instead of the delay.
+		controlConnected, err := firstConnected(controlRef)
+		if err != nil {
+			return err
+		}
+
+		slowConnected, err := firstConnected(slowRef)
+		if err != nil {
+			return err
+		}
+
+		// The slow worker's connect sleeps its whole delay before it reports
+		// success, so its first Connected reading trails the control's by at
+		// least that delay. The control was measured connecting 2.08s after
+		// its Upsert, so the check demands a gap and not a total time.
+		if gap := slowConnected.Sub(controlConnected); gap < 1500*time.Millisecond {
+			return fmt.Errorf("the slow worker was first seen Connected %s after the control worker, without running its two-second delay", gap)
+		}
+
+		return nil
+	},
 }
