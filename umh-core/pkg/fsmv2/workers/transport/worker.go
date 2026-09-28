@@ -219,21 +219,21 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
 
-// Children retrieve transport dependencies through register.GlobalDeps keyed on
-// this constant. Defined here so push/pull stay in sync with the publisher.
-const transportDepsKey = "transport"
+// DepsKey is the register.SetGlobalDeps key the transport worker stores its
+// dependencies under. The push and pull children read them with this key.
+const DepsKey = "transport"
 
 func init() {
-	fsmv2.RegisterObservationInterval(transportDepsKey, channelusage.SampleInterval)
+	fsmv2.RegisterObservationInterval(DepsKey, channelusage.SampleInterval)
 
-	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](transportDepsKey,
+	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](DepsKey,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			w, err := NewTransportWorker(id, logger, sr)
 			if err != nil {
 				return nil, err
 			}
 
-			register.SetGlobalDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
+			register.SetGlobalDeps[*TransportDependencies](DepsKey, w.GetDependencies())
 
 			return w, nil
 		})
