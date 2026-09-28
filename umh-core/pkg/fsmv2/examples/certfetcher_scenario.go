@@ -26,10 +26,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	certfetcher "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
@@ -130,122 +127,6 @@ func (m *MockCertHandler) SetSubHandler(_ certificatehandler.SubHandler) {}
 // FetchCallCount returns how many times FetchAllCerts was called.
 func (m *MockCertHandler) FetchCallCount() int {
 	return int(m.fetchCount.Load())
-}
-
-// CertFetcherRunConfig configures a cert fetcher scenario run.
-type CertFetcherRunConfig struct {
-	SubscriberEmails []string      // Emails the mock sub handler returns; nil means no sub handler
-	FetchError       error         // If set, FetchAllCerts returns this error
-	Duration         time.Duration // How long to run the scenario
-	TickInterval     time.Duration // Defaults to 100ms
-	Logger           deps.FSMLogger
-}
-
-// CertFetcherRunResult contains observable results after scenario completion.
-type CertFetcherRunResult struct {
-	Error          error
-	Done           <-chan struct{}
-	Shutdown       func()
-	FetchCallCount int
-}
-
-// RunCertFetcherScenario runs the FSMv2 certfetcher worker via ApplicationSupervisor with a mock cert handler.
-func RunCertFetcherScenario(ctx context.Context, cfg CertFetcherRunConfig) *CertFetcherRunResult {
-	done := make(chan struct{})
-
-	if cfg.Duration < 0 {
-		close(done)
-
-		return &CertFetcherRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("invalid duration %v: must be non-negative", cfg.Duration),
-		}
-	}
-
-	if ctx.Err() != nil {
-		close(done)
-
-		return &CertFetcherRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("context already cancelled: %w", ctx.Err()),
-		}
-	}
-
-	logger := cfg.Logger
-	if logger == nil {
-		logger = deps.NewNopFSMLogger()
-	}
-
-	tickInterval := cfg.TickInterval
-	if tickInterval == 0 {
-		tickInterval = 100 * time.Millisecond
-	}
-
-	mockHandler := NewMockCertHandler(cfg.SubscriberEmails, cfg.FetchError)
-
-	register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
-		certfetcher.NewCertHandlerSeedDependencies(mockHandler))
-
-	store := SetupStore(logger)
-
-	yamlConfig := `
-children:
-  - name: "certfetcher"
-    workerType: "certfetcher"
-`
-
-	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:           "scenario-certfetcher",
-		Name:         "certfetcher",
-		Store:        store,
-		Logger:       logger,
-		TickInterval: tickInterval,
-		YAMLConfig:   yamlConfig,
-	})
-	if err != nil {
-		close(done)
-
-		return &CertFetcherRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("failed to create supervisor: %w", err),
-		}
-	}
-
-	supDone := appSup.Start(ctx)
-
-	result := &CertFetcherRunResult{
-		Done:     done,
-		Shutdown: appSup.Shutdown,
-	}
-
-	go func() {
-		if cfg.Duration > 0 {
-			select {
-			case <-time.After(cfg.Duration):
-				appSup.Shutdown()
-			case <-ctx.Done():
-				appSup.Shutdown()
-			case <-supDone:
-			}
-		} else {
-			select {
-			case <-ctx.Done():
-				appSup.Shutdown()
-			case <-supDone:
-			}
-		}
-
-		<-supDone
-
-		result.FetchCallCount = mockHandler.FetchCallCount()
-
-		close(done)
-	}()
-
-	return result
 }
 
 // errCertFetchSimulated is the fetch error the degraded scenario's handler
