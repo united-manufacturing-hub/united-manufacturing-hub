@@ -28,11 +28,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
 
-// recordingCertHandler implements certificatehandler.Handler and counts the
-// calls FetchAllCerts receives, so a test can tell which of two handlers the
-// worker's dependencies actually hold. It implements only FetchAllCerts, the
-// one method the dependencies call on it here; any other method of the
-// interface panics.
+// recordingCertHandler counts FetchAllCerts calls, so a test can tell which
+// of two handlers the worker's dependencies hold. The embedded Handler is
+// nil, so any other method of the interface panics.
 type recordingCertHandler struct {
 	certificatehandler.Handler
 
@@ -59,8 +57,7 @@ var _ = Describe("CertFetcherWorker cert handler dependency", func() {
 		var mapHandlerAsHandler certificatehandler.Handler = mapHandler
 		config.SetDependency(dependencyMap, certfetcher.CertHandlerKey, mapHandlerAsHandler)
 
-		// The worker reads the handler under this literal map key; the
-		// assertion fails if the key's name in the certfetcher package changes.
+		// The worker reads the handler under this literal map key.
 		Expect(dependencyMap).To(HaveKey("certfetcher.cert_handler"))
 
 		identity := deps.Identity{ID: "map-handler-worker", WorkerType: "certfetcher"}
@@ -87,8 +84,6 @@ var _ = Describe("CertFetcherWorker cert handler dependency", func() {
 			certfetcher.NewCertHandlerSeedDependencies(globalHandler))
 		DeferCleanup(register.ClearGlobalDeps, certfetcher.WorkerTypeName)
 
-		// A nil map is the degenerate shape of the fallback. Production passes
-		// a non-nil map without the key; the next spec pins that shape.
 		identity := deps.Identity{ID: "global-handler-worker", WorkerType: "certfetcher"}
 		built, err := factory.NewWorkerByType("certfetcher", identity, deps.NewNopFSMLogger(), nil, nil)
 		Expect(err).NotTo(HaveOccurred())
@@ -112,9 +107,9 @@ var _ = Describe("CertFetcherWorker cert handler dependency", func() {
 			certfetcher.NewCertHandlerSeedDependencies(globalHandler))
 		DeferCleanup(register.ClearGlobalDeps, certfetcher.WorkerTypeName)
 
-		// Production shape: cmd/main.go builds the application supervisor's
-		// dependency map as a non-nil empty map and nothing writes into it, so
-		// the factory sees a non-nil map holding no certfetcher key.
+		// The production shape: cmd/main.go passes the application supervisor
+		// an empty dependency map, and publishes the cert handler only through
+		// register.SetGlobalDeps when agent.UseGatekeeper is enabled.
 		dependencyMap := map[string]any{}
 
 		identity := deps.Identity{ID: "global-handler-empty-map-worker", WorkerType: "certfetcher"}
@@ -136,8 +131,7 @@ var _ = Describe("CertFetcherWorker cert handler dependency", func() {
 	It("builds from the dependency map alone when the global seed is absent", func() {
 		mapHandler := &recordingCertHandler{}
 
-		// Nothing seeds the global: the dependency map alone must supply the
-		// handler, the injection shape the v2 scenarios use.
+		// The v2 certfetcher scenarios inject the handler this way.
 		register.ClearGlobalDeps(certfetcher.WorkerTypeName)
 
 		dependencyMap := map[string]any{}
