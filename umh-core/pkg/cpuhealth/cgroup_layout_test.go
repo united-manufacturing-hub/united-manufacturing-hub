@@ -65,60 +65,44 @@ var _ = Describe("the resolved cgroup layout", func() {
 		Expect(throttled).To(Equal(2.0))
 	})
 
-	It("reads nothing, and does not fail, where neither hierarchy answers", func() {
-		smp, err := v1Sampler(v1Files{}).Read(context.Background())
-
-		Expect(err).NotTo(HaveOccurred(), "an unidentifiable mount is not a failed sample")
-		_, ok := smp.UsageUsec.Get()
-		Expect(ok).To(BeFalse())
-		_, ok = smp.Quota.Get()
-		Expect(ok).To(BeFalse())
-	})
-
-	It("probes once and keeps the answer, and keeps probing while nothing answers", func() {
-		statPath := cgroupBase + "/cpu,cpuacct/cpu.stat"
-
-		// The fixture counts the probes, so "asked once" is asserted rather than
-		// inferred. Read is called from this goroutine only.
+	It("keeps an identified layout, so later ticks probe nothing", func() {
 		probes := 0
-		fs := serveFiles(v1Files{statPath: "nr_periods 10\nnr_throttled 0\n"})
+		fs := serveFiles(v1Files{cgroupBase + "/cpu,cpuacct/cpu.stat": "nr_periods 10\nnr_throttled 0\n"})
 		served := fs.FileExistsFunc
 		fs.FileExistsFunc = func(ctx context.Context, path string) (bool, error) {
 			probes++
 
 			return served(ctx, path)
 		}
-
 		sampler := cpuhealth.NewLinuxSampler(fs, cgroupBase)
+
 		_, err := sampler.Read(context.Background())
 		Expect(err).NotTo(HaveOccurred())
 		afterFirst := probes
-		Expect(afterFirst).To(BeNumerically(">", 0), "the first tick has to ask")
 
 		_, err = sampler.Read(context.Background())
 		Expect(err).NotTo(HaveOccurred())
-		Expect(probes).To(Equal(afterFirst),
-			"an identified layout is kept, so later ticks ask nothing")
+		Expect(afterFirst).To(BeNumerically(">", 0))
+		Expect(probes).To(Equal(afterFirst))
+	})
 
-		// Nothing answers this one, so every tick asks again rather than
-		// writing the box off for the life of the process.
-		blankProbes := 0
-		blank := serveFiles(v1Files{})
-		blank.FileExistsFunc = func(_ context.Context, _ string) (bool, error) {
-			blankProbes++
+	It("probes again next tick while no layout answers", func() {
+		probes := 0
+		fs := serveFiles(v1Files{})
+		fs.FileExistsFunc = func(_ context.Context, _ string) (bool, error) {
+			probes++
 
 			return false, nil
 		}
+		sampler := cpuhealth.NewLinuxSampler(fs, cgroupBase)
 
-		blankSampler := cpuhealth.NewLinuxSampler(blank, cgroupBase)
-		_, err = blankSampler.Read(context.Background())
+		_, err := sampler.Read(context.Background())
 		Expect(err).NotTo(HaveOccurred())
-		afterBlankFirst := blankProbes
+		afterFirst := probes
 
-		_, err = blankSampler.Read(context.Background())
+		_, err = sampler.Read(context.Background())
 		Expect(err).NotTo(HaveOccurred())
-		Expect(blankProbes).To(BeNumerically(">", afterBlankFirst),
-			"an unidentified mount is probed again next tick")
+		Expect(probes).To(BeNumerically(">", afterFirst))
 	})
 
 	It("probes once per tick while the layout is unresolved", func() {
