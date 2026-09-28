@@ -22,11 +22,11 @@ import (
 // Summary is the part of a historian's state reported without being asked.
 // Everything else is read on request, through Collect.
 //
-// A historian with no policies has no jobs to fail, so FailedJobs at zero is not
+// A historian with no policies has no jobs to fail, so FailedJobCount at zero is not
 // proof that data is compressed or expired.
 type Summary struct {
-	TableNames []string `json:"tableNames"`
-	FailedJobs int      `json:"failedJobs"`
+	TableNames     []string `json:"tableNames"`
+	FailedJobCount int      `json:"failedJobCount"`
 }
 
 // Both figures in one round trip, and neither subquery's cost grows with how
@@ -47,7 +47,7 @@ func CollectSummary(ctx context.Context, db Database) (Summary, error) {
 
 	var names []string
 	if err := db.QueryRow(ctx, summaryQuery, historianSchema).
-		Scan(&summary.FailedJobs, &names); err != nil {
+		Scan(&summary.FailedJobCount, &names); err != nil {
 		return summary, fmt.Errorf("read historian summary: %w", err)
 	}
 

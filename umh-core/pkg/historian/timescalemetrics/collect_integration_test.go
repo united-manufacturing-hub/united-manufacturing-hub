@@ -786,7 +786,7 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 		summary, err := CollectSummary(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(summary.FailedJobs).To(BeZero())
+		Expect(summary.FailedJobCount).To(BeZero())
 		Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
 	})
 
@@ -797,7 +797,7 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(summary.TableNames).To(BeEmpty())
-		Expect(summary.FailedJobs).To(BeZero())
+		Expect(summary.FailedJobCount).To(BeZero())
 	})
 
 	It("lists only the tables the historian created", func() {
