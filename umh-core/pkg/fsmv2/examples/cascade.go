@@ -29,8 +29,10 @@ import (
 // CascadeScenarioV2 runs one exampleparent whose two children are
 // examplefailing workers that each fail three times in each of two cycles.
 // The parent reports Degraded when its children leave Connected for the next
-// cycle while it is Running, and the second cycle's failures keep them
-// unhealthy until they reconnect.
+// cycle while it is Running, and each failure holds the child back for
+// recovery_delay_ms in wall-clock time, so the children's unhealthy window
+// spans at least one of the parent's once-per-second observations no
+// matter how slow the machine is.
 var CascadeScenarioV2 = ScenarioV2{
 	Name:        "cascade",
 	Description: "Shows cascade failure: child failures propagate to parent state, parent recovery when children heal",
@@ -45,7 +47,7 @@ var CascadeScenarioV2 = ScenarioV2{
 		childConfig := "should_fail: true\n" +
 			"max_failures: 3\n" +
 			"failure_cycles: 2\n" +
-			"recovery_delay_observations: 12\n"
+			"recovery_delay_ms: 700\n"
 
 		env.Step("create the parent with two failing children")
 
