@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
@@ -26,8 +27,8 @@ import (
 
 // PanicScenarioV2 runs one panic worker whose connect action panics on every
 // attempt. The executor recovers each panic and the worker retries on its
-// next tick, so the scenario watches it stay out of Connected across many
-// polls.
+// next tick, so the scenario counts the failed connect attempts it sees and
+// fails the run if the worker ever reaches Connected.
 var PanicScenarioV2 = ScenarioV2{
 	Name:        "panic",
 	Description: "Demonstrates panic recovery in action handlers",
@@ -64,9 +65,15 @@ var PanicScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		polls := 0
+		// The first wait already proves one panic: the worker is observed
+		// in TryingToConnect while its connect action panics. This wait
+		// counts the failed connect entries in the observation's action
+		// history, deduped by timestamp across polls, so it stays strong
+		// on a slow machine where counting polls would only prove time
+		// passed.
+		failedConnects := make(map[time.Time]bool)
 
-		return env.WaitFor(ctx, "the panic worker stays out of Connected across 20 polls",
+		return env.WaitFor(ctx, "the panic worker fails its connect three times without reaching Connected",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_panic.ExamplepanicStatus](ctx, env.Client, ref)
 				if err != nil {
@@ -81,9 +88,13 @@ var PanicScenarioV2 = ScenarioV2{
 					return false, "", fmt.Errorf("the panic worker reached Connected, so its panics did not keep it out")
 				}
 
-				polls++
+				for _, result := range obs.LastActionResults {
+					if result.ActionType == "connect" && !result.Success {
+						failedConnects[result.Timestamp] = true
+					}
+				}
 
-				return polls >= 20, fmt.Sprintf("state=%s polls=%d", obs.State, polls), nil
+				return len(failedConnects) >= 3, fmt.Sprintf("state=%s failed_connects=%d", obs.State, len(failedConnects)), nil
 			})
 	},
 }

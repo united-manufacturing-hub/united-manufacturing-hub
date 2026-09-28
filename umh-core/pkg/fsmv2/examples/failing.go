@@ -72,7 +72,10 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert restart worker: %w", err)
 		}
 
-		if err := env.WaitFor(ctx, "the recovery worker reaches Connected after more than 3 attempts",
+		// The worker runs one failure cycle and then stays Connected with
+		// AllCyclesComplete, which is true only after that round ran, so
+		// the value the wait accepts lasts until the run ends.
+		if err := env.WaitFor(ctx, "the recovery worker connects with its failure round complete",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, recoveryRef)
 				if err != nil {
@@ -83,9 +86,9 @@ var FailingScenarioV2 = ScenarioV2{
 					return false, "", err
 				}
 
-				done := obs.State == "Connected" && obs.Status.ConnectAttempts > 3
+				done := obs.State == "Connected" && obs.Status.AllCyclesComplete
 
-				return done, fmt.Sprintf("state=%s attempts=%d", obs.State, obs.Status.ConnectAttempts), nil
+				return done, fmt.Sprintf("state=%s all_cycles_complete=%t", obs.State, obs.Status.AllCyclesComplete), nil
 			}); err != nil {
 			return err
 		}
