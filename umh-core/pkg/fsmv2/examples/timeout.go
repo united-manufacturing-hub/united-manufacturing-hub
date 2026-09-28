@@ -26,11 +26,8 @@ import (
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
 
-// TimeoutScenarioV2 runs the four timeout workers from the v1 scenario. Two
-// exampleslow workers run with no delay and with a two-second delay. Two
-// examplefailing workers fail a fixed number of connect attempts before they
-// connect, one with a restart threshold it never reaches. The scenario waits
-// for each failing worker to reach Connected with an attempt count above its
+// TimeoutScenarioV2 waits for exampleslow and examplefailing workers to reach
+// Connected. A failing worker must also show an attempt count above its
 // failure limit, which proves its failures happened before its connect.
 var TimeoutScenarioV2 = ScenarioV2{
 	Name:        "timeout",
@@ -85,8 +82,6 @@ var TimeoutScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert combined worker: %w", err)
 		}
 
-		// waitFailingConnected waits for one failing worker to reach Connected
-		// with an attempt count above its failure limit.
 		waitFailingConnected := func(ref dynamicchildren.Ref, maxFailures int) error {
 			return env.WaitFor(ctx, fmt.Sprintf("the worker %s reaches Connected after more than %d attempts", ref.Name, maxFailures),
 				func(ctx context.Context) (bool, string, error) {
@@ -105,10 +100,10 @@ var TimeoutScenarioV2 = ScenarioV2{
 				})
 		}
 
-		// A failing worker shows Connected with its attempts above its limit
-		// for only about five seconds, before its counter drops to 0 again.
-		// The slow workers have no such window, so the failing ones wait
-		// first.
+		// A failing worker shows its attempts above its limit only for its
+		// first five seconds in Connected (healthyDurationMsBeforeNextCycle,
+		// examplefailing/state); then its counter drops to 0. The slow
+		// workers stay Connected, so the failing ones are waited for first.
 		if err := waitFailingConnected(retryRef, 3); err != nil {
 			return err
 		}

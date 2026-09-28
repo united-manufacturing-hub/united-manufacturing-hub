@@ -25,10 +25,10 @@ import (
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
 
-// SlowScenarioV2 runs one slow worker whose connect action sleeps two
-// seconds, next to a control worker whose connect sleeps none. Spawning a
-// worker takes about two seconds by itself, so the gap between the two first
-// Connected readings is the only proof the delay ran.
+// SlowScenarioV2 runs a slow worker whose connect action sleeps two seconds,
+// next to a control worker whose connect does not sleep. Spawning a worker
+// takes about two seconds by itself, so the scenario checks the gap between
+// the two workers' first Connected readings, not the slow worker's total time.
 var SlowScenarioV2 = ScenarioV2{
 	Name:        "slow",
 	Description: "Demonstrates a long-running action and checks its delay ran",
@@ -53,8 +53,8 @@ var SlowScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert control worker: %w", err)
 		}
 
-		// firstConnected waits for one worker to reach Connected and returns
-		// when its poll first saw that state.
+		// firstConnected waits for a worker to reach Connected and returns the
+		// time its poll first saw that state.
 		firstConnected := func(ref dynamicchildren.Ref) (time.Time, error) {
 			var first time.Time
 
@@ -97,9 +97,8 @@ var SlowScenarioV2 = ScenarioV2{
 		}
 
 		// The slow worker's connect sleeps its whole delay before it reports
-		// success, so its first Connected reading trails the control's by at
-		// least that delay. The control was measured connecting 2.08s after
-		// its Upsert, so the check demands a gap and not a total time.
+		// success, so its first Connected reading trails the control's by
+		// about that delay.
 		if gap := slowConnected.Sub(controlConnected); gap < 1500*time.Millisecond {
 			return fmt.Errorf("the slow worker was first seen Connected %s after the control worker, without running its two-second delay", gap)
 		}

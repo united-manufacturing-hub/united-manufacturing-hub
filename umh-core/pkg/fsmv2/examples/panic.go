@@ -64,11 +64,6 @@ var PanicScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// Each panic is recovered and the worker retries its connect, so
-		// staying out of Connected across many polls covers several of
-		// those cycles. A single reading of Connected fails the wait at
-		// once, because a worker that reaches Connected no longer panics on
-		// every connect.
 		polls := 0
 
 		return env.WaitFor(ctx, "the panic worker stays out of Connected across 20 polls",
