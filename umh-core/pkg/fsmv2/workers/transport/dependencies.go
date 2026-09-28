@@ -91,7 +91,9 @@ type TransportDependencies struct {
 
 // NewTransportDependencies creates dependencies for the transport worker,
 // acquiring channels from the global channel provider.
-// Panics if SetChannelProvider was not called first.
+// The worker must have a provider before it is built: set the global with
+// SetChannelProvider, or store one under ChannelProviderKey in the worker's
+// dependency map; otherwise this (or the map path) panics.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 // The supervisor writes framework metrics into this instance after construction;
 // constructing a second instance inside the factory would leave those metrics unreachable.

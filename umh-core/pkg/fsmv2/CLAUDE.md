@@ -42,7 +42,7 @@ Children aggregation (health counts) is handled by the supervisor, not in `Colle
 
 ## Channel Singleton Pattern
 
-For workers that share channels (like TransportWorker with Push/Pull children), use a singleton `ChannelProvider`:
+For workers that share channels (like TransportWorker with Push/Pull children), use a singleton `ChannelProvider`. Production sets it in `cmd/main.go`:
 
 ```go
 // Set before creating workers
@@ -55,6 +55,11 @@ func NewDependencies(...) *Dependencies {
     // ...
 }
 ```
+
+The transport worker first reads a provider from its dependency map, under
+`transport.ChannelProviderKey`, and only falls back to the global. That is how
+a scenario supplies a mock channel provider without touching the process
+global (see "Mocks" below).
 
 This enables parent-child channel sharing without tight coupling.
 
@@ -302,8 +307,8 @@ Transport / push canonical example:
 // transport/worker.go
 func init() {
     register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](WorkerTypeName,
-        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
-            w, err := NewTransportWorker(id, logger, sr)
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
+            w, err := NewTransportWorker(id, logger, sr, m)
             if err != nil {
                 return nil, err
             }
