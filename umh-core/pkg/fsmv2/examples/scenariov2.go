@@ -325,6 +325,7 @@ var RegistryV2 = map[string]ScenarioV2{
 	"cascade":      CascadeScenarioV2,
 	"configerror":  ConfigErrorScenarioV2,
 	"communicator": CommunicatorScenarioV2,
+	"persistence":  PersistenceScenarioV2,
 
 	"certfetcher-healthy":        CertFetcherHealthyScenarioV2,
 	"certfetcher-degraded":       CertFetcherDegradedScenarioV2,

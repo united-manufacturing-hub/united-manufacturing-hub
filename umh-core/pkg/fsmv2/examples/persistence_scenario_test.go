@@ -276,15 +276,3 @@ var _ = Describe("Persistence Scenario caller-ctx cancellation", func() {
 			"the supervisor must drain via a live tick loop, not time out against a dead one")
 	})
 })
-
-var _ = Describe("PersistenceScenarioEntry registry", func() {
-	It("is registered with CustomRunner that uses ApplicationSupervisor internally", func() {
-		scenario, exists := examples.Registry["persistence"]
-		Expect(exists).To(BeTrue())
-		Expect(scenario.Name).To(Equal("persistence"))
-		Expect(scenario.Description).NotTo(BeEmpty())
-		Expect(scenario.Description).To(ContainSubstring("ApplicationSupervisor"))
-		Expect(scenario.CustomRunner).NotTo(BeNil())
-		Expect(scenario.YAMLConfig).To(BeEmpty())
-	})
-})
