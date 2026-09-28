@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
@@ -66,29 +67,55 @@ type NmapStatus struct {
 	DialError   string                   `json:"dial_error,omitempty"`
 }
 
-// Deps carries this instance's BaseDependencies, whose logger Poll reports to.
-type Deps struct {
-	*deps.BaseDependencies
+// Dialer is the one dialing capability Poll needs. *net.Dialer satisfies it. A
+// scenario run (a registered ScenarioV2 in pkg/fsmv2/examples) or a test
+// injects its own Dialer under DialerKey to observe or fake the dial without a
+// network.
+type Dialer interface {
+	// DialContext dials one network address, as net.Dialer.DialContext does.
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
-func newDeps(_ deps.Identity, bd *deps.BaseDependencies, _ map[string]any) Deps {
-	return Deps{BaseDependencies: bd}
+// DialerKey names the Dialer this worker dials its target through.
+var DialerKey = fsmv2config.NewDependencyKey[Dialer]("nmap.dialer")
+
+// Deps is the per-instance value Poll receives. Poll reports to the logger of
+// its BaseDependencies.
+type Deps struct {
+	*deps.BaseDependencies
+
+	// dialer dials the target.
+	dialer Dialer
+}
+
+// newDeps builds the Deps Poll dials through: the Dialer stored under DialerKey
+// in m, or a real *net.Dialer when m holds nothing under it. The production map
+// holds nothing under the key, so a production worker dials for real; a
+// scenario or test injects its own Dialer there to observe or fake the dial.
+func newDeps(_ deps.Identity, bd *deps.BaseDependencies, m map[string]any) Deps {
+	var dialer Dialer = &net.Dialer{}
+
+	if injected, ok := fsmv2config.LookupDependency(m, DialerKey); ok {
+		dialer = injected
+	}
+
+	return Deps{
+		BaseDependencies: bd,
+		dialer:           dialer,
+	}
 }
 
 // Poll dials the configured target once and reports the port state. A
 // successful dial yields an open/running status with the measured latency; any
 // dial failure yields a closed port. A closed port is a legitimate scan
 // outcome, not a poll failure, so Poll returns it with a nil error. Poll
-// returns an error only when the context is cancelled (worker shutdown), so the
-// framework does not misreport a shutdown as a port state.
+// returns an error only when the context is cancelled (worker shutdown).
 func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error) {
 	target := net.JoinHostPort(cfg.NmapServiceConfig.Target, strconv.Itoa(int(cfg.NmapServiceConfig.Port)))
 
 	start := time.Now()
 
-	dialer := net.Dialer{}
-
-	conn, err := dialer.DialContext(ctx, "tcp", target)
+	conn, err := d.dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
 		// Worker shutdown cancels the context; surface it as an error so the
 		// framework does not misreport a shutdown as a port state. This
@@ -163,7 +190,7 @@ func init() {
 	simple.Register(simple.MonitorSpec[config.NmapConfig, NmapStatus, Deps]{
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
-		Poll:       Poll,
 		NewDeps:    newDeps,
+		Poll:       Poll,
 	})
 }
