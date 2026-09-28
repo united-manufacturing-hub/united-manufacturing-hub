@@ -25,15 +25,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 )
 
-// A monitor worker does not reach its dependencies the way every other worker
-// does. Register builds its own constructor closure and hands that to
-// register.Worker, so the run's dependency map has a second place it can be
-// dropped -- and dropping it there excludes every monitor worker, cpu and
-// historian among them, while the framework looks like it delivers.
-//
-// These specs go through Register and the factory rather than calling
-// newSimpleWorker, because that closure is the thing under test. A spec that
-// called the constructor itself would step over it and pass either way.
+// These specs build through Register and factory.NewWorkerByType, because the
+// constructor closure Register builds is what hands the map to newSimpleWorker.
+// A spec that called newSimpleWorker directly would pass even with that closure
+// broken.
 
 var deliveryLabelKey = config.NewDependencyKey[string]("simple.test.label")
 
@@ -42,10 +37,9 @@ type deliveryDeps struct {
 }
 
 var _ = Describe("dependency delivery to a monitor worker", func() {
-	// buildWith registers a monitor worker under its own type name and builds
-	// one instance with the dependencies a run would have handed in. Each spec
-	// needs its own name: Register also publishes an initial state, and that
-	// registry has no reset.
+	// buildWith registers a monitor worker under workerType and builds one
+	// instance with the given dependencies. Each spec needs its own workerType,
+	// because Register panics on a worker type that is already registered.
 	buildWith := func(workerType string, dependencies map[string]any) *deliveryDeps {
 		var built *deliveryDeps
 

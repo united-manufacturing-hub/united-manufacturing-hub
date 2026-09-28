@@ -29,11 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// The register and simple packages test that a worker constructor receives the
-// map handed to factory.NewWorkerByType. These specs test the step before that:
-// that the supervisor hands the factory the right map. A child gets its parent's
-// dependencies merged with its own spec's. A restarted worker gets its
-// supervisor's.
+// These specs check which map the supervisor passes to factory.NewWorkerByType.
 
 var (
 	deliveryParentKey  = config.NewDependencyKey[string]("supervisor.test.parent")

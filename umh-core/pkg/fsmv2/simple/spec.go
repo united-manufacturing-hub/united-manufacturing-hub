@@ -69,9 +69,7 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// deps value" in the package doc before holding a connection pool or
 	// anything else with a background goroutine.
 	//
-	// dependencies is the dependency map this instance was created with. Read a value
-	// out of it with config.LookupDependency and a typed key, and fall back to the
-	// real implementation when the key is absent.
+	// dependencies is the dependency map this instance was created with; see register.Worker.
 	NewDeps func(id deps.Identity, bd *deps.BaseDependencies, dependencies map[string]any) TDeps
 	// Poll observes the target once and returns the status. d is a copy: TDeps is
 	// passed by value, so a resource assigned to a non-pointer field of d is

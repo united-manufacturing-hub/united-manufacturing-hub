@@ -27,17 +27,13 @@ var dependencyKeyTypes sync.Map
 // DependencyKey names one entry in a dependency map and records the type stored
 // under it.
 //
-// The map itself stays map[string]any because it crosses the supervisor and the
-// worker factory, and neither of those knows what any given worker's
-// dependencies are. The key carries the type instead, so the side that writes
-// and the side that reads agree without either one writing a type assertion.
+// The map is map[string]any because the supervisor and the worker factory pass
+// it on without knowing any worker's dependency types. The key carries the type,
+// so neither the writer nor the reader writes a type assertion.
 //
 // Declare one as a package-level var next to the worker that reads it:
 //
 //	var FilesystemKey = config.NewDependencyKey[filesystem.Service]("helloworld.filesystem")
-//
-// One name has one type: the side that writes and the side that reads share
-// the same key, and NewDependencyKey panics on a second type.
 type DependencyKey[T any] struct {
 	name string
 }
@@ -58,11 +54,9 @@ func NewDependencyKey[T any](name string) DependencyKey[T] {
 	return DependencyKey[T]{name: name}
 }
 
-// SetDependency stores value under key. m must be non-nil, as for any map
-// assignment.
-//
-// A nil value panics, because LookupDependency would report it as present and
-// the worker would call it instead of falling back to its real implementation.
+// SetDependency stores value under key. A nil value panics: a nil pointer or map
+// would read as present through LookupDependency, and the worker would call it
+// instead of falling back to its real implementation.
 func SetDependency[T any](m map[string]any, key DependencyKey[T], value T) {
 	if isNil(value) {
 		panic(fmt.Sprintf("config.SetDependency(%q): value is nil", key.name))
@@ -88,16 +82,11 @@ func isNil(value any) bool {
 }
 
 // LookupDependency reads the value stored under key. The second return is false
-// when the map holds nothing under that name, and also when it holds something
-// of another type.
-//
-// A mismatched type reads as absent rather than panicking so that a worker
-// whose dependency was wired up wrongly stays on its real implementation. The
-// alternative is a panic in front of whoever is running the process.
+// when the map holds nothing under that name or holds a value of another type,
+// so a worker whose dependency was wired up wrongly stays on its real
+// implementation.
 func LookupDependency[T any](m map[string]any, key DependencyKey[T]) (T, bool) {
-	// A name the map does not hold reads as a nil any, which fails this
-	// assertion the same way a wrong type does. Both answers are the same to a
-	// caller, so neither needs its own branch.
+	// A missing name reads as a nil any, which fails this assertion too.
 	value, ok := m[key.name].(T)
 
 	return value, ok

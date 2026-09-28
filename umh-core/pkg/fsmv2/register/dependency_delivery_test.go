@@ -28,11 +28,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
-// The supervisor hands a worker's dependencies to factory.NewWorkerByType, and
-// register.Worker is what stands between that call and the developer's
-// constructor. These specs go through both, because the closure register.Worker
-// builds is what passes the map on. A spec that called the
-// constructor itself would step over that closure and pass either way.
+// These specs build through factory.NewWorkerByType, because the closure
+// register.Worker builds is what passes the map to the constructor. A spec that
+// called the constructor directly would pass even with that closure broken.
 
 type deliveryConfig struct {
 	Host string `json:"host" yaml:"host"`
@@ -58,7 +56,7 @@ var _ = Describe("dependency delivery through register.Worker", func() {
 	const workerType = "delivery-probe"
 
 	// buildWith registers the probe worker afresh and builds one instance with
-	// the dependencies a run would have handed in.
+	// the given dependencies.
 	buildWith := func(dependencies map[string]any) *deliveryWorker {
 		factory.ResetRegistry()
 		storage.ResetGlobalRegistry()
