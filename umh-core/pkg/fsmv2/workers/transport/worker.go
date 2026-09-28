@@ -80,34 +80,18 @@ type TransportWorker struct {
 }
 
 // NewTransportWorker creates a new Transport worker in Stopped state,
-// acquiring its channels from the global channel provider.
+// acquiring its channels from the ChannelProvider stored under
+// ChannelProviderKey in dependencies, falling back to the global provider
+// when the map holds none.
 // Returns an error if required dependencies are missing.
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
+	dependencies map[string]any,
 ) (*TransportWorker, error) {
 	// The architecture tests require every New*Worker constructor to
 	// validate its dependencies.
-	if logger == nil {
-		return nil, errors.New("logger must not be nil")
-	}
-
-	return newTransportWorker(identity, logger, stateReader, nil)
-}
-
-// newTransportWorker creates a new Transport worker in Stopped state,
-// acquiring its channels from the ChannelProvider stored under
-// ChannelProviderKey in dependencyMap, falling back to the global provider
-// when the map holds none.
-func newTransportWorker(
-	identity deps.Identity,
-	logger deps.FSMLogger,
-	stateReader deps.StateReader,
-	dependencyMap map[string]any,
-) (*TransportWorker, error) {
-	// The registered factory calls this constructor directly, bypassing
-	// NewTransportWorker's guard.
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
@@ -120,15 +104,14 @@ func newTransportWorker(
 	w := &TransportWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	// Create dependencies (will panic if ChannelProvider not set)
-	var dependencies *TransportDependencies
-	if provider, ok := config.LookupDependency(dependencyMap, ChannelProviderKey); ok {
-		dependencies = newTransportDependenciesWithProvider(nil, bd, provider)
+	var workerDeps *TransportDependencies
+	if provider, ok := config.LookupDependency(dependencies, ChannelProviderKey); ok {
+		workerDeps = newTransportDependenciesWithProvider(nil, bd, provider)
 	} else {
-		dependencies = NewTransportDependencies(nil, bd)
+		workerDeps = NewTransportDependencies(nil, bd)
 	}
 
-	w.BindDeps(dependencies)
+	w.BindDeps(workerDeps)
 
 	return w, nil
 }
@@ -254,7 +237,7 @@ func init() {
 
 	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
-			w, err := newTransportWorker(id, logger, sr, m)
+			w, err := NewTransportWorker(id, logger, sr, m)
 			if err != nil {
 				return nil, err
 			}
