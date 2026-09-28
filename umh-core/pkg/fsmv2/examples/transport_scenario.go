@@ -20,9 +20,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
@@ -82,6 +86,102 @@ drainLoop:
 	}
 
 	return messages
+}
+
+// relayServerKey holds the scenario's mock relay server. Only this scenario's
+// Run reads it, to read the server's URL and its counters; the transport
+// worker never does.
+var relayServerKey = config.NewDependencyKey[*testutil.MockRelayServer]("examples.relay_server")
+
+// TransportScenarioV2 runs one transport child against a mock relay server
+// and a test channel provider held in the dependency map: it creates the
+// child with valid auth, waits for it to authenticate and reach Running, then
+// queues two outbound messages and waits for the server to receive both.
+var TransportScenarioV2 = ScenarioV2{
+	Name:        "transport",
+	Description: "Transport worker: authenticates against a mock relay server and pushes queued messages",
+
+	Dependencies: func() (map[string]any, func(), error) {
+		server := testutil.NewMockRelayServer()
+
+		serverURL := server.URL()
+		if serverURL == "" {
+			server.Close()
+			return nil, nil, errors.New("mock relay server started but its URL is empty")
+		}
+
+		provider := NewTransportTestChannelProvider(100)
+
+		deps := map[string]any{}
+
+		// Declared as the interface, because SetDependency stores the value
+		// under the key's type.
+		var p transportWorker.ChannelProvider = provider
+		config.SetDependency(deps, transportWorker.ChannelProviderKey, p)
+		config.SetDependency(deps, relayServerKey, server)
+
+		return deps, func() { server.Close() }, nil
+	},
+
+	Run: func(ctx context.Context, env Env) error {
+		server, ok := config.LookupDependency(env.Dependencies, relayServerKey)
+		if !ok {
+			return errors.New("the transport scenario's dependency map holds no relay server under relayServerKey")
+		}
+
+		providerRaw, ok := config.LookupDependency(env.Dependencies, transportWorker.ChannelProviderKey)
+		if !ok {
+			return errors.New("the transport scenario's dependency map holds no channel provider under transportWorker.ChannelProviderKey")
+		}
+
+		provider, ok := providerRaw.(*TransportTestChannelProvider)
+		if !ok {
+			return errors.New("the channel provider under transportWorker.ChannelProviderKey is not the scenario's TransportTestChannelProvider")
+		}
+
+		ref := dynamicchildren.Ref{WorkerType: "transport", Name: "transport-1"}
+
+		env.Step("create transport with valid auth against the mock relay server")
+
+		if err := env.Client.Upsert(ref, map[string]any{
+			"state":        "running",
+			"relayURL":     server.URL(),
+			"instanceUUID": "test-instance-uuid",
+			"authToken":    "test-auth-token",
+			"timeout":      "5s",
+		}); err != nil {
+			return err
+		}
+
+		if err := env.WaitFor(ctx, "transport authenticates and reaches Running",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[snapshot.TransportStatus](ctx, env.Client, ref)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the transport child has not published an observation yet", nil
+					}
+
+					return false, "", err
+				}
+
+				authCalls := server.AuthCallCount()
+				done := obs.State == "Running" && authCalls >= 1
+				return done, fmt.Sprintf("state=%s authCalls=%d", obs.State, authCalls), nil
+			}); err != nil {
+			return err
+		}
+
+		env.Step("queue two outbound messages")
+
+		provider.QueueOutbound(&types.UMHMessage{InstanceUUID: "test-instance", Content: "msg1"})
+		provider.QueueOutbound(&types.UMHMessage{InstanceUUID: "test-instance", Content: "msg2"})
+
+		return env.WaitFor(ctx, "the server received both queued messages",
+			func(ctx context.Context) (bool, string, error) {
+				pushed := len(server.GetPushedMessages())
+				return pushed == 2, fmt.Sprintf("pushed=%d", pushed), nil
+			})
+	},
 }
 
 // TransportRunConfig configures a transport scenario run with a mock relay server.
