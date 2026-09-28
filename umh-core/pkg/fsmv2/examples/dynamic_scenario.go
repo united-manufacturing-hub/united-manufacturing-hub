@@ -56,9 +56,8 @@ const (
 // DynamicScenarioV2 drives one helloworld child through the migration-API
 // client: create it to Running, Upsert an observable config change (a new
 // moodFilePath whose file contents land in observed status), then Delete it.
-// The kernel-only supervisor and its config worker run the whole time;
-// correctness is judged after the run by the dynamic_scenario_v2 battery
-// reading the same store.
+// Run fails when the config worker is not readable after the Delete, so a
+// child's lifecycle that takes down the config worker fails the scenario.
 var DynamicScenarioV2 = ScenarioV2{
 	Name:        "dynamic",
 	Description: "Drives a helloworld child through create/update/delete via the migration-API client (v2)",
@@ -126,8 +125,6 @@ func runDynamicHello(ctx context.Context, env Env) error {
 	// is deferred to ENG-5107, which builds the despawn-tombstone subsystem.
 	env.Client.Delete(ref)
 
-	// The config worker must still be readable after the child's lifecycle;
-	// its absence is the kernel-failure signal this scenario exists to catch.
 	if _, err := fsmv2client.Get[snapshot.ConfigworkerStatus](ctx, env.Client, dynamicchildren.Ref{
 		WorkerType: configworker.WorkerTypeName,
 		Name:       configWorkerName,

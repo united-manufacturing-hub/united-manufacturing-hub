@@ -73,37 +73,21 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 			Store:        store,
 		})
 
-		// CREATE + UPDATE PROOF (load-bearing): Run returned nil. The Run
-		// returns nil only after it has read, from the run's store through
-		// fsmv2client.Get against the live child, BOTH the create->Running state and
-		// the update's new mood. Each leg in runDynamicHello is a poll that loops
-		// until the value is observed in the store, surfacing every error except
-		// ErrNotObserved and honoring ctx. So this nil return is the create->update
-		// migration-API proof: a runtime Upsert of a real config field (a new
-		// moodFilePath) reached a live child and its new value became observable.
+		// Run returns nil only after it has read the child's Running state and its
+		// updated mood through fsmv2client.Get. So a nil error proves that a runtime
+		// Upsert of moodFilePath reached a live child. Run also fails when the
+		// config worker is not readable after the Delete.
 		//
-		// We do not re-read the final persisted mood from the store here. After
-		// Run's Delete, nothing reaps the child, so the supervisor keeps ticking
-		// it through teardown; once Run's temp mood files are removed (the
-		// leak fix cleans them on Run return), the worker's CollectObservedState
-		// re-reads a now-missing file and overwrites the observed mood with "". That
-		// post-despawn stale observation is the ENG-5107 signal: the store-side reap
-		// (stop ticking + tombstone on Delete) is what makes a stable final-doc read
-		// possible, and ENG-5107 builds it. This rung adds no storage or supervisor
-		// code, so it proves the update at Run's own observation point.
+		// The final mood is not re-read here. After Delete, nothing stops the
+		// supervisor ticking the child (ENG-5107). Once Run removes its temp mood
+		// files, CollectObservedState overwrites the observed mood with "".
 		Expect(err).NotTo(HaveOccurred(),
 			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, then Delete, without error")
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the v2 runner must wait out the run and then tear down on its own")
 
-		// DELETE: Run called Delete, exercising the despawn path without
-		// error. The store-side reap proof (the deleted ref returning ErrNotObserved
-		// and the worker gone from the store) is deferred to ENG-5107.
-
-		// The config worker check happens inside Run: an error from it fails the
-		// run above. The error, warning and state checks below move into the
-		// runner in the next PR of ENG-5114; until then they run here, with the
-		// same allowed-warning list as every other integration scenario.
+		// ENG-5114 moves these checks into the runner. Until then they run here,
+		// against the allowed-warning list every integration scenario shares.
 		verifyNoErrorsOrWarnings(testLogger)
 		verifyStateFieldsAreValid(store)
 	})

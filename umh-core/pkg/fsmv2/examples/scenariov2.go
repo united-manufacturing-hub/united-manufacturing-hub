@@ -21,18 +21,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 )
 
-// Env carries the client, the logger and the run's dependency map. Run
-// changes its mocks through Dependencies and checks the result through
-// Client. Env has no store handle and no supervisor handle, so a check
-// reads what a user of the client could read.
+// Env is what a scenario's Run receives. It has no store handle and no
+// supervisor handle, so a check reads only what a user of the client could read.
 type Env struct {
 	// Client is the migration-API client wired to the run's dynamicchildren
-	// Writer and store, so Runs can Upsert/Delete child specs and read
+	// Writer and store, so Run can Upsert/Delete child specs and read
 	// observed state.
 	Client *fsmv2client.FSMv2Client
 
 	// Logger is the run's logger (the same logger RunConfig.Logger carries),
-	// so Runs log into the same stream the post-run log checks read.
+	// so Run logs into the same stream the post-run log checks read.
 	Logger deps.FSMLogger
 
 	// Dependencies is the map the scenario's Dependencies returned, or nil when
@@ -42,14 +40,14 @@ type Env struct {
 	Dependencies map[string]any
 }
 
-// ScenarioV2 defines a Run-based scenario. A scenario builds its mocks in
-// Dependencies, creates its workers through env.Client, and in Run changes
-// the mocks and checks the store. When a check fails, Run returns an error
-// whose text names the check.
+// ScenarioV2 is a scenario that drives the kernel-only supervisor.
+// Dependencies builds its mocks. Run creates workers through env.Client,
+// changes the mocks, and checks the result through env.Client. When a
+// check fails, Run returns an error that names the check.
 type ScenarioV2 struct {
 	// Run runs against the started supervisor. After a nil return, the
 	// runner waits RunConfig.Duration (or until ctx is cancelled; 0 means
-	// ctx-only), then shuts the supervisor down. Runs must honor ctx
+	// ctx-only), then shuts the supervisor down. Run must honor ctx
 	// cancellation: a cancelled ctx is the only stop signal a Run
 	// receives, and teardown cannot start until Run returns.
 	Run func(ctx context.Context, env Env) error
@@ -60,17 +58,15 @@ type ScenarioV2 struct {
 	// Description explains what this scenario tests (shown in CLI output).
 	Description string
 
-	// Dependencies optionally returns a map of named dependencies that the
-	// runner injects into the supervisor before it starts, so the map reaches
-	// the constructor of every worker Run creates via env.Client.Upsert (see
-	// config.DependencyKey for the typed read/write helpers). A nil
-	// Dependencies means Run-created workers get no scenario dependencies.
+	// Dependencies optionally builds the scenario's mocks. The runner passes
+	// the returned map to the supervisor before it starts. Every worker Run
+	// upserts through env.Client receives the map in its constructor.
+	// config.DependencyKey has the typed read and write helpers.
 	//
-	// When Dependencies returns an error, it releases whatever it built
-	// itself, and the runner ignores its other return values and starts
-	// nothing. When it succeeds, the runner calls cleanup (if non-nil) once,
-	// after the supervisor has stopped, or right away if the supervisor
-	// fails to build.
+	// On error, Dependencies must release what it built. The runner ignores
+	// the other return values and starts nothing. On success, the runner calls
+	// cleanup once if it is non-nil: after the supervisor stops, or at once if
+	// the supervisor fails to build.
 	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 

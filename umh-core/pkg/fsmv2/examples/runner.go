@@ -244,9 +244,6 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // ctx, cancelling it would stop ticking before Shutdown runs, and the
 // graceful drain would wait out its full timeout against a stopped loop.
 //
-// After Run returns nil, the runner waits RunConfig.Duration (or
-// until ctx is cancelled; 0 means ctx-only), then shuts the supervisor down.
-//
 // Because the deps key is process-global, v2 runs must not overlap within a
 // process. The already-published check below catches sequential overlap (a
 // previous run whose teardown has not finished); it does not catch truly
@@ -324,9 +321,8 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// ClearGlobalDeps strictly after supDone: clearing earlier flips the
 		// application worker's RegistryConfigured observation mid-shutdown.
 		register.ClearGlobalDeps(configworker.WorkerTypeName)
-		// The scenario's cleanup runs here, once, after the supervisor has stopped.
-		// A Dependencies error returns before any cleanup exists to call, and a
-		// supervisor build error calls the cleanup itself before returning.
+		// A supervisor build error never reaches teardown. That path calls
+		// scenarioCleanup itself.
 		if scenarioCleanup != nil {
 			scenarioCleanup()
 		}
