@@ -334,4 +334,5 @@ var RegistryV2 = map[string]ScenarioV2{
 
 	"cpu-pressure": CPUPressureScenarioV2,
 	"cpu-blind":    CPUBlindScenarioV2,
+	"cpu-stall":    CPUStallScenarioV2,
 }
