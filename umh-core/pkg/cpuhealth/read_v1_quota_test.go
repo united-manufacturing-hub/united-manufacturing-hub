@@ -19,7 +19,7 @@ package cpuhealth_test
 
 import (
 	"context"
-	"errors"
+	iofs "io/fs"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -48,7 +48,7 @@ func serveFiles(files v1Files) *filesystem.MockFileSystem {
 	fs.ReadFileFunc = func(_ context.Context, path string) ([]byte, error) {
 		content, served := files[path]
 		if !served {
-			return nil, errors.New("no such file or directory")
+			return nil, &iofs.PathError{Op: "open", Path: path, Err: iofs.ErrNotExist}
 		}
 
 		return []byte(content), nil

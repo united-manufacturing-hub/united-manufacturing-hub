@@ -39,6 +39,10 @@ var _ = Describe("pressure on cgroup v1", func() {
 		_, ok := smp.Pressure.Get()
 		Expect(ok).To(BeFalse(), "a machine-wide pressure figure must not reach a cgroup-scoped field")
 		Expect(smp.PsiAvailable).To(BeFalse())
+		Expect(smp.Troubleshooting.Reads).To(ContainElement(cpuhealth.ReadResult{
+			Operation: cpuhealth.OperationCPUPressure,
+			Outcome:   cpuhealth.ReadMissing,
+		}))
 
 		env := cpuhealth.DeriveEnvironment(smp)
 		Expect(env.Has(cpuhealth.HasPressureStats)).To(BeFalse())
