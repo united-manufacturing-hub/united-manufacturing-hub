@@ -434,7 +434,8 @@ past that timeout.
 ### What fails a run
 
 A logged error is unexpected unless its message contains an entry of
-`ExpectedErrors` or of `alwaysAllowedMessages` (`examples/scenariov2.go`). A
+`ExpectedErrors` or of `alwaysAllowedMessages`, or its value carries a cause
+listed in `ExpectedErrorCauses` (`examples/scenariov2.go`). A
 logged warning is checked the same way against `ExpectedWarnings`.
 
 `examples.Run` returns an error when `Run` returns one. It also returns an

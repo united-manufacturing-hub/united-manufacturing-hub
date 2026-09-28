@@ -17,6 +17,7 @@ package examples_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -468,5 +469,74 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"cancelling after Run returned must not turn into a failed store read; a Ctrl+C is not a failed run")
+	})
+})
+
+var _ = Describe("ScenarioV2 expected error causes", func() {
+	// causeRun runs a v2 scenario whose Run logs errValue as an error under
+	// the executor's generic action_failed message, declaring causes as the
+	// scenario's ExpectedErrorCauses. It returns the run's result and error;
+	// a run that fails on the logged error returns a nil result.
+	causeRun := func(name string, errValue error, causes []error) (*examples.RunResult, error) {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		scenario := examples.ScenarioV2{
+			Name:                name,
+			Description:         "test-local Run for the expected-error-cause check",
+			ExpectedErrorCauses: causes,
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "", errValue, "action_failed")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		return examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+	}
+
+	var errProbe = errors.New("the simulated failure")
+
+	It("allows an error whose cause the scenario expects under a generic message", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		result, err := causeRun("expected-cause", fmt.Errorf("wrap: %w", errProbe), []error{errProbe})
+		Expect(err).NotTo(HaveOccurred(),
+			"an error whose cause the scenario declared must not fail the run, even under the generic action_failed message")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"an allowed error must not set RunResult.Err either")
+	})
+
+	It("fails the run when the logged error's cause is not expected under the same message", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		_, err := causeRun("unexpected-cause", fmt.Errorf("wrap: %w", errors.New("a different failure")), []error{errProbe})
+		Expect(err).To(HaveOccurred(),
+			"expecting a cause must not allow every error logged as action_failed")
+		Expect(err.Error()).To(ContainSubstring("action_failed"),
+			"the failure must name the generic message the error was logged under")
+	})
+
+	It("allows nothing when the expected cause entry is nil", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		_, err := causeRun("nil-cause", fmt.Errorf("wrap: %w", errProbe), []error{nil})
+		Expect(err).To(HaveOccurred(),
+			"a nil expected cause must match nothing, the same as an empty expected message")
+		Expect(err.Error()).To(ContainSubstring("action_failed"),
+			"the failure must name the generic message the error was logged under")
 	})
 })

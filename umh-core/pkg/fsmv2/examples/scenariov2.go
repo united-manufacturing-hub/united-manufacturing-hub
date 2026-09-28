@@ -16,6 +16,7 @@ package examples
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -53,8 +54,9 @@ type runRecorder struct {
 	// attributed when several scenarios run in one process.
 	scenario string
 
-	expectedErrors   []string
-	expectedWarnings []string
+	expectedErrors      []string
+	expectedErrorCauses []error
+	expectedWarnings    []string
 
 	// mu guards the fields below. Step may run on a goroutine the scenario
 	// starts, and any goroutine that logs writes the first unexpected values.
@@ -72,8 +74,15 @@ var alwaysAllowedMessages = []string{
 	"collector_stop_skipped",
 }
 
+// recordLoggedError keeps the first error whose message messageAllowed does
+// not allow and whose value no expected cause covers, wrapped so a failure
+// names that message.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
 	if r.messageAllowed(msg, r.expectedErrors) {
+		return
+	}
+
+	if r.errorCauseAllowed(err) {
 		return
 	}
 
@@ -95,6 +104,19 @@ func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 
 	for _, substr := range alwaysAllowedMessages {
 		if strings.Contains(msg, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// errorCauseAllowed reports whether errors.Is finds one of the scenario's
+// expected causes in err. A nil entry matches nothing, the same as an empty
+// expected message.
+func (r *runRecorder) errorCauseAllowed(err error) bool {
+	for _, cause := range r.expectedErrorCauses {
+		if cause != nil && errors.Is(err, cause) {
 			return true
 		}
 	}
@@ -235,6 +257,13 @@ type ScenarioV2 struct {
 	// expects. Any other error logged during the run fails it, or sets
 	// RunResult.Err when it is logged after Run returned.
 	ExpectedErrors []string
+
+	// ExpectedErrorCauses lists error values this scenario expects by cause,
+	// for when the message is generic: the executor logs every failed action
+	// as action_failed, so expecting that message would also let any
+	// unrelated failed action pass. A logged error is expected when
+	// errors.Is finds one of these causes in it.
+	ExpectedErrorCauses []error
 
 	// ExpectedWarnings lists substrings of warning log messages this
 	// scenario expects. Any other warning logged during the run sets
