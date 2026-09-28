@@ -34,11 +34,9 @@ var _ = Describe("TransportTestChannelProvider", func() {
 	It("queues and drains messages correctly", func() {
 		provider := examples.NewTransportTestChannelProvider(10)
 
-		// Queue a message via outbound
 		testMsg := &types.UMHMessage{Content: "test-message"}
 		provider.QueueOutbound(testMsg)
 
-		// Get channels and read from outbound
 		_, outbound := provider.GetChannels("test-worker")
 		receivedMsg := <-outbound
 		Expect(receivedMsg.Content).To(Equal("test-message"))
@@ -48,11 +46,9 @@ var _ = Describe("TransportTestChannelProvider", func() {
 		provider := examples.NewTransportTestChannelProvider(10)
 		inbound, _ := provider.GetChannels("test-worker")
 
-		// Send messages to inbound
 		inbound <- &types.UMHMessage{Content: "msg1"}
 		inbound <- &types.UMHMessage{Content: "msg2"}
 
-		// Drain
 		messages := provider.DrainInbound()
 		Expect(messages).To(HaveLen(2))
 		Expect(messages[0].Content).To(Equal("msg1"))

@@ -91,9 +91,7 @@ type TransportDependencies struct {
 
 // NewTransportDependencies creates dependencies for the transport worker,
 // acquiring channels from the global channel provider.
-// The worker must have a provider before it is built: set the global with
-// SetChannelProvider, or store one under ChannelProviderKey in the worker's
-// dependency map; otherwise this (or the map path) panics.
+// Panics if SetChannelProvider was not called first.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 // The supervisor writes framework metrics into this instance after construction;
 // constructing a second instance inside the factory would leave those metrics unreachable.
@@ -101,9 +99,8 @@ func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies) *Tra
 	return newTransportDependenciesWithProvider(t, bd, GetChannelProvider())
 }
 
-// newTransportDependenciesWithProvider creates dependencies that acquire
-// channels from the given provider instead of the global one. The worker
-// factory passes the provider stored under ChannelProviderKey here.
+// newTransportDependenciesWithProvider is NewTransportDependencies with an
+// explicit provider in place of the global one.
 func newTransportDependenciesWithProvider(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *TransportDependencies {
 	if provider == nil {
 		panic(fmt.Sprintf("ChannelProvider must be set before creating dependencies (worker=%s). "+
