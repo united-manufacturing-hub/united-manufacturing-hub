@@ -29,9 +29,7 @@ import (
 )
 
 // CommunicatorScenarioV2 runs one communicator child against a mock relay
-// server and a test channel provider held in the dependency map: it creates
-// the child with valid auth, waits for it to authenticate and reach Syncing,
-// then queues one outbound message and waits for the server to receive it.
+// server, with a test channel provider in the dependency map.
 var CommunicatorScenarioV2 = ScenarioV2{
 	Name:        "communicator",
 	Description: "Communicator worker: authenticates against a mock relay server and pushes a queued message",
@@ -49,11 +47,12 @@ var CommunicatorScenarioV2 = ScenarioV2{
 
 		deps := map[string]any{}
 
-		// Declared as each key's interface, because SetDependency stores the
-		// value under the key's type. One provider serves both keys: the
-		// communicator reads communicator.ChannelProviderKey, and the
-		// transport child it spawns reads transport.ChannelProviderKey from
-		// the merged map.
+		// Declared as each key's interface: a *TransportTestChannelProvider
+		// argument does not match the key's type, so SetDependency would not
+		// compile. One provider serves both keys. The communicator reads
+		// communicator.ChannelProviderKey. The transport child it spawns reads
+		// transport.ChannelProviderKey, because a child's map includes its
+		// parent's.
 		var cp communicator.ChannelProvider = provider
 		config.SetDependency(deps, communicator.ChannelProviderKey, cp)
 

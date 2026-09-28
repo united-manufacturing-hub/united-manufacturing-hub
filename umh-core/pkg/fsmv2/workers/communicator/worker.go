@@ -22,11 +22,7 @@
 // CommunicatorWorker monitors child health and manages lifecycle transitions.
 //
 // Channel sharing: the communicator acquires its inbound and outbound channels
-// from a ChannelProvider, taken from the worker's dependency map under
-// ChannelProviderKey when present and otherwise from the global set with
-// communicator.SetChannelProvider(). Construction panics when neither is set.
-// The transport package reads its provider from the dependency map only,
-// under transport.ChannelProviderKey.
+// from a ChannelProvider. ChannelProviderKey's doc says where the worker finds one.
 //
 // # FSM v2 Pattern
 //
@@ -71,12 +67,10 @@ type CommunicatorWorker struct {
 	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies]
 }
 
-// NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state,
-// acquiring its channels from the ChannelProvider stored under ChannelProviderKey in
-// dependencies, falling back to the global provider when the map holds none.
+// NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
+// Its channels come from the provider under ChannelProviderKey in dependencies.
 // The supervisor sets HierarchyPath on identity before instantiation; tests inject a
-// transport via transportParam. The factory passes nil: the TransportWorker child
-// owns transport (see the Architecture section, ENG-4264).
+// transport via transportParam.
 func NewCommunicatorWorker(
 	identity depspkg.Identity,
 	transportParam types.Transport,
