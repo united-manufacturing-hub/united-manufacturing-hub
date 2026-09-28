@@ -24,8 +24,7 @@ import (
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
-// ConcurrentScenarioV2 runs five helloworld workers side by side, none with
-// a mood file, and waits for each one to reach Running on its own.
+// ConcurrentScenarioV2 starts several helloworld workers at once; each must reach Running.
 var ConcurrentScenarioV2 = ScenarioV2{
 	Name:        "concurrent",
 	Description: "Tests multiple independent workers running concurrently without interference",
@@ -42,8 +41,7 @@ var ConcurrentScenarioV2 = ScenarioV2{
 
 		env.Step("create five helloworld workers at once")
 
-		// All five upserts run before any wait, so the workers start
-		// together, which is the point of the scenario.
+		// Upsert every worker before waiting on any, so they start together.
 		for _, ref := range refs {
 			if err := env.Client.Upsert(ref, map[string]any{
 				"state": "running",
