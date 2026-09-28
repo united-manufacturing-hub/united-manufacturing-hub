@@ -33,6 +33,10 @@ var validWorkerStates = map[string]map[string]bool{
 		"Running": true, "Degraded": true, "Stopped": true,
 		"unknown": true,
 	},
+	"certfetcher": {
+		"Stopped": true, "Running": true, "Degraded": true,
+		"unknown": true,
+	},
 	"configworker": {
 		"Running": true, "Stopped": true,
 		"unknown": true,
