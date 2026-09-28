@@ -51,12 +51,12 @@ func CollectSummary(ctx context.Context, db Querier) (Summary, error) {
 		return summary, fmt.Errorf("read historian summary: %w", err)
 	}
 
-	// The schema holds whatever the customer put there. historianCreated is the one
+	// The schema holds whatever the customer put there. isHistorianTable is the one
 	// definition of which tables are ours, so the two read paths cannot drift.
 	summary.TableNames = []string{}
 
 	for _, name := range names {
-		if historianCreated(name) {
+		if isHistorianTable(name) {
 			summary.TableNames = append(summary.TableNames, name)
 		}
 	}

@@ -58,7 +58,7 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 		return metrics, err
 	}
 
-	metrics.Tables = historianTables(append(tablesOf(hypertables), plainTables...))
+	metrics.Tables = filterHistorianTables(append(tablesOf(hypertables), plainTables...))
 
 	metrics.JobList, err = readJobs(ctx, db)
 	if err != nil {

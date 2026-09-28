@@ -22,7 +22,8 @@ var historianTablePrefixes = []string{"value_", "attribute_"}
 
 var historianTableNames = map[string]bool{"tag": true, "topic": true, "location": true}
 
-func historianCreated(name string) bool {
+// isHistorianTable reports whether benthos-umh's historian output created the table.
+func isHistorianTable(name string) bool {
 	if historianTableNames[name] {
 		return true
 	}
@@ -36,13 +37,13 @@ func historianCreated(name string) bool {
 	return false
 }
 
-// historianTables drops the tables this product did not create: every column
-// this package reads would be absent for them.
-func historianTables(tables []Table) []Table {
+// filterHistorianTables keeps only the tables the historian created: every
+// column this package reads would be absent for the others.
+func filterHistorianTables(tables []Table) []Table {
 	kept := make([]Table, 0, len(tables))
 
 	for _, table := range tables {
-		if historianCreated(table.Name) {
+		if isHistorianTable(table.Name) {
 			kept = append(kept, table)
 		}
 	}
