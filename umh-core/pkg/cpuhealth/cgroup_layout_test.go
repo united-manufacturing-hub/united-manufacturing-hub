@@ -120,4 +120,26 @@ var _ = Describe("the resolved cgroup layout", func() {
 		Expect(blankProbes).To(BeNumerically(">", afterBlankFirst),
 			"an unidentified mount is probed again next tick")
 	})
+
+	It("probes once per tick while the layout is unresolved", func() {
+		probesPerTick := func(files v1Files) int {
+			probes := 0
+			fs := serveFiles(files)
+			fs.FileExistsFunc = func(_ context.Context, _ string) (bool, error) {
+				probes++
+
+				return false, nil
+			}
+
+			_, err := cpuhealth.NewLinuxSampler(fs, cgroupBase).Read(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			return probes
+		}
+
+		withCpusetRead := probesPerTick(v1Files{"/proc/stat": "cpu  1 0 1 1 0 0 0 0 0 0\ncpu0 1 0 1 1 0 0 0 0 0 0\n"})
+		withoutCpusetRead := probesPerTick(v1Files{})
+
+		Expect(withCpusetRead).To(Equal(withoutCpusetRead))
+	})
 })

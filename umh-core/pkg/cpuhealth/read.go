@@ -171,7 +171,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// Nested under a successful /proc/stat read so the cpuset stays
 		// not_attempted when /proc/stat failed: the file was never opened, and
 		// recording a failure for it would name the wrong one.
-		s.recordCPUScope(ctx, &sample, machine)
+		s.recordCPUScope(ctx, cgroup, &sample, machine)
 		sample.HostBusy, sample.Steal = s.host.advanceHostRates(timestamp, busy, steal, denominator)
 	}
 
@@ -201,8 +201,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 // ScopeAffinity. The same read carries LogicalCpus, the "2" in "pinned to 2 of
 // 8 CPUs". A failed cpuset read reads ScopeUnknown with LogicalCpus absent,
 // never a silent ScopeHost on a known machine count.
-func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machine float64) {
-	allowed, cpusetErr := s.reader(ctx).readCpuset(ctx)
+func (s *linuxSampler) recordCPUScope(ctx context.Context, cgroup cgroupReader, sample *Sample, machine float64) {
+	allowed, cpusetErr := cgroup.readCpuset(ctx)
 	sample.record(OperationCpusetCPUs, classifyRead(cpusetErr), cpusetErr)
 	if cpusetErr != nil {
 		sample.LogicalCpus = diagnosis.Unknown()
