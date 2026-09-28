@@ -17,6 +17,7 @@ package transport
 import (
 	"sync"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
@@ -27,6 +28,11 @@ type ChannelProvider interface {
 	// Used by PullWorker to detect backpressure before pulling messages.
 	GetInboundStats(workerID string) (capacity int, length int)
 }
+
+// ChannelProviderKey names the ChannelProvider a TransportWorker acquires its
+// inbound and outbound channels through. When the dependency map holds nothing
+// under it, the worker uses the provider set with SetChannelProvider.
+var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("transport.channel_provider")
 
 var (
 	globalChannelProvider ChannelProvider
