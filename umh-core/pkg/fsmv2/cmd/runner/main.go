@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/signal"
 	"sort"
-	"strings"
 	"syscall"
 	"time"
 
@@ -201,17 +200,7 @@ func main() {
 			return
 		}
 
-		// The v2 runner wraps a failed run's error as `scenario "<name>"
-		// failed: ...`, which is the run failing rather than the startup.
-		fatalMsg := "Failed to start scenario"
-
-		if prefix := "scenario \""; len(err.Error()) > len(prefix) &&
-			strings.HasPrefix(err.Error(), prefix) &&
-			strings.Contains(err.Error(), "\" failed") {
-			fatalMsg = "Scenario failed"
-		}
-
-		logger.Fatal(fatalMsg, zap.Error(err))
+		logger.Fatal(fatalMessage(err), zap.Error(err))
 	}
 
 	<-result.Done
@@ -243,6 +232,16 @@ func main() {
 		//nolint:gocritic // exitAfterDefer: logger.Sync ran above, and the other defers do not matter once the process exits.
 		os.Exit(code)
 	}
+}
+
+// fatalMessage returns the log message for an error from examples.Run: a
+// scenario that started and then failed, or one that could not start.
+func fatalMessage(runErr error) string {
+	if errors.Is(runErr, examples.ErrScenarioFailed) {
+		return "Scenario failed"
+	}
+
+	return "Failed to start scenario"
 }
 
 // shutdownExitCode returns the process exit code for a completed scenario run.

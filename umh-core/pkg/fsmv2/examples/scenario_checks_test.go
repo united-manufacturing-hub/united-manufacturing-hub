@@ -153,6 +153,8 @@ var _ = Describe("ScenarioV2 error checks", func() {
 			"an error logged during a run must fail the run even when Run never waits")
 		Expect(runErr.Error()).To(ContainSubstring("probe_unexpected_error"),
 			"the run's failure must name the error that was logged")
+		Expect(errors.Is(runErr, examples.ErrScenarioFailed)).To(BeTrue(),
+			"a run that failed on a logged error must wrap ErrScenarioFailed, so the CLI reports a failed scenario and not a failed start")
 
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
 			"the run must tear down even when it failed on a logged error")
