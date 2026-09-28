@@ -297,9 +297,10 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// Built before the supervisor, so an error a worker logs on its first
 	// tick also fails the run.
 	recorder := &runRecorder{
-		scenario:         cfg.ScenarioV2.Name,
-		expectedErrors:   cfg.ScenarioV2.ExpectedErrors,
-		expectedWarnings: cfg.ScenarioV2.ExpectedWarnings,
+		scenario:            cfg.ScenarioV2.Name,
+		expectedErrors:      cfg.ScenarioV2.ExpectedErrors,
+		expectedErrorCauses: cfg.ScenarioV2.ExpectedErrorCauses,
+		expectedWarnings:    cfg.ScenarioV2.ExpectedWarnings,
 	}
 	runLogger := &recordingLogger{FSMLogger: cfg.Logger, recorder: recorder}
 
