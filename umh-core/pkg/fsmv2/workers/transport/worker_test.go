@@ -451,8 +451,7 @@ var _ = Describe("TransportWorker channel provider dependency", func() {
 		var mapProviderAsProvider transport.ChannelProvider = mapProvider
 		fsmv2types.SetDependency(dependencyMap, transport.ChannelProviderKey, mapProviderAsProvider)
 
-		// The worker reads the provider under this literal map key; the
-		// assertion fails if the key's name in the transport package changes.
+		// The worker reads the provider under this literal map key.
 		Expect(dependencyMap).To(HaveKey("transport.channel_provider"))
 
 		identity := deps.Identity{ID: "map-provider-worker", WorkerType: "transport"}
