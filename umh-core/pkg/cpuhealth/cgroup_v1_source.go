@@ -167,7 +167,12 @@ func (c *cgroupV1Source) readInt(ctx context.Context, path string) (value int64,
 	}
 	raw = string(data)
 
-	value, err = strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return 0, raw, contentError(path, errEmptyRead)
+	}
+
+	value, err = strconv.ParseInt(text, 10, 64)
 	if err != nil {
 		return 0, raw, contentError(path, errUnparsableRead)
 	}

@@ -106,6 +106,20 @@ var _ = Describe("the cgroup v1 CPU limit", func() {
 		Expect(ok).To(BeFalse(), "a quota with no period is no capacity, never a bare 200000")
 	})
 
+	It("reads an empty quota file as empty, the way v2 reads an empty cpu.max", func() {
+		smp, err := v1Sampler(v1Files{
+			statPath:   "nr_periods 10\nnr_throttled 0\n",
+			quotaPath:  "\n",
+			periodPath: "100000\n",
+		}).Read(context.Background())
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(smp.Troubleshooting.Reads).To(ContainElement(cpuhealth.ReadResult{
+			Operation: cpuhealth.OperationCPUMax,
+			Outcome:   cpuhealth.ReadEmpty,
+		}))
+	})
+
 	It("names the v1 file when the quota will not parse", func() {
 		smp, err := v1Sampler(v1Files{
 			statPath:   "nr_periods 10\nnr_throttled 0\n",
