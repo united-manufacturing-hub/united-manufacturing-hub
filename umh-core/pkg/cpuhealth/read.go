@@ -71,8 +71,8 @@ type linuxSampler struct {
 
 	// cgroup is non-nil from construction, holding the v2 reader until the
 	// probe says otherwise, so no call site has to guard it.
-	cgroup   cgroupReader
-	resolved bool
+	cgroup cgroupReader
+	layout cgroupLayout
 
 	host *hostSource
 
@@ -95,11 +95,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.Troubleshooting.CgroupBase = s.base
 	sample.Troubleshooting.Reads = seedReads()
 
+	cgroup := s.reader(ctx)
+	sample.Troubleshooting.CgroupLayout = s.layout.String()
+	sample.Troubleshooting.ReadPaths = readPaths(cgroup)
+
 	// First because a cpu.stat failure returns before every read below it, and
 	// a report of that failure needs these reads as much as any other.
 	s.recordRawReads(ctx, &sample)
-
-	cgroup := s.reader(ctx)
 
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
 	// calls time.Now() itself, so both rate derivations divide by the same
@@ -236,18 +238,15 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, cgroup cgroupReader, 
 // container can start before its cgroup is mounted, and writing the box off for
 // the life of the process would leave it unmeasured after the mount appeared.
 func (s *linuxSampler) reader(ctx context.Context) cgroupReader {
-	if s.resolved {
+	if s.layout != layoutNone {
 		return s.cgroup
 	}
 
-	switch layout, locations := resolveLayout(ctx, s.fs, s.base); layout {
-	case layoutV1:
+	layout, locations := resolveLayout(ctx, s.fs, s.base)
+	if layout == layoutV1 {
 		s.cgroup = newCgroupV1Source(s.fs, s.base, locations)
-		s.resolved = true
-	case layoutV2:
-		s.resolved = true
-	case layoutNone:
 	}
+	s.layout = layout
 
 	return s.cgroup
 }
@@ -288,6 +287,15 @@ func statOutcome(stat statRead, err error) ReadOutcome {
 	return ReadOK
 }
 
+func readPaths(cgroup cgroupReader) map[ReadOperation]string {
+	paths := make(map[ReadOperation]string, len(allReadOperations))
+	for _, spec := range allReadOperations {
+		paths[spec.Operation] = cgroup.pathOf(spec.Operation)
+	}
+
+	return paths
+}
+
 // seedReads returns one ReadNotAttempted entry per operation, in
 // allReadOperations order.
 func seedReads() []ReadResult {
@@ -310,7 +318,7 @@ func (s *Sample) record(operation ReadOperation, outcome ReadOutcome, readErr er
 		// Named here rather than at each failure: the seventeen places that
 		// return a content failure sit inside parse helpers that never learn
 		// which file they were handed, while this one knows both.
-		s.Troubleshooting.ReadErrors[operation] = pathErrorFor(s.Troubleshooting.CgroupBase, operation, readErr)
+		s.Troubleshooting.ReadErrors[operation] = pathErrorFor(s.Troubleshooting.ReadPaths[operation], readErr)
 	}
 
 	for i := range s.Troubleshooting.Reads {

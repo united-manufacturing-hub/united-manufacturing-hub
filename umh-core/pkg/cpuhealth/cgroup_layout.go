@@ -39,6 +39,9 @@ type cgroupReader interface {
 	// advanceUsageRate advances the baseline to timestamp and returns this
 	// tick's rate in cores.
 	advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading
+	// pathOf returns the file this reader opens for operation, or "" when it
+	// opens none.
+	pathOf(operation ReadOperation) string
 }
 
 // systemd mounts cpu and cpuacct together; a container runtime may not.
@@ -64,6 +67,19 @@ const (
 	layoutV2
 	layoutV1
 )
+
+func (l cgroupLayout) String() string {
+	switch l {
+	case layoutV2:
+		return "v2"
+	case layoutV1:
+		return "v1"
+	case layoutNone:
+		return "unresolved"
+	}
+
+	return "unresolved"
+}
 
 func resolveLayout(ctx context.Context, fs filesystem.Service, base string) (cgroupLayout, v1Locations) {
 	if fileExists(ctx, fs, base+"/cpu.stat") {

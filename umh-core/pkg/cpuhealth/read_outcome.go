@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Which file each read opens (ReadOperation, PathOf), and how it ended (ReadOutcome).
+// Which file each read opens (ReadOperation, pathOf), and how it ended (ReadOutcome).
 // Every read on a Sample carries an outcome, though a reader may return an
 // error that classifyRead turns into one. The fsmv2 CPU worker reports the
 // failures to Sentry.
@@ -67,18 +67,19 @@ var (
 // built from error TYPES, so wording one well costs no extra issues.
 //
 // An error that already names its file, which is every error the kernel
-// returns, is returned unchanged rather than wrapped twice.
-func pathErrorFor(base string, operation ReadOperation, readErr error) error {
+// returns, is returned unchanged rather than wrapped twice, and so is one for a
+// read with no file.
+func pathErrorFor(path string, readErr error) error {
 	if readErr == nil {
 		return nil
 	}
 
 	var pathErr *fs.PathError
-	if errors.As(readErr, &pathErr) {
+	if path == "" || errors.As(readErr, &pathErr) {
 		return readErr
 	}
 
-	return &fs.PathError{Op: "read", Path: PathOf(base, operation), Err: readErr}
+	return &fs.PathError{Op: "read", Path: path, Err: readErr}
 }
 
 // classifyRead maps an unrecognised error to ReadError rather than to the
@@ -179,10 +180,10 @@ var allReadOperations = []readOperationSpec{
 	{Operation: OperationCPUMax, name: "/cpu.max", cgroupRelative: true},
 }
 
-// PathOf returns the file this operation opens under base, so a reader and a
-// report of that read name the same path by construction. base is ignored for a
-// machine-wide file. An operation with no entry returns "".
-func PathOf(base string, operation ReadOperation) string {
+// pathOf returns the file the v2 reader and the host reader open for this
+// operation under base. base is ignored for a machine-wide file. An operation
+// with no such file returns "".
+func pathOf(base string, operation ReadOperation) string {
 	for _, spec := range allReadOperations {
 		if spec.Operation != operation {
 			continue

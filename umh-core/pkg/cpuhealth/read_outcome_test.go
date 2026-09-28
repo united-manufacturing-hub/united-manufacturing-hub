@@ -285,9 +285,9 @@ var _ = Describe("a failure names the file it happened to", func() {
 		// reader acts on. A bare "file is empty" names no file and sends them
 		// hunting; the errno failures already read well because the kernel's
 		// own error carries the path.
-		Expect(pathErrorFor(base, OperationCPUMax, errEmptyRead).Error()).
+		Expect(pathErrorFor(pathOf(base, OperationCPUMax), errEmptyRead).Error()).
 			To(Equal("read /sys/fs/cgroup/cpu.max: file is empty"))
-		Expect(pathErrorFor(base, OperationCPUStat, errUnparsableRead).Error()).
+		Expect(pathErrorFor(pathOf(base, OperationCPUStat), errUnparsableRead).Error()).
 			To(Equal("read /sys/fs/cgroup/cpu.stat: content did not parse"))
 	})
 
@@ -295,8 +295,8 @@ var _ = Describe("a failure names the file it happened to", func() {
 		// Wrapping the kernel's own error again would read
 		// "read /proc/stat: open /proc/stat: ...".
 		kernel := pathErr("/proc/stat", syscall.ENOENT)
-		Expect(pathErrorFor(base, OperationProcStat, kernel)).To(BeIdenticalTo(kernel))
-		Expect(pathErrorFor(base, OperationProcStat, kernel).Error()).
+		Expect(pathErrorFor(pathOf(base, OperationProcStat), kernel)).To(BeIdenticalTo(kernel))
+		Expect(pathErrorFor(pathOf(base, OperationProcStat), kernel).Error()).
 			To(Equal("open /proc/stat: no such file or directory"))
 	})
 
@@ -309,6 +309,6 @@ var _ = Describe("a failure names the file it happened to", func() {
 	})
 
 	It("returns nil for a read that did not fail", func() {
-		Expect(pathErrorFor(base, OperationCPUMax, nil)).To(Succeed())
+		Expect(pathErrorFor(pathOf(base, OperationCPUMax), nil)).To(Succeed())
 	})
 })

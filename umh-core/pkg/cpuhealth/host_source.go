@@ -103,7 +103,7 @@ func (h *hostSource) advanceHostRates(timestamp time.Time, busy, steal, denomina
 // which is why it is read here and not by cgroupSource. Any outcome other than
 // ReadOK means no text was read, and names the cause.
 func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome, error) {
-	return readRawFile(ctx, h.fs, PathOf("", OperationProcSelfCgroup))
+	return readRawFile(ctx, h.fs, pathOf("", OperationProcSelfCgroup))
 }
 
 // readHost yields /proc/stat's busy, steal and denominator jiffy totals, plus
@@ -114,7 +114,7 @@ func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcom
 // per-CPU lines are counted before the aggregate line is parsed, so they can be
 // readable on a file whose aggregate line is not.
 func (h *hostSource) readHost(ctx context.Context) (busy, steal, denominator, machine float64, err error) {
-	data, err := h.fs.ReadFile(ctx, PathOf("", OperationProcStat))
+	data, err := h.fs.ReadFile(ctx, pathOf("", OperationProcStat))
 	if err != nil {
 		return 0, 0, 0, 0, err
 	}
@@ -180,7 +180,7 @@ func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpu
 	}
 	// The x86 route. The "hypervisor" flag is the guest's own evidence, so a
 	// match settles the fact without reading DMI at all.
-	data, err := h.fs.ReadFile(ctx, PathOf("", OperationProcCpuinfo))
+	data, err := h.fs.ReadFile(ctx, pathOf("", OperationProcCpuinfo))
 	cpuinfo = classifyRead(err)
 	readErr = err
 	if err == nil && cpuinfoHasHypervisorFlag(data) {

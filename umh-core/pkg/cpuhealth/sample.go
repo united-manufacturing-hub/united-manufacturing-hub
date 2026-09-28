@@ -157,6 +157,14 @@ type ReadTroubleshooting struct {
 	// reading a non-default tree reports the paths it actually opened.
 	CgroupBase string
 
+	// CgroupLayout is the hierarchy the sampler read: "v2", "v1", or
+	// "unresolved" when neither answered.
+	CgroupLayout string
+
+	// ReadPaths holds the file each read opens on this layout, keyed by
+	// operation, and "" for a read with no file there.
+	ReadPaths map[ReadOperation]string
+
 	// ReadErrors holds the error a failed read returned, keyed by operation, so
 	// a report can name what the kernel actually said. It is deliberately not a
 	// field on ReadResult: ReadResult is a map key in the report path, and an

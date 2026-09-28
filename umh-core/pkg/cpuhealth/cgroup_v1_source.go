@@ -52,7 +52,7 @@ func newCgroupV1Source(fs filesystem.Service, base string, locations v1Locations
 // period, over cpu.cfs_period_us. A positive quota reads as a capacity in
 // cores, -1 as a present no-limit, and either file unreadable as absent.
 func (c *cgroupV1Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome, error) {
-	quota, quotaRaw, err := c.readInt(ctx, c.path(c.locations.cpuDir, "cpu.cfs_quota_us"))
+	quota, quotaRaw, err := c.readInt(ctx, c.pathOf(OperationCPUMax))
 	if err != nil {
 		return quotaRead{Limit: diagnosis.Unknown(), Raw: quotaRaw}, classifyRead(err), err
 	}
@@ -98,9 +98,7 @@ func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
 		UsageFromCPUAcct: true,
 		UsageErr:         usageErr,
 	}
-	path := c.path(c.locations.cpuDir, "cpu.stat")
-
-	data, err := c.fs.ReadFile(ctx, path)
+	data, err := c.fs.ReadFile(ctx, c.pathOf(OperationCPUStat))
 	if err != nil {
 		return failed, err
 	}
@@ -108,11 +106,11 @@ func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
 
 	periods, err := parseCounter(data, "nr_periods")
 	if err != nil {
-		return failed, contentError(path, err)
+		return failed, err
 	}
 	throttled, err := parseCounter(data, "nr_throttled")
 	if err != nil {
-		return failed, contentError(path, err)
+		return failed, err
 	}
 
 	read := failed
@@ -124,7 +122,7 @@ func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
 
 // readUsage reads cpuacct.usage, which v1 writes in nanoseconds.
 func (c *cgroupV1Source) readUsage(ctx context.Context) (diagnosis.Reading, error) {
-	nanoseconds, _, err := c.readInt(ctx, c.path(c.locations.cpuacctDir, "cpuacct.usage"))
+	nanoseconds, _, err := c.readInt(ctx, c.pathOf(OperationCPUAcctUsage))
 	if err != nil {
 		return diagnosis.Unknown(), err
 	}
@@ -137,25 +135,35 @@ func (c *cgroupV1Source) readPSI(context.Context) (fraction float64, err error) 
 }
 
 func (c *cgroupV1Source) readCpuset(ctx context.Context) (count int, err error) {
-	path := c.path("cpuset", c.locations.cpusetFile)
-
-	data, err := c.fs.ReadFile(ctx, path)
+	data, err := c.fs.ReadFile(ctx, c.pathOf(OperationCpusetCPUs))
 	if err != nil {
 		return 0, err
 	}
 
-	count, err = countCPUList(string(data))
-	if err != nil {
-		return 0, contentError(path, err)
-	}
-
-	return count, nil
+	return countCPUList(string(data))
 }
 
 // advanceUsageRate derives this tick's usage rate in cores from the baseline it
 // replaces, exactly as cgroupSource does.
 func (c *cgroupV1Source) advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	return c.usageBase.advance(timestamp, usage)
+}
+
+func (c *cgroupV1Source) pathOf(operation ReadOperation) string {
+	switch operation {
+	case OperationCPUMax:
+		return c.path(c.locations.cpuDir, "cpu.cfs_quota_us")
+	case OperationCPUStat:
+		return c.path(c.locations.cpuDir, "cpu.stat")
+	case OperationCPUAcctUsage:
+		return c.path(c.locations.cpuacctDir, "cpuacct.usage")
+	case OperationCpusetCPUs:
+		return c.path("cpuset", c.locations.cpusetFile)
+	case OperationCPUPressure:
+		return ""
+	}
+
+	return pathOf(c.base, operation)
 }
 
 func (c *cgroupV1Source) path(dir, name string) string {
@@ -184,8 +192,8 @@ func (c *cgroupV1Source) readInt(ctx context.Context, path string) (value int64,
 	return value, raw, nil
 }
 
-// contentError names the v1 file a content failure came from. Without it the
-// report would name the v2 file PathOf maps the operation to.
+// contentError names the file itself: cpu.cfs_period_us is a second file under
+// OperationCPUMax, so the operation's path would name the quota file instead.
 func contentError(path string, readErr error) error {
 	return &fs.PathError{Op: "read", Path: path, Err: readErr}
 }
