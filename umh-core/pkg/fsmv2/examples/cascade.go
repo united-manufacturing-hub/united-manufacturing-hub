@@ -28,10 +28,11 @@ import (
 
 // CascadeScenarioV2 runs one exampleparent whose two children are
 // examplefailing workers that each fail three times, in two cycles. The
-// first cycle's failures happen while the parent is still starting, so the
-// parent reaches Running. The second cycle's failures happen while the
-// parent is Running, and only then does the parent report Degraded. When
-// the children recover, the parent returns to Running.
+// parent reports Degraded when its children leave Connected for the next
+// cycle while it is Running, and the second cycle's failures keep them
+// unhealthy until they reconnect. The final wait checks each child's cycle
+// and attempt count, so a scenario whose children merely cycle without
+// failing again does not pass.
 var CascadeScenarioV2 = ScenarioV2{
 	Name:        "cascade",
 	Description: "Shows cascade failure: child failures propagate to parent state, parent recovery when children heal",
@@ -94,7 +95,13 @@ var CascadeScenarioV2 = ScenarioV2{
 		for _, name := range []string{"child-0", "child-1"} {
 			childRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: name}
 
-			if err := env.WaitFor(ctx, "the child "+name+" reaches Connected",
+			// Attempts accumulate across cycles: the first cycle's three
+			// failures bring the counter past 3, so Connected in cycle 1
+			// (CurrentCycle, zero based) with more than 3 attempts proves
+			// the child failed its three second-cycle attempts before it
+			// reconnected. A child that never cycles again stays at
+			// CurrentCycle 0.
+			if err := env.WaitFor(ctx, "the child "+name+" reconnected in its second cycle after failing again",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, childRef)
 					if err != nil {
@@ -105,7 +112,11 @@ var CascadeScenarioV2 = ScenarioV2{
 						return false, "", err
 					}
 
-					return obs.State == "Connected", "state=" + obs.State, nil
+					done := obs.State == "Connected" &&
+						obs.Status.CurrentCycle == 1 &&
+						obs.Status.ConnectAttempts > 3
+
+					return done, fmt.Sprintf("state=%s cycle=%d attempts=%d", obs.State, obs.Status.CurrentCycle, obs.Status.ConnectAttempts), nil
 				}); err != nil {
 				return err
 			}
