@@ -305,10 +305,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 // database that is answering.
 func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
 	return func() (timescalemetrics.Summary, bool) {
-		summaryCtx, cancel := context.WithTimeout(ctx, summaryBudget)
-		defer cancel()
-
-		summary, err := timescalemetrics.CollectSummary(summaryCtx, pool)
+		summary, err := timescalemetrics.CollectSummary(ctx, pool)
 		if err != nil {
 			d.GetLogger().Debug("timescale summary",
 				deps.String("host", host),
@@ -333,11 +330,6 @@ func init() {
 // Neither figure moves faster than this: a table appears when a contract is
 // deployed, and a failing job is not urgent to the second.
 const summaryInterval = 60 * time.Second
-
-// Sized against the poll cycle, not the observation deadline: a read that blocks
-// delays the connection check this worker exists to produce. Exceeding it costs
-// nothing beyond a stale summary, since the previous value is kept.
-const summaryBudget = 100 * time.Millisecond
 
 // sharedSummary matches sharedPool: the cache has to outlive a single Poll.
 var sharedSummary = &summaryCache{interval: summaryInterval}
