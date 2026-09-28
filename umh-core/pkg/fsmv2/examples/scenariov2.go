@@ -315,4 +315,5 @@ var RegistryV2 = map[string]ScenarioV2{
 	"concurrent": ConcurrentScenarioV2,
 	"simple":     SimpleScenarioV2,
 	"cascade":    CascadeScenarioV2,
+	"configerror": ConfigErrorScenarioV2,
 }
