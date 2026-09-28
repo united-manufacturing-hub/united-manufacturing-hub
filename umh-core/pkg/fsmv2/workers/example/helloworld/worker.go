@@ -55,9 +55,8 @@ var FilesystemKey = config.NewDependencyKey[filesystem.Service]("helloworld.file
 type HelloworldWorker struct {
 	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]
 
-	// fs reads the mood file. NewHelloworldWorker sets it to the real
-	// filesystem, and the factory replaces it with the filesystem.Service
-	// stored under FilesystemKey when the dependency map holds one.
+	// fs reads the mood file. The factory replaces the default with the
+	// Service under FilesystemKey when the dependency map holds one.
 	fs filesystem.Service
 }
 

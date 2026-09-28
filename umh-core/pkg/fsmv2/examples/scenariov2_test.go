@@ -345,9 +345,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 	It("lists noop in the merged registry and runs a v2 scenario end-to-end on the kernel-only supervisor", func() {
 		// The v2 scenarios must appear in the same listing the CLI reads, so
-		// --list and --scenario find v1 and v2 scenarios alike. helloworld
-		// moved from Registry to RegistryV2, so it must be listed and absent
-		// from the v1 registry.
+		// --list and --scenario find v1 and v2 scenarios alike. helloworld is a
+		// v2 scenario only.
 		listing := examples.ListScenarios()
 		Expect(listing).To(HaveKey("noop"),
 			"merged ListScenarios must contain the v2 noop scenario")

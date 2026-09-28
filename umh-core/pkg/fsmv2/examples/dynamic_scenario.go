@@ -53,9 +53,7 @@ const (
 // DynamicScenarioV2 drives one helloworld child through the migration-API
 // client: create it to Running, Upsert an observable config change (a new
 // moodFilePath whose file contents land in observed status), then Delete it.
-// The kernel-only supervisor and its config worker run the whole time; each
-// leg is announced with Step and its result is checked through WaitFor, and
-// the config worker is read once more after the child's lifecycle ends.
+// The kernel-only supervisor and its config worker run the whole time.
 var DynamicScenarioV2 = ScenarioV2{
 	Name:        "dynamic",
 	Description: "Drives a helloworld child through create/update/delete via the migration-API client (v2)",

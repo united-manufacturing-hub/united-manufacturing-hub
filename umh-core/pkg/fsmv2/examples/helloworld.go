@@ -51,8 +51,8 @@ var HelloworldScenarioV2 = ScenarioV2{
 	},
 
 	Run: func(ctx context.Context, env Env) error {
-		// The mock is looked up as the Service the worker reads and kept as
-		// the mock it is, so Run can change the file the worker reads.
+		// Assert the Service back to *mockFilesystem, so Run can change the
+		// file the worker reads.
 		service, ok := config.LookupDependency(env.Dependencies, hello_world.FilesystemKey)
 		if !ok {
 			return errors.New("the helloworld scenario's dependency map holds no filesystem under hello_world.FilesystemKey")

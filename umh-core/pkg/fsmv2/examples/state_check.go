@@ -27,8 +27,7 @@ import (
 // integration/scenarios_test.go until the v1 integration specs are migrated
 // (ENG-5114); no registry of a type's states exists to read instead. "unknown"
 // is allowed for every type, because the supervisor reports it until a
-// worker's first tick. A worker type missing from the map is skipped: its
-// stored states cannot be validated.
+// worker's first tick.
 var validWorkerStates = map[string]map[string]bool{
 	"application": {
 		"Running": true, "Degraded": true, "Stopped": true,
@@ -45,11 +44,10 @@ var validWorkerStates = map[string]map[string]bool{
 	},
 }
 
-// checkStoredWorkerStates reads every stored worker the way the scenario dump
-// does and returns an error naming the first worker whose stored observed
-// state is not a state name its type may report, or nil when every stored
-// state is valid. The check runs after the supervisor has stopped, so no
-// supervisor write races the read.
+// checkStoredWorkerStates returns an error naming the first stored worker whose
+// type is in validWorkerStates and whose state is not listed for that type.
+// Call it after the supervisor has stopped, so no supervisor write races the
+// read.
 func checkStoredWorkerStates(ctx context.Context, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
 	dump, err := DumpScenario(ctx, store, 0)
 	if err != nil {
