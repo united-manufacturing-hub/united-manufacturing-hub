@@ -25,10 +25,7 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// SimpleScenarioV2 runs one exampleparent with two children and waits for
-// the whole hierarchy to come up: the parent reaches Running, both its
-// children reach Connected, and the parent's framework health count reports
-// both children healthy.
+// SimpleScenarioV2 brings up one exampleparent and its examplechild children.
 var SimpleScenarioV2 = ScenarioV2{
 	Name:        "simple",
 	Description: "Single parent worker with 2 dynamically-created child workers",
