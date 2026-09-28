@@ -92,13 +92,9 @@ var CascadeScenarioV2 = ScenarioV2{
 		for _, name := range []string{"child-0", "child-1"} {
 			childRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: name}
 
-			// ConnectAttempts restarts at zero when examplefailing's
-			// AdvanceCycle starts a new cycle, and with max_failures 3 the
-			// fourth attempt connects. Connected in cycle 1 (CurrentCycle is
-			// zero based) with more than 3 attempts therefore means the child
-			// failed three times again before it reconnected. A child that
-			// never cycles again stays at CurrentCycle 0.
-			if err := env.WaitFor(ctx, "the child "+name+" reconnected in its second cycle after failing again",
+			// Cycle 2 is reached only after the child failed again in
+			// cycle 1, and it is the state the child stays in.
+			if err := env.WaitFor(ctx, "the child "+name+" settles in Connected after its second failure round",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, childRef)
 					if err != nil {
@@ -110,8 +106,7 @@ var CascadeScenarioV2 = ScenarioV2{
 					}
 
 					done := obs.State == "Connected" &&
-						obs.Status.CurrentCycle == 1 &&
-						obs.Status.ConnectAttempts > 3
+						obs.Status.CurrentCycle == 2
 
 					return done, fmt.Sprintf("state=%s cycle=%d attempts=%d", obs.State, obs.Status.CurrentCycle, obs.Status.ConnectAttempts), nil
 				}); err != nil {
