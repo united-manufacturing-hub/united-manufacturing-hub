@@ -14,179 +14,152 @@
 
 package examples
 
-// ConfigErrorScenario demonstrates configuration validation and error handling.
-//
-// # What This Scenario Tests
-//
-// This scenario showcases how FSM v2 handles various configuration errors:
-//
-//  1. Invalid Worker Type
-//     - Worker type that doesn't exist in registry
-//     - Demonstrates graceful handling of registration errors
-//
-//  2. Type Mismatch in Configuration
-//     - String value where integer expected
-//     - YAML parsing produces zero values or errors
-//
-//  3. Valid Configuration Baseline
-//     - Correctly configured worker for comparison
-//     - Shows what "working" looks like alongside errors
-//
-// # Configuration Error Flow
-//
-// When configuration is invalid, the flow depends on where validation fails:
-//
-// ## Worker Type Not Found
-//
-//  1. ApplicationSupervisor parses YAML
-//  2. For each child, looks up workerType in factory registry
-//  3. If not found: error logged, worker not created
-//  4. Other workers continue normally
-//
-// ## YAML Parse Error
-//
-//  1. DeriveDesiredState calls ParseUserSpec[T](spec)
-//  2. ParseUserSpec attempts yaml.Unmarshal
-//  3. If type mismatch: Go uses zero value (no error from unmarshal!)
-//  4. Worker proceeds with default/zero config
-//
-// ## Missing Required Field
-//
-//  1. Worker receives parsed config with zero values
-//  2. Worker code must validate and handle missing fields
-//  3. GetMaxFailures() returns default (3) if MaxFailures is 0
-//
-// # Key Insight: YAML Parsing is Lenient
-//
-// Go's yaml.Unmarshal is very forgiving:
-//
-//	config: |
-//	  children_count: "not-a-number"
-//
-// This does NOT produce an error! The children_count field remains 0.
-// This is why worker code often has defaults:
-//
-//	func (s *Spec) GetMaxFailures() int {
-//	    if s.MaxFailures <= 0 {
-//	        return 3 // Default
-//	    }
-//	    return s.MaxFailures
-//	}
-//
-// # What to Observe
-//
-// Invalid worker type:
-//
-//	"worker type not found" workerType="nonexistent_worker"
-//	"skipping child creation" name="config-invalid-type"
-//
-// Type mismatch (children_count: "not-a-number"):
-//
-//	Worker starts normally with children_count = 0 (zero value)
-//	No explicit error message - silent degradation
-//	Parent creates no children
-//
-// Valid configuration:
-//
-//	Normal startup sequence
-//	Parent creates expected number of children
-//
-// # Recommendations for Production
-//
-// ## Explicit Validation
-//
-//	func (s *MySpec) Validate() error {
-//	    if s.Timeout <= 0 {
-//	        return fmt.Errorf("timeout must be positive, got %d", s.Timeout)
-//	    }
-//	    if s.MaxRetries < 0 {
-//	        return fmt.Errorf("max_retries cannot be negative")
-//	    }
-//	    return nil
-//	}
-//
-// ## Fail-Fast in DeriveDesiredState
-//
-//	func (w *Worker) DeriveDesiredState(spec interface{}) (DesiredState, error) {
-//	    parsed, err := config.ParseUserSpec[MySpec](spec)
-//	    if err != nil {
-//	        return DesiredState{}, fmt.Errorf("invalid config: %w", err)
-//	    }
-//	    if err := parsed.Validate(); err != nil {
-//	        return DesiredState{}, fmt.Errorf("config validation failed: %w", err)
-//	    }
-//	    return DesiredState{...}, nil
-//	}
-//
-// ## Semantic Validation in Actions
-//
-//	func (a *ConnectAction) Execute(ctx context.Context, deps any) error {
-//	    d := deps.(*Dependencies)
-//	    if d.GetURL() == "" {
-//	        return fmt.Errorf("cannot connect: URL not configured")
-//	    }
-//	    // ... actual connection logic
-//	}
-//
-// # Configuration Error Categories
-//
-//	Category              | When Detected      | Effect
-//	---------------------|-------------------|-------------------------
-//	Invalid worker type  | Supervisor startup | Worker not created
-//	YAML syntax error    | ParseUserSpec      | DeriveDesiredState error
-//	Type mismatch        | YAML unmarshal     | Zero value (silent!)
-//	Missing required     | Worker validation  | Validation error
-//	Invalid semantics    | Action execution   | Action failure
-//
-// # Real-World Parallels
-//
-// Invalid Worker Type:
-//   - Typo in configuration file
-//   - Missing plugin/module
-//   - Version mismatch (old config, new code)
-//
-// Type Mismatch:
-//   - "timeout: fast" instead of "timeout: 30"
-//   - Copy-paste errors from examples
-//   - Template variable not substituted
-//
-// Missing Required:
-//   - New required field added in update
-//   - Partial configuration during development
-//   - Environment variable not set
-var ConfigErrorScenario = Scenario{
-	Name: "configerror",
+import (
+	"context"
+	"errors"
+	"fmt"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	example_failing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
+	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+)
+
+// ConfigErrorScenarioV2 runs one valid parent next to three badly configured
+// workers. A bad config is rejected when the supervisor derives the worker's
+// desired state: the worker never starts, and the rejection is logged on
+// every reconciliation tick. The valid parent and its children come up
+// normally beside them, and the empty-config parent runs with zero children.
+var ConfigErrorScenarioV2 = ScenarioV2{
+	Name:        "configerror",
 	Description: "Demonstrates configuration validation and error handling patterns",
 
-	YAMLConfig: `
-children:
-  # Valid configuration baseline
-  - name: "config-valid"
-    workerType: "exampleparent"
-    userSpec:
-      config: |
-        children_count: 2
+	// Nothing narrower than these messages is available: the underlying
+	// error is a yaml type error with no sentinel value, so the messages
+	// are the only handle on it.
+	ExpectedErrors: []string{
+		"worker_add_derive_desired_failed",
+		"child_supervisor_add_worker_failed",
+	},
 
-  # Type mismatch: children_count becomes 0 (YAML is lenient)
-  - name: "config-type-mismatch"
-    workerType: "exampleparent"
-    userSpec:
-      config: |
-        children_count: "not-a-number"
+	ExpectedWarnings: []string{"reducer_error"},
 
-  # Empty config: all fields get zero values
-  - name: "config-empty"
-    workerType: "exampleparent"
-    userSpec:
-      config: ""
+	Run: func(ctx context.Context, env Env) error {
+		validRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-valid"}
+		mismatchRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-type-mismatch"}
+		emptyRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-empty"}
+		defaultsRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "config-failing-defaults"}
 
-  # Invalid max_failures becomes 0, GetMaxFailures() returns default 3
-  - name: "config-failing-defaults"
-    workerType: "examplefailing"
-    userSpec:
-      config: |
-        should_fail: true
-        max_failures: "three"
-`,
+		env.Step("create one valid parent, one empty-config parent, and two workers with invalid configs")
+
+		if err := env.Client.Upsert(validRef, map[string]any{
+			"state":          "running",
+			"children_count": 2,
+		}); err != nil {
+			return fmt.Errorf("upsert valid parent: %w", err)
+		}
+
+		if err := env.Client.Upsert(mismatchRef, map[string]any{
+			"state":          "running",
+			"children_count": "not-a-number",
+		}); err != nil {
+			return fmt.Errorf("upsert type-mismatch parent: %w", err)
+		}
+
+		if err := env.Client.Upsert(emptyRef, map[string]any{
+			"state": "running",
+		}); err != nil {
+			return fmt.Errorf("upsert empty-config parent: %w", err)
+		}
+
+		if err := env.Client.Upsert(defaultsRef, map[string]any{
+			"state":        "running",
+			"max_failures": "three",
+		}); err != nil {
+			return fmt.Errorf("upsert failing-defaults worker: %w", err)
+		}
+
+		if err := env.WaitFor(ctx, "the valid parent reaches Running",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, validRef)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the parent has not published an observation yet", nil
+					}
+
+					return false, "", err
+				}
+
+				return obs.State == "Running", "state=" + obs.State, nil
+			}); err != nil {
+			return err
+		}
+
+		for _, name := range []string{"child-0", "child-1"} {
+			childRef := dynamicchildren.Ref{WorkerType: "examplechild", Name: name}
+
+			if err := env.WaitFor(ctx, "the valid parent's child "+name+" reaches Connected",
+				func(ctx context.Context) (bool, string, error) {
+					obs, err := fsmv2client.Get[example_child.ExamplechildStatus](ctx, env.Client, childRef)
+					if err != nil {
+						if errors.Is(err, fsmv2client.ErrNotObserved) {
+							return false, "the child has not published an observation yet", nil
+						}
+
+						return false, "", err
+					}
+
+					return obs.State == "Connected", "state=" + obs.State, nil
+				}); err != nil {
+				return err
+			}
+		}
+
+		// A parent with zero children never meets the ChildrenHealthy > 0
+		// condition in state_trying_to_start.go, so the empty-config parent
+		// stays in TryingToStart forever and this wait must not ask for
+		// Running. It reaches TryingToStart after its five seconds in
+		// Stopped.
+		if err := env.WaitFor(ctx, "the empty-config parent settles in TryingToStart",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, emptyRef)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the parent has not published an observation yet", nil
+					}
+
+					return false, "", err
+				}
+
+				return obs.State == "TryingToStart", "state=" + obs.State, nil
+			}); err != nil {
+			return err
+		}
+
+		// The two invalid-config workers never start, so neither is ever
+		// observed. This check runs after the valid parent reached Running,
+		// so the invalid ones have had the same time to appear, and a
+		// worker that appears now is one the config failed to reject.
+		polls := 0
+
+		return env.WaitFor(ctx, "the two invalid-config workers stay unobserved across 20 polls",
+			func(ctx context.Context) (bool, string, error) {
+				if _, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, mismatchRef); err == nil {
+					return false, "", errors.New("the type-mismatch parent was observed, although its children_count is not a number")
+				} else if !errors.Is(err, fsmv2client.ErrNotObserved) {
+					return false, "", err
+				}
+
+				if _, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, defaultsRef); err == nil {
+					return false, "", errors.New("the failing-defaults worker was observed, although its max_failures is not a number")
+				} else if !errors.Is(err, fsmv2client.ErrNotObserved) {
+					return false, "", err
+				}
+
+				polls++
+
+				return polls >= 20, fmt.Sprintf("unobserved polls=%d", polls), nil
+			})
+	},
 }

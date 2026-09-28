@@ -170,7 +170,6 @@ type Scenario struct {
 // Registry holds the v1 scenarios not yet moved to v2 (ENG-5114). New
 // scenarios go in RegistryV2; see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 var Registry = map[string]Scenario{
-	"configerror":  ConfigErrorScenario,
 	"inheritance":  InheritanceScenario,
 	"communicator": CommunicatorScenarioEntry,
 	"persistence":  PersistenceScenarioEntry,
