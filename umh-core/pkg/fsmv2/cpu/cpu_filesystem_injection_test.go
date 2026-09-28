@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -86,12 +87,54 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		return id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
 	}
 
+	It("samples through the filesystem in its dependency map over the global one", func() {
+		// The global stub refuses every read, so a Poll through it reports a
+		// machine it cannot measure as healthy. Only the map's marked cpu.stat
+		// can make the sample fail, so the error below names which one was read.
+		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
+		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
+
+		m := map[string]any{}
+		var marked filesystem.Service = markedStatFilesystem{}
+		config.SetDependency(m, FilesystemKey, marked)
+		Expect(m).To(HaveKey("cpu.filesystem"),
+			"the dependency-map slot must be named cpu.filesystem; rename "+
+				"FilesystemKey and this literal is the line that fails")
+
+		id, bd := newBaseDeps()
+		_, err := Poll(context.Background(), monitorSpec.NewDeps(id, bd, m), CPUConfig{})
+		Expect(err).To(HaveOccurred(),
+			"the map's filesystem serves a cpu.stat that cannot parse, so the sample must fail")
+		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
+			"only the map's filesystem serves this counter value; the global stub refuses every read")
+	})
+
+	It("falls back to the published global when the map holds nothing under the key", func() {
+		// The map holds nothing under FilesystemKey, and the supervisor never
+		// adds one: a child's map is its parent's map merged with the child
+		// spec's (config.MergeDependencies), so a value under FilesystemKey
+		// arrives from the parent chain or from the spec's Dependencies, and
+		// nothing above this worker sets the key. The published global serves
+		// the marked cpu.stat, so the error below names it as the filesystem
+		// that was read.
+		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
+		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
+
+		m := map[string]any{"unrelated.key": struct{}{}}
+		id, bd := newBaseDeps()
+		_, err := Poll(context.Background(), monitorSpec.NewDeps(id, bd, m), CPUConfig{})
+		Expect(err).To(HaveOccurred(),
+			"with nothing under the key the published global serves a cpu.stat that cannot parse")
+		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
+			"only the published global serves this counter value")
+	})
+
 	It("samples through a published filesystem rather than the real one", func() {
 		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
-		d := NewDeps(id, bd, nil)
+		d := monitorSpec.NewDeps(id, bd, nil)
 
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).To(HaveOccurred(),
@@ -108,7 +151,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
-		status, err := Poll(context.Background(), NewDeps(id, bd, nil), CPUConfig{})
+		status, err := Poll(context.Background(), monitorSpec.NewDeps(id, bd, nil), CPUConfig{})
 		Expect(err).NotTo(HaveOccurred(), "an unreadable cgroup must not degrade the instance")
 		Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy))
 	})
@@ -118,7 +161,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 			"precondition: no earlier spec may have left a filesystem in the registry")
 
 		id, bd := newBaseDeps()
-		d := NewDeps(id, bd, nil)
+		d := monitorSpec.NewDeps(id, bd, nil)
 
 		Expect(d.sampler).NotTo(BeNil(), "an unpublished filesystem still yields a sampler")
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")

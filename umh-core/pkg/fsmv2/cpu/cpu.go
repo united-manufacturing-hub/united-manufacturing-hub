@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
@@ -46,6 +47,7 @@ const (
 	//
 	// A key holds one value, so each payload gets its own key rather than
 	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
+	// A value in the worker's dependency map wins over what is published here.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
@@ -68,6 +70,11 @@ const (
 // USE_FSMV2_CPU, and that a reader fetches its status back under through
 // fsmv2client.
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
+
+// FilesystemKey names the filesystem.Service the sampler reads the cgroup
+// files through. When the dependency map holds nothing under it, the sampler
+// reads the cgroup files through filesystem.NewDefaultService().
+var FilesystemKey = config.NewDependencyKey[filesystem.Service]("cpu.filesystem")
 
 // CPUConfig is empty: the CPU worker takes no configuration.
 type CPUConfig struct{}
@@ -181,14 +188,18 @@ func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.D
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
-// (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
-// it, and builds the table and engine.
+// (precedent: pkg/fsm/container/machine.go) over the first filesystem that
+// provides one, takes one startup snapshot through it, and builds the table
+// and engine.
 //
 // A read that fails at startup leaves its own figure zero, which drops that
 // capacity signal from this instance's table for its whole lifetime; a later
 // successful read does not restore it (ENG-5752).
-func NewDeps(_ deps.Identity, bd *deps.BaseDependencies, _ map[string]any) *CPUDeps {
-	fs := register.GlobalDeps[filesystem.Service](FilesystemDepsKey)
+func NewDeps(_ deps.Identity, bd *deps.BaseDependencies, dependencies map[string]any) *CPUDeps {
+	fs, ok := config.LookupDependency(dependencies, FilesystemKey)
+	if !ok {
+		fs = register.GlobalDeps[filesystem.Service](FilesystemDepsKey)
+	}
 	if fs == nil {
 		fs = filesystem.NewDefaultService()
 	}
