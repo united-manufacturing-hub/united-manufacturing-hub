@@ -36,30 +36,28 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// cgroupV1Source reads one cgroup's CPU accounting from a v1 hierarchy. cpuDir
-// is the controller directory cpu.stat was found in.
 type cgroupV1Source struct {
-	fs     filesystem.Service
-	base   string
-	cpuDir string
+	fs        filesystem.Service
+	base      string
+	locations v1Locations
 
 	usageBase usageBaseline
 }
 
-func newCgroupV1Source(fs filesystem.Service, base, cpuDir string) *cgroupV1Source {
-	return &cgroupV1Source{fs: fs, base: base, cpuDir: cpuDir}
+func newCgroupV1Source(fs filesystem.Service, base string, locations v1Locations) *cgroupV1Source {
+	return &cgroupV1Source{fs: fs, base: base, locations: locations}
 }
 
 // readQuota reads cpu.cfs_quota_us, the microseconds of CPU time allowed per
 // period, over cpu.cfs_period_us. A positive quota reads as a capacity in
 // cores, -1 as a present no-limit, and either file unreadable as absent.
 func (c *cgroupV1Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome, error) {
-	quota, quotaRaw, err := c.readInt(ctx, c.path(c.cpuDir, "cpu.cfs_quota_us"))
+	quota, quotaRaw, err := c.readInt(ctx, c.path(c.locations.cpuDir, "cpu.cfs_quota_us"))
 	if err != nil {
 		return quotaRead{Limit: diagnosis.Unknown(), Raw: quotaRaw}, classifyRead(err), err
 	}
 
-	periodPath := c.path(c.cpuDir, "cpu.cfs_period_us")
+	periodPath := c.path(c.locations.cpuDir, "cpu.cfs_period_us")
 	period, periodRaw, periodErr := c.readInt(ctx, periodPath)
 	raw := quotaAndPeriodRaw(quotaRaw, periodRaw)
 
@@ -94,7 +92,7 @@ func quotaAndPeriodRaw(quotaRaw, periodRaw string) string {
 func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
 	usage := c.readUsage(ctx)
 	failed := statRead{Usage: usage, Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
-	path := c.path(c.cpuDir, "cpu.stat")
+	path := c.path(c.locations.cpuDir, "cpu.stat")
 
 	data, err := c.fs.ReadFile(ctx, path)
 	if err != nil {
@@ -114,20 +112,14 @@ func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
 	return statRead{Usage: usage, Periods: periods, Throttled: throttled, Raw: string(data)}, nil
 }
 
-// readUsage reads cpuacct.usage, the cumulative CPU time used. v1 writes it in
-// nanoseconds and Sample.UsageUsec is microseconds. Both mount points are
-// tried, since a runtime may mount cpuacct on its own.
+// readUsage reads cpuacct.usage, which v1 writes in nanoseconds.
 func (c *cgroupV1Source) readUsage(ctx context.Context) diagnosis.Reading {
-	for _, dir := range []string{c.cpuDir, "cpuacct"} {
-		nanoseconds, _, err := c.readInt(ctx, c.path(dir, "cpuacct.usage"))
-		if err != nil {
-			continue
-		}
-
-		return diagnosis.Known(float64(nanoseconds) / 1e3)
+	nanoseconds, _, err := c.readInt(ctx, c.path(c.locations.cpuacctDir, "cpuacct.usage"))
+	if err != nil {
+		return diagnosis.Unknown()
 	}
 
-	return diagnosis.Unknown()
+	return diagnosis.Known(float64(nanoseconds) / 1e3)
 }
 
 // readPSI reports no pressure: v1 publishes no per-cgroup pressure file.
@@ -135,27 +127,20 @@ func (c *cgroupV1Source) readPSI(context.Context) (fraction float64, err error) 
 	return 0, errNoPressureFile
 }
 
-// readCpuset counts the CPUs in the cgroup's cpuset. Tasks run on the set the
-// kernel narrowed, cpuset.effective_cpus, so it is read before the written
-// cpuset.cpus.
 func (c *cgroupV1Source) readCpuset(ctx context.Context) (count int, err error) {
-	for _, name := range []string{"cpuset.effective_cpus", "cpuset.cpus"} {
-		path := c.path("cpuset", name)
-		data, readErr := c.fs.ReadFile(ctx, path)
-		if readErr != nil {
-			err = readErr
+	path := c.path("cpuset", c.locations.cpusetFile)
 
-			continue
-		}
-
-		count, countErr := countCPUList(string(data))
-		if countErr == nil {
-			return count, nil
-		}
-		err = contentError(path, countErr)
+	data, err := c.fs.ReadFile(ctx, path)
+	if err != nil {
+		return 0, err
 	}
 
-	return 0, err
+	count, err = countCPUList(string(data))
+	if err != nil {
+		return 0, contentError(path, err)
+	}
+
+	return count, nil
 }
 
 // advanceUsageRate derives this tick's usage rate in cores from the baseline it

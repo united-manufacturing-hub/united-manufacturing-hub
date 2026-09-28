@@ -230,9 +230,9 @@ func (s *linuxSampler) reader(ctx context.Context) cgroupReader {
 		return s.cgroup
 	}
 
-	switch layout, cpuDir := resolveLayout(ctx, s.fs, s.base); layout {
+	switch layout, locations := resolveLayout(ctx, s.fs, s.base); layout {
 	case layoutV1:
-		s.cgroup = newCgroupV1Source(s.fs, s.base, cpuDir)
+		s.cgroup = newCgroupV1Source(s.fs, s.base, locations)
 		s.resolved = true
 	case layoutV2:
 		s.resolved = true

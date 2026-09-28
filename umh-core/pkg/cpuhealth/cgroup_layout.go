@@ -41,9 +41,17 @@ type cgroupReader interface {
 	advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading
 }
 
-// v1CPUDirs are the directories a v1 cpu controller is mounted at, in the order
-// probed. systemd mounts cpu and cpuacct together; a runtime may not.
-var v1CPUDirs = []string{"cpu,cpuacct", "cpu"}
+// systemd mounts cpu and cpuacct together; a container runtime may not.
+var (
+	v1CPUDirs     = []string{"cpu,cpuacct", "cpu"}
+	v1CPUAcctDirs = []string{"cpu,cpuacct", "cpuacct"}
+)
+
+type v1Locations struct {
+	cpuDir     string
+	cpuacctDir string
+	cpusetFile string
+}
 
 // cgroupLayout is the hierarchy a mount turned out to be.
 type cgroupLayout int
@@ -57,20 +65,45 @@ const (
 	layoutV1
 )
 
-// resolveLayout reports the hierarchy under base, and for v1 the controller
-// directory cpu.stat was found in. Where cpu.stat sits is the discriminant.
-func resolveLayout(ctx context.Context, fs filesystem.Service, base string) (layout cgroupLayout, cpuDir string) {
+func resolveLayout(ctx context.Context, fs filesystem.Service, base string) (cgroupLayout, v1Locations) {
 	if fileExists(ctx, fs, base+"/cpu.stat") {
-		return layoutV2, ""
+		return layoutV2, v1Locations{}
 	}
 
-	for _, dir := range v1CPUDirs {
-		if fileExists(ctx, fs, base+"/"+dir+"/cpu.stat") {
-			return layoutV1, dir
+	cpuDir, hasCPUStat := firstDirHolding(ctx, fs, base, v1CPUDirs, "cpu.stat")
+	if !hasCPUStat {
+		return layoutNone, v1Locations{}
+	}
+
+	cpuacctDir, _ := firstDirHolding(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
+
+	return layoutV1, v1Locations{
+		cpuDir:     cpuDir,
+		cpuacctDir: cpuacctDir,
+		cpusetFile: v1CpusetFile(ctx, fs, base),
+	}
+}
+
+// firstDirHolding returns dirs[0] when no directory holds the file, so a later
+// read of it fails as missing.
+func firstDirHolding(ctx context.Context, fs filesystem.Service, base string, dirs []string, name string) (dir string, found bool) {
+	for _, candidate := range dirs {
+		if fileExists(ctx, fs, base+"/"+candidate+"/"+name) {
+			return candidate, true
 		}
 	}
 
-	return layoutNone, ""
+	return dirs[0], false
+}
+
+// v1CpusetFile prefers the set the kernel narrowed, which is the one tasks run on.
+// https://docs.kernel.org/admin-guide/cgroup-v1/cpusets.html
+func v1CpusetFile(ctx context.Context, fs filesystem.Service, base string) string {
+	if fileExists(ctx, fs, base+"/cpuset/cpuset.effective_cpus") {
+		return "cpuset.effective_cpus"
+	}
+
+	return "cpuset.cpus"
 }
 
 // fileExists counts a filesystem error as absent: a path that cannot be checked
