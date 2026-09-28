@@ -308,8 +308,6 @@ func (m *MockConnection) IsHealthy() bool {
 	return true
 }
 
-// setupTestStoreForScenario builds the in-memory triangular store the v1
-// integration specs run their scenarios against.
 func setupTestStoreForScenario(logger deps.FSMLogger) storage.TriangularStoreInterface {
 	basicStore := memory.NewInMemoryStore()
 
@@ -317,17 +315,14 @@ func setupTestStoreForScenario(logger deps.FSMLogger) storage.TriangularStoreInt
 }
 
 // getWorkersFromStore discovers all workers by examining deltas.
-// Returns a slice of worker snapshots for verification.
 func getWorkersFromStore(store storage.TriangularStoreInterface) []examples.WorkerSnapshot {
 	ctx := context.Background()
 
-	// Get all deltas to discover workers
 	resp, err := store.GetDeltas(ctx, storage.Subscription{LastSyncID: 0})
 	if err != nil {
 		return nil
 	}
 
-	// Extract unique workers and load their snapshots
 	seen := make(map[string]bool)
 
 	var workers []examples.WorkerSnapshot
