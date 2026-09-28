@@ -27,9 +27,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // MockStateReader implements deps.StateReader for testing.
@@ -95,6 +97,7 @@ var _ = Describe("CommunicatorWorker", func() {
 			depspkg.Identity{ID: "test-id", Name: "Test Communicator", WorkerType: "communicator"},
 			mockTransport,
 			logger,
+			nil,
 			nil,
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -279,5 +282,97 @@ state: "running"
 			Expect(communicatorObserved.Status.DegradedEnteredAt).NotTo(BeZero(),
 				"DegradedEnteredAt should be set once errors are recorded")
 		})
+	})
+})
+
+// countingChannelProvider implements communicator.ChannelProvider and counts
+// how often each of its methods is called, so a test can tell which of two
+// providers the worker actually used. The fixed-value test providers cannot
+// show that: they return the same values whichever provider is asked.
+type countingChannelProvider struct {
+	getChannelsCalls     int
+	getInboundStatsCalls int
+}
+
+func newCountingChannelProvider() *countingChannelProvider {
+	return &countingChannelProvider{}
+}
+
+func (p *countingChannelProvider) GetChannels(_ string) (
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
+) {
+	p.getChannelsCalls++
+
+	return make(chan *types.UMHMessage, 1), make(chan *types.UMHMessage, 1)
+}
+
+func (p *countingChannelProvider) GetInboundStats(_ string) (capacity int, length int) {
+	p.getInboundStatsCalls++
+
+	return 1, 0
+}
+
+var _ = Describe("CommunicatorWorker channel provider dependency", func() {
+	It("uses the provider from the dependency map over the global one", func() {
+		globalProvider := newCountingChannelProvider()
+		mapProvider := newCountingChannelProvider()
+
+		previous := communicator.GetChannelProvider()
+
+		communicator.SetChannelProvider(globalProvider)
+		DeferCleanup(func() { communicator.SetChannelProvider(previous) })
+
+		dependencyMap := map[string]any{}
+
+		var mapProviderAsProvider communicator.ChannelProvider = mapProvider
+		fsmv2types.SetDependency(dependencyMap, communicator.ChannelProviderKey, mapProviderAsProvider)
+
+		identity := depspkg.Identity{ID: "map-provider-worker", WorkerType: "communicator"}
+		built, err := factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, dependencyMap)
+		Expect(err).NotTo(HaveOccurred())
+
+		commWorker, ok := built.(*communicator.CommunicatorWorker)
+		Expect(ok).To(BeTrue(), "expected *communicator.CommunicatorWorker, got %T", built)
+
+		workerDeps := commWorker.GetDependencies()
+
+		_, _ = workerDeps.GetInboundChanStats()
+
+		Expect(mapProvider.getChannelsCalls).To(Equal(1),
+			"the construction-time reader should take its channels from the map's provider")
+		Expect(mapProvider.getInboundStatsCalls).To(Equal(1),
+			"the inbound-stats reader should read through the map's provider")
+		Expect(globalProvider.getChannelsCalls).To(Equal(0),
+			"the construction-time reader must not read the global provider")
+		Expect(globalProvider.getInboundStatsCalls).To(Equal(0),
+			"the inbound-stats reader must not read the global provider")
+
+		Expect(communicator.GetChannelProvider()).To(BeIdenticalTo(globalProvider))
+	})
+
+	It("falls back to the global provider when the dependency map holds none", func() {
+		globalProvider := newCountingChannelProvider()
+
+		previous := communicator.GetChannelProvider()
+
+		communicator.SetChannelProvider(globalProvider)
+		DeferCleanup(func() { communicator.SetChannelProvider(previous) })
+
+		identity := depspkg.Identity{ID: "global-provider-worker", WorkerType: "communicator"}
+		built, err := factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		commWorker, ok := built.(*communicator.CommunicatorWorker)
+		Expect(ok).To(BeTrue(), "expected *communicator.CommunicatorWorker, got %T", built)
+
+		workerDeps := commWorker.GetDependencies()
+
+		_, _ = workerDeps.GetInboundChanStats()
+
+		Expect(globalProvider.getChannelsCalls).To(Equal(1),
+			"the construction-time reader should take its channels from the global provider")
+		Expect(globalProvider.getInboundStatsCalls).To(Equal(1),
+			"the inbound-stats reader should read through the global provider")
 	})
 })
