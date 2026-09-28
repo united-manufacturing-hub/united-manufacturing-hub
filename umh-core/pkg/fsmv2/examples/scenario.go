@@ -190,14 +190,19 @@ type RunConfig struct {
 }
 
 // ListScenarios returns all registered scenario names and descriptions,
-// merging the v1 Registry and the v2 RegistryV2 into one listing.
+// merging the v1 Registry, the v2 RegistryV2 and the live LiveRegistryV2 into
+// one listing.
 func ListScenarios() map[string]string {
-	result := make(map[string]string, len(Registry)+len(RegistryV2))
+	result := make(map[string]string, len(Registry)+len(RegistryV2)+len(LiveRegistryV2))
 	for name, scenario := range Registry {
 		result[name] = scenario.Description
 	}
 
 	for name, scenario := range RegistryV2 {
+		result[name] = scenario.Description
+	}
+
+	for name, scenario := range LiveRegistryV2 {
 		result[name] = scenario.Description
 	}
 
