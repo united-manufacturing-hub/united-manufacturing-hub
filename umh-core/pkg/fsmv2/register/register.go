@@ -112,7 +112,6 @@ func Worker[TConfig any, TStatus any, TDeps any](
 // SetGlobalDepsBuilder registers a typed deps builder function for workerType.
 // The builder receives the standard framework deps so workers can wire per-instance
 // resources (metrics recorders keyed by identity, loggers, state readers).
-// T is the concrete deps type (e.g., *MyDeps).
 //
 // The builder runs when a worker of this type is instantiated, not at init().
 // A child's builder can therefore read its parent's deps with GlobalDeps: the
