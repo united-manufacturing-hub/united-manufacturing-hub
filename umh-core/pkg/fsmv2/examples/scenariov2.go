@@ -258,8 +258,7 @@ type ScenarioV2 struct {
 }
 
 // NoopScenarioV2 starts the kernel-only supervisor and changes nothing: the
-// application worker spawns only its config worker kernel child. The example
-// to copy is HelloworldScenarioV2 in helloworld.go.
+// application worker spawns only its config worker kernel child.
 var NoopScenarioV2 = ScenarioV2{
 	Name:        "noop",
 	Description: "Runs the kernel-only supervisor and changes nothing (v2)",

@@ -507,9 +507,7 @@ go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=10s
 go run pkg/fsmv2/cmd/runner/main.go --scenario=communicator --log-level=debug
 ```
 
-Scenarios in the current format: `noop`, `dynamic`, `helloworld`
-
-Older scenarios, still to be moved: `simple`, `failing`, `panic`, `slow`, `cascade`, `timeout`, `configerror`, `inheritance`, `communicator`, `concurrent`, `persistence`
+`--list` prints every scenario. New scenarios are v2 (`RegistryV2`); the v1 scenarios in `Registry` are being moved to v2 (ENG-5114).
 
 ### Unit tests
 

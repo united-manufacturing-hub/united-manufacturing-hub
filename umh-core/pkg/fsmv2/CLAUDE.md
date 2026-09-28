@@ -406,13 +406,10 @@ The shutdown flow:
 ## Writing a scenario
 
 A scenario runs the real supervisor and real workers against mocks, and checks
-what the store shows. It runs from the CLI with `--scenario <name>` and from
-the spec that runs every registered scenario (`examples/registry_run_test.go`).
-
-A scenario is a `ScenarioV2` with `Name`, `Description`, optional
-`Dependencies`, `Run`, and optional `ExpectedErrors` / `ExpectedWarnings`.
-Register it in `RegistryV2` (`examples/scenariov2.go`). The running example is
-`HelloworldScenarioV2` in `examples/helloworld.go`.
+what the store shows. It is a `ScenarioV2` registered in `RegistryV2`
+(`examples/scenariov2.go`), and `examples/registry_run_test.go` runs every
+registered one. The example to copy is `HelloworldScenarioV2` in
+`examples/helloworld.go`.
 
 ### Mocks
 
@@ -421,8 +418,8 @@ a cleanup). A mock implements the interface the worker already uses; for
 helloworld that is its `filesystem.Service` (`examples/mock_filesystem.go`).
 The worker declares a typed key (`hello_world.FilesystemKey`), reads it in its
 constructor with `config.LookupDependency`, and falls back to the real
-implementation when the key is absent. `Run` changes the mock, never the map:
-the supervisor reads the same map while it builds workers.
+implementation when the key is absent. `Run` changes the mock, never the map
+(see `Env.Dependencies`).
 
 ### Run
 
@@ -430,18 +427,29 @@ the supervisor reads the same map while it builds workers.
 Before each change, call `env.Step` with a short description of the change.
 After the change, call `env.WaitFor` with a check that reads the store through
 the client and returns what it saw. A check that has not seen the worker yet
-reports that it is not done. Each wait fails after 30 seconds.
+reports that it is not done. Each wait fails after `waitForTimeout`
+(`examples/scenariov2.go`).
 
 ### What fails a run
 
-An error or warning the run logs that the scenario does not list as expected
-(`data_stale`, `collector_observation_failed` and `collector_stop_skipped` are
-always allowed), a stored state that is not a valid state name, and any error
-`Run` returns. The valid state names are listed per worker type in
-`examples/state_check.go`; a worker type not in that list is not checked, so a
-scenario for a new worker type adds its states there. Warnings and late errors
-set `RunResult.Err` instead of failing `examples.Run`; the CLI exits 1 on a
-set `Err`.
+A logged error is unexpected unless its message contains an entry of
+`ExpectedErrors` or of `alwaysAllowedMessages` (`examples/scenariov2.go`). A
+logged warning is checked the same way against `ExpectedWarnings`.
+
+`examples.Run` returns an error when `Run` returns one. It also returns an
+error when the run logs an unexpected error before `Run` returns.
+
+Three other failures do not make `examples.Run` return an error. After the
+run ends, `RunResult.Err` holds the first of these that applies:
+
+1. an unexpected error logged after `Run` returns;
+2. an unexpected warning;
+3. a stored state that its worker type may not report.
+
+The CLI exits 1 on a set `Err`, and `examples/registry_run_test.go` fails on it.
+Valid states per worker type are in `validWorkerStates`
+(`examples/state_check.go`). Add a new worker type there, or its states go
+unchecked.
 
 ### Running it
 
@@ -453,9 +461,7 @@ go test -tags=test -count=1 -v ./pkg/fsmv2/examples/ -ginkgo.focus="helloworld"
 ### Rules
 
 - No global setters for mocks: `register.SetGlobalDeps` is not for scenarios.
-- No store handle: read through the client.
-- One change per `Step`.
-- A new scenario is always v2; the frozen-registry spec enforces it.
+- Do not add to the v1 `Registry`: `examples/v1_registry_test.go` fails if you do.
 
 ## Testing Patterns
 
