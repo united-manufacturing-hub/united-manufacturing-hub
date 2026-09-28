@@ -22,7 +22,7 @@ import (
 )
 
 // v1ScenarioNames is the frozen list of the v1 registry's names. Names leave
-// it as their scenarios move to v2, and none are added.
+// it as their scenarios move to v2 (ENG-5114), and none are added.
 var v1ScenarioNames = []string{
 	"simple", "failing", "panic", "slow", "cascade", "timeout",
 	"configerror", "inheritance", "communicator", "concurrent", "persistence",
@@ -30,8 +30,6 @@ var v1ScenarioNames = []string{
 
 var _ = Describe("the v1 scenario registry", func() {
 	It("does not grow the v1 scenario registry", func() {
-		// The spec checks only names Registry holds beyond the frozen list, so
-		// a name leaving Registry (its scenario moving to v2) never fails it.
 		for name := range examples.Registry {
 			Expect(v1ScenarioNames).To(ContainElement(name),
 				"the v1 registry gained %q: write new scenarios as a ScenarioV2 in RegistryV2; see the \"Writing a scenario\" section of pkg/fsmv2/CLAUDE.md", name)

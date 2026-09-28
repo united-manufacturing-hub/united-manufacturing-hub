@@ -34,9 +34,6 @@
 //	})
 //
 // CLI uses the same scenarios via pkg/fsmv2/cmd/runner.
-//
-// The v1 format is kept only for scenarios not yet moved; new scenarios are
-// v2, see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 package examples
 
 import (
@@ -170,9 +167,8 @@ type Scenario struct {
 	YAMLConfig string
 }
 
-// Registry contains the scenarios still in the v1 format, kept for the
-// scenarios not yet moved; new scenarios are v2, see pkg/fsmv2/CLAUDE.md,
-// "Writing a scenario".
+// Registry holds the v1 scenarios not yet moved to v2 (ENG-5114). New
+// scenarios go in RegistryV2; see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 var Registry = map[string]Scenario{
 	"simple":       SimpleScenario,
 	"failing":      FailingScenario,
