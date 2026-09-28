@@ -331,4 +331,7 @@ var RegistryV2 = map[string]ScenarioV2{
 	"certfetcher-degraded":       CertFetcherDegradedScenarioV2,
 	"certfetcher-no-subscribers": CertFetcherNoSubscribersScenarioV2,
 	"historian":                  HistorianScenarioV2,
+
+	"cpu-pressure": CPUPressureScenarioV2,
+	"cpu-blind":    CPUBlindScenarioV2,
 }

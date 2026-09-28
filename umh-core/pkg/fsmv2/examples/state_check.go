@@ -66,6 +66,10 @@ var validWorkerStates = map[string]map[string]bool{
 		"TryingToStop": true, "Stopped": true,
 		"unknown": true,
 	},
+	"cpu": {
+		"running": true, "degraded": true,
+		"stopped": true, "unknown": true,
+	},
 	"communicator": {
 		"Stopped": true, "Syncing": true, "Recovering": true,
 		"unknown": true,
