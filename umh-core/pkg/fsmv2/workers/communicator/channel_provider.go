@@ -39,7 +39,7 @@ var (
 	channelProviderMu     sync.RWMutex
 )
 
-// SetChannelProvider sets the global channel provider. Must be called before starting ApplicationSupervisor.
+// SetChannelProvider sets the global channel provider.
 func SetChannelProvider(p ChannelProvider) {
 	channelProviderMu.Lock()
 	defer channelProviderMu.Unlock()
