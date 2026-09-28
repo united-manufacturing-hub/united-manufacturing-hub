@@ -336,8 +336,8 @@ var _ = Describe("PersistenceWorker", func() {
 		It("builds from the dependency map alone when the global seed is absent", func() {
 			mapStore := &mockTriangularStore{}
 
-			// Nothing seeds the global: the dependency map alone must supply
-			// the store, the injection shape the v2 scenarios use.
+			// PersistenceScenarioV2 (examples/persistence_scenario.go) supplies
+			// its store this way.
 			register.ClearGlobalDeps(persistence.WorkerTypeName)
 
 			m := map[string]any{}
@@ -363,10 +363,8 @@ var _ = Describe("PersistenceWorker", func() {
 				persistence.NewStoreOnlyDependencies(globalStore))
 			DeferCleanup(register.ClearGlobalDeps, persistence.WorkerTypeName)
 
-			// The supervisor passes a merged, non-nil map (config.MergeDependencies
-			// in supervisor/reconciliation.go; nil guarded by ensureNonNilDeps
-			// in supervisor/supervisor.go); with no persistence.store key in it
-			// the factory keeps the global seed.
+			// The supervisor never passes a nil map (ensureNonNilDeps), so this
+			// is the production shape when nothing sets persistence.store.
 			m := map[string]any{}
 
 			factoryIdentity := deps.Identity{ID: "factory-persistence-no-key", Name: "Factory Persistence No Key", WorkerType: "persistence"}
