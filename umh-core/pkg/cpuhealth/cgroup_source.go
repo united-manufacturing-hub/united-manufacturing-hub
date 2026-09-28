@@ -68,8 +68,6 @@ func (c *cgroupSource) advanceUsageRate(timestamp time.Time, usage diagnosis.Rea
 	return c.usageBase.advance(timestamp, usage)
 }
 
-// advance is the derivation itself, shared by both hierarchies' readers. Both
-// hand it microseconds, so the divisor is the same either way.
 func (b *usageBaseline) advance(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
 	if b.have {
@@ -155,8 +153,7 @@ type statRead struct {
 	// a failed parse included.
 	Raw string
 
-	// UsageFromCPUAcct is set on cgroup v1, whose usage total is a separate
-	// read of cpuacct.usage, and UsageErr is what that read returned.
+	// Set only on v1, where usage is a separate cpuacct.usage read.
 	UsageFromCPUAcct bool
 	UsageErr         error
 }
@@ -256,8 +253,6 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 	return countCPUList(string(data))
 }
 
-// countCPUList counts the CPU ids a cpuset file names. Both hierarchies write
-// the same list format, so both readers count it the same way.
 func countCPUList(list string) (count int, err error) {
 	text := strings.TrimSpace(list)
 	if text == "" {

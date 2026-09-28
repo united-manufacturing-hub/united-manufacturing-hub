@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Pressure on cgroup v1: there is none, and the machine-wide /proc/pressure/cpu
-// is not read in its place. That absence puts such a box on the
-// limited-visibility arm, where usage-fraction answers for host-cpu-full.
 package cpuhealth_test
 
 import (
@@ -30,9 +27,7 @@ var _ = Describe("pressure on cgroup v1", func() {
 	It("reports no pressure, and never claims the kernel published any", func() {
 		smp, err := v1Sampler(v1Files{
 			"/sys/fs/cgroup/cpu,cpuacct/cpu.stat": "nr_periods 10\nnr_throttled 0\n",
-			// Served, and still not read: the v1 source has no pressure file to
-			// read, and this is the machine-wide one.
-			"/proc/pressure/cpu": "some avg10=1.00 avg60=42.00 avg300=1.00 total=1\n",
+			"/proc/pressure/cpu":                  "some avg10=1.00 avg60=42.00 avg300=1.00 total=1\n",
 		}).Read(context.Background())
 
 		Expect(err).NotTo(HaveOccurred())

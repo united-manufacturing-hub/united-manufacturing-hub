@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Which hierarchy the sampler resolved. The same container image runs on a v2
-// host and a v1 one, so the layout is read off the filesystem: where cpu.stat
-// sits is the discriminant. It is asked once, unless nothing matched.
 package cpuhealth_test
 
 import (
@@ -43,9 +40,6 @@ var _ = Describe("the resolved cgroup layout", func() {
 	})
 
 	It("reads the split controller directories a runtime mounts separately", func() {
-		// systemd mounts the two controllers together as cpu,cpuacct; a
-		// container runtime may bind-mount cpu and cpuacct at their own paths,
-		// so each is probed for on its own.
 		smp, err := v1Sampler(v1Files{
 			cgroupBase + "/cpu/cpu.stat":          "nr_periods 10\nnr_throttled 2\n",
 			cgroupBase + "/cpu/cpu.cfs_quota_us":  "400000\n",

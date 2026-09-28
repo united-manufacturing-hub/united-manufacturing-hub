@@ -22,24 +22,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// cgroupReader is one cgroup's CPU accounting. An implementation owns the
-// usage-rate baseline, the one fact that has to persist across ticks.
 type cgroupReader interface {
-	// readQuota reads the CPU limit in cores. See cgroupSource.readQuota for
-	// what present, present-zero and absent each mean.
 	readQuota(ctx context.Context) (quotaRead, ReadOutcome, error)
-	// readStat yields the usage total and both throttle counters. A non-nil
-	// error says why there are none.
 	readStat(ctx context.Context) (statRead, error)
-	// readPSI reads this tick's pressure fraction as a 0..1 figure.
 	readPSI(ctx context.Context) (fraction float64, err error)
-	// readCpuset counts the CPUs this cgroup may run on.
 	readCpuset(ctx context.Context) (count int, err error)
-	// advanceUsageRate advances the baseline to timestamp and returns this
-	// tick's rate in cores.
 	advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading
-	// pathOf returns the file this reader opens for operation, or "" when it
-	// opens none.
+	// pathOf returns "" for a read this reader has no file for.
 	pathOf(operation ReadOperation) string
 }
 
@@ -55,13 +44,9 @@ type v1Locations struct {
 	cpusetFile string
 }
 
-// cgroupLayout is the hierarchy a mount turned out to be.
 type cgroupLayout int
 
 const (
-	// layoutNone means neither shape matched. A box with no CPU accounting
-	// reads this way, and so does one probed before its mount appeared, so it
-	// is never final.
 	layoutNone cgroupLayout = iota
 	layoutV2
 	layoutV1
@@ -100,8 +85,7 @@ func resolveLayout(ctx context.Context, fs filesystem.Service, base string) (cgr
 	}
 }
 
-// firstDirHolding returns dirs[0] when no directory holds the file, so a later
-// read of it fails as missing.
+// firstDirHolding falls back to dirs[0], so a later read of the file fails as missing.
 func firstDirHolding(ctx context.Context, fs filesystem.Service, base string, dirs []string, name string) (dir string, found bool) {
 	for _, candidate := range dirs {
 		if fileExists(ctx, fs, base+"/"+candidate+"/"+name) {
@@ -122,8 +106,6 @@ func v1CpusetFile(ctx context.Context, fs filesystem.Service, base string) strin
 	return "cpuset.cpus"
 }
 
-// fileExists counts a filesystem error as absent: a path that cannot be checked
-// identifies no hierarchy.
 func fileExists(ctx context.Context, fs filesystem.Service, path string) bool {
 	exists, err := fs.FileExists(ctx, path)
 

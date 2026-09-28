@@ -43,8 +43,6 @@ func (stubFilesystem) ReadFile(context.Context, string) ([]byte, error) {
 	return nil, errRefusedByStub
 }
 
-// FileExists refuses the layout probe too, keeping the contract: every access
-// fails, in a way no real filesystem words.
 func (stubFilesystem) FileExists(context.Context, string) (bool, error) {
 	return false, errRefusedByStub
 }
@@ -77,8 +75,6 @@ func (markedStatFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, err
 	return nil, errRefusedByStub
 }
 
-// FileExists answers for the one file this stub serves, so the probe resolves a
-// v2 mount and readStat opens it.
 func (markedStatFilesystem) FileExists(_ context.Context, path string) (bool, error) {
 	return path == cgroupBase+"/cpu.stat", nil
 }

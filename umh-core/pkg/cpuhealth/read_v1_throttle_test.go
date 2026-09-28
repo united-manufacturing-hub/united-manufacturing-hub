@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The cgroup v1 throttle counters. v1 uses the same nr_periods and nr_throttled
-// key names v2 does, under its cpu controller directory, so only the path
-// differs.
 package cpuhealth_test
 
 import (

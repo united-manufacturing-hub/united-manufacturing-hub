@@ -43,9 +43,6 @@ func newCgroupV1Source(fs filesystem.Service, base string, locations v1Locations
 	return &cgroupV1Source{fs: fs, base: base, locations: locations}
 }
 
-// readQuota reads cpu.cfs_quota_us, the microseconds of CPU time allowed per
-// period, over cpu.cfs_period_us. A positive quota reads as a capacity in
-// cores, -1 as a present no-limit, and either file unreadable as absent.
 func (c *cgroupV1Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome, error) {
 	quota, quotaRaw, err := c.readInt(ctx, c.pathOf(OperationCPUMax))
 	if err != nil {
@@ -81,9 +78,6 @@ func quotaAndPeriodRaw(quotaRaw, periodRaw string) string {
 	return strings.TrimSpace(quotaRaw) + " " + strings.TrimSpace(periodRaw)
 }
 
-// readStat reads cpu.stat, which carries the same nr_periods and nr_throttled
-// keys v2 does. The usage total comes from cpuacct.usage instead, so a cpu.stat
-// that will not open still leaves usage readable.
 func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
 	usage, usageErr := c.readUsage(ctx)
 	failed := statRead{
@@ -138,8 +132,6 @@ func (c *cgroupV1Source) readCpuset(ctx context.Context) (count int, err error) 
 	return countCPUList(string(data))
 }
 
-// advanceUsageRate derives this tick's usage rate in cores from the baseline it
-// replaces, exactly as cgroupSource does.
 func (c *cgroupV1Source) advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	return c.usageBase.advance(timestamp, usage)
 }
@@ -165,8 +157,6 @@ func (c *cgroupV1Source) path(dir, name string) string {
 	return c.base + "/" + dir + "/" + name
 }
 
-// readInt reads one file holding a single integer, and returns its text so a
-// value that will not parse is still reportable.
 func (c *cgroupV1Source) readInt(ctx context.Context, path string) (value int64, raw string, err error) {
 	data, err := c.fs.ReadFile(ctx, path)
 	if err != nil {
@@ -187,8 +177,7 @@ func (c *cgroupV1Source) readInt(ctx context.Context, path string) (value int64,
 	return value, raw, nil
 }
 
-// contentError names the file itself: cpu.cfs_period_us is a second file under
-// OperationCPUMax, so the operation's path would name the quota file instead.
+// contentError names the period file, which shares OperationCPUMax with the quota file.
 func contentError(path string, readErr error) error {
 	return &fs.PathError{Op: "read", Path: path, Err: readErr}
 }

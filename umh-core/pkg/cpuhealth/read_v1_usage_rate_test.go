@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Usage as a rate, read from cgroup v1: cpuacct.usage in nanoseconds rather than
-// cpu.stat's microseconds, converted once at the read. Elapsed time comes from
-// the returned snapshots' own Timestamps, which makes the arithmetic exact
-// against the real clock.
 package cpuhealth_test
 
 import (
@@ -35,7 +31,6 @@ var _ = Describe("usage as a rate on cgroup v1", func() {
 
 	It("converts the nanosecond total to microseconds and derives the rate from two reads", func() {
 		ctx := context.Background()
-		// Five seconds of CPU time, as the nanoseconds the kernel writes.
 		files := v1Files{
 			statPath:  "nr_periods 1000\nnr_throttled 5\n",
 			usagePath: "5000000000\n",
@@ -50,7 +45,6 @@ var _ = Describe("usage as a rate on cgroup v1", func() {
 		_, ok = first.UsageCores.Get()
 		Expect(ok).To(BeFalse(), "the first read fixes a baseline and derives no rate")
 
-		// One more second of CPU time, the way a live counter moves between reads.
 		files[usagePath] = "6000000000\n"
 
 		second, err := sampler.Read(ctx)

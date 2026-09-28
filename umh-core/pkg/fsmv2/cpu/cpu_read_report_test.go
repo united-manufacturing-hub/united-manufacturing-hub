@@ -99,8 +99,6 @@ type reportFS struct {
 	reads *int
 }
 
-// FileExists answers the layout probe from the same file map ReadFile serves,
-// so a fixture holding the v2 files resolves as a v2 mount.
 func (f reportFS) FileExists(ctx context.Context, p string) (bool, error) {
 	data, err := f.ReadFile(ctx, p)
 
@@ -170,7 +168,7 @@ func buildReport(overrides map[string]error, fileOverrides map[string][]byte, er
 }
 
 // withFiles replaces named files in the healthy container, for a read that
-// succeeds while its CONTENT is the problem. A nil content removes the file.
+// succeeds while its CONTENT is the problem.
 func withFiles(fileOverrides map[string][]byte) map[string][]byte {
 	files := healthyContainer()
 	for path, content := range fileOverrides {

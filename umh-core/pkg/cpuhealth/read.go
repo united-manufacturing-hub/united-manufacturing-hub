@@ -60,23 +60,19 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 	}
 }
 
-// linuxSampler composes a cgroupReader and hostSource into one Sample per tick.
-// Usage baselines belong to the readers. The sampler holds the resolved layout
-// and the sticky PSI flag, which outlive a reader swap.
+// linuxSampler holds the PSI flag itself because it outlives a reader swap.
 type linuxSampler struct {
 	fs   filesystem.Service
 	base string
 
-	// cgroup is non-nil from construction, holding the v2 reader until the
-	// probe says otherwise, so no call site has to guard it.
+	// cgroup holds the v2 reader until the probe resolves v1, so it is never nil.
 	cgroup cgroupReader
 	layout cgroupLayout
 
 	host *hostSource
 
 	// psiAvailable is sticky: set true on the first successful cpu.pressure
-	// read and never cleared, even when a later read fails. It belongs to the
-	// machine rather than to a reader, which is why it is held here.
+	// read and never cleared, even when a later read fails.
 	psiAvailable bool
 }
 
@@ -226,10 +222,8 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, cgroup cgroupReader, 
 	sample.CpuScope = ScopeAffinity
 }
 
-// reader returns the cgroup reader for this mount, probing the filesystem the
-// first time. A mount neither shape matched is probed again next tick: the
-// container can start before its cgroup is mounted, and writing the box off for
-// the life of the process would leave it unmeasured after the mount appeared.
+// reader probes again every tick until a layout resolves: the container can
+// start before its cgroup is mounted.
 func (s *linuxSampler) reader(ctx context.Context) cgroupReader {
 	if s.layout != layoutNone {
 		return s.cgroup

@@ -75,8 +75,9 @@ type Sample struct {
 
 	// UsageUsec is the raw cumulative usage counter in microseconds: v2's
 	// usage_usec from cpu.stat, or v1's cpuacct.usage converted from
-	// nanoseconds. It is unavailable when that value is absent or unparsable. The raw total is kept beside the rate so a later
-	// throttle-ratio reduction still has the totals.
+	// nanoseconds. It is unavailable when that value is absent or unparsable.
+	// The raw total is kept beside the rate so a later throttle-ratio
+	// reduction still has the totals.
 	UsageUsec diagnosis.Reading
 
 	// UsageCores is the instantaneous usage rate in cores: the delta of

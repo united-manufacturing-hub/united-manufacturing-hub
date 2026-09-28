@@ -54,9 +54,7 @@ const (
 var (
 	errEmptyRead      = errors.New("file is empty")
 	errUnparsableRead = errors.New("content did not parse")
-	// errNoPressureFile is what a hierarchy with no per-cgroup pressure file
-	// returns. It wraps fs.ErrNotExist so it classifies as ReadMissing, the
-	// cause a kernel without PSI already produces, which reports nothing.
+	// errNoPressureFile wraps fs.ErrNotExist so it reads as ReadMissing, which excusedReads skips.
 	errNoPressureFile = fmt.Errorf("hierarchy publishes no cpu.pressure: %w", fs.ErrNotExist)
 )
 
@@ -130,8 +128,7 @@ const (
 	OperationProcCpuinfo ReadOperation = "proc_cpuinfo"
 	// OperationCPUStat is the cgroup's cpu.stat read.
 	OperationCPUStat ReadOperation = "cpu_stat"
-	// OperationCPUAcctUsage is the cgroup v1 cpuacct.usage read. On v2 the
-	// usage total is in cpu.stat, so this read never happens there.
+	// OperationCPUAcctUsage is the cgroup v1 cpuacct.usage read; v2 never makes it.
 	OperationCPUAcctUsage ReadOperation = "cpuacct_usage"
 	// OperationCPUMax is the cgroup's cpu.max read.
 	OperationCPUMax ReadOperation = "cpu_max"

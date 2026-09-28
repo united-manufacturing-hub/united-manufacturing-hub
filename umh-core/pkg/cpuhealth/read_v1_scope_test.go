@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The CPUs a cgroup v1 container may run on. v1 keeps the set under its own
-// cpuset controller directory and names the kernel-narrowed one
-// cpuset.effective_cpus, where v2 writes cpuset.cpus.effective at the base.
 package cpuhealth_test
 
 import (
@@ -31,8 +28,7 @@ var _ = Describe("the CPUs a cgroup v1 container may run on", func() {
 		statPath      = "/sys/fs/cgroup/cpu,cpuacct/cpu.stat"
 		effectivePath = "/sys/fs/cgroup/cpuset/cpuset.effective_cpus"
 		writtenPath   = "/sys/fs/cgroup/cpuset/cpuset.cpus"
-		// Four CPUs, of the eight the fixture /proc/stat reports.
-		procStat = "cpu  100 0 100 1000 0 0 0 0 0 0\n" +
+		procStat      = "cpu  100 0 100 1000 0 0 0 0 0 0\n" +
 			"cpu0 1 0 1 1 0 0 0 0 0 0\ncpu1 1 0 1 1 0 0 0 0 0 0\n" +
 			"cpu2 1 0 1 1 0 0 0 0 0 0\ncpu3 1 0 1 1 0 0 0 0 0 0\n" +
 			"cpu4 1 0 1 1 0 0 0 0 0 0\ncpu5 1 0 1 1 0 0 0 0 0 0\n" +
