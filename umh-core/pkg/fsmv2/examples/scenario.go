@@ -26,7 +26,7 @@
 // Tests use scenarios via the Run function:
 //
 //	done, err := examples.Run(ctx, examples.RunConfig{
-//	    Scenario:     examples.SimpleScenario,
+//	    Scenario:     examples.InheritanceScenario,
 //	    Duration:     10 * time.Second,
 //	    TickInterval: 100 * time.Millisecond,
 //	    Logger:       testLogger,
@@ -170,7 +170,6 @@ type Scenario struct {
 // Registry holds the v1 scenarios not yet moved to v2 (ENG-5114). New
 // scenarios go in RegistryV2; see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 var Registry = map[string]Scenario{
-	"simple":       SimpleScenario,
 	"cascade":      CascadeScenario,
 	"configerror":  ConfigErrorScenario,
 	"inheritance":  InheritanceScenario,
