@@ -44,9 +44,13 @@ var errTimescaleMissing = errors.New("timescaledb extension is not installed")
 func Collect(ctx context.Context, db Database) (Metrics, error) {
 	var metrics Metrics
 
-	if err := readVersions(ctx, db, &metrics); err != nil {
+	postgresVersion, timescaleVersion, err := readVersions(ctx, db)
+	if err != nil {
 		return metrics, err
 	}
+
+	metrics.PostgresVersion = postgresVersion
+	metrics.TimescaleVersion = timescaleVersion
 
 	hypertables, err := readHypertables(ctx, db)
 	if err != nil {
@@ -65,9 +69,13 @@ func Collect(ctx context.Context, db Database) (Metrics, error) {
 		return metrics, err
 	}
 
-	if err := readRowTimestamps(ctx, db, &metrics, timeColumnTables(hypertables)); err != nil {
+	spans, err := readSpans(ctx, db, metrics.Tables, timeColumnTables(hypertables))
+	if err != nil {
 		return metrics, err
 	}
+
+	assignTimestamps(metrics.Tables, spans)
+	metrics.DataSpanSeconds = dataSpanSeconds(spans)
 
 	rowCounts, err := readTableRows(ctx, db)
 	if err != nil {
@@ -76,18 +84,21 @@ func Collect(ctx context.Context, db Database) (Metrics, error) {
 
 	assignRowCounts(metrics.Tables, rowCounts)
 
-	readDatabaseSize(ctx, db, &metrics)
+	metrics.DatabaseOccupiedDiskBytes = readDatabaseSize(ctx, db)
 
 	return metrics, nil
 }
 
-// readDatabaseSize leaves DatabaseOccupiedDiskBytes at zero when the read fails. Every other
-// figure is already collected by the time it runs, and the caller discards the
-// whole Metrics on an error, so reporting this one would cost all of them.
-func readDatabaseSize(ctx context.Context, db Database, metrics *Metrics) {
-	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseOccupiedDiskBytes); err != nil {
-		metrics.DatabaseOccupiedDiskBytes = 0
+// readDatabaseSize returns zero when the read fails. Every other figure is
+// already collected by the time it runs, and the caller discards the whole
+// Metrics on an error, so reporting this one would cost all of them.
+func readDatabaseSize(ctx context.Context, db Database) int64 {
+	var occupiedDiskBytes int64
+	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&occupiedDiskBytes); err != nil {
+		return 0
 	}
+
+	return occupiedDiskBytes
 }
 
 // queryAll runs one query and builds a T from each row with toValue, naming the
@@ -118,19 +129,19 @@ func queryAll[T any](
 const versionQuery = `SELECT current_setting('server_version'),
        (SELECT extversion FROM pg_extension WHERE extname = 'timescaledb')`
 
-func readVersions(ctx context.Context, db Database, metrics *Metrics) error {
+func readVersions(ctx context.Context, db Database) (string, string, error) {
+	var postgresVersion string
+
 	var timescaleVersion *string
-	if err := db.QueryRow(ctx, versionQuery).Scan(&metrics.PostgresVersion, &timescaleVersion); err != nil {
-		return fmt.Errorf("read versions: %w", err)
+	if err := db.QueryRow(ctx, versionQuery).Scan(&postgresVersion, &timescaleVersion); err != nil {
+		return "", "", fmt.Errorf("read versions: %w", err)
 	}
 
 	if timescaleVersion == nil {
-		return errTimescaleMissing
+		return "", "", errTimescaleMissing
 	}
 
-	metrics.TimescaleVersion = *timescaleVersion
-
-	return nil
+	return postgresVersion, *timescaleVersion, nil
 }
 
 // Sizes come from the catalog rather than timescaledb_information's size
@@ -381,20 +392,6 @@ var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 func safeTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
-}
-
-// readRowTimestamps records both ends of every readable table's ts column, and
-// the span across all of them.
-func readRowTimestamps(ctx context.Context, db Database, metrics *Metrics, readable map[string]bool) error {
-	spans, err := readSpans(ctx, db, metrics.Tables, readable)
-	if err != nil {
-		return err
-	}
-
-	assignTimestamps(metrics.Tables, spans)
-	metrics.DataSpanSeconds = dataSpanSeconds(spans)
-
-	return nil
 }
 
 // rowSpan is one table's first and last row timestamp as epoch seconds.
