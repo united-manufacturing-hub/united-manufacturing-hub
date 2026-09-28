@@ -336,3 +336,10 @@ var RegistryV2 = map[string]ScenarioV2{
 	"cpu-blind":    CPUBlindScenarioV2,
 	"cpu-stall":    CPUStallScenarioV2,
 }
+
+// LiveRegistryV2 holds scenarios that read the real machine the runner runs
+// on, so their result changes with it. The CLI runs them; the registry spec
+// does not, because nobody picks the CI machine.
+var LiveRegistryV2 = map[string]ScenarioV2{
+	"cpu-host": CPUHostScenarioV2,
+}
