@@ -27,7 +27,7 @@ import (
 
 const historianSchema = "umh"
 
-const databaseSizeQuery = `SELECT pg_database_size(current_database())`
+const databaseOccupiedDiskBytesQuery = `SELECT pg_database_size(current_database())`
 
 // errTimescaleMissing reports a Postgres with no TimescaleDB extension, where
 // every catalog read below would fail.
@@ -84,21 +84,21 @@ func Collect(ctx context.Context, db Database) (Metrics, error) {
 
 	assignRowCounts(metrics.Tables, rowCounts)
 
-	metrics.DatabaseOccupiedDiskBytes = readDatabaseSize(ctx, db)
+	metrics.DatabaseOccupiedDiskBytes = readDatabaseOccupiedDiskBytes(ctx, db)
 
 	return metrics, nil
 }
 
-// readDatabaseSize returns zero when the read fails. Every other figure is
-// already collected by the time it runs, and the caller discards the whole
-// Metrics on an error, so reporting this one would cost all of them.
-func readDatabaseSize(ctx context.Context, db Database) int64 {
-	var occupiedDiskBytes int64
-	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&occupiedDiskBytes); err != nil {
+// readDatabaseOccupiedDiskBytes returns zero when the read fails. Every other
+// figure is already collected by the time it runs, and the caller discards the
+// whole Metrics on an error, so reporting this one would cost all of them.
+func readDatabaseOccupiedDiskBytes(ctx context.Context, db Database) int64 {
+	var databaseOccupiedDiskBytes int64
+	if err := db.QueryRow(ctx, databaseOccupiedDiskBytesQuery).Scan(&databaseOccupiedDiskBytes); err != nil {
 		return 0
 	}
 
-	return occupiedDiskBytes
+	return databaseOccupiedDiskBytes
 }
 
 // queryAll runs one query and builds a T from each row with toValue, naming the
