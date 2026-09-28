@@ -386,7 +386,7 @@ func dataSpanSeconds(spans map[string]rowSpan) int64 {
 // identifier. safeTableName guards every name that reaches it. min and max are
 // null for an empty table, which rowSpan carries as nil rather than as 1970.
 
-const rowTimestampQuery = `SELECT '%s', extract(epoch FROM min(ts))::bigint, extract(epoch FROM max(ts))::bigint FROM %s.%s`
+const rowTimestampQuery = `SELECT '%s', extract(epoch FROM min(ts))::bigint, extract(epoch FROM max(ts))::bigint FROM %s`
 
 var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
@@ -444,7 +444,8 @@ func unionOverTables(tables []Table, readable map[string]bool) string {
 			continue
 		}
 
-		selects = append(selects, fmt.Sprintf(rowTimestampQuery, table.Name, historianSchema, table.Name))
+		qualifiedName := pgx.Identifier{historianSchema, table.Name}.Sanitize()
+		selects = append(selects, fmt.Sprintf(rowTimestampQuery, table.Name, qualifiedName))
 	}
 
 	return strings.Join(selects, " UNION ALL ")
