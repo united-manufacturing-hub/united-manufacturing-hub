@@ -474,7 +474,7 @@ var _ = Describe("Policy reporting", Label("integration"), func() {
 // readTables is what the table listing looks like before Collect filters it: the
 // hypertables and the plain tables of the historian schema, foreign ones
 // included, which is what the specs below assert against.
-func readTables(ctx context.Context, db Querier) ([]Table, error) {
+func readTables(ctx context.Context, db Database) ([]Table, error) {
 	hypertables, err := readHypertables(ctx, db)
 	if err != nil {
 		return nil, err
@@ -490,7 +490,7 @@ func readTables(ctx context.Context, db Querier) ([]Table, error) {
 
 // readTimeColumnTables names the hypertables the row-timestamp read may ask,
 // which Collect takes from the table read it has already made.
-func readTimeColumnTables(ctx context.Context, db Querier) (map[string]bool, error) {
+func readTimeColumnTables(ctx context.Context, db Database) (map[string]bool, error) {
 	hypertables, err := readHypertables(ctx, db)
 	if err != nil {
 		return nil, err

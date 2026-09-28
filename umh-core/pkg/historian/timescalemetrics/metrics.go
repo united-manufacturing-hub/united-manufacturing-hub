@@ -20,9 +20,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Querier is the read surface this package needs. *pgx.Conn and *pgxpool.Pool
+// Database is the read surface this package needs. *pgx.Conn and *pgxpool.Pool
 // both satisfy it.
-type Querier interface {
+type Database interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }

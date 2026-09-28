@@ -42,7 +42,7 @@ const summaryQuery = `SELECT
          WHERE n.nspname = $1 AND c.relkind = 'r' AND c.relname <> 'schema_migrations')`
 
 // CollectSummary reads what the status message carries.
-func CollectSummary(ctx context.Context, db Querier) (Summary, error) {
+func CollectSummary(ctx context.Context, db Database) (Summary, error) {
 	var summary Summary
 
 	var names []string

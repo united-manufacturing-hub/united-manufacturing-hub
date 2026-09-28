@@ -41,7 +41,7 @@ var errTimescaleMissing = errors.New("timescaledb extension is not installed")
 // a customer's own table is never queried. pg_database_size runs last and its
 // failure is tolerated, because it stats every file backing the database: when
 // it is slow, only DatabaseBytes is lost.
-func Collect(ctx context.Context, db Querier) (Metrics, error) {
+func Collect(ctx context.Context, db Database) (Metrics, error) {
 	var metrics Metrics
 
 	if err := readVersions(ctx, db, &metrics); err != nil {
@@ -84,7 +84,7 @@ func Collect(ctx context.Context, db Querier) (Metrics, error) {
 // readDatabaseSize leaves DatabaseBytes at zero when the read fails. Every other
 // figure is already collected by the time it runs, and the caller discards the
 // whole Metrics on an error, so reporting this one would cost all of them.
-func readDatabaseSize(ctx context.Context, db Querier, metrics *Metrics) {
+func readDatabaseSize(ctx context.Context, db Database, metrics *Metrics) {
 	if err := db.QueryRow(ctx, databaseSizeQuery).Scan(&metrics.DatabaseBytes); err != nil {
 		metrics.DatabaseBytes = 0
 	}
@@ -96,7 +96,7 @@ func readDatabaseSize(ctx context.Context, db Querier, metrics *Metrics) {
 // https://pkg.go.dev/github.com/jackc/pgx/v5#CollectRows
 func queryAll[T any](
 	ctx context.Context,
-	db Querier,
+	db Database,
 	query string,
 	subject string,
 	toValue pgx.RowToFunc[T],
@@ -118,7 +118,7 @@ func queryAll[T any](
 const versionQuery = `SELECT current_setting('server_version'),
        (SELECT extversion FROM pg_extension WHERE extname = 'timescaledb')`
 
-func readVersions(ctx context.Context, db Querier, metrics *Metrics) error {
+func readVersions(ctx context.Context, db Database, metrics *Metrics) error {
 	var timescaleVersion *string
 	if err := db.QueryRow(ctx, versionQuery).Scan(&metrics.PostgresVersion, &timescaleVersion); err != nil {
 		return fmt.Errorf("read versions: %w", err)
@@ -180,7 +180,7 @@ type hypertable struct {
 	HasTimeColumn bool
 }
 
-func readHypertables(ctx context.Context, db Querier) ([]hypertable, error) {
+func readHypertables(ctx context.Context, db Database) ([]hypertable, error) {
 	return queryAll(ctx, db, tablesQuery, "tables", rowToHypertable, historianSchema)
 }
 
@@ -237,7 +237,7 @@ const regularTablesQuery = `SELECT c.relname, pg_total_relation_size(c.oid)::big
                     WHERE h.schema_name = n.nspname AND h.table_name = c.relname)
  ORDER BY c.relname`
 
-func readPlainTables(ctx context.Context, db Querier) ([]Table, error) {
+func readPlainTables(ctx context.Context, db Database) ([]Table, error) {
 	return queryAll(ctx, db, regularTablesQuery, "regular tables", rowToPlainTable, historianSchema)
 }
 
@@ -270,7 +270,7 @@ const jobsListQuery = `SELECT
  WHERE j.hypertable_schema = $1
  ORDER BY coalesce(s.last_run_status = 'Failed', false) DESC, j.hypertable_name, j.job_id`
 
-func readJobs(ctx context.Context, db Querier) ([]Job, error) {
+func readJobs(ctx context.Context, db Database) ([]Job, error) {
 	return queryAll(ctx, db, jobsListQuery, "jobs", pgx.RowToStructByPos[Job], historianSchema)
 }
 
@@ -295,7 +295,7 @@ const tableRowsQuery = `SELECT h.table_name,
  WHERE h.schema_name = $1
  GROUP BY h.table_name`
 
-func readTableRows(ctx context.Context, db Querier) (map[string]int64, error) {
+func readTableRows(ctx context.Context, db Database) (map[string]int64, error) {
 	pairs, err := queryAll(ctx, db, tableRowsQuery, "table rows", rowToNamedValue, historianSchema)
 	if err != nil {
 		return nil, err
@@ -385,7 +385,7 @@ func safeTableName(name string) bool {
 
 // readRowTimestamps records both ends of every readable table's ts column, and
 // the span across all of them.
-func readRowTimestamps(ctx context.Context, db Querier, metrics *Metrics, readable map[string]bool) error {
+func readRowTimestamps(ctx context.Context, db Database, metrics *Metrics, readable map[string]bool) error {
 	spans, err := readSpans(ctx, db, metrics.Tables, readable)
 	if err != nil {
 		return err
@@ -414,7 +414,7 @@ type namedRowSpan struct {
 // statement. A table absent from the result reported nothing.
 func readSpans(
 	ctx context.Context,
-	db Querier,
+	db Database,
 	tables []Table,
 	readable map[string]bool,
 ) (map[string]rowSpan, error) {
