@@ -73,13 +73,12 @@ type RunResult struct {
 	// after Done closes.
 	ShutdownClean bool
 
-	// Err is the first unexpected error or warning the run logged, or a
-	// stored-state failure found after the supervisor stopped; nil when
-	// neither was seen. When both an error and a warning were logged, it is
-	// the error. On the v2 path it is set before Done closes, so read it
-	// after Done closes. Unlike an unexpected error logged before Run
-	// returns, it does not fail the run: the CLI's exit-code mapping turns a
-	// set Err into exit code 1.
+	// Err is nil, or holds a failure the runner found after Run returned this
+	// result. In order of precedence it is an unexpected error logged after
+	// Run returned, the first unexpected warning, or the stored-state check's
+	// failure: a stored state its worker type may not report, or a failed
+	// store read. Only the v2 path sets it; read it after Done closes.
+	// shutdownExitCode in cmd/runner exits 1 when it is set.
 	Err error
 }
 
@@ -364,13 +363,8 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, err)
 	}
 
-	// The recorder kept the first unexpected error the run logged before Run
-	// returned, so it is checked once more here: a scenario that swallows the
-	// wait failure the error caused cannot hide it. An error logged after this
-	// check, during the Duration window, is not caught here. A wait failure
-	// with no logged error behind it is not re-caught on this path. The
-	// deferred teardown still runs, so the supervisor stops and the deps key
-	// is cleared before Run returns.
+	// Checked again after Run returned, so a scenario that swallows the wait
+	// failure cannot hide the error. A later error sets RunResult.Err instead.
 	if logged := recorder.loggedError(); logged != nil {
 		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, logged)
 	}
@@ -412,22 +406,15 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		teardown()
 
-		// The recorder kept the first unexpected warning and the first
-		// unexpected error the run logged, including one logged after Run
-		// returned, inside the Duration window. The recorded error becomes
-		// result.Err; when both were logged, Err carries the error. Err is
-		// written before close(done) so a caller reading Err after Done
-		// observes it.
+		// An error recorded by now was logged after Run returned, inside the
+		// Duration window.
 		result.Err = recorder.loggedError()
 		if result.Err == nil {
 			result.Err = recorder.loggedWarning()
 		}
 
-		// The store's final state is checked once the run has ended, the way
-		// the recorded warning is: a stored state that is not a state name its
-		// worker type may report does not fail the run, but surfaces here. The
-		// first cause recorded wins. The check runs on a fresh context, so a
-		// caller cancelling after Run returned cannot fail the store read.
+		// The check runs on a fresh context, so a caller cancelling after Run
+		// returned cannot fail the store read.
 		if result.Err == nil {
 			checkCtx, checkCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 

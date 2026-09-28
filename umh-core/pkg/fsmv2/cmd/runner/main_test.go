@@ -26,11 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
-// TestShutdownExitCode locks the exit-code mapping for a completed scenario
-// run. A run whose supervisor did not drain cleanly within its budget
-// (ShutdownClean=false) must exit non-zero so an outer harness/CI can detect
-// a degraded shutdown, and so must a clean drain whose RunResult.Err is set.
-// A nil result and a clean drain with no Err exit 0.
+// TestShutdownExitCode checks shutdownExitCode for each kind of completed run.
 func TestShutdownExitCode(t *testing.T) {
 	tests := []struct {
 		name   string

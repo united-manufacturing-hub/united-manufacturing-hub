@@ -28,10 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
-// Every scenario registered in RegistryV2 must complete a plain run. One spec
-// per scenario runs it end to end, so a scenario that only breaks under the
-// runner fails here by name, and an empty registry fails the guard spec
-// instead of silently running nothing.
+// One spec per RegistryV2 entry, so a scenario that breaks only under the
+// runner fails by name.
 var _ = Describe("RegistryV2 scenarios", func() {
 	It("registers at least one v2 scenario", func() {
 		Expect(examples.RegistryV2).NotTo(BeEmpty(),

@@ -232,8 +232,6 @@ func main() {
 				"exit_code", code)
 		}
 
-		// A run can drain cleanly and still fail on the unexpected
-		// warning or late error recorded in RunResult.Err.
 		if result.Err != nil {
 			logger.Sugar().Warnw("scenario_run_failed",
 				"scenario", *scenarioName,
@@ -242,15 +240,14 @@ func main() {
 		}
 
 		_ = logger.Sync()
-		//nolint:gocritic // exitAfterDefer is intentional here: the non-zero-exit path must run logger.Sync before exiting, and the remaining defers (cancel, close(runDone)) are moot once the process exits.
+		//nolint:gocritic // exitAfterDefer: logger.Sync ran above, and the other defers do not matter once the process exits.
 		os.Exit(code)
 	}
 }
 
 // shutdownExitCode returns the process exit code for a completed scenario run.
-// A run whose result carries an unexpected warning or late error (RunResult.Err),
-// or whose supervisor did not drain cleanly within its budget, exits non-zero so
-// an outer harness/CI can detect it.
+// A run whose RunResult.Err is set, or whose supervisor did not drain cleanly
+// within its budget, exits non-zero so an outer harness/CI can detect it.
 func shutdownExitCode(result *examples.RunResult) int {
 	if result == nil {
 		return 0

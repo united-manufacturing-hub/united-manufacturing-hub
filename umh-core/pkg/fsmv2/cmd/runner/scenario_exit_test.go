@@ -28,23 +28,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
-// This spec pins how a run's unexpected warnings and late errors reach the
-// operator. They do not fail examples.Run, the way an unexpected error does:
-// they set RunResult.Err before Done closes, and the CLI's exit-code mapping
-// turns a set Err into exit code 1. A warning whose message carries a
-// substring the scenario declared in ExpectedWarnings, or one whose message
-// every run allows, sets nothing.
-//
-// The spec lives next to the CLI because it spans two packages: it drives a
-// real v2 run through examples.Run, then hands the finished result to
-// shutdownExitCode, the function that decides the process exit code.
+// Drives a real v2 run through examples.Run and hands the result to
+// shutdownExitCode, so it lives in the CLI package.
 var _ = Describe("Scenario warnings and late errors", func() {
-	// runScenario drives one v2 scenario on a real supervisor and returns its
-	// result once the run has fully torn down, which is when RunResult.Err is
-	// readable. settle is the RunConfig.Duration window the runner waits after
-	// Run returns. The helper fails the spec when Run itself returns an error,
-	// because neither a warning nor a late error may fail the run: both
-	// surface through RunResult.Err.
+	// runScenario runs one v2 scenario on a real supervisor and returns its
+	// result after Done closes.
 	runScenario := func(scenario examples.ScenarioV2, settle time.Duration) *examples.RunResult {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)

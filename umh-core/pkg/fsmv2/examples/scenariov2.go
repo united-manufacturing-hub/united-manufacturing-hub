@@ -32,9 +32,8 @@ type Env struct {
 	// Writer and store.
 	Client *fsmv2client.FSMv2Client
 
-	// Logger wraps the logger RunConfig.Logger carries, so every error a Run
-	// logs feeds the run's error checks while all output still flows to the
-	// underlying logger.
+	// Logger wraps RunConfig.Logger. All output still reaches that logger, and
+	// an error or warning a Run logs also reaches the run's checks.
 	Logger deps.FSMLogger
 
 	// Dependencies is the map the scenario's Dependencies returned, or nil when
@@ -43,20 +42,21 @@ type Env struct {
 	// config.LookupDependency and changes the mock itself.
 	Dependencies map[string]any
 
-	// recorder carries the per-run state that Step and WaitFor share. Run
-	// receives Env by value, so the state lives behind a pointer; the runner
-	// sets it before a scenario's Run function sees this Env.
+	// recorder is set by the runner before Run sees this Env.
 	recorder *runRecorder
 }
 
 // runRecorder holds the per-run state that Step and WaitFor share across the
-// value copies of Env.
+// value copies of Env. The runner sets scenario, expectedErrors and
+// expectedWarnings before the supervisor starts, and nothing changes them
+// afterwards.
 type runRecorder struct {
 	// scenario is the name of the run's scenario, so a step line can be
 	// attributed when several scenarios run in one process.
 	scenario string
 
-	// lastStep is the description of the last change Step announced.
+	// lastStep is the description of the last change Step announced. Only
+	// Run's goroutine reads and writes it, so it needs no lock.
 	lastStep string
 
 	// expectedErrors lists the message substrings the run's scenario
@@ -67,22 +67,15 @@ type runRecorder struct {
 	// declared through ScenarioV2.ExpectedWarnings.
 	expectedWarnings []string
 
-	// loggedMu guards loggedErr and loggedWarn, because the supervisor's tick
-	// loop logs on its own goroutines while WaitFor, the runner's post-Run
-	// check and the teardown goroutine's end-of-run check read them. The
-	// runner sets scenario, expectedErrors and expectedWarnings once, before
-	// the supervisor starts, and nothing changes them afterwards; lastStep
-	// changes on every Step but only Run's goroutine reads and writes it.
+	// loggedMu guards loggedErr and loggedWarn. Any goroutine that logs,
+	// including the supervisor's, writes them. Run's goroutine and the
+	// teardown goroutine read them.
 	loggedMu sync.Mutex
 
-	// loggedErr is the first error the run's logger reported at error level
-	// and the scenario does not expect, or nil when none was logged. Both
-	// checks act on that first error, so later ones are not kept.
+	// loggedErr is the first unexpected error the run logged, or nil.
 	loggedErr error
 
-	// loggedWarn is the first warning the run's logger reported and the
-	// scenario does not expect, or nil when none was logged. Only the first
-	// warning is kept.
+	// loggedWarn is the first unexpected warning the run logged, or nil.
 	loggedWarn error
 }
 
@@ -95,10 +88,8 @@ var alwaysAllowedMessages = []string{
 	"collector_stop_skipped",
 }
 
-// recordLoggedError stores one error a SentryError call logged during the run,
-// shaped so a wait or run failure names the logged message. An error whose
-// message matches a substring the scenario expects, or one every run allows,
-// is not stored: it does not fail the run.
+// recordLoggedError keeps the first error whose message messageAllowed does
+// not allow, wrapped so a failure names that message.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
 	if r.messageAllowed(msg, r.expectedErrors) {
 		return
@@ -114,8 +105,8 @@ func (r *runRecorder) recordLoggedError(err error, msg string) {
 
 // messageAllowed reports whether a logged message contains a substring the
 // scenario declared in ExpectedErrors or ExpectedWarnings, or one of the
-// messages every run allows. An empty entry matches nothing: it must not make
-// every message expected.
+// messages every run allows. An empty entry matches nothing, because
+// strings.Contains would match every message.
 func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	for _, substr := range expected {
 		if substr != "" && strings.Contains(msg, substr) {
@@ -132,9 +123,8 @@ func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	return false
 }
 
-// recordLoggedWarning stores one warning a SentryWarn call logged during the
-// run. A warning whose message matches a substring the scenario declared in
-// ExpectedWarnings, or one every run allows, is not stored.
+// recordLoggedWarning keeps the first warning whose message messageAllowed
+// does not allow.
 func (r *runRecorder) recordLoggedWarning(msg string) {
 	if r.messageAllowed(msg, r.expectedWarnings) {
 		return
@@ -172,16 +162,14 @@ type runErrorLogger struct {
 	recorder *runRecorder
 }
 
-// SentryError records the error for the run's checks before delegating, so
-// both the wait and the post-Run check can fail on it.
+// SentryError records the error for the run's checks, then delegates.
 func (l *runErrorLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
 	l.recorder.recordLoggedError(err, msg)
 
 	l.FSMLogger.SentryError(feature, hierarchyPath, err, msg, fields...)
 }
 
-// SentryWarn records the warning for the run's end-of-run check before
-// delegating, so a warning the scenario does not expect reaches RunResult.Err.
+// SentryWarn records the warning for RunResult.Err, then delegates.
 func (l *runErrorLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
 	l.recorder.recordLoggedWarning(msg)
 
@@ -193,14 +181,10 @@ func (l *runErrorLogger) With(fields ...deps.Field) deps.FSMLogger {
 	return &runErrorLogger{FSMLogger: l.FSMLogger.With(fields...), recorder: l.recorder}
 }
 
-// waitForPollInterval is how long WaitFor waits between two polls of its
-// check.
 const waitForPollInterval = 50 * time.Millisecond
 
-// waitForTimeout bounds one WaitFor call: the longest a single wait may run
-// before it fails the run. The limit is checked between polls, so a poll that
-// blocks longer than the limit delays the failure until it returns; a poll
-// should honour the ctx it is given.
+// waitForTimeout bounds one WaitFor call. A poll that ignores its ctx can hold
+// the wait past it.
 var waitForTimeout = 30 * time.Second
 
 // Step logs one line naming the change the scenario is about to make, and
@@ -213,11 +197,10 @@ func (e Env) Step(description string) {
 		deps.String("step", description))
 }
 
-// WaitFor polls check until it reports done, ctx ends, or the wait exceeds
-// waitForTimeout. check returns what it last saw, so a failure can say it. An
-// error the run logged before or during the wait fails it on the next poll,
-// before the check runs again. A failure names the last Step, the check and
-// the last value seen.
+// WaitFor calls poll until it reports done, ctx ends, or waitForTimeout passes.
+// An unexpected error the run logged fails the wait before the next poll.
+// Every failure names check and the last Step. A timeout or a ctx end also
+// names the last value poll saw.
 func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Context) (done bool, seen string, err error)) error {
 	waitCtx, cancel := context.WithTimeout(ctx, waitForTimeout)
 	defer cancel()
@@ -264,7 +247,8 @@ type ScenarioV2 struct {
 	Run func(ctx context.Context, env Env) error
 
 	// ExpectedErrors lists substrings of error log messages this scenario
-	// expects. Any other error logged during the run fails it.
+	// expects. Any other error logged during the run fails it, or sets
+	// RunResult.Err when it is logged after Run returned.
 	ExpectedErrors []string
 
 	// ExpectedWarnings lists substrings of warning log messages this
