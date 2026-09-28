@@ -35,10 +35,7 @@ const workerType = WorkerTypeName
 
 // CertHandlerKey names the certificatehandler.Handler a CertFetcherWorker is
 // built from. When the dependency map holds nothing under it, the worker falls
-// back to the seed published via register.SetGlobalDeps, which cmd/main.go
-// publishes only when agent.UseGatekeeper is enabled. With no handler from
-// either source, construction fails with the error from NewCertFetcherWorker,
-// which names NewCertFetcherDependencies and NewCertHandlerSeedDependencies.
+// back to the seed published via register.SetGlobalDeps.
 var CertHandlerKey = config.NewDependencyKey[certificatehandler.Handler]("certfetcher.cert_handler")
 
 var _ fsmv2.Worker = (*CertFetcherWorker)(nil)
