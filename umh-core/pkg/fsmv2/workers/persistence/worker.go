@@ -50,8 +50,9 @@ const (
 	DefaultMaintenanceInterval = snapshot.DefaultMaintenanceInterval
 )
 
-// Seed published at startup by cmd/main.go; the factory in init() prefers a
-// store from the dependency map.
+// StoreKey names the store in a worker's dependency map. The register.Worker
+// closure in init() uses that store when present, and otherwise the global
+// that cmd/main.go publishes through register.SetGlobalDeps.
 var StoreKey = fsmv2config.NewDependencyKey[storage.TriangularStoreInterface]("persistence.store")
 
 // Compile-time interface check: PersistenceWorker implements fsmv2.Worker.
