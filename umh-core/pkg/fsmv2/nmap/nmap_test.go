@@ -26,7 +26,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // newNmapConfig builds a valid config.NmapConfig pointing Poll at target:port.
@@ -50,6 +54,42 @@ func hostPort(addr string) (string, uint16) {
 	return host, uint16(p)
 }
 
+// newPollDeps builds the deps value Poll dials through, via newDeps: the specs
+// that pass a nil map thereby dial through the real net dialer.
+func newPollDeps(m map[string]any) fsmv2nmap.Deps {
+	id := deps.Identity{ID: "nmap-poll", WorkerType: fsmv2nmap.WorkerType}
+	bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
+
+	return fsmv2nmap.NewDepsForTest(id, bd, m)
+}
+
+// nmapID builds the identity a supervisor hands an nmap worker: its own ID,
+// name and worker type, plus the hierarchy path the supervisor reports it under.
+func nmapID() deps.Identity {
+	return deps.Identity{
+		ID:            "nmap-001",
+		Name:          "nmap",
+		WorkerType:    fsmv2nmap.WorkerType,
+		HierarchyPath: "nmap-001(nmap)",
+	}
+}
+
+// fakeDialer records every address it is asked to dial and answers with one
+// end of a net.Pipe, so a poll through it reports the port open without
+// anything listening.
+type fakeDialer struct {
+	addresses []string
+}
+
+func (f *fakeDialer) DialContext(_ context.Context, _, address string) (net.Conn, error) {
+	f.addresses = append(f.addresses, address)
+
+	oneEnd, otherEnd := net.Pipe()
+	_ = otherEnd.Close()
+
+	return oneEnd, nil
+}
+
 var _ = Describe("Nmap Poll", func() {
 	It("reports the port open when a TCP listener is accepting", func() {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -63,7 +103,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		status, err := fsmv2nmap.Poll(ctx, newPollDeps(nil), cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.PortState).To(Equal("open"))
 		Expect(status.Port).To(Equal(port))
@@ -83,7 +123,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		st, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		st, err := fsmv2nmap.Poll(ctx, newPollDeps(nil), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(st.Target).To(Equal(host), "Poll must record the target it dialed")
@@ -109,19 +149,19 @@ var _ = Describe("Nmap Poll", func() {
 		openCtx, cancelOpen := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancelOpen()
 
-		openStatus, err := fsmv2nmap.Poll(openCtx, struct{}{}, newNmapConfig(openHost, openPort))
+		openStatus, err := fsmv2nmap.Poll(openCtx, newPollDeps(nil), newNmapConfig(openHost, openPort))
 		Expect(err).NotTo(HaveOccurred())
 
 		refusedCtx, cancelRefused := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancelRefused()
 
-		refusedStatus, err := fsmv2nmap.Poll(refusedCtx, struct{}{}, newNmapConfig(refusedHost, refusedPort))
+		refusedStatus, err := fsmv2nmap.Poll(refusedCtx, newPollDeps(nil), newNmapConfig(refusedHost, refusedPort))
 		Expect(err).NotTo(HaveOccurred())
 
 		cancelledCtx, cancelNow := context.WithCancel(context.Background())
 		cancelNow()
 
-		cancelledStatus, err := fsmv2nmap.Poll(cancelledCtx, struct{}{}, newNmapConfig(openHost, openPort))
+		cancelledStatus, err := fsmv2nmap.Poll(cancelledCtx, newPollDeps(nil), newNmapConfig(openHost, openPort))
 		Expect(err).To(HaveOccurred())
 
 		after := time.Now()
@@ -155,7 +195,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		status, err := fsmv2nmap.Poll(ctx, newPollDeps(nil), cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.PortState).To(Equal("closed"))
 		Expect(status.IsRunning).To(BeFalse())
@@ -177,7 +217,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		status, err := fsmv2nmap.Poll(ctx, newPollDeps(nil), cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.PortState).To(Equal("closed"))
 		Expect(status.IsRunning).To(BeFalse())
@@ -195,9 +235,113 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		status, err := fsmv2nmap.Poll(ctx, newPollDeps(nil), cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(status.PortState).NotTo(Equal("open"))
+	})
+})
+
+var _ = Describe("Nmap Poll dependencies", func() {
+	It("dials through the dialer stored under its dependency key", func() {
+		// The target is a loopback port nothing listens on, so a Poll that
+		// still dials for real reports closed and the fake records nothing.
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		host, port := hostPort(ln.Addr().String())
+		Expect(ln.Close()).To(Succeed())
+
+		fake := &fakeDialer{}
+
+		m := map[string]any{}
+
+		var dialer fsmv2nmap.Dialer = fake
+		fsmv2config.SetDependency(m, fsmv2nmap.DialerKey, dialer)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, newPollDeps(m), newNmapConfig(host, port))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.PortState).To(Equal(string(nmapservice.PortStateOpen)),
+			"Poll must dial through the dialer from the dependency map, which answers")
+		Expect(fake.addresses).To(Equal([]string{net.JoinHostPort(host, strconv.Itoa(int(port)))}),
+			"Poll must hand the map's dialer exactly the target address")
+	})
+})
+
+var _ = Describe("Nmap newDeps", func() {
+	It("keeps the BaseDependencies it was handed rather than building its own logger", func() {
+		id := nmapID()
+		bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
+
+		d := fsmv2nmap.NewDepsForTest(id, bd, nil)
+
+		Expect(d.BaseDependencies).To(BeIdenticalTo(bd),
+			"the deps carry the framework's own BaseDependencies, so the collector reads this worker's telemetry off the value Poll receives")
+	})
+})
+
+var _ = Describe("the registered nmap worker type", func() {
+	// boundDepsOf builds one instance the way production does, through the
+	// factory init() registered with, and returns the deps the worker bound.
+	boundDepsOf := func(id deps.Identity, dependencies map[string]any) fsmv2nmap.Deps {
+		w, err := factory.NewWorkerByType(fsmv2nmap.WorkerType, id, deps.NewNopFSMLogger(), nil, dependencies)
+		Expect(err).NotTo(HaveOccurred(), "init() left an instantiable factory for the worker type")
+		Expect(w).NotTo(BeNil(), "an instance exists, so the reads below are not vacuous")
+
+		dp, ok := w.(fsmv2.DependencyProvider)
+		Expect(ok).To(BeTrue(), "the worker reports the deps Poll receives")
+
+		bound, ok := dp.GetDependenciesAny().(fsmv2nmap.Deps)
+		Expect(ok).To(BeTrue(), "the framework binds newDeps' return, unwrapped")
+
+		return bound
+	}
+
+	It("dials through the dialer stored in the dependency map the worker was built with", func() {
+		// init()'s NewDeps wiring is what hands a production worker the dialer
+		// from its dependency map; a spec that builds Deps through
+		// NewDepsForTest directly passes with that wiring broken. The target is
+		// a loopback port nothing listens on, so a Poll that still dials for
+		// real reports closed and the fake records nothing.
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		host, port := hostPort(ln.Addr().String())
+		Expect(ln.Close()).To(Succeed())
+
+		fake := &fakeDialer{}
+
+		m := map[string]any{}
+
+		var dialer fsmv2nmap.Dialer = fake
+		fsmv2config.SetDependency(m, fsmv2nmap.DialerKey, dialer)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		bound := boundDepsOf(nmapID(), m)
+
+		status, err := fsmv2nmap.Poll(ctx, bound, newNmapConfig(host, port))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.PortState).To(Equal(string(nmapservice.PortStateOpen)),
+			"Poll must dial through the dialer NewDeps read from the map the worker was built with")
+		Expect(fake.addresses).To(Equal([]string{net.JoinHostPort(host, strconv.Itoa(int(port)))}),
+			"the map's dialer must receive exactly the target address")
+	})
+
+	It("gives each instance the BaseDependencies the framework built for it", func() {
+		id := nmapID()
+
+		bound := boundDepsOf(id, nil)
+
+		Expect(bound.BaseDependencies).NotTo(BeNil(),
+			"the collector reads framework telemetry off this, so the reads below are not vacuous")
+		Expect(bound.GetWorkerType()).To(Equal(id.WorkerType),
+			"newDeps kept the BaseDependencies the framework built for this instance")
+		Expect(bound.GetWorkerID()).To(Equal(id.ID))
+		Expect(bound.GetHierarchyPath()).To(Equal(id.HierarchyPath))
 	})
 })
 
