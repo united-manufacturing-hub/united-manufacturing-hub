@@ -313,4 +313,5 @@ var RegistryV2 = map[string]ScenarioV2{
 	"nmap":       NmapScenarioV2,
 	"transport":  TransportScenarioV2,
 	"concurrent": ConcurrentScenarioV2,
+	"simple":     SimpleScenarioV2,
 }
