@@ -57,6 +57,10 @@ var validWorkerStates = map[string]map[string]bool{
 		"Degraded": true, "Stopped": true,
 		"unknown": true,
 	},
+	"nmap": {
+		"running": true, "degraded": true,
+		"stopped": true, "unknown": true,
+	},
 }
 
 // checkStoredWorkerStates returns an error for the first stored worker whose
