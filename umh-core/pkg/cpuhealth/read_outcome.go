@@ -22,6 +22,7 @@ package cpuhealth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -53,6 +54,10 @@ const (
 var (
 	errEmptyRead      = errors.New("file is empty")
 	errUnparsableRead = errors.New("content did not parse")
+	// errNoPressureFile is what a hierarchy with no per-cgroup pressure file
+	// returns. It wraps fs.ErrNotExist so it classifies as ReadMissing, the
+	// cause a kernel without PSI already produces, which reports nothing.
+	errNoPressureFile = fmt.Errorf("hierarchy publishes no cpu.pressure: %w", fs.ErrNotExist)
 )
 
 // pathErrorFor gives a failure the shape Go uses for a failed file operation,

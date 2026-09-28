@@ -69,8 +69,12 @@ type linuxSampler struct {
 	fs   filesystem.Service
 	base string
 
-	cgroup cgroupReader
-	host   *hostSource
+	// cgroup is non-nil from construction, holding the v2 reader until the
+	// probe says otherwise, so no call site has to guard it.
+	cgroup   cgroupReader
+	resolved bool
+
+	host *hostSource
 
 	// psiAvailable is sticky: set true on the first successful cpu.pressure
 	// read and never cleared, even when a later read fails. It belongs to the
@@ -93,6 +97,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// a report of that failure needs these reads as much as any other.
 	s.recordRawReads(ctx, &sample)
 
+	cgroup := s.reader(ctx)
+
 	// Stamped once, here, and passed to both sources: neither cgroup nor host
 	// calls time.Now() itself, so both rate derivations divide by the same
 	// elapsed time and Decide never compares a machine-wide mean against a
@@ -102,7 +108,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
-	fraction, psiErr := s.cgroup.readPSI(ctx)
+	fraction, psiErr := cgroup.readPSI(ctx)
 	if psiErr != nil {
 		sample.Pressure = diagnosis.Unknown()
 	} else {
@@ -112,7 +118,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.record(OperationCPUPressure, classifyRead(psiErr), psiErr)
 	sample.PsiAvailable = s.psiAvailable
 
-	stat, statErr := s.cgroup.readStat(ctx)
+	stat, statErr := cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
 	sample.Troubleshooting.CPUStatRaw = stat.Raw
 	statReadOutcome := statOutcome(stat, statErr)
@@ -128,7 +134,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// ("usage_usec abc"), which no kernel writes. A cgroup v1 cpu.stat does
 		// not land here: its counters are numeric and usage_usec is simply
 		// absent, which reads empty and carries on.
-		return sample, fmt.Errorf("parse %s/cpu.stat: %w", s.base, statErr)
+		return sample, fmt.Errorf("parse cpu.stat: %w", sample.Troubleshooting.ReadErrors[OperationCPUStat])
 	}
 	// Check whether the reading was cancelled, and if so return the cancellation
 	// error. A cancelled read fails every file, which looks the same as a host
@@ -140,7 +146,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.NrPeriods = stat.Periods
 	sample.NrThrottled = stat.Throttled
 	sample.UsageUsec = stat.Usage
-	sample.UsageCores = s.cgroup.advanceUsageRate(timestamp, stat.Usage)
+	sample.UsageCores = cgroup.advanceUsageRate(timestamp, stat.Usage)
 
 	// Host signals: the first /proc/stat read fixes a baseline and publishes
 	// neither; a read after that publishes this tick's instantaneous host-busy
@@ -173,7 +179,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.Virtualized = virtualized
 	sample.record(OperationProcCpuinfo, cpuinfoOutcome, cpuinfoErr)
 
-	quota, cpuMaxOutcome, cpuMaxErr := s.cgroup.readQuota(ctx)
+	quota, cpuMaxOutcome, cpuMaxErr := cgroup.readQuota(ctx)
 	sample.Quota = quota.Limit
 	sample.Troubleshooting.CPUMaxRaw = quota.Raw
 	sample.record(OperationCPUMax, cpuMaxOutcome, cpuMaxErr)
@@ -196,7 +202,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 // 8 CPUs". A failed cpuset read reads ScopeUnknown with LogicalCpus absent,
 // never a silent ScopeHost on a known machine count.
 func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machine float64) {
-	allowed, cpusetErr := s.cgroup.readCpuset(ctx)
+	allowed, cpusetErr := s.reader(ctx).readCpuset(ctx)
 	sample.record(OperationCpusetCPUs, classifyRead(cpusetErr), cpusetErr)
 	if cpusetErr != nil {
 		sample.LogicalCpus = diagnosis.Unknown()
@@ -213,6 +219,27 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, sample *Sample, machi
 	}
 
 	sample.CpuScope = ScopeAffinity
+}
+
+// reader returns the cgroup reader for this mount, probing the filesystem the
+// first time. A mount neither shape matched is probed again next tick: the
+// container can start before its cgroup is mounted, and writing the box off for
+// the life of the process would leave it unmeasured after the mount appeared.
+func (s *linuxSampler) reader(ctx context.Context) cgroupReader {
+	if s.resolved {
+		return s.cgroup
+	}
+
+	switch layout, cpuDir := resolveLayout(ctx, s.fs, s.base); layout {
+	case layoutV1:
+		s.cgroup = newCgroupV1Source(s.fs, s.base, cpuDir)
+		s.resolved = true
+	case layoutV2:
+		s.resolved = true
+	case layoutNone:
+	}
+
+	return s.cgroup
 }
 
 // recordRawReads puts the reads that produce no signal on sample: file text kept

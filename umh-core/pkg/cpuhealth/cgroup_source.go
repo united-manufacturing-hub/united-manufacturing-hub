@@ -62,19 +62,26 @@ type usageBaseline struct {
 // Timestamp and never time.Now(); Read in read.go says why both sources have to
 // divide by the same elapsed time.
 func (c *cgroupSource) advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
+	return c.usageBase.advance(timestamp, usage)
+}
+
+// advance is the derivation itself, shared by both hierarchies' readers. Both
+// hand it microseconds, so the divisor is the same either way.
+func (b *usageBaseline) advance(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
-	if c.usageBase.have {
+	if b.have {
 		// A rising cumulative counter over a positive elapsed time derives an
 		// instantaneous rate; a falling one has been reset, so no rate.
-		if u, ok := usage.Get(); ok && u >= c.usageBase.usage {
-			if elapsed := timestamp.Sub(c.usageBase.time).Seconds(); elapsed > 0 {
-				rate = diagnosis.Known((u - c.usageBase.usage) / 1e6 / elapsed)
+		if u, ok := usage.Get(); ok && u >= b.usage {
+			if elapsed := timestamp.Sub(b.time).Seconds(); elapsed > 0 {
+				rate = diagnosis.Known((u - b.usage) / 1e6 / elapsed)
 			}
 		}
 	}
 	if u, ok := usage.Get(); ok {
-		c.usageBase = usageBaseline{usage: u, time: timestamp, have: true}
+		*b = usageBaseline{usage: u, time: timestamp, have: true}
 	}
+
 	return rate
 }
 
@@ -237,7 +244,14 @@ func (c *cgroupSource) readCpuset(ctx context.Context) (count int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	text := strings.TrimSpace(string(data))
+
+	return countCPUList(string(data))
+}
+
+// countCPUList counts the CPU ids a cpuset file names. Both hierarchies write
+// the same list format, so both readers count it the same way.
+func countCPUList(list string) (count int, err error) {
+	text := strings.TrimSpace(list)
 	if text == "" {
 		return 0, errEmptyRead
 	}
