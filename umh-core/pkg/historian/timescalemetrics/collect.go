@@ -191,7 +191,7 @@ func rowToHypertable(row pgx.CollectableRow) (hypertable, error) {
 		&read.Name,
 		&read.BytesBeforeCompression,
 		&read.BytesAfterCompression,
-		&read.DiskBytes,
+		&read.OccupiedDiskBytes,
 		&read.ChunkIntervalSeconds,
 		&read.CompressAfterSeconds,
 		&read.RetentionSeconds,
@@ -243,7 +243,7 @@ func readPlainTables(ctx context.Context, db Querier) ([]Table, error) {
 
 func rowToPlainTable(row pgx.CollectableRow) (Table, error) {
 	var table Table
-	err := row.Scan(&table.Name, &table.DiskBytes, &table.Rows)
+	err := row.Scan(&table.Name, &table.OccupiedDiskBytes, &table.Rows)
 
 	return table, err
 }

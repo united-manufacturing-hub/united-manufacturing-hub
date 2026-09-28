@@ -32,7 +32,7 @@ type Querier interface {
 type Table struct {
 	Name string `json:"name"`
 	// Compressed chunks at their compressed size, plus the chunks still uncompressed.
-	DiskBytes int64 `json:"diskBytes"`
+	OccupiedDiskBytes int64 `json:"occupiedDiskBytes"`
 	// Compressed chunks only, which is all TimescaleDB records a before size for.
 	BytesBeforeCompression int64 `json:"bytesBeforeCompression"`
 	BytesAfterCompression  int64 `json:"bytesAfterCompression"`

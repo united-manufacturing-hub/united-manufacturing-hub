@@ -258,7 +258,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 
 		Expect(byName).To(HaveKey("tag"))
 		Expect(byName["tag"].IsHypertable).To(BeFalse())
-		Expect(byName["tag"].DiskBytes).To(BeNumerically(">", 0))
+		Expect(byName["tag"].OccupiedDiskBytes).To(BeNumerically(">", 0))
 		Expect(byName["value_bench"].IsHypertable).To(BeTrue())
 	})
 
@@ -546,7 +546,7 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		Expect(value.CompressedChunks).To(BeNumerically(">", 0))
 		Expect(value.BytesBeforeCompression).To(BeNumerically(">", 0))
 		Expect(value.BytesAfterCompression).To(BeNumerically(">", 0))
-		Expect(value.DiskBytes).To(BeNumerically(">=", value.BytesAfterCompression))
+		Expect(value.OccupiedDiskBytes).To(BeNumerically(">=", value.BytesAfterCompression))
 	})
 
 	It("counts the chunks no policy has compressed into a table's size", func() {
@@ -565,7 +565,7 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 		value := tableNamed(tables, "value_bench")
 		Expect(value.CompressedChunks).To(BeNumerically("<", value.Chunks),
 			"the rows just written are in chunks no policy has compressed yet")
-		Expect(value.DiskBytes).To(BeNumerically(">", value.BytesAfterCompression),
+		Expect(value.OccupiedDiskBytes).To(BeNumerically(">", value.BytesAfterCompression),
 			"a size that counted only the compressed chunks would miss them")
 	})
 
