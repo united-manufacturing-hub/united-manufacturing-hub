@@ -77,10 +77,10 @@ var TimeoutScenarioV2 = ScenarioV2{
 		env.Step("create the combined worker, which fails five times before it connects")
 
 		if err := env.Client.Upsert(combinedRef, map[string]any{
-			"state":                   "running",
-			"should_fail":             true,
-			"max_failures":            5,
-			"restart_after_failures":  10,
+			"state":                  "running",
+			"should_fail":            true,
+			"max_failures":           5,
+			"restart_after_failures": 10,
 		}); err != nil {
 			return fmt.Errorf("upsert combined worker: %w", err)
 		}
