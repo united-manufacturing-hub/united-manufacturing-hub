@@ -64,10 +64,7 @@ type NmapStatus struct {
 	ScannedAt time.Time `json:"scanned_at"`
 }
 
-// Dialer is the one dialing capability Poll needs. *net.Dialer satisfies it. A
-// scenario run (a registered ScenarioV2 in pkg/fsmv2/examples) or a test
-// injects its own Dialer under DialerKey to observe or fake the dial without a
-// network.
+// Dialer is the one dialing capability Poll needs. *net.Dialer satisfies it.
 type Dialer interface {
 	// DialContext dials one network address, as net.Dialer.DialContext does.
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
@@ -80,14 +77,12 @@ var DialerKey = fsmv2config.NewDependencyKey[Dialer]("nmap.dialer")
 type Deps struct {
 	*deps.BaseDependencies
 
-	// dialer dials the target.
 	dialer Dialer
 }
 
 // newDeps builds the Deps Poll dials through: the Dialer stored under DialerKey
-// in m, or a real *net.Dialer when m holds nothing under it. The production map
-// holds nothing under the key, so a production worker dials for real; a
-// scenario or test injects its own Dialer there to observe or fake the dial.
+// in m, or a net.Dialer with the key absent. A scenario or test injects its
+// own Dialer under the key to observe or fake the dial.
 func newDeps(_ deps.Identity, bd *deps.BaseDependencies, m map[string]any) Deps {
 	var dialer Dialer = &net.Dialer{}
 

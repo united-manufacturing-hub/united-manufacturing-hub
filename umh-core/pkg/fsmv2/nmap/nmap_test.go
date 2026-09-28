@@ -16,6 +16,7 @@ package fsmv2nmap_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strconv"
 	"time"
@@ -54,8 +55,7 @@ func hostPort(addr string) (string, uint16) {
 	return host, uint16(p)
 }
 
-// newPollDeps builds the deps value Poll dials through, via newDeps: the specs
-// that pass a nil map thereby dial through the real net dialer.
+// newPollDeps builds the deps value Poll dials through, via newDeps.
 func newPollDeps(m map[string]any) fsmv2nmap.Deps {
 	id := deps.Identity{ID: "nmap-poll", WorkerType: fsmv2nmap.WorkerType}
 	bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
@@ -63,8 +63,8 @@ func newPollDeps(m map[string]any) fsmv2nmap.Deps {
 	return fsmv2nmap.NewDepsForTest(id, bd, m)
 }
 
-// nmapID builds the identity a supervisor hands an nmap worker: its own ID,
-// name and worker type, plus the hierarchy path the supervisor reports it under.
+// nmapID builds the identity a supervisor hands an nmap worker, with the
+// hierarchy path the supervisor reports it under.
 func nmapID() deps.Identity {
 	return deps.Identity{
 		ID:            "nmap-001",
@@ -76,13 +76,19 @@ func nmapID() deps.Identity {
 
 // fakeDialer records every address it is asked to dial and answers with one
 // end of a net.Pipe, so a poll through it reports the port open without
-// anything listening.
+// anything listening. A non-nil err makes the dial fail with that error
+// instead.
 type fakeDialer struct {
 	addresses []string
+	err       error
 }
 
 func (f *fakeDialer) DialContext(_ context.Context, _, address string) (net.Conn, error) {
 	f.addresses = append(f.addresses, address)
+
+	if f.err != nil {
+		return nil, f.err
+	}
 
 	oneEnd, otherEnd := net.Pipe()
 	_ = otherEnd.Close()
@@ -268,17 +274,24 @@ var _ = Describe("Nmap Poll dependencies", func() {
 		Expect(fake.addresses).To(Equal([]string{net.JoinHostPort(host, strconv.Itoa(int(port)))}),
 			"Poll must hand the map's dialer exactly the target address")
 	})
-})
 
-var _ = Describe("Nmap newDeps", func() {
-	It("keeps the BaseDependencies it was handed rather than building its own logger", func() {
-		id := nmapID()
-		bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
+	It("reports a closed port when the injected dialer fails", func() {
+		fake := &fakeDialer{err: errors.New("connection refused")}
 
-		d := fsmv2nmap.NewDepsForTest(id, bd, nil)
+		m := map[string]any{}
 
-		Expect(d.BaseDependencies).To(BeIdenticalTo(bd),
-			"the deps carry the framework's own BaseDependencies, so the collector reads this worker's telemetry off the value Poll receives")
+		var dialer fsmv2nmap.Dialer = fake
+		fsmv2config.SetDependency(m, fsmv2nmap.DialerKey, dialer)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, newPollDeps(m), newNmapConfig("10.0.0.1", 502))
+		Expect(err).NotTo(HaveOccurred(),
+			"a failed dial is a scan outcome, not a poll failure")
+		Expect(status.PortState).To(Equal(string(nmapservice.PortStateClosed)))
+		Expect(fake.addresses).To(Equal([]string{net.JoinHostPort("10.0.0.1", "502")}),
+			"Poll must hand the map's dialer exactly the target address")
 	})
 })
 
@@ -302,9 +315,7 @@ var _ = Describe("the registered nmap worker type", func() {
 	It("dials through the dialer stored in the dependency map the worker was built with", func() {
 		// init()'s NewDeps wiring is what hands a production worker the dialer
 		// from its dependency map; a spec that builds Deps through
-		// NewDepsForTest directly passes with that wiring broken. The target is
-		// a loopback port nothing listens on, so a Poll that still dials for
-		// real reports closed and the fake records nothing.
+		// NewDepsForTest directly passes with that wiring broken.
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -342,6 +353,28 @@ var _ = Describe("the registered nmap worker type", func() {
 			"newDeps kept the BaseDependencies the framework built for this instance")
 		Expect(bound.GetWorkerID()).To(Equal(id.ID))
 		Expect(bound.GetHierarchyPath()).To(Equal(id.HierarchyPath))
+	})
+
+	It("keeps the BaseDependencies it was handed rather than building its own logger", func() {
+		id := nmapID()
+		bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
+
+		d := fsmv2nmap.NewDepsForTest(id, bd, nil)
+
+		Expect(d.BaseDependencies).To(BeIdenticalTo(bd),
+			"the deps carry the framework's own BaseDependencies, so the collector reads this worker's telemetry off the value Poll receives")
+	})
+
+	It("satisfies the injection interfaces supervisor/api.go asserts on the deps", func() {
+		bound := boundDepsOf(nmapID(), nil)
+
+		_, setsFrameworkState := any(bound).(interface{ SetFrameworkState(*deps.FrameworkMetrics) })
+		Expect(setsFrameworkState).To(BeTrue(),
+			"supervisor/api.go injects framework telemetry only into deps satisfying this")
+
+		_, setsActionHistory := any(bound).(interface{ SetActionHistory([]deps.ActionResult) })
+		Expect(setsActionHistory).To(BeTrue(),
+			"supervisor/api.go injects action history only into deps satisfying this")
 	})
 })
 
