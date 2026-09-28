@@ -97,6 +97,7 @@ func startDatabaseWithConfig(image string) (config.HistorianConfig, *pgxpool.Poo
 		},
 	})
 	Expect(err).NotTo(HaveOccurred(), "the database container starts")
+
 	if container == nil {
 		Fail("testcontainers.GenericContainer returned a nil container")
 	}
@@ -317,6 +318,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(jobs).To(HaveLen(2), "a healthy job is still worth reporting")
+
 		for _, job := range jobs {
 			Expect(job.Table).To(BeElementOf("value_bench", "attribute_bench"))
 			Expect(job.ScheduleSeconds).To(BeNumerically(">", 0))
@@ -341,6 +343,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			  FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh'`)
 		Expect(err).NotTo(HaveOccurred())
 
+		//nolint:dupword
 		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
 			(job_id, last_start, last_finish, next_start, last_successful_finish, last_run_success,
 			 total_runs, total_duration, total_duration_failures, total_successes, total_failures,
@@ -378,6 +381,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			  FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh'`)
 		Expect(err).NotTo(HaveOccurred())
 
+		//nolint:dupword
 		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
 			(job_id, last_start, last_finish, next_start, last_successful_finish, last_run_success,
 			 total_runs, total_duration, total_duration_failures, total_successes, total_failures,
