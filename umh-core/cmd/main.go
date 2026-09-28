@@ -682,9 +682,9 @@ func buildFSMv2Supervisor(
 		channelAdapter.Start(ctx)
 	}
 
-	// Set the global ChannelProvider singleton BEFORE creating the supervisor.
-	// Phase 1 architecture: singleton is THE ONLY way to provide channels to the communicator.
-	// The factory will panic if this is not set.
+	// Set the global channel providers before creating the supervisor. No
+	// worker's dependency map holds a provider here, so the communicator and
+	// transport constructors use these globals and panic if they are unset.
 	communicator.SetChannelProvider(channelAdapter)
 
 	var certHandler *certificatehandler.CertHandler

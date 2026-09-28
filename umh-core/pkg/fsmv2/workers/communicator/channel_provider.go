@@ -30,8 +30,10 @@ type ChannelProvider interface {
 }
 
 // ChannelProviderKey names the ChannelProvider a CommunicatorWorker acquires its
-// inbound and outbound channels through. When the dependency map holds nothing
-// under it, the worker uses the provider set with SetChannelProvider.
+// inbound and outbound channels through. The worker looks the key up in its
+// dependency map, the map[string]any its register.Worker constructor receives.
+// When the map holds nothing under the key, the worker uses the provider set
+// with SetChannelProvider, and construction panics if that is unset too.
 var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("communicator.channel_provider")
 
 var (
