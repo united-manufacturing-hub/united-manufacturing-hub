@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benbjohnson/clock"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -72,9 +74,15 @@ const (
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 // FilesystemKey names the filesystem.Service the sampler reads the cgroup
-// files through. When the dependency map holds nothing under it, the sampler
-// reads the cgroup files through filesystem.NewDefaultService().
+// files through. NewDeps does the lookup, then the global published under
+// FilesystemDepsKey, and falls back to filesystem.NewDefaultService().
 var FilesystemKey = config.NewDependencyKey[filesystem.Service]("cpu.filesystem")
+
+// ClockKey names the clock.Clock the sampler stamps every Sample from. NewDeps
+// does the lookup and falls back to clock.New() when the map holds nothing
+// under it: a scenario that meant to publish a mock clock and forgot gets no
+// error, and its samples are stamped from wall time instead.
+var ClockKey = config.NewDependencyKey[clock.Clock]("cpu.clock")
 
 // CPUConfig is empty: the CPU worker takes no configuration.
 type CPUConfig struct{}
@@ -204,7 +212,12 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies, dependencies map[string
 		fs = filesystem.NewDefaultService()
 	}
 
-	sampler := cpuhealth.NewLinuxSampler(fs, cgroupBase)
+	clk, ok := config.LookupDependency(dependencies, ClockKey)
+	if !ok {
+		clk = clock.New()
+	}
+
+	sampler := cpuhealth.NewLinuxSamplerWithClock(fs, cgroupBase, clk)
 
 	d := &CPUDeps{
 		BaseDependencies: bd,
