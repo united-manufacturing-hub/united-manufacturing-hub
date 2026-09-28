@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The same CPU accounting cgroupSource reads, as cgroup v1 writes it. Three
-// things differ. The files sit under a directory per controller. The CPU limit
-// is two files, and spells no-limit as -1 rather than "max". The usage total is
-// nanoseconds in cpuacct.usage rather than microseconds in cpu.stat.
-//
-// v1 publishes no per-cgroup pressure file. The machine-wide
-// /proc/pressure/cpu is not read in its place: it measures the whole machine,
-// and Sample.Pressure is cgroup-scoped.
-//
-// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/cpu.html and
-// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/cpuacct.html.
+// The cgroup v1 reader. v1 has no per-cgroup pressure file, and the
+// machine-wide /proc/pressure/cpu is not read in its place, because
+// Sample.Pressure is cgroup-scoped.
+// https://docs.kernel.org/scheduler/sched-bwc.html
+// https://docs.kernel.org/admin-guide/cgroup-v1/cpuacct.html
+
 package cpuhealth
 
 import (

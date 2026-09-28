@@ -13,9 +13,9 @@
 // limitations under the License.
 
 // The Linux sampler: one tick's cgroup-plus-machine read, built from the
-// previous tick's numbers wherever a rate is derived. Read is a composer over
-// two sources — cgroupSource (cgroup_source.go) and hostSource
-// (host_source.go) — neither of which can see the other's files.
+// previous tick's numbers wherever a rate is derived. Read composes a
+// cgroupReader (cgroup_source.go for v2, cgroup_v1_source.go for v1) and
+// hostSource (host_source.go).
 
 package cpuhealth
 
@@ -60,11 +60,9 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 	}
 }
 
-// linuxSampler composes cgroupSource and hostSource into one Sample per tick.
-// It holds no accounting state of its own — every sticky fact and baseline
-// belongs to whichever source reads the file it is derived from — because it
-// exists only to stamp the tick's single Timestamp and derive CPU scope, the
-// one fact that needs both sources' reads to compute.
+// linuxSampler composes a cgroupReader and hostSource into one Sample per tick.
+// Usage baselines belong to the readers. The sampler holds the resolved layout
+// and the sticky PSI flag, which outlive a reader swap.
 type linuxSampler struct {
 	fs   filesystem.Service
 	base string
@@ -138,14 +136,9 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	if statReadOutcome == ReadUnparsable {
 		// A cpu.stat that opens and does not parse is corrupt, and every number
 		// derived from it would be a guess. A cpu.stat that will not open is a
-		// different thing: the three readings below stay absent and the sample
-		// carries on, so a host keeping its CPU accounting elsewhere is not
-		// degraded over a file it was never going to have.
-		//
-		// Unparsable is a key present with a value that is not a number
-		// ("usage_usec abc"), which no kernel writes. A cgroup v1 cpu.stat does
-		// not land here: its counters are numeric and usage_usec is simply
-		// absent, which reads empty and carries on.
+		// different thing: its readings stay absent and the sample carries on,
+		// so a host keeping its CPU accounting elsewhere is not degraded over a
+		// file it was never going to have.
 		return sample, fmt.Errorf("parse cpu.stat: %w", sample.Troubleshooting.ReadErrors[OperationCPUStat])
 	}
 	// Check whether the reading was cancelled, and if so return the cancellation

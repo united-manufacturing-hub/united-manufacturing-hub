@@ -49,8 +49,8 @@ const (
 	// configworker.ConfigManagerDepsKey.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
-	// cgroupBase is the cgroup v2 mount point whose CPU controller files the
-	// sampler reads (cpu.stat, cpu.max, cpu.pressure, cpuset.cpus.effective).
+	// cgroupBase is the cgroup mount point the sampler reads, as a v2 tree or
+	// as v1 controller directories.
 	cgroupBase = "/sys/fs/cgroup"
 
 	// PollInterval is how often the worker samples the cgroup. simple.Register

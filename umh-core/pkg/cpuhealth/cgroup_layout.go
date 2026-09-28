@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The reader interface the sampler holds, and the readers behind it.
 package cpuhealth
 
 import (
@@ -86,8 +85,8 @@ func resolveLayout(ctx context.Context, fs filesystem.Service, base string) (cgr
 		return layoutV2, v1Locations{}
 	}
 
-	// A kernel built without CONFIG_CFS_BANDWIDTH writes no v1 cpu.stat, and
-	// still writes cpuacct.usage.
+	// A kernel built without CONFIG_CFS_BANDWIDTH writes no v1 cpu.stat but
+	// still writes cpuacct.usage: https://docs.kernel.org/scheduler/sched-bwc.html
 	cpuDir, hasCPUStat := firstDirHolding(ctx, fs, base, v1CPUDirs, "cpu.stat")
 	cpuacctDir, hasCPUAcctUsage := firstDirHolding(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
 	if !hasCPUStat && !hasCPUAcctUsage {

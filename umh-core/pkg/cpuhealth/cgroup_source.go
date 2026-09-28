@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The cgroup source: everything this package reads from under one cgroup's
-// base — cpu.max, cpu.stat, cpu.pressure and cpuset.cpus.effective. Distinct
-// from hostSource, which reads the machine-wide files that apply regardless
-// of which cgroup is asking.
+// The cgroup v2 reader: cpu.max, cpu.stat, cpu.pressure and
+// cpuset.cpus.effective under one cgroup's base. hostSource reads the
+// machine-wide files.
 
 package cpuhealth
 

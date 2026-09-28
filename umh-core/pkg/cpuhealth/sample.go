@@ -67,15 +67,15 @@ type Sample struct {
 	// this tick.
 	Pressure diagnosis.Reading
 
-	// NrPeriods and NrThrottled come from the SAME cpu.stat read that carries
+	// NrPeriods and NrThrottled come from cpu.stat, which on v2 also carries
 	// usage. Each is present when its key is in cpu.stat and parses, and
 	// unavailable (never a trusted 0) when the key is absent or unparsable.
 	NrPeriods   diagnosis.Reading
 	NrThrottled diagnosis.Reading
 
-	// UsageUsec is the raw cumulative usage_usec counter from cpu.stat. It is
-	// present when the key is in cpu.stat and parses, and unavailable when it
-	// is absent or unparsable. The raw total is kept beside the rate so a later
+	// UsageUsec is the raw cumulative usage counter in microseconds: v2's
+	// usage_usec from cpu.stat, or v1's cpuacct.usage converted from
+	// nanoseconds. It is unavailable when that value is absent or unparsable. The raw total is kept beside the rate so a later
 	// throttle-ratio reduction still has the totals.
 	UsageUsec diagnosis.Reading
 
@@ -179,11 +179,11 @@ type ReadTroubleshooting struct {
 }
 
 // Sampler reads one tick of CPU health signals: a cgroup's own accounting,
-// from either hierarchy, and the host's
-// machine-wide state (/proc/stat, /proc/cpuinfo, and the DMI identity files),
-// both stamped with the one Timestamp the tick was read at. A file it cannot
-// read leaves its readings absent; only an unparsable cpu.stat and a cancelled
-// tick return an error.
+// from either hierarchy, and the host's machine-wide state (/proc/stat,
+// /proc/cpuinfo, and the DMI identity files), both stamped with the one
+// Timestamp the tick was read at. A file it cannot read leaves its readings
+// absent; only an unparsable cpu.stat or cpuacct.usage and a cancelled tick
+// return an error.
 type Sampler interface {
 	Read(ctx context.Context) (Sample, error)
 }
