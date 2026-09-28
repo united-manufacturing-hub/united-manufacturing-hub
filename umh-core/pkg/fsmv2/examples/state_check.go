@@ -61,6 +61,19 @@ var validWorkerStates = map[string]map[string]bool{
 		"running": true, "degraded": true,
 		"stopped": true, "unknown": true,
 	},
+	"transport": {
+		"Stopped": true, "Starting": true, "Running": true,
+		"Degraded": true, "AuthFailed": true, "Stopping": true,
+		"unknown": true,
+	},
+	"push": {
+		"Running": true, "Degraded": true, "Stopped": true, "Stopping": true,
+		"unknown": true,
+	},
+	"pull": {
+		"Running": true, "Degraded": true, "Stopped": true, "Stopping": true,
+		"unknown": true,
+	},
 }
 
 // checkStoredWorkerStates returns an error for the first stored worker whose
