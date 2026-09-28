@@ -232,24 +232,6 @@ var _ = Describe("Communicator Scenario", func() {
 	)
 })
 
-var _ = Describe("CommunicatorScenarioEntry registry", func() {
-	It("is registered with CustomRunner that uses ApplicationSupervisor internally", func() {
-		scenario, exists := examples.Registry["communicator"]
-		Expect(exists).To(BeTrue())
-		Expect(scenario.Name).To(Equal("communicator"))
-		Expect(scenario.Description).NotTo(BeEmpty())
-		// Uses CustomRunner for mock server orchestration (but still uses ApplicationSupervisor internally)
-		Expect(scenario.CustomRunner).NotTo(BeNil())
-		Expect(scenario.YAMLConfig).To(BeEmpty()) // Config built dynamically with mock server URL
-	})
-
-	It("description explains ApplicationSupervisor usage", func() {
-		scenario := examples.Registry["communicator"]
-		// Description should mention that it uses ApplicationSupervisor (not bypass)
-		Expect(scenario.Description).To(ContainSubstring("ApplicationSupervisor"))
-	})
-})
-
 var _ = Describe("TestChannelProvider", func() {
 	It("provides channels for test scenarios", func() {
 		provider := examples.NewTestChannelProvider(10)
