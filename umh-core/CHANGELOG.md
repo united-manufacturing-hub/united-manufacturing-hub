@@ -4,7 +4,7 @@
 
 ### New Features
 
-- The instance can now report the state of its historian database when asked: how much disk it uses and how fast it is growing, what compression saves, the per-table detail behind those figures, and the background jobs that maintain it. The reads happen only when the Management Console asks, so an instance with a large historian sends no more than before. The table names and the count of failing background jobs are reported continuously, alongside the connection check
+- With the historian feature flag enabled in the Management Console, the instance reports the state of its historian database: disk usage and growth, compression savings, per-table details and background jobs. The detailed figures are read only on request
 
 ### Fixes
 
