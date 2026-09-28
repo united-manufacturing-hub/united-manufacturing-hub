@@ -82,8 +82,8 @@ var TimeoutScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert combined worker: %w", err)
 		}
 
-		waitFailingConnected := func(ref dynamicchildren.Ref, maxFailures int) error {
-			return env.WaitFor(ctx, fmt.Sprintf("the worker %s reaches Connected after more than %d attempts", ref.Name, maxFailures),
+		waitFailingConnected := func(ref dynamicchildren.Ref) error {
+			return env.WaitFor(ctx, "the worker "+ref.Name+" connects with its failure round complete",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, ref)
 					if err != nil {
@@ -94,21 +94,21 @@ var TimeoutScenarioV2 = ScenarioV2{
 						return false, "", err
 					}
 
-					done := obs.State == "Connected" && obs.Status.ConnectAttempts > maxFailures
+					done := obs.State == "Connected" && obs.Status.AllCyclesComplete
 
-					return done, fmt.Sprintf("state=%s attempts=%d", obs.State, obs.Status.ConnectAttempts), nil
+					return done, fmt.Sprintf("state=%s all_cycles_complete=%t", obs.State, obs.Status.AllCyclesComplete), nil
 				})
 		}
 
-		// A failing worker shows its attempts above its limit only for its
-		// first five seconds in Connected (healthyDurationMsBeforeNextCycle,
-		// examplefailing/state); then its counter drops to 0. The slow
-		// workers stay Connected, so the failing ones are waited for first.
-		if err := waitFailingConnected(retryRef, 3); err != nil {
+		// Each failing worker runs one failure cycle and then stays Connected
+		// with AllCyclesComplete, a value that is true only after that round
+		// ran and that lasts until the run ends. The slow workers also stay
+		// Connected, but the failing ones are waited for first anyway.
+		if err := waitFailingConnected(retryRef); err != nil {
 			return err
 		}
 
-		if err := waitFailingConnected(combinedRef, 5); err != nil {
+		if err := waitFailingConnected(combinedRef); err != nil {
 			return err
 		}
 
