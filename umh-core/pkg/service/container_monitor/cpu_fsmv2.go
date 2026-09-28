@@ -27,13 +27,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// cpuWorkerMaxAge is how old the fsmv2 CPU worker's observation may be and still
-// count as Fresh for the seam. It leaves enough slack that one slow or missed
-// poll cannot flip the instance to degraded. The seam is the code path that
-// reports CPU from the fsmv2 worker instead of the legacy sampler, selected at
-// construction by USE_FSMV2_CPU.
-const cpuWorkerMaxAge = 3 * fsmv2cpu.PollInterval
-
+// The seam is the code path that reports CPU from the fsmv2 worker instead of
+// the legacy sampler, selected at construction by USE_FSMV2_CPU.
+//
 // collectCPUFromWorker builds the whole CPU record from the fsmv2 CPU worker's
 // last observation. The legacy fields stay empty on purpose: old and new
 // reporting stay cleanly separated, so nothing here re-derives a legacy-named
@@ -100,7 +96,7 @@ func judgeWorkerCPU(
 
 		switch freshness {
 		case fsmv2client.Stale:
-			message = fmt.Sprintf("CPU worker observation is stale (older than %s); cannot trust the verdict it carries", cpuWorkerMaxAge)
+			message = fmt.Sprintf("CPU worker observation is stale (older than %s); cannot trust the verdict it carries", fsmv2cpu.MaxObservationAge)
 		case fsmv2client.NeverObserved:
 			message = "CPU worker has never observed; no measurement to judge"
 		case fsmv2client.Unregistered:
@@ -180,7 +176,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	}
 
 	// Get the latest poll result from the worker.
-	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
+	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, fsmv2cpu.MaxObservationAge)
 
 	if err != nil {
 		v := judgeWorkerCPUReadError(err)

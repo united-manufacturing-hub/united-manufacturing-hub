@@ -56,6 +56,12 @@ const (
 	// also publishes it as this worker's observation interval, and
 	// pkg/fsmv2/adapter calls an observation stale at three times it.
 	PollInterval = 1 * time.Second
+
+	// MaxObservationAge is the oldest a reading may be and still count as
+	// Fresh for fsmv2client.GetFresh. The container monitor and the CPU
+	// scenarios both use it, so the two cannot drift; one slow or missed poll
+	// cannot flip the instance to degraded.
+	MaxObservationAge = 3 * PollInterval
 )
 
 // Ref is the pair the configworker upserts this child under behind

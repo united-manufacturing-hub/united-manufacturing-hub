@@ -1625,7 +1625,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 var _ = Describe("the CPU seam's judgement, called without a client", func() {
 	// The window the stale message quotes, derived the way production derives
 	// it, so a change to the worker's poll interval moves both together.
-	maxAge := 3 * fsmv2cpu.PollInterval
+	maxAge := fsmv2cpu.MaxObservationAge
 
 	It("keeps the store's own error in the message of a failed read", func() {
 		health, cpuHealth := container_monitor.JudgeWorkerCPUReadError(errors.New("boltdb: bucket not found"))
