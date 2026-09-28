@@ -74,9 +74,8 @@ var alwaysAllowedMessages = []string{
 	"collector_stop_skipped",
 }
 
-// recordLoggedError keeps the first error whose message messageAllowed does
-// not allow and whose value no expected cause covers, wrapped so a failure
-// names that message.
+// recordLoggedError keeps the first error that neither messageAllowed nor
+// errorCauseAllowed allows, wrapped so a failure names its message.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
 	if r.messageAllowed(msg, r.expectedErrors) {
 		return
@@ -258,11 +257,11 @@ type ScenarioV2 struct {
 	// RunResult.Err when it is logged after Run returned.
 	ExpectedErrors []string
 
-	// ExpectedErrorCauses lists error values this scenario expects by cause,
-	// for when the message is generic: the executor logs every failed action
-	// as action_failed, so expecting that message would also let any
-	// unrelated failed action pass. A logged error is expected when
-	// errors.Is finds one of these causes in it.
+	// ExpectedErrorCauses lists error values this scenario expects. A logged
+	// error is expected when errors.Is finds one of them in it. Use it when
+	// the message is generic: ActionExecutor (supervisor/internal/execution)
+	// logs every failed action as action_failed, so expecting that message
+	// would let any failed action pass.
 	ExpectedErrorCauses []error
 
 	// ExpectedWarnings lists substrings of warning log messages this

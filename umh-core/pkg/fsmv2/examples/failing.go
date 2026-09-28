@@ -25,12 +25,9 @@ import (
 	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
 )
 
-// FailingScenarioV2 runs the three failing workers from the v1 scenario. The
-// recovery worker fails three times and then connects. The permanent worker
-// never reaches its failure limit of 999999, so it never connects. The
-// restart worker fails forever and is restarted after five consecutive
-// failures, and the scenario waits until a new worker of the same name is
-// trying to connect again.
+// FailingScenarioV2 checks examplefailing workers that connect after their
+// failures, that never connect, and that are restarted after repeated
+// failures.
 var FailingScenarioV2 = ScenarioV2{
 	Name:        "failing",
 	Description: "Demonstrates action failure handling with recovery vs permanent failure patterns",
@@ -75,8 +72,6 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert restart worker: %w", err)
 		}
 
-		// The recovery worker reaches Connected only after its attempts ran
-		// past its failure limit.
 		if err := env.WaitFor(ctx, "the recovery worker reaches Connected after more than 3 attempts",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, recoveryRef)
@@ -95,8 +90,6 @@ var FailingScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// The permanent worker never connects, so after three failed attempts
-		// one more reading must still show it outside Connected.
 		if err := env.WaitFor(ctx, "the permanent worker records three failed attempts",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, permanentRef)
@@ -122,8 +115,6 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("the permanent worker reached Connected after %d attempts, although its failure limit is 999999", obs.Status.ConnectAttempts)
 		}
 
-		// The restart worker first runs its failures up to the restart
-		// threshold.
 		if err := env.WaitFor(ctx, "the restart worker records five failed attempts",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, restartRef)
@@ -140,10 +131,9 @@ var FailingScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// After the restart, only a newly created worker is trying to
-		// connect again with a low attempt count. Waiting for a low count
-		// alone would pass on the old worker's last reading, Stopped with 0
-		// attempts, taken after it stopped and before the new worker
+		// After the restart, only the new worker is in TryingToConnect with 1
+		// to 4 attempts. A low count alone would also match the old worker's
+		// last reading, Stopped with 0 attempts, taken before the new worker
 		// exists.
 		return env.WaitFor(ctx, "a restarted worker is trying to connect again with a low attempt count",
 			func(ctx context.Context) (bool, string, error) {
