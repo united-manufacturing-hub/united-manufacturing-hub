@@ -67,6 +67,7 @@ type TransportDependencies struct {
 
 	*deps.BaseDependencies
 	authFailureRate *failurerate.Tracker
+	channelProvider ChannelProvider
 	inboundChan     chan<- *types.UMHMessage
 	outboundChan    <-chan *types.UMHMessage
 	// outboundUsage is nil when its table fails to build, which leaves the
@@ -88,13 +89,20 @@ type TransportDependencies struct {
 	mu sync.RWMutex
 }
 
-// NewTransportDependencies creates dependencies for the transport worker.
+// NewTransportDependencies creates dependencies for the transport worker,
+// acquiring channels from the global channel provider.
 // Panics if SetChannelProvider was not called first.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 // The supervisor writes framework metrics into this instance after construction;
 // constructing a second instance inside the factory would leave those metrics unreachable.
 func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies) *TransportDependencies {
-	provider := GetChannelProvider()
+	return newTransportDependenciesWithProvider(t, bd, GetChannelProvider())
+}
+
+// newTransportDependenciesWithProvider creates dependencies that acquire
+// channels from the given provider instead of the global one. The worker
+// factory passes the provider stored under ChannelProviderKey here.
+func newTransportDependenciesWithProvider(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *TransportDependencies {
 	if provider == nil {
 		panic(fmt.Sprintf("ChannelProvider must be set before creating dependencies (worker=%s). "+
 			"Call SetChannelProvider() in main() before starting FSMv2 supervisor.",
@@ -112,6 +120,7 @@ func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies) *Tra
 		BaseDependencies: bd,
 		transport:        t,
 		authFailureRate:  failurerate.New(AuthFailureRateConfig),
+		channelProvider:  provider,
 		inboundChan:      inbound,
 		outboundChan:     outbound,
 		outboundUsage:    outboundUsage,
@@ -267,28 +276,20 @@ func (d *TransportDependencies) GetLastErrorAt() time.Time {
 	return d.RetryTracker().LastError().OccurredAt
 }
 
-// GetInboundChan returns channel to write received messages, or nil if no provider set.
+// GetInboundChan returns channel to write received messages.
 func (d *TransportDependencies) GetInboundChan() chan<- *types.UMHMessage {
 	return d.inboundChan
 }
 
-// GetOutboundChan returns channel to read messages for pushing, or nil if no provider set.
+// GetOutboundChan returns channel to read messages for pushing.
 func (d *TransportDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 	return d.outboundChan
 }
 
-// GetInboundChanStats returns the capacity and current length of the inbound channel.
-// Returns (0, 0) if no channel provider is set.
+// GetInboundChanStats returns the capacity and current length of the inbound channel,
+// reported by the provider the dependencies were created with.
 func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int) {
-	provider := GetChannelProvider()
-	if provider == nil {
-		d.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "channel_provider_not_initialized",
-			deps.WorkerID(d.GetWorkerID()))
-
-		return 0, 0
-	}
-
-	return provider.GetInboundStats(d.GetWorkerID())
+	return d.channelProvider.GetInboundStats(d.GetWorkerID())
 }
 
 // RecordTypedError increments consecutive errors and records error type and retry-after.
