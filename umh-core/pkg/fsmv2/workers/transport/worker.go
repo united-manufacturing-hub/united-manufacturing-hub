@@ -79,10 +79,8 @@ type TransportWorker struct {
 	fsmv2.WorkerBase[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies]
 }
 
-// NewTransportWorker creates a new Transport worker in Stopped state,
-// acquiring its channels from the ChannelProvider stored under
-// ChannelProviderKey in dependencies, falling back to the global provider
-// when the map holds none.
+// NewTransportWorker creates a new Transport worker in Stopped state. Its
+// channels come from the provider under ChannelProviderKey in dependencies.
 // Returns an error if required dependencies are missing.
 func NewTransportWorker(
 	identity deps.Identity,
@@ -90,8 +88,6 @@ func NewTransportWorker(
 	stateReader deps.StateReader,
 	dependencies map[string]any,
 ) (*TransportWorker, error) {
-	// The architecture tests require every New*Worker constructor to
-	// validate its dependencies.
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
