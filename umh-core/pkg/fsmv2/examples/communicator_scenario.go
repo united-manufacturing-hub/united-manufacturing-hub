@@ -49,10 +49,8 @@ var CommunicatorScenarioV2 = ScenarioV2{
 
 		// Declared as each key's interface: a *TransportTestChannelProvider
 		// argument does not match the key's type, so SetDependency would not
-		// compile. One provider serves both keys. The communicator reads
-		// communicator.ChannelProviderKey. The transport child it spawns reads
-		// transport.ChannelProviderKey, because a child's map includes its
-		// parent's.
+		// compile. The transport child the communicator spawns reads
+		// transport.ChannelProviderKey, because a child's map includes its parent's.
 		var cp communicator.ChannelProvider = provider
 		config.SetDependency(deps, communicator.ChannelProviderKey, cp)
 

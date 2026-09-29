@@ -21,8 +21,7 @@
 // TransportWorker handles authentication, push, pull, backoff, and transport reset.
 // CommunicatorWorker monitors child health and manages lifecycle transitions.
 //
-// Channel sharing: the communicator acquires its inbound and outbound channels
-// from a ChannelProvider. ChannelProviderKey's doc says where the worker finds one.
+// Channel sharing: ChannelProviderKey's doc says where the worker finds its ChannelProvider.
 //
 // # FSM v2 Pattern
 //
@@ -68,7 +67,6 @@ type CommunicatorWorker struct {
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
-// Its channels come from the provider under ChannelProviderKey in dependencies.
 // The supervisor sets HierarchyPath on identity before instantiation; tests inject a
 // transport via transportParam.
 func NewCommunicatorWorker(
