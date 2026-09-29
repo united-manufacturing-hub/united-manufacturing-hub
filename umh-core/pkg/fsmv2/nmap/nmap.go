@@ -90,10 +90,10 @@ func newDeps(_ deps.Identity, _ *deps.BaseDependencies, m map[string]any) Deps {
 }
 
 // Poll dials the configured target once and reports the port state. A
-// successful dial yields an open/running status with the measured latency; any
-// dial failure yields a closed port. A closed port is a legitimate scan
-// outcome, not a poll failure, so Poll returns it with a nil error. Poll
-// returns an error only when the context is cancelled (worker shutdown).
+// successful dial yields an open/running status with the measured latency. A
+// failed dial yields a closed port with a nil error, because a closed port is a
+// legitimate scan outcome, not a poll failure. The exception is a cancelled
+// context (worker shutdown): then Poll returns an error and no port state.
 func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error) {
 	target := net.JoinHostPort(cfg.NmapServiceConfig.Target, strconv.Itoa(int(cfg.NmapServiceConfig.Port)))
 
