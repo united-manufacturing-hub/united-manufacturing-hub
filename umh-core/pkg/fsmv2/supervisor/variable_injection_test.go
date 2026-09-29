@@ -250,7 +250,7 @@ var _ = Describe("Variable Injection", func() {
 	})
 
 	Describe("Variable Inheritance from Parent to Child", func() {
-		It("should inherit parent User variables to child, with child vars overriding parent", func() {
+		It("should inherit parent User variables to child, and add the child's own", func() {
 			// Setup parent supervisor with User variables
 			parentUserVars := map[string]any{
 				"IP":   "192.168.1.100",
@@ -316,7 +316,7 @@ var _ = Describe("Variable Injection", func() {
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
 		})
 
-		It("should allow child User variables to override parent User variables", func() {
+		It("keeps the parent's User value when the child's spec sets the same key", func() {
 			// Setup parent supervisor with User variables
 			parentUserVars := map[string]any{
 				"IP":   "192.168.1.100",
@@ -331,11 +331,10 @@ var _ = Describe("Variable Injection", func() {
 
 			s.TestUpdateUserSpec(parentUserSpec)
 
-			// Create a child spec that overrides PORT
 			childUserSpec := config.UserSpec{
 				Variables: config.VariableBundle{
 					User: map[string]any{
-						"PORT":      503, // Override parent's PORT
+						"PORT":      503, // child also sets PORT; the merge keeps the parent's 502
 						"DEVICE_ID": "child-device",
 					},
 				},
@@ -346,7 +345,7 @@ var _ = Describe("Variable Injection", func() {
 					BaseDesiredState: config.BaseDesiredState{},
 					ChildrenSpecs: []config.ChildSpec{
 						{
-							Name:       "override-child",
+							Name:       "same-key-child",
 							WorkerType: "test",
 							UserSpec:   childUserSpec,
 						},
@@ -358,14 +357,14 @@ var _ = Describe("Variable Injection", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			children := s.GetChildren()
-			Expect(children).To(HaveKey("override-child"))
+			Expect(children).To(HaveKey("same-key-child"))
 
-			child := children["override-child"]
+			child := children["same-key-child"]
 			capturedChildSpec := child.TestGetUserSpec()
 
-			// Verify: IP inherited, PORT overridden by child, DEVICE_ID from child
+			// Verify: IP inherited, PORT kept from the parent, DEVICE_ID added by the child.
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
-			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("PORT", 503)) // Child's value
+			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("PORT", 502))
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
 		})
 	})
