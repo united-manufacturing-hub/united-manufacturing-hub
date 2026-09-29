@@ -19,15 +19,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/benbjohnson/clock"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // CPUStallScenarioV2 drives the real CPU monitor over a fake machine whose
@@ -52,15 +47,7 @@ var CPUStallScenarioV2 = ScenarioV2{
 
 	Dependencies: func() (map[string]any, func(), error) {
 		box := newTickingBox(cpuBlindBase, cpuBlindMachine())
-		machine := &cpuMachine{HangingFS: fakebox.NewHangingFS(box.fs()), box: box}
-
-		m := map[string]any{}
-
-		var fs filesystem.Service = machine
-		config.SetDependency(m, fsmv2cpu.FilesystemKey, fs)
-
-		var clk clock.Clock = box.box.Clock()
-		config.SetDependency(m, fsmv2cpu.ClockKey, clk)
+		m := cpuMachineDeps(box)
 
 		// The box advances once per read, when the sampler opens
 		// cpu.pressure. While the cpu.stat read hangs no new read starts, so
