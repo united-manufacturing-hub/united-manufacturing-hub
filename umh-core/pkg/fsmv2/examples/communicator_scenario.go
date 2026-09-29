@@ -30,6 +30,12 @@ import (
 
 // CommunicatorScenarioV2 runs one communicator child against a mock relay
 // server, with a test channel provider in the dependency map.
+//
+// The communicator spawns a transport child, which authenticates. Until that
+// child is healthy the communicator counts zero healthy children, so it moves
+// Syncing -> Recovering with "healthy=0, unhealthy=0" right after it starts.
+// It returns to Syncing about a second later, once the transport child has
+// authenticated.
 var CommunicatorScenarioV2 = ScenarioV2{
 	Name:        "communicator",
 	Description: "Communicator worker: authenticates against a mock relay server and pushes a queued message",
@@ -80,7 +86,7 @@ var CommunicatorScenarioV2 = ScenarioV2{
 
 		ref := dynamicchildren.Ref{WorkerType: "communicator", Name: "communicator-1"}
 
-		env.Step("create communicator with valid auth against the mock relay server")
+		env.Step("create communicator against the mock relay server; it passes through Recovering until its transport child authenticates")
 
 		if err := env.Client.Upsert(ref, map[string]any{
 			"state":        "running",
@@ -114,7 +120,7 @@ var CommunicatorScenarioV2 = ScenarioV2{
 
 		provider.QueueOutbound(&types.UMHMessage{InstanceUUID: "test-instance", Content: "status-update"})
 
-		return env.WaitFor(ctx, "the server received the queued message",
+		return env.WaitFor(ctx, "the mock relay server received the queued message",
 			func(ctx context.Context) (bool, string, error) {
 				pushed := len(server.GetPushedMessages())
 				return pushed == 1, fmt.Sprintf("pushed=%d", pushed), nil
