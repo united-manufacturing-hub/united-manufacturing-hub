@@ -49,8 +49,8 @@ const (
 	// configworker.ConfigManagerDepsKey.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
-	// cgroupBase is the cgroup mount point the sampler reads, as a v2 tree or
-	// as v1 controller directories.
+	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
+	// the directory holding one mount per controller.
 	cgroupBase = "/sys/fs/cgroup"
 
 	// PollInterval is how often the worker samples the cgroup. simple.Register
