@@ -72,9 +72,9 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert restart worker: %w", err)
 		}
 
-		// The worker runs one failure cycle and then stays Connected with
-		// AllCyclesComplete, which is true only after that round ran, so
-		// the value the wait accepts lasts until the run ends.
+		// AllCyclesComplete turns true only after the failure round ran, and
+		// the worker then stays Connected, so this state lasts until the run
+		// ends.
 		if err := env.WaitFor(ctx, "the recovery worker connects with its failure round complete",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, recoveryRef)
@@ -134,10 +134,8 @@ var FailingScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// After the restart, only the new worker is in TryingToConnect with 1
-		// to 4 attempts. A low count alone would also match the old worker's
-		// last reading, Stopped with 0 attempts, taken before the new worker
-		// exists.
+		// The old worker's last reading before the restart is Stopped with 0
+		// attempts, so a low count alone would match it.
 		return env.WaitFor(ctx, "a restarted worker is trying to connect again with a low attempt count",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, restartRef)

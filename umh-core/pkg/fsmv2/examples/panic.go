@@ -25,10 +25,9 @@ import (
 	example_panic "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 )
 
-// PanicScenarioV2 runs one panic worker whose connect action panics on every
-// attempt. The executor recovers each panic and the worker retries on its
-// next tick, so the scenario counts the failed connect attempts it sees and
-// fails the run if the worker ever reaches Connected.
+// PanicScenarioV2 runs a worker whose connect action panics on every attempt.
+// ActionExecutor (supervisor/internal/execution) recovers each panic and
+// records it as a failed connect, and the worker retries on its next tick.
 var PanicScenarioV2 = ScenarioV2{
 	Name:        "panic",
 	Description: "Demonstrates panic recovery in action handlers",
@@ -65,12 +64,8 @@ var PanicScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// The first wait already proves one panic: the worker is observed
-		// in TryingToConnect while its connect action panics. This wait
-		// counts the failed connect entries in the observation's action
-		// history, deduped by timestamp across polls, so it stays strong
-		// on a slow machine where counting polls would only prove time
-		// passed.
+		// A poll can read the same observation twice, so each failed
+		// connect is counted once, by its timestamp.
 		failedConnects := make(map[time.Time]bool)
 
 		return env.WaitFor(ctx, "the panic worker fails its connect three times without reaching Connected",

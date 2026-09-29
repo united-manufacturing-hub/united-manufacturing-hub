@@ -459,9 +459,7 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 })
 
 var _ = Describe("ScenarioV2 expected error causes", func() {
-	// causeRun runs a scenario whose Run logs errValue under the generic
-	// action_failed message, with causes as its ExpectedErrorCauses. A run
-	// that fails on the logged error returns a nil result.
+	// causeRun returns a nil result when the logged error fails the run.
 	causeRun := func(name string, errValue error, causes []error) (*examples.RunResult, error) {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
