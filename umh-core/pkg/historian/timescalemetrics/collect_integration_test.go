@@ -29,6 +29,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 const (
@@ -804,8 +805,10 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 		summary, err := CollectSummary(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(summary.PostgresVersion).To(HavePrefix("17."))
-		Expect(summary.TimescaleVersion).To(Equal("2.24.0"))
+		Expect(summary.Versions).To(ConsistOf(
+			models.Version{Name: "TimescaleDB", Version: "2.24.0"},
+			And(HaveField("Name", "PostgreSQL"), HaveField("Version", HavePrefix("17."))),
+		))
 		Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
 		Expect(summary.JobCount).To(Equal(2))
 		Expect(summary.FailedJobCount).To(BeZero())

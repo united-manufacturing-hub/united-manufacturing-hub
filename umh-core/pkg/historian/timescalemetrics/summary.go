@@ -17,6 +17,8 @@ package timescalemetrics
 import (
 	"context"
 	"fmt"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 // Summary is the part of a historian's state reported without being asked.
@@ -25,14 +27,13 @@ import (
 // A historian with no policies has no jobs to fail, so FailedJobCount at zero is not
 // proof that data is compressed or expired.
 type Summary struct {
-	PostgresVersion            string   `json:"postgresVersion"`
-	TimescaleVersion           string   `json:"timescaleVersion"`
-	TableNames                 []string `json:"tableNames"`
-	DatabaseOccupiedDiskBytes  int64    `json:"databaseOccupiedDiskBytes"`
-	HistorianOccupiedDiskBytes int64    `json:"historianOccupiedDiskBytes"`
-	DataSpanSeconds            int64    `json:"dataSpanSeconds"`
-	JobCount                   int      `json:"jobCount"`
-	FailedJobCount             int      `json:"failedJobCount"`
+	Versions                   []models.Version `json:"versions"`
+	TableNames                 []string         `json:"tableNames"`
+	DatabaseOccupiedDiskBytes  int64            `json:"databaseOccupiedDiskBytes"`
+	HistorianOccupiedDiskBytes int64            `json:"historianOccupiedDiskBytes"`
+	DataSpanSeconds            int64            `json:"dataSpanSeconds"`
+	JobCount                   int              `json:"jobCount"`
+	FailedJobCount             int              `json:"failedJobCount"`
 }
 
 const jobCountsQuery = `SELECT count(*), count(*) FILTER (WHERE s.last_run_status = 'Failed')
@@ -65,8 +66,10 @@ func CollectSummary(ctx context.Context, db Database) (Summary, error) {
 	}
 
 	summary = Summary{
-		PostgresVersion:            postgresVersion,
-		TimescaleVersion:           timescaleVersion,
+		Versions: []models.Version{
+			{Name: "PostgreSQL", Version: postgresVersion},
+			{Name: "TimescaleDB", Version: timescaleVersion},
+		},
 		TableNames:                 tableNames(tables),
 		HistorianOccupiedDiskBytes: occupiedDiskBytes(tables),
 		DataSpanSeconds:            dataSpanSeconds(spans),
