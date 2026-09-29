@@ -28,7 +28,7 @@ import (
 // TryingToConnect.
 var SlowScenarioV2 = ScenarioV2{
 	Name:        "slow",
-	Description: "Demonstrates a long-running action and checks its delay ran",
+	Description: "A worker whose connect takes two seconds; checks that it spent them in TryingToConnect",
 
 	Run: func(ctx context.Context, env Env) error {
 		slowRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "slow-worker-1"}
@@ -46,7 +46,7 @@ var SlowScenarioV2 = ScenarioV2{
 		// success, so the worker spends at least that long in
 		// TryingToConnect. CumulativeTimeByStateMs only grows, so a slow
 		// machine delays this reading but cannot shrink it.
-		return env.WaitFor(ctx, "the slow worker reaches Connected after spending its delay trying",
+		return env.WaitFor(ctx, "the slow worker is Connected after at least 1.9 s in TryingToConnect",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_slow.ExampleslowStatus](ctx, env.Client, slowRef)
 				if err != nil {
