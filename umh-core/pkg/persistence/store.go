@@ -49,7 +49,7 @@ import (
 //
 // Example:
 //
-//	doc := basic.Document{
+//	doc := Document{
 //	    "id": "asset-123",
 //	    "name": "Press Machine A",
 //	    "tags": []string{"production", "critical"},
@@ -168,7 +168,7 @@ type Schema struct {
 //	store.CreateCollection(ctx, "assets", nil)
 //
 //	// Insert document
-//	doc := basic.Document{"name": "Machine A", "status": "active"}
+//	doc := Document{"name": "Machine A", "status": "active"}
 //	id, _ := store.Insert(ctx, "assets", doc)
 //
 //	// Query documents

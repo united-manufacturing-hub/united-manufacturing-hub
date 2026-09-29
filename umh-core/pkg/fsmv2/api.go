@@ -130,8 +130,8 @@ type Disableable interface {
 
 // Snapshot is the complete view of the worker at a point in time (immutable).
 type Snapshot struct {
-	Observed interface{}   // What is the actual state? (ObservedState or basic.Document).
-	Desired  interface{}   // What should the state be? (DesiredState or basic.Document).
+	Observed interface{}   // What is the actual state? (ObservedState or persistence.Document).
+	Desired  interface{}   // What should the state be? (DesiredState or persistence.Document).
 	Identity deps.Identity // Who am I?
 }
 
