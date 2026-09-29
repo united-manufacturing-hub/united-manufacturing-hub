@@ -79,9 +79,8 @@ type TransportWorker struct {
 	fsmv2.WorkerBase[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies]
 }
 
-// NewTransportWorker creates a new Transport worker in Stopped state. Its
-// channels come from the provider under ChannelProviderKey in dependencies.
-// Returns an error if required dependencies are missing.
+// NewTransportWorker creates a new Transport worker in Stopped state.
+// Returns an error if logger is nil.
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
