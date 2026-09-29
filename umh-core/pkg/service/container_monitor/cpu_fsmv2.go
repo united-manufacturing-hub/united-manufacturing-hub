@@ -29,7 +29,7 @@ import (
 
 // The seam is the code path that reports CPU from the fsmv2 worker instead of
 // the legacy sampler, selected at construction by USE_FSMV2_CPU.
-//
+
 // collectCPUFromWorker builds the whole CPU record from the fsmv2 CPU worker's
 // last observation. The legacy fields stay empty on purpose: old and new
 // reporting stay cleanly separated, so nothing here re-derives a legacy-named

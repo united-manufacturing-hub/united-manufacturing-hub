@@ -110,13 +110,9 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 	})
 
 	It("falls back to the published global when the map holds nothing under the key", func() {
-		// The map holds nothing under FilesystemKey, and the supervisor never
-		// adds one: a child's map is its parent's map merged with the child
-		// spec's (config.MergeDependencies), so a value under FilesystemKey
-		// arrives from the parent chain or from the spec's Dependencies, and
-		// nothing above this worker sets the key. The published global serves
-		// the marked cpu.stat, so the error below names it as the filesystem
-		// that was read.
+		// The map holds nothing under FilesystemKey, and the published global
+		// serves the marked cpu.stat, so the error below names the global as
+		// the filesystem that was read.
 		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
@@ -130,8 +126,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 
 		// A value of the wrong type under the literal reads as absent
 		// (LookupDependency type-asserts with comma-ok), so the global serves
-		// here too: a wrong-typed entry cannot break the fallback, and cannot
-		// be mistaken for the map key working.
+		// here too.
 		wrongTyped := map[string]any{"cpu.filesystem": "not a filesystem"}
 		_, err = Poll(context.Background(), monitorSpec.NewDeps(id, bd, wrongTyped), CPUConfig{})
 		Expect(err).To(HaveOccurred(),
@@ -177,11 +172,9 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		Expect(d.sampler).NotTo(BeNil(), "an unpublished filesystem still yields a sampler")
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")
 
-		// The branch every enabled deployment takes. The concrete type names
-		// the real filesystem because outcomes cannot: on a host without
-		// cgroup v2 the real filesystem fails every read too, exactly like a
-		// refuse-everything stub swapped in its place, so only the type
-		// tells them apart.
+		// Only the concrete type tells the real filesystem from a
+		// refuse-everything stub: on a host without cgroup v2 both fail every
+		// read.
 		_, isDefault := d.fs.(*filesystem.DefaultService)
 		Expect(isDefault).To(BeTrue(),
 			"with nothing published the resolved filesystem must be the real one, not a stub")
