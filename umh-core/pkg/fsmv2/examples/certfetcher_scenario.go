@@ -182,7 +182,7 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
 
-		env.Step("create certfetcher with a subscriber handler")
+		env.Step("create certfetcher; its mock handler lists one subscriber, alice@example.com")
 
 		if err := upsertCertFetcher(env); err != nil {
 			return err
@@ -195,7 +195,7 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 		// A successful fetch sets LastFetchAt (RecordFetchSuccess in the
 		// worker's dependencies), so a non-zero value shows the worker
 		// fetched through the handler.
-		return env.WaitFor(ctx, "store shows a completed fetch",
+		return env.WaitFor(ctx, "store shows a successful fetch (last_fetch_at is set)",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
 				if err != nil {
@@ -213,10 +213,13 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 }
 
 // CertFetcherDegradedScenarioV2 runs one certfetcher worker whose handler
-// has a subscriber but fails every fetch.
+// has a subscriber but fails every fetch. Each failure logs an action_failed
+// error, which ExpectedErrorCauses allows. After DegradedThreshold
+// (certfetcher/state/state_running.go) failed fetches in a row, the worker
+// moves Running -> Degraded.
 var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-degraded",
-	Description: "Cert fetcher whose fetches fail: enters Degraded after the threshold",
+	Description: "Cert fetcher whose fetches fail: enters Degraded after 3 failed fetches in a row",
 
 	ExpectedErrorCauses: []error{errCertFetchSimulated},
 
@@ -227,22 +230,25 @@ var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
 
-		env.Step("create certfetcher with a subscriber handler and a failing fetch")
+		env.Step("create certfetcher whose every fetch fails; each failure logs an expected action_failed error")
 
 		if err := upsertCertFetcher(env); err != nil {
 			return err
 		}
 
-		// The threshold is DegradedThreshold in certfetcher/state/state_running.go.
 		return waitForCertFetcherState(ctx, env, ref, "Degraded")
 	},
 }
 
 // CertFetcherNoSubscribersScenarioV2 runs one certfetcher worker whose
-// handler has no sub handler.
+// handler has no subscriber list. The worker stays Stopped, so the log shows no
+// state_transition line for it. StoppedState starts the worker only once the
+// handler has a subscriber list (certfetcher/state/state_stopped.go), and the
+// "state" key in the upsert has no effect. The scenario passes when the worker
+// is still Stopped after 20 polls, about one second.
 var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-no-subscribers",
-	Description: "Cert fetcher without a subscriber handler: stays in Stopped",
+	Description: "Cert fetcher with no subscriber list: stays in Stopped",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		return certFetcherDependencies(nil, nil)
@@ -251,17 +257,15 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
 
-		env.Step("create certfetcher without a subscriber handler")
+		env.Step("create certfetcher with no subscriber list; it stays Stopped, so no state change appears for it")
 
 		if err := upsertCertFetcher(env); err != nil {
 			return err
 		}
 
-		// StoppedState leaves Stopped only when the handler has a sub
-		// handler (certfetcher/state/state_stopped.go).
 		polls := 0
 
-		return env.WaitFor(ctx, "the worker stays in Stopped across 20 polls",
+		return env.WaitFor(ctx, "the certfetcher is still Stopped after 20 polls (about 1s)",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
 				if err != nil {
