@@ -28,9 +28,8 @@ import (
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
-// mockDialer is the fake target port the nmap scenario dials: open hands back
-// one end of a net.Pipe, closed refuses the dial. Run flips the flag while the
-// collector dials from another goroutine, so reads and writes are atomic.
+// mockDialer is the target port the nmap scenario dials. Run flips open while
+// the collector dials from another goroutine, so open is atomic.
 type mockDialer struct {
 	open atomic.Bool
 }
@@ -47,10 +46,7 @@ func (m *mockDialer) DialContext(_ context.Context, _, _ string) (net.Conn, erro
 	return local, nil
 }
 
-// NmapScenarioV2 runs one nmap worker against a mock dialer held in the
-// dependency map: it creates the worker with the target port open, then closes
-// the port, waiting for the store to show each port state before making the
-// next change.
+// NmapScenarioV2 opens and then closes the port one nmap worker dials.
 var NmapScenarioV2 = ScenarioV2{
 	Name:        "nmap",
 	Description: "Port monitor: dials a target through a mock dialer, reports the port open then closed",
