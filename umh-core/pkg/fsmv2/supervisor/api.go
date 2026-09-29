@@ -521,16 +521,6 @@ func (s *Supervisor[TObserved, TDesired]) ListWorkers() []string {
 	return ids
 }
 
-// SetGlobalVariables sets the global variables for this supervisor.
-// Global variables come from the management system and are fleet-wide settings.
-// They are injected into UserSpec.Variables.Global before DeriveDesiredState() is called.
-func (s *Supervisor[TObserved, TDesired]) SetGlobalVariables(vars map[string]any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.globalVars = vars
-}
-
 // GetWorkers returns the identity of each worker currently managed by this supervisor.
 func (s *Supervisor[TObserved, TDesired]) GetWorkers() []deps.Identity {
 	s.mu.RLock()
