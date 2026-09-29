@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package container_monitor
+package fsmv2memory
 
 import (
 	"context"
@@ -20,17 +20,40 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// MemoryCgroupInfo contains cgroup v2 memory metrics.
-type MemoryCgroupInfo struct {
-	LimitBytes   int64 // Memory limit in bytes from memory.max
-	CurrentBytes int64 // Current memory usage in bytes from memory.current
-	Unlimited    bool  // True if memory.max is "max" (no limit set)
+type CgroupMemory struct {
+	LimitBytes   int64
+	CurrentBytes int64
+	Unlimited    bool
 }
 
-// parseMemoryMax parses the memory.max file content.
-// Returns the limit in bytes, whether the limit is unlimited ("max"), and any error.
+func ReadCgroupMemory(ctx context.Context, fs filesystem.Service, cgroupBase string) (CgroupMemory, error) {
+	memoryMaxData, err := fs.ReadFile(ctx, cgroupBase+"/memory.max")
+	if err != nil {
+		return CgroupMemory{}, fmt.Errorf("failed to read memory.max: %w", err)
+	}
+
+	limitBytes, unlimited, err := parseMemoryMax(memoryMaxData)
+	if err != nil {
+		return CgroupMemory{}, err
+	}
+
+	memoryCurrentData, err := fs.ReadFile(ctx, cgroupBase+"/memory.current")
+	if err != nil {
+		return CgroupMemory{}, fmt.Errorf("failed to read memory.current: %w", err)
+	}
+
+	currentBytes, err := parseMemoryCurrent(memoryCurrentData)
+	if err != nil {
+		return CgroupMemory{}, err
+	}
+
+	return CgroupMemory{LimitBytes: limitBytes, CurrentBytes: currentBytes, Unlimited: unlimited}, nil
+}
+
 func parseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
 	s := strings.TrimSpace(string(data))
 	if s == "" {
@@ -53,8 +76,6 @@ func parseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
 	return limitBytes, false, nil
 }
 
-// parseMemoryCurrent parses the memory.current file content.
-// Returns the current memory usage in bytes.
 func parseMemoryCurrent(data []byte) (currentBytes int64, err error) {
 	s := strings.TrimSpace(string(data))
 	if s == "" {
@@ -71,36 +92,4 @@ func parseMemoryCurrent(data []byte) (currentBytes int64, err error) {
 	}
 
 	return currentBytes, nil
-}
-
-// getCgroupMemoryInfo reads cgroup v2 memory limits and current usage.
-func (c *ContainerMonitorService) getCgroupMemoryInfo(ctx context.Context) (*MemoryCgroupInfo, error) {
-	info := &MemoryCgroupInfo{}
-
-	memMaxData, err := c.fs.ReadFile(ctx, "/sys/fs/cgroup/memory.max")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read memory.max: %w", err)
-	}
-
-	limitBytes, unlimited, err := parseMemoryMax(memMaxData)
-	if err != nil {
-		return nil, err
-	}
-
-	info.LimitBytes = limitBytes
-	info.Unlimited = unlimited
-
-	memCurrentData, err := c.fs.ReadFile(ctx, "/sys/fs/cgroup/memory.current")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read memory.current: %w", err)
-	}
-
-	currentBytes, err := parseMemoryCurrent(memCurrentData)
-	if err != nil {
-		return nil, err
-	}
-
-	info.CurrentBytes = currentBytes
-
-	return info, nil
 }

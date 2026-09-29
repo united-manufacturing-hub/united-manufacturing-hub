@@ -12,29 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package container_monitor
+package fsmv2memory
 
 import (
 	"context"
+	"io/fs"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-var _ = Describe("Cgroup Memory", func() {
-	Describe("Fallback behavior", func() {
-		It("should return valid memory metrics even when cgroup files are unavailable", func() {
-			// On macOS and non-container Linux, /sys/fs/cgroup/memory.max does not exist.
-			// getMemoryMetrics() should fall back to gopsutil host-level values.
-			mockFS := filesystem.NewMockFileSystem()
-			service := NewContainerMonitorServiceWithPath(mockFS, GinkgoT().TempDir())
+func TestMemory(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "fsmv2memory Suite")
+}
 
-			status, err := service.GetStatus(context.Background())
-			Expect(err).ToNot(HaveOccurred())
-			Expect(status.Memory).ToNot(BeNil())
-			Expect(status.Memory.CGroupTotalBytes).To(BeNumerically(">", 0))
-			Expect(status.Memory.CGroupUsedBytes).To(BeNumerically(">", 0))
-		})
+const fixtureCgroupBase = "/sys/fs/cgroup"
+
+func cgroupFiles(memoryMax, memoryCurrent string) map[string]string {
+	return map[string]string{
+		fixtureCgroupBase + "/memory.max":     memoryMax,
+		fixtureCgroupBase + "/memory.current": memoryCurrent,
+	}
+}
+
+func fixtureFilesystem(files map[string]string) *filesystem.MockFileSystem {
+	return filesystem.NewMockFileSystem().WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		content, ok := files[path]
+		if !ok {
+			return nil, fs.ErrNotExist
+		}
+
+		return []byte(content), nil
 	})
-})
+}
