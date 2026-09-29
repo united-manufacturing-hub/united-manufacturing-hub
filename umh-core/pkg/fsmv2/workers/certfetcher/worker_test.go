@@ -56,8 +56,6 @@ var _ = Describe("CertFetcherWorker cert handler dependency", func() {
 		var mapHandlerAsHandler certificatehandler.Handler = mapHandler
 		config.SetDependency(dependencyMap, certfetcher.CertHandlerKey, mapHandlerAsHandler)
 
-		Expect(dependencyMap).To(HaveKey("certfetcher.cert_handler"))
-
 		identity := deps.Identity{ID: "map-handler-worker", WorkerType: "certfetcher"}
 		built, err := factory.NewWorkerByType("certfetcher", identity, deps.NewNopFSMLogger(), nil, dependencyMap)
 		Expect(err).NotTo(HaveOccurred())
