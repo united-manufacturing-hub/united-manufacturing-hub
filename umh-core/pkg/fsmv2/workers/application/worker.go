@@ -20,6 +20,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -59,16 +60,31 @@ var _ fsmv2.Worker = (*ApplicationWorker)(nil)
 // to dynamically discover and create child workers. It doesn't hardcode child
 // types - any registered worker type can be instantiated as a child.
 //
+// An own child is a child declared in the application's own YAML (the desired
+// state's ChildrenSpecs), as opposed to the config-worker kernel child and the
+// registry's dynamic children.
+//
 // This implements the "passthrough pattern" where the application supervisor simply
 // passes through ChildrenSpecs from the YAML config without knowing about
 // specific child implementations.
 type ApplicationWorker struct {
 	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus, struct{}]
+
+	// warnedMu guards warnedConflicts. The current callers never overlap;
+	// the lock guards against a future concurrent caller, not a current
+	// race.
+	warnedMu sync.Mutex
+	// warnedConflicts holds each variableConflictKey that
+	// warnVariableConflicts has warned about. Entries are never removed.
+	warnedConflicts map[variableConflictKey]struct{}
 }
+
+// variableConflictKey names one variable of one own child.
+type variableConflictKey struct{ child, namespace, key string }
 
 // NewApplicationWorker creates a new application worker.
 func NewApplicationWorker(identity deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *ApplicationWorker {
-	w := &ApplicationWorker{}
+	w := &ApplicationWorker{warnedConflicts: make(map[variableConflictKey]struct{})}
 	w.InitBase(identity, logger, sr)
 
 	return w
@@ -78,7 +94,7 @@ func NewApplicationWorker(identity deps.Identity, logger deps.FSMLogger, sr deps
 // supervisor. Returns fsmv2.NewObservation - the collector fills CollectedAt,
 // framework metrics, action history, ChildrenView, and children counts
 // automatically after COS returns.
-func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+func (w *ApplicationWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -93,17 +109,48 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	// The shared registry is published under the config worker's key (one key,
 	// one publisher; same pattern as pull/push reading the transport deps). When
 	// nothing publishes it, RegistryConfigured stays false and the application
-	// renders only its declared children: dynamic spawning is off, not broken.
+	// renders only its own children: dynamic spawning is off, not broken.
 	if reg := register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName); reg != nil {
 		status.RegistryConfigured = true
 		status.DynamicChildren = reg.Specs()
 
 		if vars := reg.Variables(); len(vars.User) > 0 || len(vars.Global) > 0 {
 			status.Variables = &vars
+			w.warnVariableConflicts(vars, desired)
 		}
 	}
 
 	return fsmv2.NewObservation(status), nil
+}
+
+// warnVariableConflicts warns about each key that both the registry's bundle
+// and an own child's spec set. renderUnion keeps the bundle's value for that
+// key. Each variableConflictKey is warned about once per worker instance. The
+// warning names the key and never a value, because variables can hold
+// credentials.
+func (w *ApplicationWorker) warnVariableConflicts(bundle config.VariableBundle, desired fsmv2.DesiredState) {
+	provider, ok := desired.(config.ChildSpecProvider)
+	if !ok {
+		return
+	}
+
+	w.warnedMu.Lock()
+	defer w.warnedMu.Unlock()
+
+	for _, child := range provider.GetChildrenSpecs() {
+		for _, c := range config.MergeWithConflicts(bundle, child.UserSpec.Variables).Conflicts {
+			id := variableConflictKey{child: child.Name, namespace: c.Namespace, key: c.Key}
+			if _, done := w.warnedConflicts[id]; done {
+				continue
+			}
+
+			w.warnedConflicts[id] = struct{}{}
+			w.Logger().SentryWarn(deps.FeatureFSMv2, w.Identity().String(), "registry_variable_overrides_child",
+				deps.String("child_name", child.Name),
+				deps.String("namespace", c.Namespace),
+				deps.String("key", c.Key))
+		}
+	}
 }
 
 // childrenConfig is the structure for parsing children from YAML.
