@@ -29,7 +29,7 @@ const kernelWorkerType = "configworker"
 
 // renderUnion builds the additive union of the config-worker kernel (only when
 // the registry is configured), the registry's dynamic children, and the worker's
-// own declared children. Specs are deduped by Name with the FIRST occurrence
+// own children. Specs are deduped by Name with the FIRST occurrence
 // winning, so the emit order encodes the Name-collision precedence
 // kernel > registry > own: a kernel or registry child can never be shadowed by a
 // same-named own child.
