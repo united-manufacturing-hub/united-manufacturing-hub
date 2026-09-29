@@ -101,8 +101,7 @@ func (d *CommunicatorDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 	return d.outboundChan
 }
 
-// GetInboundChanStats returns the capacity and current length of the inbound channel,
-// reported by the provider the dependencies were created with.
+// GetInboundChanStats returns the capacity and current length of the inbound channel.
 func (d *CommunicatorDependencies) GetInboundChanStats() (capacity int, length int) {
 	return d.channelProvider.GetInboundStats(d.GetWorkerID())
 }

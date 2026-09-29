@@ -285,10 +285,8 @@ state: "running"
 	})
 })
 
-// recordingChannelProvider implements communicator.ChannelProvider and records
-// the worker IDs its methods are called with, so a test can tell which of two
-// providers the worker actually used. It keeps the channels GetChannels
-// returned, so a test can also check the worker was wired to them.
+// recordingChannelProvider is a communicator.ChannelProvider that records the
+// worker IDs it is called with and keeps the channels it hands out.
 type recordingChannelProvider struct {
 	getChannelsIDs     []string
 	getInboundStatsIDs []string
