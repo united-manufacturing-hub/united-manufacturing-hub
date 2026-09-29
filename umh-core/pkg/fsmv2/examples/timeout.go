@@ -27,8 +27,7 @@ import (
 )
 
 // TimeoutScenarioV2 waits for exampleslow and examplefailing workers to reach
-// Connected. A failing worker must also show an attempt count above its
-// failure limit, which proves its failures happened before its connect.
+// Connected, each failing worker after its failure round.
 var TimeoutScenarioV2 = ScenarioV2{
 	Name:        "timeout",
 	Description: "Demonstrates action timeout handling and retry behavior patterns",
@@ -82,6 +81,8 @@ var TimeoutScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert combined worker: %w", err)
 		}
 
+		// The wait reads AllCyclesComplete for the reason given in
+		// FailingScenarioV2.
 		waitFailingConnected := func(ref dynamicchildren.Ref) error {
 			return env.WaitFor(ctx, "the worker "+ref.Name+" connects with its failure round complete",
 				func(ctx context.Context) (bool, string, error) {
@@ -100,10 +101,6 @@ var TimeoutScenarioV2 = ScenarioV2{
 				})
 		}
 
-		// Each failing worker runs one failure cycle and then stays Connected
-		// with AllCyclesComplete, a value that is true only after that round
-		// ran and that lasts until the run ends. The slow workers also stay
-		// Connected, but the failing ones are waited for first anyway.
 		if err := waitFailingConnected(retryRef); err != nil {
 			return err
 		}
