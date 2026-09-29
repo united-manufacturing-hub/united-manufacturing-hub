@@ -47,6 +47,12 @@ func (m *mockDialer) DialContext(_ context.Context, _, _ string) (net.Conn, erro
 }
 
 // NmapScenarioV2 opens and then closes the port one nmap worker dials.
+//
+// nmap is a drop-in replacement for the fsmv1 nmap worker, so it stays running
+// while it scans, whether the port is open or closed. The fsmv1 connection
+// worker that owns nmap decides that a closed port means the connection is
+// down. So this scenario waits for port_state in the observation. It cannot
+// wait for the worker to go degraded, which is what one would expect.
 var NmapScenarioV2 = ScenarioV2{
 	Name:        "nmap",
 	Description: "Port monitor: dials a target through a mock dialer, reports the port open then closed",
@@ -118,7 +124,7 @@ var NmapScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("close the port")
+		env.Step("close the port; nmap stays running, so wait for port_state closed in the observation")
 		mock.open.Store(false)
 
 		return waitForPortState(string(nmapservice.PortStateClosed))
