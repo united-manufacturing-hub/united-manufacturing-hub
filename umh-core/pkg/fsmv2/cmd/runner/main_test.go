@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"syscall"
 	"testing"
 	"time"
@@ -89,9 +90,7 @@ func TestFatalMessage(t *testing.T) {
 	}
 }
 
-// TestRunnerCLIRouting locks the runner's routing seams so that duration
-// routing and signal/exit routing are decidable without os.Exit or real OS
-// signals.
+// The routing seams stay decidable without os.Exit or real OS signals.
 func TestRunnerCLIRouting(t *testing.T) {
 	t.Run("duration routing v2 takes RunConfig.Duration", func(t *testing.T) {
 		runDuration, applyCtxTimeout := routeDuration(true, 5*time.Second)
@@ -327,4 +326,146 @@ func TestRunnerCLIRouting(t *testing.T) {
 		default:
 		}
 	})
+}
+
+func TestExpectedFields(t *testing.T) {
+	t.Run("a scenario declaring all three kinds gets one field per kind", func(t *testing.T) {
+		full := examples.ScenarioV2{
+			ExpectedErrors:      []string{"action_failed"},
+			ExpectedErrorCauses: []error{errors.New("boom")},
+			ExpectedWarnings:    []string{"slow"},
+		}
+
+		fields := expectedFields(full)
+
+		if len(fields) != 3 {
+			t.Fatalf("expectedFields must return three fields for a scenario declaring errors, causes and warnings, got %d", len(fields))
+		}
+
+		want := []struct {
+			key    string
+			values []string
+		}{
+			{"expected_errors", []string{"action_failed"}},
+			{"expected_error_causes", []string{"boom"}},
+			{"expected_warnings", []string{"slow"}},
+		}
+
+		for i, w := range want {
+			if fields[i].Key != w.key {
+				t.Errorf("field %d must be %q, got %q", i, w.key, fields[i].Key)
+			}
+
+			got, ok := fields[i].Interface.([]string)
+			if !ok {
+				t.Errorf("field %q must hold a []string, got %T", w.key, fields[i].Interface)
+				continue
+			}
+
+			if !slices.Equal(got, w.values) {
+				t.Errorf("field %q must hold %v, got %v", w.key, w.values, got)
+			}
+		}
+	})
+
+	t.Run("a scenario declaring only warnings gets only the warnings field", func(t *testing.T) {
+		fields := expectedFields(examples.ScenarioV2{ExpectedWarnings: []string{"slow"}})
+
+		if len(fields) != 1 || fields[0].Key != "expected_warnings" {
+			t.Fatalf("expectedFields must return only expected_warnings, got %v", fields)
+		}
+	})
+
+	t.Run("a nil expected cause matches nothing and yields no entry", func(t *testing.T) {
+		fields := expectedFields(examples.ScenarioV2{
+			ExpectedErrorCauses: []error{errors.New("boom"), nil},
+		})
+
+		if len(fields) != 1 || fields[0].Key != "expected_error_causes" {
+			t.Fatalf("expectedFields must return only expected_error_causes, got %v", fields)
+		}
+
+		got, ok := fields[0].Interface.([]string)
+		if !ok || !slices.Equal(got, []string{"boom"}) {
+			t.Errorf("expected_error_causes must hold only the non-nil causes, got %T %v", fields[0].Interface, got)
+		}
+	})
+
+	t.Run("a scenario whose expected causes are all nil gets no causes field", func(t *testing.T) {
+		fields := expectedFields(examples.ScenarioV2{ExpectedErrorCauses: []error{nil}})
+
+		if len(fields) != 0 {
+			t.Errorf("expectedFields must return no field when every expected cause is nil, got %v", fields)
+		}
+	})
+
+	t.Run("a scenario declaring nothing gets no field", func(t *testing.T) {
+		if got := expectedFields(examples.ScenarioV2{}); len(got) != 0 {
+			t.Errorf("expectedFields must return no field for a scenario declaring nothing, got %d", len(got))
+		}
+	})
+}
+
+func TestStartingScenarioFields(t *testing.T) {
+	obsCore, logs := observer.New(zapcore.InfoLevel)
+	logger := zap.New(obsCore)
+
+	full := examples.ScenarioV2{
+		ExpectedErrors:      []string{"action_failed"},
+		ExpectedErrorCauses: []error{errors.New("boom"), nil},
+		ExpectedWarnings:    []string{"slow"},
+	}
+
+	logger.Info("Starting scenario",
+		startingScenarioFields("probe", "a probe", "endless (until Ctrl+C)", time.Second, full)...)
+
+	entries := logs.TakeAll()
+	if len(entries) != 1 {
+		t.Fatalf("the starting line must emit one entry, got %d", len(entries))
+	}
+
+	context := entries[0].ContextMap()
+
+	if got := context["name"]; got != "probe" {
+		t.Errorf("the starting line must carry the scenario name, got %v", got)
+	}
+
+	wantFields := []struct {
+		key    string
+		values []string
+	}{
+		{"expected_errors", []string{"action_failed"}},
+		{"expected_error_causes", []string{"boom"}},
+		{"expected_warnings", []string{"slow"}},
+	}
+
+	for _, w := range wantFields {
+		got, ok := context[w.key].([]string)
+		if !ok || !slices.Equal(got, w.values) {
+			t.Errorf("the starting line must carry %s %v (a nil expected cause matches nothing and is left out), got %T %v",
+				w.key, w.values, context[w.key], context[w.key])
+		}
+	}
+
+	logger.Info("Starting scenario",
+		startingScenarioFields("probe", "a probe", "endless (until Ctrl+C)", time.Second,
+			examples.ScenarioV2{ExpectedWarnings: []string{"slow"}})...)
+
+	entries = logs.TakeAll()
+	if len(entries) != 1 {
+		t.Fatalf("a scenario declaring only warnings must still emit one starting entry, got %d", len(entries))
+	}
+
+	context = entries[0].ContextMap()
+
+	got, ok := context["expected_warnings"].([]string)
+	if !ok || !slices.Equal(got, []string{"slow"}) {
+		t.Errorf("the starting line must carry expected_warnings %v, got %T %v", []string{"slow"}, context["expected_warnings"], context["expected_warnings"])
+	}
+
+	for _, key := range []string{"expected_errors", "expected_error_causes"} {
+		if _, has := context[key]; has {
+			t.Errorf("a scenario declaring only warnings must not carry %s", key)
+		}
+	}
 }

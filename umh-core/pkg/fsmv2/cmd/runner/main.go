@@ -183,10 +183,7 @@ func main() {
 	}
 
 	logger.Info("Starting scenario",
-		zap.String("name", *scenarioName),
-		zap.String("description", description),
-		zap.String("duration", durationStr),
-		zap.Duration("tick", *tickInterval),
+		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, v2Scenario)...,
 	)
 
 	result, err := examples.Run(ctx, examples.RunConfig{
@@ -341,6 +338,49 @@ func handleSignals(sigCh <-chan os.Signal, done <-chan struct{}, onFirstSignal f
 // the sampled logger dropped state_transition lines.
 func newRunLogger(logger *zap.Logger) deps.FSMLogger {
 	return deps.NewUnsampledFSMLogger(logger.Sugar())
+}
+
+// startingScenarioFields returns the fields the "Starting scenario" log line
+// carries: the run's name, description, duration and tick interval, plus what
+// the scenario expects.
+func startingScenarioFields(name, description, duration string, tick time.Duration, s examples.ScenarioV2) []zap.Field {
+	return append([]zap.Field{
+		zap.String("name", name),
+		zap.String("description", description),
+		zap.String("duration", duration),
+		zap.Duration("tick", tick),
+	}, expectedFields(s)...)
+}
+
+// expectedFields returns one log field per expectation kind the scenario
+// declares, omitting each the scenario leaves empty. A nil expected cause
+// matches nothing, so the causes field omits it.
+func expectedFields(s examples.ScenarioV2) []zap.Field {
+	var fields []zap.Field
+
+	if len(s.ExpectedErrors) > 0 {
+		fields = append(fields, zap.Reflect("expected_errors", s.ExpectedErrors))
+	}
+
+	if len(s.ExpectedErrorCauses) > 0 {
+		causes := make([]string, 0, len(s.ExpectedErrorCauses))
+		for _, cause := range s.ExpectedErrorCauses {
+			if cause == nil {
+				continue
+			}
+			causes = append(causes, cause.Error())
+		}
+
+		if len(causes) > 0 {
+			fields = append(fields, zap.Reflect("expected_error_causes", causes))
+		}
+	}
+
+	if len(s.ExpectedWarnings) > 0 {
+		fields = append(fields, zap.Reflect("expected_warnings", s.ExpectedWarnings))
+	}
+
+	return fields
 }
 
 // parseLogLevel converts string log level to zap level using zap's built-in parser.
