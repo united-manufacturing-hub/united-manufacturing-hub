@@ -89,8 +89,8 @@ type TransportDependencies struct {
 	mu sync.RWMutex
 }
 
-// NewTransportDependencies creates dependencies for the transport worker,
-// acquiring channels from the global channel provider.
+// NewTransportDependencies creates dependencies for the transport worker from
+// the global channel provider.
 // Panics if SetChannelProvider was not called first.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 // The supervisor writes framework metrics into this instance after construction;
@@ -99,8 +99,6 @@ func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies) *Tra
 	return newTransportDependenciesWithProvider(t, bd, GetChannelProvider())
 }
 
-// newTransportDependenciesWithProvider is NewTransportDependencies with an
-// explicit provider in place of the global one.
 func newTransportDependenciesWithProvider(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *TransportDependencies {
 	if provider == nil {
 		panic(fmt.Sprintf("ChannelProvider must be set before creating dependencies (worker=%s). "+
@@ -285,8 +283,7 @@ func (d *TransportDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 	return d.outboundChan
 }
 
-// GetInboundChanStats returns the capacity and current length of the inbound channel,
-// reported by the provider the dependencies were created with.
+// GetInboundChanStats returns the capacity and current length of the inbound channel.
 func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int) {
 	return d.channelProvider.GetInboundStats(d.GetWorkerID())
 }

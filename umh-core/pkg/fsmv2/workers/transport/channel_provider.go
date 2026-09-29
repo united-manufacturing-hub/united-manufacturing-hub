@@ -29,9 +29,8 @@ type ChannelProvider interface {
 	GetInboundStats(workerID string) (capacity int, length int)
 }
 
-// ChannelProviderKey names the ChannelProvider a TransportWorker acquires its
-// inbound and outbound channels through. When the dependency map holds nothing
-// under it, the worker uses the provider set with SetChannelProvider.
+// ChannelProviderKey holds the ChannelProvider a TransportWorker gets its
+// channels from. Without one in the map, the worker uses the global provider.
 var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("transport.channel_provider")
 
 var (
