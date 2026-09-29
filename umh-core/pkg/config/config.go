@@ -107,6 +107,7 @@ type AgentConfig struct {
 	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`     // Enable PersistenceWorker for delta compaction
 	UseGatekeeper             bool `yaml:"useGatekeeper,omitempty"`             // Enable gatekeeper middleware for message validation and encryption
 	UseFSMv2CPU               bool `yaml:"useFSMv2CPU,omitempty"`               // Enable the fsmv2 CPU monitor worker
+	UseFSMv2Memory            bool `yaml:"useFSMv2Memory,omitempty"`
 }
 
 type CommunicatorConfig struct {
