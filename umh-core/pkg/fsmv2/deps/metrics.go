@@ -239,6 +239,14 @@ const (
 	GaugeCPULastSampleUnix GaugeName = "cpu_last_sample_unix"
 )
 
+const (
+	GaugeMemoryUsedBytes      GaugeName = "memory_used_bytes"
+	GaugeMemoryTotalBytes     GaugeName = "memory_total_bytes"
+	GaugeMemoryUsedPercent    GaugeName = "memory_used_percent"
+	GaugeMemoryLastSampleUnix GaugeName = "memory_last_sample_unix"
+	GaugeMemorySourceIsCgroup GaugeName = "memory_source_is_cgroup"
+)
+
 // CPU worker flags, 1 for true and 0 for false. A 0 on any of them means the
 // measurement it names is not worth acting on this tick. The suffix says what
 // makes it 0:

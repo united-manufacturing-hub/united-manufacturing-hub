@@ -116,7 +116,17 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 	status.UsedPercent = usedPercent(status.UsedBytes, status.TotalBytes)
 	status.Message = messageFor(status.UsedPercent)
 
+	recordMetrics(d.MetricsRecorder(), time.Now(), status)
+
 	return status, nil
+}
+
+func recordMetrics(recorder *deps.MetricsRecorder, sampledAt time.Time, status MemoryStatus) {
+	recorder.SetGauge(deps.GaugeMemoryLastSampleUnix, float64(sampledAt.Unix()))
+	recorder.SetGauge(deps.GaugeMemoryUsedBytes, float64(status.UsedBytes))
+	recorder.SetGauge(deps.GaugeMemoryTotalBytes, float64(status.TotalBytes))
+	recorder.SetGauge(deps.GaugeMemoryUsedPercent, status.UsedPercent)
+	recorder.SetGaugeFlag(deps.GaugeMemorySourceIsCgroup, status.Source == SourceCgroup)
 }
 
 func chooseSource(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory, cgroupErr error) (MemoryStatus, error) {
