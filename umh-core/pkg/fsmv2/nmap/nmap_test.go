@@ -100,8 +100,7 @@ func newPollDeps(m map[string]any) fsmv2nmap.Deps {
 	return fsmv2nmap.NewDepsForTest(id, bd, m)
 }
 
-// nmapID builds the identity a supervisor hands an nmap worker, with the
-// hierarchy path the supervisor reports it under.
+// nmapID builds the identity a supervisor hands an nmap worker.
 func nmapID() deps.Identity {
 	return deps.Identity{
 		ID:            "nmap-001",
