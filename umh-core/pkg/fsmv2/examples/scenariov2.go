@@ -257,11 +257,11 @@ type ScenarioV2 struct {
 	// RunResult.Err when it is logged after Run returned.
 	ExpectedErrors []string
 
-	// ExpectedErrorCauses lists error values this scenario expects. A logged
-	// error is expected when errors.Is finds one of them in it. Use it when
-	// the message is generic: ActionExecutor (supervisor/internal/execution)
-	// logs every failed action as action_failed, so expecting that message
-	// would let any failed action pass.
+	// ExpectedErrorCauses lists error values this scenario expects, matched
+	// with errors.Is. Use it when the message is generic: ActionExecutor
+	// (supervisor/internal/execution) logs every failed action as
+	// action_failed, so expecting that message would let any failed action
+	// pass.
 	ExpectedErrorCauses []error
 
 	// ExpectedWarnings lists substrings of warning log messages this
