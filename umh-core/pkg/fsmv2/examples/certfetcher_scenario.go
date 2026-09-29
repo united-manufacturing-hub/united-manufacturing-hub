@@ -129,12 +129,8 @@ func (m *MockCertHandler) FetchCallCount() int {
 	return int(m.fetchCount.Load())
 }
 
-// errCertFetchSimulated is the fetch error the degraded scenario's handler
-// returns.
 var errCertFetchSimulated = errors.New("simulated cert fetch failure")
 
-// certFetcherDependencies builds the dependency map one certfetcher scenario
-// runs against: a MockCertHandler stored under the worker's CertHandlerKey.
 func certFetcherDependencies(emails []string, fetchErr error) (map[string]any, func(), error) {
 	handler := NewMockCertHandler(emails, fetchErr)
 
@@ -149,17 +145,14 @@ func certFetcherDependencies(emails []string, fetchErr error) (map[string]any, f
 	return deps, nil, nil
 }
 
-// upsertCertFetcher creates the certfetcher worker every scenario below
-// runs. CertFetcherConfig has no fields, so the state key is accepted and
-// ignored; it is sent anyway to keep the same shape as the other scenarios.
+// upsertCertFetcher creates the certfetcher worker. CertFetcherConfig has no
+// fields, so the state key has no effect.
 func upsertCertFetcher(env Env) error {
 	ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
 
 	return env.Client.Upsert(ref, map[string]any{"state": "running"})
 }
 
-// waitForCertFetcherState waits until the certfetcher worker's stored
-// observation reports the given state.
 func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.Ref, want string) error {
 	return env.WaitFor(ctx, "store shows state "+want,
 		func(ctx context.Context) (bool, string, error) {
@@ -240,8 +233,7 @@ var CertFetcherDegradedScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// The worker enters Degraded once its consecutive failed fetches
-		// reach DegradedThreshold (certfetcher/state/state_running.go).
+		// The threshold is DegradedThreshold in certfetcher/state/state_running.go.
 		return waitForCertFetcherState(ctx, env, ref, "Degraded")
 	},
 }
