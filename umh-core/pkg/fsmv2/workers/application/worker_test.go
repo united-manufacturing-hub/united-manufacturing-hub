@@ -16,6 +16,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -26,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
 
 // Compile-time interface verification.
@@ -84,6 +86,50 @@ children:
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.ChildrenSpecs).To(HaveLen(1))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("declared-1"))
+		})
+	})
+
+	Describe("CollectObservedState with the registry's variable bundle", func() {
+		var w *dynamicchildren.Writer
+
+		BeforeEach(func() {
+			w = dynamicchildren.NewWriter()
+			register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, w.Registry())
+			DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+		})
+
+		collectStatus := func() snapshot.ApplicationStatus {
+			obs, err := worker.CollectObservedState(context.Background(), nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			return obs.(fsmv2.Observation[snapshot.ApplicationStatus]).Status
+		}
+
+		It("reports the variable bundle the registry holds", func() {
+			vars := config.VariableBundle{
+				User:   map[string]any{"IP": "10.0.0.1"},
+				Global: map[string]any{"cluster_id": "c1"},
+			}
+			w.SetVariables(vars)
+
+			status := collectStatus()
+			Expect(status.Variables).NotTo(BeNil())
+			Expect(*status.Variables).To(Equal(vars))
+		})
+
+		It("leaves Variables out of the observation when the registry holds none", func() {
+			status := collectStatus()
+			Expect(status.RegistryConfigured).To(BeTrue())
+			Expect(status.Variables).To(BeNil())
+
+			// A dynamic child's spec also serialises a "variables" key, so the
+			// check must look at the observation's own top-level keys.
+			raw, err := json.Marshal(status)
+			Expect(err).ToNot(HaveOccurred())
+
+			var m map[string]any
+			Expect(json.Unmarshal(raw, &m)).To(Succeed())
+			Expect(m).NotTo(HaveKey("variables"))
 		})
 	})
 
