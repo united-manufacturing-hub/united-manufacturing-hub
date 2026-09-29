@@ -154,42 +154,16 @@ var _ = Describe("Variable Injection", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Describe("SetGlobalVariables", func() {
-		It("should store global variables correctly", func() {
-			globalVars := map[string]any{
-				"api_endpoint": "https://api.example.com",
-				"cluster_id":   "cluster-123",
-				"region":       "us-east-1",
-			}
-
-			s.SetGlobalVariables(globalVars)
-
-			// Note: We can't directly access s.globalVars as it's private,
-			// but we can verify it works by checking the injection during Tick()
-			// This test will fail until implementation is complete
-		})
-
-		It("should handle nil global variables", func() {
-			s.SetGlobalVariables(nil)
-
-			// Should not panic or error
-		})
-
-		It("should handle empty global variables map", func() {
-			s.SetGlobalVariables(map[string]any{})
-
-			// Should not panic or error
-		})
-	})
-
-	Describe("Global Variables Injection in Tick", func() {
-		It("should inject Global variables into userSpec.Variables.Global", func() {
+	// These specs fail if the supervisor overwrites Global with an empty map on
+	// every tick. Its own worker then never sees the Global variables.
+	Describe("Global variables in the spec", func() {
+		It("passes the Global variables in the supervisor's spec to DeriveDesiredState", func() {
 			globalVars := map[string]any{
 				"api_endpoint": "https://api.example.com",
 				"cluster_id":   "cluster-123",
 			}
 
-			s.SetGlobalVariables(globalVars)
+			s.TestUpdateUserSpec(config.UserSpec{Variables: config.VariableBundle{Global: globalVars}})
 
 			// Capture the userSpec passed to DeriveDesiredState
 			var capturedSpec config.UserSpec
@@ -202,12 +176,11 @@ var _ = Describe("Variable Injection", func() {
 			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify Global variables were injected
 			Expect(capturedSpec.Variables.Global).To(Equal(globalVars))
 		})
 
-		It("should inject empty Global map when no global variables set", func() {
-			// Don't call SetGlobalVariables, so globalVars should be nil or empty
+		It("passes no Global variables when the spec has none", func() {
+			s.TestUpdateUserSpec(config.UserSpec{})
 
 			var capturedSpec config.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
@@ -219,10 +192,7 @@ var _ = Describe("Variable Injection", func() {
 			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify Global variables are either nil or empty
-			if capturedSpec.Variables.Global != nil {
-				Expect(capturedSpec.Variables.Global).To(BeEmpty())
-			}
+			Expect(capturedSpec.Variables.Global).To(BeNil())
 		})
 	})
 
@@ -379,18 +349,18 @@ var _ = Describe("Variable Injection", func() {
 				"PORT": float64(502),
 			}
 
+			globalVars := map[string]any{
+				"api_endpoint": "https://api.example.com",
+			}
+
 			userSpec := config.UserSpec{
 				Variables: config.VariableBundle{
-					User: existingUserVars,
+					User:   existingUserVars,
+					Global: globalVars,
 				},
 			}
 
 			s.TestUpdateUserSpec(userSpec)
-
-			globalVars := map[string]any{
-				"api_endpoint": "https://api.example.com",
-			}
-			s.SetGlobalVariables(globalVars)
 
 			var capturedSpec config.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
@@ -405,7 +375,6 @@ var _ = Describe("Variable Injection", func() {
 			// Verify User variables were preserved
 			Expect(capturedSpec.Variables.User).To(Equal(existingUserVars))
 
-			// Verify Global variables were added
 			Expect(capturedSpec.Variables.Global).To(Equal(globalVars))
 
 			// Verify Internal variables were added
@@ -416,11 +385,6 @@ var _ = Describe("Variable Injection", func() {
 			// userSpec with no Variables set
 			userSpec := config.UserSpec{}
 			s.TestUpdateUserSpec(userSpec)
-
-			globalVars := map[string]any{
-				"api_endpoint": "https://api.example.com",
-			}
-			s.SetGlobalVariables(globalVars)
 
 			var capturedSpec config.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
@@ -433,7 +397,8 @@ var _ = Describe("Variable Injection", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Should not panic, variables should be initialized
-			Expect(capturedSpec.Variables.Global).To(Equal(globalVars))
+			Expect(capturedSpec.Variables.User).ToNot(BeNil())
+			Expect(capturedSpec.Variables.Global).To(BeNil())
 			Expect(capturedSpec.Variables.Internal).ToNot(BeNil())
 		})
 	})

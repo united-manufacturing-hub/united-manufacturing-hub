@@ -507,7 +507,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 //   - Non-blocking: health check completes in <1ms
 //
 // PHASE 0.5: Variable Injection (from Phase 0.5)
-//   - Global variables from management system (configuration)
+//   - Global variables pass down unchanged from the supervisor's spec (the supervisor does not inject them)
 //   - Internal variables (supervisorID, createdAt, bridgedBy)
 //   - User variables from UserSpec (preserved, not overwritten)
 //   - Variables available for template expansion in DeriveDesiredState
@@ -722,21 +722,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		userSpecWithVars.Variables.User = make(map[string]any)
 	}
 
-	// Deep copy globalVars to prevent race with SetGlobalVariables().
-	// The map reference could be replaced while we use it for template expansion.
-	s.mu.RLock()
-
-	globalVarsCopy := make(map[string]any, len(s.globalVars))
-	for k, v := range s.globalVars {
-		globalVarsCopy[k] = v
-	}
-
-	globalVarCount := len(globalVarsCopy)
-
-	s.mu.RUnlock()
-
-	userSpecWithVars.Variables.Global = globalVarsCopy
-
 	userSpecWithVars.Variables.Internal = map[string]any{
 		FieldID:                firstWorkerID,
 		storage.FieldCreatedAt: s.createdAt,
@@ -747,7 +732,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// Per-tick log moved to TRACE for scalability
 	s.logTrace("variables_propagated",
 		deps.Int("user_vars", userVarCount),
-		deps.Int("global_vars", globalVarCount))
+		deps.Int("global_vars", len(userSpecWithVars.Variables.Global)))
 	metrics.RecordVariablePropagation(s.GetHierarchyPathUnlocked())
 
 	// PHASE 0: Hierarchical Composition
