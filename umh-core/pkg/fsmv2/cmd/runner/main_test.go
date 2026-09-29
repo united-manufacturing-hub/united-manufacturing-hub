@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"syscall"
@@ -84,17 +85,9 @@ func TestFatalMessage(t *testing.T) {
 	}
 }
 
-// TestRunnerCLIRouting locks the three routing seams the runner must expose so
-// that duration routing and signal/exit routing are decidable without os.Exit
-// or real OS signals:
-//
-//   - routeDuration:      a v2 scenario gets RunConfig.Duration (a settle
-//     window after Run returns) while a v1 scenario routes its --duration into a ctx
-//     timeout that bounds the whole run; --duration 0 stays endless on both.
-//   - isCleanInterruptExit: a run error that wraps an interrupt-induced
-//     ctx.Err() is a clean exit, not a fatal "Failed to start scenario" exit-1.
-//   - handleSignals:       the first SIGINT triggers teardown (the runner
-//     cancels and tears down gracefully); a second SIGINT force-exits.
+// TestRunnerCLIRouting locks the runner's routing seams so that duration
+// routing and signal/exit routing are decidable without os.Exit or real OS
+// signals.
 func TestRunnerCLIRouting(t *testing.T) {
 	t.Run("duration routing v2 takes RunConfig.Duration", func(t *testing.T) {
 		runDuration, applyCtxTimeout := routeDuration(true, 5*time.Second)
@@ -127,6 +120,97 @@ func TestRunnerCLIRouting(t *testing.T) {
 		v2Duration, v2Timeout := routeDuration(true, 0)
 		if v2Timeout || v2Duration != 0 {
 			t.Errorf("v2 --duration 0 must stay endless: timeout=%t duration=%v", v2Timeout, v2Duration)
+		}
+	})
+
+	t.Run("duration default: v2 without --duration settles 1s", func(t *testing.T) {
+		got, defaulted := defaultDuration(true, false, 0)
+		if got != defaultSettle {
+			t.Errorf("a v2 scenario given no --duration must settle %s after Run returns, got %v", defaultSettle, got)
+		}
+
+		if !defaulted {
+			t.Error("a v2 scenario given no --duration must report the default as applied")
+		}
+	})
+
+	t.Run("duration default: explicit --duration 0 stays endless", func(t *testing.T) {
+		got, defaulted := defaultDuration(true, true, 0)
+		if got != 0 {
+			t.Errorf("an explicit --duration 0 must stay endless, got %v", got)
+		}
+
+		if defaulted {
+			t.Error("an explicit --duration 0 must not report the default as applied")
+		}
+	})
+
+	t.Run("duration default: explicit --duration is kept", func(t *testing.T) {
+		got, defaulted := defaultDuration(true, true, 5*time.Second)
+		if got != 5*time.Second {
+			t.Errorf("an explicit --duration must be kept as given, got %v", got)
+		}
+
+		if defaulted {
+			t.Error("an explicit --duration must not report the default as applied")
+		}
+	})
+
+	t.Run("duration default: v1 is unchanged", func(t *testing.T) {
+		got, defaulted := defaultDuration(false, false, 0)
+		if got != 0 {
+			t.Errorf("a v1 scenario given no --duration must stay endless, got %v", got)
+		}
+
+		if defaulted {
+			t.Error("a v1 scenario must never report the default as applied")
+		}
+	})
+
+	t.Run("duration default and routing compose: a defaulted v2 run settles via RunConfig, explicit values pass through", func(t *testing.T) {
+		effective, _ := defaultDuration(true, false, 0)
+
+		runDuration, applyCtxTimeout := routeDuration(true, effective)
+		if runDuration != defaultSettle || applyCtxTimeout {
+			t.Errorf("a v2 run without --duration must settle %s via RunConfig.Duration with no ctx timeout, got duration=%v timeout=%t", defaultSettle, runDuration, applyCtxTimeout)
+		}
+
+		effective, _ = defaultDuration(true, true, 5*time.Second)
+
+		runDuration, applyCtxTimeout = routeDuration(true, effective)
+		if runDuration != 5*time.Second || applyCtxTimeout {
+			t.Errorf("an explicit --duration 5s must reach RunConfig.Duration with no ctx timeout, got duration=%v timeout=%t", runDuration, applyCtxTimeout)
+		}
+
+		effective, _ = defaultDuration(true, true, 0)
+
+		runDuration, applyCtxTimeout = routeDuration(true, effective)
+		if runDuration != 0 || applyCtxTimeout {
+			t.Errorf("an explicit --duration 0 must stay endless after routing, got duration=%v timeout=%t", runDuration, applyCtxTimeout)
+		}
+	})
+
+	t.Run("duration flag detection: an explicit --duration is seen, its absence is not", func(t *testing.T) {
+		withFlag := flag.NewFlagSet("runner", flag.ContinueOnError)
+		withFlag.Duration("duration", 0, "")
+
+		if err := withFlag.Parse([]string{"--duration=5s"}); err != nil {
+			t.Fatalf("parse with --duration failed: %v", err)
+		}
+
+		if !durationWasSet(withFlag) {
+			t.Error("an explicit --duration must be detected as set")
+		}
+
+		withoutFlag := flag.NewFlagSet("runner", flag.ContinueOnError)
+		withoutFlag.Duration("duration", 0, "")
+
+		if err := withoutFlag.Parse([]string{}); err != nil {
+			t.Fatalf("parse without --duration failed: %v", err)
+		}
+
+		if durationWasSet(withoutFlag) {
+			t.Error("a run without --duration must not be detected as set")
 		}
 	})
 
