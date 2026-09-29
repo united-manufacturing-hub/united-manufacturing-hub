@@ -165,7 +165,7 @@ func readFailureFields(sample cpuhealth.Sample, failed readFailure, cores, quota
 		deps.String("read_outcome", string(failed.Outcome)),
 		deps.String("path", sample.Troubleshooting.ReadPaths[failed.Operation]),
 		deps.String("cgroup_base", sample.Troubleshooting.CgroupBase),
-		deps.String("cgroup_layout", sample.Troubleshooting.CgroupLayout),
+		deps.String("cgroup_version", sample.Troubleshooting.CgroupVersion),
 		deps.String("cgroup_controllers_raw", sample.Troubleshooting.CgroupControllersRaw),
 		deps.String("cpu_max_raw", sample.Troubleshooting.CPUMaxRaw),
 		deps.String("cpu_stat_raw", sample.Troubleshooting.CPUStatRaw),

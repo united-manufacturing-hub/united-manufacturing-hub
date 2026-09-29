@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 )
 
-var _ = Describe("the resolved cgroup layout", func() {
+var _ = Describe("the detected cgroup version", func() {
 	It("reads the v2 files when cpu.stat sits at the base", func() {
 		smp, err := v1Sampler(v1Files{
 			cgroupBase + "/cpu.stat": "usage_usec 5000000\nnr_periods 10\nnr_throttled 1\n",
@@ -59,7 +59,7 @@ var _ = Describe("the resolved cgroup layout", func() {
 		Expect(throttled).To(Equal(2.0))
 	})
 
-	It("keeps an identified layout, so later ticks probe nothing", func() {
+	It("keeps a detected version, so later ticks probe nothing", func() {
 		probes := 0
 		fs := serveFiles(v1Files{cgroupBase + "/cpu,cpuacct/cpu.stat": "nr_periods 10\nnr_throttled 0\n"})
 		served := fs.FileExistsFunc
@@ -80,7 +80,7 @@ var _ = Describe("the resolved cgroup layout", func() {
 		Expect(probes).To(Equal(afterFirst))
 	})
 
-	It("probes again next tick while no layout answers", func() {
+	It("probes again next tick while no version is detected", func() {
 		probes := 0
 		fs := serveFiles(v1Files{})
 		fs.FileExistsFunc = func(_ context.Context, _ string) (bool, error) {
@@ -99,7 +99,7 @@ var _ = Describe("the resolved cgroup layout", func() {
 		Expect(probes).To(BeNumerically(">", afterFirst))
 	})
 
-	It("probes once per tick while the layout is unresolved", func() {
+	It("probes once per tick while the version is unresolved", func() {
 		probesPerTick := func(files v1Files) int {
 			probes := 0
 			fs := serveFiles(files)

@@ -66,8 +66,8 @@ type linuxSampler struct {
 	base string
 
 	// cgroup holds the v2 reader until the probe resolves v1, so it is never nil.
-	cgroup cgroupReader
-	layout cgroupLayout
+	cgroup  cgroupReader
+	version cgroupVersion
 
 	host *hostSource
 
@@ -90,7 +90,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.Troubleshooting.Reads = seedReads()
 
 	cgroup := s.reader(ctx)
-	sample.Troubleshooting.CgroupLayout = s.layout.String()
+	sample.Troubleshooting.CgroupVersion = s.version.String()
 	sample.Troubleshooting.ReadPaths = readPaths(cgroup)
 
 	// First because a cpu.stat failure returns before every read below it, and
@@ -222,18 +222,18 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, cgroup cgroupReader, 
 	sample.CpuScope = ScopeAffinity
 }
 
-// reader probes again every tick until a layout resolves: the container can
+// reader probes again every tick until a cgroup version is detected: the container can
 // start before its cgroup is mounted.
 func (s *linuxSampler) reader(ctx context.Context) cgroupReader {
-	if s.layout != layoutNone {
+	if s.version != cgroupVersionUnresolved {
 		return s.cgroup
 	}
 
-	layout, locations := resolveLayout(ctx, s.fs, s.base)
-	if layout == layoutV1 {
+	version, locations := detectCgroupVersion(ctx, s.fs, s.base)
+	if version == cgroupV1 {
 		s.cgroup = newCgroupV1Source(s.fs, s.base, locations)
 	}
-	s.layout = layout
+	s.version = version
 
 	return s.cgroup
 }

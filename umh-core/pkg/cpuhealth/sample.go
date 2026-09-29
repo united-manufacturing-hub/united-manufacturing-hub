@@ -158,11 +158,11 @@ type ReadTroubleshooting struct {
 	// reading a non-default tree reports the paths it actually opened.
 	CgroupBase string
 
-	// CgroupLayout is the hierarchy the sampler read: "v2", "v1", or
+	// CgroupVersion is the cgroup version the sampler read: "v2", "v1", or
 	// "unresolved" when neither answered.
-	CgroupLayout string
+	CgroupVersion string
 
-	// ReadPaths holds the file each read opens on this layout, keyed by
+	// ReadPaths holds the file each read opens on this cgroup version, keyed by
 	// operation, and "" for a read with no file there.
 	ReadPaths map[ReadOperation]string
 

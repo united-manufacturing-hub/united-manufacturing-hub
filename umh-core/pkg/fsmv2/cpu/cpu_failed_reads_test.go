@@ -103,11 +103,11 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 })
 
 var _ = Describe("a failure report names the file the sample read", func() {
-	It("carries the path and the layout the sample recorded", func() {
+	It("carries the path and the cgroup version the sample recorded", func() {
 		sample := cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{
-			CgroupBase:   cgroupBase,
-			CgroupLayout: "v1",
-			ReadPaths:    map[cpuhealth.ReadOperation]string{cpuhealth.OperationCPUMax: cgroupBase + "/cpu,cpuacct/cpu.cfs_quota_us"},
+			CgroupBase:    cgroupBase,
+			CgroupVersion: "v1",
+			ReadPaths:     map[cpuhealth.ReadOperation]string{cpuhealth.OperationCPUMax: cgroupBase + "/cpu,cpuacct/cpu.cfs_quota_us"},
 		}}
 
 		kv := map[string]any{}
@@ -116,6 +116,6 @@ var _ = Describe("a failure report names the file the sample read", func() {
 		}
 
 		Expect(kv).To(HaveKeyWithValue("path", cgroupBase+"/cpu,cpuacct/cpu.cfs_quota_us"))
-		Expect(kv).To(HaveKeyWithValue("cgroup_layout", "v1"))
+		Expect(kv).To(HaveKeyWithValue("cgroup_version", "v1"))
 	})
 })

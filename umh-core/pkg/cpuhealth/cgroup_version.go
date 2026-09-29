@@ -32,66 +32,78 @@ type v1Locations struct {
 	cpusetFile string
 }
 
-type cgroupLayout int
+type cgroupVersion int
 
 const (
-	layoutNone cgroupLayout = iota
-	layoutV2
-	layoutV1
+	cgroupVersionUnresolved cgroupVersion = iota
+	cgroupV2
+	cgroupV1
 )
 
-func (l cgroupLayout) String() string {
-	switch l {
-	case layoutV2:
+func (v cgroupVersion) String() string {
+	switch v {
+	case cgroupV2:
 		return "v2"
-	case layoutV1:
+	case cgroupV1:
 		return "v1"
-	case layoutNone:
+	case cgroupVersionUnresolved:
 		return "unresolved"
 	}
 
 	return "unresolved"
 }
 
-func resolveLayout(ctx context.Context, fs filesystem.Service, base string) (cgroupLayout, v1Locations) {
+func detectCgroupVersion(ctx context.Context, fs filesystem.Service, base string) (cgroupVersion, v1Locations) {
 	if fileExists(ctx, fs, base+"/cpu.stat") {
-		return layoutV2, v1Locations{}
+		return cgroupV2, v1Locations{}
 	}
 
 	// A kernel built without CONFIG_CFS_BANDWIDTH writes no v1 cpu.stat but
 	// still writes cpuacct.usage: https://docs.kernel.org/scheduler/sched-bwc.html
-	cpuDir, hasCPUStat := firstDirHolding(ctx, fs, base, v1CPUDirs, "cpu.stat")
-	cpuacctDir, hasCPUAcctUsage := firstDirHolding(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
+	cpuDir, hasCPUStat := findDirContaining(ctx, fs, base, v1CPUDirs, "cpu.stat")
+	cpuacctDir, hasCPUAcctUsage := findDirContaining(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
 	if !hasCPUStat && !hasCPUAcctUsage {
-		return layoutNone, v1Locations{}
+		return cgroupVersionUnresolved, v1Locations{}
 	}
 
-	return layoutV1, v1Locations{
+	// A file the probe did not find is still read at its usual directory, so it reports as missing.
+	if !hasCPUStat {
+		cpuDir = v1CPUDirs[0]
+	}
+	if !hasCPUAcctUsage {
+		cpuacctDir = v1CPUAcctDirs[0]
+	}
+
+	return cgroupV1, v1Locations{
 		cpuDir:     cpuDir,
 		cpuacctDir: cpuacctDir,
-		cpusetFile: v1CpusetFile(ctx, fs, base),
+		cpusetFile: v1CpusetFileName(ctx, fs, base),
 	}
 }
 
-// firstDirHolding falls back to dirs[0], so a later read of the file fails as missing.
-func firstDirHolding(ctx context.Context, fs filesystem.Service, base string, dirs []string, name string) (dir string, found bool) {
+func findDirContaining(ctx context.Context, fs filesystem.Service, base string, dirs []string, file string) (dir string, found bool) {
 	for _, candidate := range dirs {
-		if fileExists(ctx, fs, base+"/"+candidate+"/"+name) {
+		if fileExists(ctx, fs, base+"/"+candidate+"/"+file) {
 			return candidate, true
 		}
 	}
 
-	return dirs[0], false
+	return "", false
 }
 
-// v1CpusetFile prefers the set the kernel narrowed, which is the one tasks run on.
-// https://docs.kernel.org/admin-guide/cgroup-v1/cpusets.html
-func v1CpusetFile(ctx context.Context, fs filesystem.Service, base string) string {
-	if fileExists(ctx, fs, base+"/cpuset/cpuset.effective_cpus") {
-		return "cpuset.effective_cpus"
+const (
+	v1EffectiveCpusetFile  = "cpuset.effective_cpus"
+	v1ConfiguredCpusetFile = "cpuset.cpus"
+)
+
+// effective_cpus is a copy of cpuset.cpus unless the cpuset is mounted with cpuset_v2_mode,
+// where it alone lists the CPUs in use: https://docs.kernel.org/admin-guide/cgroup-v1/cpusets.html
+func v1CpusetFileName(ctx context.Context, fs filesystem.Service, base string) string {
+	if fileExists(ctx, fs, base+"/cpuset/"+v1EffectiveCpusetFile) {
+		return v1EffectiveCpusetFile
 	}
 
-	return "cpuset.cpus"
+	return v1ConfiguredCpusetFile
 }
 
 func fileExists(ctx context.Context, fs filesystem.Service, path string) bool {

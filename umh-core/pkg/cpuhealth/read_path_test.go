@@ -31,7 +31,7 @@ var _ = Describe("the file each read opened", func() {
 		}), base).Read(context.Background())
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(smp.Troubleshooting.CgroupLayout).To(Equal("v2"))
+		Expect(smp.Troubleshooting.CgroupVersion).To(Equal("v2"))
 		Expect(smp.Troubleshooting.ReadPaths).To(HaveKeyWithValue(cpuhealth.OperationCPUStat, base+"/cpu.stat"))
 		Expect(smp.Troubleshooting.ReadPaths).To(HaveKeyWithValue(cpuhealth.OperationCPUMax, base+"/cpu.max"))
 		Expect(smp.Troubleshooting.ReadPaths).To(HaveKeyWithValue(cpuhealth.OperationProcStat, "/proc/stat"))
@@ -46,7 +46,7 @@ var _ = Describe("the file each read opened", func() {
 		}).Read(context.Background())
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(smp.Troubleshooting.CgroupLayout).To(Equal("v1"))
+		Expect(smp.Troubleshooting.CgroupVersion).To(Equal("v1"))
 		Expect(smp.Troubleshooting.ReadPaths).To(And(
 			HaveKeyWithValue(cpuhealth.OperationCPUMax, cgroupBase+"/cpu,cpuacct/cpu.cfs_quota_us"),
 			HaveKeyWithValue(cpuhealth.OperationCPUStat, cgroupBase+"/cpu,cpuacct/cpu.stat"),
@@ -68,10 +68,10 @@ var _ = Describe("the file each read opened", func() {
 			To(MatchError(ContainSubstring(cgroupBase + "/cpuset/cpuset.cpus")))
 	})
 
-	It("records the layout as unresolved where neither hierarchy answers", func() {
+	It("records the version as unresolved where neither hierarchy answers", func() {
 		smp, err := v1Sampler(v1Files{}).Read(context.Background())
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(smp.Troubleshooting.CgroupLayout).To(Equal("unresolved"))
+		Expect(smp.Troubleshooting.CgroupVersion).To(Equal("unresolved"))
 	})
 })
