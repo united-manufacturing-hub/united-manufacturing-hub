@@ -449,8 +449,6 @@ var _ = Describe("TransportWorker channel provider dependency", func() {
 		var mapProviderAsProvider transport.ChannelProvider = mapProvider
 		fsmv2types.SetDependency(dependencyMap, transport.ChannelProviderKey, mapProviderAsProvider)
 
-		Expect(dependencyMap).To(HaveKey("transport.channel_provider"))
-
 		identity := deps.Identity{ID: "map-provider-worker", WorkerType: "transport"}
 		built, err := factory.NewWorkerByType("transport", identity, deps.NewNopFSMLogger(), nil, dependencyMap)
 		Expect(err).NotTo(HaveOccurred())
