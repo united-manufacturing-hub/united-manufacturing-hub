@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benbjohnson/clock"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
@@ -42,6 +44,25 @@ const cpuMachineSecond = time.Second
 type cpuMachine struct {
 	*fakebox.HangingFS
 	box *tickingBox
+}
+
+// cpuMachineDeps returns the dependency map a CPU scenario's Dependencies
+// builds over box: the box's filesystem, wrapped as a cpuMachine, and its
+// clock. The two go in together because publishing only one fails quietly: a
+// filesystem with no clock leaves the sampler stamping wall time while the
+// counters accrue on the box's clock. The caller starts the box.
+func cpuMachineDeps(box *tickingBox) map[string]any {
+	machine := &cpuMachine{HangingFS: fakebox.NewHangingFS(box.fs()), box: box}
+
+	m := map[string]any{}
+
+	var fs filesystem.Service = machine
+	config.SetDependency(m, fsmv2cpu.FilesystemKey, fs)
+
+	var clk clock.Clock = box.box.Clock()
+	config.SetDependency(m, fsmv2cpu.ClockKey, clk)
+
+	return m
 }
 
 // cpuMachineFromDeps reads the scenario's fake machine back out of the
@@ -156,12 +177,8 @@ func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.S
 
 // tickingBox is a fakebox.Box that advances on its own and can be read while
 // it does. A plain Box moves only when someone calls Tick, and is not safe for
-// the collector's goroutine to read.
-//
-// Both the filesystem and the clock go into the dependency map together, in
-// the scenario's Dependencies. Publishing only one fails quietly: a filesystem
-// with no clock leaves the sampler stamping wall time while the counters
-// accrue on the box's clock.
+// the collector's goroutine to read. cpuMachineDeps puts it in a scenario's
+// dependency map.
 //
 // mu covers every touch of the Box's counters: reads, ticks and Set. It is
 // taken per file, not per sampler read. clock.Mock synchronises itself.
