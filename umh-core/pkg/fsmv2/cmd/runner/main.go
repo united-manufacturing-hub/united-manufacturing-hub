@@ -116,8 +116,6 @@ func main() {
 	v1Scenario, isV1 := examples.Registry[*scenarioName]
 	v2Scenario, isV2 := examples.RegistryV2[*scenarioName]
 
-	// The CLI also runs the scenarios in LiveRegistryV2, which the registry
-	// spec does not.
 	if !isV2 {
 		liveScenario, isLive := examples.LiveRegistryV2[*scenarioName]
 		if isLive {

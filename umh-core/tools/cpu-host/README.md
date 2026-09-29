@@ -69,9 +69,9 @@ the container addressable for the load experiment below.
 The monitor runs as one worker inside the scenario runner, and its readings
 show up in that runner's log. The debug `observed_changed` line carries the
 message's old and new text whenever the worker's message changes, cut to
-about 100 characters, so the Technical Details table does not appear. The
-same change also appears at info in the `state_transition` line's `reason`
-field.
+about 100 characters, so the Technical Details table does not appear. A
+change that also moves the worker's state appears at info in the
+`state_transition` line's `reason` field.
 
 Two kinds of load move different signals, and telling them apart is the point
 of the exercise:

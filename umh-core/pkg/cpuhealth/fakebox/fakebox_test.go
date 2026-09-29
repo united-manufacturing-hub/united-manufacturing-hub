@@ -113,10 +113,8 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 
 		s1, s2 := readTwice(box, time.Second)
 
-		// Tick must move the counters and the clock by the same amount. Every
-		// rate below is a counter delta divided by this elapsed time, so a
-		// clock that moved differently would scale all of them together and
-		// none of the assertions could tell.
+		// Every rate below divides a counter delta by this elapsed time, so a
+		// wrong elapsed would scale them all together and none could tell.
 		Expect(s2.Timestamp.Sub(s1.Timestamp)).To(Equal(time.Second),
 			"one Tick(1s) must advance the sample's Timestamp by exactly one second")
 
@@ -196,14 +194,10 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	})
 
 	It("derives the same rates from any servable tick length", func() {
-		// The headline property: Tick moves the counters and the clock
-		// together. A Box that advanced the clock by d but accrued counters for
-		// a hard-coded one second would agree with the 1s case above and be
-		// wrong by 2x either side of it.
-		//
-		// Not every length is servable — this box picks the 10ms CFS period for
-		// Throttle 0.08, and 100ms of that is 8/10ths of a throttled period,
-		// which panics. The last case of the panic spec below checks that.
+		// A Box that advanced the clock by d but accrued counters for a
+		// hard-coded one second would agree with the 1s case above and be
+		// wrong by 2x either side of it. 100ms is left out because it panics at
+		// this Throttle; the panic spec's last case covers it.
 		//
 		// 250ms and 1.5s are here because 500ms, 1s and 2s are all whole
 		// multiples of 100ms and cannot tell a box that quietly rounded ticks
@@ -243,8 +237,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	})
 
 	It("holds the throttle counters still on a cgroup with no quota", func() {
-		// The kernel only runs the CFS period timer for a quota'd cgroup, so an
-		// unquota'd one reports nr_periods 0 for its whole life however busy it
 		box := fakebox.NewBox(base, fakebox.Condition{
 			Cores:      4,
 			QuotaCores: 0,
@@ -485,10 +477,8 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		}).To(PanicWith(ContainSubstring("must advance time")),
 			"a clock that does not move forwards is not recoverable downstream")
 
-		// The tick length the CFS period cannot divide. This is the case Set
-		// cannot check, because whether a Throttle is servable depends on a
-		// tick Set is never told: 0.08 needs the 10ms period, and 100ms of it
-		// is 8/10ths of a throttled period.
+		// 0.08 needs the 10ms period, and 100ms of it is 8/10ths of a
+		// throttled period.
 		Expect(func() {
 			fakebox.NewBox(base, with(func(c *fakebox.Condition) { c.Throttle = 0.08 })).Tick(100 * time.Millisecond)
 		}).To(PanicWith(ContainSubstring("nr_throttled over the tick")),

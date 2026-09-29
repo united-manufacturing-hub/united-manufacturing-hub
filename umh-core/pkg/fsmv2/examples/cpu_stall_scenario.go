@@ -34,18 +34,14 @@ import (
 // cpu.stat read hangs mid-poll, and watches the reading go stale and then
 // recover, through the same GetFresh call the container monitor reads with.
 //
-// The story is the case that matters most in the field: the worker stops
-// producing readings, the reading ages past the shared staleness limit, and
-// the monitor sees it. A missing file never does this (cpu-blind checks
+// The story is that the worker stops producing readings, the reading ages
+// past the shared staleness limit, and the monitor sees it. A missing file never does this (cpu-blind checks
 // that); a read that blocks does.
 //
 // The hang must end well before 20 seconds. At 10 seconds the supervisor logs
 // data_stale, which every run allows; at 20 seconds it logs the timeout and
 // restart warnings this scenario does not expect. The stale wait ends at about
 // three seconds and the release step follows it at once.
-//
-// On every change of the worker's message the state_transition line's reason
-// field carries it at info.
 var CPUStallScenarioV2 = ScenarioV2{
 	Name:        "cpu-stall",
 	Description: "Hangs the cpu.stat read mid-poll, and watches the reading go stale and then recover (v2)",
@@ -78,8 +74,6 @@ var CPUStallScenarioV2 = ScenarioV2{
 
 		env.Step("create the cpu monitor on a quiet machine")
 
-		// Nil config: CPUConfig is an empty struct, and this is the same call
-		// the config worker makes in production.
 		if err := env.Client.Upsert(fsmv2cpu.Ref, nil); err != nil {
 			return fmt.Errorf("upsert cpu monitor: %w", err)
 		}
@@ -136,13 +130,10 @@ var CPUStallScenarioV2 = ScenarioV2{
 		env.Step("release cpu.stat")
 		release()
 
-		// The first polls after the release still see the Stale reading,
-		// because the collector has not saved yet, so Stale means not done
-		// here rather than a failure. A Fresh reading that is not healthy is
-		// the hung tick's own observation, whose context expired mid-hang;
-		// that one is also not done. The wait is done on the first Fresh and
-		// healthy reading, and once a Fresh reading has been seen, a reading
-		// that is not Fresh fails it at once.
+		// Until the collector saves again the reading is still Stale, so Stale
+		// before the first Fresh is not done. The first Fresh reading may be
+		// the hung tick's own, whose context expired mid-hang, so the wait
+		// also needs it healthy.
 		seenFresh := false
 
 		return env.WaitFor(ctx, "fresh and healthy again", func(ctx context.Context) (bool, string, error) {

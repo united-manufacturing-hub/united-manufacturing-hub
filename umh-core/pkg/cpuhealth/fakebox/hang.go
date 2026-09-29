@@ -25,9 +25,8 @@ import (
 // a caller releases them. A Box can serve, change or refuse a file, but it
 // cannot make a read block.
 //
-// It wraps outside the scenarios' tickingBox, whose mutex covers every Box
-// read: a hang inside that lock would block Set and Stop for as long as the
-// read hangs. Unlike a Box, a HangingFS is safe for concurrent use.
+// Wrap it outside any lock the inner service's reads take, or a hung read
+// holds that lock too. Unlike a Box, a HangingFS is safe for concurrent use.
 type HangingFS struct {
 	filesystem.Service
 
@@ -64,8 +63,9 @@ func (h *HangingFS) Hang(path string) (release func()) {
 // ReadFile blocks while a Hang holds the path, then serves the inner service.
 //
 // The read's ctx is ignored while the read is held. The collector cancels a
-// read at its ObservationTimeout (2.2s); a read that returned then would save
-// a poll-error reading, and the reading would never go Stale.
+// read at its ObservationTimeout (supervisor.CollectorHealthConfig); a read
+// that returned then would save a poll-error reading, and the reading would
+// never go Stale.
 func (h *HangingFS) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	h.mu.Lock()
 	released, hung := h.hung[path]

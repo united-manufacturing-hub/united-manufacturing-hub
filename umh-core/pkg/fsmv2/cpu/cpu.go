@@ -49,7 +49,6 @@ const (
 	//
 	// A key holds one value, so each payload gets its own key rather than
 	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
-	// NewDeps reads FilesystemKey in the dependency map before this global.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
@@ -62,9 +61,8 @@ const (
 	PollInterval = 1 * time.Second
 
 	// MaxObservationAge is the oldest a reading may be and still count as
-	// Fresh for fsmv2client.GetFresh. The container monitor and the CPU
-	// scenarios both read it. At three polls, one slow or missed poll leaves
-	// the reading Fresh.
+	// Fresh for fsmv2client.GetFresh. At three polls, one slow or missed poll
+	// leaves the reading Fresh.
 	MaxObservationAge = 3 * PollInterval
 )
 
@@ -74,10 +72,9 @@ const (
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 // FilesystemKey names the filesystem.Service the sampler reads the cgroup
-// files through. NewDeps does the lookup, then the global published under
-// FilesystemDepsKey, and falls back to filesystem.NewDefaultService(). The
-// same literal, cpu.filesystem, also names that global slot
-// (FilesystemDepsKey); the map key here is the one read first.
+// files through. NewDeps reads it first, then the global published under
+// FilesystemDepsKey (the same literal, cpu.filesystem), and falls back to
+// filesystem.NewDefaultService().
 var FilesystemKey = config.NewDependencyKey[filesystem.Service]("cpu.filesystem")
 
 // ClockKey names the clock.Clock the sampler stamps every Sample from. NewDeps
