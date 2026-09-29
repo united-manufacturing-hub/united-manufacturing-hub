@@ -117,7 +117,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 
 		// A parent with zero children never meets TryingToStartState's
 		// ChildrenHealthy > 0 condition, so the empty-config parent stays in
-		// TryingToStart. It gets there once StoppedWaitDuration has passed.
+		// TryingToStart.
 		if err := env.WaitFor(ctx, "the empty-config parent settles in TryingToStart",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, emptyRef)
@@ -134,9 +134,8 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// An invalid-config worker never starts, so it is never observed.
-		// This check runs after the valid parent reached Running, so the
-		// invalid ones have had the same time to appear.
+		// This check runs after the valid parent reached Running, so an
+		// invalid-config worker has had as long to appear as a valid one.
 		polls := 0
 
 		return env.WaitFor(ctx, "the two invalid-config workers stay unobserved across 20 polls",

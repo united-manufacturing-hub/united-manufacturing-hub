@@ -26,13 +26,9 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// CascadeScenarioV2 runs one exampleparent whose two children are
-// examplefailing workers that each fail three times in each of two cycles.
-// The parent reports Degraded when its children leave Connected for the next
-// cycle while it is Running, and each failure holds the child back for
-// recovery_delay_ms in wall-clock time, so the children's unhealthy window
-// spans at least one of the parent's once-per-second observations no
-// matter how slow the machine is.
+// CascadeScenarioV2 runs one exampleparent whose children are examplefailing
+// workers that fail in repeated cycles. The parent reports Degraded when its
+// children leave Connected for the next cycle while it is Running.
 var CascadeScenarioV2 = ScenarioV2{
 	Name:        "cascade",
 	Description: "Shows cascade failure: child failures propagate to parent state, parent recovery when children heal",
@@ -44,6 +40,9 @@ var CascadeScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		parentRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "cascade-parent"}
 
+		// recovery_delay_ms is wall-clock time, so a child's unhealthy window
+		// does not stretch with the tick interval. The window must outlast the
+		// parent's observation interval for the parent to see it.
 		childConfig := "should_fail: true\n" +
 			"max_failures: 3\n" +
 			"failure_cycles: 2\n" +
@@ -60,10 +59,9 @@ var CascadeScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert parent: %w", err)
 		}
 
-		// The parent stays Degraded for only one observation period, so the
-		// wait reads the transition counter, which survives every later
-		// observation, instead of the state itself. Degraded can only
-		// follow Running, so this wait also covers the parent's start.
+		// Degraded lasts only while a child is unhealthy, so the wait reads the
+		// transition counter, which keeps its value afterward. Degraded can
+		// only follow Running, so this wait also covers the parent's start.
 		if err := env.WaitFor(ctx, "the parent has been Degraded once",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
@@ -97,9 +95,9 @@ var CascadeScenarioV2 = ScenarioV2{
 		for _, name := range []string{"child-0", "child-1"} {
 			childRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: name}
 
-			// Cycle 2 is reached only through the second failure round,
-			// and CurrentCycle keeps that value until the parent's next
-			// cycle respawns the children, which outlasts this wait.
+			// CurrentCycle is zero based, so 2 means the child finished its
+			// second failure round. The child keeps that value until the
+			// parent's RunningDuration ends and the parent removes it.
 			if err := env.WaitFor(ctx, "the child "+name+" reaches its second failure round",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, childRef)

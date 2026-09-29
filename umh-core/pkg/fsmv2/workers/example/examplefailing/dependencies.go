@@ -252,8 +252,8 @@ func (d *FailingDependencies) GetLastFailureTime() time.Time {
 
 // ShouldDelayRecovery returns true if we should wait before retrying after a failure.
 // This keeps the worker in the unhealthy state long enough for parents to observe.
-// The wait runs for recovery_delay_ms in wall-clock time after the last failure,
-// and for recovery_delay_observations observations after it, whichever applies.
+// It returns true while recovery_delay_ms of wall-clock time, or
+// recovery_delay_observations observations, have not passed since the last failure.
 func (d *FailingDependencies) ShouldDelayRecovery() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
