@@ -27,7 +27,7 @@ import (
 // ConcurrentScenarioV2 starts several helloworld workers at once; each must reach Running.
 var ConcurrentScenarioV2 = ScenarioV2{
 	Name:        "concurrent",
-	Description: "Tests multiple independent workers running concurrently without interference",
+	Description: "Five helloworld workers created at once; each one reaches Running",
 
 	Run: func(ctx context.Context, env Env) error {
 		refs := make([]dynamicchildren.Ref, 0, 5)
