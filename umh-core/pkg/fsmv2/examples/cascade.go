@@ -31,7 +31,7 @@ import (
 // children leave Connected for the next cycle while it is Running.
 var CascadeScenarioV2 = ScenarioV2{
 	Name:        "cascade",
-	Description: "Shows cascade failure: child failures propagate to parent state, parent recovery when children heal",
+	Description: "A parent goes Degraded while its failing children reconnect, and returns to Running when both are Connected",
 
 	ExpectedWarnings: []string{"connect_failed_simulated"},
 
@@ -48,7 +48,7 @@ var CascadeScenarioV2 = ScenarioV2{
 			"failure_cycles: 2\n" +
 			"recovery_delay_ms: 700\n"
 
-		env.Step("create the parent with two failing children")
+		env.Step("create the parent with two children that each fail 3 connects, then connect, and repeat for 2 cycles; the parent waits 5 s before it creates them")
 
 		if err := env.Client.Upsert(parentRef, map[string]any{
 			"state":             "running",
@@ -96,9 +96,9 @@ var CascadeScenarioV2 = ScenarioV2{
 			childRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: name}
 
 			// CurrentCycle is zero based, so 2 means the child finished its
-			// second failure round. The child keeps that value until the
+			// second failure cycle. The child keeps that value until the
 			// parent's RunningDuration ends and the parent removes it.
-			if err := env.WaitFor(ctx, "the child "+name+" reaches its second failure round",
+			if err := env.WaitFor(ctx, "the child "+name+" finishes its second failure cycle",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, childRef)
 					if err != nil {

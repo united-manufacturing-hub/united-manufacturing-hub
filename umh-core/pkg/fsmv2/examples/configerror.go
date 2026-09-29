@@ -33,7 +33,7 @@ import (
 // empty-config parent is accepted and gets zero children.
 var ConfigErrorScenarioV2 = ScenarioV2{
 	Name:        "configerror",
-	Description: "Demonstrates configuration validation and error handling patterns",
+	Description: "Workers with a bad config are rejected and never start; beside them a valid parent reaches Running and an empty-config parent stays in TryingToStart",
 
 	// The underlying error is a yaml type error with no sentinel value, so
 	// ExpectedErrorCauses cannot name it.
@@ -48,9 +48,9 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 		validRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-valid"}
 		mismatchRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-type-mismatch"}
 		emptyRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-empty"}
-		defaultsRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "config-failing-defaults"}
+		defaultsRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "config-bad-max-failures"}
 
-		env.Step("create one valid parent, one empty-config parent, and two workers with invalid configs")
+		env.Step("create a valid parent, an empty-config parent, and two workers whose config has a string where a number belongs; the two are rejected with an error on every tick")
 
 		if err := env.Client.Upsert(validRef, map[string]any{
 			"state":          "running",
@@ -76,7 +76,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 			"state":        "running",
 			"max_failures": "three",
 		}); err != nil {
-			return fmt.Errorf("upsert failing-defaults worker: %w", err)
+			return fmt.Errorf("upsert bad-max-failures worker: %w", err)
 		}
 
 		if err := env.WaitFor(ctx, "the valid parent reaches Running",
@@ -118,7 +118,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 		// A parent with zero children never meets TryingToStartState's
 		// ChildrenHealthy > 0 condition, so the empty-config parent stays in
 		// TryingToStart.
-		if err := env.WaitFor(ctx, "the empty-config parent settles in TryingToStart",
+		if err := env.WaitFor(ctx, "the empty-config parent stays in TryingToStart, because it has zero children to become healthy",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, emptyRef)
 				if err != nil {
@@ -147,7 +147,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 				}
 
 				if _, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, defaultsRef); err == nil {
-					return false, "", errors.New("the failing-defaults worker was observed, although its max_failures is not a number")
+					return false, "", errors.New("the bad-max-failures worker was observed, although its max_failures is not a number")
 				} else if !errors.Is(err, fsmv2client.ErrNotObserved) {
 					return false, "", err
 				}
