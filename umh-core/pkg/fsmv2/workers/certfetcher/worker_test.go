@@ -28,9 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
 
-// recordingCertHandler counts FetchAllCerts calls, so a test can tell which
-// of two handlers the worker's dependencies hold. The embedded Handler is
-// nil, so any other method of the interface panics.
+// recordingCertHandler's embedded Handler is nil, so any method but
+// FetchAllCerts panics.
 type recordingCertHandler struct {
 	certificatehandler.Handler
 
@@ -57,7 +56,6 @@ var _ = Describe("CertFetcherWorker cert handler dependency", func() {
 		var mapHandlerAsHandler certificatehandler.Handler = mapHandler
 		config.SetDependency(dependencyMap, certfetcher.CertHandlerKey, mapHandlerAsHandler)
 
-		// The worker reads the handler under this literal map key.
 		Expect(dependencyMap).To(HaveKey("certfetcher.cert_handler"))
 
 		identity := deps.Identity{ID: "map-handler-worker", WorkerType: "certfetcher"}
