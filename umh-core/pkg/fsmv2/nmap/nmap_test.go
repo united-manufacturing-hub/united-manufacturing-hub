@@ -338,12 +338,12 @@ var _ = Describe("the registered nmap worker type", func() {
 			"the map's dialer must receive exactly the target address")
 	})
 
-	It("does not satisfy the injection interfaces supervisor/api.go asserts on the deps", func() {
+	It("gives the supervisor no SetActionHistory to call on its deps", func() {
 		bound := boundDepsOf(nmapID(), nil)
 
 		_, setsActionHistory := any(bound).(interface{ SetActionHistory([]deps.ActionResult) })
 		Expect(setsActionHistory).To(BeFalse(),
-			"nmap's deps carry only the dialer, so the collector's injection pass skips them")
+			"nmap's deps hold only the dialer, so they must not take the action history")
 	})
 })
 
