@@ -54,9 +54,13 @@ const (
 // client: create it to Running, Upsert an observable config change (a new
 // moodFilePath whose file contents land in observed status), then Delete it.
 // The kernel-only supervisor and its config worker run the whole time.
+//
+// Run returns right after the delete and the config worker check. The child
+// stops about a second later, while the runner keeps going for --duration,
+// and no check reads that Stopped line.
 var DynamicScenarioV2 = ScenarioV2{
 	Name:        "dynamic",
-	Description: "Drives a helloworld child through create/update/delete via the migration-API client (v2)",
+	Description: "Creates a helloworld child, points it at a second mood file, then deletes it, all through the fsmv2 client",
 	Run:         runDynamicHello,
 }
 
@@ -113,7 +117,7 @@ func runDynamicHello(ctx context.Context, env Env) error {
 	// UPDATE: Upsert a changed config field (a different moodFilePath), wait
 	// until the new mood lands in observed status. The config field itself
 	// changes here; the worker re-reads the new path in CollectObservedState.
-	env.Step("upsert a mood file with updated contents")
+	env.Step("point the child at a second mood file that says " + dynamicHelloUpdatedMood + "; wait for mood=" + dynamicHelloUpdatedMood + " in the observation")
 
 	if err := env.Client.Upsert(ref, map[string]any{
 		"state":        "running",
@@ -122,7 +126,7 @@ func runDynamicHello(ctx context.Context, env Env) error {
 		return fmt.Errorf("upsert update: %w", err)
 	}
 
-	if err := env.WaitFor(ctx, "the child shows the updated mood",
+	if err := env.WaitFor(ctx, "the child's observation shows mood="+dynamicHelloUpdatedMood,
 		func(ctx context.Context) (bool, string, error) {
 			obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
 			if err != nil {
@@ -141,7 +145,7 @@ func runDynamicHello(ctx context.Context, env Env) error {
 	// DELETE: remove the child, exercising the despawn path. Run only
 	// calls Delete; proving the store-side reap (the worker gone from the store)
 	// is deferred to ENG-5107, which builds the despawn-tombstone subsystem.
-	env.Step("delete the child")
+	env.Step("delete the child, then check that the config worker can still be read")
 	env.Client.Delete(ref)
 
 	if _, err := fsmv2client.Get[snapshot.ConfigworkerStatus](ctx, env.Client, dynamicchildren.Ref{
