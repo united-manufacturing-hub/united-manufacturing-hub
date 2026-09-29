@@ -28,27 +28,6 @@ import (
 
 // Test suite is registered in worker_test.go to avoid duplicate RunSpecs
 
-// =============================================================================
-// Phase 1 Architecture Verification Tests - ChannelProvider Singleton
-// =============================================================================
-//
-// These tests verify the Phase 1 FSMv2 Communicator Architecture:
-// 1. ChannelProvider MUST be set via global singleton BEFORE creating dependencies
-// 2. deps.SetChannelProvider() method should NOT exist (removed in Phase 1)
-// 3. factory deps["channelProvider"] path should NOT exist (removed in Phase 1)
-//
-// Compile-time verification:
-// The removal of deps.SetChannelProvider() is verified at compile time - if this
-// code compiles, the method does not exist on CommunicatorDependencies:
-//
-//     var _ interface{ SetChannelProvider(ChannelProvider) } = (*communicator.CommunicatorDependencies)(nil)
-//     // ^ This line would fail to compile if the method still exists
-//
-// The above is NOT included because it would FAIL compilation after Phase 1 is complete.
-// Instead, if someone accidentally adds the method back, the architecture tests
-// will catch it at runtime.
-// =============================================================================
-
 type mockTransport struct{}
 
 func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
@@ -102,7 +81,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	BeforeEach(func() {
 		mt = &mockTransport{}
 		logger = depspkg.NewNopFSMLogger()
-		// Phase 1: Set up singleton for ALL tests (except Phase 1 architecture tests)
+		// Every spec gets a global provider; the singleton specs below clear it.
 		communicator.SetChannelProvider(newTestChannelProvider())
 	})
 
@@ -416,17 +395,8 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 	})
 
-	// =============================================================================
-	// Phase 1: ChannelProvider Singleton Architecture Tests
-	// =============================================================================
-	//
-	// After Phase 1, the ChannelProvider MUST be set via global singleton ONLY.
-	// These tests verify:
-	// 1. NewCommunicatorDependencies panics if singleton is nil
-	// 2. deps.SetChannelProvider() method no longer exists (verified at runtime)
-	//
-	// See comment block at top of file for compile-time verification notes.
-	// =============================================================================
+	// NewCommunicatorDependencies reads only the global provider. The
+	// dependency-map route is specified in worker_test.go.
 	Describe("Phase 1: ChannelProvider Singleton Architecture", func() {
 		BeforeEach(func() {
 			// Ensure singleton is cleared before each test
