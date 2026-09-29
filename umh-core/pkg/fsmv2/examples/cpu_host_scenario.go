@@ -28,9 +28,6 @@ import (
 // cgroup v2 and /proc/stat files. It is for watching the monitor work: the
 // wait asserts only that a fresh reading arrived, nothing about the verdict.
 //
-// On every change of the worker's message the state_transition line's
-// reason field carries it at info.
-//
 // On a machine without /sys/fs/cgroup/cpu.stat, such as a developer Mac, Run
 // refuses rather than watch readings that cannot describe the cgroup. The
 // refusal names tools/cpu-host, which runs this scenario in a Linux container.

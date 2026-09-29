@@ -38,8 +38,8 @@ const (
 
 	// The files this scenario takes away, in the order it takes them.
 	// /proc/stat is the machine's CPU accounting, outside the cgroup; cpu.stat
-	// is the cgroup's. The sampler reads either one, when it cannot be opened,
-	// as absent: losing it costs its readings and does not fail the sample.
+	// is the cgroup's. When either cannot be opened, the sampler records its
+	// readings as absent and the sample still succeeds.
 	cpuBlindHostStat   = "/proc/stat"
 	cpuBlindCgroupStat = cpuBlindBase + "/cpu.stat"
 
@@ -66,20 +66,13 @@ const (
 // CPUBlindScenarioV2 drives the real CPU monitor over a fake machine and then
 // takes away, one at a time, the two files it reads its numbers from.
 //
-// The story is that neither outage disturbs the reading. Losing /proc/stat
-// leaves the poll succeeding and the worker reporting healthy, with a message
-// saying CPU monitoring is unavailable, since with no machine CPU count to
-// budget against there is nothing to judge. Losing cpu.stat as well reads the
-// same way: the sample carries on with its readings absent, the worker stays
-// healthy and Fresh through both outages, and the second one holds for several
-// readings to prove it. Under the 2026-09-23 decision (ENG-5815) a machine the
-// worker cannot measure is reported healthy, which is what it does.
+// The story is that neither outage disturbs the reading: the worker stays
+// healthy and Fresh through both, reporting that CPU monitoring is
+// unavailable. Under the 2026-09-23 decision (ENG-5815) a machine the worker
+// cannot measure is reported healthy.
 //
 // The second outage keeps the first, so the story tests the two failures
 // rather than a recovery.
-//
-// On every change of the worker's message the state_transition line's reason
-// field carries it at info.
 var CPUBlindScenarioV2 = ScenarioV2{
 	Name:        "cpu-blind",
 	Description: "Takes away the two files the CPU monitor reads, one at a time (v2)",
@@ -114,15 +107,13 @@ var CPUBlindScenarioV2 = ScenarioV2{
 
 		env.Step("create the cpu monitor on a quiet machine")
 
-		// Nil config: CPUConfig is an empty struct, and this is the same call
-		// the config worker makes in production.
 		if err := env.Client.Upsert(fsmv2cpu.Ref, nil); err != nil {
 			return fmt.Errorf("upsert cpu monitor: %w", err)
 		}
 
-		// The headline names the machine's usage, which holds while both files
-		// read; the later waits compare against it, so a verdict that never
-		// described the readable machine fails the first wait instead.
+		// A headline naming the machine's usage proves the worker described the
+		// readable machine, so the unavailable message the later waits look
+		// for is a change.
 		if err := waitCPUFirstReading(ctx, env, "first reading healthy", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Verdict.State == cpuhealth.StateHealthy
 			done := healthy && strings.Contains(st.Result.Message, "The machine is using 1.2 of 4 cores")
@@ -135,8 +126,6 @@ var CPUBlindScenarioV2 = ScenarioV2{
 		env.Step("take /proc/stat away")
 		machine.box.Set(cpuBlindMachine(cpuBlindHostStat))
 
-		// No machine CPU count means no capacity to budget against, so the
-		// message says monitoring is unavailable and the verdict stays healthy.
 		if err := waitCPUFresh(ctx, env, "healthy without /proc/stat", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Message == cpuBlindUnavailableMessage
 
@@ -161,7 +150,6 @@ var CPUBlindScenarioV2 = ScenarioV2{
 }
 
 // cpuBlindMachine is this scenario's machine with the named files unreadable.
-// The calls differ only in which files the machine can no longer see.
 func cpuBlindMachine(unreadable ...string) fakebox.Condition {
 	return fakebox.Condition{
 		Cores:      cpuBlindCores,

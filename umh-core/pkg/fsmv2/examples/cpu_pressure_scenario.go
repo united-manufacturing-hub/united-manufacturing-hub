@@ -31,10 +31,9 @@ import (
 )
 
 const (
-	// cpuPressureBase is where the fake machine serves its cgroup files. It has
-	// to equal the base the production sampler reads, which is the unexported
-	// cgroupBase in pkg/fsmv2/cpu. Nothing checks that they match: they are kept
-	// equal by hand, and a mismatch leaves every read failing.
+	// cpuPressureBase is where the fake machine serves its cgroup files. It
+	// must equal the unexported cgroupBase in pkg/fsmv2/cpu. Nothing checks
+	// that, and a mismatch makes every read fail.
 	cpuPressureBase = "/sys/fs/cgroup"
 
 	// cpuPressureCalm is one point under the pressure signal's 0.20 fire mark,
@@ -60,13 +59,12 @@ const (
 	cpuPressureUsageCores = 0.5
 
 	// cpuPressureMachineTick is how much machine time one tick of the ticker
-	// advances. Its ratio to the worker's one-second poll cadence is a
-	// correctness bound, not a matter of taste, and a tenth is what keeps this
-	// machine's capacity signal quiet.
+	// advances. Its ratio to the worker's one-second poll is a correctness
+	// bound, and a tenth keeps this machine's capacity signal quiet.
 	//
-	// A tick that lands inside the sampler's read adds counters the stamp does
-	// not cover (see tickingBox), so that one reading overstates its rate by
-	// tick over poll. At a tenth, host busy reads 2.64 against a stated 2.4 and
+	// tickingBox locks per file, so a tick can land between the sampler's
+	// stamp and its counter reads. It adds counters the stamp does not cover,
+	// and that one reading overstates its rate by tick over poll. At a tenth, host busy reads 2.64 against a stated 2.4 and
 	// headroom bottoms out at 0.36, still clear of the mark at 0, and a
 	// 60-second mean damps even that. At a tick equal to the poll it reads
 	// 4.80, headroom is -1.80, and the machine is reported full.
@@ -84,9 +82,6 @@ const (
 // tasks are queueing rather than because capacity ran out. Sixty percent of
 // four cores leaves the capacity signal clear throughout; pressure alone moves,
 // from one point under its fire mark to over it.
-//
-// On every change of the worker's message the state_transition line's reason
-// field carries it at info.
 var CPUPressureScenarioV2 = ScenarioV2{
 	Name:        "cpu-pressure",
 	Description: "Steps a fake machine's CPU pressure over its fire mark while capacity stays clear (v2)",
@@ -116,8 +111,6 @@ var CPUPressureScenarioV2 = ScenarioV2{
 
 		env.Step("create the cpu monitor on a busy machine with pressure one point under its fire mark")
 
-		// Nil config: CPUConfig is an empty struct, and this is the same call
-		// the config worker makes in production.
 		if err := env.Client.Upsert(fsmv2cpu.Ref, nil); err != nil {
 			return fmt.Errorf("upsert cpu monitor: %w", err)
 		}
@@ -151,7 +144,7 @@ var CPUPressureScenarioV2 = ScenarioV2{
 }
 
 // cpuPressureMachine is the machine this scenario runs on, at the given PSI
-// pressure. Only the pressure differs between calls.
+// pressure.
 func cpuPressureMachine(pressure float64) fakebox.Condition {
 	return fakebox.Condition{
 		Cores:      cpuPressureCores,

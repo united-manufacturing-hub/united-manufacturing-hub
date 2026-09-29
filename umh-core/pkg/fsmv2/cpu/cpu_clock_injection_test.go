@@ -31,11 +31,8 @@ import (
 // ClockKey's doc is the contract these specs check. A mock pinned to
 // 2020-03-14T15:09:26Z can appear in a Sample only through the dependency map.
 var _ = Describe("the clock the CPU worker samples on", func() {
-	// readableFS serves the files whose reads produce signals, from the same
-	// cgroupBase the sampler is constructed with. Every other read answers
-	// with an error the sampler tolerates, so the only error path left is a
-	// cpu.stat that opens and does not parse — and the served cpu.stat
-	// forecloses that.
+	// readableFS serves the signal files under cgroupBase and fails every
+	// other read, which the sampler tolerates.
 	readableFS := func() filesystem.Service {
 		fs := filesystem.NewMockFileSystem()
 		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {

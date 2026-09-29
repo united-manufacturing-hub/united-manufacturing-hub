@@ -36,11 +36,6 @@
 // writes is stated independently of the constant the sampler reads it back
 // with, and a wrong constant on either side shows up as a wrong reading.
 //
-// A Box does not serve /sys/class/dmi/id/sys_vendor, the ARM64 DMI source. Its
-// /proc/cpuinfo always has an x86 flags line, so the hypervisor flag or
-// product_name settles virtualisation without it. read_virtualized_test.go
-// covers the ARM64 route.
-//
 // It ships as non-test code, like the filesystem package's MockFileSystem, so
 // tests in other packages can use it.
 //
@@ -70,16 +65,14 @@ const userHz = 100
 // which the PSI reader divides back out into a 0..1 fraction.
 const psiScale = 100
 
-// cfsPeriodsUs are the CFS periods a Box may write, largest first. All three
-// are legal cpu.max periods; the shorter ones exist so a Throttle that cannot
-// be written as a whole number of throttled periods at 100 ms still can at a
-// finer grid.
+// cfsPeriodsUs are the cpu.max periods a Box may write, largest first.
+// chooseCfsPeriodUs picks one.
 var cfsPeriodsUs = []int64{100_000, 10_000, 1_000}
 
 // referenceTick is the tick length NewBox assumes when it picks the CFS period.
-// The period has to be fixed before the first Tick, because cpu.max publishes
-// it and nr_periods accrues against it, but NewBox is not told how long the
-// caller's ticks will be. One second is the sampler's own cadence. A caller who
+// The period is fixed before the first Tick (periodUs says why), and NewBox is
+// not told how long the caller's ticks will be. One second is the sampler's
+// own cadence. A caller who
 // ticks at some other length is not silently mis-served: Tick re-checks the
 // actual tick against the chosen period and panics if it does not divide.
 const referenceTick = time.Second
@@ -101,8 +94,7 @@ func unreadable(path string) error {
 }
 
 // Condition is one tick's steady state of a machine, in the units an operator
-// would say out loud. It says what the machine IS doing, not what any file
-// contains; a Box turns it into the files.
+// would say out loud.
 type Condition struct {
 	// Cores is the machine's CPU count, the number of per-CPU lines /proc/stat
 	// carries.
@@ -170,7 +162,7 @@ type Box struct {
 	cond Condition
 
 	// servers is the path-to-renderer table, built once in NewBox because it
-	// closes over base. See newServers.
+	// closes over base.
 	servers map[string]func() string
 
 	// periodUs is the CFS period, chosen once in NewBox. It is fixed for the
@@ -179,17 +171,14 @@ type Box struct {
 	// counter's own history inconsistent.
 	periodUs int64
 
-	// The cumulative counters, in the units their files carry. They start at
-	// zero and only rise. Tick adds one tick's worth, except that the two
-	// throttle counters stand still without a quota — see Tick.
+	// The cumulative counters, in the units their files carry. They only
+	// rise, and the two throttle counters stand still without a quota.
 	usageUsec    int64
 	nrPeriods    int64
 	nrThrottled  int64
 	psiTotalUsec int64
 
-	// The /proc/stat jiffy totals. Everything not busy and not stolen lands in
-	// idle, which is what keeps the total the sampler divides steal by equal to
-	// the whole machine's jiffies for the interval.
+	// The /proc/stat jiffy totals.
 	jiffiesUser  int64
 	jiffiesIdle  int64
 	jiffiesSteal int64
@@ -247,10 +236,9 @@ func (b *Box) Clock() clock.Clock { return shieldedClock{b.clk} }
 // itself, so a Set between two reads changes the next tick's rates and not the
 // counters already served.
 //
-// Set cannot check the new Throttle against the CFS period this box fixed at
-// NewBox, because whether a Throttle is servable depends on the tick length and
-// Set is not told it. Tick applies that check against the tick it is actually
-// given, and panics there.
+// A Throttle the fixed CFS period cannot serve panics at the next Tick, not
+// here: whether it is servable depends on the tick length, which Set is not
+// told.
 func (b *Box) Set(c Condition) {
 	validate(c)
 	b.checkUnreadable(c)
@@ -271,11 +259,9 @@ func (b *Box) Set(c Condition) {
 // Tick accrues d worth of every counter at the current condition and advances
 // the clock by d. The package doc says why the two move together.
 //
-// It panics on a non-positive d rather than serving it. A zero d accrues
-// nothing and moves nothing, so the next read finds no elapsed time to divide
-// by. A negative d subtracts from counters that only rise, which cpuhealth
-// reads as a cgroup reset. Either way the tick serves no rate, so the condition
-// the caller stated goes missing instead of failing.
+// It panics on a non-positive d. A zero d leaves the next read no elapsed time
+// to divide by, and cpuhealth reads a negative one as a cgroup reset, so
+// either would serve no rate without failing.
 func (b *Box) Tick(d time.Duration) {
 	if d <= 0 {
 		panic(fmt.Sprintf("fakebox: Tick(%s) must advance time; a clock that moves backwards is not recoverable downstream", d))
@@ -285,14 +271,9 @@ func (b *Box) Tick(d time.Duration) {
 
 	b.usageUsec += whole("usage_usec over the tick", b.cond.UsageCores*1e6*seconds)
 
-	// The throttle counters only move while CFS bandwidth control is on, which
-	// is what a positive quota turns on. The kernel starts the period timer
-	// that increments nr_periods only for a quota'd cgroup, so an unquota'd one
-	// reports nr_periods 0 for its whole life however busy it gets.
+	// Only a positive quota turns on CFS bandwidth control, and the kernel
+	// counts nr_periods only while it is on.
 	if b.cond.QuotaCores > 0 {
-		// Both counters are integers, so a tick producing a fractional count of
-		// either cannot be served: rounding nr_throttled changes the throttle
-		// RATIO the instrument reads, which is the whole point of the counter.
 		periods := whole("nr_periods over the tick", float64(d.Microseconds())/float64(b.periodUs))
 		throttled := whole("nr_throttled over the tick", b.cond.Throttle*float64(periods))
 		b.nrPeriods += periods
@@ -329,9 +310,6 @@ func (b *Box) readFile(path string) ([]byte, error) {
 		}
 	}
 
-	// A kernel without PSI has no cpu.pressure to open at all, which is a
-	// different fact from the file being listed unreadable and reads the same
-	// way to the sampler.
 	if path == b.base+"/cpu.pressure" && !b.cond.PsiPresent {
 		return nil, unreadable(path)
 	}
@@ -345,7 +323,9 @@ func (b *Box) readFile(path string) ([]byte, error) {
 }
 
 // newServers builds the table of every file this box serves, mapped to what
-// renders it. readFile and checkUnreadable both read it.
+// renders it. It omits /sys/class/dmi/id/sys_vendor, the ARM64 DMI source: the
+// x86 cpuinfo a Box serves settles virtualisation without it, and
+// read_virtualized_test.go covers the ARM64 route.
 func (b *Box) newServers() map[string]func() string {
 	return map[string]func() string{
 		b.base + "/cpu.stat":              b.cpuStat,
@@ -487,10 +467,6 @@ func (b *Box) dmiProductName() string { return "PowerEdge R640\n" }
 // side of the 5% fire mark. The signal then fires with a number nobody stated.
 // A 10 ms period gives that same tick a hundred periods and 0.08 accrues
 // exactly 8.
-//
-// A Throttle no period can express panics rather than being served
-// approximately, because there is no way to tell a wrong-by-rounding ratio
-// apart from a stated one once it is in the file.
 func chooseCfsPeriodUs(throttle float64) int64 {
 	for _, periodUs := range cfsPeriodsUs {
 		periods := float64(referenceTick.Microseconds()) / float64(periodUs)
@@ -521,26 +497,18 @@ func validate(c Condition) {
 	unitFraction("Throttle", c.Throttle)
 	unitFraction("Pressure", c.Pressure)
 
-	// Busy and stolen time are both fractions of the machine's jiffies, and
-	// what is left over is idle. Together above 1 there is no idle left to take
-	// it from.
 	if c.HostBusy+c.Steal > 1 {
 		panic(fmt.Sprintf(
 			"fakebox: HostBusy %v + Steal %v is %v: they are fractions of the same machine and cannot exceed 1 together",
 			c.HostBusy, c.Steal, c.HostBusy+c.Steal))
 	}
 
-	// cpu.pressure carries two decimals of a percentage, so a finer Pressure
-	// cannot be written.
 	if !isWhole(c.Pressure * psiScale * 100) {
 		panic(fmt.Sprintf(
 			"fakebox: Pressure %v is finer than the two decimals of a percentage cpu.pressure carries; state a multiple of 0.0001",
 			c.Pressure))
 	}
 
-	// Only a quota'd cgroup can be throttled, because the quota is what turns
-	// CFS bandwidth control on. Serving a throttle without one would mean
-	// writing nr_throttled against an nr_periods that never moves.
 	if c.Throttle > 0 && c.QuotaCores <= 0 {
 		panic(fmt.Sprintf(
 			"fakebox: Throttle %v with QuotaCores %v: a cgroup with no quota has no CFS bandwidth control and is never throttled",
@@ -571,8 +539,7 @@ const wholeTolerance = 1e-6
 func isWhole(v float64) bool { return math.Abs(v-math.Round(v)) <= wholeTolerance }
 
 // whole rounds v to the integer the file will carry, and panics naming what
-// could not be written when v is not one. Serving the rounded value instead
-// would change the condition rather than fail to express it.
+// could not be written when v is not one.
 func whole(what string, v float64) int64 {
 	if !isWhole(v) {
 		panic(fmt.Sprintf(
