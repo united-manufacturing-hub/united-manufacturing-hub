@@ -70,14 +70,14 @@ type Dialer interface {
 // observe the dial.
 var DialerKey = fsmv2config.NewDependencyKey[Dialer]("nmap.dialer")
 
-// Deps is the per-instance value Poll receives.
+// Deps is the per-instance value Poll receives. It holds only the dialer:
+// framework telemetry for nmap comes from the collector, not from its
+// dependencies.
 type Deps struct {
-	*deps.BaseDependencies
-
 	dialer Dialer
 }
 
-func newDeps(_ deps.Identity, bd *deps.BaseDependencies, m map[string]any) Deps {
+func newDeps(_ deps.Identity, _ *deps.BaseDependencies, m map[string]any) Deps {
 	// No timeout: the collector bounds every Poll with its ObservationTimeout,
 	// which cancels the dial context.
 	var dialer Dialer = &net.Dialer{}
@@ -87,8 +87,7 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies, m map[string]any) Deps 
 	}
 
 	return Deps{
-		BaseDependencies: bd,
-		dialer:           dialer,
+		dialer: dialer,
 	}
 }
 
