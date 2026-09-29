@@ -100,11 +100,32 @@ func (c *cgroupV2Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome,
 	return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK, nil
 }
 
-// readStat reads cpu.stat once. A non-nil error means either the read or a
-// counter's parse failed. linuxSampler.Read turns that into the whole tick's
-// error, and parseCounter says what an absent or unparsable key does to a
-// single counter.
-func (c *cgroupV2Source) readStat(ctx context.Context) (statRead, error) {
+func (c *cgroupV2Source) readStat(ctx context.Context) statRead {
+	stat, err := c.readStatFile(ctx)
+	stat.Reads = []readAttempt{{Operation: OperationCPUStat, Outcome: statOutcome(stat, err), Err: err}}
+
+	return stat
+}
+
+// statOutcome reports a successful read with no usage figure as ReadEmpty,
+// since ReadOK would claim a value never produced. A zero-byte file and a
+// valueless usage_usec line both land there; the raw text separates them.
+func statOutcome(stat statRead, err error) ReadOutcome {
+	if err != nil {
+		return classifyRead(err)
+	}
+
+	if _, ok := stat.Usage.Get(); !ok {
+		return ReadEmpty
+	}
+
+	return ReadOK
+}
+
+// readStatFile reads cpu.stat once. A non-nil error means either the read or a
+// counter's parse failed, and parseCounter says what an absent or unparsable
+// key does to a single counter.
+func (c *cgroupV2Source) readStatFile(ctx context.Context) (statRead, error) {
 	failed := statRead{Usage: diagnosis.Unknown(), Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
 
 	data, err := c.fs.ReadFile(ctx, pathOf(c.base, OperationCPUStat))

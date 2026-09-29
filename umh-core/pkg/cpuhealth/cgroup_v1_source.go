@@ -78,15 +78,21 @@ func quotaAndPeriodRaw(quotaRaw, periodRaw string) string {
 	return strings.TrimSpace(quotaRaw) + " " + strings.TrimSpace(periodRaw)
 }
 
-func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
+func (c *cgroupV1Source) readStat(ctx context.Context) statRead {
 	usage, usageErr := c.readUsage(ctx)
-	failed := statRead{
-		Usage:            usage,
-		Periods:          diagnosis.Unknown(),
-		Throttled:        diagnosis.Unknown(),
-		UsageFromCPUAcct: true,
-		UsageErr:         usageErr,
+	stat, statErr := c.readStatFile(ctx)
+	stat.Usage = usage
+	stat.Reads = []readAttempt{
+		{Operation: OperationCPUAcctUsage, Outcome: classifyRead(usageErr), Err: usageErr},
+		{Operation: OperationCPUStat, Outcome: classifyRead(statErr), Err: statErr},
 	}
+
+	return stat
+}
+
+func (c *cgroupV1Source) readStatFile(ctx context.Context) (statRead, error) {
+	failed := statRead{Usage: diagnosis.Unknown(), Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
+
 	data, err := c.fs.ReadFile(ctx, c.pathOf(OperationCPUStat))
 	if err != nil {
 		return failed, err
@@ -102,11 +108,7 @@ func (c *cgroupV1Source) readStat(ctx context.Context) (statRead, error) {
 		return failed, err
 	}
 
-	read := failed
-	read.Periods = periods
-	read.Throttled = throttled
-
-	return read, nil
+	return statRead{Usage: diagnosis.Unknown(), Periods: periods, Throttled: throttled, Raw: string(data)}, nil
 }
 
 // readUsage reads cpuacct.usage, which v1 writes in nanoseconds.

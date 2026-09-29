@@ -30,7 +30,7 @@ import (
 
 type cgroupReader interface {
 	readQuota(ctx context.Context) (quotaRead, ReadOutcome, error)
-	readStat(ctx context.Context) (statRead, error)
+	readStat(ctx context.Context) statRead
 	readPSI(ctx context.Context) (fraction float64, err error)
 	readCpuset(ctx context.Context) (count int, err error)
 	advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading
@@ -97,9 +97,14 @@ type statRead struct {
 	// a failed parse included.
 	Raw string
 
-	// Set only on v1, where usage is a separate cpuacct.usage read.
-	UsageFromCPUAcct bool
-	UsageErr         error
+	// Reads holds one entry per file the reader opened for these readings.
+	Reads []readAttempt
+}
+
+type readAttempt struct {
+	Operation ReadOperation
+	Outcome   ReadOutcome
+	Err       error
 }
 
 // parseCounter reads one key's numeric value out of cpu.stat bytes. An absent

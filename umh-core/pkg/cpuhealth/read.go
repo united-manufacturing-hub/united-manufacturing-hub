@@ -116,26 +116,21 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	sample.record(OperationCPUPressure, classifyRead(psiErr), psiErr)
 	sample.PsiAvailable = s.psiAvailable
 
-	stat, statErr := cgroup.readStat(ctx)
+	stat := cgroup.readStat(ctx)
 	// Assigned before the early return below: this text is what would not parse.
 	sample.Troubleshooting.CPUStatRaw = stat.Raw
-	statReadOutcome := statOutcome(stat, statErr)
-	sample.record(OperationCPUStat, statReadOutcome, statErr)
-	usageReadOutcome := ReadNotAttempted
-	if stat.UsageFromCPUAcct {
-		usageReadOutcome = classifyRead(stat.UsageErr)
-		sample.record(OperationCPUAcctUsage, usageReadOutcome, stat.UsageErr)
+	for _, read := range stat.Reads {
+		sample.record(read.Operation, read.Outcome, read.Err)
 	}
-	if usageReadOutcome == ReadUnparsable {
-		return sample, fmt.Errorf("parse cpuacct.usage: %w", sample.Troubleshooting.ReadErrors[OperationCPUAcctUsage])
-	}
-	if statReadOutcome == ReadUnparsable {
-		// A cpu.stat that opens and does not parse is corrupt, and every number
-		// derived from it would be a guess. A cpu.stat that will not open is a
-		// different thing: its readings stay absent and the sample carries on,
-		// so a host keeping its CPU accounting elsewhere is not degraded over a
-		// file it was never going to have.
-		return sample, fmt.Errorf("parse cpu.stat: %w", sample.Troubleshooting.ReadErrors[OperationCPUStat])
+	for _, read := range stat.Reads {
+		// A usage or throttle file that opens and does not parse is corrupt, and
+		// every number derived from it would be a guess. One that will not open
+		// is a different thing: its readings stay absent and the sample carries
+		// on, so a host keeping its CPU accounting elsewhere is not degraded
+		// over a file it was never going to have.
+		if read.Outcome == ReadUnparsable {
+			return sample, fmt.Errorf("parse %s: %w", read.Operation, sample.Troubleshooting.ReadErrors[read.Operation])
+		}
 	}
 	// Check whether the reading was cancelled, and if so return the cancellation
 	// error. A cancelled read fails every file, which looks the same as a host
@@ -253,25 +248,6 @@ func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
 	baseEntries, baseDirOutcome, baseDirErr := readBaseDirEntryCount(ctx, s.fs, s.base)
 	sample.Troubleshooting.CgroupBaseDirEntryCount = baseEntries
 	sample.record(OperationCgroupBaseDir, baseDirOutcome, baseDirErr)
-}
-
-// statOutcome reports a successful read with no usage figure as ReadEmpty,
-// since ReadOK would claim a value never produced. A zero-byte file and a
-// valueless usage_usec line both land there; the raw text separates them.
-func statOutcome(stat statRead, err error) ReadOutcome {
-	if err != nil {
-		return classifyRead(err)
-	}
-
-	if stat.UsageFromCPUAcct {
-		return ReadOK
-	}
-
-	if _, ok := stat.Usage.Get(); !ok {
-		return ReadEmpty
-	}
-
-	return ReadOK
 }
 
 // seedReads returns one ReadNotAttempted entry per operation, in

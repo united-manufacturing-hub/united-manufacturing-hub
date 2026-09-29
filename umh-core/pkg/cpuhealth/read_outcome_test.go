@@ -138,7 +138,7 @@ var _ = Describe("a failed read reports its cause", func() {
 		statPath := base + "/cpu.stat"
 
 		It("reports ENOENT as a not-exist error", func() {
-			_, err := newCgroupV2Source(oneFile(statPath, nil, pathErr(statPath, syscall.ENOENT)), base).readStat(ctx)
+			_, err := newCgroupV2Source(oneFile(statPath, nil, pathErr(statPath, syscall.ENOENT)), base).readStatFile(ctx)
 			Expect(err).To(MatchError(fs.ErrNotExist))
 		})
 
@@ -147,31 +147,31 @@ var _ = Describe("a failed read reports its cause", func() {
 			// cpu.stat wrapping strconv's error instead would classify as
 			// ReadError, the catch-all, and the Sentry facet that tells a
 			// garbage counter from an I/O failure would say nothing.
-			_, err := newCgroupV2Source(oneFile(statPath, []byte("usage_usec notanumber\n"), nil), base).readStat(ctx)
+			_, err := newCgroupV2Source(oneFile(statPath, []byte("usage_usec notanumber\n"), nil), base).readStatFile(ctx)
 			Expect(err).To(MatchError(errUnparsableRead))
 			Expect(classifyRead(err)).To(Equal(ReadUnparsable))
 		})
 
 		It("keeps strconv's detail alongside the cause", func() {
-			_, err := newCgroupV2Source(oneFile(statPath, []byte("usage_usec notanumber\n"), nil), base).readStat(ctx)
+			_, err := newCgroupV2Source(oneFile(statPath, []byte("usage_usec notanumber\n"), nil), base).readStatFile(ctx)
 			Expect(err.Error()).To(ContainSubstring("usage_usec"), "the message must still name which counter")
 			Expect(err.Error()).To(ContainSubstring("notanumber"), "and the text that would not parse")
 		})
 
 		It("treats an absent key as absent, never as malformed", func() {
-			stat, err := newCgroupV2Source(oneFile(statPath, []byte("nr_periods 5\n"), nil), base).readStat(ctx)
+			stat, err := newCgroupV2Source(oneFile(statPath, []byte("nr_periods 5\n"), nil), base).readStatFile(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			_, ok := stat.Usage.Get()
 			Expect(ok).To(BeFalse())
 		})
 
 		It("reports a NaN counter as unparsable", func() {
-			_, err := newCgroupV2Source(oneFile(statPath, []byte("usage_usec NaN\nnr_periods 0\nnr_throttled 0\n"), nil), base).readStat(ctx)
+			_, err := newCgroupV2Source(oneFile(statPath, []byte("usage_usec NaN\nnr_periods 0\nnr_throttled 0\n"), nil), base).readStatFile(ctx)
 			Expect(err).To(MatchError(errUnparsableRead))
 		})
 
 		It("reports an infinite counter as unparsable", func() {
-			_, err := newCgroupV2Source(oneFile(statPath, []byte("usage_usec 5000000\nnr_periods +Inf\nnr_throttled 0\n"), nil), base).readStat(ctx)
+			_, err := newCgroupV2Source(oneFile(statPath, []byte("usage_usec 5000000\nnr_periods +Inf\nnr_throttled 0\n"), nil), base).readStatFile(ctx)
 			Expect(err).To(MatchError(errUnparsableRead))
 		})
 	})
