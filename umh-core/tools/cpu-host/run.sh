@@ -20,36 +20,25 @@
 # stock Alpine image with no toolchain and no repository mounted.
 #
 # Environment variables:
-#   CPUS       CPU quota for the container, e.g. CPUS=2. Below umh-core's
-#              own minimum the reserves leave numbers describing no machine
-#              we support, so prefer 2 over 0.5. Unset means no
-#              quota, which is the other world worth watching: no throttling
-#              signal, only host load.
+#   CPUS       CPU quota for the container, e.g. CPUS=2 (README.md says why
+#              not 0.5). Unset means no quota: no throttling signal, only
+#              host load.
 #   DURATION   How long the monitor runs after its first reading. Default 0,
-#              which runs until Ctrl+C, so you can put load on the container
-#              and watch the readings answer it for as long as you like.
+#              which runs until Ctrl+C.
 #   LOG_LEVEL  Runner log level (default debug, where the observed_changed
 #              line carries the worker's message whenever it changes; info
 #              carries the message in the state_transition line's reason
 #              field whenever the worker's state changes).
 #
-# Any argument is passed to docker run verbatim, so docker's own options
-# work without this script naming them (e.g. --name, to make the container
-# easy to exec into while it runs).
-#
-# The container gets stress-ng, so you can load it from a second terminal
-# without installing anything there:
-#
-#     docker exec cpu-host stress-ng --cpu 8 --timeout 60
+# Any argument is passed to docker run verbatim, such as --name, to make the
+# container easy to exec into while it runs. README.md shows how to load it.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Build outside the repository: go build on a main package writes its
-# output into the working directory otherwise, which would drop a binary
-# into the checkout.
+# Build to a temporary file, so no binary lands in the checkout.
 BIN="$(mktemp /tmp/cpu-host-runner.XXXXXX)"
 trap 'rm -f "$BIN"' EXIT
 

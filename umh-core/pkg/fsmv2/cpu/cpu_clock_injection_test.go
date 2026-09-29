@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Specs for the injected clock at the worker boundary; ClockKey's doc is the
-// contract. A mock pinned to 2020-03-14T15:09:26Z can only appear in a Sample
-// by reading the clock in the dependency map, since a sampler still stamping
-// from time.Now() cannot produce that instant.
 package fsmv2cpu
 
 import (
@@ -32,6 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+// ClockKey's doc is the contract these specs check. A mock pinned to
+// 2020-03-14T15:09:26Z can appear in a Sample only through the dependency map.
 var _ = Describe("the clock the CPU worker samples on", func() {
 	// readableFS serves the files whose reads produce signals, from the same
 	// cgroupBase the sampler is constructed with. Every other read answers
@@ -101,10 +99,8 @@ var _ = Describe("the clock the CPU worker samples on", func() {
 		id, bd := newBaseDeps()
 		d := NewDeps(id, bd, m)
 
-		// A wall-clock window rather than a non-zero check: the window catches
-		// a clock pinned outside it, while a wrong clock that happens to
-		// return a current wall instant passes — indistinguishable from the
-		// real clock.
+		// A clock pinned outside this window fails. A wrong clock that returns
+		// the current wall time cannot be told from the real one.
 		before := time.Now()
 		sample, err := d.sampler.Read(context.Background())
 		after := time.Now()

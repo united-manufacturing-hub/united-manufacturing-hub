@@ -24,31 +24,20 @@ import (
 )
 
 // CPUHostScenarioV2 runs the CPU monitor against the machine it is running
-// on, unmodified. Every other CPU scenario publishes a fake machine before
-// the upsert; this one publishes nothing, so the CPU worker reads the host's
-// own cgroup v2 and /proc/stat files, and whatever the log says about the
-// machine is what the real machine deserves. It is for watching the monitor
-// work, not for judging it: the wait below asserts only that a fresh reading
-// arrived, nothing about the verdict, and its result changes with the
-// machine it runs on.
+// on. It publishes no fake machine, so the CPU worker reads the host's own
+// cgroup v2 and /proc/stat files. It is for watching the monitor work: the
+// wait asserts only that a fresh reading arrived, nothing about the verdict.
 //
 // On every change of the worker's message the state_transition line's
 // reason field carries it at info.
 //
-// On a machine with no cgroup v2 CPU files, such as every developer Mac, no
-// reading can say anything about the machine, and the driver refuses rather
-// than spend its whole duration on one. The refusal names tools/cpu-host,
-// the wrapper that runs this scenario in a Linux container where those
-// files exist.
+// On a machine without /sys/fs/cgroup/cpu.stat, such as a developer Mac, Run
+// refuses rather than watch readings that cannot describe the cgroup. The
+// refusal names tools/cpu-host, which runs this scenario in a Linux container.
 var CPUHostScenarioV2 = ScenarioV2{
 	Name:        "cpu-host",
 	Description: "Runs the CPU monitor against the machine it is running on, unmodified (v2)",
 	Run: func(ctx context.Context, env Env) error {
-		// A missing cpu.stat no longer fails the sample, but without the
-		// cgroup v2 CPU files every reading says CPU monitoring is
-		// unavailable, so there is nothing to watch. Refuse here rather than
-		// leave the reader to infer that from a silent stream of
-		// unavailable readings.
 		if _, err := os.Stat("/sys/fs/cgroup/cpu.stat"); err != nil {
 			return fmt.Errorf("this host publishes no cgroup v2 CPU files, so no reading can describe the machine: %w; run it under tools/cpu-host, which puts it in a Linux container", err)
 		}
@@ -58,8 +47,6 @@ var CPUHostScenarioV2 = ScenarioV2{
 		}
 
 		return waitCPUFirstReading(ctx, env, "first fresh reading", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
-			// Done on any fresh reading: this scenario watches the monitor
-			// work and judges nothing, so the verdict is not asserted.
 			return true, cpuStatusSeen(st)
 		})
 	},

@@ -22,20 +22,17 @@ import (
 )
 
 // HangingFS wraps a filesystem.Service and can hold up reads of one path until
-// a caller releases them. A scenario uses it to make a read hang mid-poll, the
-// one thing a Box cannot state: a Box can serve, change or refuse a file, but
-// it cannot make opening it block.
+// a caller releases them. A Box can serve, change or refuse a file, but it
+// cannot make a read block.
 //
-// It is a separate wrapper rather than a Box method because the scenarios'
-// tickingBox holds its mutex around every Box read. A hang inside that lock
-// would block Stop and Set for as long as the read hangs, so the hang wraps
-// outside it. Unlike a Box, a HangingFS is safe for concurrent use: it has
-// its own mutex, and the collector reads it from its own goroutine.
+// It wraps outside the scenarios' tickingBox, whose mutex covers every Box
+// read: a hang inside that lock would block Set and Stop for as long as the
+// read hangs. Unlike a Box, a HangingFS is safe for concurrent use.
 type HangingFS struct {
 	filesystem.Service
 
-	// mu guards hung. The reads the collector makes, the Hang calls a
-	// scenario makes from its own goroutine, and release must not race.
+	// mu guards hung against the collector's reads and a scenario's Hang
+	// calls.
 	mu   sync.Mutex
 	hung map[string]chan struct{}
 }
@@ -66,10 +63,9 @@ func (h *HangingFS) Hang(path string) (release func()) {
 
 // ReadFile blocks while a Hang holds the path, then serves the inner service.
 //
-// The read's ctx is ignored while the read is held, on purpose. The collector
-// cancels a read at its ObservationTimeout (2.2s), and a read that returned
-// then would save a poll-error reading about every three seconds, so the
-// reading would never stay Stale for the scenario that hung it.
+// The read's ctx is ignored while the read is held. The collector cancels a
+// read at its ObservationTimeout (2.2s); a read that returned then would save
+// a poll-error reading, and the reading would never go Stale.
 func (h *HangingFS) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	h.mu.Lock()
 	released, hung := h.hung[path]

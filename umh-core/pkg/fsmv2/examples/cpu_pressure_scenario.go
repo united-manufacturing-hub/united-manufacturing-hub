@@ -38,10 +38,7 @@ const (
 	cpuPressureBase = "/sys/fs/cgroup"
 
 	// cpuPressureCalm is one point under the pressure signal's 0.20 fire mark,
-	// so the machine starts healthy on a number that is nearly the threshold
-	// rather than nowhere near it. A start far below the mark would leave the
-	// later crossing provable by a much cruder change than the one this
-	// scenario makes.
+	// so the crossing later is a one-point change.
 	cpuPressureCalm = 0.19
 
 	// cpuPressureFiring is over that fire mark, so the signal fires.
@@ -52,25 +49,14 @@ const (
 	//
 	// The capacity signal reads headroom as cores minus busy minus a one-core
 	// reserve, averaged over 60 seconds, and calls the machine full below zero.
-	// Four cores at 60% busy is 4 - 2.4 - 1.0 = 0.6 cores, and that is what the
-	// run reports from its first reading onward, with no ramp into it: cpu.NewDeps
-	// takes a startup snapshot through the same sampler, which fixes the counter
-	// baselines every rate is derived from, so the worker's first poll is that
-	// sampler's second read and already carries a full rate. There is no zero
-	// for the 60-second mean to climb out of.
-	//
-	// So the run sits 0.6 cores above the mark at which this machine would be
-	// called full, and stays there. That is the story: it is a busy machine
-	// with capacity to spare, and what makes it degraded later has nothing to
-	// do with capacity.
+	// Four cores at 60% busy is 4 - 2.4 - 1.0 = 0.6 cores from the first
+	// reading on: cpu.NewDeps takes a startup snapshot through the same
+	// sampler, so the worker's first poll already carries a full rate.
 	cpuPressureCores    = 4
 	cpuPressureHostBusy = 0.60
 
-	// cpuPressureUsageCores is what this instance itself is using: 0.5 cores of
-	// the 2.4 the machine is busy with, so about a fifth of the load is ours and
-	// the rest is somebody else's. Nothing in this story turns on that split; it
-	// is set to a plausible figure rather than left at zero, which would be a
-	// machine busy with nothing.
+	// cpuPressureUsageCores is what this instance itself uses, 0.5 of the 2.4
+	// busy cores. Nothing in the story turns on that split.
 	cpuPressureUsageCores = 0.5
 
 	// cpuPressureMachineTick is how much machine time one tick of the ticker
@@ -165,8 +151,7 @@ var CPUPressureScenarioV2 = ScenarioV2{
 }
 
 // cpuPressureMachine is the machine this scenario runs on, at the given PSI
-// pressure. Everything except the pressure is the same in both conditions, so
-// the two calls differ by exactly the one number the story turns on.
+// pressure. Only the pressure differs between calls.
 func cpuPressureMachine(pressure float64) fakebox.Condition {
 	return fakebox.Condition{
 		Cores:      cpuPressureCores,

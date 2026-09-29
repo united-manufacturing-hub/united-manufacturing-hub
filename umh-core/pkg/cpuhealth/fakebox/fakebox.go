@@ -28,25 +28,18 @@
 //
 // Second, the kernel writes these counters as integers, so a stated condition
 // that does not land on the integer grid cannot be served. Such a condition
-// panics naming the value rather than rounding to the nearest one it can write:
-// rounding nr_throttled at a 100 ms period turns a stated 8% throttle into a
-// served 10%, which is on the far side of the 5% fire mark, so the signal fires
-// with the wrong number while the test still looks like it passed.
+// panics naming the value rather than rounding it; chooseCfsPeriodUs shows what
+// rounding would cost.
 //
 // The dependency runs one way. This package imports neither cpuhealth nor
-// anything that does, and cpuhealth must not import it. Nothing in the compiler
-// stops it — the two build either way — so this is a rule here rather than
-// something the build enforces. What it buys is that every number a Box writes
-// is stated independently of the one the sampler reads it back with, so a wrong
-// constant on either side shows up as a wrong reading instead of cancelling out
-// against itself.
+// anything that does, and cpuhealth must not import it. So every number a Box
+// writes is stated independently of the constant the sampler reads it back
+// with, and a wrong constant on either side shows up as a wrong reading.
 //
-// One route through the sampler is deliberately not modelled: the ARM64 DMI
-// fallback, where /sys/class/dmi/id/sys_vendor carries the hypervisor identity
-// that an ARM64 product_name never names. A Box always writes an x86
-// /proc/cpuinfo with a flags line, so the sampler settles virtualisation before
-// it gets there. That route is covered separately and is not this fixture's
-// job.
+// A Box does not serve /sys/class/dmi/id/sys_vendor, the ARM64 DMI source. Its
+// /proc/cpuinfo always has an x86 flags line, so the hypervisor flag or
+// product_name settles virtualisation without it. read_virtualized_test.go
+// covers the ARM64 route.
 //
 // It ships as non-test code, like the filesystem package's MockFileSystem, so
 // tests in other packages can use it.
@@ -96,9 +89,9 @@ const referenceTick = time.Second
 // this clock cannot coincidentally look right.
 var fixtureEpoch = time.Date(2020, time.March, 14, 15, 9, 26, 0, time.UTC)
 
-// errUnreadable is what a file a Box does not serve reads as. The sampler
-// branches on the read failing at all and never on which error it was, so the
-// only thing that matters here is that it is non-nil.
+// errUnreadable is what a file a Box does not serve reads as. It is not
+// fs.ErrNotExist, so cpuhealth's classifyRead records such a read as ReadError,
+// not ReadMissing.
 var errUnreadable = errors.New("no such file or directory")
 
 // unreadable is the error for one path, wrapping errUnreadable so a caller can
@@ -159,14 +152,9 @@ type Condition struct {
 	// cpu.stat the process may not open. Each entry is matched whole, against
 	// the same path the sampler asks for, so a cgroup file needs the base:
 	// "/sys/fs/cgroup/cpu.stat", not "cpu.stat". An entry that is relative, or
-	// that names no file this box serves, panics rather than being ignored —
-	// silently ignoring it would leave a spec asserting against the readable
-	// machine it was written to rule out.
-	//
-	// This is a list rather than a bool per file on purpose. Four bools would
-	// all mean the same thing and each would carry the PsiPresent inversion,
-	// where false is the interesting value and the zero value reads as the
-	// healthy one.
+	// that names no file this box serves, panics rather than being ignored:
+	// ignored, it would leave a spec asserting against the readable machine it
+	// was written to rule out.
 	Unreadable []string
 }
 
@@ -242,16 +230,13 @@ func (b *Box) FS() filesystem.Service {
 	return fs
 }
 
-// shieldedClock hides the mock behind a plain clock.Clock. Returning the
-// interface is not on its own enough to hide anything: the dynamic type travels
-// with it, so box.Clock().(*clock.Mock) succeeds and hands the caller Set,
-// which moves the clock BACKWARDS. cpuhealth publishes a rate only while the
-// gap between two Timestamps is positive: advanceUsageRate in cgroup_source.go
-// and advanceHostRates in host_source.go both guard on it. So a backwards step
-// costs the tick it lands on, which serves no rate at all. The baseline still
-// moves to the backwards instant, so ticking forward restores the rates on the
-// next tick. Embedding the interface in an unexported struct promotes every
-// read method and leaves no way back to the mock.
+// shieldedClock hides the mock behind a plain clock.Clock. A bare interface
+// would not: box.Clock().(*clock.Mock) would succeed and hand the caller Set,
+// which can move the clock backwards. A backwards step leaves the tick it
+// lands on with no rate, because advanceUsageRate (cgroup_source.go) and
+// advanceHostRates (host_source.go) publish only over a positive gap.
+// Embedding the interface in an unexported struct leaves no way back to the
+// mock.
 type shieldedClock struct{ clock.Clock }
 
 // Clock returns the clock to hand to cpuhealth.NewLinuxSamplerWithClock. Tick
@@ -283,10 +268,8 @@ func (b *Box) Set(c Condition) {
 	b.cond = c
 }
 
-// Tick accrues d worth of every counter at the current condition AND advances
-// the clock by d. The two happen together because the sampler divides a counter
-// delta by the gap between two Sample Timestamps: advancing one without the
-// other would serve a rate nobody asked for.
+// Tick accrues d worth of every counter at the current condition and advances
+// the clock by d. The package doc says why the two move together.
 //
 // It panics on a non-positive d rather than serving it. A zero d accrues
 // nothing and moves nothing, so the next read finds no elapsed time to divide
@@ -306,13 +289,6 @@ func (b *Box) Tick(d time.Duration) {
 	// is what a positive quota turns on. The kernel starts the period timer
 	// that increments nr_periods only for a quota'd cgroup, so an unquota'd one
 	// reports nr_periods 0 for its whole life however busy it gets.
-	//
-	// Holding them still is also the only way to hand the sampler a denominator
-	// that never advances, and two guards downstream exist for that machine: the
-	// throttling signal requires HasLimit (signal_throttling.go), and
-	// SlidingWindow.Reduce marks a dividing reduction untrusted when the
-	// denominator delta is not positive. A Box with no quota states that machine
-	// directly, so a spec can reach both.
 	if b.cond.QuotaCores > 0 {
 		// Both counters are integers, so a tick producing a fractional count of
 		// either cannot be served: rounding nr_throttled changes the throttle
@@ -369,9 +345,7 @@ func (b *Box) readFile(path string) ([]byte, error) {
 }
 
 // newServers builds the table of every file this box serves, mapped to what
-// renders it. It is the single source of truth for "servable": readFile
-// dispatches on it and checkUnreadable rejects against it, so a path cannot be
-// servable to one and unknown to the other.
+// renders it. readFile and checkUnreadable both read it.
 func (b *Box) newServers() map[string]func() string {
 	return map[string]func() string{
 		b.base + "/cpu.stat":              b.cpuStat,
@@ -397,11 +371,8 @@ func (b *Box) ServablePaths() []string {
 	return paths
 }
 
-// checkUnreadable rejects an Unreadable entry that names no file this box could
-// ever serve. Without this the entry is silently ignored, so a spec written to
-// prove behaviour under an unreadable cpu.stat would run against a perfectly
-// readable one and assert nothing — the failure this whole package exists to
-// prevent, reached through its own newest field.
+// checkUnreadable panics on an Unreadable entry that is relative or names no
+// file this box serves. Condition.Unreadable says why.
 func (b *Box) checkUnreadable(c Condition) {
 	for _, path := range c.Unreadable {
 		if !strings.HasPrefix(path, "/") {
@@ -440,11 +411,8 @@ func (b *Box) cpuMax() string {
 	return fmt.Sprintf("%d %d\n", quota, b.periodUs)
 }
 
-// cpuPressure writes the PSI averages at the two decimals the kernel writes,
-// matching the hand-written fixture in read_psi_test.go. Writing more decimals
-// would let a test state a pressure no real box could report, and a test that
-// passes has to describe a machine that could exist. validate rejects a
-// Pressure this precision cannot carry, so nothing is rounded away here.
+// cpuPressure writes the PSI averages at the two decimals the kernel writes.
+// validate rejects a Pressure that needs more, so nothing is rounded away here.
 func (b *Box) cpuPressure() string {
 	avg := b.cond.Pressure * psiScale
 
@@ -536,10 +504,9 @@ func chooseCfsPeriodUs(throttle float64) int64 {
 		throttle, referenceTick))
 }
 
-// validate rejects a Condition no machine could be in. Each of these would
-// otherwise be served as some other condition — a Steal above 1 as a negative
-// idle, an Affinity above Cores as a cpuset the machine does not have — and the
-// test would then be asserting against a machine it did not describe.
+// validate panics on a Condition no machine could be in. Served, such a
+// condition would read back as some other machine: a Steal above 1 as a
+// negative idle, an Affinity above Cores as a cpuset the machine does not have.
 func validate(c Condition) {
 	if c.Cores < 1 {
 		panic(fmt.Sprintf("fakebox: Cores %d: a machine has at least one CPU", c.Cores))
@@ -563,9 +530,8 @@ func validate(c Condition) {
 			c.HostBusy, c.Steal, c.HostBusy+c.Steal))
 	}
 
-	// cpu.pressure carries two decimals of a percentage. A finer Pressure
-	// cannot be written, and this package states what it cannot serve rather
-	// than rounding it into something the caller did not ask for.
+	// cpu.pressure carries two decimals of a percentage, so a finer Pressure
+	// cannot be written.
 	if !isWhole(c.Pressure * psiScale * 100) {
 		panic(fmt.Sprintf(
 			"fakebox: Pressure %v is finer than the two decimals of a percentage cpu.pressure carries; state a multiple of 0.0001",

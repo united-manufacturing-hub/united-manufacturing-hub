@@ -36,8 +36,8 @@ import (
 //
 // The story is the case that matters most in the field: the worker stops
 // producing readings, the reading ages past the shared staleness limit, and
-// the monitor sees it. A missing file never does this, which is what
-// cpu-blind pins; a read that blocks does.
+// the monitor sees it. A missing file never does this (cpu-blind checks
+// that); a read that blocks does.
 //
 // The hang must end well before 20 seconds. At 10 seconds the supervisor logs
 // data_stale, which every run allows; at 20 seconds it logs the timeout and
@@ -62,9 +62,9 @@ var CPUStallScenarioV2 = ScenarioV2{
 		var clk clock.Clock = box.box.Clock()
 		config.SetDependency(m, fsmv2cpu.ClockKey, clk)
 
-		// The box advances on the sampler's read of cpu.pressure, which the
-		// hang never touches, so machine time stops the moment the cpu.stat
-		// read blocks: the box advances on reads, and no read completes.
+		// The box advances once per read, when the sampler opens
+		// cpu.pressure. While the cpu.stat read hangs no new read starts, so
+		// machine time stops.
 		box.StartPerRead(cpuMachineSecond)
 
 		return m, box.Stop, nil

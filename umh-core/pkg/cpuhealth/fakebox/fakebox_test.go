@@ -203,7 +203,7 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		//
 		// Not every length is servable — this box picks the 10ms CFS period for
 		// Throttle 0.08, and 100ms of that is 8/10ths of a throttled period,
-		// which panics. The last case of the panic spec below pins that.
+		// which panics. The last case of the panic spec below checks that.
 		//
 		// 250ms and 1.5s are here because 500ms, 1s and 2s are all whole
 		// multiples of 100ms and cannot tell a box that quietly rounded ticks
@@ -245,8 +245,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	It("holds the throttle counters still on a cgroup with no quota", func() {
 		// The kernel only runs the CFS period timer for a quota'd cgroup, so an
 		// unquota'd one reports nr_periods 0 for its whole life however busy it
-		// gets. A fixture that advanced the denominator anyway could not state
-		// this machine at all.
 		box := fakebox.NewBox(base, fakebox.Condition{
 			Cores:      4,
 			QuotaCores: 0,
@@ -296,8 +294,8 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		Expect(counted.reads[dmiProductName]).To(Equal(1),
 			"the bare-metal path must find product_name READABLE; a Sample cannot say so on its own, since an unreadable one also reads Virtualized false")
 
-		// A settled fact is not re-read. This is the property the fixture's
-		// comment claims and the reason a bare-metal box has to serve DMI.
+		// A settled fact is not re-read, which is why a bare-metal box has to
+		// serve DMI (dmiProductName in fakebox.go).
 		settled := counted.reads[dmiProductName] + counted.reads["/proc/cpuinfo"]
 		box.Tick(time.Second)
 		_, err = sampler.Read(ctx)
@@ -339,8 +337,8 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 			PsiPresent: true,
 		}
 
-		// An unreadable cpu.stat reads as absent since #2758: the sample
-		// carries on with its three readings missing, never a failed poll.
+		// An unreadable cpu.stat reads as absent: the sample carries on with
+		// its three readings missing.
 		noStat := readable
 		noStat.Unreadable = []string{base + "/cpu.stat"}
 		box := fakebox.NewBox(base, noStat)
@@ -352,8 +350,8 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		Expect(usageOK).To(BeFalse(),
 			"an unreadable cpu.stat must leave its readings absent, not served")
 
-		// /proc/stat is not primary either. The sample still succeeds and
-		// loses the machine's CPU count, and with it the scope that needs it.
+		// An unreadable /proc/stat does not fail the sample either. It loses
+		// the machine's CPU count, and with it the scope that needs it.
 		noProcStat := readable
 		noProcStat.Unreadable = []string{"/proc/stat"}
 		box2 := fakebox.NewBox(base, noProcStat)
@@ -387,9 +385,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	})
 
 	It("refuses an Unreadable path it would never be asked for", func() {
-		// A silently ignored entry is the worst outcome available here: a spec
-		// written to prove behaviour under an unreadable cpu.stat would run
-		// against a readable one and assert nothing.
 		base10 := fakebox.Condition{Cores: 4, QuotaCores: 2, PsiPresent: true}
 
 		with := func(paths ...string) fakebox.Condition {
@@ -428,10 +423,8 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	})
 
 	It("hands out a clock the caller cannot move backwards", func() {
-		// Returning a clock.Clock is not on its own enough to hide the mock:
-		// the dynamic type travels with the interface, so an unwrapped mock
-		// would come straight back out of a type assertion, bringing Set with
-		// it. fakebox.go's shieldedClock says what a backwards step costs.
+		// fakebox.go's shieldedClock says why the mock must not come back out
+		// of a type assertion.
 		box := fakebox.NewBox(base, fakebox.Condition{Cores: 4, QuotaCores: 2, PsiPresent: true})
 
 		_, recovered := box.Clock().(*clock.Mock)
@@ -447,8 +440,7 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	})
 
 	It("panics on a machine it cannot serve, naming what it could not serve", func() {
-		// Every guard below is otherwise unexercised, which means any of them
-		// could be deleted without a spec going red.
+		// No other spec reaches these guards.
 		ok := fakebox.Condition{Cores: 4, QuotaCores: 2, UsageCores: 1.2, PsiPresent: true}
 
 		with := func(f func(c *fakebox.Condition)) fakebox.Condition {
