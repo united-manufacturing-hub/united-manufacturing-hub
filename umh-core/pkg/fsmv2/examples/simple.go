@@ -28,12 +28,12 @@ import (
 // SimpleScenarioV2 brings up one exampleparent and its examplechild children.
 var SimpleScenarioV2 = ScenarioV2{
 	Name:        "simple",
-	Description: "Single parent worker with 2 dynamically-created child workers",
+	Description: "One exampleparent starts two examplechild workers and reports both healthy",
 
 	Run: func(ctx context.Context, env Env) error {
 		parentRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "parent-1"}
 
-		env.Step("create the parent with two children")
+		env.Step("create the parent with two children; the parent waits 5 s in Stopped before it creates them")
 
 		if err := env.Client.Upsert(parentRef, map[string]any{
 			"state":          "running",
