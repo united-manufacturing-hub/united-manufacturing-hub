@@ -36,6 +36,12 @@ import (
 // read: one second, the cadence the worker reads at in production.
 const cpuMachineSecond = time.Second
 
+// cpuMachineReadAdvance is the machine time one sampler read advances the box
+// in cpu-filling and cpu-latch. Every window, coverage rule and re-fire bar in
+// pkg/cpuhealth is judged on sample timestamps, so ten machine seconds per read
+// fills a 60-second window in six readings at the worker's 1s poll.
+const cpuMachineReadAdvance = 10 * time.Second
+
 // cpuMachine is a scenario's fake CPU machine: a tickingBox wrapped in a
 // HangingFS, so reads of a chosen path can be held up mid-poll. The
 // HangingFS wraps outside the box's mutex, so a hung read does not block Set
