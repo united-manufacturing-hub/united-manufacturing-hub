@@ -38,6 +38,10 @@ import (
 // past the shared staleness limit, and the monitor sees it. A missing file never does this (cpu-blind checks
 // that); a read that blocks does.
 //
+// The worker stays running through the hang, so no state_transition line
+// appears and the log is silent from the hang step to the release step. The
+// staleness shows only in the freshness GetFresh returns with the reading.
+//
 // The hang must end well before 20 seconds. At 10 seconds the supervisor logs
 // data_stale, which every run allows; at 20 seconds it logs the timeout and
 // restart warnings this scenario does not expect. The stale wait ends at about
@@ -90,7 +94,7 @@ var CPUStallScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("hang reads of cpu.stat")
+		env.Step("hang reads of cpu.stat; the worker stays running, so wait for GetFresh to call the reading stale (3 seconds)")
 
 		// The deferred release is the backstop that lets teardown finish if a
 		// wait fails with the read still hung; the release step below is the
@@ -127,7 +131,7 @@ var CPUStallScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("release cpu.stat")
+		env.Step("let the hung cpu.stat read return; wait for a fresh, healthy reading")
 		release()
 
 		// Until the collector saves again the reading is still Stale, so Stale
