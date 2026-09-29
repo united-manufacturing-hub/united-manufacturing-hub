@@ -17,8 +17,8 @@ package examples
 // InheritanceScenario demonstrates variable inheritance from parent to child workers.
 //
 // Parent defines variables (IP, PORT) in userSpec.variables.user. Children created
-// via GetChildSpecs can define their own variables (DEVICE_ID) which override parent
-// values with same key. Variables are flattened for templates: {{ .IP }}, {{ .PORT }}.
+// via GetChildSpecs can define their own variables (DEVICE_ID), which the parent
+// does not set. Variables are flattened for templates: {{ .IP }}, {{ .PORT }}.
 var InheritanceScenario = Scenario{
 	Name: "inheritance",
 

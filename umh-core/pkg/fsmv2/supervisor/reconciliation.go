@@ -1469,7 +1469,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				delete(s.pendingRemoval, spec.Name)
 			}
 
-			// Merge parent User variables with child's (child overrides parent)
+			// Merge the parent's variables with the child's (the parent's value wins in User and Global alike)
 			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
@@ -1532,7 +1532,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				continue
 			}
 
-			// Merge parent User variables with child's (child overrides parent)
+			// Merge the parent's variables with the child's (the parent's value wins in User and Global alike)
 			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
