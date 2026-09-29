@@ -402,10 +402,8 @@ authToken: "test-token"`,
 	})
 })
 
-// recordingChannelProvider implements transport.ChannelProvider and records the
-// worker IDs its methods are called with, so a test can tell which of two
-// providers the worker actually used. It keeps the channels GetChannels
-// returned, so a test can also check the worker was wired to them.
+// recordingChannelProvider is a transport.ChannelProvider that records the
+// worker IDs it is called with and the channels it returned.
 type recordingChannelProvider struct {
 	getChannelsIDs     []string
 	getInboundStatsIDs []string
@@ -451,7 +449,6 @@ var _ = Describe("TransportWorker channel provider dependency", func() {
 		var mapProviderAsProvider transport.ChannelProvider = mapProvider
 		fsmv2types.SetDependency(dependencyMap, transport.ChannelProviderKey, mapProviderAsProvider)
 
-		// The worker reads the provider under this literal map key.
 		Expect(dependencyMap).To(HaveKey("transport.channel_provider"))
 
 		identity := deps.Identity{ID: "map-provider-worker", WorkerType: "transport"}
