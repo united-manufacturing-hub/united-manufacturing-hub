@@ -267,11 +267,18 @@ var _ = Describe("Poll on a connection fault", func() {
 		}}
 
 		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
-		d.summary = &summaryCache{
+		dsn := cfg.WithDefaults().Timescale.ToDSN()
+		d.summary = &readCache[timescalemetrics.Summary]{
 			interval: time.Minute,
-			dsn:      cfg.WithDefaults().Timescale.ToDSN(),
+			dsn:      dsn,
 			readAt:   time.Now(),
 			value:    timescalemetrics.Summary{TableNames: []string{"value_bench"}, JobCount: 2},
+		}
+		d.databaseSize = &readCache[int64]{
+			interval: time.Minute,
+			dsn:      dsn,
+			readAt:   time.Now(),
+			value:    900_000_000,
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -282,6 +289,7 @@ var _ = Describe("Poll on a connection fault", func() {
 		Expect(err).To(MatchError(ContainSubstring("timescale query")))
 		Expect(status.TableNames).To(ConsistOf("value_bench"))
 		Expect(status.JobCount).To(Equal(2))
+		Expect(status.DatabaseOccupiedDiskBytes).To(Equal(int64(900_000_000)))
 	})
 })
 
@@ -315,7 +323,7 @@ var _ = Describe("the summary cache", func() {
 	}
 
 	It("keeps the summary it read for the same database until the interval elapses", func() {
-		cache := &summaryCache{interval: time.Minute}
+		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
 		first, second := 0, 0
 
 		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
@@ -326,7 +334,7 @@ var _ = Describe("the summary cache", func() {
 	})
 
 	It("reads again when the database changed, however recent the cached summary", func() {
-		cache := &summaryCache{interval: time.Minute}
+		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
 		first, second := 0, 0
 
 		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
@@ -338,7 +346,7 @@ var _ = Describe("the summary cache", func() {
 	})
 
 	It("reports nothing rather than the previous database when the first read of the new one fails", func() {
-		cache := &summaryCache{interval: time.Minute}
+		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
 		first, second := 0, 0
 
 		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
@@ -350,7 +358,7 @@ var _ = Describe("the summary cache", func() {
 	})
 
 	It("reports nothing as the last summary of a database it has not read", func() {
-		cache := &summaryCache{interval: time.Minute}
+		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
 		calls := 0
 
 		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &calls))

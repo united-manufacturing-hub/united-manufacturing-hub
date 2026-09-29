@@ -813,7 +813,10 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 		Expect(summary.JobCount).To(Equal(2))
 		Expect(summary.FailedJobCount).To(BeZero())
 		Expect(summary.HistorianOccupiedDiskBytes).To(BeNumerically(">", 0))
-		Expect(summary.DatabaseOccupiedDiskBytes).To(BeNumerically(">", summary.HistorianOccupiedDiskBytes),
+
+		databaseOccupiedDiskBytes, err := ReadDatabaseOccupiedDiskBytes(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(databaseOccupiedDiskBytes).To(BeNumerically(">", summary.HistorianOccupiedDiskBytes),
 			"the database also holds the catalogs")
 	})
 

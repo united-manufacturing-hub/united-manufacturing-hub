@@ -29,7 +29,6 @@ import (
 type Summary struct {
 	Versions                   []models.Version `json:"versions"`
 	TableNames                 []string         `json:"tableNames"`
-	DatabaseOccupiedDiskBytes  int64            `json:"databaseOccupiedDiskBytes"`
 	HistorianOccupiedDiskBytes int64            `json:"historianOccupiedDiskBytes"`
 	DataSpanSeconds            int64            `json:"dataSpanSeconds"`
 	JobCount                   int              `json:"jobCount"`
@@ -75,7 +74,6 @@ func CollectSummary(ctx context.Context, db Database) (Summary, error) {
 		DataSpanSeconds:            dataSpanSeconds(spans),
 		JobCount:                   jobCount,
 		FailedJobCount:             failedJobCount,
-		DatabaseOccupiedDiskBytes:  readDatabaseOccupiedDiskBytes(ctx, db),
 	}
 
 	return summary, nil

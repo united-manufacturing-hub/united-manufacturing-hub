@@ -100,6 +100,7 @@ type TimescaleStatus struct {
 	// Read on a slower schedule than the connection check, keeping its last value
 	// between reads, so it is empty only until the first one completes.
 	timescalemetrics.Summary
+	DatabaseOccupiedDiskBytes int64 `json:"databaseOccupiedDiskBytes"`
 }
 
 // sharedPool is the one holder every worker instance polls through. The
@@ -127,8 +128,9 @@ var sharedPool = &poolHolder{}
 type Deps struct {
 	*deps.BaseDependencies
 
-	pool    *poolHolder
-	summary *summaryCache
+	pool         *poolHolder
+	summary      *readCache[timescalemetrics.Summary]
+	databaseSize *readCache[int64]
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -141,6 +143,7 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 		BaseDependencies: bd,
 		pool:             sharedPool,
 		summary:          sharedSummary,
+		databaseSize:     sharedDatabaseSize,
 	}
 }
 
@@ -259,10 +262,11 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Err(err))
 
 		return TimescaleStatus{
-			Host:    host,
-			Port:    port,
-			Auth:    models.TimescaleAuthUnknown,
-			Summary: d.summary.last(dsn),
+			Host:                      host,
+			Port:                      port,
+			Auth:                      models.TimescaleAuthUnknown,
+			Summary:                   d.summary.last(dsn),
+			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
 		}, fmt.Errorf("timescale pool: %w", err)
 	}
 
@@ -286,11 +290,12 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Err(err))
 
 		return TimescaleStatus{
-			Host:      host,
-			Port:      port,
-			Reachable: reachable,
-			Auth:      auth,
-			Summary:   d.summary.last(dsn),
+			Host:                      host,
+			Port:                      port,
+			Reachable:                 reachable,
+			Auth:                      auth,
+			Summary:                   d.summary.last(dsn),
+			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
 		}, fmt.Errorf("timescale query %s: %w", host, err)
 	}
 
@@ -301,13 +306,16 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		deps.String("auth", string(models.TimescaleAuthValid)),
 		deps.Float64("latency_ms", elapsedMs))
 
+	now := time.Now()
+
 	return TimescaleStatus{
-		Host:      host,
-		Auth:      models.TimescaleAuthValid,
-		LatencyMs: elapsedMs,
-		Port:      port,
-		Reachable: true,
-		Summary:   d.summary.refresh(time.Now(), dsn, summaryReader(ctx, d, pool, host)),
+		Host:                      host,
+		Auth:                      models.TimescaleAuthValid,
+		LatencyMs:                 elapsedMs,
+		Port:                      port,
+		Reachable:                 true,
+		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, pool, host)),
+		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, pool, host)),
 	}, nil
 }
 
@@ -329,6 +337,21 @@ func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string)
 	}
 }
 
+func databaseSizeReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (int64, bool) {
+	return func() (int64, bool) {
+		databaseOccupiedDiskBytes, err := timescalemetrics.ReadDatabaseOccupiedDiskBytes(ctx, pool)
+		if err != nil {
+			d.GetLogger().Debug("timescale database size",
+				deps.String("host", host),
+				deps.Err(err))
+
+			return 0, false
+		}
+
+		return databaseOccupiedDiskBytes, true
+	}
+}
+
 func init() {
 	simple.Register(simple.MonitorSpec[config.HistorianConfig, TimescaleStatus, Deps]{
 		WorkerType: WorkerType,
@@ -342,14 +365,22 @@ func init() {
 // deployed, and disk usage and a failing job are not urgent to the second.
 const summaryInterval = 60 * time.Second
 
-// sharedSummary matches sharedPool: the cache has to outlive a single Poll.
-var sharedSummary = &summaryCache{interval: summaryInterval}
+// pg_database_size stats every file of the database, and calling it on a short
+// interval is a reported cause of timeouts and inode cache pressure.
+// https://www.postgresql.org/message-id/CAGRY4nz94%2Bq_zVxj%2Bdnk7zqm-McBz4mSza_wALKiw2%3D%3D23MiGQ%40mail.gmail.com
+const databaseSizeInterval = 15 * time.Minute
 
-type summaryCache struct {
+// The caches match sharedPool: they have to outlive a single Poll.
+var (
+	sharedSummary      = &readCache[timescalemetrics.Summary]{interval: summaryInterval}
+	sharedDatabaseSize = &readCache[int64]{interval: databaseSizeInterval}
+)
+
+type readCache[T any] struct {
 	readAt time.Time
-	value  timescalemetrics.Summary
+	value  T
 	// A config edit repoints the pool at another database; holding the value across
-	// that would report one database's tables beside the other's host.
+	// that would report one database's figures beside the other's host.
 	dsn      string
 	interval time.Duration
 	mu       sync.Mutex
@@ -358,37 +389,41 @@ type summaryCache struct {
 // refresh reads again once the interval has elapsed or the database changed. A
 // failed read keeps the previous value and waits its turn rather than retrying
 // every poll.
-func (c *summaryCache) refresh(
+func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,
-	read func() (timescalemetrics.Summary, bool),
-) timescalemetrics.Summary {
+	read func() (T, bool),
+) T {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if dsn != c.dsn {
+		var empty T
+
 		c.dsn = dsn
-		c.value = timescalemetrics.Summary{}
+		c.value = empty
 	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
 		return c.value
 	}
 
 	c.readAt = now
 
-	if summary, ok := read(); ok {
-		c.value = summary
+	if value, ok := read(); ok {
+		c.value = value
 	}
 
 	return c.value
 }
 
-// The framework persists a failed Poll's status too, so it carries the last summary.
-func (c *summaryCache) last(dsn string) timescalemetrics.Summary {
+// The framework persists a failed Poll's status too, so it carries the last value.
+func (c *readCache[T]) last(dsn string) T {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if dsn != c.dsn {
-		return timescalemetrics.Summary{}
+		var empty T
+
+		return empty
 	}
 
 	return c.value

@@ -89,16 +89,16 @@ func readHistorianTables(ctx context.Context, db Database) ([]Table, error) {
 	return filterHistorianTables(append(hypertables, plainTables...)), nil
 }
 
-// readDatabaseOccupiedDiskBytes returns zero when the read fails, so a slow
-// pg_database_size, which stats every file of the database, costs only this figure.
+// ReadDatabaseOccupiedDiskBytes reads the size of the whole database. It stats
+// every file of the database, so its cost grows with the chunk count.
 // https://github.com/postgres/postgres/blob/master/src/backend/utils/adt/dbsize.c
-func readDatabaseOccupiedDiskBytes(ctx context.Context, db Database) int64 {
+func ReadDatabaseOccupiedDiskBytes(ctx context.Context, db Database) (int64, error) {
 	var databaseOccupiedDiskBytes int64
 	if err := db.QueryRow(ctx, databaseOccupiedDiskBytesQuery).Scan(&databaseOccupiedDiskBytes); err != nil {
-		return 0
+		return 0, fmt.Errorf("read database size: %w", err)
 	}
 
-	return databaseOccupiedDiskBytes
+	return databaseOccupiedDiskBytes, nil
 }
 
 // queryAll runs one query and builds a T from each row with toValue, naming the
