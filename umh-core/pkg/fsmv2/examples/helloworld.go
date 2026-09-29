@@ -30,12 +30,16 @@ import (
 const moodFilePath = "mood"
 
 // HelloworldScenarioV2 runs one helloworld child against a mock filesystem
-// held in the dependency map: it creates the child with a happy mood file,
-// rewrites the file to grumpy, and deletes it, waiting for the store to show
-// each change before making the next.
+// held in the dependency map. It creates the child with a happy mood file,
+// rewrites the file to grumpy, and deletes it. After each change it waits for
+// the child's observation to show the new mood.
+//
+// The child starts and then stays Running through all three moods, because
+// only the mood "sad" moves it to Degraded. So this scenario waits for the
+// mood in the observation.
 var HelloworldScenarioV2 = ScenarioV2{
 	Name:        "helloworld",
-	Description: "Minimal worker: says hello, reads mood from a mock filesystem",
+	Description: "A helloworld child reads its mood from a file. The scenario changes the file twice and checks that the observed mood follows each time",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		moodFS := &mockFilesystem{files: map[string][]byte{}}
@@ -65,7 +69,7 @@ var HelloworldScenarioV2 = ScenarioV2{
 
 		ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
 
-		env.Step("create helloworld with mood happy")
+		env.Step("create the helloworld child with a mood file that says happy")
 
 		if err := env.Client.Upsert(ref, map[string]any{
 			"state":        "running",
@@ -75,7 +79,7 @@ var HelloworldScenarioV2 = ScenarioV2{
 		}
 
 		waitForMood := func(want string) error {
-			return env.WaitFor(ctx, "store shows mood "+want,
+			return env.WaitFor(ctx, "the child's observation shows mood="+want,
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
 					if err != nil {
@@ -94,14 +98,14 @@ var HelloworldScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("change mood file to grumpy")
+		env.Step("change the mood file to grumpy; wait for mood=grumpy in the observation")
 		moodFS.SetFile(moodFilePath, "grumpy")
 
 		if err := waitForMood("grumpy"); err != nil {
 			return err
 		}
 
-		env.Step("delete mood file")
+		env.Step("delete the mood file; wait for an empty mood in the observation")
 		moodFS.RemoveFile(moodFilePath)
 
 		return waitForMood("")
