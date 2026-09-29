@@ -65,7 +65,9 @@ func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 // NewUnsampledFSMLogger wraps sugar without the message-based sampler that
 // NewFSMLogger applies. Use it only in test harnesses that must observe every
 // log entry (sampling drops entries before they reach an observer core, which
-// breaks log-scraping assertions). Production code must use NewFSMLogger.
+// breaks log-scraping assertions), and in developer tools like the scenario
+// runner CLI, whose output is the thing being read. Production code must use
+// NewFSMLogger.
 func NewUnsampledFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 	if sugar == nil {
 		panic("NewUnsampledFSMLogger: sugar cannot be nil")

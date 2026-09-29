@@ -24,6 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
@@ -262,6 +266,23 @@ func TestRunnerCLIRouting(t *testing.T) {
 		case <-forced:
 		case <-time.After(2 * time.Second):
 			t.Fatal("a second signal must force-exit instead of waiting for Done")
+		}
+	})
+
+	t.Run("run logger keeps every line: 20 identical info lines in a second all arrive", func(t *testing.T) {
+		obsCore, logs := observer.New(zapcore.InfoLevel)
+
+		runLogger := newRunLogger(zap.New(obsCore))
+
+		// A busy scenario emits far more than five identical info lines in one
+		// second (state transitions, passed waits); every one must reach the
+		// output, so none may be sampled away.
+		for range 20 {
+			runLogger.Info("state_transition")
+		}
+
+		if got := len(logs.TakeAll()); got != 20 {
+			t.Errorf("the run logger must keep every log line a scenario run emits, got %d of 20", got)
 		}
 	})
 
