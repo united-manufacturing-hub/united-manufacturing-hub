@@ -122,15 +122,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	for _, read := range stat.Reads {
 		sample.record(read.Operation, read.Outcome, read.Err)
 	}
-	for _, read := range stat.Reads {
-		// A usage or throttle file that opens and does not parse is corrupt, and
-		// every number derived from it would be a guess. One that will not open
-		// is a different thing: its readings stay absent and the sample carries
-		// on, so a host keeping its CPU accounting elsewhere is not degraded
-		// over a file it was never going to have.
-		if read.Outcome == ReadUnparsable {
-			return sample, fmt.Errorf("parse %s: %w", read.Operation, sample.Troubleshooting.ReadErrors[read.Operation])
-		}
+	// A usage or throttle file that opens and does not parse is corrupt, and
+	// every number derived from it would be a guess. One that will not open is a
+	// different thing: its readings stay absent and the sample carries on, so a
+	// host keeping its CPU accounting elsewhere is not degraded over a file it
+	// was never going to have.
+	if corrupt, found := firstUnparsable(stat.Reads); found {
+		return sample, fmt.Errorf("parse %s: %w", corrupt.Operation, sample.Troubleshooting.ReadErrors[corrupt.Operation])
 	}
 	// Check whether the reading was cancelled, and if so return the cancellation
 	// error. A cancelled read fails every file, which looks the same as a host
@@ -248,6 +246,16 @@ func (s *linuxSampler) recordRawReads(ctx context.Context, sample *Sample) {
 	baseEntries, baseDirOutcome, baseDirErr := readBaseDirEntryCount(ctx, s.fs, s.base)
 	sample.Troubleshooting.CgroupBaseDirEntryCount = baseEntries
 	sample.record(OperationCgroupBaseDir, baseDirOutcome, baseDirErr)
+}
+
+func firstUnparsable(reads []readAttempt) (readAttempt, bool) {
+	for _, read := range reads {
+		if read.Outcome == ReadUnparsable {
+			return read, true
+		}
+	}
+
+	return readAttempt{}, false
 }
 
 // seedReads returns one ReadNotAttempted entry per operation, in

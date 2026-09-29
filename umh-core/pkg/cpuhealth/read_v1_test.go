@@ -222,6 +222,18 @@ var _ = Describe("usage as a rate on cgroup v1", func() {
 
 		Expect(err).To(MatchError(ContainSubstring(usagePath)))
 	})
+
+	It("still records cpu.stat when cpuacct.usage fails the sample", func() {
+		smp, err := v1Sampler(v1Files{
+			statPath:  "nr_periods 10\nnr_throttled 0\n",
+			usagePath: "abc\n",
+		}).Read(context.Background())
+
+		Expect(err).To(HaveOccurred())
+		Expect(smp.Troubleshooting.Reads).To(ContainElement(
+			cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUStat, Outcome: cpuhealth.ReadOK},
+		))
+	})
 })
 
 var _ = Describe("the CPUs a cgroup v1 container may run on", func() {
