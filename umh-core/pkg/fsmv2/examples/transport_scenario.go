@@ -133,7 +133,7 @@ var TransportScenarioV2 = ScenarioV2{
 
 		ref := dynamicchildren.Ref{WorkerType: "transport", Name: "transport-1"}
 
-		env.Step("create transport with valid auth against the mock relay server")
+		env.Step("create transport-1 against the mock relay server, which accepts any token; it starts push and pull children and takes the instance UUID the relay server returns")
 
 		if err := env.Client.Upsert(ref, map[string]any{
 			"state":        "running",
