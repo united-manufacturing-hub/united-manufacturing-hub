@@ -97,6 +97,10 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	if reg := register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName); reg != nil {
 		status.RegistryConfigured = true
 		status.DynamicChildren = reg.Specs()
+
+		if vars := reg.Variables(); len(vars.User) > 0 || len(vars.Global) > 0 {
+			status.Variables = &vars
+		}
 	}
 
 	return fsmv2.NewObservation(status), nil

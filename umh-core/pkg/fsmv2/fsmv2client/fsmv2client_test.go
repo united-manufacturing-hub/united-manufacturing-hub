@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
 
@@ -59,5 +60,16 @@ func TestGetReturnsErrorOnNilStateReader(t *testing.T) {
 
 	if _, err := Get[struct{}](context.Background(), client, ref); err == nil {
 		t.Fatalf("Get on a nil-StateReader client returned nil error, want a non-nil error rather than a panic")
+	}
+}
+
+func TestSetVariablesPassesThroughToWriter(t *testing.T) {
+	w := dynamicchildren.NewWriter()
+	client := NewFSMv2Client(w, nil)
+
+	client.SetVariables(config.VariableBundle{User: map[string]any{"IP": "10.0.0.1"}})
+
+	if got := w.Registry().Variables().User["IP"]; got != "10.0.0.1" {
+		t.Fatalf("registry User[IP] = %v, want 10.0.0.1", got)
 	}
 }
