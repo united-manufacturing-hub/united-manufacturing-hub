@@ -65,7 +65,7 @@
 // Injects variables into UserSpec before template expansion:
 //
 // Global variables:
-//   - From management system (fleet-wide configuration)
+//   - Taken from the supervisor's spec as they are
 //   - Available as {{ .global.key }} in templates
 //
 // Internal variables:
@@ -249,8 +249,8 @@
 // s.mu (RWMutex) protects:
 //   - workers map (workerID -> WorkerContext)
 //   - children map (childName -> SupervisorInterface)
-//   - userSpec, globalVars, cachedDesiredState
-//   - pendingRestart, restartRequestedAt maps
+//   - userSpec, cachedDesiredState
+//   - pendingRemoval, pendingRestart, restartRequestedAt
 //
 // Read lock: Accessing workers/children without modification
 // Write lock: Adding/removing workers/children, updating configuration
