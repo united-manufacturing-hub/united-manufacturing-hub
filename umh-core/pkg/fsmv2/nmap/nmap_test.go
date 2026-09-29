@@ -55,17 +55,14 @@ func hostPort(addr string) (string, uint16) {
 	return host, uint16(p)
 }
 
-// newPollDeps builds the deps value Poll dials through, via newDeps. The
-// framework's BaseDependencies are not part of nmap's deps, so a nil one is
-// all there is to hand.
+// newPollDeps builds the deps value Poll dials through, via newDeps.
 func newPollDeps(m map[string]any) fsmv2nmap.Deps {
 	id := deps.Identity{ID: "nmap-poll", WorkerType: fsmv2nmap.WorkerType}
 
 	return fsmv2nmap.NewDepsForTest(id, nil, m)
 }
 
-// nmapID builds the identity a supervisor hands an nmap worker, with the
-// hierarchy path the supervisor reports it under.
+// nmapID builds the identity a supervisor hands an nmap worker.
 func nmapID() deps.Identity {
 	return deps.Identity{
 		ID:            "nmap-001",
@@ -342,8 +339,6 @@ var _ = Describe("the registered nmap worker type", func() {
 	})
 
 	It("does not satisfy the injection interfaces supervisor/api.go asserts on the deps", func() {
-		// Framework telemetry for nmap comes from the collector (PR #2678),
-		// not from its dependencies.
 		bound := boundDepsOf(nmapID(), nil)
 
 		_, setsActionHistory := any(bound).(interface{ SetActionHistory([]deps.ActionResult) })

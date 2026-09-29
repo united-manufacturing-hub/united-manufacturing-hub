@@ -70,9 +70,7 @@ type Dialer interface {
 // observe the dial.
 var DialerKey = fsmv2config.NewDependencyKey[Dialer]("nmap.dialer")
 
-// Deps is the per-instance value Poll receives. It holds only the dialer:
-// framework telemetry for nmap comes from the collector, not from its
-// dependencies.
+// Deps is the per-instance value Poll receives.
 type Deps struct {
 	dialer Dialer
 }
