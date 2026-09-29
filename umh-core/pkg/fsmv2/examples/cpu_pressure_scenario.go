@@ -36,11 +36,11 @@ const (
 	// that, and a mismatch makes every read fail.
 	cpuPressureBase = "/sys/fs/cgroup"
 
-	// cpuPressureCalm is one point under the pressure signal's 0.20 fire mark,
-	// so the crossing later is a one-point change.
+	// cpuPressureCalm is one point under 0.20, the pressure at which the
+	// pressure signal fires, so the crossing later is a one-point change.
 	cpuPressureCalm = 0.19
 
-	// cpuPressureFiring is over that fire mark, so the signal fires.
+	// cpuPressureFiring is over 0.20, so the signal fires.
 	cpuPressureFiring = 0.25
 
 	// cpuPressureCores is the fake machine's CPU count, and cpuPressureHostBusy
@@ -78,13 +78,14 @@ const (
 // busy but not full, and steps its PSI pressure across the mark at which the
 // pressure signal fires.
 //
-// The story is that a machine can be degraded with cores to spare, because
-// tasks are queueing rather than because capacity ran out. Sixty percent of
-// four cores leaves the capacity signal clear throughout; pressure alone moves,
-// from one point under its fire mark to over it.
+// The story is that pressure alone degrades the machine: tasks are queueing
+// for a free core. Pressure moves from 19% to 25%, over the 20% at which the
+// monitor degrades. The scenario does not check the capacity signal. It
+// averages over 60 seconds and the run is a few seconds long, so its line
+// reads "Machine headroom not available (measuring)" throughout.
 var CPUPressureScenarioV2 = ScenarioV2{
 	Name:        "cpu-pressure",
-	Description: "Steps a fake machine's CPU pressure over its fire mark while capacity stays clear (v2)",
+	Description: "Raises a fake machine's CPU pressure from 19% to 25%, over the 20% at which the monitor degrades (v2)",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		box := newTickingBox(cpuPressureBase, cpuPressureMachine(cpuPressureCalm))
@@ -109,7 +110,7 @@ var CPUPressureScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("create the cpu monitor on a busy machine with pressure one point under its fire mark")
+		env.Step("create the cpu monitor on a machine using 60% of 4 cores, with CPU pressure at 19%, under the 20% at which the monitor degrades")
 
 		if err := env.Client.Upsert(fsmv2cpu.Ref, nil); err != nil {
 			return fmt.Errorf("upsert cpu monitor: %w", err)
@@ -119,7 +120,7 @@ var CPUPressureScenarioV2 = ScenarioV2{
 		// wall ticker cannot move it and this text holds while the machine
 		// stays at 0.19. The usage-headroom line beside it is a rate, which the
 		// ticker does move, so the wait pins the level and not the rate.
-		if err := waitCPUFirstReading(ctx, env, "first reading healthy under the fire mark", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
+		if err := waitCPUFirstReading(ctx, env, "first reading healthy with pressure at 19%", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Verdict.State == cpuhealth.StateHealthy
 			done := healthy && strings.Contains(st.Result.Message, "Pressure 19% (degrades above 20%)")
 
@@ -128,13 +129,13 @@ var CPUPressureScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("raise the machine's pressure over its fire mark")
+		env.Step("raise CPU pressure to 25%; wait for the worker to go degraded")
 		machine.box.Set(cpuPressureMachine(cpuPressureFiring))
 
 		// PSI is a level, so the next reading fires the signal, and the latch
 		// holds it while pressure stays over the 0.12 clear mark: this
 		// condition lasts to the end of the run.
-		return waitCPUFresh(ctx, env, "degraded by pressure over the fire mark", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
+		return waitCPUFresh(ctx, env, "degraded by pressure at 25%", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			degraded := st.Degraded && st.Result.Verdict.State == cpuhealth.StateDegraded
 			done := degraded && strings.Contains(st.Result.Message, "spent 25% of the last minute waiting for a free CPU core")
 

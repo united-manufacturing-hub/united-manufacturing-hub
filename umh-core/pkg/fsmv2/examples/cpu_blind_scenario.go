@@ -66,10 +66,12 @@ const (
 // CPUBlindScenarioV2 drives the real CPU monitor over a fake machine and then
 // takes away, one at a time, the two files it reads its numbers from.
 //
-// The story is that neither outage disturbs the reading: the worker stays
-// healthy and Fresh through both, reporting that CPU monitoring is
-// unavailable. Under the 2026-09-23 decision (ENG-5815) a machine the worker
-// cannot measure is reported healthy.
+// The story is that neither outage changes the worker's state. It stays
+// running, healthy and Fresh through both, and its message becomes "CPU
+// monitoring unavailable". Each outage logs one cpu::read_failed warning,
+// which the scenario expects. Under the 2026-09-23 decision (ENG-5815) a
+// machine the worker cannot measure is reported healthy; ENG-6319 tracks
+// changing that.
 //
 // The second outage keeps the first, so the story tests the two failures
 // rather than a recovery.
@@ -123,10 +125,10 @@ var CPUBlindScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("take /proc/stat away")
+		env.Step("take /proc/stat away; expect one cpu::read_failed warning, and the worker stays running and healthy")
 		machine.box.Set(cpuBlindMachine(cpuBlindHostStat))
 
-		if err := waitCPUFresh(ctx, env, "healthy without /proc/stat", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
+		if err := waitCPUFresh(ctx, env, "healthy with \"CPU monitoring unavailable\" without /proc/stat", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Message == cpuBlindUnavailableMessage
 
 			return healthy, cpuStatusSeen(st)
@@ -134,11 +136,11 @@ var CPUBlindScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("take cpu.stat away as well")
+		env.Step("take cpu.stat away as well; expect a second cpu::read_failed warning, and the worker stays running and healthy")
 		setAt := machine.box.MachineNow()
 		machine.box.Set(cpuBlindMachine(cpuBlindHostStat, cpuBlindCgroupStat))
 
-		return waitCPUFresh(ctx, env, "healthy without cpu.stat for the hold", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
+		return waitCPUFresh(ctx, env, "healthy without cpu.stat for 5 seconds of machine time", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Message == cpuBlindUnavailableMessage
 			held := machine.box.MachineNow().Sub(setAt) >= cpuBlindHold
 
