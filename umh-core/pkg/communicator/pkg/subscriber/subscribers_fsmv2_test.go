@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"go.uber.org/zap"
 )
@@ -63,8 +64,9 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				logger,
 				nil, // topicBrowserCommunicator
 				fsmOutboundChannel,
-				nil, // gatekeeperOutboundChannel
-				nil, // featureUsage
+				nil,                    // gatekeeperOutboundChannel
+				nil,                    // featureUsage
+				deps.NewNopFSMLogger(), // fsmLogger
 			)
 		})
 
@@ -99,10 +101,11 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				nil, // systemSnapshotManager
 				nil, // configManager
 				logger,
-				nil, // topicBrowserCommunicator
-				nil, // fsmOutboundChannel - nil for legacy mode
-				nil, // gatekeeperOutboundChannel
-				nil, // featureUsage
+				nil,                    // topicBrowserCommunicator
+				nil,                    // fsmOutboundChannel - nil for legacy mode
+				nil,                    // gatekeeperOutboundChannel
+				nil,                    // featureUsage
+				deps.NewNopFSMLogger(), // fsmLogger
 			)
 		})
 
@@ -133,9 +136,10 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				nil,
 				logger,
 				nil,
-				nil, // legacy mode
-				nil, // gatekeeperOutboundChannel
-				nil, // featureUsage
+				nil,                    // legacy mode
+				nil,                    // gatekeeperOutboundChannel
+				nil,                    // featureUsage
+				deps.NewNopFSMLogger(), // fsmLogger
 			)
 
 			// Create FSMv2 handler (with channel)
@@ -154,9 +158,10 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				nil,
 				logger,
 				nil,
-				fsmv2Channel, // FSMv2 mode
-				nil, // gatekeeperOutboundChannel
-				nil, // featureUsage
+				fsmv2Channel,           // FSMv2 mode
+				nil,                    // gatekeeperOutboundChannel
+				nil,                    // featureUsage
+				deps.NewNopFSMLogger(), // fsmLogger
 			)
 
 			// Both handlers should work independently

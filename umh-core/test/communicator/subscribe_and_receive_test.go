@@ -38,6 +38,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
@@ -194,9 +195,10 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			config.NewMockConfigManager(),
 			logger.For(logger.ComponentCommunicator),
 			topicBrowserCommunicator,
-			nil, // fsmOutboundChannel - nil for legacy mode test
-			nil, // gatekeeperOutboundChannel
-			nil, // featureUsage
+			nil,                    // fsmOutboundChannel - nil for legacy mode test
+			nil,                    // gatekeeperOutboundChannel
+			nil,                    // featureUsage
+			deps.NewNopFSMLogger(), // fsmLogger
 		)
 		subHandler.StartNotifier()
 

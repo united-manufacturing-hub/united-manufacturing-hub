@@ -26,7 +26,7 @@ import (
 )
 
 // TestCommunicatorFSMLoggerWiredToSentryHook locks the invariant that the
-// FSMLogger constructed by communicatorFSMLogger() routes through the
+// FSMLogger constructed by CommunicatorFSMLogger() routes through the
 // package-level SentryHook. The original bug was that
 // HandleActionMessage built deps.NewFSMLogger(log) directly, so SentryWarn
 // and SentryError calls emitted structured zap entries but never reached
@@ -38,10 +38,10 @@ import (
 // it. This test asserts the hook INTERCEPTED the entry by checking that
 // the debouncer's lastSeen map was updated for the expected fingerprint.
 func TestCommunicatorFSMLoggerWiredToSentryHook(t *testing.T) {
-	logger := communicatorFSMLogger()
+	logger := CommunicatorFSMLogger()
 
 	if communicatorSentryHook == nil {
-		t.Fatal("communicatorSentryHook nil after communicatorFSMLogger() — Once.Do did not run")
+		t.Fatal("communicatorSentryHook nil after CommunicatorFSMLogger() — Once.Do did not run")
 	}
 
 	// Use a unique event_name so the fingerprint cannot collide with any
@@ -82,6 +82,6 @@ func TestCommunicatorFSMLoggerWiredToSentryHook(t *testing.T) {
 	// (i.e., we regressed back to a bare FSMLogger), the lastSeen map
 	// is empty for this fingerprint and ShouldCapture returns true.
 	if communicatorSentryHook.Debouncer().ShouldCapture(expectedFingerprint) {
-		t.Errorf("SentryHook did not intercept FSMLogger.SentryError — communicatorFSMLogger() is not wrapping the logger with the hook")
+		t.Errorf("SentryHook did not intercept FSMLogger.SentryError — CommunicatorFSMLogger() is not wrapping the logger with the hook")
 	}
 }
