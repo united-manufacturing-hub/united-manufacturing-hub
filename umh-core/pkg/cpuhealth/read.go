@@ -274,15 +274,6 @@ func statOutcome(stat statRead, err error) ReadOutcome {
 	return ReadOK
 }
 
-func readPaths(cgroup cgroupReader) map[ReadOperation]string {
-	paths := make(map[ReadOperation]string, len(allReadOperations))
-	for _, spec := range allReadOperations {
-		paths[spec.Operation] = cgroup.pathOf(spec.Operation)
-	}
-
-	return paths
-}
-
 // seedReads returns one ReadNotAttempted entry per operation, in
 // allReadOperations order.
 func seedReads() []ReadResult {

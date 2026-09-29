@@ -38,6 +38,15 @@ type cgroupReader interface {
 	pathOf(operation ReadOperation) string
 }
 
+func readPaths(cgroup cgroupReader) map[ReadOperation]string {
+	paths := make(map[ReadOperation]string, len(allReadOperations))
+	for _, spec := range allReadOperations {
+		paths[spec.Operation] = cgroup.pathOf(spec.Operation)
+	}
+
+	return paths
+}
+
 // usageBaseline is the previous tick's usage total, from which advanceUsageRate
 // derives the instantaneous usage rate. have is false before the first
 // successful read; a falling edge (a counter reset) re-baselines instead of
