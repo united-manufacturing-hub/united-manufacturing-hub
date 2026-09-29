@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The injected clock. NewLinuxSamplerWithClock builds a sampler that stamps
-// every Sample from the clock it was handed, so a caller that moves the clock
-// moves every stamp with it. A sampler still calling time.Now() stamps wall
-// time, which cannot equal an instant pinned to 2020-03-14T15:09:26Z — the
-// pinned-instant assertion below can only pass by reading the injected clock.
 package cpuhealth_test
 
 import (
@@ -32,6 +27,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+// A sampler stamping from time.Now() cannot produce the instant these specs
+// pin, 2020-03-14T15:09:26Z, so only the injected clock can pass them.
 var _ = Describe("sampler-injected clock", func() {
 	const base = "/sys/fs/cgroup"
 
@@ -81,12 +78,10 @@ var _ = Describe("sampler-injected clock", func() {
 			"the second Sample must land exactly d after the first on the injected clock")
 	})
 
-	// Both rate derivations divide their counter deltas by the elapsed time
-	// between two Samples. Every other rate test derives that elapsed from the
-	// samples' own Timestamps, which is circular here: this spec advances the
-	// mock clock and serves higher counters, so the elapsed the rates divide
-	// by can only be the injected clock's d. A sampler stamping from time.Now()
-	// would divide the same deltas by microseconds of wall time.
+	// Both rates divide counter deltas by the elapsed time between two
+	// Samples. This spec moves the mock clock by d and serves higher counters,
+	// so the rates are right only if that elapsed is d. A sampler stamping
+	// from time.Now() would divide by microseconds of wall time.
 	It("derives both rates from the injected clock's elapsed, not wall time", func() {
 		ctx := context.Background()
 		clk := clock.NewMock()

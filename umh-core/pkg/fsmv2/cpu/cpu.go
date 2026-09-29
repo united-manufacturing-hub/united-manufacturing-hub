@@ -49,9 +49,7 @@ const (
 	//
 	// A key holds one value, so each payload gets its own key rather than
 	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
-	// A value in the worker's dependency map wins over what is published here:
-	// the same literal, cpu.filesystem, also names the map key
-	// (FilesystemKey), which NewDeps reads before this global.
+	// NewDeps reads FilesystemKey in the dependency map before this global.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
@@ -65,8 +63,8 @@ const (
 
 	// MaxObservationAge is the oldest a reading may be and still count as
 	// Fresh for fsmv2client.GetFresh. The container monitor and the CPU
-	// scenarios both use it, so the two cannot drift; one slow or missed poll
-	// cannot flip the instance to degraded.
+	// scenarios both read it. At three polls, one slow or missed poll leaves
+	// the reading Fresh.
 	MaxObservationAge = 3 * PollInterval
 )
 
@@ -205,9 +203,9 @@ func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.D
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
-// (precedent: pkg/fsm/container/machine.go) over the first filesystem that
-// provides one, takes one startup snapshot through it, and builds the table
-// and engine.
+// (precedent: pkg/fsm/container/machine.go) over the filesystem FilesystemKey's
+// doc names, takes one startup snapshot through it, and builds the table and
+// engine.
 //
 // A read that fails at startup leaves its own figure zero, which drops that
 // capacity signal from this instance's table for its whole lifetime; a later

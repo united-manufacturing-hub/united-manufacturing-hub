@@ -42,20 +42,13 @@ var _ = Describe("CPU host ScenarioV2", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// This spec asserts what the machine it runs on requires, so it asks
-		// that machine the same question the driver asks: do the cgroup v2
-		// CPU accounting files exist? Without them every reading says CPU
-		// monitoring is unavailable, so there is nothing to watch and the
-		// driver refuses. Only one arm can run per machine: macOS and
-		// cgroup v1 hosts take the refusal, a cgroup v2 host the proceed.
-		// Neither arm skips, so a developer always sees the arm their
-		// machine exercises.
+		// The spec asks the machine the question the scenario's Run asks:
+		// does /sys/fs/cgroup/cpu.stat exist? Only one arm can run per machine: macOS and cgroup v1 hosts
+		// take the refusal, a cgroup v2 host the proceed.
 		_, statErr := os.Stat("/sys/fs/cgroup/cpu.stat")
 
-		// The refusal arm needs almost none of this budget: the driver checks
-		// the file before it upserts anything. The proceed arm needs the
-		// worker to take and publish one reading, which is a handful of its
-		// one-second polls, plus the settle window.
+		// The budget is for the proceed arm: a handful of one-second polls,
+		// then teardown. The refusal returns before anything is upserted.
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -68,11 +61,9 @@ var _ = Describe("CPU host ScenarioV2", func() {
 		})
 
 		if statErr != nil {
-			// The driver's error returns synchronously and teardown has
-			// already finished by the time Run reports it, so there is no
-			// Done channel to wait for. The message has to name the tool,
-			// because a developer on a Mac has no other way to learn that
-			// the readings exist only inside a Linux container.
+			// The scenario's error returns synchronously, after teardown, so
+			// there is no Done channel to wait for. The message names the
+			// tool, the only place a developer on a Mac learns of it.
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("tools/cpu-host"))
 
@@ -80,9 +71,7 @@ var _ = Describe("CPU host ScenarioV2", func() {
 		}
 
 		// The readable arm: the refusal must not fire here. The run may still
-		// fail for its own reasons: a machine whose cpu.stat exists but is
-		// unreadable serves the worker nothing but unavailable readings, and
-		// ends the run on the context deadline.
+		// fail for its own reasons, so only the refusal's absence is asserted.
 		if err != nil {
 			Expect(err.Error()).NotTo(ContainSubstring("tools/cpu-host"))
 

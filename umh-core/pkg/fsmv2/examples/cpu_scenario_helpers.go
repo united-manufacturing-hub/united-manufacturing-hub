@@ -45,9 +45,7 @@ type cpuMachine struct {
 }
 
 // cpuMachineFromDeps reads the scenario's fake machine back out of the
-// dependency map, so Run can change the condition or hang a read. The map is
-// the same one the supervisor builds workers from, so the machine Run holds is
-// the machine the worker reads.
+// dependency map, the same map the supervisor builds the worker from.
 func cpuMachineFromDeps(env Env) (*cpuMachine, error) {
 	raw, ok := config.LookupDependency(env.Dependencies, fsmv2cpu.FilesystemKey)
 	if !ok {
@@ -139,10 +137,9 @@ func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(s
 	})
 }
 
-// waitCPUFresh waits for pass to hold on a Fresh reading. Any freshness other
-// than Fresh fails the wait at once, naming it and the stage: through a normal
-// hold the reading stays Fresh, and a gap long enough to stale it would also
-// make the container monitor refuse bridges.
+// waitCPUFresh waits for pass to hold on a Fresh reading. Any other freshness
+// fails the wait at once: a reading old enough to be Stale would also make the
+// container monitor refuse bridges.
 func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
 	return env.WaitFor(ctx, check, func(ctx context.Context) (bool, string, error) {
 		st, fresh, err := cpuReading(ctx, env)
@@ -160,32 +157,20 @@ func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.S
 	})
 }
 
-// tickingBox is a fakebox.Box that runs, and that can be read while it runs.
-//
-// A Box does neither on its own, and a worker under a supervisor needs both.
-// Its counters and its clock move only when someone calls Tick, so a Box
-// handed straight to such a worker serves a machine frozen at zero. And a Box
-// is not safe for concurrent use, while the collector reads it from its own
-// goroutine.
+// tickingBox is a fakebox.Box that advances on its own and can be read while
+// it does. A plain Box moves only when someone calls Tick, and is not safe for
+// the collector's goroutine to read.
 //
 // Both the filesystem and the clock go into the dependency map together, in
-// the scenario's Dependencies. Tick moves the counters and the clock by the
-// same amount, so once the sampler stamps from that clock, the time it divides
-// by and the counters it divides are the same quantity, and the rate that
-// comes out is the rate the condition states. Publishing only one of the two
-// fails quietly: a filesystem with no clock leaves the sampler stamping wall
-// time while the counters accrue on the box's clock, and a clock nothing
-// advances leaves every rate withheld, because the sampler's elapsed time is
-// never positive.
+// the scenario's Dependencies. Publishing only one fails quietly: a filesystem
+// with no clock leaves the sampler stamping wall time while the counters
+// accrue on the box's clock.
 //
-// Everything that touches the Box's counters goes through the one mutex here:
-// the reads the collector makes, the ticks, and Set. The clock is not covered
-// by it and does not need to be, because clock.Mock synchronises itself. What
-// that leaves is an ordering gap rather than a race. The sampler stamps once
-// at the top of a read and then opens the files, so a tick landing after the
-// stamp adds counters the stamp does not account for, and whichever source is
-// read after that tick reports a rate too high by one tick's worth. Only one
-// tick can fit, so the overstatement is bounded.
+// One mutex covers everything that touches the Box's counters: the reads, the
+// ticks, and Set. clock.Mock synchronises itself. The sampler stamps once at
+// the top of a read and then opens the files, so a wall-clock tick landing
+// after the stamp makes that one reading overstate its rate by one tick's
+// worth.
 type tickingBox struct {
 	box  *fakebox.Box
 	stop chan struct{}
@@ -215,8 +200,7 @@ func newTickingBox(base string, initial fakebox.Condition) *tickingBox {
 }
 
 // fs returns a filesystem service serving this box, safe to read while the box
-// advances. It wraps the Box's own service rather than replacing it, so what a
-// reader gets back is whatever the Box would have served.
+// advances.
 func (t *tickingBox) fs() filesystem.Service {
 	inner := t.box.FS()
 
@@ -225,16 +209,10 @@ func (t *tickingBox) fs() filesystem.Service {
 		t.mu.Lock()
 		defer t.mu.Unlock()
 
-		// The read-driven advance. cpu.pressure is opened once per read,
-		// before anything that can fail the read early, so seeing it is
-		// seeing a read begin. It ticks even when the condition makes that
-		// file unreadable, because the box serves the failure rather than
-		// skipping the open.
-		//
-		// The tick lands after the sampler has stamped the read and before
-		// any file is served, so the stamp trails the counters by one tick,
-		// the same one tick on every read. StartPerRead carries what that
-		// exactness buys a scenario.
+		// The read-driven advance. The sampler opens cpu.pressure once per
+		// read, after it stamps the read and before any other counter file,
+		// so each read covers exactly one tick. It ticks even when the
+		// condition makes cpu.pressure unreadable.
 		if t.perRead > 0 && path == t.base+"/cpu.pressure" {
 			t.box.Tick(t.perRead)
 		}
@@ -245,20 +223,14 @@ func (t *tickingBox) fs() filesystem.Service {
 	return guarded
 }
 
-// MachineNow reads the box's own clock: the instant the sampler stamps its
-// samples from, and the one every window span and release rule downstream is
-// denominated in. A scenario whose story is measured in machine time reads
-// this rather than the wall clock.
-//
-// clock.Mock synchronises itself, so this is safe to call while the box ticks.
+// MachineNow reads the box's own clock, the one the sampler stamps its samples
+// from. It is safe to call while the box ticks.
 func (t *tickingBox) MachineNow() time.Time {
 	return t.box.Clock().Now()
 }
 
-// Set changes the condition later ticks accrue at, and takes effect on the
-// next read for anything the box states directly rather than accrues. PSI
-// pressure is one of those: the kernel reports it as a level, so a Box writes
-// it rather than accumulating it.
+// Set changes the condition later ticks accrue at. A level such as PSI
+// pressure changes on the next read.
 func (t *tickingBox) Set(c fakebox.Condition) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -270,19 +242,10 @@ func (t *tickingBox) Set(c fakebox.Condition) {
 // time each tick advances, so machine time keeps pace with the wall clock.
 // Call it once.
 //
-// A ticker drops ticks under load rather than queueing them, and on the box's
-// own clock a drop withholds a tick's counters and a tick's clock together,
-// so no rate it reports is wrong.
-//
-// It does not lengthen the run either. Both the scenario's waits and the
-// worker's polls are on the wall clock, so a drop does not buy back the time:
-// it thins the run, leaving less machine time inside each wall-clock second.
-// The visible effect is fewer sample-seconds per reading, not a longer story.
-//
-// Enough consecutive drops to span a whole poll is the case that is not merely
-// thinner. Machine time then does not advance between two reads at all, the
-// sampler's elapsed is zero, and that reading is withheld rather than served
-// low.
+// A ticker drops ticks under load. A drop withholds a tick's counters and a
+// tick's clock together, so no rate is wrong; the run just has less machine
+// time per wall-clock second. If drops span a whole poll, machine time does
+// not advance between two reads, and that reading has no rate.
 func (t *tickingBox) Start(every time.Duration) {
 	t.startTicker(every, every)
 }
@@ -290,14 +253,10 @@ func (t *tickingBox) Start(every time.Duration) {
 // StartPerRead advances the box by advance once per sampler read, rather than
 // on a wall-clock ticker. Call it once, and not beside Start.
 //
-// It is exact rather than merely repeatable. Every reading covers one tick of
-// counters over one tick of clock, so the rate is the one the condition
-// states, with none of the straddling a wall-clock ticker has to bound.
-//
-// The price is that machine time now advances only while the worker is
-// reading. A scenario waiting on this clock waits out its ctx if the worker
-// stops polling, and how much wall time a machine second costs is the
-// collector's cadence rather than a ticker's.
+// Every reading then covers one tick of counters over one tick of clock, so
+// the rate is exactly the one the condition states. Machine time advances
+// only while the worker reads: a scenario waiting on this clock waits out its
+// ctx if the worker stops polling.
 func (t *tickingBox) StartPerRead(advance time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -334,12 +293,8 @@ func (t *tickingBox) startTicker(interval, advance time.Duration) {
 // worker keeps making no longer move machine time.
 //
 // Stop runs in the scenario's Dependencies cleanup, after the supervisor has
-// stopped (the ScenarioV2.Dependencies doc), so the box keeps advancing
-// through the whole settle window and the readings of that window keep their
-// rates.
-//
-// A stopped box has stopped its clock too, so a read the worker makes after
-// Stop finds no elapsed time to divide by and serves no rate at all.
+// stopped (the ScenarioV2.Dependencies doc), so the box advances for every
+// read the worker makes.
 func (t *tickingBox) Stop() {
 	t.mu.Lock()
 	t.perRead = 0

@@ -37,12 +37,9 @@ const (
 	cpuBlindBase = "/sys/fs/cgroup"
 
 	// The files this scenario takes away, in the order it takes them.
-	//
-	// /proc/stat is the machine's own CPU accounting, a HOST file outside the
-	// cgroup. cpu.stat is the cgroup's. Neither one fails the sample when it
-	// cannot be read: since #2758 an unreadable cpu.stat reads as absent, the
-	// same as an unreadable /proc/stat, so losing either file costs its
-	// readings and nothing else.
+	// /proc/stat is the machine's CPU accounting, outside the cgroup; cpu.stat
+	// is the cgroup's. The sampler reads either one, when it cannot be opened,
+	// as absent: losing it costs its readings and does not fail the sample.
 	cpuBlindHostStat   = "/proc/stat"
 	cpuBlindCgroupStat = cpuBlindBase + "/cpu.stat"
 
@@ -55,11 +52,9 @@ const (
 	cpuBlindUsageCores = 0.5
 	cpuBlindPressure   = 0.02
 
-	// cpuBlindHold is how much machine time the second outage must last, so
-	// the wait proves the worker stayed healthy over many readings without
-	// cpu.stat rather than on the one reading the Set produced. The box
-	// advances one machine second per read, so the hold is that many readings
-	// without the file.
+	// cpuBlindHold is how much machine time the second outage must last. The
+	// box advances one machine second per read, so the wait sees that many
+	// readings without cpu.stat, not only the one the Set produced.
 	cpuBlindHold = 5 * time.Second
 
 	// cpuBlindUnavailableMessage is what the worker reports once no machine
@@ -80,13 +75,8 @@ const (
 // readings to prove it. Under the 2026-09-23 decision (ENG-5815) a machine the
 // worker cannot measure is reported healthy, which is what it does.
 //
-// The second outage keeps the first, because a machine losing sight of itself
-// does not usually get one file back as it loses another, and because a story
-// that restored /proc/stat would be testing recovery rather than the two
-// failures.
-//
-// The two failed reads each log a cpu::read_failed warning, which the run
-// expects.
+// The second outage keeps the first, so the story tests the two failures
+// rather than a recovery.
 //
 // On every change of the worker's message the state_transition line's reason
 // field carries it at info.
@@ -110,8 +100,7 @@ var CPUBlindScenarioV2 = ScenarioV2{
 
 		// The box advances on the sampler's read of cpu.pressure, which this
 		// scenario never takes away, so machine time keeps moving through both
-		// outages, including the last one, where the read of cpu.stat fails
-		// before the sampler reaches most of the files.
+		// outages.
 		box.StartPerRead(cpuMachineSecond)
 
 		return m, box.Stop, nil
@@ -148,7 +137,6 @@ var CPUBlindScenarioV2 = ScenarioV2{
 
 		// No machine CPU count means no capacity to budget against, so the
 		// message says monitoring is unavailable and the verdict stays healthy.
-		// This holds while the file is gone.
 		if err := waitCPUFresh(ctx, env, "healthy without /proc/stat", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Message == cpuBlindUnavailableMessage
 
@@ -161,10 +149,6 @@ var CPUBlindScenarioV2 = ScenarioV2{
 		setAt := machine.box.MachineNow()
 		machine.box.Set(cpuBlindMachine(cpuBlindHostStat, cpuBlindCgroupStat))
 
-		// The hold is measured on the machine's clock, which moves one second
-		// per read: the wait is done only after several readings have gone by
-		// without cpu.stat, still healthy, with the same message. This is the
-		// explicit check that a missing file does not stale the reading.
 		return waitCPUFresh(ctx, env, "healthy without cpu.stat for the hold", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Message == cpuBlindUnavailableMessage
 			held := machine.box.MachineNow().Sub(setAt) >= cpuBlindHold
@@ -177,12 +161,7 @@ var CPUBlindScenarioV2 = ScenarioV2{
 }
 
 // cpuBlindMachine is this scenario's machine with the named files unreadable.
-// Everything else is the same in all three conditions, so the three calls
-// differ by exactly what the machine can no longer see.
-//
-// fakebox rejects a path it does not serve rather than ignoring it, so a
-// mistyped name here fails the run instead of leaving the scenario asserting
-// against the readable machine it was written to rule out.
+// The calls differ only in which files the machine can no longer see.
 func cpuBlindMachine(unreadable ...string) fakebox.Condition {
 	return fakebox.Condition{
 		Cores:      cpuBlindCores,
