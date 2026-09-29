@@ -63,6 +63,12 @@ func (c *FSMv2Client) Upsert(ref dynamicchildren.Ref, cfg map[string]any) error 
 	return c.w.Upsert(ref, cfg)
 }
 
+// SetVariables passes vars to the wrapped Writer. See Writer.SetVariables
+// for what it replaces.
+func (c *FSMv2Client) SetVariables(vars config.VariableBundle) {
+	c.w.SetVariables(vars)
+}
+
 // Delete removes ref from the wrapped Writer.
 func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
 	c.w.Delete(ref)
