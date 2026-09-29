@@ -17,7 +17,10 @@ package fsmv2memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/mem"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -42,6 +45,8 @@ const (
 
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
+var errZeroTotal = errors.New("memory total is zero")
+
 type MemoryConfig struct{}
 
 type MemorySource string
@@ -60,10 +65,13 @@ type MemoryStatus struct {
 	Message     string       `json:"message"`
 }
 
+type HostMemoryReader func(ctx context.Context) (usedBytes, totalBytes uint64, err error)
+
 type MemoryDeps struct {
 	*deps.BaseDependencies
 
 	filesystem filesystem.Service
+	hostMemory HostMemoryReader
 }
 
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *MemoryDeps {
@@ -72,28 +80,65 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *MemoryDeps {
 		fs = filesystem.NewDefaultService()
 	}
 
-	return &MemoryDeps{BaseDependencies: bd, filesystem: fs}
+	return &MemoryDeps{BaseDependencies: bd, filesystem: fs, hostMemory: readHostMemory}
+}
+
+func readHostMemory(ctx context.Context) (uint64, uint64, error) {
+	virtualMemory, err := mem.VirtualMemoryWithContext(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return virtualMemory.Used, virtualMemory.Total, nil
 }
 
 func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, error) {
-	cgroup, err := ReadCgroupMemory(ctx, d.filesystem, cgroupBase)
+	cgroup, cgroupErr := ReadCgroupMemory(ctx, d.filesystem, cgroupBase)
+	if ctx.Err() != nil {
+		return MemoryStatus{}, ctx.Err()
+	}
+
+	status, err := chooseSource(ctx, d, cgroup, cgroupErr)
 	if err != nil {
 		return MemoryStatus{}, err
 	}
 
-	if cgroup.Unlimited || cgroup.LimitBytes == 0 {
-		return MemoryStatus{}, errors.New("cgroup memory has no limit")
+	if status.TotalBytes <= 0 {
+		return MemoryStatus{}, errZeroTotal
 	}
 
-	status := MemoryStatus{
-		Source:     SourceCgroup,
-		UsedBytes:  cgroup.CurrentBytes,
-		TotalBytes: cgroup.LimitBytes,
-	}
 	status.UsedPercent = usedPercent(status.UsedBytes, status.TotalBytes)
 	status.Message = messageFor(status.UsedPercent)
 
 	return status, nil
+}
+
+func chooseSource(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory, cgroupErr error) (MemoryStatus, error) {
+	cgroupHasLimit := cgroupErr == nil && !cgroup.Unlimited && cgroup.LimitBytes > 0
+	if cgroupHasLimit {
+		return MemoryStatus{Source: SourceCgroup, UsedBytes: cgroup.CurrentBytes, TotalBytes: cgroup.LimitBytes}, nil
+	}
+
+	hostUsed, hostTotal, hostErr := d.hostMemory(ctx)
+
+	if cgroupErr != nil {
+		if hostErr != nil {
+			return MemoryStatus{}, errors.Join(cgroupErr, hostErr)
+		}
+
+		return MemoryStatus{Source: SourceHost, UsedBytes: int64(hostUsed), TotalBytes: int64(hostTotal)}, nil
+	}
+
+	if hostErr != nil {
+		return MemoryStatus{}, fmt.Errorf("cgroup has no memory limit and the host total is unreadable: %w", hostErr)
+	}
+
+	return MemoryStatus{
+		Source:     SourceCgroup,
+		UsedBytes:  cgroup.CurrentBytes,
+		TotalBytes: int64(hostTotal),
+		Unlimited:  cgroup.Unlimited,
+	}, nil
 }
 
 func usedPercent(usedBytes, totalBytes int64) float64 {
