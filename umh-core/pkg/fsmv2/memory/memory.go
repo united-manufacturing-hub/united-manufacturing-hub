@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/mem"
@@ -70,8 +71,9 @@ type HostMemoryReader func(ctx context.Context) (usedBytes, totalBytes uint64, e
 type MemoryDeps struct {
 	*deps.BaseDependencies
 
-	filesystem filesystem.Service
-	hostMemory HostMemoryReader
+	filesystem    filesystem.Service
+	hostMemory    HostMemoryReader
+	reportedReads sync.Map
 }
 
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *MemoryDeps {
@@ -96,6 +98,10 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 	cgroup, cgroupErr := ReadCgroupMemory(ctx, d.filesystem, cgroupBase)
 	if ctx.Err() != nil {
 		return MemoryStatus{}, ctx.Err()
+	}
+
+	if cgroupErr != nil {
+		d.reportCgroupReadFailure(cgroupErr)
 	}
 
 	status, err := chooseSource(ctx, d, cgroup, cgroupErr)

@@ -110,9 +110,9 @@ var _ = Describe("the memory worker's poll", func() {
 })
 
 const (
-	eightGiBHost  = uint64(8589934592)
-	threeGiBHost  = uint64(3221225472)
-	halfGiBBytes  = int64(536870912)
+	eightGiBHost = uint64(8589934592)
+	threeGiBHost = uint64(3221225472)
+	halfGiBBytes = int64(536870912)
 )
 
 var _ = Describe("the memory worker's fallbacks", func() {
