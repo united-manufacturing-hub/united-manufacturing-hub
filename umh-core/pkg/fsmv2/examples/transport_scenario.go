@@ -86,12 +86,10 @@ drainLoop:
 	return messages
 }
 
-// relayServerKey holds the scenario's mock relay server. Only Run reads it;
-// the transport worker does not.
+// relayServerKey carries the mock relay server to Run; no worker reads it.
 var relayServerKey = config.NewDependencyKey[*testutil.MockRelayServer]("examples.relay_server")
 
-// TransportScenarioV2 runs one transport child against a mock relay server,
-// with a test channel provider in the dependency map.
+// TransportScenarioV2 runs a transport child against a mock relay server.
 var TransportScenarioV2 = ScenarioV2{
 	Name:        "transport",
 	Description: "Transport worker: authenticates against a mock relay server and pushes queued messages",
@@ -109,8 +107,7 @@ var TransportScenarioV2 = ScenarioV2{
 
 		deps := map[string]any{}
 
-		// Declared as the interface: a *TransportTestChannelProvider argument
-		// does not match the key's type, so SetDependency would not compile.
+		// Typed as the interface, or SetDependency cannot infer its type parameter.
 		var p transportWorker.ChannelProvider = provider
 		config.SetDependency(deps, transportWorker.ChannelProviderKey, p)
 		config.SetDependency(deps, relayServerKey, server)

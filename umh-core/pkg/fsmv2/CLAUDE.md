@@ -56,10 +56,9 @@ func NewDependencies(...) *Dependencies {
 }
 ```
 
-The transport worker first reads a provider from its dependency map, under
-`transport.ChannelProviderKey`, and only falls back to the global. That is how
-a scenario supplies a mock channel provider without touching the process
-global (see "Mocks" below).
+A scenario supplies a mock provider under `transport.ChannelProviderKey` in the
+dependency map; the worker falls back to the global when the key is absent (see
+"Mocks" below).
 
 This enables parent-child channel sharing without tight coupling.
 
