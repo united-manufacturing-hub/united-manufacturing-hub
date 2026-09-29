@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Container memory can now be measured by a new monitor as a preview, which says whether the reading came from the container or from the machine and publishes it on the `/metrics` endpoint. Requires `USE_FSMV2_MEMORY=true` and `USE_FSMV2_TRANSPORT=true`. With the preview on, memory counts as degraded, and new bridges are held back, whenever no recent reading is available
+
 ### Fixes
 
 - Log messages for stopped flows in bridges are now more consistent
