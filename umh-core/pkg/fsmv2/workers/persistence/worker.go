@@ -50,9 +50,8 @@ const (
 	DefaultMaintenanceInterval = snapshot.DefaultMaintenanceInterval
 )
 
-// StoreKey names the store in a worker's dependency map. The register.Worker
-// closure in init() uses that store when present, and otherwise the global
-// that cmd/main.go publishes through register.SetGlobalDeps.
+// StoreKey names the store in a worker's dependency map. When set, the
+// worker uses it instead of register.GlobalDeps, which cmd/main.go sets.
 var StoreKey = fsmv2config.NewDependencyKey[storage.TriangularStoreInterface]("persistence.store")
 
 // Compile-time interface check: PersistenceWorker implements fsmv2.Worker.
