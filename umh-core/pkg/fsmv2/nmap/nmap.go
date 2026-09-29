@@ -40,9 +40,6 @@ const (
 
 	// pollInterval is the cadence at which the framework calls Poll.
 	pollInterval = 1 * time.Second
-
-	// The dialer sets no timeout: the collector already bounds every Poll with
-	// its ObservationTimeout, which cancels the dial context.
 )
 
 // NmapStatus is the result of one TCP-dial observation of the target port.
@@ -66,7 +63,6 @@ type NmapStatus struct {
 
 // Dialer is the one dialing capability Poll needs. *net.Dialer satisfies it.
 type Dialer interface {
-	// DialContext dials one network address, as net.Dialer.DialContext does.
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
@@ -81,9 +77,9 @@ type Deps struct {
 	dialer Dialer
 }
 
-// newDeps builds the Deps Poll dials through: the Dialer stored under DialerKey
-// in m, or a net.Dialer with the key absent.
 func newDeps(_ deps.Identity, bd *deps.BaseDependencies, m map[string]any) Deps {
+	// No timeout: the collector bounds every Poll with its ObservationTimeout,
+	// which cancels the dial context.
 	var dialer Dialer = &net.Dialer{}
 
 	if injected, ok := fsmv2config.LookupDependency(m, DialerKey); ok {

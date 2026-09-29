@@ -74,10 +74,8 @@ func nmapID() deps.Identity {
 	}
 }
 
-// fakeDialer records every address it is asked to dial and answers with one
-// end of a net.Pipe, so a poll through it reports the port open without
-// anything listening. A non-nil err makes the dial fail with that error
-// instead.
+// fakeDialer records each address it dials. Its net.Pipe answer makes Poll
+// report the port open with nothing listening.
 type fakeDialer struct {
 	addresses []string
 	err       error
@@ -296,8 +294,8 @@ var _ = Describe("Nmap Poll dependencies", func() {
 })
 
 var _ = Describe("the registered nmap worker type", func() {
-	// boundDepsOf builds one instance the way production does, through the
-	// factory init() registered with, and returns the deps the worker bound.
+	// boundDepsOf builds one worker through the factory init() registered, as
+	// production does, and returns the Deps the worker holds.
 	boundDepsOf := func(id deps.Identity, dependencies map[string]any) fsmv2nmap.Deps {
 		w, err := factory.NewWorkerByType(fsmv2nmap.WorkerType, id, deps.NewNopFSMLogger(), nil, dependencies)
 		Expect(err).NotTo(HaveOccurred(), "init() left an instantiable factory for the worker type")
