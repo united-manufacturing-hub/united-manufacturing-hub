@@ -30,15 +30,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// cpuMachineSecond is one second of machine time, the amount a read-driven box
-// advances per sampler read. One read therefore lands one machine second after
-// the last, the cadence the worker reads at in production.
+// cpuMachineSecond is the machine time a read-driven box advances per sampler
+// read: one second, the cadence the worker reads at in production.
 const cpuMachineSecond = time.Second
 
 // cpuMachine is a scenario's fake CPU machine: a tickingBox wrapped in a
-// HangingFS, so reads of a chosen path can be held up mid-poll. It is a
-// filesystem.Service through the embedded wrapper, and holds the box so Run
-// can read machine time and change the condition.
+// HangingFS, so reads of a chosen path can be held up mid-poll. The
+// HangingFS wraps outside the box's mutex, so a hung read does not block Set
+// or Stop. It holds the box so Run can read machine time and change the
+// condition.
 type cpuMachine struct {
 	*fakebox.HangingFS
 	box *tickingBox
@@ -94,10 +94,9 @@ func firstLine(msg string) string {
 	return msg
 }
 
-// cpuStatusSeen renders the parts of a reading a wait names: the degraded
-// flag, the verdict's state, and the first line of the message. A poll that
-// failed composes no message, so the worker's reason stands in for it: that
-// is where the poll error is written.
+// cpuStatusSeen renders the parts of a reading a wait names. A poll that
+// failed composes no message, so the worker's reason, where the poll error is
+// written, stands in for it.
 func cpuStatusSeen(st simple.Status[fsmv2cpu.CPUStatus]) string {
 	msg := st.Result.Message
 	if msg == "" {
@@ -108,11 +107,9 @@ func cpuStatusSeen(st simple.Status[fsmv2cpu.CPUStatus]) string {
 		st.Degraded, st.Result.Verdict.State, firstLine(msg))
 }
 
-// waitCPUFirstReading waits for the worker's first Fresh reading and the
-// condition pass. NeverObserved means the first poll has not completed yet, so
-// it is not done rather than a failure. Unregistered and Stale are errors:
-// Upsert registers the worker synchronously, and no reading goes stale before
-// the first one exists.
+// waitCPUFirstReading waits for a Fresh reading on which pass holds.
+// NeverObserved means the first poll has not completed yet, so it is not done
+// rather than a failure.
 func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
 	return env.WaitFor(ctx, check, func(ctx context.Context) (bool, string, error) {
 		st, fresh, err := cpuReading(ctx, env)
@@ -138,8 +135,8 @@ func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(s
 }
 
 // waitCPUFresh waits for pass to hold on a Fresh reading. Any other freshness
-// fails the wait at once: a reading old enough to be Stale would also make the
-// container monitor refuse bridges.
+// fails the wait at once: the container monitor's judgeWorkerCPU reports any
+// reading that is not Fresh as degraded.
 func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
 	return env.WaitFor(ctx, check, func(ctx context.Context) (bool, string, error) {
 		st, fresh, err := cpuReading(ctx, env)
@@ -166,11 +163,8 @@ func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.S
 // with no clock leaves the sampler stamping wall time while the counters
 // accrue on the box's clock.
 //
-// One mutex covers everything that touches the Box's counters: the reads, the
-// ticks, and Set. clock.Mock synchronises itself. The sampler stamps once at
-// the top of a read and then opens the files, so a wall-clock tick landing
-// after the stamp makes that one reading overstate its rate by one tick's
-// worth.
+// mu covers every touch of the Box's counters: reads, ticks and Set. It is
+// taken per file, not per sampler read. clock.Mock synchronises itself.
 type tickingBox struct {
 	box  *fakebox.Box
 	stop chan struct{}
@@ -179,8 +173,7 @@ type tickingBox struct {
 	// can recognise the file the sampler opens once per read.
 	base string
 	// perRead is how much machine time one sampler read advances the box, and
-	// zero when the box is driven by a wall-clock ticker instead. StartPerRead
-	// sets it and Stop clears it.
+	// zero when the box is driven by a wall-clock ticker instead.
 	perRead time.Duration
 	// ticking records that a wall-clock ticker was started, so Stop knows
 	// whether there is a goroutine to join.
@@ -287,14 +280,11 @@ func (t *tickingBox) startTicker(interval, advance time.Duration) {
 	}()
 }
 
-// Stop halts the advancing and waits for it to have halted, so no tick lands
-// after Stop returns. It ends both modes: it joins the ticker goroutine when
-// there is one, and it stops a read-driven box advancing, so the reads the
-// worker keeps making no longer move machine time.
-//
-// Stop runs in the scenario's Dependencies cleanup, after the supervisor has
-// stopped (the ScenarioV2.Dependencies doc), so the box advances for every
-// read the worker makes.
+// Stop halts the advancing in either mode, joining the ticker goroutine when
+// there is one, so no tick lands after Stop returns. It runs in the scenario's
+// Dependencies cleanup, after the supervisor has stopped (the
+// ScenarioV2.Dependencies doc), so the box has advanced for every read the
+// worker made.
 func (t *tickingBox) Stop() {
 	t.mu.Lock()
 	t.perRead = 0

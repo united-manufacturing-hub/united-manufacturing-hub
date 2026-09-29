@@ -42,9 +42,9 @@ var _ = Describe("CPU host ScenarioV2", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// The spec asks the machine the question the scenario's Run asks:
-		// does /sys/fs/cgroup/cpu.stat exist? Only one arm can run per machine: macOS and cgroup v1 hosts
-		// take the refusal, a cgroup v2 host the proceed.
+		// Only one arm runs per machine: macOS and cgroup v1 hosts have no
+		// /sys/fs/cgroup/cpu.stat and take the refusal; a cgroup v2 host
+		// proceeds.
 		_, statErr := os.Stat("/sys/fs/cgroup/cpu.stat")
 
 		// The budget is for the proceed arm: a handful of one-second polls,

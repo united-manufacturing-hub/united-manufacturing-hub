@@ -78,10 +78,6 @@ var _ = Describe("sampler-injected clock", func() {
 			"the second Sample must land exactly d after the first on the injected clock")
 	})
 
-	// Both rates divide counter deltas by the elapsed time between two
-	// Samples. This spec moves the mock clock by d and serves higher counters,
-	// so the rates are right only if that elapsed is d. A sampler stamping
-	// from time.Now() would divide by microseconds of wall time.
 	It("derives both rates from the injected clock's elapsed, not wall time", func() {
 		ctx := context.Background()
 		clk := clock.NewMock()
@@ -132,15 +128,11 @@ var _ = Describe("sampler-injected clock", func() {
 		second, err := s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// UsageCores: the usage_usec delta 7000000 over 1e6 over the injected
-		// clock's 7s is exactly one core.
 		usage, ok := second.UsageCores.Get()
 		Expect(ok).To(BeTrue(), "a rising counter over the injected clock's span must publish a usage rate")
 		Expect(usage).To(Equal(7000000.0/1e6/d.Seconds()),
 			"UsageCores must divide the counter delta by the injected clock's elapsed, not wall time")
 
-		// HostBusy: the busy-jiffy delta 410 over USER_HZ (100) over the same
-		// 7s.
 		busy, ok := second.HostBusy.Get()
 		Expect(ok).To(BeTrue(), "a read after the baseline must publish host-busy cores")
 		Expect(busy).To(Equal((820.0-410.0)/100.0/d.Seconds()),
