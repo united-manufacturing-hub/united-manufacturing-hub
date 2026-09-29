@@ -258,6 +258,33 @@ var _ = Describe("Poll", func() {
 	})
 })
 
+var _ = Describe("Poll on a connection fault", func() {
+	It("keeps reporting the last summary it read", func() {
+		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:    "127.0.0.1",
+			Port:    closedPort(),
+			SSLMode: config.HistorianSSLModeDisable,
+		}}
+
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
+		d.summary = &summaryCache{
+			interval: time.Minute,
+			dsn:      cfg.WithDefaults().Timescale.ToDSN(),
+			readAt:   time.Now(),
+			value:    timescalemetrics.Summary{TableNames: []string{"value_bench"}, JobCount: 2},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		status, err := Poll(ctx, d, cfg)
+
+		Expect(err).To(MatchError(ContainSubstring("timescale query")))
+		Expect(status.TableNames).To(ConsistOf("value_bench"))
+		Expect(status.JobCount).To(Equal(2))
+	})
+})
+
 var _ = Describe("the summary cache", func() {
 	const (
 		dsnA = "postgres://umh@host-a:5432/umh"
@@ -320,5 +347,15 @@ var _ = Describe("the summary cache", func() {
 		Expect(second).To(Equal(1))
 		Expect(summary.TableNames).To(BeEmpty(),
 			"keeping the last value across a failed read must not carry one database's tables onto another")
+	})
+
+	It("reports nothing as the last summary of a database it has not read", func() {
+		cache := &summaryCache{interval: time.Minute}
+		calls := 0
+
+		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &calls))
+
+		Expect(cache.last(dsnA).TableNames).To(ConsistOf("value_bench"))
+		Expect(cache.last(dsnB).TableNames).To(BeEmpty())
 	})
 })

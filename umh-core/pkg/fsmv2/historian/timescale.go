@@ -258,7 +258,12 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Bool("reachable", false),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port, Auth: models.TimescaleAuthUnknown}, fmt.Errorf("timescale pool: %w", err)
+		return TimescaleStatus{
+			Host:    host,
+			Port:    port,
+			Auth:    models.TimescaleAuthUnknown,
+			Summary: d.summary.last(dsn),
+		}, fmt.Errorf("timescale pool: %w", err)
 	}
 
 	start := time.Now()
@@ -280,7 +285,13 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.String("auth", string(auth)),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port, Reachable: reachable, Auth: auth}, fmt.Errorf("timescale query %s: %w", host, err)
+		return TimescaleStatus{
+			Host:      host,
+			Port:      port,
+			Reachable: reachable,
+			Auth:      auth,
+			Summary:   d.summary.last(dsn),
+		}, fmt.Errorf("timescale query %s: %w", host, err)
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
@@ -366,6 +377,18 @@ func (c *summaryCache) refresh(
 
 	if summary, ok := read(); ok {
 		c.value = summary
+	}
+
+	return c.value
+}
+
+// The framework persists a failed Poll's status too, so it carries the last summary.
+func (c *summaryCache) last(dsn string) timescalemetrics.Summary {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if dsn != c.dsn {
+		return timescalemetrics.Summary{}
 	}
 
 	return c.value
