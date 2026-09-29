@@ -15,17 +15,45 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
+	"strings"
+	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
+
+// lockedBuffer is a bytes.Buffer that the supervisor's goroutines can write
+// while the spec reads it.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.String()
+}
 
 var _ = Describe("Application supervisor passes the registry's variable bundle to its children", func() {
 	const configWorkerKey = "configworker"
@@ -108,5 +136,71 @@ var _ = Describe("Application supervisor passes the registry's variable bundle t
 			}
 		}, "5s", "100ms").Should(Succeed(),
 			"every child the application renders must receive the registry's variable bundle after it is replaced, user and global")
+	})
+
+	It("keeps the registry's value over an own child's, and warns once", func() {
+		w := dynamicchildren.NewWriter()
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
+		w.SetVariables(config.VariableBundle{User: map[string]any{"IP": "10.0.0.1"}})
+
+		logs := &lockedBuffer{}
+		sup, store, appID := newAppSupervisorWithStore(deps.NewJSONFSMLogger(logs, deps.LevelWarn))
+		sup.TestUpdateUserSpec(config.UserSpec{Config: `children:
+  - name: own-hello
+    workerType: helloworld
+    userSpec:
+      config: "state: running\n"
+      variables:
+        user:
+          IP: ip-from-yaml
+`})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := sup.Start(ctx)
+
+		defer func() { cancel(); <-done }()
+
+		conflictLines := func() []string {
+			var lines []string
+
+			for _, line := range strings.Split(logs.String(), "\n") {
+				if strings.Contains(line, `"msg":"registry_variable_overrides_child"`) {
+					lines = append(lines, line)
+				}
+			}
+
+			return lines
+		}
+
+		Eventually(func(g Gomega) {
+			doc, err := store.LoadDesired(ctx, "helloworld", "own-hello-001") //nolint:staticcheck // the spec reads the raw document, so the typed loader does not fit
+			g.Expect(err).NotTo(HaveOccurred())
+			spec, _ := doc.(persistence.Document)["originalUserSpec"].(map[string]any)
+			vars, _ := spec["variables"].(map[string]any)
+			g.Expect(vars).To(HaveKeyWithValue("user", HaveKeyWithValue("IP", "10.0.0.1")))
+		}, "5s", "100ms").Should(Succeed())
+		Eventually(conflictLines, "5s", "100ms").Should(HaveLen(1))
+		// The window must be contentful: warn-once is proven only by collects
+		// that actually ran inside it. Each poll records the stored
+		// observation's CollectedAt; distinct timestamps count as collects.
+		collects := map[time.Time]struct{}{}
+		sampleCollect := func() {
+			obs, err := storage.LoadObservedTyped[fsmv2.Observation[snapshot.ApplicationStatus]](store, ctx, appID)
+			if err != nil {
+				return
+			}
+
+			collects[obs.CollectedAt] = struct{}{}
+		}
+
+		Consistently(func(g Gomega) {
+			g.Expect(conflictLines()).To(HaveLen(1))
+
+			sampleCollect()
+		}, "3s", "200ms").Should(Succeed())
+		Expect(len(collects)).To(BeNumerically(">=", 2),
+			"the collector must run at least twice inside the window for the warn-once check to mean anything")
+		Expect(conflictLines()[0]).To(And(ContainSubstring(`"child_name":"own-hello"`), ContainSubstring(`"namespace":"User"`), ContainSubstring(`"key":"IP"`)))
+		Expect(logs.String()).NotTo(ContainSubstring("ip-from-yaml"), "the warning names the key, never a value")
 	})
 })
