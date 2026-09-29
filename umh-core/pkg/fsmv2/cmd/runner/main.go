@@ -171,7 +171,7 @@ func main() {
 		},
 	)
 
-	store := examples.SetupStore(deps.NewFSMLogger(logger.Sugar()))
+	store := examples.SetupStore(newRunLogger(logger))
 
 	durationStr := "endless (until Ctrl+C)"
 
@@ -194,7 +194,7 @@ func main() {
 		ScenarioV2:         v2Scenario,
 		Duration:           settleWindow,
 		TickInterval:       *tickInterval,
-		Logger:             deps.NewFSMLogger(logger.Sugar()),
+		Logger:             newRunLogger(logger),
 		Store:              store,
 		EnableTraceLogging: *traceFlag,
 		DumpStore:          *dumpStore,
@@ -334,6 +334,13 @@ func handleSignals(sigCh <-chan os.Signal, done <-chan struct{}, onFirstSignal f
 		forceExit()
 	case <-done:
 	}
+}
+
+// newRunLogger returns the FSMLogger a scenario run logs through. The CLI
+// keeps every line, so a reader sees every step, wait and state_transition;
+// the sampled logger dropped state_transition lines.
+func newRunLogger(logger *zap.Logger) deps.FSMLogger {
+	return deps.NewUnsampledFSMLogger(logger.Sugar())
 }
 
 // parseLogLevel converts string log level to zap level using zap's built-in parser.
