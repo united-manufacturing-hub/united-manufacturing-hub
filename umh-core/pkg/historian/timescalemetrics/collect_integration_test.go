@@ -158,7 +158,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		ctx = context.Background()
 	})
 
-	It("reports versions, table counts and compression against a historian schema", func() {
+	It("reads the tables and jobs of a historian schema", func() {
 		pool := startDatabase(timescaleImage)
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred(), "the historian schema is created")
@@ -166,9 +166,8 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		metrics, err := Collect(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.PostgresVersion).To(HavePrefix("17."))
-		Expect(metrics.TimescaleVersion).To(Equal("2.24.0"))
-		Expect(metrics.DatabaseOccupiedDiskBytes).To(BeNumerically(">", 0))
+		Expect(metrics.Tables).To(HaveLen(2))
+		Expect(metrics.JobList).To(HaveLen(2))
 	})
 
 	It("counts no failed jobs when every umh job is succeeding", func() {
@@ -602,12 +601,12 @@ var _ = Describe("Data span reporting", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := Collect(ctx, pool)
+		summary, err := CollectSummary(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
 		// The schema writes 200 daily points, and the span is taken from the rows
 		// themselves, so it is the interval between the first and the last.
-		Expect(metrics.DataSpanSeconds).To(BeNumerically("~", 199*24*3600, 24*3600))
+		Expect(summary.DataSpanSeconds).To(BeNumerically("~", 199*24*3600, 24*3600))
 	})
 
 	It("reads the same first and last row as the whole table, with rows deleted at both ends", func() {
@@ -637,10 +636,10 @@ var _ = Describe("Data span reporting", Label("integration"), func() {
 		_, err := pool.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS umh;`)
 		Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := Collect(ctx, pool)
+		summary, err := CollectSummary(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.DataSpanSeconds).To(BeZero())
+		Expect(summary.DataSpanSeconds).To(BeZero())
 	})
 })
 
@@ -797,7 +796,7 @@ INSERT INTO umh.tag (name) SELECT 'tag_' || g FROM generate_series(1, 10) AS g;`
 var _ = Describe("Summary collection", Label("integration"), func() {
 	ctx := context.Background()
 
-	It("reports the tables and the failing job count", func() {
+	It("reports versions, tables, disk usage and job counts", func() {
 		pool := startDatabase(timescaleImage)
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
@@ -805,8 +804,38 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 		summary, err := CollectSummary(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(summary.FailedJobCount).To(BeZero())
+		Expect(summary.PostgresVersion).To(HavePrefix("17."))
+		Expect(summary.TimescaleVersion).To(Equal("2.24.0"))
 		Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
+		Expect(summary.JobCount).To(Equal(2))
+		Expect(summary.FailedJobCount).To(BeZero())
+		Expect(summary.HistorianOccupiedDiskBytes).To(BeNumerically(">", 0))
+		Expect(summary.DatabaseOccupiedDiskBytes).To(BeNumerically(">", summary.HistorianOccupiedDiskBytes),
+			"the database also holds the catalogs")
+	})
+
+	It("reports the historian's disk usage as the sum of its tables", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY, name text);
+			CREATE TABLE umh.customer_export (id BIGINT, payload TEXT);
+			INSERT INTO umh.customer_export SELECT g, repeat('x', 500) FROM generate_series(1, 20000) g;`)
+		Expect(err).NotTo(HaveOccurred())
+
+		summary, err := CollectSummary(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		var tablesBytes int64
+		for _, table := range metrics.Tables {
+			tablesBytes += table.OccupiedDiskBytes
+		}
+
+		Expect(summary.HistorianOccupiedDiskBytes).To(BeNumerically("~", tablesBytes, 64*1024),
+			"the customer's own table, about 10 MB, is not the historian's")
 	})
 
 	It("reports nothing rather than failing on a database with no historian", func() {

@@ -4,7 +4,7 @@
 
 ### New Features
 
-- With the historian feature flag enabled in the Management Console, the instance reports the state of its historian database: disk usage and growth, compression savings, per-table details and background jobs. The detailed figures are read only on request
+- With the historian feature flag enabled in the Management Console, the instance reports the state of its historian database: versions, disk usage and growth, and background job counts with every status update, and compression savings, per-table details and the job list on request
 
 ### Fixes
 

@@ -70,7 +70,13 @@ type Timescale struct {
 	// historian with no policies has no jobs to fail, so zero here is not proof
 	// that data is compressed or expired -- the job list read on request says
 	// which policies exist.
-	FailedJobCount int `json:"failedJobCount"`
+	FailedJobCount             int    `json:"failedJobCount"`
+	JobCount                   int    `json:"jobCount"`
+	PostgresVersion            string `json:"postgresVersion,omitempty"`
+	TimescaleVersion           string `json:"timescaleVersion,omitempty"`
+	DatabaseOccupiedDiskBytes  int64  `json:"databaseOccupiedDiskBytes,omitempty"`
+	HistorianOccupiedDiskBytes int64  `json:"historianOccupiedDiskBytes,omitempty"`
+	DataSpanSeconds            int64  `json:"dataSpanSeconds,omitempty"`
 }
 
 type Agent struct {

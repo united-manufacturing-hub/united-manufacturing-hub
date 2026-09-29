@@ -20,16 +20,16 @@
 // configuration faults (Auth=TimescaleAuthInvalid) rather than transient network
 // faults, which leave authentication unverified (Auth=TimescaleAuthUnknown).
 //
-// # Scope: connection health, plus two figures
+// # Scope: connection health, plus a summary
 //
 // Per tick this worker checks the connection and nothing else: one `SELECT 1`
 // over a pooled connection for reachability, latency, and whether the
 // credentials and database name are accepted. On a slower schedule it also reads
-// the historian's table names and its failing job count, both catalog reads
-// whose cost does not grow with the data held.
+// a summary of the database: versions, disk usage, table names, the span of the
+// stored rows, and the job counts.
 //
-// Everything else is read on request by the get-historian-metrics action, so an
-// instance nobody is looking at does no work.
+// Per-table detail and the job list are read on request by the
+// get-historian-metrics action.
 package fsmv2timescale
 
 import (
@@ -327,8 +327,8 @@ func init() {
 	})
 }
 
-// Neither figure moves faster than this: a table appears when a contract is
-// deployed, and a failing job is not urgent to the second.
+// None of the figures moves faster than this: a table appears when a contract is
+// deployed, and disk usage and a failing job are not urgent to the second.
 const summaryInterval = 60 * time.Second
 
 // sharedSummary matches sharedPool: the cache has to outlive a single Poll.

@@ -62,11 +62,6 @@ type Job struct {
 
 // Metrics is everything Collect reads, returned to the console on request.
 type Metrics struct {
-	PostgresVersion           string `json:"postgresVersion"`
-	TimescaleVersion          string `json:"timescaleVersion"`
-	DatabaseOccupiedDiskBytes int64  `json:"databaseOccupiedDiskBytes"`
-	// From the earliest row in any table to the latest.
-	DataSpanSeconds int64   `json:"dataSpanSeconds"`
-	Tables          []Table `json:"tables"`
-	JobList         []Job   `json:"jobList"`
+	Tables  []Table `json:"tables"`
+	JobList []Job   `json:"jobList"`
 }

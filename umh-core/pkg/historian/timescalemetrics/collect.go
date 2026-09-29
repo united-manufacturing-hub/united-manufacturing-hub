@@ -34,24 +34,17 @@ const databaseOccupiedDiskBytesQuery = `SELECT pg_database_size(current_database
 // every catalog read below would fail.
 var errTimescaleMissing = errors.New("timescaledb extension is not installed")
 
-// Collect reads the whole picture: versions, database size, per-table storage
-// and policies, the background jobs, and each hypertable's row timestamps. Its
-// only bound is ctx.
+// Collect reads per-table storage and policies, the background jobs, and each
+// hypertable's row timestamps. Its only bound is ctx.
 //
 // Tables this product did not create are dropped before the per-table reads, so
-// a customer's own table is never queried. pg_database_size runs last and its
-// failure is tolerated, because it stats every file backing the database: when
-// it is slow, only DatabaseOccupiedDiskBytes is lost.
+// a customer's own table is never queried.
 func Collect(ctx context.Context, db Database) (Metrics, error) {
 	var metrics Metrics
 
-	postgresVersion, timescaleVersion, err := readVersions(ctx, db)
-	if err != nil {
+	if _, _, err := readVersions(ctx, db); err != nil {
 		return metrics, err
 	}
-
-	metrics.PostgresVersion = postgresVersion
-	metrics.TimescaleVersion = timescaleVersion
 
 	tables, err := readHistorianTables(ctx, db)
 	if err != nil {
@@ -71,7 +64,6 @@ func Collect(ctx context.Context, db Database) (Metrics, error) {
 	}
 
 	assignTimestamps(metrics.Tables, spans)
-	metrics.DataSpanSeconds = dataSpanSeconds(spans)
 
 	rowCounts, err := readTableRows(ctx, db)
 	if err != nil {
@@ -79,8 +71,6 @@ func Collect(ctx context.Context, db Database) (Metrics, error) {
 	}
 
 	assignRowCounts(metrics.Tables, rowCounts)
-
-	metrics.DatabaseOccupiedDiskBytes = readDatabaseOccupiedDiskBytes(ctx, db)
 
 	return metrics, nil
 }
@@ -99,9 +89,9 @@ func readHistorianTables(ctx context.Context, db Database) ([]Table, error) {
 	return filterHistorianTables(append(hypertables, plainTables...)), nil
 }
 
-// readDatabaseOccupiedDiskBytes returns zero when the read fails. Every other
-// figure is already collected by the time it runs, and the caller discards the
-// whole Metrics on an error, so reporting this one would cost all of them.
+// readDatabaseOccupiedDiskBytes returns zero when the read fails, so a slow
+// pg_database_size, which stats every file of the database, costs only this figure.
+// https://github.com/postgres/postgres/blob/master/src/backend/utils/adt/dbsize.c
 func readDatabaseOccupiedDiskBytes(ctx context.Context, db Database) int64 {
 	var databaseOccupiedDiskBytes int64
 	if err := db.QueryRow(ctx, databaseOccupiedDiskBytesQuery).Scan(&databaseOccupiedDiskBytes); err != nil {

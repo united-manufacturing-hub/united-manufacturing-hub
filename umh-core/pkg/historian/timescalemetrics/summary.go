@@ -25,41 +25,73 @@ import (
 // A historian with no policies has no jobs to fail, so FailedJobCount at zero is not
 // proof that data is compressed or expired.
 type Summary struct {
-	TableNames     []string `json:"tableNames"`
-	FailedJobCount int      `json:"failedJobCount"`
+	PostgresVersion            string   `json:"postgresVersion"`
+	TimescaleVersion           string   `json:"timescaleVersion"`
+	TableNames                 []string `json:"tableNames"`
+	DatabaseOccupiedDiskBytes  int64    `json:"databaseOccupiedDiskBytes"`
+	HistorianOccupiedDiskBytes int64    `json:"historianOccupiedDiskBytes"`
+	DataSpanSeconds            int64    `json:"dataSpanSeconds"`
+	JobCount                   int      `json:"jobCount"`
+	FailedJobCount             int      `json:"failedJobCount"`
 }
 
-// Both figures in one round trip, and neither subquery's cost grows with how
-// much data the historian holds.
-const summaryQuery = `SELECT
-       (SELECT count(*) FILTER (WHERE s.last_run_status = 'Failed')
-          FROM timescaledb_information.jobs j
-          LEFT JOIN timescaledb_information.job_stats s USING (job_id)
-         WHERE j.hypertable_schema = $1),
-       (SELECT coalesce(array_agg(c.relname ORDER BY c.relname), '{}')
-          FROM pg_class c
-          JOIN pg_namespace n ON n.oid = c.relnamespace
-         WHERE n.nspname = $1 AND c.relkind = 'r' AND c.relname <> 'schema_migrations')`
+const jobCountsQuery = `SELECT count(*), count(*) FILTER (WHERE s.last_run_status = 'Failed')
+  FROM timescaledb_information.jobs j
+  LEFT JOIN timescaledb_information.job_stats s USING (job_id)
+ WHERE j.hypertable_schema = $1`
 
 // CollectSummary reads what the status message carries.
 func CollectSummary(ctx context.Context, db Database) (Summary, error) {
 	var summary Summary
 
-	var names []string
-	if err := db.QueryRow(ctx, summaryQuery, historianSchema).
-		Scan(&summary.FailedJobCount, &names); err != nil {
-		return summary, fmt.Errorf("read historian summary: %w", err)
+	postgresVersion, timescaleVersion, err := readVersions(ctx, db)
+	if err != nil {
+		return summary, err
 	}
 
-	// The schema holds whatever the customer put there. isHistorianTable is the one
-	// definition of which tables are ours, so the two read paths cannot drift.
-	summary.TableNames = []string{}
+	tables, err := readHistorianTables(ctx, db)
+	if err != nil {
+		return summary, err
+	}
 
-	for _, name := range names {
-		if isHistorianTable(name) {
-			summary.TableNames = append(summary.TableNames, name)
-		}
+	var jobCount, failedJobCount int
+	if err := db.QueryRow(ctx, jobCountsQuery, historianSchema).Scan(&jobCount, &failedJobCount); err != nil {
+		return summary, fmt.Errorf("read job counts: %w", err)
+	}
+
+	spans, err := readSpans(ctx, db)
+	if err != nil {
+		return summary, err
+	}
+
+	summary = Summary{
+		PostgresVersion:            postgresVersion,
+		TimescaleVersion:           timescaleVersion,
+		TableNames:                 tableNames(tables),
+		HistorianOccupiedDiskBytes: occupiedDiskBytes(tables),
+		DataSpanSeconds:            dataSpanSeconds(spans),
+		JobCount:                   jobCount,
+		FailedJobCount:             failedJobCount,
+		DatabaseOccupiedDiskBytes:  readDatabaseOccupiedDiskBytes(ctx, db),
 	}
 
 	return summary, nil
+}
+
+func tableNames(tables []Table) []string {
+	names := make([]string, 0, len(tables))
+	for _, table := range tables {
+		names = append(names, table.Name)
+	}
+
+	return names
+}
+
+func occupiedDiskBytes(tables []Table) int64 {
+	var total int64
+	for _, table := range tables {
+		total += table.OccupiedDiskBytes
+	}
+
+	return total
 }
