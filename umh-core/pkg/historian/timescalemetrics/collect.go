@@ -146,16 +146,20 @@ func readVersions(ctx context.Context, db Database) (string, string, error) {
 
 // Sizes come from the catalog rather than timescaledb_information's size
 // functions, which stat every chunk's files and cost two orders of magnitude more
-// at a few thousand chunks. An uncompressed chunk has no catalog row, so its size
-// has to come from the relation or the table reads as empty.
+// at a few thousand chunks. An uncompressed chunk has no catalog row, and a partial
+// one (status bit 8) keeps the rows written after compression in its own heap, so
+// both are read from the relation.
+const chunkOccupiedDiskBytes = `CASE WHEN ch.id IS NULL THEN 0
+            WHEN ch.compressed_chunk_id IS NULL OR ch.status & 8 = 8
+            THEN coalesce(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size, 0)
+               + coalesce(pg_total_relation_size(to_regclass(format('%I.%I', ch.schema_name, ch.table_name))), 0)
+            ELSE s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size END`
+
 const tablesQuery = `WITH sizes AS (
   SELECT h.id, h.schema_name, h.table_name,
          coalesce(sum(s.uncompressed_heap_size + s.uncompressed_index_size + s.uncompressed_toast_size), 0)::bigint AS bytes_before_compression,
          coalesce(sum(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size), 0)::bigint AS bytes_after_compression,
-         coalesce(sum(CASE WHEN ch.id IS NULL THEN 0
-                           WHEN ch.compressed_chunk_id IS NULL
-                           THEN coalesce(pg_total_relation_size(to_regclass(format('%I.%I', ch.schema_name, ch.table_name))), 0)
-                           ELSE s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size END), 0)::bigint AS disk_bytes,
+         coalesce(sum(` + chunkOccupiedDiskBytes + `), 0)::bigint AS disk_bytes,
          count(ch.id) AS chunks,
          count(ch.compressed_chunk_id) AS compressed_chunks
     FROM _timescaledb_catalog.hypertable h

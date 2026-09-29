@@ -571,6 +571,31 @@ var _ = Describe("Per-table reporting", Label("integration"), func() {
 			"a size that counted only the compressed chunks would miss them")
 	})
 
+	It("counts the rows written into a chunk after it was compressed", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		before, err := readTables(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `INSERT INTO umh.value_bench
+			SELECT 1000 + n, now() - interval '30 days' + (n || ' seconds')::interval, random()
+			  FROM generate_series(1, 20000) n`)
+		Expect(err).NotTo(HaveOccurred())
+
+		var partialChunkBytes int64
+		Expect(pool.QueryRow(ctx, `SELECT coalesce(sum(pg_total_relation_size(format('%I.%I', schema_name, table_name)::regclass)), 0)
+			  FROM _timescaledb_catalog.chunk WHERE status & 8 = 8`).Scan(&partialChunkBytes)).To(Succeed())
+		Expect(partialChunkBytes).To(BeNumerically(">", 0), "the rows went into a compressed chunk, which is now partial")
+
+		after, err := readTables(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(tableNamed(after, "value_bench").OccupiedDiskBytes).To(
+			BeNumerically(">=", tableNamed(before, "value_bench").OccupiedDiskBytes+partialChunkBytes))
+	})
+
 	It("reports the chunk interval each table was created with", func() {
 		pool := startDatabase(timescaleImage)
 		_, err := pool.Exec(ctx, historianSchemaDDL)
