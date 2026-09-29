@@ -38,7 +38,6 @@ var _ = Describe("Observation", func() {
 
 	// Compile-time assertions.
 	var _ fsmv2.ObservedState = fsmv2.Observation[TestStatus]{}
-	var _ fsmv2.TimestampProvider = fsmv2.Observation[TestStatus]{}
 
 	Describe("NewObservation", func() {
 		It("returns Observation with correct Status", func() {

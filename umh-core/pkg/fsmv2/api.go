@@ -76,33 +76,14 @@ const (
 )
 
 // ObservedState represents the actual state gathered from monitoring the system.
-// Intentional pair with TimestampProvider: ObservedState is the compile-time
-// return-type contract for CollectObservedState, while TimestampProvider is the
-// runtime capability the supervisor asserts against Snapshot.Observed (typed
-// `any` — see line above). Identical method sets today, different roles.
-//
-// Invariant: TimestampProvider must remain a strict subset of ObservedState's
-// methods so the runtime assertion never misses a value the compile-time
-// contract accepted. The compile-time check below enforces this.
-//
-//nolint:iface // see godoc above — paired contract/capability interfaces.
+// It is both the return-type contract for CollectObservedState and the type of
+// Snapshot.Observed, so every observation the supervisor holds carries a
+// timestamp by construction.
 type ObservedState interface {
 	// GetTimestamp returns the time when this observed state was collected,
 	// used for staleness checks.
 	GetTimestamp() time.Time
 }
-
-// TimestampProvider allows access to observation timestamps for staleness checks.
-//
-//nolint:iface // see ObservedState above — paired contract/capability interfaces.
-type TimestampProvider interface {
-	GetTimestamp() time.Time
-}
-
-// Compile-time invariant: every ObservedState satisfies TimestampProvider.
-// If ObservedState ever grows methods, TimestampProvider stays a strict subset
-// so the runtime assertions in supervisor stay correct.
-var _ TimestampProvider = (ObservedState)(nil)
 
 // DesiredState represents the target state derived from user configuration.
 type DesiredState interface {
@@ -129,9 +110,15 @@ type Disableable interface {
 }
 
 // Snapshot is the complete view of the worker at a point in time (immutable).
+//
+// Observed is typed: the supervisor is generic over TObserved constrained to
+// ObservedState, and the store deserialises into that concrete type before the
+// snapshot is built, so an observation always carries a readable timestamp.
+// Desired stays untyped because a raw persistence.Document cannot honestly
+// provide IsShutdownRequested or IsDisabled.
 type Snapshot struct {
-	Observed interface{}   // What is the actual state? (ObservedState or basic.Document).
-	Desired  interface{}   // What should the state be? (DesiredState or basic.Document).
+	Observed ObservedState // What is the actual state?
+	Desired  interface{}   // What should the state be? (DesiredState or persistence.Document).
 	Identity deps.Identity // Who am I?
 }
 

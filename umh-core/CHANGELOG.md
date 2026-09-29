@@ -5,6 +5,7 @@
 ### Fixes
 
 - Log messages for stopped flows in bridges are now more consistent
+- An FSMv2 observation can no longer reach the supervisor without a readable timestamp, so the staleness and collector-restart recovery cannot be silently skipped
 
 ## [0.44.41]
 

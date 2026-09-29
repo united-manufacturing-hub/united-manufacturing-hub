@@ -169,22 +169,16 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		Desired:  desired,
 	}
 
-	if timestampProvider, ok := any(observed).(fsmv2.TimestampProvider); ok {
-		observationTimestamp := timestampProvider.GetTimestamp()
+	observationTimestamp := observed.GetTimestamp()
 
-		// Cache for IsObservationStale() - called by parent supervisor when building ChildInfo
-		workerCtx.mu.Lock()
-		workerCtx.lastObservationCollectedAt = observationTimestamp
-		workerCtx.mu.Unlock()
+	// Cache for IsObservationStale() - called by parent supervisor when building ChildInfo
+	workerCtx.mu.Lock()
+	workerCtx.lastObservationCollectedAt = observationTimestamp
+	workerCtx.mu.Unlock()
 
-		s.logTrace("observation_timestamp_loaded",
-			deps.String("stage", "data_freshness"),
-			deps.String("timestamp", observationTimestamp.Format(time.RFC3339Nano)))
-	} else {
-		s.logTrace("observation_no_timestamp",
-			deps.String("stage", "data_freshness"),
-			deps.String("type", fmt.Sprintf("%T", observed)))
-	}
+	s.logTrace("observation_timestamp_loaded",
+		deps.String("stage", "data_freshness"),
+		deps.String("timestamp", observationTimestamp.Format(time.RFC3339Nano)))
 
 	// Cache observed state name for GetObservedStateName() - used by parent for lifecycle-based health checks
 	// State implements LifecyclePhase(), construct name from phase + state.String()
@@ -285,11 +279,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	if actionPending && !isShutdownRequested {
 		// Observation must be NEWER than last action to unlock gating
-		var currentObsTime time.Time
-
-		if timestampProvider, ok := any(observed).(fsmv2.TimestampProvider); ok {
-			currentObsTime = timestampProvider.GetTimestamp()
-		}
+		currentObsTime := observed.GetTimestamp()
 
 		if currentObsTime.After(lastActionObsTime) {
 			workerCtx.mu.Lock()
@@ -398,11 +388,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		workerCtx.mu.Lock()
 		workerCtx.actionPending = true
 
-		var currentObsTime time.Time
-
-		if timestampProvider, ok := any(observed).(fsmv2.TimestampProvider); ok {
-			currentObsTime = timestampProvider.GetTimestamp()
-		}
+		currentObsTime := observed.GetTimestamp()
 
 		workerCtx.lastActionObsTime = currentObsTime
 		workerCtx.mu.Unlock()
@@ -1362,27 +1348,11 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 }
 
 func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Snapshot) bool {
-	var (
-		age          time.Duration
-		collectedAt  time.Time
-		hasTimestamp bool
-	)
-
-	// ObservedState interface requires GetTimestamp() - no Document fallback needed
-	if timestampProvider, ok := snapshot.Observed.(fsmv2.TimestampProvider); ok {
-		collectedAt = timestampProvider.GetTimestamp()
-		hasTimestamp = true
-	}
-
-	if !hasTimestamp {
-		s.logger.SentryWarn(deps.FeatureForWorker(s.workerType), snapshot.Identity.HierarchyPath, "snapshot_missing_timestamp",
-			deps.Reason("Snapshot.Observed does not implement GetTimestamp()"),
-			deps.String("impact", "cannot check freshness"))
-
+	if snapshot.Observed == nil {
 		return true
 	}
 
-	age = time.Since(collectedAt)
+	age := time.Since(snapshot.Observed.GetTimestamp())
 
 	// During shutdown, log at DEBUG instead of WARN to avoid noisy logs
 	// when collectors are already stopped and data is expected to be stale.

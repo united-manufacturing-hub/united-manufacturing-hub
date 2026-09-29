@@ -528,15 +528,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		}
 	}
 
-	var observationTimestamp time.Time
-	if timestampProvider, ok := observed.(fsmv2.TimestampProvider); ok {
-		observationTimestamp = timestampProvider.GetTimestamp()
-		c.logTrace("observation_collected",
-			deps.String("observation_timestamp", observationTimestamp.Format(time.RFC3339Nano)))
-	} else {
-		c.logTrace("observation_collected_no_timestamp",
-			deps.String("actual_type", fmt.Sprintf("%T", observed)))
-	}
+	observationTimestamp := observed.GetTimestamp()
+	c.logTrace("observation_collected",
+		deps.String("observation_timestamp", observationTimestamp.Format(time.RFC3339Nano)))
 
 	saveStartTime := time.Now()
 
