@@ -19,7 +19,7 @@ Security scope:
 - Industrial protocol handling (OPC UA, Modbus, S7, MQTT)
 
 ### ManagementConsole (Cloud Platform)
-**Documentation**: `management-console/` (separate repository)
+**Documentation**: [Management Console security](../../management-console/security/README.md)
 
 Security scope:
 - User authentication and multi-factor authentication (MFA)

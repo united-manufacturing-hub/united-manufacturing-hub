@@ -19,9 +19,18 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 func TestYAML(t *testing.T) {
 	RegisterFailHandler(Fail)
+
+	// logger.For initializes the global logger on first use, and initializing
+	// replaces it - which would throw away the observer a spec had just installed,
+	// depending on which spec ran first. Marking it initialized up front keeps For
+	// to a plain lookup, so a spec's observer survives.
+	logger.Disable()
+
 	RunSpecs(t, "Benthos YAML Suite")
 }

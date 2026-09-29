@@ -8,13 +8,25 @@
 /umh-core/ @JeremyTheocharis @FalconTube
 /deployment/ @JeremyTheocharis
 
+# CI/CD and root config touched by umh-core PRs (e.g. Makefile bumps, changelog sync)
+# also need FalconTube as co-owner
+/.github/ @JeremyTheocharis @FalconTube
+/lefthook.yml @JeremyTheocharis @FalconTube
+/Makefile @JeremyTheocharis @FalconTube
+
+# Yannic Falke (@FalconTube) co-owns all markdown docs, except the legal/security
+# ones below which stay Jeremy-only. Order matters: later, more specific rules
+# override this one.
+*.md @JeremyTheocharis @FalconTube
+
 # Remaining files are owned by Jeremy
 AUTHORS @JeremyTheocharis
 CODEOWNERS @JeremyTheocharis
+LICENSE @JeremyTheocharis
+
+# Legal / security docs stay Jeremy-only (overrides the *.md rule above)
 CODE_OF_CONDUCT.md @JeremyTheocharis
 CONTRIBUTING.md @JeremyTheocharis
 CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md @JeremyTheocharis
 CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md @JeremyTheocharis
-LICENSE @JeremyTheocharis
-README.md @JeremyTheocharis
 SECURITY.md @JeremyTheocharis

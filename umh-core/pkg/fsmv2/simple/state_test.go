@@ -132,4 +132,16 @@ var _ = Describe("state machine", func() {
 			Expect(res.State).To(BeAssignableToTypeOf(&runningState[probeConfig, probeStatus]{}))
 		})
 	})
+
+	Describe("state names", func() {
+		// These names reach operators as log fields and as Prometheus label
+		// values on state_transitions_total. The states are generic, so their
+		// reflect names carry the full import path of every type argument
+		// unless DeriveStateName drops them.
+		It("names the states without their type arguments", func() {
+			Expect((&runningState[probeConfig, probeStatus]{}).String()).To(Equal("running"))
+			Expect((&degradedState[probeConfig, probeStatus]{}).String()).To(Equal("degraded"))
+			Expect((&stoppedState[probeConfig, probeStatus]{}).String()).To(Equal("stopped"))
+		})
+	})
 })

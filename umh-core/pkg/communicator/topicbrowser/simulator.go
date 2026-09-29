@@ -126,7 +126,7 @@ func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 		SequenceNum: uint64(len(s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items) + 1),
 	}
 
-	s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items = append(s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items, newItem)
+	s.simObservedState.ServiceInfo.Status.BufferSnapshot.AppendNewest(newItem)
 	s.simObservedState.ServiceInfo.Status.BufferSnapshot.LastSequenceNum = newItem.SequenceNum
 
 	// limit the buffer to 100 entries and delete the oldest entry if the buffer is full

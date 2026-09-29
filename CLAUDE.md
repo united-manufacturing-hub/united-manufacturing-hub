@@ -18,6 +18,7 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 - **Virtual Path** = optional organizational segments in topics (e.g., `motor.electrical`)
 - **Tag** = single data point/sensor (industrial term)
 - **_raw** → **_devicemodel_v1** → **_businessmodel_v1** (data progression)
+- **Permission grant** (only in docs.umh.app) = what the Management Console issues so a user or instance can access instances. Never call it a certificate. "Certificate" is reserved for TLS. Describe what actually happens on the user's screen: "permission grant" or "unlocks access to your X"
 
 ## Non-Intuitive Patterns
 
@@ -122,9 +123,8 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 1. **Comments**: Do NOT add inline comments unless explicitly requested. DO add godoc comments on exported functions/types and comments on non-obvious constants, following [Google Developer Documentation Style Guide](https://developers.google.com/style) (active voice, present tense, concise)
 2. **Prefer editing existing files over creating new ones**
 3. **Follow existing patterns in the codebase**
-4. **Struct field alignment**: Run `make betteralign-fix` (automated tool orders fields by decreasing size)
-5. **Error handling**: Return errors up the stack, handle in reconciliation loop
-6. **No direct FSM state changes**: Always go through reconciliation
+4. **Error handling**: Return errors up the stack, handle in reconciliation loop
+5. **No direct FSM state changes**: Always go through reconciliation
 
 ## Documentation Maintenance
 
@@ -141,7 +141,7 @@ Every PR with user-visible changes must add an entry to `umh-core/CHANGELOG.md` 
 
 ## Support & Troubleshooting Workflows
 
-This section covers umh-core-specific troubleshooting workflows. For universal team processes (Linear/Sentry integration, ticket routing), see `/Users/jeremytheocharis/Documents/git/troubleshooting/CLAUDE.md`.
+This section covers umh-core-specific troubleshooting workflows. For universal team processes (Linear/Sentry integration, ticket routing), see the `CLAUDE.md` in the internal `troubleshooting` repository.
 
 ### Instance Offline Troubleshooting
 

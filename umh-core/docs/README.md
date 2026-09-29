@@ -85,7 +85,7 @@ By the end, you'll have production-ready data pipelines with validation, organiz
   * [**Unified Namespace**](usage/unified-namespace/) - Core messaging architecture
   * [**Data Flows**](usage/data-flows/) - Connect and process data streams
   * [**Data Modeling**](usage/data-modeling/) - Enterprise data structuring
-  * [**Management Console**](usage/management-console/) - Cloud-based control center
+  * [**Management Console**](management-console/) - Cloud-based control center
 * [**Production Deployment**](production/) - Scaling, security, and operations
 * [**Reference Documentation**](reference/) - Complete API and configuration reference
 

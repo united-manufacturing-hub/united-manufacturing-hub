@@ -87,7 +87,8 @@ var _ = Describe("Container Monitor Service", func() {
 				status, err := service.GetStatus(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(status.CPU).ToNot(BeNil())
-				Expect(status.CPU.CoreCount).To(BeNumerically(">", 0))
+				Expect(status.CPU.CoreCount).NotTo(BeNil())
+				Expect(*status.CPU.CoreCount).To(BeNumerically(">", 0))
 			})
 
 			It("should contain memory metrics", func() {
@@ -268,10 +269,12 @@ var _ = Describe("Container Monitor Service", func() {
 			GinkgoWriter.Printf("Architecture: %s\n", container.Architecture)
 
 			GinkgoWriter.Printf("\n--- CPU Metrics ---\n")
-			if container.CPU != nil {
-				GinkgoWriter.Printf("Core Count: %d\n", container.CPU.CoreCount)
-				GinkgoWriter.Printf("Total Usage (mCPU): %.2f\n", container.CPU.TotalUsageMCpu)
-				GinkgoWriter.Printf("Usage Per Core: %.2f%%\n", (container.CPU.TotalUsageMCpu/1000.0)/float64(container.CPU.CoreCount)*100.0)
+			if container.CPU != nil && container.CPU.CoreCount != nil && container.CPU.TotalUsageMCpu != nil {
+				GinkgoWriter.Printf("Core Count: %d\n", *container.CPU.CoreCount)
+				GinkgoWriter.Printf("Total Usage (mCPU): %.2f\n", *container.CPU.TotalUsageMCpu)
+				GinkgoWriter.Printf("Usage Per Core: %.2f%%\n", (*container.CPU.TotalUsageMCpu/1000.0)/float64(*container.CPU.CoreCount)*100.0)
+			} else if container.CPU != nil {
+				GinkgoWriter.Printf("CPU metrics unmeasured\n")
 			} else {
 				GinkgoWriter.Printf("CPU metrics unavailable\n")
 			}

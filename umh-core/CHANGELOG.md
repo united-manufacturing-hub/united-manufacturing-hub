@@ -4,7 +4,83 @@
 
 ### Fixes
 
+- Log messages for stopped flows in bridges are now more consistent
+
+## [0.44.41]
+
+### New Features
+
+- The community Beckhoff ADS plugin was replaced by our own implementation. It is still in an experimental state. Refer to the benthos-umh repository for more information.
+
+### Improvements
+
+- The CPU status of an instance whose operating system does not report CPU pressure stats now links to instructions for switching them on
+- CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, CPU pressure, throttling and how busy the machine is. Requires `USE_FSMV2_CPU=true` and `USE_FSMV2_TRANSPORT=true`
+- Removed stale documentation on using references within data models
+
+### Fixes
+
+- Sparkplug B input: metric datatypes now survive from BIRTH to DATA for devices that repeat the metric name in NDATA/DDATA. The alias cache restored the datatype only when the DATA metric arrived without a name, so devices sending name and alias together kept losing it, leaving `spb_datatype` missing and decoding signed integers as their unsigned wire value (an `Int32` of `-12` surfaced as `4294967284`). Devices sending the alias alone were already correct.
+
+## [0.44.40]
+
+### Fixes
+
+- Adding a data model with a name longer than 53 characters is now rejected with an explanation, instead of only being blocked in the Management Console.
+
+- Instances on some hosts are no longer reported as degraded, which previously stopped every bridge on them from running. Where CPU usage cannot be read, the instance keeps running and reports CPU monitoring as unavailable
+
+## [0.44.39]
+
+### Fixes
+
+- Repointing a bridge to a different host on the same port now waits for a check of the new host, so the previous host can no longer make the deploy report success
+
+## [0.44.38]
+
+### Improvements
+
+- The historian output takes `value_chunk_interval` and `attribute_chunk_interval`, setting how wide a TimescaleDB chunk is for each of its two hypertables, both still defaulting to 168h. An interval applies only when a table is created, so changing it later needs `set_chunk_time_interval` on the database, and a restart warns when a configured interval no longer matches its table
+
+### Fixes
+
+- The historian output now applies compression and retention to every data contract, not only the first one. Existing historian setups are unaffected
+- The historian no longer stores `timestamp_ms` as a tag attribute, which previously wrote one attribute row per data point
+
+## [0.44.37]
+
+### Fixes
+
+- Topics no longer go missing from the Topic Browser when several updates arrive in quick succession
+- The Topic Browser now updates as data arrives instead of in bursts roughly every 10 seconds
+
+## [0.44.36]
+
+### Improvements
+
+- Topic Browser updates are around 60% smaller on instances with many topics, because per-topic metadata is no longer resent with every refresh. This helps most on slow or metered connections
+
+### Fixes
+
+- Instances with large configurations no longer run out of time in the control loop, which previously caused "not enough time left to reconcile" error log messages.
+
+## [0.44.35]
+
+### Improvements
+
+- A message dropped for a missing `timestamp_ms` says how to supply one, noting that the tag processor sets the field automatically and that any other processing has to carry it in the payload
+- The historian output reports dropped messages at error level, one aggregated line per reason per batch, naming the reason, how much of the batch it accounted for, an example topic and the fix. Reporting starts with the first batch rather than after 30 seconds, and `missing_value_or_timestamp` is split into `missing_value` and `missing_timestamp`
+- The historian output refuses a whole batch carrying a message for a data contract other than its configured `data_contract_name`, rather than discarding those messages silently, and the batch is not retried. The error names the contracts that arrived and the `umh_topics` pattern to narrow to, so a subscription broader than one contract stores nothing until it is narrowed
+- A versioned data contract whose schema was bypassed is rejected by the historian output, because the version claims a schema that was never applied; an unversioned contract such as `_historian` is stored, since it never claimed one. A tag that changes datatype still has its offending rows dropped, and the error names the new `allow_datatype_changes` option that stores both types on it instead. Payloads carrying fields beyond `value` and `timestamp_ms` are rejected as `not_timeseries`
+- The historian output's drop counter is renamed from `historian_messages_dropped` to `messages_dropped`, matching the metric name every other plugin already uses
+- The historian output stores `data_contract_version` as metadata, read as `attribute->>'data_contract_version'`, so a connected application can tell which contract version a reading arrived under. All versions of a contract share one table and one `umh.tag` row, so no column recorded the version and it was previously dropped
+
+
+### Fixes
+
+- When the connection to the Management Console degrades after repeated failures, the log now names the upstream cause — the HTTP status and a snippet of the response — instead of only the error count. Previously the cause was recorded internally but never reached the log, so a connection that kept failing and recovering showed repeated degradation with no reason given
 - Renaming a bridge whose deployment then fails no longer leaves it impossible to edit or save. A failed deployment now undoes the rename along with the rest of the configuration, while Save Anyway keeps the new name as before
+- The historian output no longer discards tags whose virtual path merely starts with the OPC UA diagnostics prefix, such as `Root.Objects.ServerRoom`; only the `Root.Objects.Server` subtree itself is skipped
 
 ## [0.44.34]
 

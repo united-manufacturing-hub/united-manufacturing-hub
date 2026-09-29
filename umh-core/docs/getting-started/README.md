@@ -19,6 +19,10 @@ No kubectl, no Kubernetes setup, just a single Docker container. Almost anything
 * x86_64 (Intel/AMD 64-bit)
 * ARM64 (64-bit ARM, but NOT Raspberry Pi - Redpanda requires 48-bit virtual address space)
 
+**CPU health reporting (early access):**
+
+UMH Core runs on any of the above. Its CPU pressure signal also needs Linux pressure stats (PSI) and cgroup v2, which the Red Hat family ships off. Without them CPU health still reports from throttling, steal and headroom, and an instance with no CPU limit reports limited visibility. [CPU Health](../production/cpu-health.md) covers how to check, how to switch them on, and which flag enables this reporting.
+
 For detailed sizing recommendations, see the [Sizing Guide](../production/sizing-guide.md).
 
 ## Installation using the Management Console
@@ -62,9 +66,9 @@ Then re-run the `docker run` command.
 For advanced users needing bind mounts (custom data locations), see the [Container Layout reference](../reference/container-layout.md#advanced-custom-data-location).
 
 **Corporate firewall/proxy issues**
-If your corporate network intercepts TLS traffic, see the [Corporate Firewalls Guide](../production/corporate-firewalls.md) to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml` or use `-e ALLOW_INSECURE_TLS=true` in your docker run command.
+If your corporate network intercepts TLS traffic, see [Network Configuration](../production/security/umh-core/network-configuration.md#tls-inspection-mitm) to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml` or use `-e ALLOW_INSECURE_TLS=true` in your docker run command.
 
-For proxy configuration, see the [Corporate Firewalls Guide](../production/corporate-firewalls.md) or add these arguments to your docker run:
+For proxy configuration, see [Network Configuration](../production/security/umh-core/network-configuration.md#proxy-configuration) or add these arguments to your docker run:
 
 ```bash
 -e HTTP_PROXY=http://proxy.company.com:8080 \

@@ -585,14 +585,10 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 		case !hasActivity:
 			// When both DFCs are intentionally stopped, surface the connection
 			// monitor status so the user retains visibility into device reachability.
-			if p.areBothDFCsIntentionallyStopped() {
-				if connectionUp {
-					p.ObservedState.ServiceInfo.StatusReason = "idle: all flows stopped, connection up"
-				} else {
-					p.ObservedState.ServiceInfo.StatusReason = "idle: all flows stopped, " + reasonConnection
-				}
+			if connectionUp {
+				p.ObservedState.ServiceInfo.StatusReason = "idle: " + reasonActivity + ", connection up"
 			} else {
-				p.ObservedState.ServiceInfo.StatusReason = "idling: " + reasonActivity
+				p.ObservedState.ServiceInfo.StatusReason = "idle: " + reasonActivity + ", " + reasonConnection
 			}
 
 			return nil, false
