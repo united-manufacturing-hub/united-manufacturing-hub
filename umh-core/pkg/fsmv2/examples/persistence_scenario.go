@@ -30,16 +30,14 @@ import (
 )
 
 // PersistenceScenarioV2 runs one persistence worker against an in-memory
-// store held in the dependency map: the worker runs its startup maintenance,
-// reaches Running, and compacts the store.
+// store held in the dependency map.
 var PersistenceScenarioV2 = ScenarioV2{
 	Name:        "persistence",
 	Description: "Compacts and maintains an in-memory store through the dependency map",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		// This store is separate from RunConfig.Store, which this function
-		// cannot reach. The worker compacts and maintains this one. The
-		// collector writes the worker's observations to RunConfig.Store.
+		// The worker maintains this store. The collector writes the worker's
+		// observations to RunConfig.Store, a separate store.
 		var store storage.TriangularStoreInterface = SetupStore(deps.NewNopFSMLogger())
 
 		m := map[string]any{}
@@ -54,17 +52,15 @@ var PersistenceScenarioV2 = ScenarioV2{
 
 		env.Step("create the persistence worker")
 
-		// No state reads the state key: StoppedState moves to TryingToStart
-		// unless a shutdown is requested.
+		// No persistence state reads the "state" key: StoppedState moves to
+		// TryingToStart unless a shutdown is requested.
 		if err := env.Client.Upsert(ref, map[string]any{"state": "running"}); err != nil {
 			return err
 		}
 
-		// Startup maintenance runs in TryingToStart, so its counter and
-		// timestamp are set once Running is visible. Running stays healthy
-		// to the end: only a shutdown or a failed action leaves it, and
-		// both actions succeed against the in-memory store. Both counters
-		// in this scenario only rise, and neither timestamp is cleared.
+		// Running lasts to the end: only ShouldStop() or a failed action
+		// leaves it, and both actions succeed against the in-memory store.
+		// No counter or timestamp in this scenario is ever reset.
 		if err := env.WaitFor(ctx, "store shows Running after startup maintenance",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[persistencesnapshot.PersistenceStatus](ctx, env.Client, ref)
@@ -92,7 +88,7 @@ var PersistenceScenarioV2 = ScenarioV2{
 		}
 
 		// A zero LastCompactionAt is due at once, so compaction runs on the
-		// first Running tick. Its counter and timestamp then hold to the end.
+		// first Running tick.
 		return env.WaitFor(ctx, "compaction has run",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[persistencesnapshot.PersistenceStatus](ctx, env.Client, ref)

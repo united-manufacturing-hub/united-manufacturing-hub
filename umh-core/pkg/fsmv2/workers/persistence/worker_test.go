@@ -336,8 +336,7 @@ var _ = Describe("PersistenceWorker", func() {
 		It("builds from the dependency map alone when the global seed is absent", func() {
 			mapStore := &mockTriangularStore{}
 
-			// PersistenceScenarioV2 (examples/persistence_scenario.go) supplies
-			// its store this way.
+			// examples.PersistenceScenarioV2 supplies its store this way.
 			register.ClearGlobalDeps(persistence.WorkerTypeName)
 
 			m := map[string]any{}
