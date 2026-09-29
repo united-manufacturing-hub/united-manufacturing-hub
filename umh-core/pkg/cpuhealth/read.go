@@ -14,7 +14,7 @@
 
 // The Linux sampler: one tick's cgroup-plus-machine read, built from the
 // previous tick's numbers wherever a rate is derived. Read composes a
-// cgroupReader (cgroup_source.go for v2, cgroup_v1_source.go for v1) and
+// cgroupReader (cgroup_v2_source.go for v2, cgroup_v1_source.go for v1) and
 // hostSource (host_source.go).
 
 package cpuhealth
@@ -55,7 +55,7 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 	return &linuxSampler{
 		fs:     fs,
 		base:   base,
-		cgroup: newCgroupSource(fs, base),
+		cgroup: newCgroupV2Source(fs, base),
 		host:   newHostSource(fs),
 	}
 }
@@ -314,4 +314,23 @@ func (s *Sample) record(operation ReadOperation, outcome ReadOutcome, readErr er
 			return
 		}
 	}
+}
+
+// readControllers returns cgroup.controllers verbatim: the controllers the
+// parent delegated to the cgroup at base. Any outcome other than ReadOK means
+// no text was read, and names the cause.
+func readControllers(ctx context.Context, fs filesystem.Service, base string) (string, ReadOutcome, error) {
+	return readRawFile(ctx, fs, pathOf(base, OperationCgroupControllers))
+}
+
+// readBaseDirEntryCount keeps only the entry count. A mounted cgroup v2 tree
+// holds dozens of files, so a directory holding two or three says the mount is
+// not the one we expect. An unlistable directory yields -1, never 0.
+func readBaseDirEntryCount(ctx context.Context, fs filesystem.Service, base string) (int, ReadOutcome, error) {
+	entries, err := fs.ReadDir(ctx, pathOf(base, OperationCgroupBaseDir))
+	if err != nil {
+		return -1, classifyRead(err), err
+	}
+
+	return len(entries), ReadOK, nil
 }

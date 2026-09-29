@@ -16,21 +16,9 @@ package cpuhealth
 
 import (
 	"context"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
-
-type cgroupReader interface {
-	readQuota(ctx context.Context) (quotaRead, ReadOutcome, error)
-	readStat(ctx context.Context) (statRead, error)
-	readPSI(ctx context.Context) (fraction float64, err error)
-	readCpuset(ctx context.Context) (count int, err error)
-	advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading
-	// pathOf returns "" for a read this reader has no file for.
-	pathOf(operation ReadOperation) string
-}
 
 // systemd mounts cpu and cpuacct together; a container runtime may not.
 var (
