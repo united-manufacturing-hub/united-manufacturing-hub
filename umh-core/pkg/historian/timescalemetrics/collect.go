@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -52,24 +53,19 @@ func Collect(ctx context.Context, db Database) (Metrics, error) {
 	metrics.PostgresVersion = postgresVersion
 	metrics.TimescaleVersion = timescaleVersion
 
-	hypertables, err := readHypertables(ctx, db)
+	tables, err := readHistorianTables(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
 
-	plainTables, err := readPlainTables(ctx, db)
-	if err != nil {
-		return metrics, err
-	}
-
-	metrics.Tables = filterHistorianTables(append(tablesOf(hypertables), plainTables...))
+	metrics.Tables = tables
 
 	metrics.JobList, err = readJobs(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
 
-	spans, err := readSpans(ctx, db, metrics.Tables, timeColumnTables(hypertables))
+	spans, err := readSpans(ctx, db)
 	if err != nil {
 		return metrics, err
 	}
@@ -87,6 +83,20 @@ func Collect(ctx context.Context, db Database) (Metrics, error) {
 	metrics.DatabaseOccupiedDiskBytes = readDatabaseOccupiedDiskBytes(ctx, db)
 
 	return metrics, nil
+}
+
+func readHistorianTables(ctx context.Context, db Database) ([]Table, error) {
+	hypertables, err := readHypertables(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	plainTables, err := readPlainTables(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	return filterHistorianTables(append(hypertables, plainTables...)), nil
 }
 
 // readDatabaseOccupiedDiskBytes returns zero when the read fails. Every other
@@ -176,8 +186,7 @@ SELECT DISTINCT ON (t.table_name) t.table_name,
        coalesce(EXTRACT(EPOCH FROM (cj.config->>'compress_after')::interval)::bigint, 0),
        coalesce(EXTRACT(EPOCH FROM (rj.config->>'drop_after')::interval)::bigint, 0),
        t.chunks,
-       t.compressed_chunks,
-       d.column_name IS NOT NULL
+       t.compressed_chunks
   FROM sizes t
   LEFT JOIN timescaledb_information.dimensions d
     ON d.hypertable_schema = t.schema_name AND d.hypertable_name = t.table_name AND d.column_name = 'ts'
@@ -187,21 +196,13 @@ SELECT DISTINCT ON (t.table_name) t.table_name,
     ON rj.hypertable_schema = t.schema_name AND rj.hypertable_name = t.table_name AND rj.proc_name = 'policy_retention'
  ORDER BY t.table_name`
 
-// hypertable is a Table plus the one fact only tablesQuery knows and the wire
-// format does not carry: whether the time dimension is the ts column, which is
-// what makes the row-timestamp read safe to ask of it.
-type hypertable struct {
-	Table
-	HasTimeColumn bool
-}
-
-func readHypertables(ctx context.Context, db Database) ([]hypertable, error) {
+func readHypertables(ctx context.Context, db Database) ([]Table, error) {
 	return queryAll(ctx, db, tablesQuery, "tables", rowToHypertable, historianSchema)
 }
 
 // tablesQuery orders its columns to read as SQL, not to match Table.
-func rowToHypertable(row pgx.CollectableRow) (hypertable, error) {
-	read := hypertable{Table: Table{IsHypertable: true}}
+func rowToHypertable(row pgx.CollectableRow) (Table, error) {
+	read := Table{IsHypertable: true}
 	err := row.Scan(
 		&read.Name,
 		&read.BytesBeforeCompression,
@@ -212,31 +213,9 @@ func rowToHypertable(row pgx.CollectableRow) (hypertable, error) {
 		&read.RetentionSeconds,
 		&read.Chunks,
 		&read.CompressedChunks,
-		&read.HasTimeColumn,
 	)
 
 	return read, err
-}
-
-func tablesOf(hypertables []hypertable) []Table {
-	tables := make([]Table, 0, len(hypertables))
-	for _, read := range hypertables {
-		tables = append(tables, read.Table)
-	}
-
-	return tables
-}
-
-// timeColumnTables names the hypertables whose time dimension is ts.
-func timeColumnTables(hypertables []hypertable) map[string]bool {
-	readable := make(map[string]bool, len(hypertables))
-	for _, read := range hypertables {
-		if read.HasTimeColumn {
-			readable[read.Name] = true
-		}
-	}
-
-	return readable
 }
 
 // Lookup tables are written rarely enough that autovacuum may never analyse
@@ -385,12 +364,55 @@ func dataSpanSeconds(spans map[string]rowSpan) int64 {
 	return *latest - *earliest
 }
 
-// A table name cannot be bound as a parameter, so this is a format string taking
-// the name three times: once as the literal labelling the row, twice as the
-// identifier. safeTableName guards every name that reaches it. min and max are
-// null for an empty table, which rowSpan carries as nil rather than as 1970.
+const chunksQuery = `SELECT h.table_name, ch.schema_name, ch.table_name
+  FROM _timescaledb_catalog.hypertable h
+  JOIN _timescaledb_catalog.dimension d ON d.hypertable_id = h.id AND d.column_name = 'ts'
+  JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND NOT ch.dropped
+  JOIN _timescaledb_catalog.chunk_constraint cc ON cc.chunk_id = ch.id
+  JOIN _timescaledb_catalog.dimension_slice ds ON ds.id = cc.dimension_slice_id AND ds.dimension_id = d.id
+ WHERE h.schema_name = $1
+ ORDER BY h.table_name, ds.range_start, ch.id`
 
-const rowTimestampQuery = `SELECT '%s', extract(epoch FROM min(ts))::bigint, extract(epoch FROM max(ts))::bigint FROM %s`
+type chunkRow struct {
+	Table       string
+	ChunkSchema string
+	ChunkName   string
+}
+
+func readChunks(ctx context.Context, db Database) (map[string][]pgx.Identifier, error) {
+	rows, err := queryAll(ctx, db, chunksQuery, "chunks", pgx.RowToStructByPos[chunkRow], historianSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	chunks := map[string][]pgx.Identifier{}
+
+	for _, row := range rows {
+		if !isHistorianTable(row.Table) {
+			continue
+		}
+
+		chunks[row.Table] = append(chunks[row.Table], pgx.Identifier{row.ChunkSchema, row.ChunkName})
+	}
+
+	return chunks, nil
+}
+
+func readSpans(ctx context.Context, db Database) (map[string]rowSpan, error) {
+	chunks, err := readChunks(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	return readSpansOf(ctx, db, chunks)
+}
+
+// A table name cannot be bound as a parameter, so it is formatted in as the
+// literal labelling the row. safeTableName guards every name that reaches it.
+const (
+	earliestRowQuery = `SELECT '%s', extract(epoch FROM min(ts))::bigint FROM %s`
+	latestRowQuery   = `SELECT '%s', extract(epoch FROM max(ts))::bigint FROM %s`
+)
 
 var tableNamePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
@@ -404,53 +426,79 @@ type rowSpan struct {
 	Latest   *int64
 }
 
-// namedRowSpan is one row of rowTimestampQuery.
-type namedRowSpan struct {
-	Name     string
-	Earliest *int64
-	Latest   *int64
-}
+// A query over a whole hypertable locks every chunk of it, and across all
+// hypertables in one statement that exceeds max_locks_per_transaction.
+// https://www.postgresql.org/docs/current/runtime-config-locks.html
+func readSpansOf(ctx context.Context, db Database, chunks map[string][]pgx.Identifier) (map[string]rowSpan, error) {
+	oldestFirst := map[string][]pgx.Identifier{}
+	newestFirst := map[string][]pgx.Identifier{}
 
-// readSpans asks both ends of the ts column of every readable table in one
-// statement. A table absent from the result reported nothing.
-func readSpans(
-	ctx context.Context,
-	db Database,
-	tables []Table,
-	readable map[string]bool,
-) (map[string]rowSpan, error) {
-	statement := unionOverTables(tables, readable)
-	if statement == "" {
-		return map[string]rowSpan{}, nil
+	for table, tableChunks := range chunks {
+		if !safeTableName(table) {
+			continue
+		}
+
+		oldestFirst[table] = tableChunks
+		newestFirst[table] = slices.Clone(tableChunks)
+		slices.Reverse(newestFirst[table])
 	}
 
-	rows, err := queryAll(ctx, db, statement, "row timestamps", pgx.RowToStructByPos[namedRowSpan])
+	earliest, err := readFirstAnswer(ctx, db, earliestRowQuery, oldestFirst)
 	if err != nil {
 		return nil, err
 	}
 
-	spans := make(map[string]rowSpan, len(rows))
-	for _, row := range rows {
-		spans[row.Name] = rowSpan{Earliest: row.Earliest, Latest: row.Latest}
+	latest, err := readFirstAnswer(ctx, db, latestRowQuery, newestFirst)
+	if err != nil {
+		return nil, err
+	}
+
+	spans := make(map[string]rowSpan, len(earliest))
+	for table, epoch := range earliest {
+		spans[table] = rowSpan{Earliest: epoch, Latest: latest[table]}
 	}
 
 	return spans, nil
 }
 
-// unionOverTables asks rowTimestampQuery of every readable table in one
-// statement. Empty when no table qualifies, which the caller reads as nothing to
-// ask.
-func unionOverTables(tables []Table, readable map[string]bool) string {
-	selects := make([]string, 0, len(tables))
+type namedEpoch struct {
+	Name  string
+	Epoch *int64
+}
 
-	for _, table := range tables {
-		if !readable[table.Name] || !safeTableName(table.Name) {
-			continue
+// A chunk whose rows were all deleted answers null.
+func readFirstAnswer(
+	ctx context.Context,
+	db Database,
+	query string,
+	chunks map[string][]pgx.Identifier,
+) (map[string]*int64, error) {
+	answers := map[string]*int64{}
+
+	for position := 0; ; position++ {
+		selects := []string{}
+
+		for table, tableChunks := range chunks {
+			if answers[table] != nil || position >= len(tableChunks) {
+				continue
+			}
+
+			selects = append(selects, fmt.Sprintf(query, table, tableChunks[position].Sanitize()))
 		}
 
-		qualifiedName := pgx.Identifier{historianSchema, table.Name}.Sanitize()
-		selects = append(selects, fmt.Sprintf(rowTimestampQuery, table.Name, qualifiedName))
-	}
+		if len(selects) == 0 {
+			return answers, nil
+		}
 
-	return strings.Join(selects, " UNION ALL ")
+		rows, err := queryAll(ctx, db, strings.Join(selects, " UNION ALL "), "row timestamps", pgx.RowToStructByPos[namedEpoch])
+		if err != nil {
+			return nil, err
+		}
+
+		for _, row := range rows {
+			if row.Epoch != nil {
+				answers[row.Name] = row.Epoch
+			}
+		}
+	}
 }

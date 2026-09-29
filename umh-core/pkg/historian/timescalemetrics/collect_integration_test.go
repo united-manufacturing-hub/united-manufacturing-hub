@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -186,13 +187,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		tables, err := readTables(ctx, pool)
-		Expect(err).NotTo(HaveOccurred())
-
-		readable, err := readTimeColumnTables(ctx, pool)
-		Expect(err).NotTo(HaveOccurred())
-
-		writes, err := readSpans(ctx, pool, tables, readable)
+		writes, err := readSpans(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(HaveKey("value_bench"))
@@ -208,13 +203,7 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err = pool.Exec(ctx, `CREATE TABLE umh.tag (id bigint PRIMARY KEY, name text)`)
 		Expect(err).NotTo(HaveOccurred())
 
-		tables, err := readTables(ctx, pool)
-		Expect(err).NotTo(HaveOccurred())
-
-		readable, err := readTimeColumnTables(ctx, pool)
-		Expect(err).NotTo(HaveOccurred())
-
-		writes, err := readSpans(ctx, pool, tables, readable)
+		writes, err := readSpans(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred(), "a regular table must not fail the whole read")
 		Expect(writes).To(HaveKey("value_bench"))
@@ -226,12 +215,9 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		readable, err := readTimeColumnTables(ctx, pool)
-		Expect(err).NotTo(HaveOccurred())
-
-		writes, err := readSpans(ctx, pool, []Table{
-			{Name: `value"; DROP TABLE umh.value_bench; --`},
-		}, readable)
+		writes, err := readSpansOf(ctx, pool, map[string][]pgx.Identifier{
+			`value"; DROP TABLE umh.value_bench; --`: {{"umh", "value_bench"}},
+		})
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(writes).To(BeEmpty())
@@ -291,22 +277,18 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 		_, err := pool.Exec(ctx, historianSchemaDDL)
 		Expect(err).NotTo(HaveOccurred())
 
-		_, err = pool.Exec(ctx, `CREATE TABLE umh.custom_metric (device_id bigint, event_time timestamptz NOT NULL, v double precision)`)
+		_, err = pool.Exec(ctx, `CREATE TABLE umh.value_event_time (device_id bigint, event_time timestamptz NOT NULL, v double precision)`)
 		Expect(err).NotTo(HaveOccurred())
-		_, err = pool.Exec(ctx, `SELECT create_hypertable('umh.custom_metric', 'event_time')`)
+		_, err = pool.Exec(ctx, `SELECT create_hypertable('umh.value_event_time', 'event_time')`)
 		Expect(err).NotTo(HaveOccurred())
-
-		tables, err := readTables(ctx, pool)
-		Expect(err).NotTo(HaveOccurred())
-
-		readable, err := readTimeColumnTables(ctx, pool)
+		_, err = pool.Exec(ctx, `INSERT INTO umh.value_event_time VALUES (1, now(), 1)`)
 		Expect(err).NotTo(HaveOccurred())
 
-		writes, err := readSpans(ctx, pool, tables, readable)
+		writes, err := readSpans(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred(), "one unreadable table must not fail every table's freshness")
 		Expect(writes).To(HaveKey("value_bench"))
-		Expect(writes).NotTo(HaveKey("custom_metric"))
+		Expect(writes).NotTo(HaveKey("value_event_time"))
 	})
 
 	It("lists every job, including the ones that are succeeding", func() {
@@ -487,18 +469,7 @@ func readTables(ctx context.Context, db Database) ([]Table, error) {
 		return nil, err
 	}
 
-	return append(tablesOf(hypertables), plainTables...), nil
-}
-
-// readTimeColumnTables names the hypertables the row-timestamp read may ask,
-// which Collect takes from the table read it has already made.
-func readTimeColumnTables(ctx context.Context, db Database) (map[string]bool, error) {
-	hypertables, err := readHypertables(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	return timeColumnTables(hypertables), nil
+	return append(hypertables, plainTables...), nil
 }
 
 // tableNamed returns the reported entry for one hypertable, failing the spec when
@@ -637,6 +608,27 @@ var _ = Describe("Data span reporting", Label("integration"), func() {
 		// The schema writes 200 daily points, and the span is taken from the rows
 		// themselves, so it is the interval between the first and the last.
 		Expect(metrics.DataSpanSeconds).To(BeNumerically("~", 199*24*3600, 24*3600))
+	})
+
+	It("reads the same first and last row as the whole table, with rows deleted at both ends", func() {
+		ctx := context.Background()
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = pool.Exec(ctx, `DELETE FROM umh.value_bench
+			WHERE ts < now() - interval '150 days' OR ts > now() - interval '40 days'`)
+		Expect(err).NotTo(HaveOccurred())
+
+		var earliest, latest int64
+		Expect(pool.QueryRow(ctx, `SELECT extract(epoch FROM min(ts))::bigint, extract(epoch FROM max(ts))::bigint
+			  FROM umh.value_bench`).Scan(&earliest, &latest)).To(Succeed())
+
+		spans, err := readSpans(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(spans["value_bench"].Earliest).To(HaveValue(Equal(earliest)))
+		Expect(spans["value_bench"].Latest).To(HaveValue(Equal(latest)))
 	})
 
 	It("reports no span when nothing has been written", func() {
