@@ -55,12 +55,13 @@ func hostPort(addr string) (string, uint16) {
 	return host, uint16(p)
 }
 
-// newPollDeps builds the deps value Poll dials through, via newDeps.
+// newPollDeps builds the deps value Poll dials through, via newDeps. The
+// framework's BaseDependencies are not part of nmap's deps, so a nil one is
+// all there is to hand.
 func newPollDeps(m map[string]any) fsmv2nmap.Deps {
 	id := deps.Identity{ID: "nmap-poll", WorkerType: fsmv2nmap.WorkerType}
-	bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
 
-	return fsmv2nmap.NewDepsForTest(id, bd, m)
+	return fsmv2nmap.NewDepsForTest(id, nil, m)
 }
 
 // nmapID builds the identity a supervisor hands an nmap worker, with the
@@ -340,39 +341,14 @@ var _ = Describe("the registered nmap worker type", func() {
 			"the map's dialer must receive exactly the target address")
 	})
 
-	It("gives each instance the BaseDependencies the framework built for it", func() {
-		id := nmapID()
-
-		bound := boundDepsOf(id, nil)
-
-		Expect(bound.BaseDependencies).NotTo(BeNil(),
-			"the collector reads framework telemetry off this, so the reads below are not vacuous")
-		Expect(bound.GetWorkerType()).To(Equal(id.WorkerType),
-			"newDeps kept the BaseDependencies the framework built for this instance")
-		Expect(bound.GetWorkerID()).To(Equal(id.ID))
-		Expect(bound.GetHierarchyPath()).To(Equal(id.HierarchyPath))
-	})
-
-	It("keeps the BaseDependencies it was handed rather than building its own logger", func() {
-		id := nmapID()
-		bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
-
-		d := fsmv2nmap.NewDepsForTest(id, bd, nil)
-
-		Expect(d.BaseDependencies).To(BeIdenticalTo(bd),
-			"the deps carry the framework's own BaseDependencies, so the collector reads this worker's telemetry off the value Poll receives")
-	})
-
-	It("satisfies the injection interfaces supervisor/api.go asserts on the deps", func() {
+	It("does not satisfy the injection interfaces supervisor/api.go asserts on the deps", func() {
+		// Framework telemetry for nmap comes from the collector (PR #2678),
+		// not from its dependencies.
 		bound := boundDepsOf(nmapID(), nil)
 
-		_, setsFrameworkState := any(bound).(interface{ SetFrameworkState(*deps.FrameworkMetrics) })
-		Expect(setsFrameworkState).To(BeTrue(),
-			"supervisor/api.go injects framework telemetry only into deps satisfying this")
-
 		_, setsActionHistory := any(bound).(interface{ SetActionHistory([]deps.ActionResult) })
-		Expect(setsActionHistory).To(BeTrue(),
-			"supervisor/api.go injects action history only into deps satisfying this")
+		Expect(setsActionHistory).To(BeFalse(),
+			"nmap's deps carry only the dialer, so the collector's injection pass skips them")
 	})
 })
 
