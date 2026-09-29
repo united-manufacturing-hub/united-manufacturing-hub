@@ -15,7 +15,8 @@
 package config
 
 // MergeDependencies creates a new map combining parent and child dependencies.
-// Child dependencies override parent dependencies with the same key.
+// Child dependencies override parent dependencies with the same key, the
+// opposite of Merge's direction.
 //
 // IMPORTANT: This performs a SHALLOW merge. Interface and channel values are
 // shared between parent and child, which is intentional - dependencies represent
