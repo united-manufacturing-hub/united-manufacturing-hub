@@ -127,6 +127,17 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 			"with nothing under the key the published global serves a cpu.stat that cannot parse")
 		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
 			"only the published global serves this counter value")
+
+		// A value of the wrong type under the literal reads as absent
+		// (LookupDependency type-asserts with comma-ok), so the global serves
+		// here too: a wrong-typed entry cannot break the fallback, and cannot
+		// be mistaken for the map key working.
+		wrongTyped := map[string]any{"cpu.filesystem": "not a filesystem"}
+		_, err = Poll(context.Background(), monitorSpec.NewDeps(id, bd, wrongTyped), CPUConfig{})
+		Expect(err).To(HaveOccurred(),
+			"a wrong-typed value under the key reads as absent, so the published global still serves")
+		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
+			"only the published global serves this counter value")
 	})
 
 	It("samples through a published filesystem rather than the real one", func() {
@@ -165,6 +176,15 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 
 		Expect(d.sampler).NotTo(BeNil(), "an unpublished filesystem still yields a sampler")
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")
+
+		// The branch every enabled deployment takes. The concrete type names
+		// the real filesystem because outcomes cannot: on a host without
+		// cgroup v2 the real filesystem fails every read too, exactly like a
+		// refuse-everything stub swapped in its place, so only the type
+		// tells them apart.
+		_, isDefault := d.fs.(*filesystem.DefaultService)
+		Expect(isDefault).To(BeTrue(),
+			"with nothing published the resolved filesystem must be the real one, not a stub")
 
 		// errors.Is rather than NotTo(MatchError): MatchError rejects a nil actual
 		// even under NotTo, and Poll returns nil with a cgroup v2 mount and an

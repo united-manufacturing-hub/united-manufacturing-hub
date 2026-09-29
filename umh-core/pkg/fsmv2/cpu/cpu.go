@@ -49,7 +49,9 @@ const (
 	//
 	// A key holds one value, so each payload gets its own key rather than
 	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
-	// A value in the worker's dependency map wins over what is published here.
+	// A value in the worker's dependency map wins over what is published here:
+	// the same literal, cpu.filesystem, also names the map key
+	// (FilesystemKey), which NewDeps reads before this global.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
@@ -75,7 +77,9 @@ var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 // FilesystemKey names the filesystem.Service the sampler reads the cgroup
 // files through. NewDeps does the lookup, then the global published under
-// FilesystemDepsKey, and falls back to filesystem.NewDefaultService().
+// FilesystemDepsKey, and falls back to filesystem.NewDefaultService(). The
+// same literal, cpu.filesystem, also names that global slot
+// (FilesystemDepsKey); the map key here is the one read first.
 var FilesystemKey = config.NewDependencyKey[filesystem.Service]("cpu.filesystem")
 
 // ClockKey names the clock.Clock the sampler stamps every Sample from. NewDeps
@@ -117,6 +121,11 @@ type CPUStatus struct {
 // pointer, would die with that copy.
 type CPUDeps struct {
 	*deps.BaseDependencies
+
+	// fs is the filesystem the sampler reads through, kept beside it so the
+	// injection specs can name which source NewDeps resolved it to: the map
+	// entry, the published global, or the real machine.
+	fs filesystem.Service
 
 	// sampler reads the cgroup. Behind the interface it is a pointer holding the
 	// counter baselines every rate is derived from, so they survive the tick.
@@ -221,6 +230,7 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies, dependencies map[string
 
 	d := &CPUDeps{
 		BaseDependencies: bd,
+		fs:               fs,
 		sampler:          sampler,
 	}
 
