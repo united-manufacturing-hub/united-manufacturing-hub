@@ -26,11 +26,16 @@ import (
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
 
-// TimeoutScenarioV2 waits for exampleslow and examplefailing workers to reach
-// Connected, each failing worker after its failure round.
+// TimeoutScenarioV2 runs four workers that connect at different speeds: at
+// once, after a two-second connect delay, after three failed connects, and
+// after five. The longest action is the two-second delay, far below the 30 s
+// action timeout (defaultActionTimeout in supervisor/internal/execution). The
+// combined worker connects on attempt six, before its restart limit of ten.
+// Each failing worker's wait also waits out its 5 s Connected period and one
+// reconnect, as in FailingScenarioV2.
 var TimeoutScenarioV2 = ScenarioV2{
 	Name:        "timeout",
-	Description: "Demonstrates action timeout handling and retry behavior patterns",
+	Description: "Four workers that connect at different speeds: at once, after a two-second delay, after three failures, after five failures. The longest action takes 2 s, far below the 30 s action timeout",
 
 	ExpectedWarnings: []string{"connect_failed_simulated"},
 
@@ -70,7 +75,7 @@ var TimeoutScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert retry worker: %w", err)
 		}
 
-		env.Step("create the combined worker, which fails five times before it connects")
+		env.Step("create the combined worker: it fails five times and connects on attempt six, before its restart limit of ten")
 
 		if err := env.Client.Upsert(combinedRef, map[string]any{
 			"state":                  "running",
@@ -84,7 +89,7 @@ var TimeoutScenarioV2 = ScenarioV2{
 		// The wait reads AllCyclesComplete for the reason given in
 		// FailingScenarioV2.
 		waitFailingConnected := func(ref dynamicchildren.Ref) error {
-			return env.WaitFor(ctx, "the worker "+ref.Name+" connects with its failure round complete",
+			return env.WaitFor(ctx, "the worker "+ref.Name+" is connected again after its one disconnect",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, ref)
 					if err != nil {
