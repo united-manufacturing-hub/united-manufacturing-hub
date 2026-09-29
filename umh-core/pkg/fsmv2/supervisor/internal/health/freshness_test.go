@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/health"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 var _ = Describe("FreshnessChecker", func() {
@@ -92,6 +93,67 @@ var _ = Describe("FreshnessChecker", func() {
 			}
 
 			Expect(checker.IsTimeout(snapshot)).To(BeTrue())
+		})
+	})
+
+	// An observation whose age cannot be read is not evidence of freshness.
+	// Treating it as fresh disabled all four defense layers for that worker:
+	// the FSM kept transitioning on data of unknown age, the collector was
+	// never restarted, and shutdown was never requested.
+	Context("when the observation's age cannot be determined", func() {
+		newChecker := func() *health.FreshnessChecker {
+			return health.NewFreshnessChecker(
+				10*time.Second,
+				20*time.Second,
+				"test",
+				deps.NewNopFSMLogger(),
+			)
+		}
+
+		It("treats an unrecognised observed type as stale", func() {
+			snapshot := &fsmv2.Snapshot{
+				Identity: supervisor.TestIdentity(),
+				Observed: struct{ Unrelated string }{Unrelated: "no timestamp here"},
+				Desired:  &supervisor.TestDesiredState{},
+			}
+
+			Expect(newChecker().Check(snapshot)).To(BeFalse())
+			Expect(newChecker().IsTimeout(snapshot)).To(BeTrue())
+		})
+
+		It("treats a document without collected_at as stale", func() {
+			snapshot := &fsmv2.Snapshot{
+				Identity: supervisor.TestIdentity(),
+				Observed: persistence.Document{"id": "test-worker"},
+				Desired:  &supervisor.TestDesiredState{},
+			}
+
+			Expect(newChecker().Check(snapshot)).To(BeFalse())
+			Expect(newChecker().IsTimeout(snapshot)).To(BeTrue())
+		})
+
+		It("treats an unparseable collected_at as stale", func() {
+			snapshot := &fsmv2.Snapshot{
+				Identity: supervisor.TestIdentity(),
+				Observed: persistence.Document{"collected_at": "not a timestamp"},
+				Desired:  &supervisor.TestDesiredState{},
+			}
+
+			Expect(newChecker().Check(snapshot)).To(BeFalse())
+			Expect(newChecker().IsTimeout(snapshot)).To(BeTrue())
+		})
+
+		It("still reads a document that carries collected_at", func() {
+			snapshot := &fsmv2.Snapshot{
+				Identity: supervisor.TestIdentity(),
+				Observed: persistence.Document{
+					"collected_at": time.Now().Format(time.RFC3339Nano),
+				},
+				Desired: &supervisor.TestDesiredState{},
+			}
+
+			Expect(newChecker().Check(snapshot)).To(BeTrue())
+			Expect(newChecker().IsTimeout(snapshot)).To(BeFalse())
 		})
 	})
 })

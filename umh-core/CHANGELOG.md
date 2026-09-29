@@ -5,6 +5,7 @@
 ### Fixes
 
 - Log messages for stopped flows in bridges are now more consistent
+- An FSMv2 observation whose age cannot be read is now treated as stale rather than fresh, so the supervisor's staleness and collector-restart recovery still run instead of being silently skipped
 
 ## [0.44.41]
 

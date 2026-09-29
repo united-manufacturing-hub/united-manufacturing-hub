@@ -45,6 +45,11 @@ func NewFreshnessChecker(staleThreshold, timeout time.Duration, workerType strin
 // Returns (timestamp, true) if extraction succeeds, (zero, false) otherwise.
 // Handles both GetTimestamp() interface and persistence.Document formats.
 //
+// A false return means the age of this observation is unknown, which Check and
+// IsTimeout treat as stale. Every ObservedState is required to carry
+// CollectedAt (validator rule MISSING_COLLECTED_AT), so reaching a false here
+// is a violated invariant rather than a supported shape.
+//
 // NOTE: collected_at is a business field set by FSM v2 workers, not a CSE field.
 func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time, bool) {
 	if snapshot.Observed == nil {
@@ -61,7 +66,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	if !ok {
 		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_type_unknown",
 			deps.String("type", fmt.Sprintf("%T", snapshot.Observed)),
-			deps.String("action", "assuming_fresh"))
+			deps.String("action", "assuming_stale"))
 
 		return time.Time{}, false
 	}
@@ -70,7 +75,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	ts, exists := doc["collected_at"]
 	if !exists {
 		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_missing_timestamp",
-			deps.String("action", "assuming_fresh"))
+			deps.String("action", "assuming_stale"))
 
 		return time.Time{}, false
 	}
@@ -87,7 +92,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 		if err != nil {
 			f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_invalid_timestamp",
 				deps.String("value", v),
-				deps.String("action", "assuming_fresh"))
+				deps.String("action", "assuming_stale"))
 
 			return time.Time{}, false
 		}
@@ -96,7 +101,7 @@ func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time
 	default:
 		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_unknown_timestamp_type",
 			deps.String("type", fmt.Sprintf("%T", v)),
-			deps.String("action", "assuming_fresh"))
+			deps.String("action", "assuming_stale"))
 
 		return time.Time{}, false
 	}
@@ -109,9 +114,13 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 		return false
 	}
 
+	// An observation whose age cannot be read is not evidence of freshness.
+	// Returning true here disabled all four defense layers for that worker: the
+	// FSM kept transitioning on data of unknown age, the collector was never
+	// restarted, and shutdown was never requested.
 	collectedAt, ok := f.extractTimestamp(snapshot)
 	if !ok {
-		return true
+		return false
 	}
 
 	age := time.Since(collectedAt)
@@ -130,9 +139,11 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 // IsTimeout checks if observation data has exceeded the timeout threshold.
 // Returns true if data is stale and requires collector restart.
 func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
+	// Unknown age counts as timed out, so the collector is restarted rather
+	// than left running against an observation nobody can date.
 	collectedAt, ok := f.extractTimestamp(snapshot)
 	if !ok {
-		return false
+		return true
 	}
 
 	age := time.Since(collectedAt)
