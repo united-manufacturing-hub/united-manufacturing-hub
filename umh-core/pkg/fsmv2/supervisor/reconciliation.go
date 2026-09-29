@@ -1442,6 +1442,34 @@ func (s *Supervisor[TObserved, TDesired]) getEscalationSteps(childName string) s
 	return "1) Check component logs 2) Verify network connectivity 3) Restart component manually"
 }
 
+// The parent's value wins on a key both hold. Each dropped
+// (child, namespace, key) is warned about once, not on every tick.
+// The caller holds s.mu.
+func (s *Supervisor[TObserved, TDesired]) mergeChildVariables(childName string, childVars config.VariableBundle) config.VariableBundle {
+	result := config.MergeWithConflicts(s.userSpec.Variables, childVars)
+
+	for _, c := range result.Conflicts {
+		key := c.Namespace + "/" + c.Key
+		if _, done := s.warnedConflicts[childName][key]; done {
+			continue
+		}
+
+		if s.warnedConflicts[childName] == nil {
+			s.warnedConflicts[childName] = make(map[string]struct{})
+		}
+
+		s.warnedConflicts[childName][key] = struct{}{}
+		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_variable_conflict",
+			deps.String("child_name", childName),
+			deps.String("namespace", c.Namespace),
+			deps.String("key", c.Key),
+			deps.String("resolution", "parent"),
+			deps.String("remedy", "the parent's value wins; remove the key from the child's spec or the parent's spec"))
+	}
+
+	return result.Bundle
+}
+
 func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.ChildSpec) error {
 	startTime := time.Now()
 
@@ -1469,10 +1497,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				delete(s.pendingRemoval, spec.Name)
 			}
 
-			// Merge the parent's variables with the child's (the parent's value wins in User and Global alike)
-			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec
-			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
+			childUserSpec.Variables = s.mergeChildVariables(spec.Name, spec.UserSpec.Variables)
 			child.updateUserSpec(childUserSpec)
 
 			updatedCount++
@@ -1532,10 +1558,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				continue
 			}
 
-			// Merge the parent's variables with the child's (the parent's value wins in User and Global alike)
-			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec
-			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
+			childUserSpec.Variables = s.mergeChildVariables(spec.Name, spec.UserSpec.Variables)
 			childSupervisor.updateUserSpec(childUserSpec)
 			childSupervisor.setParent(s, s.workerType)
 

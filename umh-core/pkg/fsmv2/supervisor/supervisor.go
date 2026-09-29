@@ -159,6 +159,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	pendingRestart     map[string]bool
 	restartRequestedAt map[string]time.Time
 	globalVars         map[string]any
+	warnedConflicts    map[string]map[string]struct{} // per child name, the "Namespace/Key" pairs mergeChildVariables warned about
 	healthChecker      *InfrastructureHealthChecker
 	panicTracker       *panicRecovery
 	actionExecutor     *execution.ActionExecutor
@@ -300,6 +301,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		pendingRemoval:     make(map[string]bool),
 		pendingRestart:     make(map[string]bool),
 		restartRequestedAt: make(map[string]time.Time),
+		warnedConflicts:    make(map[string]map[string]struct{}),
 		createdAt:          time.Now(),
 		parentID:           "",
 		healthChecker:      NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),

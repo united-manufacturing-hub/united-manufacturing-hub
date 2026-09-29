@@ -15,7 +15,10 @@
 package supervisor_test
 
 import (
+	"bytes"
 	"context"
+	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
@@ -366,6 +370,248 @@ var _ = Describe("Variable Injection", func() {
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("PORT", 502))
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
+		})
+	})
+
+	Describe("Variable conflicts", func() {
+		var logs *bytes.Buffer
+
+		BeforeEach(func() {
+			logs = &bytes.Buffer{}
+			s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:   "test",
+				Store:        store,
+				Logger:       deps.NewJSONFSMLogger(logs, deps.LevelWarn),
+				TickInterval: 100 * time.Millisecond,
+			})
+			Expect(s.AddWorker(identity, testWorker)).To(Succeed())
+		})
+
+		conflictLines := func() []string {
+			var lines []string
+			for _, line := range strings.Split(logs.String(), "\n") {
+				if strings.Contains(line, `"msg":"child_variable_conflict"`) {
+					lines = append(lines, line)
+				}
+			}
+			return lines
+		}
+
+		// A conflict warning must not carry a variable value: variables can hold
+		// credentials. Each value is matched in its JSON-quoted form so the log
+		// line's timestamp cannot collide with a numeric value.
+		noValueInWarnings := func(values ...string) {
+			all := strings.Join(conflictLines(), "\n")
+			for _, value := range values {
+				Expect(all).NotTo(ContainSubstring(strconv.Quote(value)))
+			}
+		}
+
+		emitChild := func(vars config.VariableBundle) {
+			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
+				return &config.DesiredState{
+					BaseDesiredState: config.BaseDesiredState{},
+					ChildrenSpecs: []config.ChildSpec{
+						{Name: "conflict-child", WorkerType: "test", UserSpec: config.UserSpec{Variables: vars}},
+					},
+				}, nil
+			}
+		}
+
+		It("warns once per child, namespace and key, not on every tick", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{
+					User:   map[string]any{"IP": "192.168.1.100", "PORT": 502},
+					Global: map[string]any{"cluster_id": "cluster-a"},
+				},
+			})
+			emitChild(config.VariableBundle{
+				User:   map[string]any{"PORT": 503, "DEVICE_ID": "child-device"},
+				Global: map[string]any{"cluster_id": "cluster-b"},
+			})
+
+			// Tick 1 adds the child; ticks 2 and 3 update it.
+			for range 3 {
+				Expect(s.TestTick(ctx)).To(Succeed())
+			}
+
+			lines := conflictLines()
+			Expect(lines).To(HaveLen(2), "one warning per (child, namespace, key), got:\n%s", logs.String())
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"child_name":"conflict-child"`),
+				ContainSubstring(`"namespace":"User"`),
+				ContainSubstring(`"key":"PORT"`),
+			)))
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"child_name":"conflict-child"`),
+				ContainSubstring(`"namespace":"Global"`),
+				ContainSubstring(`"key":"cluster_id"`),
+			)))
+			// The warning names the key, never a value: variables can hold
+			// credentials. The parent's dropped value is as sensitive as the
+			// child's, so both must stay out of the logs.
+			Expect(logs.String()).NotTo(ContainSubstring("cluster-b"))
+			Expect(logs.String()).NotTo(ContainSubstring("cluster-a"))
+			Expect(logs.String()).NotTo(ContainSubstring("192.168.1.100"))
+			noValueInWarnings("502", "503")
+
+			childSpec := s.GetChildren()["conflict-child"].TestGetUserSpec()
+			Expect(childSpec.Variables.User).To(HaveKeyWithValue("PORT", 502))
+			Expect(childSpec.Variables.Global).To(HaveKeyWithValue("cluster_id", "cluster-a"))
+		})
+
+		It("does not warn when the child only adds keys", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"IP": "192.168.1.100"}},
+			})
+			emitChild(config.VariableBundle{User: map[string]any{"DEVICE_ID": "child-device"}})
+
+			for range 3 {
+				Expect(s.TestTick(ctx)).To(Succeed())
+			}
+
+			// The merge ran: without this, an empty conflictLines() could also
+			// mean no child was ever created.
+			childSpec := s.GetChildren()["conflict-child"].TestGetUserSpec()
+			Expect(childSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
+			Expect(childSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
+
+			Expect(conflictLines()).To(BeEmpty())
+			Expect(logs.String()).NotTo(ContainSubstring("child-device"))
+			Expect(logs.String()).NotTo(ContainSubstring("192.168.1.100"))
+		})
+
+		It("warns for each child that sets the key", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502}},
+			})
+			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
+				return &config.DesiredState{
+					BaseDesiredState: config.BaseDesiredState{},
+					ChildrenSpecs: []config.ChildSpec{
+						{Name: "child-a", WorkerType: "test", UserSpec: config.UserSpec{Variables: config.VariableBundle{User: map[string]any{"PORT": 503}}}},
+						{Name: "child-b", WorkerType: "test", UserSpec: config.UserSpec{Variables: config.VariableBundle{User: map[string]any{"PORT": 504}}}},
+					},
+				}, nil
+			}
+
+			for range 3 {
+				Expect(s.TestTick(ctx)).To(Succeed())
+			}
+
+			lines := conflictLines()
+			Expect(lines).To(HaveLen(2))
+			Expect(lines).To(ContainElement(ContainSubstring(`"child_name":"child-a"`)))
+			Expect(lines).To(ContainElement(ContainSubstring(`"child_name":"child-b"`)))
+			noValueInWarnings("502", "503", "504")
+		})
+
+		It("warns when a child's spec first sets the key on a later tick", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502}},
+			})
+			emitChild(config.VariableBundle{User: map[string]any{"DEVICE_ID": "d"}})
+			Expect(s.TestTick(ctx)).To(Succeed())
+			Expect(conflictLines()).To(BeEmpty())
+
+			emitChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
+			// The parent's spec must change: tick caches the derived state by the
+			// user-spec hash (lastUserSpecHash; see supervisor/doc.go), so a new
+			// deriveDesiredStateFunc alone never re-derives.
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502, "IP": "10.0.0.1"}},
+			})
+			Expect(s.TestTick(ctx)).To(Succeed())
+			Expect(s.TestTick(ctx)).To(Succeed())
+
+			Expect(conflictLines()).To(HaveLen(1))
+			noValueInWarnings("502", "503", "10.0.0.1")
+		})
+
+		It("warns once per namespace for the same key", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{
+					User:   map[string]any{"PORT": 502},
+					Global: map[string]any{"PORT": 502},
+				},
+			})
+			emitChild(config.VariableBundle{
+				User:   map[string]any{"PORT": 503},
+				Global: map[string]any{"PORT": 503},
+			})
+
+			Expect(s.TestTick(ctx)).To(Succeed())
+
+			lines := conflictLines()
+			Expect(lines).To(HaveLen(2), "one warning per (child, namespace, key), got:\n%s", logs.String())
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"namespace":"User"`),
+				ContainSubstring(`"key":"PORT"`),
+			)))
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"namespace":"Global"`),
+				ContainSubstring(`"key":"PORT"`),
+			)))
+			noValueInWarnings("502", "503")
+		})
+
+		It("does not warn again when a removed child is re-added with the same conflict", func() {
+			const removableType = "variable_conflict_child"
+			_ = factory.RegisterFactoryByType(removableType, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				return &supervisor.TestWorkerWithType{
+					Worker:     supervisor.TestWorker{InitialState: shutdownHonoringState{}},
+					WorkerType: removableType,
+				}
+			})
+			_ = factory.RegisterSupervisorFactoryByType(removableType, func(cfg interface{}) interface{} {
+				return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg.(supervisor.Config))
+			})
+
+			deriveChild := func(vars config.VariableBundle) {
+				testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
+					return &config.DesiredState{
+						BaseDesiredState: config.BaseDesiredState{},
+						ChildrenSpecs: []config.ChildSpec{
+							{Name: "conflict-child", WorkerType: removableType, UserSpec: config.UserSpec{Variables: vars}},
+						},
+					}, nil
+				}
+			}
+			deriveNoChild := func() {
+				testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
+					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
+				}
+			}
+
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502}},
+			})
+			deriveChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
+			Expect(s.TestTick(ctx)).To(Succeed())
+			Expect(conflictLines()).To(HaveLen(1))
+
+			// Remove the child from the specs; the parent spec must change too,
+			// or tick keeps the cached desired state.
+			deriveNoChild()
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502, "IP": "10.0.0.1"}},
+			})
+			Eventually(func() bool {
+				Expect(s.TestTick(ctx)).To(Succeed())
+				_, exists := s.GetChildren()["conflict-child"]
+				return !exists
+			}, 10*time.Second).Should(BeTrue())
+
+			// Re-added with the same key: the warned pair survives the
+			// removal, so the re-added child is not warned again.
+			deriveChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502, "IP": "10.0.0.2"}},
+			})
+			Expect(s.TestTick(ctx)).To(Succeed())
+
+			Expect(conflictLines()).To(HaveLen(1))
+			noValueInWarnings("502", "503")
 		})
 	})
 
