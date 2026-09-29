@@ -25,12 +25,17 @@ import (
 	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
 )
 
-// FailingScenarioV2 checks examplefailing workers that connect after their
-// failures, that never connect, and that are restarted after repeated
-// failures.
+// FailingScenarioV2 runs three examplefailing workers. The recovery worker
+// fails three connects, connects, stays Connected for 5 s
+// (healthyDurationMsBeforeNextCycle in examplefailing/state), disconnects once
+// and reconnects. Only that disconnect sets AllCyclesComplete, so its wait
+// takes about 7 s. The permanent worker never connects. The restart worker is
+// restarted after every five failures and keeps restarting until the run
+// ends. Every failed connect logs a warning and an action_failed error, and
+// the scenario expects both.
 var FailingScenarioV2 = ScenarioV2{
 	Name:        "failing",
-	Description: "Demonstrates action failure handling with recovery vs permanent failure patterns",
+	Description: "Three workers whose connect fails: one connects after three failures, one never connects, one is restarted after every five failures",
 
 	ExpectedWarnings: []string{"connect_failed_simulated"},
 
@@ -41,7 +46,7 @@ var FailingScenarioV2 = ScenarioV2{
 		permanentRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "failing-worker-permanent"}
 		restartRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "failing-worker-restart"}
 
-		env.Step("create the recovery worker, which fails three times before it connects")
+		env.Step("create the recovery worker: it fails three times, connects, stays connected 5 s, disconnects once, and reconnects")
 
 		if err := env.Client.Upsert(recoveryRef, map[string]any{
 			"state":        "running",
@@ -51,7 +56,7 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert recovery worker: %w", err)
 		}
 
-		env.Step("create the permanent worker, which never reaches its failure limit")
+		env.Step("create the permanent worker: its failure limit is 999999, so it never connects")
 
 		if err := env.Client.Upsert(permanentRef, map[string]any{
 			"state":        "running",
@@ -61,7 +66,7 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert permanent worker: %w", err)
 		}
 
-		env.Step("create the restart worker, which is restarted after five failures")
+		env.Step("create the restart worker: it is restarted after every five failures, until the run ends")
 
 		if err := env.Client.Upsert(restartRef, map[string]any{
 			"state":                  "running",
@@ -72,10 +77,10 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert restart worker: %w", err)
 		}
 
-		// AllCyclesComplete turns true only after the failure round ran, and
-		// the worker then stays Connected, so this state lasts until the run
-		// ends.
-		if err := env.WaitFor(ctx, "the recovery worker connects with its failure round complete",
+		// AllCyclesComplete turns true when the worker disconnects after 5 s
+		// Connected. It stays true after the reconnect, so this state lasts
+		// until the run ends.
+		if err := env.WaitFor(ctx, "the recovery worker is connected again after its one disconnect",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, recoveryRef)
 				if err != nil {
