@@ -67,6 +67,8 @@ type CommunicatorWorker struct {
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
+// The dependency map must hold a ChannelProvider under ChannelProviderKey;
+// otherwise it returns an error naming the key.
 // The supervisor sets HierarchyPath on identity before instantiation; tests inject a
 // transport via transportParam.
 func NewCommunicatorWorker(
@@ -84,15 +86,15 @@ func NewCommunicatorWorker(
 		identity.WorkerType = workerTypeName
 	}
 
+	provider, ok := fsmv2types.LookupDependency(dependencies, ChannelProviderKey)
+	if !ok {
+		return nil, fmt.Errorf("communicator: no channel provider under %q in the dependency map", channelProviderKeyName)
+	}
+
 	w := &CommunicatorWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	provider, ok := fsmv2types.LookupDependency(dependencies, ChannelProviderKey)
-	if !ok {
-		provider = GetChannelProvider()
-	}
-
-	w.BindDeps(newCommunicatorDependenciesWithProvider(transportParam, bd, provider))
+	w.BindDeps(NewCommunicatorDependencies(transportParam, bd, provider))
 
 	return w, nil
 }
