@@ -23,13 +23,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
 // InheritanceScenarioV2 shows variables flowing from the registry down to a
 // grandchild. The registry's variables reach the parent, the parent passes
 // them on to its children, and each child adds its own DEVICE_ID. Each
 // child's observation reports the address and device it rendered, so the
-// waits prove the values travelled the whole way.
+// waits prove the values travelled the whole way. The scenario ends when both
+// children are Connected and the parent is Running with both children healthy.
 var InheritanceScenarioV2 = ScenarioV2{
 	Name:        "inheritance",
 	Description: "The registry's variables reach an application child and its grandchildren; each grandchild adds its own DEVICE_ID",
@@ -68,7 +70,7 @@ var InheritanceScenarioV2 = ScenarioV2{
 			childRef := dynamicchildren.Ref{WorkerType: "examplechild", Name: name}
 
 			if err := env.WaitFor(ctx,
-				fmt.Sprintf("the child %s reports the address %s and the device %s it rendered", name, wantAddress, wantDevice),
+				fmt.Sprintf("the child %s is Connected and reports the address %s and the device %s it rendered", name, wantAddress, wantDevice),
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_child.ExamplechildStatus](ctx, env.Client, childRef)
 					if err != nil {
@@ -79,15 +81,26 @@ var InheritanceScenarioV2 = ScenarioV2{
 						return false, "", err
 					}
 
-					done := obs.Status.Address == wantAddress &&
+					done := obs.State == "Connected" &&
+						obs.Status.Address == wantAddress &&
 						obs.Status.Device == wantDevice
 
-					return done, fmt.Sprintf("address=%s device=%s", obs.Status.Address, obs.Status.Device), nil
+					return done, fmt.Sprintf("state=%s address=%s device=%s", obs.State, obs.Status.Address, obs.Status.Device), nil
 				}); err != nil {
 				return err
 			}
 		}
 
-		return nil
+		return env.WaitFor(ctx, "the parent is Running and reports both children healthy",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
+				if err != nil {
+					return false, "", fmt.Errorf("read the parent: %w", err)
+				}
+
+				done := obs.State == "Running" && obs.ChildrenHealthy == 2
+
+				return done, fmt.Sprintf("state=%s healthy=%d", obs.State, obs.ChildrenHealthy), nil
+			})
 	},
 }
