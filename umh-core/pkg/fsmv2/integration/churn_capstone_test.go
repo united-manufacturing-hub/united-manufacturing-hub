@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -112,7 +113,15 @@ var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end",
 		}, "20s", "100ms").Should(BeTrue(),
 			"after deleting all three helloworld refs the application must converge to exactly {config-worker}")
 
-		// NOTE: Get on a Deleted ref still returns its last observed state until despawn store-cleanup lands (see ENG-5088 follow-up); the authoritative signal that a ref is gone is its absence from GetChildren(), asserted above.
+		// (5) Once removed, each worker reads as removed: Get refuses it with
+		// ErrWorkerDeleted and returns no observation, although its documents
+		// stay in the store as history.
+		for _, ref := range refs {
+			obs, getErr := fsmv2client.Get[hello_world.HelloworldStatus](ctx, client, ref)
+			Expect(errors.Is(getErr, fsmv2client.ErrWorkerDeleted)).To(BeTrue(),
+				"Get on removed worker %q must return ErrWorkerDeleted, got %v", ref.Name, getErr)
+			Expect(obs.State).To(BeEmpty(), "Get must not return removed worker %q's last observation", ref.Name)
+		}
 	})
 })
 
