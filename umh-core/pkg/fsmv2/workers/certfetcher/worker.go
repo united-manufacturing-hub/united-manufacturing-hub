@@ -33,13 +33,13 @@ const WorkerTypeName = "certfetcher"
 
 const workerType = WorkerTypeName
 
-// certHandlerKeyName is CertHandlerKey's name. It is a constant so the key and
-// the constructor's error text share one spelling.
+// certHandlerKeyName is CertHandlerKey's name. It is a constant so
+// NewCertFetcherWorker's error can print it, because DependencyKey does not
+// expose its name.
 const certHandlerKeyName = "certfetcher.cert_handler"
 
 // CertHandlerKey names the certificatehandler.Handler a CertFetcherWorker is
-// built from. NewCertFetcherWorker returns an error naming it when the
-// dependency map holds nothing under it.
+// built from.
 var CertHandlerKey = config.NewDependencyKey[certificatehandler.Handler](certHandlerKeyName)
 
 var _ fsmv2.Worker = (*CertFetcherWorker)(nil)
