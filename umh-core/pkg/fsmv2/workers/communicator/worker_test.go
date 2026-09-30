@@ -91,8 +91,8 @@ var _ = Describe("CommunicatorWorker", func() {
 		logger = depspkg.NewNopFSMLogger()
 		mockTransport = NewMockTransport()
 
-		// Every worker in this file gets its mock channel provider from this
-		// map, the way the supervisor delivers one.
+		// Workers built in this Describe get their mock channel provider from
+		// this map, the way the supervisor delivers one.
 		providerDeps = map[string]any{}
 		fsmv2types.SetDependency(providerDeps, communicator.ChannelProviderKey, communicator.ChannelProvider(NewMockChannelProvider()))
 

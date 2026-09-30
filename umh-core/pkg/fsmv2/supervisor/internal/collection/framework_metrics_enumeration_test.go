@@ -79,10 +79,11 @@ const registeredFloor = 16
 
 // panicOnConstruction names the types that panic rather than error when
 // built via factory.NewWorkerByType in this isolated test process, because
-// register.Worker wraps constructor failure in a panic. Each constructor's
-// dependency is published by a parent or passed in the dependency map. This
-// test wires up neither.
-// They are skipped below with the stated reason, and
+// register.Worker wraps constructor failure in a panic. Each constructor reads
+// its dependency from the dependency map or from register.GlobalDeps. In
+// production, cmd/main.go or a parent worker puts it there. This test passes a
+// nil map and sets no GlobalDeps key these five read.
+// These types are skipped below with the stated reason, and
 // the recovered panic is asserted to match that reason, so a skip cannot hide a
 // constructor regression inside one of them.
 var panicOnConstruction = map[string]string{
