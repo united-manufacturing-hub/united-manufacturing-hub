@@ -222,9 +222,9 @@ func (s *linuxSampler) reader(ctx context.Context) cgroupReader {
 		return s.cgroup
 	}
 
-	version, locations := detectCgroupVersion(ctx, s.fs, s.base)
+	version := detectCgroupVersion(ctx, s.fs, s.base)
 	if version == cgroupV1 {
-		s.cgroup = newCgroupV1Source(s.fs, s.base, locations)
+		s.cgroup = newCgroupV1Source(s.fs, s.base, locateV1Files(ctx, s.fs, s.base))
 	}
 	s.version = version
 

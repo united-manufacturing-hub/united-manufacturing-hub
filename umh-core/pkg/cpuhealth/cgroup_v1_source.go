@@ -31,6 +31,51 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+const (
+	v1EffectiveCpusetFile  = "cpuset.effective_cpus"
+	v1ConfiguredCpusetFile = "cpuset.cpus"
+)
+
+// systemd mounts cpu and cpuacct together; a container runtime may not.
+var (
+	v1CPUDirs     = []string{"cpu,cpuacct", "cpu"}
+	v1CPUAcctDirs = []string{"cpu,cpuacct", "cpuacct"}
+)
+
+type v1Locations struct {
+	cpuDir     string
+	cpuacctDir string
+	cpusetFile string
+}
+
+func locateV1Files(ctx context.Context, fs filesystem.Service, base string) v1Locations {
+	// A file the probe did not find is still read at its usual directory, so it reports as missing.
+	cpuDir, found := findDirContaining(ctx, fs, base, v1CPUDirs, "cpu.stat")
+	if !found {
+		cpuDir = v1CPUDirs[0]
+	}
+	cpuacctDir, found := findDirContaining(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
+	if !found {
+		cpuacctDir = v1CPUAcctDirs[0]
+	}
+
+	return v1Locations{
+		cpuDir:     cpuDir,
+		cpuacctDir: cpuacctDir,
+		cpusetFile: v1CpusetFileName(ctx, fs, base),
+	}
+}
+
+// effective_cpus is a copy of cpuset.cpus unless the cpuset is mounted with cpuset_v2_mode,
+// where it alone lists the CPUs in use: https://docs.kernel.org/admin-guide/cgroup-v1/cpusets.html
+func v1CpusetFileName(ctx context.Context, fs filesystem.Service, base string) string {
+	if fileExists(ctx, fs, base+"/cpuset/"+v1EffectiveCpusetFile) {
+		return v1EffectiveCpusetFile
+	}
+
+	return v1ConfiguredCpusetFile
+}
+
 type cgroupV1Source struct {
 	fs        filesystem.Service
 	base      string
