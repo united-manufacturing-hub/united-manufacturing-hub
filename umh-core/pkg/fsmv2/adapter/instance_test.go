@@ -128,8 +128,7 @@ var _ = Describe("AdaptedInstance", func() {
 	}
 
 	// stageClient publishes a global client whose store returns the given
-	// observation/error for ref. GetFresh reads the store only, so the ref is
-	// not Upserted.
+	// observation/error for ref.
 	stageClient := func(obs *fsmv2.Observation[probeStatus], err error) *stubReader {
 		writer := dynamicchildren.NewWriter()
 

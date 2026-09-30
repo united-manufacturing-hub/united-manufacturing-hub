@@ -105,6 +105,8 @@ func judgeWorkerCPU(
 			message = "CPU worker has never observed; no measurement to judge"
 		case fsmv2client.Deleted:
 			message = "CPU worker was removed; no measurement to judge"
+		case fsmv2client.Unknown:
+			// The preset message above covers it.
 		}
 
 		return degradedCPU(message)
