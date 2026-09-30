@@ -162,7 +162,7 @@
 //
 // VariableBundle provides three namespaces:
 //   - User: Top-level template access (flattened, e.g., {{ .IP }})
-//   - Global: Fleet-wide settings (nested, e.g., {{ .global.cluster_id }})
+//   - Global: Settings a spec passes to every worker below it (nested, e.g., {{ .global.cluster_id }})
 //   - Internal: Runtime metadata (nested), not serialized
 //
 // See config/variables.go for the VariableBundle struct definition.

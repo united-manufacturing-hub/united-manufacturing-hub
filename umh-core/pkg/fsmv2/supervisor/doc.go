@@ -64,10 +64,6 @@
 //
 // Injects variables into UserSpec before template expansion:
 //
-// Global variables:
-//   - Pass down unchanged from the supervisor's spec; the supervisor does not inject them
-//   - Available as {{ .global.key }} in templates
-//
 // Internal variables:
 //   - supervisorID: Supervisor's worker ID
 //   - createdAt: Worker creation timestamp
@@ -77,6 +73,9 @@
 // User variables:
 //   - From UserSpec.Variables.User (preserved, not overwritten)
 //   - Available as {{ .key }} in templates (flattened namespace)
+//
+// Global variables reach DeriveDesiredState() as the supervisor's spec holds
+// them. Templates read them as {{ .global.key }}.
 //
 // Variables are available for template expansion in DeriveDesiredState().
 //
