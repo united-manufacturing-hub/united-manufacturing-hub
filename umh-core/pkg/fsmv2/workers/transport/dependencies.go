@@ -56,7 +56,8 @@ var AuthFailureRateConfig = failurerate.Config{
 	MinSamples: 5,
 }
 
-// ChannelProvider interface and singleton functions are defined in channel_provider.go
+// The ChannelProvider interface and its dependency key are defined in
+// channel_provider.go.
 
 // TransportDependencies provides transport and channel access for transport worker actions.
 type TransportDependencies struct {
@@ -90,19 +91,14 @@ type TransportDependencies struct {
 }
 
 // NewTransportDependencies creates dependencies for the transport worker from
-// the global channel provider.
-// Panics if SetChannelProvider was not called first.
+// the given channel provider. It panics when the provider is nil, because a
+// dependency without channels fails on first use with a nil dereference.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 // The supervisor writes framework metrics into this instance after construction;
 // constructing a second instance inside the factory would leave those metrics unreachable.
-func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies) *TransportDependencies {
-	return newTransportDependenciesWithProvider(t, bd, GetChannelProvider())
-}
-
-func newTransportDependenciesWithProvider(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *TransportDependencies {
+func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *TransportDependencies {
 	if provider == nil {
-		panic(fmt.Sprintf("ChannelProvider must be set before creating dependencies (worker=%s). "+
-			"Call SetChannelProvider() in main() before starting FSMv2 supervisor.",
+		panic(fmt.Sprintf("ChannelProvider must not be nil when creating dependencies (worker=%s).",
 			bd.GetWorkerID()))
 	}
 

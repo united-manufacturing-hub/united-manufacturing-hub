@@ -77,7 +77,7 @@ func createParentDeps(logger deps.FSMLogger) *transportpkg.TransportDependencies
 	mt := &mockTransport{}
 	identity := deps.Identity{ID: "parent-id", WorkerType: "transport"}
 
-	return transportpkg.NewTransportDependencies(mt, deps.NewBaseDependencies(logger, nil, identity))
+	return transportpkg.NewTransportDependencies(mt, deps.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 }
 
 func makeMessages(n int) []*types.UMHMessage {
@@ -98,14 +98,11 @@ var _ = Describe("PullDependencies", func() {
 
 	BeforeEach(func() {
 		logger = deps.NewNopFSMLogger()
-		transportpkg.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
 		identity = deps.Identity{ID: "pull-child-id", WorkerType: "pull"}
 	})
 
-	AfterEach(func() {
-		transportpkg.ClearChannelProvider()
-	})
+	AfterEach(func() {})
 
 	Describe("NewPullDependencies", func() {
 		It("should return error with nil parentDeps", func() {
@@ -416,7 +413,6 @@ var _ = Describe("RecordTypedError status_code and error_detail emission (pull)"
 	BeforeEach(func() {
 		buf = new(bytes.Buffer)
 		jsonLogger = deps.NewJSONFSMLogger(buf, deps.LevelDebug)
-		transportpkg.SetChannelProvider(newTestChannelProvider())
 		parentDeps := createParentDeps(jsonLogger)
 		identity := deps.Identity{ID: "pull-child-id", WorkerType: "pull"}
 		var err error
@@ -424,9 +420,7 @@ var _ = Describe("RecordTypedError status_code and error_detail emission (pull)"
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	AfterEach(func() {
-		transportpkg.ClearChannelProvider()
-	})
+	AfterEach(func() {})
 
 	It("emits status_code and error_detail on persistent_pull_failure after escalation", func() {
 		detail := "HTTP 502 (server_error): error code: 502"
