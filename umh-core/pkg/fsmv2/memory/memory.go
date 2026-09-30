@@ -130,23 +130,30 @@ func recordMetrics(recorder *deps.MetricsRecorder, sampledAt time.Time, status M
 }
 
 func chooseSource(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory, cgroupErr error) (MemoryStatus, error) {
-	cgroupHasLimit := cgroupErr == nil && !cgroup.Unlimited && cgroup.LimitBytes > 0
-	if cgroupHasLimit {
-		return MemoryStatus{Source: SourceCgroup, UsedBytes: cgroup.CurrentBytes, TotalBytes: cgroup.LimitBytes}, nil
-	}
-
-	hostUsed, hostTotal, hostErr := d.hostMemory(ctx)
-
 	if cgroupErr != nil {
-		if hostErr != nil {
-			return MemoryStatus{}, errors.Join(cgroupErr, hostErr)
-		}
-
-		return MemoryStatus{Source: SourceHost, UsedBytes: int64(hostUsed), TotalBytes: int64(hostTotal)}, nil
+		return hostFallback(ctx, d, cgroupErr)
 	}
 
+	if cgroup.Unlimited || cgroup.LimitBytes == 0 {
+		return cgroupAgainstHostTotal(ctx, d, cgroup)
+	}
+
+	return MemoryStatus{Source: SourceCgroup, UsedBytes: cgroup.CurrentBytes, TotalBytes: cgroup.LimitBytes}, nil
+}
+
+func hostFallback(ctx context.Context, d *MemoryDeps, cgroupErr error) (MemoryStatus, error) {
+	hostUsed, hostTotal, hostErr := d.hostMemory(ctx)
 	if hostErr != nil {
-		return MemoryStatus{}, fmt.Errorf("cgroup has no memory limit and the host total is unreadable: %w", hostErr)
+		return MemoryStatus{}, fmt.Errorf("cgroup memory is unreadable (%w) and host memory is unreadable: %w", cgroupErr, hostErr)
+	}
+
+	return MemoryStatus{Source: SourceHost, UsedBytes: int64(hostUsed), TotalBytes: int64(hostTotal)}, nil
+}
+
+func cgroupAgainstHostTotal(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory) (MemoryStatus, error) {
+	_, hostTotal, hostErr := d.hostMemory(ctx)
+	if hostErr != nil {
+		return MemoryStatus{}, fmt.Errorf("cgroup memory has no limit and host memory is unreadable: %w", hostErr)
 	}
 
 	return MemoryStatus{
