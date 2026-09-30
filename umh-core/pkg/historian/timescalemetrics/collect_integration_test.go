@@ -152,6 +152,33 @@ func startDatabaseWithConfig(image string) (config.HistorianConfig, *pgxpool.Poo
 	return dialled, pool
 }
 
+const missingHypertableID = 999
+
+func runJobAgainstHypertable(pool *pgxpool.Pool, jobID int, hypertableID int) {
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx, `UPDATE _timescaledb_config.bgw_job
+		SET config = jsonb_set(config, '{hypertable_id}', to_jsonb($2::int)) WHERE id = $1`, jobID, hypertableID)
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = pool.Exec(ctx, `UPDATE _timescaledb_internal.bgw_job_stat SET next_start = now() WHERE job_id = $1`, jobID)
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = pool.Exec(ctx, `SELECT _timescaledb_functions.restart_background_workers()`)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func waitForLastRunStatus(pool *pgxpool.Pool, jobID int, status string) {
+	Eventually(func() string {
+		var lastRunStatus string
+		Expect(pool.QueryRow(context.Background(),
+			`SELECT coalesce(last_run_status, '') FROM timescaledb_information.job_stats WHERE job_id = $1`, jobID,
+		).Scan(&lastRunStatus)).To(Succeed())
+
+		return lastRunStatus
+	}, 30*time.Second, 200*time.Millisecond).Should(Equal(status), "the scheduler records the job's run")
+}
+
 var _ = Describe("Metrics collection", Label("integration"), func() {
 	var ctx context.Context
 
@@ -318,21 +345,9 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			`SELECT job_id FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh' ORDER BY job_id LIMIT 1`,
 		).Scan(&jobID)).To(Succeed())
 
-		// Every umh job stops before the stat row below is written. A background
-		// run landing after it would record its own outcome over the one this spec
-		// is asserting on.
-		_, err = pool.Exec(ctx, `SELECT alter_job(job_id, scheduled => false, next_start => 'infinity')
-			  FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh'`)
-		Expect(err).NotTo(HaveOccurred())
-
-		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
-			(job_id, last_start, last_finish, next_start, last_successful_finish, last_run_success,
-			 total_runs, total_duration, total_duration_failures, total_successes, total_failures,
-			 total_crashes, consecutive_failures, consecutive_crashes, flags)
-			VALUES ($1, now() - interval '1 minute', now(), now() + interval '1 hour', '-infinity', false,
-			 3, interval '0', interval '0', 0, 3, 0, 3, 0, 0)
-			ON CONFLICT (job_id) DO UPDATE SET last_run_success = false, total_failures = 3`, jobID)
-		Expect(err).NotTo(HaveOccurred())
+		waitForLastRunStatus(pool, jobID, "Success")
+		runJobAgainstHypertable(pool, jobID, missingHypertableID)
+		waitForLastRunStatus(pool, jobID, "Failed")
 
 		jobs, err := readJobs(ctx, pool)
 
