@@ -80,7 +80,9 @@ type TransportWorker struct {
 }
 
 // NewTransportWorker creates a new Transport worker in Stopped state.
-// Returns an error if logger is nil.
+// It takes its channel provider from dependencies under ChannelProviderKey,
+// or from SetChannelProvider when the key is absent.
+// Returns an error if logger is nil. Panics if neither source holds a provider.
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,

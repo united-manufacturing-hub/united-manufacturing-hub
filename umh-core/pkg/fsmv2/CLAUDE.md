@@ -60,7 +60,8 @@ A scenario supplies a mock provider under `transport.ChannelProviderKey` in the
 dependency map; the worker falls back to the global when the key is absent (see
 "Mocks" below).
 
-This enables parent-child channel sharing without tight coupling.
+The push and pull children read the transport worker's channels through its
+dependencies, so they share its channels without a provider of their own.
 
 ## State Machine States
 
@@ -510,10 +511,10 @@ func TestExamples(t *testing.T) {
     RunSpecs(t, "Examples Suite")
 }
 
-// transport_scenario_test.go - NO RunSpecs, just Describe blocks
+// transport_channel_provider_test.go - NO RunSpecs, just Describe blocks
 package examples_test
 
-var _ = Describe("Transport Scenario", func() {
+var _ = Describe("TransportTestChannelProvider", func() {
     // tests...
 })
 ```
