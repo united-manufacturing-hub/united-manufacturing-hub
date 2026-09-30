@@ -288,11 +288,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps.Attempts(restartCount))
 	}
 
-	// I16: Validate ObservedState is not nil before progressing FSM
-	if snapshot.Observed == nil {
-		panic("Invariant I16 violated: attempted to progress FSM with nil ObservedState for worker " + workerID)
-	}
-
 	// Action-observation gating: wait for fresh observation after action enqueued.
 	// This prevents duplicate action execution when ticker fires faster than collector.
 	workerCtx.mu.RLock()
@@ -1553,10 +1548,6 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 }
 
 func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Snapshot) bool {
-	if snapshot.Observed == nil {
-		return true
-	}
-
 	age := time.Since(snapshot.Observed.GetTimestamp())
 
 	// During shutdown, log at DEBUG instead of WARN to avoid noisy logs

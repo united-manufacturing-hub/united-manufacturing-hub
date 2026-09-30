@@ -42,10 +42,6 @@ func NewFreshnessChecker(staleThreshold, timeout time.Duration, workerType strin
 // Check validates observation freshness.
 // Returns true if data is fresh.
 func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
-	if snapshot.Observed == nil {
-		return false
-	}
-
 	age := time.Since(snapshot.Observed.GetTimestamp())
 	isFresh := age < f.staleThreshold
 
@@ -62,10 +58,6 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 // IsTimeout checks if observation data has exceeded the timeout threshold.
 // Returns true if data is stale and requires collector restart.
 func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
-	if snapshot.Observed == nil {
-		return false
-	}
-
 	collectedAt := snapshot.Observed.GetTimestamp()
 	age := time.Since(collectedAt)
 	isTimedOut := age >= f.timeout
