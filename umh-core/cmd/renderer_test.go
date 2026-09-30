@@ -128,4 +128,31 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 		Expect(childNames(render(partial, "uuid-1"))).
 			NotTo(ContainElement("communicator"))
 	})
+
+	// The certfetcher child fetches user certificates from the Management
+	// Console for the gatekeeper, so it needs both the gatekeeper and
+	// credentials. Without credentials it is omitted, the same rule as the
+	// communicator.
+	DescribeTable("renders the certfetcher child only with the gatekeeper on and credentials present",
+		func(useGatekeeper bool, apiURL, authToken string, expectCertfetcher bool) {
+			cfg := config.AgentConfig{
+				CommunicatorConfig: config.CommunicatorConfig{
+					APIURL:    apiURL,
+					AuthToken: authToken,
+				},
+				UseGatekeeper: useGatekeeper,
+			}
+
+			names := childNames(render(cfg, "uuid-2"))
+			Expect(names).To(ContainElement("persistence"))
+			if expectCertfetcher {
+				Expect(names).To(ContainElement("certfetcher"))
+			} else {
+				Expect(names).NotTo(ContainElement("certfetcher"))
+			}
+		},
+		Entry("gatekeeper on, credentials present", true, "http://fsmv2.invalid:9999", "test-token", true),
+		Entry("gatekeeper on, no credentials", true, "", "", false),
+		Entry("gatekeeper off, credentials present", false, "http://fsmv2.invalid:9999", "test-token", false),
+	)
 })

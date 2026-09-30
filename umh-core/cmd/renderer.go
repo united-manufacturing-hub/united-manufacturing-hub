@@ -45,7 +45,8 @@ type communicatorSpec struct {
 
 // renderSupervisorChildrenYAML renders the FSMv2 supervisor children document.
 // The persistence child is always present; the communicator child appears only
-// when communicatorEnabled reports credentials (E2 contract). The instanceUUID is
+// when communicatorEnabled reports credentials (E2 contract), and the
+// certfetcher child only when, in addition, the gatekeeper is on. The instanceUUID is
 // interpolated into the communicator's userSpec config.
 //
 // A marshal failure is returned rather than swallowed. Both structs hold only
@@ -79,7 +80,9 @@ func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) (
 		})
 	}
 
-	if cfg.UseGatekeeper {
+	// The certfetcher fetches user certificates from the Management Console, so
+	// it follows the communicator's rule: without credentials it is omitted.
+	if cfg.UseGatekeeper && communicatorEnabled(cfg) {
 		children = append(children, childNode{Name: "certfetcher", WorkerType: "certfetcher"})
 	}
 
