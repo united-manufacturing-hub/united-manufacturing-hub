@@ -36,14 +36,14 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
-// This canary is PR1's cross-boundary proof: it drives a helloworld worker
-// THROUGH the process-scoped fsmv2client (the seam any FSMv1 benthos manager
-// will use), exercising Upsert -> GetFresh Fresh+Running -> Delete -> reap ->
-// Deleted -> re-Upsert (respawn) -> Fresh with the new mood, never the old
-// observation. It inlines the production wiring
-// (dynamicchildren registry + SetClient) so the seam is exercised end-to-end,
-// and uses manual ticking so the multi-tick despawn/reap sequence is
-// deterministic.
+// This canary is the cross-boundary proof for the fsmv2client read path: it
+// drives a helloworld worker THROUGH the process-scoped fsmv2client (the seam
+// any FSMv1 benthos manager will use), exercising Upsert -> GetFresh
+// Fresh+Running -> Delete -> reap -> Deleted -> re-Upsert (respawn) -> Fresh
+// with the new mood, never the old observation. It inlines the production
+// wiring (dynamicchildren registry + SetClient) so the seam is exercised
+// end-to-end, and uses manual ticking so the multi-tick despawn/reap sequence
+// is deterministic.
 var _ = Describe("fsmv2bridge helloworld canary", func() {
 	const (
 		maxAge      = 10 * time.Second
