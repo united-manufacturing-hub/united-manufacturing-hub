@@ -230,3 +230,25 @@ var _ = Describe("GetStatus with USE_FSMV2_MEMORY", func() {
 		Expect(info.Memory.CGroupTotalBytes).ToNot(Equal(criticalWorkerMemory.TotalBytes))
 	})
 })
+
+var _ = Describe("the memory gauge source", func() {
+	It("publishes a record with a total", func() {
+		usedBytes, totalBytes, ok := container_monitor.MemoryGaugeInputs(&models.Memory{CGroupUsedBytes: 500, CGroupTotalBytes: 1000})
+
+		Expect(ok).To(BeTrue())
+		Expect(usedBytes).To(Equal(500.0))
+		Expect(totalBytes).To(Equal(1000.0))
+	})
+
+	It("publishes nothing for a record without a reading", func() {
+		_, _, ok := container_monitor.MemoryGaugeInputs(&models.Memory{Health: &models.Health{Category: models.Degraded}})
+
+		Expect(ok).To(BeFalse())
+	})
+
+	It("publishes nothing without a record", func() {
+		_, _, ok := container_monitor.MemoryGaugeInputs(nil)
+
+		Expect(ok).To(BeFalse())
+	})
+})

@@ -77,3 +77,7 @@ func (c *ContainerMonitorService) SetSentryLogger(sentryLogger deps.FSMLogger) {
 func JudgeWorkerMemory(status simple.Status[fsmv2memory.MemoryStatus], freshness fsmv2client.Freshness) *models.Memory {
 	return judgeWorkerMemory(status, freshness)
 }
+
+func MemoryGaugeInputs(memory *models.Memory) (usedBytes, totalBytes float64, ok bool) {
+	return memoryGaugeInputs(memory)
+}
