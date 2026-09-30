@@ -161,6 +161,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		Logger:                  cfg.Logger,
 		TickInterval:            cfg.TickInterval,
 		YAMLConfig:              cfg.Scenario.YAMLConfig,
+		Dependencies:            cfg.Dependencies,
 		EnableTraceLogging:      cfg.EnableTraceLogging,
 		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})

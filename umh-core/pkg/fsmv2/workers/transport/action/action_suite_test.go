@@ -48,31 +48,14 @@ func (m *mockActionChannelProvider) GetInboundStats(_ string) (capacity int, len
 	return 100, 0
 }
 
-// setupChannelProviderSingleton sets up the global singleton for tests.
-// Must be called in BeforeEach before creating TransportDependencies.
-func setupChannelProviderSingleton() {
+// newActionChannelProvider builds a channel provider for action tests.
+// Pass it to NewTransportDependencies.
+func newActionChannelProvider() transportpkg.ChannelProvider {
 	inboundBi := make(chan *types.UMHMessage, 100)
 	outboundBi := make(chan *types.UMHMessage, 100)
-	provider := &mockActionChannelProvider{
+
+	return &mockActionChannelProvider{
 		inbound:  inboundBi,
 		outbound: outboundBi,
 	}
-	transportpkg.SetChannelProvider(provider)
 }
-
-// clearChannelProviderSingleton clears the global singleton.
-// Must be called in AfterEach.
-func clearChannelProviderSingleton() {
-	transportpkg.ClearChannelProvider()
-}
-
-// Suite-level setup: ensure singleton is cleared before and after each test.
-var _ = BeforeEach(func() {
-	// Phase 1: Set up ChannelProvider singleton for action tests
-	setupChannelProviderSingleton()
-})
-
-var _ = AfterEach(func() {
-	// Phase 1: Clear ChannelProvider singleton after each test
-	clearChannelProviderSingleton()
-})
