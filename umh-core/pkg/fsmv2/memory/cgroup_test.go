@@ -16,10 +16,13 @@ package fsmv2memory
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 var _ = Describe("ReadCgroupMemory", func() {
@@ -57,12 +60,32 @@ var _ = Describe("ReadCgroupMemory", func() {
 		Expect(err).To(MatchError(fs.ErrNotExist))
 	})
 
-	It("fails when memory.current does not parse", func() {
-		fileSystem := fixtureFilesystem(cgroupFiles("max\n", "abc\n"))
+	DescribeTable("names the file and the outcome of a failed read",
+		func(files map[string]string, expectedFile string, expectedOutcome readOutcome) {
+			_, err := ReadCgroupMemory(context.Background(), fixtureFilesystem(files), fixtureCgroupBase)
 
-		_, err := ReadCgroupMemory(context.Background(), fileSystem, fixtureCgroupBase)
+			var readErr *cgroupReadError
+			Expect(errors.As(err, &readErr)).To(BeTrue())
+			Expect(readErr.File).To(Equal(expectedFile))
+			Expect(readErr.Outcome).To(Equal(expectedOutcome))
+		},
+		Entry("missing memory.max", map[string]string{}, "memory.max", readMissing),
+		Entry("unparsable memory.max", cgroupFiles("lots\n", bytesText(twoGiBBytes)), "memory.max", readUnparsable),
+		Entry("missing memory.current", map[string]string{fixtureCgroupBase + "/memory.max": "max\n"}, "memory.current", readMissing),
+		Entry("unparsable memory.current", cgroupFiles("max\n", "abc\n"), "memory.current", readUnparsable),
+	)
 
-		Expect(err).To(HaveOccurred())
+	It("reports a read that fails for another reason as failed", func() {
+		refusingFileSystem := filesystem.NewMockFileSystem().WithReadFileFunc(func(context.Context, string) ([]byte, error) {
+			return nil, fs.ErrPermission
+		})
+
+		_, err := ReadCgroupMemory(context.Background(), refusingFileSystem, fixtureCgroupBase)
+
+		var readErr *cgroupReadError
+		Expect(errors.As(err, &readErr)).To(BeTrue())
+		Expect(readErr.Outcome).To(Equal(readFailed))
+		Expect(err).To(MatchError(fs.ErrPermission))
 	})
 })
 

@@ -72,6 +72,7 @@ func pollTimes(memoryDeps *MemoryDeps, times int) {
 var (
 	missingCgroup    = map[string]string{}
 	unparsableCgroup = cgroupFiles("max\n", "abc\n")
+	onlyMemoryMax    = map[string]string{fixtureCgroupBase + "/memory.max": "max\n"}
 )
 
 var _ = Describe("the memory worker's Sentry reports", func() {
@@ -83,7 +84,20 @@ var _ = Describe("the memory worker's Sentry reports", func() {
 		Expect(*events).To(HaveLen(1))
 		Expect((*events)[0].Feature).To(Equal(deps.FeatureSupportMemory))
 		Expect((*events)[0].Message).To(Equal(cgroupReadFailedTag + "::missing"))
+		Expect((*events)[0].Fields).To(HaveKeyWithValue("file", "memory.max"))
 		Expect((*events)[0].Fields).To(HaveKey("error"))
+	})
+
+	It("reports the same outcome on a second file separately", func() {
+		memoryDeps, events := recordingDeps(fixtureFilesystem(missingCgroup))
+		pollTimes(memoryDeps, 1)
+
+		memoryDeps.fileSystem = fixtureFilesystem(onlyMemoryMax)
+		pollTimes(memoryDeps, 2)
+
+		Expect(*events).To(HaveLen(2))
+		Expect((*events)[1].Message).To(Equal(cgroupReadFailedTag + "::missing"))
+		Expect((*events)[1].Fields).To(HaveKeyWithValue("file", "memory.current"))
 	})
 
 	It("reports an unparsable cgroup separately from a missing one", func() {
@@ -94,7 +108,8 @@ var _ = Describe("the memory worker's Sentry reports", func() {
 		pollTimes(memoryDeps, 2)
 
 		Expect(*events).To(HaveLen(2))
-		Expect((*events)[1].Message).To(Equal(cgroupReadFailedTag + "::failed"))
+		Expect((*events)[1].Message).To(Equal(cgroupReadFailedTag + "::unparsable"))
+		Expect((*events)[1].Fields).To(HaveKeyWithValue("file", "memory.current"))
 	})
 
 	It("reports nothing for a readable cgroup", func() {

@@ -16,35 +16,29 @@ package fsmv2memory
 
 import (
 	"errors"
-	"io/fs"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 const cgroupReadFailedTag = "memory::cgroup_read_failed"
 
-type readOutcome string
-
-const (
-	readMissing readOutcome = "missing"
-	readFailed  readOutcome = "failed"
-)
-
-func outcomeOf(err error) readOutcome {
-	if errors.Is(err, fs.ErrNotExist) {
-		return readMissing
-	}
-
-	return readFailed
+type reportedRead struct {
+	file    string
+	outcome readOutcome
 }
 
 func (d *MemoryDeps) reportCgroupReadFailure(err error) {
-	outcome := outcomeOf(err)
-	if _, reportedBefore := d.reportedReads.LoadOrStore(outcome, struct{}{}); reportedBefore {
+	var readErr *cgroupReadError
+	if !errors.As(err, &readErr) {
+		readErr = &cgroupReadError{Outcome: readFailed, Err: err}
+	}
+
+	key := reportedRead{file: readErr.File, outcome: readErr.Outcome}
+	if _, reportedBefore := d.reportedReads.LoadOrStore(key, struct{}{}); reportedBefore {
 		return
 	}
 
 	d.GetLogger().SentryWarn(deps.FeatureSupportMemory, d.GetHierarchyPath(),
-		cgroupReadFailedTag+"::"+string(outcome),
-		deps.String("cgroup_base", cgroupBase), deps.Err(err))
+		cgroupReadFailedTag+"::"+string(readErr.Outcome),
+		deps.String("file", readErr.File), deps.String("cgroup_base", cgroupBase), deps.Err(readErr.Err))
 }

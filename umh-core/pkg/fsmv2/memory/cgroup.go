@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strconv"
 	"strings"
 
@@ -30,28 +31,64 @@ type CgroupMemory struct {
 	Unlimited    bool
 }
 
+type readOutcome string
+
+const (
+	readMissing    readOutcome = "missing"
+	readUnparsable readOutcome = "unparsable"
+	readFailed     readOutcome = "failed"
+)
+
+type cgroupReadError struct {
+	File    string
+	Outcome readOutcome
+	Err     error
+}
+
+func (e *cgroupReadError) Error() string {
+	return fmt.Sprintf("cgroup %s %s: %v", e.File, e.Outcome, e.Err)
+}
+
+func (e *cgroupReadError) Unwrap() error {
+	return e.Err
+}
+
 func ReadCgroupMemory(ctx context.Context, fileSystem filesystem.Service, cgroupBase string) (CgroupMemory, error) {
-	memoryMaxData, err := fileSystem.ReadFile(ctx, cgroupBase+"/memory.max")
+	memoryMaxData, err := readCgroupFile(ctx, fileSystem, cgroupBase, "memory.max")
 	if err != nil {
-		return CgroupMemory{}, fmt.Errorf("failed to read memory.max: %w", err)
+		return CgroupMemory{}, err
 	}
 
 	limitBytes, unlimited, err := parseMemoryMax(memoryMaxData)
 	if err != nil {
-		return CgroupMemory{}, err
+		return CgroupMemory{}, &cgroupReadError{File: "memory.max", Outcome: readUnparsable, Err: err}
 	}
 
-	memoryCurrentData, err := fileSystem.ReadFile(ctx, cgroupBase+"/memory.current")
+	memoryCurrentData, err := readCgroupFile(ctx, fileSystem, cgroupBase, "memory.current")
 	if err != nil {
-		return CgroupMemory{}, fmt.Errorf("failed to read memory.current: %w", err)
+		return CgroupMemory{}, err
 	}
 
 	currentBytes, err := parseMemoryCurrent(memoryCurrentData)
 	if err != nil {
-		return CgroupMemory{}, err
+		return CgroupMemory{}, &cgroupReadError{File: "memory.current", Outcome: readUnparsable, Err: err}
 	}
 
 	return CgroupMemory{LimitBytes: limitBytes, CurrentBytes: currentBytes, Unlimited: unlimited}, nil
+}
+
+func readCgroupFile(ctx context.Context, fileSystem filesystem.Service, cgroupBase, file string) ([]byte, error) {
+	data, err := fileSystem.ReadFile(ctx, cgroupBase+"/"+file)
+	if err == nil {
+		return data, nil
+	}
+
+	outcome := readFailed
+	if errors.Is(err, fs.ErrNotExist) {
+		outcome = readMissing
+	}
+
+	return nil, &cgroupReadError{File: file, Outcome: outcome, Err: err}
 }
 
 func parseMemoryMax(data []byte) (limitBytes int64, unlimited bool, err error) {
