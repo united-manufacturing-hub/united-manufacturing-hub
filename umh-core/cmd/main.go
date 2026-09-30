@@ -191,6 +191,12 @@ func main() {
 			configData.Agent.APIURL != "",
 			configData.Agent.AuthToken != "",
 		),
+		FSMv2MemoryMonitorEnabled: models.FSMv2MonitorEnabled(
+			memoryMonitorEnabled,
+			configData.Agent.UseFSMv2Transport,
+			configData.Agent.APIURL != "",
+			configData.Agent.AuthToken != "",
+		),
 		FSMv2TransportEnabled:         configData.Agent.UseFSMv2Transport,
 		FSMv2MemoryCleanupEnabled:     configData.Agent.UseFSMv2MemoryCleanup,
 		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
