@@ -82,12 +82,12 @@ func isNil(value any) bool {
 }
 
 // LookupDependency reads the value stored under key. The second return is false
-// when the map holds nothing under that name or holds a value of another type,
-// so a worker whose dependency was wired up wrongly stays on its real
-// implementation.
+// when the map holds nothing under that name, holds a value of another type, or
+// holds a nil value, so a worker whose dependency was wired up wrongly stays on
+// its real implementation.
 func LookupDependency[T any](m map[string]any, key DependencyKey[T]) (T, bool) {
 	// A missing name reads as a nil any, which fails this assertion too.
 	value, ok := m[key.name].(T)
 
-	return value, ok
+	return value, ok && !isNil(value)
 }

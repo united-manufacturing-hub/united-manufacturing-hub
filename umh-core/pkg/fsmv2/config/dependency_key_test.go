@@ -124,4 +124,12 @@ var _ = Describe("DependencyKey", func() {
 		Expect(ok).To(BeFalse())
 		Expect(got).To(BeNil())
 	})
+
+	It("reports absent when code that writes the map by name stored a nil pointer", func() {
+		var missing *fixedSampler
+		m := map[string]any{"test.sampler": sampler(missing)}
+
+		_, ok := config.LookupDependency(m, samplerKey)
+		Expect(ok).To(BeFalse())
+	})
 })
