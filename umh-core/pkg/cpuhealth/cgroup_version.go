@@ -42,14 +42,14 @@ func (v cgroupVersion) String() string {
 }
 
 func detectCgroupVersion(ctx context.Context, fs filesystem.Service, base string) cgroupVersion {
-	if fileExists(ctx, fs, base+"/cpu.stat") {
+	if fileExists(ctx, fs, base+"/"+v2CPUStatFile) {
 		return cgroupV2
 	}
 
 	// A kernel built without CONFIG_CFS_BANDWIDTH writes no v1 cpu.stat but
 	// still writes cpuacct.usage: https://docs.kernel.org/scheduler/sched-bwc.html
-	_, hasCPUStat := findDirContaining(ctx, fs, base, v1CPUDirs, "cpu.stat")
-	_, hasCPUAcctUsage := findDirContaining(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
+	_, hasCPUStat := findDirContaining(ctx, fs, base, v1CPUDirs, v1CPUStatFile)
+	_, hasCPUAcctUsage := findDirContaining(ctx, fs, base, v1CPUAcctDirs, v1CPUAcctUsageFile)
 	if !hasCPUStat && !hasCPUAcctUsage {
 		return cgroupVersionUnresolved
 	}

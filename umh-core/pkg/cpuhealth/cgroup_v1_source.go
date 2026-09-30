@@ -31,9 +31,24 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+// The files the v1 reader opens. Each sits in the controller directory its
+// comment names, under the cgroup base.
+// https://docs.kernel.org/admin-guide/cgroup-v1/cpusets.html
 const (
-	v1EffectiveCpusetFile  = "cpuset.effective_cpus"
+	// cpu: the CPU time the cgroup may use per period, in microseconds, or -1 when uncapped.
+	v1CPUQuotaFile = "cpu.cfs_quota_us"
+	// cpu: the length of one period, in microseconds.
+	v1CPUPeriodFile = "cpu.cfs_period_us"
+	// cpu: nr_periods and nr_throttled. Unlike v2's cpu.stat it carries no usage.
+	v1CPUStatFile = "cpu.stat"
+	// cpuacct: the CPU time the cgroup has used, in nanoseconds.
+	v1CPUAcctUsageFile = "cpuacct.usage"
+	// cpuset: the CPUs in use. It equals cpuset.cpus unless the hierarchy is mounted with cpuset_v2_mode.
+	v1EffectiveCpusetFile = "cpuset.effective_cpus"
+	// cpuset: the CPUs configured for the cgroup, read when cpuset.effective_cpus is absent.
 	v1ConfiguredCpusetFile = "cpuset.cpus"
+
+	v1CpusetDir = "cpuset"
 )
 
 // systemd mounts cpu and cpuacct together; a container runtime may not.
@@ -50,11 +65,11 @@ type v1Locations struct {
 
 func locateV1Files(ctx context.Context, fs filesystem.Service, base string) v1Locations {
 	// A file the probe did not find is still read at its usual directory, so it reports as missing.
-	cpuDir, found := findDirContaining(ctx, fs, base, v1CPUDirs, "cpu.stat")
+	cpuDir, found := findDirContaining(ctx, fs, base, v1CPUDirs, v1CPUStatFile)
 	if !found {
 		cpuDir = v1CPUDirs[0]
 	}
-	cpuacctDir, found := findDirContaining(ctx, fs, base, v1CPUAcctDirs, "cpuacct.usage")
+	cpuacctDir, found := findDirContaining(ctx, fs, base, v1CPUAcctDirs, v1CPUAcctUsageFile)
 	if !found {
 		cpuacctDir = v1CPUAcctDirs[0]
 	}
@@ -66,10 +81,8 @@ func locateV1Files(ctx context.Context, fs filesystem.Service, base string) v1Lo
 	}
 }
 
-// effective_cpus is a copy of cpuset.cpus unless the cpuset is mounted with cpuset_v2_mode,
-// where it alone lists the CPUs in use: https://docs.kernel.org/admin-guide/cgroup-v1/cpusets.html
 func v1CpusetFileName(ctx context.Context, fs filesystem.Service, base string) string {
-	if fileExists(ctx, fs, base+"/cpuset/"+v1EffectiveCpusetFile) {
+	if fileExists(ctx, fs, base+"/"+v1CpusetDir+"/"+v1EffectiveCpusetFile) {
 		return v1EffectiveCpusetFile
 	}
 
@@ -94,7 +107,7 @@ func (c *cgroupV1Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome,
 		return quotaRead{Limit: diagnosis.Unknown(), Raw: quotaRaw}, classifyRead(err), err
 	}
 
-	periodPath := c.path(c.locations.cpuDir, "cpu.cfs_period_us")
+	periodPath := c.path(c.locations.cpuDir, v1CPUPeriodFile)
 	period, periodRaw, periodErr := c.readInt(ctx, periodPath)
 	raw := quotaAndPeriodRaw(quotaRaw, periodRaw)
 
@@ -186,13 +199,13 @@ func (c *cgroupV1Source) advanceUsageRate(timestamp time.Time, usage diagnosis.R
 func (c *cgroupV1Source) pathOf(operation ReadOperation) string {
 	switch operation {
 	case OperationCPUMax:
-		return c.path(c.locations.cpuDir, "cpu.cfs_quota_us")
+		return c.path(c.locations.cpuDir, v1CPUQuotaFile)
 	case OperationCPUStat:
-		return c.path(c.locations.cpuDir, "cpu.stat")
+		return c.path(c.locations.cpuDir, v1CPUStatFile)
 	case OperationCPUAcctUsage:
-		return c.path(c.locations.cpuacctDir, "cpuacct.usage")
+		return c.path(c.locations.cpuacctDir, v1CPUAcctUsageFile)
 	case OperationCpusetCPUs:
-		return c.path("cpuset", c.locations.cpusetFile)
+		return c.path(v1CpusetDir, c.locations.cpusetFile)
 	case OperationCPUPressure:
 		return ""
 	}

@@ -28,6 +28,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+// The files the v2 reader opens, all directly under the cgroup base.
+// https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files
+const (
+	// "$QUOTA $PERIOD" in microseconds, with the quota "max" when uncapped.
+	v2CPUMaxFile = "cpu.max"
+	// usage_usec, nr_periods and nr_throttled.
+	v2CPUStatFile = "cpu.stat"
+	// The cgroup's own pressure stall information. v1 has no equivalent.
+	v2CPUPressureFile = "cpu.pressure"
+	// The CPUs the cgroup can run on.
+	v2CpusetFile = "cpuset.cpus.effective"
+)
+
 // cgroupV2Source reads one cgroup's CPU accounting files, and owns the facts
 // that persist across ticks for this cgroup.
 type cgroupV2Source struct {

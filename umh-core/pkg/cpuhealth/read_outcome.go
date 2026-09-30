@@ -168,13 +168,13 @@ var allReadOperations = []readOperationSpec{
 	{Operation: OperationCgroupControllers, name: "/cgroup.controllers", cgroupRelative: true},
 	{Operation: OperationProcSelfCgroup, name: "/proc/self/cgroup"},
 	{Operation: OperationCgroupBaseDir, cgroupRelative: true},
-	{Operation: OperationCPUPressure, name: "/cpu.pressure", cgroupRelative: true},
-	{Operation: OperationCPUStat, name: "/cpu.stat", cgroupRelative: true},
+	{Operation: OperationCPUPressure, name: "/" + v2CPUPressureFile, cgroupRelative: true},
+	{Operation: OperationCPUStat, name: "/" + v2CPUStatFile, cgroupRelative: true},
 	{Operation: OperationCPUAcctUsage},
 	{Operation: OperationProcStat, name: "/proc/stat"},
-	{Operation: OperationCpusetCPUs, name: "/cpuset.cpus.effective", cgroupRelative: true},
+	{Operation: OperationCpusetCPUs, name: "/" + v2CpusetFile, cgroupRelative: true},
 	{Operation: OperationProcCpuinfo, name: "/proc/cpuinfo"},
-	{Operation: OperationCPUMax, name: "/cpu.max", cgroupRelative: true},
+	{Operation: OperationCPUMax, name: "/" + v2CPUMaxFile, cgroupRelative: true},
 }
 
 // pathOf returns the file the v2 reader and the host reader open for this
