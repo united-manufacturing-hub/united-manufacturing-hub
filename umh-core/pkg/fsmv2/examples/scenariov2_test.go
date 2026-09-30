@@ -139,9 +139,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 	})
 
 	It("keeps the v2 registries' names disjoint", func() {
-		// On a name collision between RegistryV2 and LiveRegistryV2,
-		// ListScenarios and the CLI --list silently prefer one entry, making
-		// the other scenario unrunnable.
+		// On a name collision, --list shows the LiveRegistryV2 description
+		// while --scenario runs the RegistryV2 scenario. The LiveRegistryV2
+		// scenario can then not be run from the CLI.
 		for name := range examples.LiveRegistryV2 {
 			Expect(examples.RegistryV2).NotTo(HaveKey(name),
 				"scenario name %q is registered in both RegistryV2 and LiveRegistryV2", name)
@@ -297,8 +297,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		os.Stdout = writer
 
-		// A failed Run tears down before examples.Run returns, so the dump
-		// is complete when the call returns.
+		// When the scenario's Run fails, examples.Run tears down and prints
+		// the dump before it returns, so the dump is complete when the call
+		// returns.
 		_, err = examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   failing,
 			TickInterval: 50 * time.Millisecond,
@@ -408,11 +409,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the dump must list the worker the scenario created")
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"a clean dump run must not report a failure")
-		// Every v2 run logs v2_run_teardown_starting during teardown. This
-		// positive control makes an empty or malformed log capture fail the
-		// spec before the absence check below runs.
+		// Every run that returns a RunResult logs v2_run_teardown_starting
+		// during teardown. This positive control makes an empty or malformed
+		// log capture fail the spec before the absence check below runs.
 		Expect(logContainsEvent(logBuf.String(), "v2_run_teardown_starting")).To(BeTrue(),
-			"the log capture must contain the teardown event every v2 run emits")
+			"the log capture must contain the teardown event that every run returning a RunResult emits")
 		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeFalse(),
 			"the v2 path must not warn that DumpStore is unsupported")
 	})
@@ -587,15 +588,16 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// A real worker must be resident when teardown starts, so the drain
-		// has a worker it cannot reap within its budget.
+		// A real worker must be running when teardown starts, so the drain
+		// has a worker to stop.
 		degradedDrain := examples.ScenarioV2{
 			Name:        "degraded-drain",
 			Description: "test-local Run for the exhausted drain budget",
-			// A 1ns budget cannot reap even one worker within a tick, so the
-			// drain warns graceful_shutdown_timeout. The v2 teardown puts that
-			// warning into RunResult.Err, and this spec asserts only the drain
-			// outcome, so the scenario declares the warning here.
+			// A 1ns budget runs out before the drain can stop even one
+			// worker, so the drain warns graceful_shutdown_timeout. The v2
+			// teardown puts that warning into RunResult.Err, and this spec
+			// asserts only the drain outcome, so the scenario declares the
+			// warning here.
 			ExpectedWarnings: []string{
 				"graceful_shutdown_timeout",
 				"graceful_shutdown_budget_exhausted",
