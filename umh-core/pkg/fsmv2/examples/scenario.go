@@ -47,7 +47,7 @@ import (
 type RunConfig struct {
 	Store        storage.TriangularStoreInterface
 	Logger       deps.FSMLogger
-	ScenarioV2   ScenarioV2    // When ScenarioV2.Run is set, examples.Run takes the v2 kernel-only path
+	ScenarioV2   ScenarioV2    // Required: examples.Run rejects a ScenarioV2 with no Run func or no Name
 	Duration     time.Duration // 0 means run forever (until context cancelled)
 	TickInterval time.Duration
 	// GracefulShutdownTimeout is the per-level drain base propagated to the
