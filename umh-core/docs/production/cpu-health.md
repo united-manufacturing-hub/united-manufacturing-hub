@@ -93,8 +93,8 @@ stat -fc %T /sys/fs/cgroup
 `cpu.pressure` does not exist at all.
 
 On cgroup v1, UMH reads the container's usage, throttling and CPU limit from the v1 controller files,
-and machine headroom and steal from `/proc/stat`. It loses only CPU pressure, because cgroup v1 has no
-per-container pressure file.
+and machine headroom and steal from `/proc/stat`. CPU pressure is the only signal it cannot read, because
+cgroup v1 has no per-container pressure file.
 
 ### Set the kernel parameters
 
@@ -120,7 +120,7 @@ minute and look again.
 If the file is still missing, run `cat /proc/pressure/cpu` on the host. Output means PSI is on and
 cgroup v2 is what is missing. `No such file or directory` means the kernel ignored `psi=1`, which
 happens on a kernel built without PSI. If the kernel has no PSI, set a CPU limit on the container
-instead. UMH then judges the container against its limit, and pressure stays unavailable.
+instead. UMH then judges the container against its limit. Pressure stays unavailable.
 
 ## When UMH refuses a new bridge
 
