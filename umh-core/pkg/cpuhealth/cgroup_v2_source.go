@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The cgroup v2 reader: cpu.max, cpu.stat, cpu.pressure and
-// cpuset.cpus.effective under one cgroup's base. hostSource reads the
-// machine-wide files.
+// The cgroup v2 reader. hostSource reads the machine-wide files.
 
 package cpuhealth
 
@@ -41,8 +39,8 @@ const (
 	v2CpusetFile = "cpuset.cpus.effective"
 )
 
-// cgroupV2Source reads one cgroup's CPU accounting files, and owns the facts
-// that persist across ticks for this cgroup.
+// cgroupV2Source reads one cgroup's CPU accounting files, and keeps the usage
+// baseline between ticks.
 type cgroupV2Source struct {
 	fs   filesystem.Service
 	base string
@@ -59,12 +57,9 @@ func newCgroupV2Source(fs filesystem.Service, base string) *cgroupV2Source {
 	return &cgroupV2Source{fs: fs, base: base}
 }
 
-// advanceUsageRate advances the baseline this source owns to this tick, which is
-// what the next tick measures against. It returns this tick's instantaneous usage
-// rate: the delta of usage against the baseline it replaced, divided by the
-// elapsed time since that baseline. timestamp is the composer's single per-tick
-// Timestamp and never time.Now(); Read in read.go says why both sources have to
-// divide by the same elapsed time.
+// advanceUsageRate returns the average cores in use between the previous tick and this one.
+// timestamp must be the tick's single Timestamp, never time.Now(); Read in
+// read.go says why.
 func (c *cgroupV2Source) advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	return c.usageBase.averageCoresOverLastInterval(timestamp, usage)
 }
@@ -74,10 +69,9 @@ func (c *cgroupV2Source) advanceUsageRate(timestamp time.Time, usage diagnosis.R
 // the cgroup is unlimited:
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#cpu-interface-files
 //
-// A positive quota reads as a capacity in cores. "max" and a non-positive quota
-// read as a present no-limit, a present 0.0, and both return ReadOK. A cpu.max
-// that is unreadable, empty or unparsable reads as absent no-signal, under the
-// outcome that says which.
+// A positive quota returns the limit in cores. "max" and a non-positive quota
+// return a present 0.0, meaning no limit, with ReadOK. An unreadable, empty or
+// unparsable cpu.max returns an absent limit and the outcome naming the failure.
 func (c *cgroupV2Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome, error) {
 	data, err := c.fs.ReadFile(ctx, pathOf(c.base, OperationCPUMax))
 	if err != nil {
@@ -94,7 +88,7 @@ func (c *cgroupV2Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome,
 	}
 
 	if fields[0] == "max" {
-		// Uncapped is a definite no-limit: present, but never a positive capacity.
+		// Uncapped reads as a present 0.0 (no limit), never a capacity.
 		return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK, nil
 	}
 
@@ -110,7 +104,7 @@ func (c *cgroupV2Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome,
 	if quota > 0 {
 		return quotaRead{Limit: diagnosis.Known(float64(quota) / float64(period)), Raw: raw}, ReadOK, nil
 	}
-	// A non-positive limit is never a positive capacity/denominator.
+	// A non-positive quota cannot be a capacity or a divisor, so it reads as no limit.
 	return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK, nil
 }
 
@@ -123,7 +117,7 @@ func (c *cgroupV2Source) readStat(ctx context.Context) statRead {
 
 // statOutcome reports a successful read with no usage figure as ReadEmpty,
 // since ReadOK would claim a value never produced. A zero-byte file and a
-// valueless usage_usec line both land there; the raw text separates them.
+// usage_usec line with no value both return ReadEmpty; Raw tells them apart.
 func statOutcome(stat statRead, err error) ReadOutcome {
 	if err != nil {
 		return classifyRead(err)
@@ -136,9 +130,9 @@ func statOutcome(stat statRead, err error) ReadOutcome {
 	return ReadOK
 }
 
-// readStatFile reads cpu.stat once. A non-nil error means either the read or a
-// counter's parse failed, and parseCounter says what an absent or unparsable
-// key does to a single counter.
+// readStatFile reads cpu.stat once. A non-nil error means the read or a
+// counter's parse failed. parseCounter says what an absent or unparsable key
+// does to a single counter.
 func (c *cgroupV2Source) readStatFile(ctx context.Context) (statRead, error) {
 	failed := statRead{Usage: diagnosis.Unknown(), Periods: diagnosis.Unknown(), Throttled: diagnosis.Unknown()}
 
@@ -183,15 +177,14 @@ func (c *cgroupV2Source) readPSI(ctx context.Context) (fraction float64, err err
 			if strings.HasPrefix(field, "avg60=") {
 				v, parseErr := strconv.ParseFloat(strings.TrimPrefix(field, "avg60="), 64)
 				if parseErr != nil {
-					// An unparsable avg60 is no pressure this tick, matching the
-					// unparsable cpu.max no-signal handling: never a present 0.0.
+					// An unparsable avg60 leaves Pressure absent this tick, never a present 0.0.
 					return 0, errUnparsableRead
 				}
 				return v / 100.0, nil
 			}
 		}
 	}
-	// The file was there; its documented "some"/avg60 shape was not.
+	// The file was read but has no "some" line carrying avg60.
 	return 0, errUnparsableRead
 }
 

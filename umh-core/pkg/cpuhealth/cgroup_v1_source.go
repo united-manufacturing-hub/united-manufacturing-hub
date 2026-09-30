@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The cgroup v1 reader. v1 has no per-cgroup pressure file, and the
-// machine-wide /proc/pressure/cpu is not read in its place, because
-// Sample.Pressure is cgroup-scoped.
+// The cgroup v1 reader. v1 has no per-cgroup pressure file. The reader does not
+// read the machine-wide /proc/pressure/cpu instead, because Sample.Pressure is
+// cgroup-scoped.
 // https://docs.kernel.org/scheduler/sched-bwc.html
 // https://docs.kernel.org/admin-guide/cgroup-v1/cpuacct.html
 
@@ -31,15 +31,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// The files the v1 reader opens. Each sits in the controller directory its
-// comment names, under the cgroup base.
+// The files the v1 reader opens. Each comment starts with the controller
+// directory under the cgroup base that holds the file.
 // https://docs.kernel.org/admin-guide/cgroup-v1/cpusets.html
 const (
 	// cpu: the CPU time the cgroup may use per period, in microseconds, or -1 when uncapped.
 	v1CPUQuotaFile = "cpu.cfs_quota_us"
 	// cpu: the length of one period, in microseconds.
 	v1CPUPeriodFile = "cpu.cfs_period_us"
-	// cpu: nr_periods and nr_throttled. Unlike v2's cpu.stat it carries no usage.
+	// cpu: nr_periods and nr_throttled. It has no usage counter, unlike v2's cpu.stat.
 	v1CPUStatFile = "cpu.stat"
 	// cpuacct: the CPU time the cgroup has used, in nanoseconds.
 	v1CPUAcctUsageFile = "cpuacct.usage"
@@ -51,7 +51,8 @@ const (
 	v1CpusetDir = "cpuset"
 )
 
-// systemd mounts cpu and cpuacct together; a container runtime may not.
+// The directories tried, in order, for the cpu and cpuacct controllers. systemd
+// mounts both as cpu,cpuacct; a container runtime may mount them separately.
 var (
 	v1CPUDirs     = []string{"cpu,cpuacct", "cpu"}
 	v1CPUAcctDirs = []string{"cpu,cpuacct", "cpuacct"}
@@ -64,7 +65,7 @@ type v1Locations struct {
 }
 
 func locateV1Files(ctx context.Context, fs filesystem.Service, base string) v1Locations {
-	// A file the probe did not find is still read at its usual directory, so it reports as missing.
+	// A file found in no candidate directory is read from the first one, so its read reports ReadMissing.
 	cpuDir, found := findDirContaining(ctx, fs, base, v1CPUDirs, v1CPUStatFile)
 	if !found {
 		cpuDir = v1CPUDirs[0]
@@ -101,7 +102,7 @@ func newCgroupV1Source(fs filesystem.Service, base string, locations v1Locations
 	return &cgroupV1Source{fs: fs, base: base, locations: locations}
 }
 
-// readQuota divides the quota by the period, which v1 writes to two files.
+// readQuota returns the CPU limit in cores: the quota divided by the period, which v1 writes to two separate files.
 func (c *cgroupV1Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome, error) {
 	quota, quotaRaw, err := c.readInt(ctx, c.pathOf(OperationCPUMax))
 	if err != nil {
@@ -113,7 +114,7 @@ func (c *cgroupV1Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome,
 	raw := quotaAndPeriodRaw(quotaRaw, periodRaw)
 
 	if quota <= 0 {
-		// -1 means uncapped: a definite no-limit, never a positive capacity.
+		// -1 means uncapped, which reads as a present 0.0 (no limit), never a capacity.
 		return quotaRead{Limit: diagnosis.Known(0.0), Raw: raw}, ReadOK, nil
 	}
 
@@ -170,7 +171,7 @@ func (c *cgroupV1Source) readStatFile(ctx context.Context) (statRead, error) {
 	return statRead{Usage: diagnosis.Unknown(), Periods: periods, Throttled: throttled, Raw: string(data)}, nil
 }
 
-// readUsage reads cpuacct.usage, which v1 writes in nanoseconds.
+// readUsage returns cpuacct.usage in microseconds. The kernel writes it in nanoseconds.
 func (c *cgroupV1Source) readUsage(ctx context.Context) (diagnosis.Reading, error) {
 	nanoseconds, _, err := c.readInt(ctx, c.pathOf(OperationCPUAcctUsage))
 	if err != nil {
@@ -238,7 +239,8 @@ func (c *cgroupV1Source) readInt(ctx context.Context, path string) (value int64,
 	return value, raw, nil
 }
 
-// contentError names the period file, which shares OperationCPUMax with the quota file.
+// contentError wraps readErr in a PathError naming path. The period file shares
+// OperationCPUMax with the quota file, so without it pathErrorFor would name the quota file.
 func contentError(path string, readErr error) error {
 	return &fs.PathError{Op: "read", Path: path, Err: readErr}
 }

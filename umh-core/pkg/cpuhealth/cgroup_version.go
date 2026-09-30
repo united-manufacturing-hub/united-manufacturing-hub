@@ -46,8 +46,9 @@ func detectCgroupVersion(ctx context.Context, fs filesystem.Service, base string
 		return cgroupV2
 	}
 
-	// A kernel built without CONFIG_CFS_BANDWIDTH writes no v1 cpu.stat but
-	// still writes cpuacct.usage: https://docs.kernel.org/scheduler/sched-bwc.html
+	// A kernel built without CONFIG_CFS_BANDWIDTH has no v1 cpu.stat but still
+	// has cpuacct.usage, so either file identifies v1.
+	// https://docs.kernel.org/scheduler/sched-bwc.html
 	_, hasCPUStat := findDirContaining(ctx, fs, base, v1CPUDirs, v1CPUStatFile)
 	_, hasCPUAcctUsage := findDirContaining(ctx, fs, base, v1CPUAcctDirs, v1CPUAcctUsageFile)
 	if !hasCPUStat && !hasCPUAcctUsage {

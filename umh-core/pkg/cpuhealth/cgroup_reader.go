@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The interface the sampler reads the cgroup through, so the sampler does not
-// depend on whether the host runs cgroup v1 or v2. The result types and parsers
-// here are shared by both readers.
+// cgroupReader is the interface linuxSampler reads the cgroup through. It hides
+// whether the host runs cgroup v1 or v2. The result types and parsers in this
+// file are shared by both readers.
 
 package cpuhealth
 
@@ -38,13 +38,13 @@ type cgroupReader interface {
 	readPSI(ctx context.Context) (fraction float64, err error)
 	// readCpuset counts the CPUs the cgroup can run on.
 	readCpuset(ctx context.Context) (count int, err error)
-	// advanceUsageRate returns the usage rate since the previous call and keeps usage for the next one.
+	// advanceUsageRate returns the average cores in use between the previous tick and this one, and stores usage as the new baseline.
 	advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading
 	// pathOf returns the file this reader opens for operation, or "" when it has none.
 	pathOf(operation ReadOperation) string
 }
 
-// readPaths lists the file cgroup opens for each read, so a failure report names the file this host has.
+// readPaths maps each operation to the file cgroup opens for it, so a failure report names the file on this host.
 func readPaths(cgroup cgroupReader) map[ReadOperation]string {
 	paths := make(map[ReadOperation]string, len(allReadOperations))
 	for _, spec := range allReadOperations {
@@ -54,10 +54,8 @@ func readPaths(cgroup cgroupReader) map[ReadOperation]string {
 	return paths
 }
 
-// usageBaseline is the previous tick's usage total, from which advanceUsageRate
-// derives the instantaneous usage rate. have is false before the first
-// successful read; a falling edge (a counter reset) re-baselines instead of
-// publishing a nonsense rate.
+// usageBaseline is the previous tick's usage total and the time it was read.
+// have is false before the first successful read.
 type usageBaseline struct {
 	time  time.Time
 	usage float64
@@ -68,8 +66,8 @@ type usageBaseline struct {
 func (b *usageBaseline) averageCoresOverLastInterval(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
 	if b.have {
-		// A rising cumulative counter over a positive elapsed time derives an
-		// instantaneous rate; a falling one has been reset, so no rate.
+		// A usage total below the baseline means the counter was reset, so no
+		// rate is returned and the new total becomes the baseline.
 		if u, ok := usage.Get(); ok && u >= b.usage {
 			if elapsed := timestamp.Sub(b.time).Seconds(); elapsed > 0 {
 				rate = diagnosis.Known((u - b.usage) / 1e6 / elapsed)
@@ -87,10 +85,10 @@ func (b *usageBaseline) averageCoresOverLastInterval(timestamp time.Time, usage 
 type quotaRead struct {
 	Limit diagnosis.Reading
 
-	// Raw is the text read, kept for a failure report and published as
-	// Sample.Troubleshooting.CPUMaxRaw. On v1 it is the quota, followed by the
-	// period when that was read. It is set whenever the read succeeded, a failed
-	// parse included, so a report can show the text that would not parse.
+	// Raw is the text read, published as Sample.Troubleshooting.CPUMaxRaw for a
+	// failure report. On v1 it is the quota, then the period when the period
+	// file was read. It is set whenever the file was read, including when its
+	// content did not parse.
 	Raw string
 }
 
@@ -100,12 +98,12 @@ type statRead struct {
 	Periods   diagnosis.Reading
 	Throttled diagnosis.Reading
 
-	// Raw is cpu.stat's text, kept for a failure report and published as
-	// Sample.Troubleshooting.CPUStatRaw. It is set whenever the read succeeded,
-	// a failed parse included.
+	// Raw is cpu.stat's text, published as Sample.Troubleshooting.CPUStatRaw for
+	// a failure report. It is set whenever the file was read, including when its
+	// content did not parse.
 	Raw string
 
-	// Reads holds one entry per file the reader opened for these readings.
+	// Reads holds one entry per file the reader tried to open for these readings.
 	Reads []readAttempt
 }
 
@@ -115,9 +113,9 @@ type readAttempt struct {
 	Err       error
 }
 
-// parseCounter reads one key's numeric value out of cpu.stat bytes. An absent
-// key yields an unavailable Reading — never a trusted 0 — while an unparsable
-// value for a present key returns a non-nil error, which fails the whole sample.
+// parseCounter returns one key's numeric value from cpu.stat bytes. An absent
+// key returns an unavailable Reading, never a trusted 0. An unparsable value
+// for a present key returns a non-nil error, which fails the whole sample.
 func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 	for _, line := range strings.Split(string(data), "\n") {
 		fields := strings.Fields(line)
@@ -138,15 +136,14 @@ func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 // countCPUList counts the CPUs in a kernel CPU list, a comma-separated list of
 // inclusive ranges and single ids such as "0-3", "0,2,4" or "0-1,4-5":
 // https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files
-// Any entry that does not parse yields zero and the reason rather than a partial count.
+// Any entry that does not parse returns 0 and the error, never a partial count.
 func countCPUList(list string) (count int, err error) {
 	text := strings.TrimSpace(list)
 	if text == "" {
 		return 0, errEmptyRead
 	}
-	// Non-contiguous ranges are the shapes the scheduler emits when pinning a
-	// pod to specific CPUs — the pinned-container case the scope check exists
-	// for; count every id so any shape collapses to the allowed set's size.
+	// The scheduler writes non-contiguous lists when it pins a pod to specific
+	// CPUs, which is the case recordCPUScope reports as ScopeAffinity.
 	for _, part := range strings.Split(text, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
