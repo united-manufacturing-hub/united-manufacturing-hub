@@ -23,9 +23,7 @@ import (
 )
 
 // validWorkerStates lists the state names each worker type the runner runs may
-// report. It duplicates the integration battery's list in
-// integration/scenarios_test.go until the v1 integration specs are migrated
-// (ENG-5114); no registry of a type's states exists to read instead. "unknown"
+// report. No registry of a type's states exists to read instead. "unknown"
 // is allowed for every type, because the supervisor reports it until a
 // worker's first tick.
 var validWorkerStates = map[string]map[string]bool{
