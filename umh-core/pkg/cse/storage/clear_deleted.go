@@ -40,7 +40,7 @@ func (ts *TriangularStore) ClearDeleted(ctx context.Context, workerType string, 
 	defer func() { _ = tx.Rollback() }()
 
 	// clearedRole pairs a document's role with the sync id its clearing
-	// delta allocated.
+	// write allocated.
 	type clearedRole struct {
 		role   string
 		syncID int64
@@ -70,7 +70,7 @@ func (ts *TriangularStore) ClearDeleted(ctx context.Context, workerType string, 
 		doc[FieldSyncID] = syncID
 
 		if err := tx.Update(ctx, workerType+"_"+role, id, doc); err != nil {
-			return fmt.Errorf("failed to clear %s deleted for %s/%s: %w", role, workerType, id, err)
+			return fmt.Errorf("failed to clear %s tombstone for %s/%s: %w", role, workerType, id, err)
 		}
 
 		cleared = append(cleared, clearedRole{role: role, syncID: syncID})

@@ -106,10 +106,10 @@ type TriangularStoreInterface interface {
 	LoadSnapshot(ctx context.Context, workerType string, id string) (*Snapshot, error)
 
 	// MarkDeleted tombstones a worker's stored role documents (see
-	// FieldDeletedAt), so a removal stays syncable. Each tombstoned document
-	// keeps every field it had and gains _deleted_at (the store clock time),
-	// _deleted_by, and a new _sync_id, allocated the same way saveWithDelta
-	// does. A document that already carries a tombstone is left untouched,
+	// FieldDeletedAt). The documents stay, so clients that sync by _sync_id
+	// see the removal as a change. Each tombstoned document keeps every field
+	// it had and gains _deleted_at (the store clock time), _deleted_by, and a
+	// new _sync_id, as with any other write. A document that already carries a tombstone is left untouched,
 	// so calling MarkDeleted twice keeps the first tombstone and writes
 	// nothing. A role the worker has no document for is skipped, not an
 	// error.
