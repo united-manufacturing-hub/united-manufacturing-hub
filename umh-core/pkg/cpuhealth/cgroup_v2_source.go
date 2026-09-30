@@ -69,6 +69,7 @@ func (c *cgroupV2Source) advanceUsageRate(timestamp time.Time, usage diagnosis.R
 	return c.usageBase.advance(timestamp, usage)
 }
 
+// readQuota reads cpu.max, the cgroup's CPU limit. The kernel writes the file
 // as "$QUOTA $PERIOD" and puts the literal string "max" in the quota field when
 // the cgroup is unlimited:
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#cpu-interface-files
@@ -163,6 +164,7 @@ func (c *cgroupV2Source) readStatFile(ctx context.Context) (statRead, error) {
 	return statRead{Usage: usage, Periods: periods, Throttled: throttled, Raw: string(data)}, nil
 }
 
+// readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction. On a non-nil
 // error no fraction was read and fraction is 0, which is not a measured zero.
 func (c *cgroupV2Source) readPSI(ctx context.Context) (fraction float64, err error) {
 	data, err := c.fs.ReadFile(ctx, pathOf(c.base, OperationCPUPressure))
@@ -193,12 +195,7 @@ func (c *cgroupV2Source) readPSI(ctx context.Context) (fraction float64, err err
 	return 0, errUnparsableRead
 }
 
-// readCpuset counts the CPUs in the cgroup's effective cpuset, which the kernel
-// writes as a comma-separated list of inclusive ranges and single ids: "0-3",
-// "0,2,4", "0-1,4-5", documented at
-// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#cpuset-interface-files.
-// An unreadable file, or any entry that does not parse, yields zero and the
-// reason rather than a partial count.
+// readCpuset counts the CPUs in the cgroup's effective cpuset.
 func (c *cgroupV2Source) readCpuset(ctx context.Context) (count int, err error) {
 	data, err := c.fs.ReadFile(ctx, pathOf(c.base, OperationCpusetCPUs))
 	if err != nil {

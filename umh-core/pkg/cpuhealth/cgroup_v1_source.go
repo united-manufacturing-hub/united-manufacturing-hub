@@ -101,6 +101,7 @@ func newCgroupV1Source(fs filesystem.Service, base string, locations v1Locations
 	return &cgroupV1Source{fs: fs, base: base, locations: locations}
 }
 
+// readQuota divides the quota by the period, which v1 writes to two files.
 func (c *cgroupV1Source) readQuota(ctx context.Context) (quotaRead, ReadOutcome, error) {
 	quota, quotaRaw, err := c.readInt(ctx, c.pathOf(OperationCPUMax))
 	if err != nil {

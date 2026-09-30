@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The interface both cgroup readers implement, and the result types and
-// parsers they share.
+// The interface the sampler reads the cgroup through, so the sampler does not
+// depend on whether the host runs cgroup v1 or v2. The result types and parsers
+// here are shared by both readers.
 
 package cpuhealth
 
@@ -29,15 +30,21 @@ import (
 )
 
 type cgroupReader interface {
+	// readQuota reads the cgroup's CPU limit in cores. A present 0 means no limit.
 	readQuota(ctx context.Context) (quotaRead, ReadOutcome, error)
+	// readStat reads the usage and throttle counters, with one readAttempt per file it opened.
 	readStat(ctx context.Context) statRead
+	// readPSI reads the cgroup's "some" avg60 CPU pressure as a 0..1 fraction.
 	readPSI(ctx context.Context) (fraction float64, err error)
+	// readCpuset counts the CPUs the cgroup can run on.
 	readCpuset(ctx context.Context) (count int, err error)
+	// advanceUsageRate returns the usage rate since the previous call and keeps usage for the next one.
 	advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading
-	// pathOf returns "" for a read this reader has no file for.
+	// pathOf returns the file this reader opens for operation, or "" when it has none.
 	pathOf(operation ReadOperation) string
 }
 
+// readPaths lists the file cgroup opens for each read, so a failure report names the file this host has.
 func readPaths(cgroup cgroupReader) map[ReadOperation]string {
 	paths := make(map[ReadOperation]string, len(allReadOperations))
 	for _, spec := range allReadOperations {
@@ -75,24 +82,24 @@ func (b *usageBaseline) advance(timestamp time.Time, usage diagnosis.Reading) di
 	return rate
 }
 
-// quotaRead is one cpu.max read: the limit in cores, and the text it came from.
+// quotaRead is one CPU limit read: the limit in cores, and the text it came from.
 type quotaRead struct {
 	Limit diagnosis.Reading
 
-	// Raw is the file's text, kept for a failure report and published as
-	// Sample.Troubleshooting.CPUMaxRaw. It is set whenever the read succeeded,
-	// a failed parse included, so a report can show the text that would not
-	// parse.
+	// Raw is the text read, kept for a failure report and published as
+	// Sample.Troubleshooting.CPUMaxRaw. On v1 it is the quota, followed by the
+	// period when that was read. It is set whenever the read succeeded, a failed
+	// parse included, so a report can show the text that would not parse.
 	Raw string
 }
 
-// statRead is one cpu.stat read: the counters, and the text they came from.
+// statRead is one read of the usage and throttle counters, and the cpu.stat text they came from.
 type statRead struct {
 	Usage     diagnosis.Reading
 	Periods   diagnosis.Reading
 	Throttled diagnosis.Reading
 
-	// Raw is the file's text, kept for a failure report and published as
+	// Raw is cpu.stat's text, kept for a failure report and published as
 	// Sample.Troubleshooting.CPUStatRaw. It is set whenever the read succeeded,
 	// a failed parse included.
 	Raw string
@@ -127,6 +134,10 @@ func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 	return diagnosis.Unknown(), nil
 }
 
+// countCPUList counts the CPUs in a kernel CPU list, a comma-separated list of
+// inclusive ranges and single ids such as "0-3", "0,2,4" or "0-1,4-5":
+// https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files
+// Any entry that does not parse yields zero and the reason rather than a partial count.
 func countCPUList(list string) (count int, err error) {
 	text := strings.TrimSpace(list)
 	if text == "" {
