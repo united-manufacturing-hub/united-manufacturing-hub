@@ -24,9 +24,10 @@ import (
 // Each child receives cfg.ChildConfig verbatim as UserSpec.Config and a
 // per-child DEVICE_ID variable (device-0, device-1, ...).
 //
-// When cfg.ChildConfig is empty, the child's Config is also empty.
-// No fallback template is injected — ExamplechildConfig has no address or
-// device fields that would consume one.
+// When cfg.ChildConfig is empty, the child's Config is also empty. The
+// parent injects no fallback template: cfg.ChildConfig is the one source of
+// the child's config, and each child already carries its own DEVICE_ID
+// variable plus the variables it inherits.
 //
 // enabled=false here is unused: exampleparent's stop-states pass empty
 // slices directly because the children are stateless. See workers/transport
