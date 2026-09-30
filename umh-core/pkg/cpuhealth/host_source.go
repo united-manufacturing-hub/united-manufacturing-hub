@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The host source: everything this package reads machine-wide, independent
-// of any particular cgroup — /proc/stat, /proc/cpuinfo, and the DMI identity
-// files. Distinct from the cgroup readers, which read one cgroup's own
-// accounting files under its base.
+// The host source reads the machine-wide files: /proc/stat, /proc/cpuinfo and
+// the DMI identity files. The cgroup readers read one cgroup's own accounting
+// files under its base.
 
 package cpuhealth
 
@@ -99,9 +98,9 @@ func (h *hostSource) advanceHostRates(timestamp time.Time, busy, steal, denomina
 }
 
 // readProcSelfCgroup returns /proc/self/cgroup verbatim: which cgroup this
-// process runs in. The file is machine-wide, not under any cgroup's base,
-// which is why it is read here and not by a cgroup reader. Any outcome other
-// than ReadOK means no text was read, and names the cause.
+// process runs in. The file is outside any cgroup's base, so hostSource reads
+// it and a cgroup reader does not. Any outcome other than ReadOK means no text
+// was read, and names the cause.
 func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome, error) {
 	return readRawFile(ctx, h.fs, pathOf("", OperationProcSelfCgroup))
 }

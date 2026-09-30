@@ -54,7 +54,7 @@ const (
 var (
 	errEmptyRead      = errors.New("file is empty")
 	errUnparsableRead = errors.New("content did not parse")
-	// errNoPressureFile wraps fs.ErrNotExist so it reads as ReadMissing, which excusedReads skips.
+	// errNoPressureFile wraps fs.ErrNotExist so it reads as ReadMissing, which the fsmv2 CPU worker's excusedReads does not report.
 	errNoPressureFile = fmt.Errorf("hierarchy publishes no cpu.pressure: %w", fs.ErrNotExist)
 )
 
@@ -64,9 +64,9 @@ var (
 // report: it reaches Sentry as the event's subtitle, and the fingerprint is
 // built from error TYPES, so wording one well costs no extra issues.
 //
-// An error that already names its file, which is every error the kernel
-// returns, is returned unchanged rather than wrapped twice, and so is one for a
-// read with no file.
+// An error that already names its file is returned unchanged rather than
+// wrapped twice. Every error the kernel returns names its file. An error for a
+// read with no file (an empty path) is also returned unchanged.
 func pathErrorFor(path string, readErr error) error {
 	if readErr == nil {
 		return nil
@@ -177,9 +177,9 @@ var allReadOperations = []readOperationSpec{
 	{Operation: OperationCPUMax, name: "/" + v2CPUMaxFile, cgroupRelative: true},
 }
 
-// pathOf returns the file the v2 reader and the host reader open for this
-// operation under base. base is ignored for a machine-wide file. An operation
-// with no such file returns "".
+// pathOf returns the file cgroupV2Source and hostSource open for operation under
+// base. base is ignored for a machine-wide file. An operation with no such file
+// returns "".
 func pathOf(base string, operation ReadOperation) string {
 	for _, spec := range allReadOperations {
 		if spec.Operation != operation {

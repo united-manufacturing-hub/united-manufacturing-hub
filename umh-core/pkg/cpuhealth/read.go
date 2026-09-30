@@ -13,8 +13,8 @@
 // limitations under the License.
 
 // The Linux sampler: one tick's cgroup-plus-machine read, built from the
-// previous tick's numbers wherever a rate is derived. Read composes a
-// cgroupReader (cgroup_v2_source.go for v2, cgroup_v1_source.go for v1) and
+// previous tick's numbers wherever a rate is derived. Read combines a
+// cgroupReader (cgroup_v2_source.go for v2, cgroup_v1_source.go for v1) with
 // hostSource (host_source.go).
 
 package cpuhealth
@@ -60,30 +60,31 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 	}
 }
 
-// linuxSampler holds the PSI flag itself because it outlives a reader swap.
+// linuxSampler combines a cgroupReader and hostSource into one Sample per tick.
 type linuxSampler struct {
 	fs   filesystem.Service
 	base string
 
-	// cgroup holds the v2 reader until the probe resolves v1, so it is never nil.
+	// cgroup is the v2 reader until reader detects v1 and replaces it, so it is never nil.
 	cgroup  cgroupReader
 	version cgroupVersion
 
 	host *hostSource
 
 	// psiAvailable is sticky: set true on the first successful cpu.pressure
-	// read and never cleared, even when a later read fails.
+	// read and never cleared, even when a later read fails. It is held here,
+	// not on the cgroup reader, so it keeps its value when reader replaces the
+	// v2 reader with a v1 reader.
 	psiAvailable bool
 }
 
 // Read samples the cgroup and the machine once.
 //
-// A non-nil error means cpu.stat or v1's cpuacct.usage opened and would not
-// parse, or the tick was cancelled, and this tick has no measurement. A file
-// that will not open is not an error: the readings taken from it stay absent
-// and the rest of the sample reads. Sample.Troubleshooting.Reads still records
-// what every read produced, so diagnose a failed read from there, not from the
-// error.
+// A non-nil error means this tick has no measurement: cpu.stat or v1's
+// cpuacct.usage opened and did not parse, or the tick was cancelled. A file
+// that does not open is not an error: its readings stay absent and the rest of
+// the sample is read. Sample.Troubleshooting.Reads records what every read
+// produced, so diagnose a failed read from there, not from the error.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var sample Sample
 	sample.Troubleshooting.CgroupBase = s.base
@@ -122,11 +123,10 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	for _, read := range stat.Reads {
 		sample.record(read.Operation, read.Outcome, read.Err)
 	}
-	// A usage or throttle file that opens and does not parse is corrupt, and
-	// every number derived from it would be a guess. One that will not open is a
-	// different thing: its readings stay absent and the sample carries on, so a
-	// host keeping its CPU accounting elsewhere is not degraded over a file it
-	// was never going to have.
+	// A usage or throttle file that opens and does not parse is corrupt, so the
+	// tick returns an error instead of numbers derived from it. A file that does
+	// not open only leaves its readings absent, because a host may not have
+	// that file at all.
 	if corrupt, found := firstUnparsable(stat.Reads); found {
 		return sample, fmt.Errorf("parse %s: %w", corrupt.Operation, sample.Troubleshooting.ReadErrors[corrupt.Operation])
 	}
@@ -215,8 +215,9 @@ func (s *linuxSampler) recordCPUScope(ctx context.Context, cgroup cgroupReader, 
 	sample.CpuScope = ScopeAffinity
 }
 
-// reader probes again every tick until a cgroup version is detected: the container can
-// start before its cgroup is mounted.
+// reader returns the cgroup reader for this tick. It runs version detection on
+// every tick until a version is found, because the container can start before
+// its cgroup is mounted.
 func (s *linuxSampler) reader(ctx context.Context) cgroupReader {
 	if s.version != cgroupVersionUnresolved {
 		return s.cgroup
@@ -298,9 +299,9 @@ func readControllers(ctx context.Context, fs filesystem.Service, base string) (s
 	return readRawFile(ctx, fs, pathOf(base, OperationCgroupControllers))
 }
 
-// readBaseDirEntryCount keeps only the entry count. A mounted cgroup v2 tree
-// holds dozens of files, so a directory holding two or three says the mount is
-// not the one we expect. An unlistable directory yields -1, never 0.
+// readBaseDirEntryCount returns the number of entries in base, or -1 when the
+// directory cannot be listed, never 0. A mounted cgroup v2 tree holds dozens of
+// files, so a count of two or three shows the mount is not the expected one.
 func readBaseDirEntryCount(ctx context.Context, fs filesystem.Service, base string) (int, ReadOutcome, error) {
 	entries, err := fs.ReadDir(ctx, pathOf(base, OperationCgroupBaseDir))
 	if err != nil {
