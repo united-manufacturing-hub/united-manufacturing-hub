@@ -48,8 +48,10 @@ import (
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
-	// helloworld and exampleslow declare their package names as hello_world and
-	// example_slow respectively; the aliases below match the config type names.
+	// examplechild, exampleslow and helloworld declare their package names as
+	// example_child, example_slow and hello_world; the aliases below match the
+	// config type names.
+	examplechild "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	exampleslow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 	helloworld "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 
@@ -61,7 +63,6 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
@@ -116,6 +117,10 @@ func desiredProviderFor(workerType string) func() (fsmv2.DesiredState, error) {
 	case "helloworld":
 		return func() (fsmv2.DesiredState, error) {
 			return &fsmv2.WrappedDesiredState[helloworld.HelloworldConfig]{Config: helloworld.HelloworldConfig{}}, nil
+		}
+	case "examplechild":
+		return func() (fsmv2.DesiredState, error) {
+			return &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{Config: examplechild.ExamplechildConfig{}}, nil
 		}
 	case "examplepanic":
 		return func() (fsmv2.DesiredState, error) {
