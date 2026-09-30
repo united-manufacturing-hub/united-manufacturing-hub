@@ -14,61 +14,6 @@
 
 // state_suite_test.go provides shared test setup for all state tests.
 // The TestSyncingState function is in state_syncing_test.go - this file
-// only provides BeforeEach/AfterEach setup for CommunicatorDependencies.
+// only provides suite-level setup.
 
 package state_test
-
-import (
-	. "github.com/onsi/ginkgo/v2"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
-)
-
-// mockStateChannelProvider implements communicator.ChannelProvider for state tests.
-// Required for integration tests that use CommunicatorDependencies.
-type mockStateChannelProvider struct {
-	inbound  chan<- *types.UMHMessage
-	outbound <-chan *types.UMHMessage
-}
-
-func (m *mockStateChannelProvider) GetChannels(_ string) (
-	chan<- *types.UMHMessage,
-	<-chan *types.UMHMessage,
-) {
-	return m.inbound, m.outbound
-}
-
-func (m *mockStateChannelProvider) GetInboundStats(_ string) (capacity int, length int) {
-	// Return reasonable defaults for state tests (not testing backpressure here)
-	return 100, 0
-}
-
-// setupChannelProviderSingleton sets up the global singleton for tests.
-// Must be called in BeforeEach before creating CommunicatorDependencies.
-func setupChannelProviderSingleton() {
-	inboundBi := make(chan *types.UMHMessage, 100)
-	outboundBi := make(chan *types.UMHMessage, 100)
-	provider := &mockStateChannelProvider{
-		inbound:  inboundBi,
-		outbound: outboundBi,
-	}
-	communicator.SetChannelProvider(provider)
-}
-
-// clearChannelProviderSingleton clears the global singleton.
-// Must be called in AfterEach.
-func clearChannelProviderSingleton() {
-	communicator.ClearChannelProvider()
-}
-
-// Suite-level setup: ensure singleton is cleared before and after each test.
-var _ = BeforeEach(func() {
-	// Set up ChannelProvider singleton for state integration tests
-	setupChannelProviderSingleton()
-})
-
-var _ = AfterEach(func() {
-	// Clear ChannelProvider singleton after each test
-	clearChannelProviderSingleton()
-})

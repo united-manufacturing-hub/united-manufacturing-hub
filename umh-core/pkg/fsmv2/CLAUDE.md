@@ -42,21 +42,21 @@ Children aggregation (health counts) is handled by the supervisor, not in `Colle
 
 ## Channel Provider via the Dependency Map
 
-The transport worker reads its `ChannelProvider` from the dependency map, under
-`transport.ChannelProviderKey`. The communicator reads its own global
-provider. Production puts the transport provider in the map in `cmd/main.go`:
+The transport and communicator workers read their `ChannelProvider` from the
+dependency map, under `transport.ChannelProviderKey` and
+`communicator.ChannelProviderKey`. Production puts both providers in the map in
+`cmd/main.go`:
 
 ```go
 fsmv2Deps := map[string]any{}
+fsmv2config.SetDependency(fsmv2Deps, communicator.ChannelProviderKey, communicator.ChannelProvider(channelAdapter))
 fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
 ```
 
-The supervisor merges its map into every child, so the provider reaches the
-worker however deep it sits. `NewTransportWorker` returns an error naming the
-key when the map holds none. A scenario supplies a mock provider under
-`transport.ChannelProviderKey` or `communicator.ChannelProviderKey`. The
-communicator still falls back to its global when its key is absent (see
-"Mocks" below).
+The supervisor merges its map into every child, so a provider reaches its
+worker however deep it sits. `NewTransportWorker` and `NewCommunicatorWorker`
+each return an error naming the key when the map holds none. A scenario
+supplies a mock provider under the same keys (see "Mocks" below).
 
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.
