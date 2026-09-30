@@ -382,6 +382,10 @@ func (m *mockStore) GetChangesSince(ctx context.Context, sinceSyncID int64, limi
 	return []storage.Event{}, nil
 }
 
+func (m *mockStore) MarkDeleted(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
+
 func (m *mockStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 	return 0, nil
 }
@@ -778,6 +782,10 @@ func (m *mockTriangularStore) CompactDeltas(ctx context.Context, retentionWindow
 }
 
 func (m *mockTriangularStore) Maintenance(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTriangularStore) MarkDeleted(_ context.Context, _ string, _ string, _ string) error {
 	return nil
 }
 
