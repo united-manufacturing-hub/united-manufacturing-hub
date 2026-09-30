@@ -30,7 +30,6 @@ func TestAction(t *testing.T) {
 }
 
 // mockActionChannelProvider implements transport.ChannelProvider for action tests.
-// Phase 1 Architecture: ChannelProvider singleton MUST be set before creating dependencies.
 type mockActionChannelProvider struct {
 	inbound  chan<- *types.UMHMessage
 	outbound <-chan *types.UMHMessage
