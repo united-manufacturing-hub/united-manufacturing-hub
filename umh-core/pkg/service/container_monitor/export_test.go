@@ -18,7 +18,9 @@ import (
 	"context"
 
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	fsmv2memory "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -62,4 +64,16 @@ func JudgeWorkerCPU(status simple.Status[fsmv2cpu.CPUStatus], freshness fsmv2cli
 	v := judgeWorkerCPU(status, freshness)
 
 	return v.health(), v.cpuHealth
+}
+
+func (c *ContainerMonitorService) CollectMemoryFromWorker(ctx context.Context) (*models.Memory, error) {
+	return c.collectMemoryFromWorker(ctx)
+}
+
+func (c *ContainerMonitorService) SetSentryLogger(sentryLogger deps.FSMLogger) {
+	c.sentryLogger = sentryLogger
+}
+
+func JudgeWorkerMemory(status simple.Status[fsmv2memory.MemoryStatus], freshness fsmv2client.Freshness) *models.Memory {
+	return judgeWorkerMemory(status, freshness)
 }
