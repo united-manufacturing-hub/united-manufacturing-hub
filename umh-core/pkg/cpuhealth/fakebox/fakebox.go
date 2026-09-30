@@ -71,10 +71,10 @@ var cfsPeriodsUs = []int64{100_000, 10_000, 1_000}
 
 // referenceTick is the tick length NewBox assumes when it picks the CFS period.
 // The period is fixed before the first Tick (periodUs says why), and NewBox is
-// not told how long the caller's ticks will be. One second is the sampler's
-// own cadence. A caller who
-// ticks at some other length is not silently mis-served: Tick re-checks the
-// actual tick against the chosen period and panics if it does not divide.
+// not told how long the caller's ticks will be. One second is the CPU worker's
+// poll interval (pkg/fsmv2/cpu.PollInterval). A caller who ticks at some other length is not silently
+// mis-served: Tick re-checks the actual tick against the chosen period and
+// panics if it does not divide.
 const referenceTick = time.Second
 
 // fixtureEpoch is where a Box's clock starts. It is a fixed instant far from
@@ -209,7 +209,7 @@ func NewBox(base string, initial Condition) *Box {
 // FS returns a filesystem service serving this box's files. It reads the box's
 // state at each call rather than a snapshot, so one service stays correct
 // across later Set and Tick calls. Every path the box does not serve reads as
-// an error, which is what the sampler sees on a machine lacking that file.
+// errUnreadable, which classifyRead records as ReadError.
 func (b *Box) FS() filesystem.Service {
 	fs := filesystem.NewMockFileSystem()
 	fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
@@ -463,8 +463,8 @@ func (b *Box) dmiProductName() string { return "PowerEdge R640\n" }
 //
 // The period matters because nr_throttled is an integer. At a 100 ms period a
 // one-second tick has ten periods, so a Throttle of 0.08 accrues 0.8 of a
-// period: served as an integer that is 1, a ratio of 0.10, which is on the far
-// side of the 5% fire mark. The signal then fires with a number nobody stated.
+// period: served as an integer that is 1, so the throttling signal would
+// report a ratio of 0.10 where 0.08 was stated.
 // A 10 ms period gives that same tick a hundred periods and 0.08 accrues
 // exactly 8.
 func chooseCfsPeriodUs(throttle float64) int64 {

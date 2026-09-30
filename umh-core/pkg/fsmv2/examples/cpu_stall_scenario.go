@@ -30,8 +30,8 @@ import (
 // recover, through the same GetFresh call the container monitor reads with.
 //
 // The story is that the worker stops producing readings, the reading ages
-// past the shared staleness limit, and the monitor sees it. A missing file never does this (cpu-blind checks
-// that); a read that blocks does.
+// past the shared staleness limit, and the monitor sees it. An unreadable file
+// never does this (cpu-blind checks that); a read that blocks does.
 //
 // The worker stays running through the hang, so no state_transition line
 // appears and the log is silent from the hang step to the release step. The

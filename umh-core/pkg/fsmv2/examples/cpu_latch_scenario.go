@@ -132,8 +132,10 @@ var CPULatchScenarioV2 = ScenarioV2{
 		fireAt := machine.box.MachineNow()
 		machine.box.Set(cpuPressureMachine(cpuLatchFiring))
 
-		// The healthy stretch before the re-fire is bounded, so no wait accepts
-		// it. The check below reads the end of that stretch instead, which lasts.
+		// The healthy stretch between this Set and the re-fire is short, so a wait
+		// on it could miss it. The check below waits instead for the degraded
+		// reading that follows, which lasts.
+		//
 		// Without the bar the signal fires on the first reading after fireAt,
 		// at most one advance later. The check tells that apart from the bar
 		// only if that reading is still inside the bar. A slower machine makes

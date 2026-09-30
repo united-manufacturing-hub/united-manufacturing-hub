@@ -45,7 +45,7 @@ It runs until you stop it, so you can load the machine and watch the readings
 answer while it keeps going.
 
 The runner's log carries the supervisor's own lines as well as the monitor's.
-To watch just the worker's message:
+To watch the worker's observations, and its message when it changes:
 
 ```bash
 ./run.sh --name cpu-host | grep --line-buffered observed_changed
@@ -55,10 +55,9 @@ To watch just the worker's message:
 output in a block buffer and prints nothing until the buffer fills, so a
 working run looks like a dead one.
 
-⚠️ Keep the pipe out of a first run. A machine whose message never changes
-has no `observed_changed` line to print, so the filter turns a startup
-problem into silence, and an empty result cannot tell you which of the two
-happened. Run it bare once, confirm the run starts, then add the pipe.
+⚠️ Keep the pipe out of a first run. The filter drops every line except
+`observed_changed`, including the error that says why a run failed to
+start. Run it bare once, confirm the run starts, then add the pipe.
 
 Any argument is passed to `docker run` verbatim, so docker's own options
 work without the script naming them. `--name` is the useful one: it makes
@@ -67,9 +66,10 @@ the container addressable for the load experiment below.
 ## What to watch
 
 The monitor runs as one worker inside the scenario runner, and its readings
-show up in that runner's log. The debug `observed_changed` line carries the
-message's old and new text whenever the worker's message changes, cut to
-about 100 characters, so the Technical Details table does not appear. A
+show up in that runner's log. The debug `observed_changed` line is logged
+on each save of the worker's observation, which changes on every poll. When
+the message changed, the line carries its old and new text, cut to about 100
+characters, so the Technical Details table does not appear. A
 change that also moves the worker's state appears at info in the
 `state_transition` line's `reason` field.
 
@@ -90,15 +90,15 @@ of the exercise:
   Eight workers against two CPUs is a deliberate 4x overcommit, so
   `nr_throttled` climbs at once rather than after a wait. Ten seconds of load is
   enough: the throttling ratio is a delta over a 60-second window, so a short
-  burst fires it, and stopping early leaves you watching the half that is easy
-  to miss.
+  burst fires it. After the load stops, keep watching: the verdict clears once
+  the burst has left that window.
 
   Do not use `CPUS=0.5`. It is under umh-core's own minimum, so the reserves the
   monitor subtracts leave numbers that describe no machine we support.
 
 - **Load on the host** competes for the machine's own CPUs and moves
   host-busy and steal as read from `/proc/stat`, leaving throttling
-  untouched. Run the scenario without `CPUS` for this world: an unquota'd
+  untouched. Run the scenario without `CPUS` for this case: an unquota'd
   machine can only be filled by its host.
 
 A `--timeout` ends the load by itself. Without one, stop it with
