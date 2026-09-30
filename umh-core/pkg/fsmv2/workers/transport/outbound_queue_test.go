@@ -26,13 +26,8 @@ import (
 )
 
 var _ = Describe("TransportDependencies outbound queue", func() {
-	BeforeEach(func() {
-		transport.SetChannelProvider(newTestChannelProvider())
-		DeferCleanup(transport.ClearChannelProvider)
-	})
-
 	It("reports a burst the push child drained between two samples", func() {
-		d := transport.NewTransportDependencies(nil, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, deps.Identity{ID: "transport-001"}))
+		d := transport.NewTransportDependencies(nil, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, deps.Identity{ID: "transport-001"}), newTestChannelProvider())
 		d.RecordOutboundDepth(100)
 
 		at := time.Now()
