@@ -38,8 +38,8 @@ const (
 	// Updated on every modification.
 	FieldUpdatedAt = "_updated_at"
 
-	// FieldDeletedAt is the soft delete timestamp (NULL if not deleted).
-	// Enables soft deletes without losing data.
+	// FieldDeletedAt is the tombstone timestamp (NULL if not deleted).
+	// Enables tombstones without losing data.
 	FieldDeletedAt = "_deleted_at"
 
 	// FieldDeletedBy is the user who deleted the record (for audit trail).
