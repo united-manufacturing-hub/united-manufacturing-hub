@@ -194,7 +194,7 @@ func (c *cgroupV1Source) readCpuset(ctx context.Context) (count int, err error) 
 }
 
 func (c *cgroupV1Source) advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
-	return c.usageBase.advance(timestamp, usage)
+	return c.usageBase.averageCoresOverLastInterval(timestamp, usage)
 }
 
 func (c *cgroupV1Source) pathOf(operation ReadOperation) string {

@@ -66,7 +66,7 @@ func newCgroupV2Source(fs filesystem.Service, base string) *cgroupV2Source {
 // Timestamp and never time.Now(); Read in read.go says why both sources have to
 // divide by the same elapsed time.
 func (c *cgroupV2Source) advanceUsageRate(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
-	return c.usageBase.advance(timestamp, usage)
+	return c.usageBase.averageCoresOverLastInterval(timestamp, usage)
 }
 
 // readQuota reads cpu.max, the cgroup's CPU limit. The kernel writes the file

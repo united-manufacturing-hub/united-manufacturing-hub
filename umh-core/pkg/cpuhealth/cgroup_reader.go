@@ -64,7 +64,8 @@ type usageBaseline struct {
 	have  bool
 }
 
-func (b *usageBaseline) advance(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
+// averageCoresOverLastInterval returns the average cores in use between the previous tick and this one, and stores usage as the new baseline.
+func (b *usageBaseline) averageCoresOverLastInterval(timestamp time.Time, usage diagnosis.Reading) diagnosis.Reading {
 	rate := diagnosis.Unknown()
 	if b.have {
 		// A rising cumulative counter over a positive elapsed time derives an
