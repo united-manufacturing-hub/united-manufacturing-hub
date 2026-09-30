@@ -23,21 +23,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// tombstoneRoles are the role documents MarkDeleted stamps and ClearDeleted
-// clears. Both use this one list, so they always cover the same documents.
-var tombstoneRoles = []string{RoleIdentity, RoleDesired, RoleObserved}
-
-// MarkDeleted tombstones the worker's stored role documents; the
+// ClearDeleted removes the tombstone MarkDeleted wrote from a worker's stored
+// role documents, so a worker added again starts without one; the
 // TriangularStoreInterface method documents the contract.
-//
-// Parameters:
-//   - workerType: e.g., "container"
-//   - deletedBy: Actor responsible for the removal (audit trail)
-func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
+func (ts *TriangularStore) ClearDeleted(ctx context.Context, workerType string, id string) error {
 	ts.documentWriteMu.Lock()
 	defer ts.documentWriteMu.Unlock()
 
-	deletedAt := ts.clock.Now().UTC()
+	clearedAt := ts.clock.Now().UTC()
 
 	tx, err := ts.store.BeginTx(ctx)
 	if err != nil {
@@ -46,16 +39,16 @@ func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, i
 
 	defer func() { _ = tx.Rollback() }()
 
-	// tombstonedRole pairs a document's role with the sync id its tombstone
-	// write allocated.
-	type tombstonedRole struct {
+	// clearedRole pairs a document's role with the sync id its clearing
+	// delta allocated.
+	type clearedRole struct {
 		role   string
 		syncID int64
 	}
 
-	// tombstoned holds one entry per document that received a tombstone in
-	// this call.
-	var tombstoned []tombstonedRole
+	// cleared holds one entry per document that lost its tombstone in this
+	// call.
+	var cleared []clearedRole
 
 	for _, role := range tombstoneRoles {
 		doc, err := tx.Get(ctx, workerType+"_"+role, id)
@@ -67,48 +60,42 @@ func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, i
 			return fmt.Errorf("failed to load %s for %s/%s: %w", role, workerType, id, err)
 		}
 
-		// A tombstone is a non-nil _deleted_at: a document that already
-		// carries one keeps the first tombstone.
-		if existing, ok := doc[FieldDeletedAt]; ok && existing != nil {
+		if deletedAt, ok := doc[FieldDeletedAt]; !ok || deletedAt == nil {
 			continue
 		}
 
 		syncID := ts.syncID.Add(1)
-		doc[FieldDeletedAt] = deletedAt
-		doc[FieldDeletedBy] = deletedBy
+		delete(doc, FieldDeletedAt)
+		delete(doc, FieldDeletedBy)
 		doc[FieldSyncID] = syncID
 
 		if err := tx.Update(ctx, workerType+"_"+role, id, doc); err != nil {
-			return fmt.Errorf("failed to mark %s deleted for %s/%s: %w", role, workerType, id, err)
+			return fmt.Errorf("failed to clear %s deleted for %s/%s: %w", role, workerType, id, err)
 		}
 
-		tombstoned = append(tombstoned, tombstonedRole{role: role, syncID: syncID})
+		cleared = append(cleared, clearedRole{role: role, syncID: syncID})
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Each delta entry carries the sync id its document was allocated.
-	for _, s := range tombstoned {
+	for _, c := range cleared {
 		if ts.deltaStore == nil {
 			continue
 		}
 
 		entry := DeltaEntry{
-			SyncID:     s.syncID,
+			SyncID:     c.syncID,
 			WorkerType: workerType,
 			ID:         id,
-			Role:       s.role,
+			Role:       c.role,
 			Changes: &Diff{
-				Added: map[string]interface{}{
-					FieldDeletedAt: deletedAt,
-					FieldDeletedBy: deletedBy,
-				},
+				Added:    map[string]interface{}{},
 				Modified: make(map[string]ModifiedField),
-				Removed:  []string{},
+				Removed:  []string{FieldDeletedAt, FieldDeletedBy},
 			},
-			Timestamp: deletedAt,
+			Timestamp: clearedAt,
 		}
 
 		if appendErr := ts.deltaStore.Append(ctx, entry); appendErr != nil {
@@ -121,7 +108,7 @@ func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, i
 
 			ts.logger.SentryWarn(deps.FeatureCSE, hierarchyPath, "delta_append_failed",
 				deps.Err(appendErr),
-				deps.String("role", s.role))
+				deps.String("role", c.role))
 		}
 	}
 

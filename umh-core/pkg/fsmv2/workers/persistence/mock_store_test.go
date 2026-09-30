@@ -79,6 +79,10 @@ func (m *mockTriangularStore) MarkDeleted(_ context.Context, _ string, _ string,
 	panic("not implemented")
 }
 
+func (m *mockTriangularStore) ClearDeleted(_ context.Context, _ string, _ string) error {
+	panic("not implemented")
+}
+
 func (m *mockTriangularStore) GetLatestSyncID(_ context.Context) (int64, error) {
 	panic("not implemented")
 }
