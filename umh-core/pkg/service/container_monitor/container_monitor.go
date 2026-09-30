@@ -84,9 +84,9 @@ type ContainerMonitorService struct {
 	cpuWorkerWarnOnce sync.Once
 	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
 
-	useFSMv2Memory       bool
-	memoryWorkerWarnOnce sync.Once
-	sentryLogger         deps.FSMLogger
+	useFSMv2MemoryMonitor bool
+	memoryWorkerWarnOnce  sync.Once
+	sentryLogger          deps.FSMLogger
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -99,17 +99,17 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 	log := logger.For(logger.ComponentContainerMonitorService)
 
 	useFSMv2CPU, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
-	useFSMv2Memory, _ := env.GetAsBool("USE_FSMV2_MEMORY", false, false)
+	useFSMv2MemoryMonitor, _ := env.GetAsBool("USE_FSMV2_MEMORY_MONITOR", false, false)
 
 	return &ContainerMonitorService{
-		fs:               fs,
-		logger:           log,
-		instanceName:     constants.CoreInstanceName, // Single container instance name
-		dataPath:         dataPath,
-		useFSMv2CPU:      useFSMv2CPU,
-		useFSMv2Memory:   useFSMv2Memory,
-		sentryLogger:     containerMonitorSentryLogger(),
-		cpuUsageProvider: defaultCPUUsagePercent,
+		fs:                    fs,
+		logger:                log,
+		instanceName:          constants.CoreInstanceName, // Single container instance name
+		dataPath:              dataPath,
+		useFSMv2CPU:           useFSMv2CPU,
+		useFSMv2MemoryMonitor: useFSMv2MemoryMonitor,
+		sentryLogger:          containerMonitorSentryLogger(),
+		cpuUsageProvider:      defaultCPUUsagePercent,
 	}
 }
 
@@ -189,7 +189,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	}
 
 	// Assess memory health
-	if c.useFSMv2Memory {
+	if c.useFSMv2MemoryMonitor {
 		status.MemoryHealth = memStat.Health.Category
 		if status.MemoryHealth == models.Degraded {
 			status.OverallHealth = models.Degraded
@@ -220,7 +220,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 }
 
 func (c *ContainerMonitorService) collectMemory(ctx context.Context) (*models.Memory, error) {
-	if c.useFSMv2Memory {
+	if c.useFSMv2MemoryMonitor {
 		return c.collectMemoryFromWorker(ctx)
 	}
 

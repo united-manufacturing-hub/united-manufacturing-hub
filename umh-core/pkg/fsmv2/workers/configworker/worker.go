@@ -78,7 +78,7 @@ const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 // given there.
 const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
 
-const MemoryEnabledDepsKey = WorkerTypeName + ".memoryenabled"
+const MemoryMonitorEnabledDepsKey = WorkerTypeName + ".memorymonitorenabled"
 
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
 // to the shared dynamicchildren registry. See the package doc for why it does
@@ -119,7 +119,7 @@ func NewConfigworkerWorker(
 	// nil (mirroring the fsmv2client.GetClient nil guard).
 	configManager := register.GetDeps[config.ConfigManager](ConfigManagerDepsKey)
 	cpuEnabled := register.GetDeps[bool](CPUEnabledDepsKey)
-	memoryEnabled := register.GetDeps[bool](MemoryEnabledDepsKey)
+	memoryEnabled := register.GetDeps[bool](MemoryMonitorEnabledDepsKey)
 
 	w := &ConfigworkerWorker{
 		registry:      shared,

@@ -32,8 +32,8 @@ func newMemoryConstructedWorker(t *testing.T, memoryEnabled bool) *configworker.
 
 	register.SetDeps[*dynamicchildren.Registry](workerType, dynamicchildren.NewWriter().Registry())
 	t.Cleanup(func() { register.ClearDeps(workerType) })
-	register.SetDeps[bool](configworker.MemoryEnabledDepsKey, memoryEnabled)
-	t.Cleanup(func() { register.ClearDeps(configworker.MemoryEnabledDepsKey) })
+	register.SetDeps[bool](configworker.MemoryMonitorEnabledDepsKey, memoryEnabled)
+	t.Cleanup(func() { register.ClearDeps(configworker.MemoryMonitorEnabledDepsKey) })
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
 

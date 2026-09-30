@@ -50,7 +50,7 @@ A `_ring_active` flag covers one 60-second window, and reads 0 until that window
 
 ## Memory evidence (preview)
 
-These gauges appear when the container is started with `-e USE_FSMV2_MEMORY=true -e USE_FSMV2_TRANSPORT=true`. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges above, and they also keep their previous value on a tick that could not measure.
+These gauges appear when the container is started with `-e USE_FSMV2_MEMORY_MONITOR=true -e USE_FSMV2_TRANSPORT=true`. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges above, and they also keep their previous value on a tick that could not measure.
 
 | Gauge | Reports |
 |---|---|

@@ -34,7 +34,7 @@ import (
 const (
 	memoryWorkerMaxAge = 3 * fsmv2memory.PollInterval
 
-	memoryClientUnavailableMessage = "USE_FSMV2_MEMORY is enabled but no fsmv2 client is published, so no memory measurement is available"
+	memoryClientUnavailableMessage = "USE_FSMV2_MEMORY_MONITOR is enabled but no fsmv2 client is published, so no memory measurement is available"
 	memoryClientUnavailableTag     = "memory::worker_client_unavailable"
 )
 

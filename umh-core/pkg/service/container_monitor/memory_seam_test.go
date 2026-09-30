@@ -105,7 +105,7 @@ func clearMemoryClient() {
 }
 
 func newFlaggedService(memoryFlag string) *container_monitor.ContainerMonitorService {
-	GinkgoT().Setenv("USE_FSMV2_MEMORY", memoryFlag)
+	GinkgoT().Setenv("USE_FSMV2_MEMORY_MONITOR", memoryFlag)
 	GinkgoT().Setenv("USE_FSMV2_CPU", "false")
 
 	return container_monitor.NewContainerMonitorServiceWithPath(filesystem.NewMockFileSystem(), GinkgoT().TempDir())
@@ -197,7 +197,7 @@ var _ = Describe("the memory seam's worker read", func() {
 	})
 })
 
-var _ = Describe("GetStatus with USE_FSMV2_MEMORY", func() {
+var _ = Describe("GetStatus with USE_FSMV2_MEMORY_MONITOR", func() {
 	It("takes memory health from a degraded worker reading", func() {
 		status := memoryStatus{Result: criticalWorkerMemory, Degraded: true, Reason: criticalWorkerMemory.Message}
 		publishMemoryClient(&memoryStubStateReader{observation: freshObservation(status)}, true)
