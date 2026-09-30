@@ -87,7 +87,8 @@ func scenarioFailed(name string, err error) error {
 // killing the loop and forcing the drain to wait out its timeouts.
 //
 // If DumpStore is set, Run prints the store dump after teardown, before Done
-// closes.
+// closes. When the scenario's Run fails, the dump is printed before Run
+// returns its error.
 func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	if cfg.ScenarioV2.Run == nil {
 		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Run is nil",
@@ -225,11 +226,33 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// before runV2's frame unwinds, otherwise every later runV2 in this
 	// process fails its already-published check. The flag stays false until
 	// the teardown goroutine takes ownership of cleanup.
+	// printStoreDump prints the store's changes since the run started when
+	// DumpStore is set. It runs on a fresh context, so a caller cancelling
+	// after Run returned cannot fail the store read.
+	printStoreDump := func() {
+		if !cfg.DumpStore {
+			return
+		}
+
+		dump, err := DumpScenario(context.Background(), cfg.Store, startSyncID)
+		if err != nil {
+			cfg.Logger.SentryWarn(deps.FeatureExamples, "", "scenario_dump_failed",
+				deps.Err(err))
+
+			return
+		}
+
+		fmt.Print(dump.FormatHuman())
+	}
+
 	teardownOwnedByGoroutine := false
 
+	// A failed Run prints the dump here, because a failed run is when the
+	// dump is most useful.
 	defer func() {
 		if !teardownOwnedByGoroutine {
 			teardown()
+			printStoreDump()
 		}
 	}()
 
@@ -285,16 +308,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		result.Err = postRunFailure(ctx, recorder, cfg.Store, cfg.Logger)
 
-		if cfg.DumpStore {
-			// The dump runs on a fresh context, like the stored-state check above.
-			dump, err := DumpScenario(context.Background(), cfg.Store, startSyncID)
-			if err != nil {
-				cfg.Logger.SentryWarn(deps.FeatureExamples, "", "scenario_dump_failed",
-					deps.Err(err))
-			} else {
-				fmt.Print(dump.FormatHuman())
-			}
-		}
+		printStoreDump()
 
 		close(done)
 	}()
