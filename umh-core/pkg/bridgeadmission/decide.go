@@ -14,69 +14,10 @@
 
 // Package bridgeadmission decides whether umh-core may create a bridge.
 //
-// A bridge connects one device to umh-core; the code calls it a protocol
-// converter. Bridge admission is the check umh-core runs before it creates a
-// bridge. A refused bridge is not created. It waits in the to_be_created state,
-// and the check runs again on every later pass of umh-core's control loop, so
-// the bridge starts on its own once it is admitted.
-//
-// # What Decide receives
-//
-// Decide reads only its Input. It logs nothing, reads no clock and makes no
-// system call. The caller gathers the Input and acts on the Decision; today
-// that caller is IsResourceLimited in pkg/service/protocolconverter. The Input
-// fields are:
-//
-//   - BlockingEnabled: the config setting agent.enableResourceLimitBlocking,
-//     which turns bridge admission on or off.
-//   - CPU, Memory and Disk: the health of each resource. Each is Healthy,
-//     Degraded or Unknown, with a message explaining it. Unknown means nobody
-//     has shown the resource to be healthy yet, for example because the
-//     instance has only just started.
-//   - Admitted: how many other bridges have already been admitted and are not
-//     being removed.
-//   - WaitingAhead: how many bridges are still waiting for admission and come
-//     before this bridge in config.yaml.
-//   - CapacityCores: the container's CPU limit in cores, when it is known.
-//   - HostCores: the number of CPU cores on the host.
-//
-// # The rules, in the order Decide applies them
-//
-// The first rule that matches decides.
-//
-//  1. Bridge admission is off: admit the bridge and check nothing else. This
-//     setting exists to start bridges in an emergency while a resource problem
-//     is unfixed.
-//  2. A resource is Degraded: refuse, and name the resource and its message,
-//     so the user knows what to fix. CPU is checked first, then memory, then
-//     disk. This rule comes before rule 3, so a known problem is named even
-//     while another resource has no reading.
-//  3. A resource is Unknown: refuse with "Resource health not proven yet". A
-//     bridge is admitted only on health that a reading has shown, so a fresh
-//     instance starts no bridges until its first health readings arrive.
-//  4. No place under the bridge limit is free: refuse. The next section
-//     defines the limit and its places.
-//  5. Otherwise: admit the bridge.
-//
-// Every refusal carries a hint: Decision.Message appends how to turn bridge
-// admission off with agent.enableResourceLimitBlocking: false.
-//
-// # The bridge limit
-//
-// The limit is (cores - 1) * 5 bridges, rounded down and never below zero.
-// cores is CapacityCores when it is known and above zero, and HostCores
-// otherwise. One core is reserved for Redpanda, the message broker that runs
-// inside umh-core. Each remaining core may run BridgesPerCore bridges.
-// docs/production/sizing-guide.md recommends these figures.
-//
-// A place is one bridge's share of the limit. Each admitted bridge takes a
-// place. Each waiting bridge ahead of this one in config.yaml takes a place
-// too, because it is admitted before this one. Waiting bridges behind it take
-// no place. The bridge is admitted when at least one place is left free.
-//
-// After a restart no bridge is admitted yet and every bridge waits. The first
-// bridges in config.yaml order are then admitted up to the limit. The rest
-// wait until a place frees up, for example when a bridge is removed.
+// A bridge is admitted only when CPU, memory and disk are proven healthy and a
+// place under the bridge limit is free. The one exception is the emergency
+// switch agent.enableResourceLimitBlocking: false, which admits every bridge.
+// Decide applies the rules top to bottom.
 package bridgeadmission
 
 import "fmt"
@@ -175,72 +116,84 @@ func (d Decision) Message() string {
 	return d.Reason + ". " + emergencyHint
 }
 
-// degradedDecision refuses because one resource is degraded. The reason is
-// prefix followed by the resource's message, or generic when the message is empty.
-func degradedDecision(cause Cause, r Resource, prefix, generic string) Decision {
-	reason := generic
-	if r.Message != "" {
-		reason = prefix + r.Message
-	}
-
-	return Decision{Cause: cause, Reason: reason}
-}
-
-// notProvenDecision refuses because a resource is Unknown. The reason carries
-// the Unknown resource's message when it has one.
-func notProvenDecision(r Resource) Decision {
-	reason := "Resource health not proven yet"
-	if r.Message != "" {
-		reason += ": " + r.Message
-	}
-
-	return Decision{Cause: NotProven, Reason: reason}
-}
-
-// Decide returns whether a bridge may be created. The package doc lists the
-// rules in the order Decide applies them.
+// Decide returns whether a bridge may be created.
 func Decide(in Input) Decision {
 	if !in.BlockingEnabled {
-		return Decision{Admit: true, Cause: None}
+		return Decision{Admit: true}
 	}
 
-	switch {
-	case in.CPU.Health == Degraded:
-		return degradedDecision(CPU, in.CPU, "CPU degraded: ", "CPU resources degraded")
-	case in.Memory.Health == Degraded:
-		return degradedDecision(Memory, in.Memory, "Memory degraded: ", "Memory resources degraded")
-	case in.Disk.Health == Degraded:
-		return degradedDecision(Disk, in.Disk, "Disk degraded: ", "Disk resources degraded")
-	}
-
-	for _, r := range []Resource{in.CPU, in.Memory, in.Disk} {
-		if r.Health == Unknown {
-			return notProvenDecision(r)
+	// A degraded resource is named before an unknown one, so a known problem
+	// is reported even while another resource has no reading yet.
+	for _, res := range in.resources() {
+		if res.Health == Degraded {
+			return refuse(res.cause, res.degradedReason())
 		}
 	}
 
-	cores := limitCores(in)
-	coresForBridges := max(cores-redpandaReservedCores, 0)
-	maxBridges := int(coresForBridges * BridgesPerCore)
-
-	placesTaken := in.Admitted + in.WaitingAhead
-	freePlaces := maxBridges - placesTaken
-
-	d := Decision{Admit: freePlaces > 0, Limit: &maxBridges}
-	if !d.Admit {
-		d.Cause = BridgeLimit
-		d.Reason = fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, %d core reserved for Redpanda)", maxBridges, cores, redpandaReservedCores)
+	for _, res := range in.resources() {
+		if res.Health == Unknown {
+			return refuse(NotProven, res.unknownReason())
+		}
 	}
 
-	return d
+	limit, cores := bridgeLimit(in)
+
+	// A place under the limit is taken by every admitted bridge and by every
+	// waiting bridge ahead of this one in config.yaml, which is admitted first.
+	placesTaken := in.Admitted + in.WaitingAhead
+	if placesTaken >= limit {
+		d := refuse(BridgeLimit, fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, %d core reserved for Redpanda)", limit, cores, redpandaReservedCores))
+		d.Limit = &limit
+
+		return d
+	}
+
+	return Decision{Admit: true, Limit: &limit}
 }
 
-// limitCores returns the core count the bridge limit is computed from: the CPU
-// limit when it is known and above zero, and the host's cores otherwise.
-func limitCores(in Input) float64 {
+// bridgeLimit returns the maximum number of bridges, (cores - 1) * 5, and the
+// cores it was computed from: the CPU limit when known, else the host's cores.
+func bridgeLimit(in Input) (limit int, cores float64) {
+	cores = float64(in.HostCores)
 	if in.CapacityCores != nil && *in.CapacityCores > 0 {
-		return *in.CapacityCores
+		cores = *in.CapacityCores
 	}
 
-	return float64(in.HostCores)
+	return int(max(cores-redpandaReservedCores, 0) * BridgesPerCore), cores
+}
+
+func refuse(cause Cause, reason string) Decision {
+	return Decision{Cause: cause, Reason: reason}
+}
+
+type namedResource struct {
+	Resource
+
+	name  string
+	cause Cause
+}
+
+// resources lists CPU, memory and disk in the order a refusal names them.
+func (in Input) resources() []namedResource {
+	return []namedResource{
+		{Resource: in.CPU, name: "CPU", cause: CPU},
+		{Resource: in.Memory, name: "Memory", cause: Memory},
+		{Resource: in.Disk, name: "Disk", cause: Disk},
+	}
+}
+
+func (r namedResource) degradedReason() string {
+	if r.Message == "" {
+		return r.name + " resources degraded"
+	}
+
+	return r.name + " degraded: " + r.Message
+}
+
+func (r namedResource) unknownReason() string {
+	if r.Message == "" {
+		return "Resource health not proven yet"
+	}
+
+	return "Resource health not proven yet: " + r.Message
 }
