@@ -34,8 +34,8 @@ const (
 )
 
 // PersistenceConfig holds the user-provided configuration for the persistence worker.
-// Embeds BaseUserSpec so the worker's DeriveDesiredState can read the user-facing
-// State from the "state" YAML field.
+// It embeds BaseUserSpec, so the "state" YAML field parses, but no persistence
+// code reads it.
 type PersistenceConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 	CompactionInterval  time.Duration `json:"compactionInterval"  yaml:"compactionInterval"`
