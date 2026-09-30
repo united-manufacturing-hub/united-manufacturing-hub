@@ -67,16 +67,17 @@ type Sample struct {
 	// this tick.
 	Pressure diagnosis.Reading
 
-	// NrPeriods and NrThrottled come from the SAME cpu.stat read that carries
-	// usage. Each is present when its key is in cpu.stat and parses, and
-	// unavailable (never a trusted 0) when the key is absent or unparsable.
+	// NrPeriods and NrThrottled come from cpu.stat on both cgroup versions.
+	// Each is present when its key is in cpu.stat and parses, and unavailable
+	// (never a trusted 0) when the key is absent or unparsable.
 	NrPeriods   diagnosis.Reading
 	NrThrottled diagnosis.Reading
 
-	// UsageUsec is the raw cumulative usage_usec counter from cpu.stat. It is
-	// present when the key is in cpu.stat and parses, and unavailable when it
-	// is absent or unparsable. The raw total is kept beside the rate so a later
-	// throttle-ratio reduction still has the totals.
+	// UsageUsec is the raw cumulative usage counter in microseconds: v2's
+	// usage_usec from cpu.stat, or v1's cpuacct.usage converted from
+	// nanoseconds. It is unavailable when that value is absent or unparsable.
+	// The raw total is kept beside the rate so a later throttle-ratio
+	// reduction still has the totals.
 	UsageUsec diagnosis.Reading
 
 	// UsageCores is the instantaneous usage rate in cores: the delta of
@@ -157,6 +158,14 @@ type ReadTroubleshooting struct {
 	// reading a non-default tree reports the paths it actually opened.
 	CgroupBase string
 
+	// CgroupVersion is the cgroup version the sampler read: "v2", "v1", or
+	// "unresolved" when the files of neither version were found.
+	CgroupVersion string
+
+	// ReadPaths maps each operation to the file it opens on this cgroup
+	// version, or to "" when that version has no such file.
+	ReadPaths map[ReadOperation]string
+
 	// ReadErrors holds the error a failed read returned, keyed by operation, so
 	// a report can name what the kernel actually said. It is deliberately not a
 	// field on ReadResult: ReadResult is a map key in the report path, and an
@@ -170,12 +179,12 @@ type ReadTroubleshooting struct {
 	Reads []ReadResult
 }
 
-// Sampler reads one tick of CPU health signals: a cgroup's own accounting
-// (cpu.max, cpu.stat, cpu.pressure, cpuset.cpus.effective) and the host's
-// machine-wide state (/proc/stat, /proc/cpuinfo, and the DMI identity files),
-// both stamped with the one Timestamp the tick was read at. A file it cannot
-// read leaves its readings absent; only an unparsable cpu.stat and a cancelled
-// tick return an error.
+// Sampler reads one tick of CPU health signals: a cgroup's own accounting on
+// cgroup v1 or v2, and the host's machine-wide state (/proc/stat,
+// /proc/cpuinfo, and the DMI identity files). Both are stamped with the one
+// Timestamp the tick was read at. A file it cannot read leaves its readings
+// absent. Only an unparsable cpu.stat or cpuacct.usage and a cancelled tick
+// return an error.
 type Sampler interface {
 	Read(ctx context.Context) (Sample, error)
 }

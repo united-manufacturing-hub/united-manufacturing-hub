@@ -102,35 +102,20 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 	})
 })
 
-// The reported path must be the path the sampler opened, which is not the same
-// as the package's default tree: NewLinuxSampler takes the base, so an instance
-// built on another one reports that one.
-var _ = Describe("a failure report names the tree the sample was read from", func() {
-	fieldsOf := func(sample cpuhealth.Sample, operation cpuhealth.ReadOperation) map[string]any {
+var _ = Describe("a failure report names the file the sample read", func() {
+	It("carries the path and the cgroup version the sample recorded", func() {
+		sample := cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{
+			CgroupBase:    cgroupBase,
+			CgroupVersion: "v1",
+			ReadPaths:     map[cpuhealth.ReadOperation]string{cpuhealth.OperationCPUMax: cgroupBase + "/cpu,cpuacct/cpu.cfs_quota_us"},
+		}}
+
 		kv := map[string]any{}
-		for _, f := range readFailureFields(sample, readFailure{Operation: operation}, 0, 0) {
+		for _, f := range readFailureFields(sample, readFailure{Operation: cpuhealth.OperationCPUMax}, 0, 0) {
 			kv[f.Key] = f.Value
 		}
 
-		return kv
-	}
-
-	It("builds the path from the sample's base, not from the package constant", func() {
-		kv := fieldsOf(cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{CgroupBase: "/custom/tree"}}, cpuhealth.OperationCPUStat)
-
-		Expect(kv).To(HaveKeyWithValue("path", "/custom/tree/cpu.stat"))
-		Expect(kv).To(HaveKeyWithValue("cgroup_base", "/custom/tree"))
-	})
-
-	It("leaves a machine-wide file absolute whatever the base is", func() {
-		kv := fieldsOf(cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{CgroupBase: "/custom/tree"}}, cpuhealth.OperationProcStat)
-
-		Expect(kv).To(HaveKeyWithValue("path", "/proc/stat"))
-	})
-
-	It("still names the default tree for a sampler built on it", func() {
-		kv := fieldsOf(cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{CgroupBase: cgroupBase}}, cpuhealth.OperationCPUMax)
-
-		Expect(kv).To(HaveKeyWithValue("path", cgroupBase+"/cpu.max"))
+		Expect(kv).To(HaveKeyWithValue("path", cgroupBase+"/cpu,cpuacct/cpu.cfs_quota_us"))
+		Expect(kv).To(HaveKeyWithValue("cgroup_version", "v1"))
 	})
 })
