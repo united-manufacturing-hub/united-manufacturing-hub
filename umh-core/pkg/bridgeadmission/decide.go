@@ -15,7 +15,7 @@
 // Package bridgeadmission decides whether umh-core may create a bridge.
 //
 // A bridge is admitted only when CPU, memory and disk are proven healthy and a
-// place under the bridge limit is free. The one exception is the emergency
+// bridge fits under the maximum number of bridges. The one exception is the emergency
 // switch agent.enableResourceLimitBlocking: false, which admits every bridge.
 // Decide applies the rules top to bottom.
 package bridgeadmission
@@ -63,12 +63,12 @@ type Input struct {
 	Memory Resource
 	Disk   Resource
 
-	// Admitted counts the bridges that already passed admission and are not
-	// being removed. It excludes the bridge being decided.
-	Admitted int
-	// WaitingAhead counts the bridges that are still waiting for admission and
-	// come before the bridge being decided in config.yaml.
-	WaitingAhead int
+	// Created counts the other bridges umh-core has already created, running
+	// or stopped, and is not removing.
+	Created int
+	// WaitingBefore counts the bridges not created yet that config.yaml lists
+	// before this one. They are created first, so they count like Created.
+	WaitingBefore int
 
 	// CapacityCores is the container's CPU limit in cores, or nil when it is
 	// not known. Decide treats a value of zero or less as not known.
@@ -101,9 +101,9 @@ type Decision struct {
 	Admit  bool
 	Cause  Cause
 	Reason string
-	// Limit is the maximum number of bridges for this instance, or nil when
+	// MaxBridges is how many bridges this instance may have, or nil when
 	// Decide refused before computing it.
-	Limit *int
+	MaxBridges *int
 }
 
 // Message returns the text shown for a refused bridge: Reason followed by how
@@ -122,8 +122,6 @@ func Decide(in Input) Decision {
 		return Decision{Admit: true}
 	}
 
-	// A degraded resource is named before an unknown one, so a known problem
-	// is reported even while another resource has no reading yet.
 	for _, res := range in.resources() {
 		if res.Health == Degraded {
 			return refuse(res.cause, res.degradedReason())
@@ -136,24 +134,20 @@ func Decide(in Input) Decision {
 		}
 	}
 
-	limit, cores := bridgeLimit(in)
-
-	// A place under the limit is taken by every admitted bridge and by every
-	// waiting bridge ahead of this one in config.yaml, which is admitted first.
-	placesTaken := in.Admitted + in.WaitingAhead
-	if placesTaken >= limit {
-		d := refuse(BridgeLimit, fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, %d core reserved for Redpanda)", limit, cores, redpandaReservedCores))
-		d.Limit = &limit
+	maxBridges, cores := maxBridgesFor(in)
+	if in.Created+in.WaitingBefore >= maxBridges {
+		d := refuse(BridgeLimit, fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, %d core reserved for Redpanda)", maxBridges, cores, redpandaReservedCores))
+		d.MaxBridges = &maxBridges
 
 		return d
 	}
 
-	return Decision{Admit: true, Limit: &limit}
+	return Decision{Admit: true, MaxBridges: &maxBridges}
 }
 
-// bridgeLimit returns the maximum number of bridges, (cores - 1) * 5, and the
-// cores it was computed from: the CPU limit when known, else the host's cores.
-func bridgeLimit(in Input) (limit int, cores float64) {
+// maxBridgesFor returns how many bridges the instance may have, (cores - 1) * 5,
+// and the cores it used: the CPU limit when known, else the host's cores.
+func maxBridgesFor(in Input) (maxBridges int, cores float64) {
 	cores = float64(in.HostCores)
 	if in.CapacityCores != nil && *in.CapacityCores > 0 {
 		cores = *in.CapacityCores

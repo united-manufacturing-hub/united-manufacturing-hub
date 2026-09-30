@@ -1180,12 +1180,12 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 		HostCores:       runtime.NumCPU(),
 	}
 	in.CPU, in.Memory, in.Disk, in.CapacityCores = admissionResources(snapshot)
-	in.Admitted, in.WaitingAhead = p.countBridges(snapshot, bridgeName)
+	in.Created, in.WaitingBefore = p.countBridges(snapshot, bridgeName)
 
 	d := bridgeadmission.Decide(in)
-	if d.Limit != nil {
-		p.logger.Debugf("IsResourceLimited: max bridges=%d (1 core reserved for Redpanda), admitted=%d, waiting ahead=%d, bridge %s admit=%v",
-			*d.Limit, in.Admitted, in.WaitingAhead, bridgeName, d.Admit)
+	if d.MaxBridges != nil {
+		p.logger.Debugf("IsResourceLimited: max bridges=%d (1 core reserved for Redpanda), created=%d, waiting before=%d, bridge %s admit=%v",
+			*d.MaxBridges, in.Created, in.WaitingBefore, bridgeName, d.Admit)
 	}
 
 	return !d.Admit, d.Message()
@@ -1283,13 +1283,10 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 	return cpu, memory, disk, capacityCores
 }
 
-// countBridges returns the two bridge counts that bridgeadmission.Input needs
-// for bridgeName. admitted counts the other bridges that have left
-// to_be_created, the state a bridge waits in until it is admitted.
-// waitingAhead counts the bridges still in to_be_created that config.yaml
-// lists before bridgeName. Bridges that are being removed or are removed count
-// in neither.
-func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bridgeName string) (admitted, waitingAhead int) {
+// countBridges counts, for bridgeName, the other bridges already created and
+// the bridges still in to_be_created that config.yaml lists before it. Bridges
+// being removed count in neither.
+func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bridgeName string) (created, waitingBefore int) {
 	protocolConverterManager, exists := snapshot.Managers[constants.ProtocolConverterManagerName]
 	if !exists {
 		return 0, 0
@@ -1322,7 +1319,7 @@ func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bri
 
 		if instance.CurrentState == internalfsm.LifecycleStateToBeCreated {
 			if index, ok := indexByName[name]; ok && index < candidateIndex {
-				waitingAhead++
+				waitingBefore++
 			}
 
 			continue
@@ -1330,8 +1327,8 @@ func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bri
 
 		p.logger.Debugf("IsResourceLimited: Instance %s in state %s - counting towards limit", name, instance.CurrentState)
 
-		admitted++
+		created++
 	}
 
-	return admitted, waitingAhead
+	return created, waitingBefore
 }

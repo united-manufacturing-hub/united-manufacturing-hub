@@ -46,14 +46,14 @@ var _ = Describe("Decide", func() {
 			in := ba.Input{
 				BlockingEnabled: false,
 				CPU:             ba.Resource{Health: ba.Degraded, Message: "cpu is full"},
-				Admitted:        1000,
+				Created:         1000,
 			}
 
 			d := ba.Decide(in)
 
 			Expect(d.Admit).To(BeTrue())
 			Expect(d.Cause).To(Equal(ba.None))
-			Expect(d.Limit).To(BeNil())
+			Expect(d.MaxBridges).To(BeNil())
 			Expect(d.Message()).To(BeEmpty())
 		})
 	})
@@ -77,7 +77,7 @@ var _ = Describe("Decide", func() {
 				Expect(d.Admit).To(BeFalse())
 				Expect(d.Cause).To(Equal(cause))
 				Expect(d.Reason).To(Equal(reason))
-				Expect(d.Limit).To(BeNil())
+				Expect(d.MaxBridges).To(BeNil())
 			},
 			Entry("CPU with a message",
 				func(in *ba.Input) { in.CPU = ba.Resource{Health: ba.Degraded, Message: "cpu is full"} },
@@ -121,7 +121,7 @@ var _ = Describe("Decide", func() {
 				Expect(d.Admit).To(BeFalse())
 				Expect(d.Cause).To(Equal(ba.NotProven))
 				Expect(d.Reason).To(Equal("Resource health not proven yet: instance not active yet"))
-				Expect(d.Limit).To(BeNil())
+				Expect(d.MaxBridges).To(BeNil())
 			},
 			Entry("CPU", func(in *ba.Input) { in.CPU = ba.Resource{Health: ba.Unknown, Message: "instance not active yet"} }),
 			Entry("memory", func(in *ba.Input) { in.Memory = ba.Resource{Health: ba.Unknown, Message: "instance not active yet"} }),
@@ -133,14 +133,14 @@ var _ = Describe("Decide", func() {
 		DescribeTable("admits while admitted + waiting ahead + this bridge fit the limit",
 			func(admitted, waitingAhead int, admit bool) {
 				in := allHealthy()
-				in.Admitted = admitted
-				in.WaitingAhead = waitingAhead
+				in.Created = admitted
+				in.WaitingBefore = waitingAhead
 
 				d := ba.Decide(in)
 
 				Expect(d.Admit).To(Equal(admit))
-				Expect(d.Limit).NotTo(BeNil())
-				Expect(*d.Limit).To(Equal(15))
+				Expect(d.MaxBridges).NotTo(BeNil())
+				Expect(*d.MaxBridges).To(Equal(15))
 				if admit {
 					Expect(d.Cause).To(Equal(ba.None))
 				} else {
@@ -166,8 +166,8 @@ var _ = Describe("Decide", func() {
 
 				d := ba.Decide(in)
 
-				Expect(d.Limit).NotTo(BeNil())
-				Expect(*d.Limit).To(Equal(limit))
+				Expect(d.MaxBridges).NotTo(BeNil())
+				Expect(*d.MaxBridges).To(Equal(limit))
 				Expect(d.Admit).To(Equal(limit > 0))
 			},
 			Entry("CPU limit of 4 cores", cores(4), 32, 15),
@@ -201,7 +201,7 @@ var _ = Describe("Decide", func() {
 			Entry("not proven", ba.Input{BlockingEnabled: true}),
 			Entry("memory", func() ba.Input { in := allHealthy(); in.Memory.Health = ba.Degraded; return in }()),
 			Entry("disk", func() ba.Input { in := allHealthy(); in.Disk.Health = ba.Degraded; return in }()),
-			Entry("bridge limit", func() ba.Input { in := allHealthy(); in.Admitted = 15; return in }()),
+			Entry("bridge limit", func() ba.Input { in := allHealthy(); in.Created = 15; return in }()),
 		)
 
 		It("is empty for an admitted bridge", func() {
