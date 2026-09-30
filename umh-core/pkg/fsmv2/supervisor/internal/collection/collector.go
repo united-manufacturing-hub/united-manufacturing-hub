@@ -149,7 +149,7 @@ func (c *Collector[TObserved]) Start(ctx context.Context) error {
 		panic("Invariant I8 violated: collector already started. Collector.Start() must not be called twice. Check lifecycle management in supervisor code.")
 	}
 
-	c.config.Logger.Info("collector_starting",
+	c.config.Logger.Debug("collector_starting",
 		deps.String("from_state", c.state.String()),
 		deps.String("to_state", "running"))
 
@@ -368,7 +368,7 @@ func (c *Collector[TObserved]) observationLoop() {
 			deps.String("final_state", finalState))
 	}()
 
-	c.config.Logger.Info("collector_loop_starting",
+	c.config.Logger.Debug("collector_loop_starting",
 		deps.String("interval", interval.String()),
 		deps.String("timeout", timeout.String()))
 

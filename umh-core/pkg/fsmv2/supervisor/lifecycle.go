@@ -752,7 +752,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	s.mu.RUnlock()
 
-	s.logger.Info("worker_restart_executing",
+	s.logger.Debug("worker_restart_executing",
 		deps.HierarchyPath(identity.HierarchyPath),
 		deps.String("from_state", fromState),
 		deps.String("action", "full_recreation"))
