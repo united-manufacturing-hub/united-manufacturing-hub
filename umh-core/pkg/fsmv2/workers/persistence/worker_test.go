@@ -31,8 +31,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
-// storeDeps builds the dependency map shape every construction path uses: the
-// store under persistence.StoreKey.
+// storeDeps returns a dependency map holding s under persistence.StoreKey,
+// the same shape cmd/main.go and PersistenceScenarioV2 build.
 func storeDeps(s storage.TriangularStoreInterface) map[string]any {
 	m := map[string]any{}
 
