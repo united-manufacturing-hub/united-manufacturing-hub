@@ -744,9 +744,9 @@ func buildFSMv2Supervisor(
 }
 
 // wireFSMv2Communicator wires the legacy CommunicationState to the already-started
-// FSMv2 supervisor.  It sets up the write-only pusher, subscriber handler, and
-// FSMv2 router, then polls the TransportWorker's ObservedState until the real
-// authenticated UUID is available.  This function blocks until ctx is cancelled.
+// FSMv2 supervisor.  It sets up the subscriber handler and the FSMv2 router,
+// then polls the TransportWorker's ObservedState until the real authenticated
+// UUID is available.  This function blocks until ctx is cancelled.
 func wireFSMv2Communicator(
 	ctx context.Context,
 	appSup fsmv2Supervisor,
