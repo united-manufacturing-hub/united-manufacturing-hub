@@ -215,6 +215,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, firstRunWriter.Registry())
 
 		var depsCalled atomic.Bool
+
 		runRan := false
 		overlapping := examples.ScenarioV2{
 			Name:        "overlapping",
@@ -674,9 +675,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the probe's constructor before cancelling, so teardown cannot race the Upsert.
-		Eventually(func() *scenarioDepsProbeRecord {
-			return scenarioDepsProbeSeen.Load()
-		}, "30s").ShouldNot(BeNil(),
+		Eventually(scenarioDepsProbeSeen.Load, "30s").ShouldNot(BeNil(),
 			"the upserted child's constructor must run while the scenario's supervisor is live")
 
 		cancel()

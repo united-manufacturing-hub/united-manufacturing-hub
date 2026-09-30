@@ -262,10 +262,14 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	// Acquire the scenario's dependency map before anything is published.
-	var scenarioDeps map[string]any
-	var scenarioCleanup func()
+	var (
+		scenarioDeps    map[string]any
+		scenarioCleanup func()
+	)
+
 	if cfg.ScenarioV2.Dependencies != nil {
 		var err error
+
 		scenarioDeps, scenarioCleanup, err = cfg.ScenarioV2.Dependencies()
 		if err != nil {
 			return nil, fmt.Errorf("scenario %q dependencies: %w", cfg.ScenarioV2.Name, err)

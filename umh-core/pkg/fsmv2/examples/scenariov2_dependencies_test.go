@@ -81,6 +81,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		store := examples.SetupStore(logger)
 
 		var cleanupCalls atomic.Int32
+
 		normal := examples.ScenarioV2{
 			Name:        "cleanup-normal",
 			Description: "test-local Run for the cleanup path after a normal run",
@@ -122,7 +123,9 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		store := examples.SetupStore(logger)
 
 		runErr := errors.New("boom")
+
 		var cleanupCalls atomic.Int32
+
 		failing := examples.ScenarioV2{
 			Name:        "cleanup-error",
 			Description: "test-local Run for the cleanup path after a failing Run",
@@ -157,6 +160,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		store := examples.SetupStore(logger)
 
 		var cleanupCalls atomic.Int32
+
 		panicking := examples.ScenarioV2{
 			Name:        "cleanup-panic",
 			Description: "test-local Run for the cleanup path after a panicking Run",
