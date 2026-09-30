@@ -113,6 +113,11 @@ type TriangularStore struct {
 	cacheMutex       sync.RWMutex
 
 	knownWorkerTypesMu sync.RWMutex
+
+	// documentWriteMu makes a save and MarkDeleted run one at a time. A save
+	// reads the stored document and writes it back in two separate calls. A
+	// tombstone written between those calls would be overwritten and lost.
+	documentWriteMu sync.Mutex
 }
 
 // cachedSnapshot stores a snapshot with its syncID for cache invalidation.

@@ -30,6 +30,9 @@ import (
 //   - workerType: e.g., "container"
 //   - deletedBy: Actor responsible for the removal (audit trail)
 func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
+	ts.documentWriteMu.Lock()
+	defer ts.documentWriteMu.Unlock()
+
 	deletedAt := ts.clock.Now().UTC()
 
 	tx, err := ts.store.BeginTx(ctx)

@@ -90,6 +90,9 @@ func (ts *TriangularStore) saveWithDelta(
 
 	collectionName := workerType + "_" + opts.Role
 
+	ts.documentWriteMu.Lock()
+	defer ts.documentWriteMu.Unlock()
+
 	existing, err := ts.store.Get(ctx, collectionName, id)
 
 	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
