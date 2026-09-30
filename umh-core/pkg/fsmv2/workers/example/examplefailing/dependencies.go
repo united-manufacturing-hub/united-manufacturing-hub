@@ -50,7 +50,7 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 type FailingDependencies struct {
 	*deps.BaseDependencies                   // Embedded pointer (8 bytes)
 	connectionPool            ConnectionPool // Interface (16 bytes)
-	lastFailureTime           time.Time      // When the last failure occurred - kept for metrics (24 bytes)
+	lastFailureTime           time.Time      // When the last connect failure occurred; ShouldDelayRecovery measures recoveryDelayMs from it (24 bytes)
 	mu                        sync.RWMutex   // Protects mutable fields below (24 bytes)
 	maxFailures               int
 	attempts                  int

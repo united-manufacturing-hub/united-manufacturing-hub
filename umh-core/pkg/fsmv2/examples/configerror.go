@@ -118,7 +118,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 		// A parent with zero children never meets TryingToStartState's
 		// ChildrenHealthy > 0 condition, so the empty-config parent stays in
 		// TryingToStart.
-		if err := env.WaitFor(ctx, "the empty-config parent stays in TryingToStart, because it has zero children to become healthy",
+		if err := env.WaitFor(ctx, "the empty-config parent is in TryingToStart",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, emptyRef)
 				if err != nil {
