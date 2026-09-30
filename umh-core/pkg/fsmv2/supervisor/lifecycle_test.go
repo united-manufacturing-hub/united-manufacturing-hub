@@ -17,14 +17,17 @@ package supervisor_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 var _ = Describe("Supervisor Lifecycle", func() {
@@ -186,6 +189,106 @@ var _ = Describe("Supervisor Lifecycle", func() {
 		})
 	})
 
+	Describe("removal marks the worker's records deleted", func() {
+		newRemovalSupervisor := func(store storage.TriangularStoreInterface, logger deps.FSMLogger) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+			removalState := &mockState{
+				signal: fsmv2.SignalNeedsRemoval,
+			}
+			removalState.nextState = removalState
+
+			return newSupervisorWithWorkerAndLogger(&mockWorker{initialState: removalState}, store, supervisor.CollectorHealthConfig{}, logger)
+		}
+
+		It("marks the records deleted on plain removal", func() {
+			identity := mockIdentity()
+			store := newMockTriangularStore()
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.MarkDeletedCalls).To(HaveLen(1))
+			Expect(store.MarkDeletedCalls[0].WorkerType).To(Equal("test"))
+			Expect(store.MarkDeletedCalls[0].ID).To(Equal(identity.ID))
+			Expect(store.MarkDeletedCalls[0].By).To(Equal("removed"))
+		})
+
+		It("does not mark the records deleted on restart", func() {
+			identity := mockIdentity()
+			store := newMockTriangularStore()
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+			s.TestSetPendingRestart(identity.ID)
+			s.TestMarkAsStarted()
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(s.ListWorkers()).To(HaveLen(1))
+			Expect(store.MarkDeletedCalls).To(BeEmpty())
+		})
+
+		It("does not mark the records deleted on RemoveWorker", func() {
+			identity := mockIdentity()
+			store := newMockTriangularStore()
+			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
+
+			Expect(s.RemoveWorker(context.Background(), identity.ID)).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.MarkDeletedCalls).To(BeEmpty())
+		})
+
+		It("still removes the worker and warns when the mark fails", func() {
+			store := newMockTriangularStore()
+			store.MarkDeletedErr = errors.New("mark deleted failed")
+			logger := &sentryWarnRecorder{}
+			s := newRemovalSupervisor(store, logger)
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.MarkDeletedCalls).To(HaveLen(1))
+
+			warnings := logger.Warns()
+			Expect(warnings).To(HaveLen(1))
+			Expect(warnings[0].Msg).To(Equal("worker_tombstone_failed"))
+			Expect(warnings[0].Fields).To(ContainElement(deps.Field{Key: "target_worker_id", Value: mockIdentity().ID}))
+		})
+
+		It("marks the records deleted even when the tick context is cancelled", func() {
+			store := newMockTriangularStore()
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			Expect(s.TestTick(ctx)).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.MarkDeletedCalls).To(HaveLen(1))
+			Expect(store.MarkDeletedCalls[0].CtxErr).ToNot(HaveOccurred())
+			Expect(store.MarkDeletedCalls[0].HasDeadline).To(BeTrue(),
+				"MarkDeleted must not be able to block removal forever")
+		})
+
+		It("stamps a non-nil deletion time on the real store's documents", func() {
+			identity := mockIdentity()
+			roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
+
+			basicStore := memory.NewInMemoryStore()
+			for _, role := range roles {
+				Expect(basicStore.CreateCollection(context.Background(), "test_"+role, nil)).To(Succeed())
+			}
+
+			realStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+			s := newRemovalSupervisor(realStore, deps.NewNopFSMLogger())
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+
+			for _, role := range roles {
+				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the %s document must be marked deleted", role)
+				Expect(doc[storage.FieldDeletedAt]).ToNot(BeNil(), "the %s document's deletion time must be set, or the tombstone is inert", role)
+				Expect(doc[storage.FieldDeletedBy]).To(Equal("removed"))
+			}
+		})
+	})
+
 	Describe("SignalNeedsRestart full worker restart", func() {
 		Context("when SignalNeedsRestart is received", func() {
 			It("should mark worker for restart and request graceful shutdown", func() {
@@ -338,3 +441,34 @@ var _ = Describe("Supervisor Lifecycle", func() {
 		})
 	})
 })
+
+// sentryWarnRecorder is an FSMLogger that records SentryWarn calls.
+type sentryWarnRecorder struct {
+	mu       sync.Mutex
+	warnings []sentryWarn
+}
+
+type sentryWarn struct {
+	Msg    string
+	Fields []deps.Field
+}
+
+func (r *sentryWarnRecorder) Debug(_ string, _ ...deps.Field) {}
+func (r *sentryWarnRecorder) Info(_ string, _ ...deps.Field)  {}
+
+func (r *sentryWarnRecorder) SentryWarn(_ deps.Feature, _ string, msg string, fields ...deps.Field) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.warnings = append(r.warnings, sentryWarn{Msg: msg, Fields: fields})
+}
+
+func (r *sentryWarnRecorder) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
+}
+
+func (r *sentryWarnRecorder) With(_ ...deps.Field) deps.FSMLogger { return r }
+
+func (r *sentryWarnRecorder) Warns() []sentryWarn {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]sentryWarn{}, r.warnings...)
+}
