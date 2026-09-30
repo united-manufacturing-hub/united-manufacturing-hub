@@ -109,8 +109,8 @@ func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
 	c.w.Delete(ref)
 }
 
-// Get reads the observed state the collector persisted for ref's spawned child
-// and returns it as an Observation[TStatus]. The collection is ref.WorkerType
+// Get reads the observation the collector stored for ref's worker, dynamic or
+// static, and returns it as an Observation[TStatus]. The collection is ref.WorkerType
 // and the child id is config.ChildID(ref.Name). When nothing is stored for the
 // ref it returns an error that matches ErrNotFound. When the worker was
 // removed it returns a *WorkerDeletedError, which matches ErrWorkerDeleted.
