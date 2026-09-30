@@ -290,7 +290,7 @@ func main() {
 			}
 		}()
 
-		if communicatorEnabled(&configData) {
+		if communicatorEnabled(configData.Agent) {
 			log.Info("Starting FSMv2 communicator because backend credentials are present")
 			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
 				wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
@@ -323,8 +323,8 @@ func main() {
 // requires backend credentials. It gates only wireFSMv2Communicator: the FSMv2
 // runtime is built and run regardless of credentials, so this must never gate
 // its construction or its Run call.
-func communicatorEnabled(cfg *config.FullConfig) bool {
-	return cfg.Agent.APIURL != "" && cfg.Agent.AuthToken != ""
+func communicatorEnabled(cfg config.AgentConfig) bool {
+	return cfg.APIURL != "" && cfg.AuthToken != ""
 }
 
 // countHistorianBridges returns the number of bridges whose write DFC targets the historian output.

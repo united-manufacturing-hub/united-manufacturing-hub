@@ -42,49 +42,43 @@ var _ = Describe("communicatorEnabled", func() {
 	// gates.
 
 	It("enables the communicator when credentials are present, even with the legacy transport switch off", func() {
-		cfg := config.FullConfig{
-			Agent: config.AgentConfig{
-				CommunicatorConfig: config.CommunicatorConfig{
-					APIURL:            "http://fsmv2.invalid:9999",
-					AuthToken:         "test-token",
-					UseFSMv2Transport: false,
-				},
+		cfg := config.AgentConfig{
+			CommunicatorConfig: config.CommunicatorConfig{
+				APIURL:            "http://fsmv2.invalid:9999",
+				AuthToken:         "test-token",
+				UseFSMv2Transport: false,
 			},
 		}
 
-		Expect(communicatorEnabled(&cfg)).To(BeTrue())
+		Expect(communicatorEnabled(cfg)).To(BeTrue())
 	})
 
 	It("does not enable the communicator when credentials are absent", func() {
-		cfg := config.FullConfig{}
+		cfg := config.AgentConfig{}
 
-		Expect(communicatorEnabled(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(cfg)).To(BeFalse())
 	})
 
 	It("does not enable the communicator when only API_URL is set", func() {
-		cfg := config.FullConfig{
-			Agent: config.AgentConfig{
-				CommunicatorConfig: config.CommunicatorConfig{
-					APIURL: "http://fsmv2.invalid:9999",
-				},
+		cfg := config.AgentConfig{
+			CommunicatorConfig: config.CommunicatorConfig{
+				APIURL: "http://fsmv2.invalid:9999",
 			},
 		}
 
 		// The && credential contract must reject partial state; an operator with
 		// one field empty should not run without a token.
-		Expect(communicatorEnabled(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(cfg)).To(BeFalse())
 	})
 
 	It("does not enable the communicator when only AUTH_TOKEN is set", func() {
-		cfg := config.FullConfig{
-			Agent: config.AgentConfig{
-				CommunicatorConfig: config.CommunicatorConfig{
-					AuthToken: "test-token",
-				},
+		cfg := config.AgentConfig{
+			CommunicatorConfig: config.CommunicatorConfig{
+				AuthToken: "test-token",
 			},
 		}
 
-		Expect(communicatorEnabled(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(cfg)).To(BeFalse())
 	})
 })
 

@@ -45,7 +45,7 @@ type communicatorSpec struct {
 
 // renderSupervisorChildrenYAML renders the FSMv2 supervisor children document.
 // The persistence child is always present; the communicator child appears only
-// when both APIURL and AuthToken are set (E2 contract). The instanceUUID is
+// when communicatorEnabled reports credentials (E2 contract). The instanceUUID is
 // interpolated into the communicator's userSpec config.
 //
 // A marshal failure is returned rather than swallowed. Both structs hold only
@@ -58,7 +58,7 @@ func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) (
 		{Name: "persistence", WorkerType: "persistence"},
 	}
 
-	if cfg.APIURL != "" && cfg.AuthToken != "" {
+	if communicatorEnabled(cfg) {
 		specBytes, err := yaml.Marshal(communicatorSpec{
 			RelayURL:     cfg.APIURL,
 			InstanceUUID: instanceUUID,
