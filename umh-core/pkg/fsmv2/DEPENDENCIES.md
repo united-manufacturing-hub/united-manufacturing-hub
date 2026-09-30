@@ -20,7 +20,7 @@ Custom dependencies (e.g., `Transport`, `ConnectionPool`, channels) can be added
 
 ## Global Variables Flow
 
-Global variables arrive on a spec's `VariableBundle` (`config/variables.go`). No production code sets them; the only source is a `children:` entry in the user's application config, whose `userSpec.variables.global` carries them. Each supervisor merges its bundle into its children's specs (`mergeChildVariables`), the tick preserves the values, and the worker reads them as `{{ .global.<key> }}`.
+Global variables arrive on a spec's `VariableBundle` (`config/variables.go`). Two places can set them, and no production code uses either today. One is a `children:` entry in the application's YAML, through `userSpec.variables.global`. The other is the dynamic-children registry, through `Writer.SetVariables`. The application worker merges the registry's bundle into every child it renders (`renderUnion`). Each supervisor then merges its own bundle into its children's specs (`mergeChildVariables`). The supervisor's tick passes the values to its worker unchanged, and the worker reads them as `{{ .global.<key> }}`.
 
 ## StateReader Examples
 
