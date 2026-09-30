@@ -6,21 +6,21 @@ umh-core refuses a new bridge when one of the instance's resources is degraded, 
 
 ## What the reason says
 
-- **CPU degraded: [message]** — the instance's CPU is short on headroom. The message comes from the CPU health check. The [CPU Health](./cpu-health.md) page explains every status and how to fix it.
+- **CPU degraded: [message]** — the instance's CPU is short on headroom. The message comes from the CPU health check. The [CPU Health](../../production/cpu-health.md) page explains every status and how to fix it.
 - **Memory degraded: [message]** — memory is short. Free memory on the host, or raise the container's memory limit.
 - **Disk degraded: [message]** — the disk is short. Free space on the volume, or make the volume larger.
 - **Resource health not proven yet** — umh-core has not yet shown the instance's resources to be healthy. A bridge always waits for this proof, so a fresh instance starts no bridges until its first health readings arrive. If the reason stays at "no health reading yet", the instance cannot read its own resources: use the emergency setting below and report it to UMH.
-- **Cannot create bridge - limit exceeded (N bridges maximum with X CPU cores, 1 core reserved for Redpanda)** — the instance holds its maximum number of bridges. The [Sizing Guide](./sizing-guide.md) explains the limit and what raises it.
+- **Cannot create bridge - limit exceeded (N bridges maximum with X CPU cores, 1 core reserved for Redpanda)** — the instance holds its maximum number of bridges. The [Sizing Guide](../../production/sizing-guide.md) explains the limit and what raises it.
 
 ## What to do
 
 1. Read the reason on the bridge's status.
-2. Fix the resource it names. For CPU, follow the [CPU Health](./cpu-health.md) page. For the bridge limit, follow the [Sizing Guide](./sizing-guide.md).
+2. Fix the resource it names. For CPU, follow the [CPU Health](../../production/cpu-health.md) page. For the bridge limit, follow the [Sizing Guide](../../production/sizing-guide.md).
 3. Wait. The bridge starts on its own once the resource is healthy again, or once a place under the limit frees up. Nothing needs to be redeployed.
 
 ## Start bridges anyway in an emergency
 
-Only if the bridge is needed now, turn the refusals off. Edit the instance's [Config File](../usage/instances/config-file.md):
+Only if the bridge is needed now, turn the refusals off. Edit the instance's [Config File](../instances/config-file.md):
 
 ```yaml
 agent:
