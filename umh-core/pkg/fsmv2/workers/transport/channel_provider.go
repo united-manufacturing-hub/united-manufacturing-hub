@@ -27,10 +27,11 @@ type ChannelProvider interface {
 	GetInboundStats(workerID string) (capacity int, length int)
 }
 
-// channelProviderKeyName is the dependency-map name the transport worker reads
-// its ChannelProvider under.
+// channelProviderKeyName is ChannelProviderKey's name. It is a constant so
+// NewTransportWorker's error can print it, because DependencyKey does not
+// expose its name.
 const channelProviderKeyName = "transport.channel_provider"
 
-// ChannelProviderKey holds the ChannelProvider a TransportWorker gets its
-// channels from. The dependency map must carry it; cmd/main.go puts it there.
+// ChannelProviderKey names the dependency-map entry that holds the transport
+// worker's ChannelProvider.
 var ChannelProviderKey = config.NewDependencyKey[ChannelProvider](channelProviderKeyName)
