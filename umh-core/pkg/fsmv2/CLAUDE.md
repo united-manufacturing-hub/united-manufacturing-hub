@@ -439,12 +439,13 @@ logged warning is checked the same way against `ExpectedWarnings`.
 `examples.Run` returns an error when `Run` returns one. It also returns an
 error when the run logs an unexpected error before `Run` returns.
 
-Three other failures do not make `examples.Run` return an error. After the
+Four other failures do not make `examples.Run` return an error. After the
 run ends, `RunResult.Err` holds the first of these that applies:
 
 1. an unexpected error logged after `Run` returns;
 2. an unexpected warning;
-3. a stored state that its worker type may not report.
+3. a stored state that its worker type may not report;
+4. a store read that fails during that state check.
 
 The CLI exits 1 on a set `Err`, and `examples/registry_run_test.go` fails on it.
 Valid states per worker type are in `validWorkerStates`
