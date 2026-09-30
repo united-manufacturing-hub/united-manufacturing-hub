@@ -507,7 +507,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 //   - Non-blocking: health check completes in <1ms
 //
 // PHASE 0.5: Variable Injection (from Phase 0.5)
-//   - Global variables pass down unchanged from the supervisor's spec (the supervisor does not inject them)
+//   - Global variables: see "Phase 0.5: Variable injection" in doc.go
 //   - Internal variables (supervisorID, createdAt, bridgedBy)
 //   - User variables from UserSpec (preserved, not overwritten)
 //   - Variables available for template expansion in DeriveDesiredState
@@ -1427,9 +1427,10 @@ func (s *Supervisor[TObserved, TDesired]) getEscalationSteps(childName string) s
 	return "1) Check component logs 2) Verify network connectivity 3) Restart component manually"
 }
 
-// The parent's value wins on a key both hold. Each dropped
-// (child, namespace, key) is warned about once, not on every tick.
-// The caller holds s.mu.
+// mergeChildVariables returns childVars merged with the supervisor's
+// variables, with the precedence config.Merge documents. It logs a warning
+// the first time it drops a value for each child, namespace and key. The
+// caller holds s.mu.
 func (s *Supervisor[TObserved, TDesired]) mergeChildVariables(childName string, childVars config.VariableBundle) config.VariableBundle {
 	result := config.MergeWithConflicts(s.userSpec.Variables, childVars)
 

@@ -180,9 +180,10 @@ var _ = Describe("Application supervisor passes the registry's variable bundle t
 			g.Expect(vars).To(HaveKeyWithValue("user", HaveKeyWithValue("IP", "10.0.0.1")))
 		}, "5s", "100ms").Should(Succeed())
 		Eventually(conflictLines, "5s", "100ms").Should(HaveLen(1))
-		// The window must be contentful: warn-once is proven only by collects
-		// that actually ran inside it. Each poll records the stored
-		// observation's CollectedAt; distinct timestamps count as collects.
+		// The check that the warning appears once means something only if
+		// the collector ran at least twice during the Consistently window
+		// below. Each poll records the stored observation's CollectedAt, and
+		// each distinct timestamp counts as one collection.
 		collects := map[time.Time]struct{}{}
 		sampleCollect := func() {
 			obs, err := storage.LoadObservedTyped[fsmv2.Observation[snapshot.ApplicationStatus]](store, ctx, appID)
@@ -199,7 +200,7 @@ var _ = Describe("Application supervisor passes the registry's variable bundle t
 			sampleCollect()
 		}, "3s", "200ms").Should(Succeed())
 		Expect(len(collects)).To(BeNumerically(">=", 2),
-			"the collector must run at least twice inside the window for the warn-once check to mean anything")
+			"the collector must run at least twice inside the window, or the check that the warning appears once means nothing")
 		Expect(conflictLines()[0]).To(And(ContainSubstring(`"child_name":"own-hello"`), ContainSubstring(`"namespace":"User"`), ContainSubstring(`"key":"IP"`)))
 		Expect(logs.String()).NotTo(ContainSubstring("ip-from-yaml"), "the warning names the key, never a value")
 	})

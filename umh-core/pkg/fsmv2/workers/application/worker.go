@@ -70,9 +70,7 @@ var _ fsmv2.Worker = (*ApplicationWorker)(nil)
 type ApplicationWorker struct {
 	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus, struct{}]
 
-	// warnedMu guards warnedConflicts. The current callers never overlap;
-	// the lock guards against a future concurrent caller, not a current
-	// race.
+	// warnedMu guards warnedConflicts.
 	warnedMu sync.Mutex
 	// warnedConflicts holds each variableConflictKey that
 	// warnVariableConflicts has warned about. Entries are never removed.

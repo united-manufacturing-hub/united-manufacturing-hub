@@ -33,10 +33,11 @@
 //   - Use case: Most common variables, no prefix needed
 //
 // Global Namespace:
-//   - Contains: Fleet-wide settings (cluster ID, environment, API endpoints)
+//   - Contains: Settings a spec passes to its own worker and to every worker
+//     below it (cluster ID, environment, API endpoints). See variables.go.
 //   - Template access: Prefixed {{ .global.cluster_id }}
 //   - Serialization: YES (persisted in config files)
-//   - Use case: Shared settings across all workers
+//   - Use case: Settings that a worker and every worker below it read
 //
 // Internal Namespace:
 //   - Contains: Supervisor-injected identity (worker ID, parent ID,
