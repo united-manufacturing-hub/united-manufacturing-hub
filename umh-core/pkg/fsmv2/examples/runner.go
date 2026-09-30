@@ -82,10 +82,6 @@ func scenarioFailed(name string, err error) error {
 
 // Run executes a v2 scenario with the given configuration (see runV2).
 //
-// The supervisor's tick loop runs on a context detached from ctx: cancelling
-// ctx triggers a graceful teardown against the live tick loop instead of
-// killing the loop and forcing the drain to wait out its timeouts.
-//
 // If DumpStore is set, Run prints the store dump after teardown, before Done
 // closes. When the scenario's Run fails, the dump is printed before Run
 // returns its error.
@@ -221,14 +217,9 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		releaseScenarioDeps()
 	}
 
-	// ScenarioV2.Run is user-authored code, so it may return an error or panic.
-	// Either way the supervisor must stop and the deps key must be cleared
-	// before runV2's frame unwinds, otherwise every later runV2 in this
-	// process fails its already-published check. The flag stays false until
-	// the teardown goroutine takes ownership of cleanup.
 	// printStoreDump prints the store's changes since the run started when
-	// DumpStore is set. It runs on a fresh context, so a caller cancelling
-	// after Run returned cannot fail the store read.
+	// DumpStore is set. It reads the store on context.Background(), so a
+	// cancelled caller ctx cannot cut the dump short.
 	printStoreDump := func() {
 		if !cfg.DumpStore {
 			return
@@ -245,10 +236,15 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		fmt.Print(dump.FormatHuman())
 	}
 
+	// The scenario's Run is user-authored code, so it may return an error or
+	// panic. Either way the supervisor must stop and the deps key must be
+	// cleared before runV2's frame unwinds, otherwise every later runV2 in
+	// this process fails its already-published check. The flag stays false
+	// until the teardown goroutine takes ownership of cleanup.
 	teardownOwnedByGoroutine := false
 
-	// A failed Run prints the dump here, because a failed run is when the
-	// dump is most useful.
+	// Every return below this line, and a panic in the scenario's Run, tears
+	// down and prints the dump here.
 	defer func() {
 		if !teardownOwnedByGoroutine {
 			teardown()
