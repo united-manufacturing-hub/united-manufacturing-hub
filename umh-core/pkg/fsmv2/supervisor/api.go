@@ -230,7 +230,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	// Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
 	workerLogger := s.baseLogger.With(deps.String("worker", identity.String()))
-	workerLogger.Info("identity_created")
+	workerLogger.Debug("identity_created")
 
 	// Declared early so closures can capture it by reference.
 	var workerCtx *WorkerContext[TObserved, TDesired]
