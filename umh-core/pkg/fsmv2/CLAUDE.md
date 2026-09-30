@@ -66,6 +66,14 @@ dependencies, so they share its channels without a provider of their own.
 The certfetcher worker reads its cert handler from the dependency map, under
 `certfetcher.CertHandlerKey`. `cmd/main.go` explains when it sets it.
 
+## Store via the Dependency Map
+
+The persistence worker reads its store from the dependency map, under
+`persistence.StoreKey`. `cmd/main.go` sets it only when the memory-cleanup
+feature is enabled, which is also the only case that adds the persistence
+child to the YAML config. `NewPersistenceWorker` returns an error naming the
+key when the map holds none.
+
 ## State Machine States
 
 Each state file follows this pattern:

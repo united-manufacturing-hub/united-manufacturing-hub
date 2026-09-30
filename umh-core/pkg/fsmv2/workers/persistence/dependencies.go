@@ -59,17 +59,6 @@ func NewPersistenceDependencies(
 	}
 }
 
-// NewStoreOnlyDependencies builds seed dependencies carrying only the triangular
-// store, to store with register.SetGlobalDeps before the worker is constructed.
-// NewPersistenceWorker describes how it completes a seed. Panics on nil store.
-func NewStoreOnlyDependencies(store storage.TriangularStoreInterface) *PersistenceDependencies {
-	if store == nil {
-		panic("NewStoreOnlyDependencies: store cannot be nil")
-	}
-
-	return &PersistenceDependencies{store: store}
-}
-
 func (d *PersistenceDependencies) GetStore() storage.TriangularStoreInterface {
 	return d.store
 }

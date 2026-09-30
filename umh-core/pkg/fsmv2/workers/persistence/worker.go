@@ -50,9 +50,13 @@ const (
 	DefaultMaintenanceInterval = snapshot.DefaultMaintenanceInterval
 )
 
-// StoreKey names the store in a worker's dependency map. When set, the
-// worker uses it instead of register.GlobalDeps, which cmd/main.go sets.
-var StoreKey = fsmv2config.NewDependencyKey[storage.TriangularStoreInterface]("persistence.store")
+// storeKeyName is StoreKey's name. It is a constant so the key and the
+// constructor's error text share one spelling.
+const storeKeyName = "persistence.store"
+
+// StoreKey names the store a PersistenceWorker is built from. NewPersistenceWorker
+// returns an error naming it when the dependency map holds nothing under it.
+var StoreKey = fsmv2config.NewDependencyKey[storage.TriangularStoreInterface](storeKeyName)
 
 // Compile-time interface check: PersistenceWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*PersistenceWorker)(nil)
@@ -64,43 +68,28 @@ type PersistenceWorker struct {
 }
 
 // NewPersistenceWorker creates a new persistence worker.
-//
-// Two supported shapes for dependencies:
-//
-//   - seed (built via NewStoreOnlyDependencies): the constructor extracts the
-//     store and builds full deps with this worker's identity/logger/stateReader.
-//   - fully built (via NewPersistenceDependencies): used as-is, preserving
-//     the direct-injection contract used by tests.
-//
+// The dependency map must hold a TriangularStoreInterface under StoreKey;
+// otherwise it returns an error naming the key.
 // Returns fsmv2.Worker to align with the factory constructor signature.
 func NewPersistenceWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	dependencies *PersistenceDependencies,
+	dependencies map[string]any,
 ) (fsmv2.Worker, error) {
 	if identity.WorkerType == "" {
 		identity.WorkerType = workerType
 	}
 
+	store, ok := fsmv2config.LookupDependency(dependencies, StoreKey)
+	if !ok {
+		return nil, fmt.Errorf("persistence: no store under %q in the dependency map", storeKeyName)
+	}
+
 	w := &PersistenceWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	switch {
-	case dependencies == nil:
-		return nil, errors.New("persistence worker requires a store; pass via NewPersistenceDependencies or NewStoreOnlyDependencies")
-	case dependencies.BaseDependencies == nil:
-		store := dependencies.GetStore()
-		if store == nil {
-			return nil, errors.New("persistence worker: seed dependencies.Store must not be nil")
-		}
-
-		dependencies = NewPersistenceDependencies(store, deps.DefaultScheduler{}, bd)
-	case dependencies.GetStore() == nil:
-		return nil, errors.New("persistence worker: dependencies.Store must not be nil")
-	}
-
-	w.BindDeps(dependencies)
+	w.BindDeps(NewPersistenceDependencies(store, deps.DefaultScheduler{}, bd))
 
 	return w, nil
 }
@@ -236,12 +225,6 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 func init() {
 	register.Worker[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
-			d := register.GlobalDeps[*PersistenceDependencies](WorkerTypeName)
-
-			if store, ok := fsmv2config.LookupDependency(m, StoreKey); ok {
-				d = NewStoreOnlyDependencies(store)
-			}
-
-			return NewPersistenceWorker(id, logger, sr, d)
+			return NewPersistenceWorker(id, logger, sr, m)
 		})
 }
