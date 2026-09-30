@@ -671,7 +671,8 @@ func buildFSMv2Supervisor(
 		fsmv2config.SetDependency(fsmv2Deps, certfetcher.CertHandlerKey, communicationState.Gatekeeper.CertificateHandler())
 	}
 
-	register.SetGlobalDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
+	// The persistence worker reads its store from the same map.
+	fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
 
 	// Publish the dynamicchildren registry under the configworker deps key and
 	// the process-scoped fsmv2client before constructing the supervisor, so the
