@@ -138,38 +138,14 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 	})
 
-	It("keeps v1 and v2 registry names disjoint", func() {
-		// On a name collision, ListScenarios and the CLI --list silently
-		// prefer the v2 entry, and --scenario resolves both forms so Run
-		// rejects them with its conflicting-configuration error, making
-		// both scenarios unrunnable.
-		for name := range examples.RegistryV2 {
-			Expect(examples.Registry).NotTo(HaveKey(name),
-				"scenario name %q is registered in both Registry and RegistryV2", name)
-		}
-
-		// LiveRegistryV2 joins the same listing, so the same collision rules
-		// hold against both other registries.
+	It("keeps the v2 registries' names disjoint", func() {
+		// On a name collision between RegistryV2 and LiveRegistryV2,
+		// ListScenarios and the CLI --list silently prefer one entry, making
+		// the other scenario unrunnable.
 		for name := range examples.LiveRegistryV2 {
-			Expect(examples.Registry).NotTo(HaveKey(name),
-				"scenario name %q is registered in both Registry and LiveRegistryV2", name)
 			Expect(examples.RegistryV2).NotTo(HaveKey(name),
 				"scenario name %q is registered in both RegistryV2 and LiveRegistryV2", name)
 		}
-	})
-
-	It("rejects a RunConfig with both a v1 and a v2 scenario set", func() {
-		logger := deps.NewNopFSMLogger()
-		store := examples.SetupStore(logger)
-
-		result, err := examples.Run(context.Background(), examples.RunConfig{
-			Scenario:   examples.Scenario{Name: "v1", YAMLConfig: "children: []"},
-			ScenarioV2: examples.ScenarioV2{Name: "v2", Run: func(_ context.Context, _ examples.Env) error { return nil }},
-			Logger:     logger,
-			Store:      store,
-		})
-		Expect(err).To(MatchError(ContainSubstring("conflicting configuration")))
-		Expect(result).To(BeNil())
 	})
 
 	It("rejects a ScenarioV2 with a Name but no Run, naming the scenario", func() {
@@ -335,8 +311,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"DumpStore must not break a v2 run")
 		Eventually(result.Done, "55s").Should(BeClosed())
 
-		// Restore stdout and close the write end, so the drain goroutine sees
-		// EOF and finishes.
+		// Closing the write end makes the drain goroutine see EOF and finish.
 		os.Stdout = origStdout
 		Expect(writer.Close()).To(Succeed())
 		Eventually(drainDone, "5s").Should(BeClosed())
@@ -416,14 +391,12 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 	It("lists noop in the merged registry and runs a v2 scenario end-to-end on the kernel-only supervisor", func() {
 		// The v2 scenarios must appear in the same listing the CLI reads, so
-		// --list and --scenario find v1 and v2 scenarios alike.
+		// --list and --scenario find every registered scenario.
 		listing := examples.ListScenarios()
 		Expect(listing).To(HaveKey("noop"),
 			"merged ListScenarios must contain the v2 noop scenario")
 		Expect(listing).To(HaveKey("helloworld"),
 			"merged ListScenarios must contain the v2 helloworld scenario")
-		Expect(examples.Registry).NotTo(HaveKey("helloworld"),
-			"helloworld must be a v2 scenario only")
 
 		// The sentinel bool proves the runner invoked Run; noop's own Run
 		// returns nil at once, so it cannot.
