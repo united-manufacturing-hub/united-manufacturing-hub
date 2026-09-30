@@ -55,8 +55,8 @@ type runRecorder struct {
 	// attributed when several scenarios run in one process.
 	scenario string
 
-	// lastStep is the description of the last change Step announced. Only
-	// Run's goroutine reads and writes it, so it needs no lock.
+	// lastStep is the description of the last change Step announced. A
+	// scenario may call Step from a goroutine it starts, so loggedMu guards it.
 	lastStep string
 
 	// expectedErrors lists the message substrings the run's scenario
@@ -67,9 +67,9 @@ type runRecorder struct {
 	// declared through ScenarioV2.ExpectedWarnings.
 	expectedWarnings []string
 
-	// loggedMu guards loggedErr and loggedWarn. Any goroutine that logs,
-	// including the supervisor's, writes them. Run's goroutine and the
-	// teardown goroutine read them.
+	// loggedMu guards lastStep, loggedErr and loggedWarn. Any goroutine that
+	// logs, including the supervisor's, writes loggedErr and loggedWarn. Run's
+	// goroutine and the teardown goroutine read them.
 	loggedMu sync.Mutex
 
 	// loggedErr is the first unexpected error the run logged, or nil.
@@ -154,6 +154,22 @@ func (r *runRecorder) loggedError() error {
 	return r.loggedErr
 }
 
+// setLastStep remembers description as the last change Step announced.
+func (r *runRecorder) setLastStep(description string) {
+	r.loggedMu.Lock()
+	defer r.loggedMu.Unlock()
+
+	r.lastStep = description
+}
+
+// lastStepDescription returns the last change Step announced.
+func (r *runRecorder) lastStepDescription() string {
+	r.loggedMu.Lock()
+	defer r.loggedMu.Unlock()
+
+	return r.lastStep
+}
+
 // runErrorLogger wraps the run's logger so every error the run logs, from
 // the scenario's own code or from the supervisor's workers, reaches the
 // recorder, while all output still flows to the underlying logger.
@@ -190,7 +206,7 @@ var waitForTimeout = 30 * time.Second
 // Step logs one line naming the change the scenario is about to make, and
 // remembers it, so a later failed wait can name the change it followed.
 func (e Env) Step(description string) {
-	e.recorder.lastStep = description
+	e.recorder.setLastStep(description)
 
 	e.Logger.Info("scenario_step",
 		deps.String("scenario", e.recorder.scenario),
@@ -209,12 +225,12 @@ func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Co
 
 	for {
 		if logged := e.recorder.loggedError(); logged != nil {
-			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStep, logged)
+			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStepDescription(), logged)
 		}
 
 		done, seen, err := poll(waitCtx)
 		if err != nil {
-			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStep, err)
+			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStepDescription(), err)
 		}
 
 		lastSeen = seen
@@ -227,11 +243,11 @@ func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Co
 		case <-waitCtx.Done():
 			if ctx.Err() != nil {
 				return fmt.Errorf("wait %q after step %q did not complete before ctx ended: last seen %q: %w",
-					check, e.recorder.lastStep, lastSeen, ctx.Err())
+					check, e.recorder.lastStepDescription(), lastSeen, ctx.Err())
 			}
 
 			return fmt.Errorf("wait %q after step %q timed out after %s: last seen %q",
-				check, e.recorder.lastStep, waitForTimeout, lastSeen)
+				check, e.recorder.lastStepDescription(), waitForTimeout, lastSeen)
 		case <-time.After(waitForPollInterval):
 		}
 	}
