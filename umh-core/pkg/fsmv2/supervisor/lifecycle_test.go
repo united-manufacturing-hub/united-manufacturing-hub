@@ -287,6 +287,47 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				Expect(doc[storage.FieldDeletedBy]).To(Equal("removed"))
 			}
 		})
+
+		It("does not mark a worker deleted that is added again while the old one is removed", func() {
+			identity := mockIdentity()
+			roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
+
+			basicStore := memory.NewInMemoryStore()
+			for _, role := range roles {
+				Expect(basicStore.CreateCollection(context.Background(), "test_"+role, nil)).To(Succeed())
+			}
+
+			store := &markDeletedHookStore{TriangularStoreInterface: storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())}
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+
+			addDone := make(chan error, 1)
+
+			// Just before the removal stamps the old worker's documents, add
+			// a worker with the same id. If AddWorker can finish first, give
+			// it the time to do so. If it has to wait for the removal, this
+			// times out and the outcome is the same either way.
+			store.beforeMarkDeleted = func() {
+				go func() { addDone <- s.AddWorker(identity, &mockWorker{}) }()
+
+				select {
+				case err := <-addDone:
+					addDone <- err
+				case <-time.After(300 * time.Millisecond):
+				}
+			}
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Eventually(addDone).Should(Receive(BeNil()))
+
+			Expect(s.ListWorkers()).To(ContainElement(identity.ID))
+
+			for _, role := range roles {
+				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(doc).ToNot(HaveKey(storage.FieldDeletedAt),
+					"the %s document of the worker added again must not be marked deleted", role)
+			}
+		})
 	})
 
 	Describe("SignalNeedsRestart full worker restart", func() {
@@ -443,6 +484,23 @@ var _ = Describe("Supervisor Lifecycle", func() {
 })
 
 // sentryWarnRecorder is an FSMLogger that records SentryWarn calls.
+// markDeletedHookStore runs beforeMarkDeleted once, just before it passes a
+// MarkDeleted call on to the store it wraps.
+type markDeletedHookStore struct {
+	storage.TriangularStoreInterface
+
+	beforeMarkDeleted func()
+}
+
+func (h *markDeletedHookStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
+	if hook := h.beforeMarkDeleted; hook != nil {
+		h.beforeMarkDeleted = nil
+		hook()
+	}
+
+	return h.TriangularStoreInterface.MarkDeleted(ctx, workerType, id, deletedBy)
+}
+
 type sentryWarnRecorder struct {
 	mu       sync.Mutex
 	warnings []sentryWarn

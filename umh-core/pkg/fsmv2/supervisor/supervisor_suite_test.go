@@ -544,8 +544,9 @@ type mockTriangularStore struct {
 	ClearDeletedErr   error
 	ClearDeletedCalls []clearDeletedCall
 
-	// StoreCalls records the order of the store's write calls, one entry
-	// per call, named after the store method that made it.
+	// StoreCalls records, in call order, each successful Save* call and each
+	// ClearDeleted call, named after the store method. MarkDeleted calls go
+	// to MarkDeletedCalls instead.
 	StoreCalls []string
 
 	identity map[string]map[string]persistence.Document

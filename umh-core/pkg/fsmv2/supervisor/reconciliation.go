@@ -1088,6 +1088,30 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				deps.Any("children", childNames))
 		}
 
+		// Record the removal in the worker's stored documents (see
+		// TriangularStoreInterface.MarkDeleted) before the worker leaves
+		// s.workers, while s.mu is held. AddWorker takes s.mu and refuses an
+		// id that is still in s.workers. So a worker added again with the same
+		// id saves and clears its documents only after this stamp, and the
+		// stamp cannot land on the new worker. The old worker's collector may
+		// still save after this point; a save keeps the stamp.
+		//
+		// Removal also runs during Shutdown, when ctx can already be
+		// cancelled, and the store rejects a cancelled context. So MarkDeleted
+		// gets a context without the cancellation and with its own deadline.
+		// If MarkDeleted fails, nothing retries it, and the documents stay as
+		// if the worker still ran.
+		markCtx, cancelMark := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		markErr := s.store.MarkDeleted(markCtx, s.workerType, workerID, "removed")
+
+		cancelMark()
+
+		if markErr != nil {
+			s.logger.SentryWarn(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, "worker_tombstone_failed",
+				deps.Err(markErr),
+				deps.String("target_worker_id", workerID))
+		}
+
 		delete(s.workers, workerID)
 		s.mu.Unlock()
 
@@ -1122,23 +1146,6 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
-
-		// Stamp the tombstone into the worker's stored documents (see
-		// TriangularStoreInterface.MarkDeleted). Removal also runs during
-		// Shutdown, when ctx can already be cancelled, and the store rejects a
-		// cancelled context. So MarkDeleted gets a context without the
-		// cancellation and with its own deadline. If MarkDeleted fails, nothing
-		// retries it, and the documents stay as if the worker still ran.
-		markCtx, cancelMark := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		err := s.store.MarkDeleted(markCtx, s.workerType, workerID, "removed")
-
-		cancelMark()
-
-		if err != nil {
-			s.logger.SentryWarn(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, "worker_tombstone_failed",
-				deps.Err(err),
-				deps.String("target_worker_id", workerID))
-		}
 
 		s.logger.Debug("worker_removed_successfully",
 			deps.Int("children_cleaned", childCount))
