@@ -192,6 +192,64 @@ var _ = Describe("Observation", func() {
 			Expect(restored.Metrics.Worker.Gauges["latency"]).To(Equal(1.5))
 		})
 
+		It("decodes the _deleted_at a stored document carries after its worker was removed", func() {
+			deletedAt := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+
+			// A typed load marshals the stored document to JSON and decodes
+			// that, so this map stands in for a tombstoned stored document.
+			stored := map[string]interface{}{
+				"collected_at": time.Date(2026, 9, 30, 11, 59, 0, 0, time.UTC),
+				"state":        "running",
+				"reachable":    true,
+				"_deleted_at":  deletedAt,
+				"_deleted_by":  "removed",
+			}
+
+			data, err := json.Marshal(stored)
+			Expect(err).NotTo(HaveOccurred())
+
+			var restored fsmv2.Observation[TestStatus]
+			Expect(json.Unmarshal(data, &restored)).To(Succeed())
+
+			Expect(restored.DeletedAt).NotTo(BeNil())
+			Expect(restored.DeletedAt.Equal(deletedAt)).To(BeTrue())
+			Expect(restored.State).To(Equal("running"))
+			Expect(restored.Status.Reachable).To(BeTrue())
+		})
+
+		It("leaves DeletedAt nil for a document without _deleted_at", func() {
+			data := []byte(`{"collected_at":"2026-09-30T11:59:00Z","state":"running","reachable":true}`)
+
+			var restored fsmv2.Observation[TestStatus]
+			Expect(json.Unmarshal(data, &restored)).To(Succeed())
+
+			Expect(restored.DeletedAt).To(BeNil())
+		})
+
+		It("marshals a fresh observation without _deleted_at", func() {
+			obs := fsmv2.Observation[TestStatus]{State: "running"}
+
+			data, err := json.Marshal(obs)
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(json.Unmarshal(data, &raw)).To(Succeed())
+			Expect(raw).NotTo(HaveKey("_deleted_at"))
+		})
+
+		It("round-trips a set DeletedAt", func() {
+			deletedAt := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+			obs := fsmv2.Observation[TestStatus]{State: "running", DeletedAt: &deletedAt}
+
+			data, err := json.Marshal(obs)
+			Expect(err).NotTo(HaveOccurred())
+
+			var restored fsmv2.Observation[TestStatus]
+			Expect(json.Unmarshal(data, &restored)).To(Succeed())
+			Expect(restored.DeletedAt).NotTo(BeNil())
+			Expect(restored.DeletedAt.Equal(deletedAt)).To(BeTrue())
+		})
+
 		It("includes ShutdownRequested=false in JSON (not omitted)", func() {
 			obs := fsmv2.Observation[TestStatus]{
 				State:             "stopped",
