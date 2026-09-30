@@ -226,6 +226,9 @@ const (
 	DeleteHistorian ActionType = "delete-historian"
 	// GetHistorian represents the action type for getting the historian configuration.
 	GetHistorian ActionType = "get-historian"
+	// GetHistorianMetrics represents the action type for reading the state of the
+	// historian database: storage, policies, background jobs and per-table detail.
+	GetHistorianMetrics ActionType = "get-historian-metrics"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -794,6 +797,10 @@ const (
 	// ErrGetCacheModTimeFailed is the error code for a failed cache mod time retrieval.
 	// It is not retryable because we already changed the config file and the user should refresh the page.
 	ErrGetCacheModTimeFailed = "ERR_GET_CACHE_MOD_TIME_FAILED"
+	// ErrHistorianMetricsFailed is the error code for a historian database whose
+	// state could not be read. It is retryable: the connection may be fine now
+	// even though the catalog read failed a moment ago.
+	ErrHistorianMetricsFailed = "ERR_HISTORIAN_METRICS_FAILED"
 )
 
 type ProtocolConverterConnection struct {

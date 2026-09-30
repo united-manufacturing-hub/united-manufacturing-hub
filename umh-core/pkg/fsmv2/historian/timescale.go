@@ -20,29 +20,16 @@
 // configuration faults (Auth=TimescaleAuthInvalid) rather than transient network
 // faults, which leave authentication unverified (Auth=TimescaleAuthUnknown).
 //
-// # Scope: connection health only
+// # Scope: connection health, plus a summary
 //
-// This worker checks the connection and nothing else: reachability, latency,
-// and whether the credentials and database name are accepted. Its per-tick cost
-// is a single `SELECT 1` over one pooled, long-lived connection.
+// Per tick this worker checks the connection and nothing else: one `SELECT 1`
+// over a pooled connection for reachability, latency, and whether the
+// credentials and database name are accepted. On a slower schedule it also reads
+// a summary of the database: versions, disk usage, table names, the span of the
+// stored rows, and the job counts.
 //
-// Database metrics (long-running queries, compression ratios, background job
-// state, especially aborted compression jobs, and the rest of the operational
-// signals on the Timescale Grafana dashboard) are deliberately NOT collected here.
-// They belong to a separate future worker (TODO(ENG-5320): the timescale metrics
-// monitor), for two reasons:
-//
-//   - Cost. Those metrics need involved SQL that costs far more CPU on the
-//     server than a `SELECT 1`. The metrics worker will run on its own, slower
-//     tick so heavy queries never share this monitor's cadence. Splitting the
-//     workers keeps connection health cheap and always-fresh regardless of how
-//     expensive metrics collection becomes.
-//   - Sequencing. Which metrics to expose still needs discussion with the VEs.
-//     Keeping that out of this worker means it does not block Historian
-//     integration.
-//
-// Running two workers adds only one extra pooled connection to the database, so
-// the overhead is minimal and worth the isolation.
+// Per-table detail and the job list are read on request by the
+// get-historian-metrics action.
 package fsmv2timescale
 
 import (
@@ -59,6 +46,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -109,6 +97,10 @@ type TimescaleStatus struct {
 	// or the server rejected the credentials/database (an auth fault). It is
 	// false only for network or timeout faults, where nothing answered.
 	Reachable bool `json:"reachable"`
+	// Read on a slower schedule than the connection check, keeping its last value
+	// between reads, so it is empty only until the first one completes.
+	timescalemetrics.Summary
+	DatabaseOccupiedDiskBytes int64 `json:"databaseOccupiedDiskBytes"`
 }
 
 // sharedPool is the one holder every worker instance polls through. The
@@ -136,7 +128,9 @@ var sharedPool = &poolHolder{}
 type Deps struct {
 	*deps.BaseDependencies
 
-	pool *poolHolder
+	pool         *poolHolder
+	summary      *readCache[timescalemetrics.Summary]
+	databaseSize *readCache[int64]
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -148,6 +142,8 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 	return Deps{
 		BaseDependencies: bd,
 		pool:             sharedPool,
+		summary:          sharedSummary,
+		databaseSize:     sharedDatabaseSize,
 	}
 }
 
@@ -256,14 +252,22 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	cfg = cfg.WithDefaults()
 	host, port := cfg.Timescale.Host, cfg.Timescale.Port
 
-	pool, err := d.pool.get(cfg.Timescale.ToDSN())
+	dsn := cfg.Timescale.ToDSN()
+
+	pool, err := d.pool.get(dsn)
 	if err != nil {
 		d.GetLogger().Debug("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", false),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port, Auth: models.TimescaleAuthUnknown}, fmt.Errorf("timescale pool: %w", err)
+		return TimescaleStatus{
+			Host:                      host,
+			Port:                      port,
+			Auth:                      models.TimescaleAuthUnknown,
+			Summary:                   d.summary.last(dsn),
+			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+		}, fmt.Errorf("timescale pool: %w", err)
 	}
 
 	start := time.Now()
@@ -285,7 +289,14 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.String("auth", string(auth)),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port, Reachable: reachable, Auth: auth}, fmt.Errorf("timescale query %s: %w", host, err)
+		return TimescaleStatus{
+			Host:                      host,
+			Port:                      port,
+			Reachable:                 reachable,
+			Auth:                      auth,
+			Summary:                   d.summary.last(dsn),
+			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+		}, fmt.Errorf("timescale query %s: %w", host, err)
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
@@ -295,13 +306,50 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		deps.String("auth", string(models.TimescaleAuthValid)),
 		deps.Float64("latency_ms", elapsedMs))
 
+	now := time.Now()
+
 	return TimescaleStatus{
-		Host:      host,
-		Auth:      models.TimescaleAuthValid,
-		LatencyMs: elapsedMs,
-		Port:      port,
-		Reachable: true,
+		Host:                      host,
+		Auth:                      models.TimescaleAuthValid,
+		LatencyMs:                 elapsedMs,
+		Port:                      port,
+		Reachable:                 true,
+		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, pool, host)),
+		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, pool, host)),
 	}, nil
+}
+
+// The error is logged and discarded: a summary that cannot be read is not a
+// connection fault, and returning it would drive the worker degraded for a
+// database that is answering.
+func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
+	return func() (timescalemetrics.Summary, bool) {
+		summary, err := timescalemetrics.CollectSummary(ctx, pool)
+		if err != nil {
+			d.GetLogger().Debug("timescale summary",
+				deps.String("host", host),
+				deps.Err(err))
+
+			return timescalemetrics.Summary{}, false
+		}
+
+		return summary, true
+	}
+}
+
+func databaseSizeReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (int64, bool) {
+	return func() (int64, bool) {
+		databaseOccupiedDiskBytes, err := timescalemetrics.ReadDatabaseOccupiedDiskBytes(ctx, pool)
+		if err != nil {
+			d.GetLogger().Debug("timescale database size",
+				deps.String("host", host),
+				deps.Err(err))
+
+			return 0, false
+		}
+
+		return databaseOccupiedDiskBytes, true
+	}
 }
 
 func init() {
@@ -311,4 +359,72 @@ func init() {
 		Poll:       Poll,
 		NewDeps:    newDeps,
 	})
+}
+
+// None of the figures moves faster than this: a table appears when a contract is
+// deployed, and disk usage and a failing job are not urgent to the second.
+const summaryInterval = 60 * time.Second
+
+// pg_database_size stats every file of the database, and calling it on a short
+// interval is a reported cause of timeouts and inode cache pressure.
+// https://www.postgresql.org/message-id/CAGRY4nz94%2Bq_zVxj%2Bdnk7zqm-McBz4mSza_wALKiw2%3D%3D23MiGQ%40mail.gmail.com
+const databaseSizeInterval = 15 * time.Minute
+
+// The caches match sharedPool: they have to outlive a single Poll.
+var (
+	sharedSummary      = &readCache[timescalemetrics.Summary]{interval: summaryInterval}
+	sharedDatabaseSize = &readCache[int64]{interval: databaseSizeInterval}
+)
+
+type readCache[T any] struct {
+	readAt time.Time
+	value  T
+	// A config edit repoints the pool at another database; holding the value across
+	// that would report one database's figures beside the other's host.
+	dsn      string
+	interval time.Duration
+	mu       sync.Mutex
+}
+
+// refresh reads again once the interval has elapsed or the database changed. A
+// failed read keeps the previous value and waits its turn rather than retrying
+// every poll.
+func (c *readCache[T]) refresh(
+	now time.Time,
+	dsn string,
+	read func() (T, bool),
+) T {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if dsn != c.dsn {
+		var empty T
+
+		c.dsn = dsn
+		c.value = empty
+	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
+		return c.value
+	}
+
+	c.readAt = now
+
+	if value, ok := read(); ok {
+		c.value = value
+	}
+
+	return c.value
+}
+
+// The framework persists a failed Poll's status too, so it carries the last value.
+func (c *readCache[T]) last(dsn string) T {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if dsn != c.dsn {
+		var empty T
+
+		return empty
+	}
+
+	return c.value
 }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New Features
+
+- With the historian feature flag enabled in the Management Console, the instance reports the state of its historian database: versions, disk usage and growth, and background job counts with every status update, and compression savings, per-table details and the job list on request
+
 ### Fixes
 
 - Log messages for stopped flows in bridges are now more consistent
