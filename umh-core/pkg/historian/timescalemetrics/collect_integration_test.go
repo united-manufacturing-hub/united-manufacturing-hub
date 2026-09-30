@@ -154,6 +154,15 @@ func startDatabaseWithConfig(image string) (config.HistorianConfig, *pgxpool.Poo
 
 const missingHypertableID = 999
 
+func hypertableIDOfJob(pool *pgxpool.Pool, jobID int) int {
+	var hypertableID int
+	Expect(pool.QueryRow(context.Background(),
+		`SELECT (config->>'hypertable_id')::int FROM _timescaledb_config.bgw_job WHERE id = $1`, jobID,
+	).Scan(&hypertableID)).To(Succeed())
+
+	return hypertableID
+}
+
 func runJobAgainstHypertable(pool *pgxpool.Pool, jobID int, hypertableID int) {
 	ctx := context.Background()
 
@@ -370,28 +379,19 @@ var _ = Describe("Metrics collection", Label("integration"), func() {
 			`SELECT job_id FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh' ORDER BY job_id LIMIT 1`,
 		).Scan(&jobID)).To(Succeed())
 
-		// Every umh job stops before the stat row below is written. A background
-		// run landing after it would record its own outcome over the one this spec
-		// is asserting on.
-		_, err = pool.Exec(ctx, `SELECT alter_job(job_id, scheduled => false, next_start => 'infinity')
-			  FROM timescaledb_information.jobs WHERE hypertable_schema = 'umh'`)
-		Expect(err).NotTo(HaveOccurred())
-
-		_, err = pool.Exec(ctx, `INSERT INTO _timescaledb_internal.bgw_job_stat
-			(job_id, last_start, last_finish, next_start, last_successful_finish, last_run_success,
-			 total_runs, total_duration, total_duration_failures, total_successes, total_failures,
-			 total_crashes, consecutive_failures, consecutive_crashes, flags)
-			VALUES ($1, now() - interval '1 minute', now(), now() + interval '1 hour', now(), true,
-			 4, interval '0', interval '0', 1, 3, 0, 0, 0, 0)
-			ON CONFLICT (job_id) DO UPDATE SET last_run_success = true, total_failures = 3`, jobID)
-		Expect(err).NotTo(HaveOccurred())
+		waitForLastRunStatus(pool, jobID, "Success")
+		hypertableID := hypertableIDOfJob(pool, jobID)
+		runJobAgainstHypertable(pool, jobID, missingHypertableID)
+		waitForLastRunStatus(pool, jobID, "Failed")
+		runJobAgainstHypertable(pool, jobID, hypertableID)
+		waitForLastRunStatus(pool, jobID, "Success")
 
 		jobs, err := readJobs(ctx, pool)
 
 		Expect(err).NotTo(HaveOccurred())
 		for _, job := range jobs {
 			Expect(job.LastRunFailed).To(BeFalse(),
-				"three failures in this job's history are not a reason to flag it while it is succeeding")
+				"a failure in this job's history is not a reason to flag it while it is succeeding")
 		}
 	})
 
