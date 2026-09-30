@@ -158,6 +158,21 @@ func (ts *TriangularStore) saveWithDelta(
 		}
 	}
 
+	// A save never adds, changes or removes a tombstone, which is a non-nil
+	// _deleted_at with its _deleted_by. A collection can still be running
+	// when its worker is removed, and its late save must not make the worker
+	// look alive again. So the stored tombstone is kept, and any tombstone
+	// the incoming document carries is dropped.
+	delete(doc, FieldDeletedAt)
+	delete(doc, FieldDeletedBy)
+
+	if !isNew && existing != nil {
+		if deletedAt, ok := existing[FieldDeletedAt]; ok && deletedAt != nil {
+			doc[FieldDeletedAt] = deletedAt
+			doc[FieldDeletedBy] = existing[FieldDeletedBy]
+		}
+	}
+
 	// Preserve version for roles that don't increment (observed state)
 	if !isNew && existing != nil && !opts.IncrementVersion {
 		if version, ok := existing[FieldVersion]; ok {
@@ -264,7 +279,7 @@ func (ts *TriangularStore) computeCreatedDiff(doc persistence.Document, role str
 	added := make(map[string]interface{})
 
 	for key, val := range doc {
-		if !cseFieldSet[key] && key != "id" && key != FieldVersion {
+		if !cseFieldSet[key] && key != "id" && key != FieldDeletedAt && key != FieldDeletedBy {
 			added[key] = val
 		}
 	}
