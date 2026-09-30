@@ -64,6 +64,7 @@ type MemoryStatus struct {
 	TotalBytes  int64        `json:"totalBytes"`
 	UsedPercent float64      `json:"usedPercent"`
 	Message     string       `json:"message"`
+	Measured    bool         `json:"measured"`
 }
 
 type HostMemoryReader func(ctx context.Context) (usedBytes, totalBytes uint64, err error)
@@ -115,6 +116,7 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 
 	status.UsedPercent = usedPercent(status.UsedBytes, status.TotalBytes)
 	status.Message = messageFor(status.UsedPercent)
+	status.Measured = true
 
 	recordMetrics(d.MetricsRecorder(), time.Now(), status)
 

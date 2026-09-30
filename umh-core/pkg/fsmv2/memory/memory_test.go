@@ -73,6 +73,7 @@ var _ = Describe("the memory worker's poll", func() {
 	It("reports a cgroup with a limit", func() {
 		status, health := pollAndJudge(fixtureFilesystem(cgroupFiles(oneGiBText, halfGiBText)))
 
+		Expect(status.Measured).To(BeTrue())
 		Expect(status.Source).To(Equal(SourceCgroupLimit))
 		Expect(status.UsedBytes).To(Equal(oneGiB / 2))
 		Expect(status.TotalBytes).To(Equal(oneGiB))

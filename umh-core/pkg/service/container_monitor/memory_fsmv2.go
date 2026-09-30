@@ -73,8 +73,7 @@ func judgeWorkerMemory(status simple.Status[fsmv2memory.MemoryStatus], freshness
 		return degradedMemory(unfreshMemoryMessage(freshness))
 	}
 
-	pollFailed := status.Degraded && status.Result.TotalBytes == 0
-	if pollFailed {
+	if !status.Result.Measured {
 		return degradedMemory(status.Reason)
 	}
 

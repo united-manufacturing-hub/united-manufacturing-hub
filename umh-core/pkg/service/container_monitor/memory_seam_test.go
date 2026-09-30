@@ -76,10 +76,10 @@ func (r warningRecorder) SentryWarn(feature deps.Feature, _ string, msg string, 
 
 var (
 	healthyWorkerMemory = fsmv2memory.MemoryStatus{
-		Source: fsmv2memory.SourceCgroupLimit, UsedBytes: 500, TotalBytes: 1000, UsedPercent: 50, Message: "worker says normal",
+		Source: fsmv2memory.SourceCgroupLimit, UsedBytes: 500, TotalBytes: 1000, UsedPercent: 50, Message: "worker says normal", Measured: true,
 	}
 	criticalWorkerMemory = fsmv2memory.MemoryStatus{
-		Source: fsmv2memory.SourceCgroupLimit, UsedBytes: 900, TotalBytes: 1000, UsedPercent: 90, Message: "worker says critical",
+		Source: fsmv2memory.SourceCgroupLimit, UsedBytes: 900, TotalBytes: 1000, UsedPercent: 90, Message: "worker says critical", Measured: true,
 	}
 )
 
@@ -131,15 +131,19 @@ var _ = Describe("the memory seam's verdict", func() {
 		Expect(memory.CGroupTotalBytes).To(Equal(criticalWorkerMemory.TotalBytes))
 	})
 
-	It("reports a failed poll as degraded without a reading", func() {
-		status := memoryStatus{Degraded: true, Reason: "poll error: cgroup and host unreadable"}
+	DescribeTable("reports a failed poll as degraded without a reading",
+		func(partialResult fsmv2memory.MemoryStatus) {
+			status := memoryStatus{Result: partialResult, Degraded: true, Reason: "poll error: cgroup and host unreadable"}
 
-		memory := container_monitor.JudgeWorkerMemory(status, fsmv2client.Fresh)
+			memory := container_monitor.JudgeWorkerMemory(status, fsmv2client.Fresh)
 
-		Expect(memory.Health.Category).To(Equal(models.Degraded))
-		Expect(memory.Health.Message).To(Equal(status.Reason))
-		Expect(memory.CGroupTotalBytes).To(BeZero())
-	})
+			Expect(memory.Health.Category).To(Equal(models.Degraded))
+			Expect(memory.Health.Message).To(Equal(status.Reason))
+			Expect(memory.CGroupTotalBytes).To(BeZero())
+		},
+		Entry("with an empty result", fsmv2memory.MemoryStatus{}),
+		Entry("with partial data kept from the failed poll", fsmv2memory.MemoryStatus{UsedBytes: 900, TotalBytes: 1000}),
+	)
 
 	DescribeTable("reports a missing reading as degraded",
 		func(freshness fsmv2client.Freshness, messagePart string) {
