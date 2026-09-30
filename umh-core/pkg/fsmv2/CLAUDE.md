@@ -56,23 +56,28 @@ fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transpo
 The supervisor merges its map into every child, so a provider reaches its
 worker however deep it sits. `NewTransportWorker` and `NewCommunicatorWorker`
 each return an error naming the key when the map holds none. A scenario
-supplies a mock provider under the same keys (see "Mocks" below).
+supplies a mock provider under the same keys, as "Mocks" below describes.
+Unlike helloworld's filesystem there, these workers have no fallback.
 
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.
 
 ## Cert Handler via the Dependency Map
 
-The certfetcher worker reads its cert handler from the dependency map, under
-`certfetcher.CertHandlerKey`. `cmd/main.go` explains when it sets it.
+The certfetcher worker reads its cert handler, a
+`certificatehandler.Handler`, from the dependency map under
+`certfetcher.CertHandlerKey`. `cmd/main.go` sets it only when the gatekeeper is
+enabled; the comment above that `SetDependency` call says why. Like the channel
+providers, `NewCertFetcherWorker` returns an error naming the key when the map
+holds none.
 
 ## Store via the Dependency Map
 
-The persistence worker reads its store from the dependency map, under
-`persistence.StoreKey`. `cmd/main.go` sets it only when the memory-cleanup
-feature is enabled, which is also the only case that adds the persistence
-child to the YAML config. `NewPersistenceWorker` returns an error naming the
-key when the map holds none.
+The persistence worker reads its store, a `storage.TriangularStoreInterface`,
+from the dependency map under `persistence.StoreKey`. `cmd/main.go` sets it only
+when memory cleanup is enabled; the comment above that `SetDependency` call
+says why. `NewPersistenceWorker` returns an error naming the key when the map
+holds none.
 
 ## State Machine States
 
