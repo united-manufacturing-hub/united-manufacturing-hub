@@ -498,13 +498,11 @@ go test -tags=test -count=1 -v ./pkg/fsmv2/examples/ -ginkgo.focus="helloworld"
 ```
 
 A v2 scenario's runner stops one second after the scenario ends;
-`--duration=0` keeps it running until Ctrl+C. A v1 scenario runs until
-Ctrl+C unless `--duration` is given, which sets a hard total-run timeout.
+`--duration=0` keeps it running until Ctrl+C.
 
 ### Rules
 
 - No global setters for mocks: `register.SetGlobalDeps` is not for scenarios.
-- Do not add to the v1 `Registry`: `examples/v1_registry_test.go` fails if you do.
 
 ## Testing Patterns
 
