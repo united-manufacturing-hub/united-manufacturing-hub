@@ -66,7 +66,7 @@ func (s *stubStateReader) LoadObservedTyped(_ context.Context, _, _ string, resu
 // TestGetFresh_MapsChildObservationToReason asserts GetFresh maps each read
 // result to its Freshness value. It returns the whole observation for Fresh
 // and Stale and the zero observation otherwise. No case Upserts the ref, so
-// the Fresh case stands for a worker that another worker started.
+// the Fresh case also covers a static worker (see the package doc).
 func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 	const maxAge = 10 * time.Second
 

@@ -140,8 +140,8 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		Expect(bridge.Upsert(ref, spec2)).To(Succeed())
 
 		// Phase 3(c): with no further tick yet, the respawned child has not been
-		// added. The store still holds the removed child's marked documents, so
-		// GetFresh still reports Deleted, not the old observation.
+		// added. The store still holds the removed child's documents with their
+		// tombstone, so GetFresh still reports Deleted, not the old observation.
 		_, preTickFresh, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(preTickFresh).To(Equal(fsmv2client.Deleted),
