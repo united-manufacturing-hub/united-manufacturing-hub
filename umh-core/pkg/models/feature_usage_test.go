@@ -68,19 +68,14 @@ var _ = Describe("FeatureUsage", func() {
 	})
 })
 
-// An instance that fell back to the legacy CPU path never counts as enabled:
-// the flag and every prerequisite must hold. models.FSMv2CPUEnabled names the
-// prerequisites.
+// The fsmv2 CPU path runs whenever USE_FSMV2_CPU is on. Management Console
+// credentials are not a prerequisite: the fsmv2 supervisor runs without them.
 var _ = Describe("FSMv2CPUEnabled, the fsmv2 CPU adoption flag", func() {
 	DescribeTable("reports the effective state of the fsmv2 CPU path",
-		func(flag, transport, apiURLSet, authTokenSet, expected bool) {
-			Expect(models.FSMv2CPUEnabled(flag, transport, apiURLSet, authTokenSet)).
-				To(Equal(expected))
+		func(flag, expected bool) {
+			Expect(models.FSMv2CPUEnabled(flag)).To(Equal(expected))
 		},
-		Entry("flag on, transport on, API_URL and AUTH_TOKEN present", true, true, true, true, true),
-		Entry("flag on but transport off (the rollout inflation case)", true, false, true, true, false),
-		Entry("flag on, transport on, API_URL missing", true, true, false, true, false),
-		Entry("flag on, transport on, AUTH_TOKEN missing", true, true, true, false, false),
-		Entry("flag off even with every prerequisite present", false, true, true, true, false),
+		Entry("flag on", true, true),
+		Entry("flag off", false, false),
 	)
 })

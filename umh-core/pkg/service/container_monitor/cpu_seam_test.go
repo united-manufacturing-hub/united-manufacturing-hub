@@ -86,15 +86,9 @@ var workerHealthyMessage = cpuhealth.ComposeMessage(
 	workerHealthyDetails,
 )
 
-// seamTransportOffWarning, seamCredentialsWarning, and seamStillStartingWarning
-// mirror the three diagnostic warnings readWorkerCPUHealth emits when the flag
-// is on but the fsmv2 supervisor cannot run or its client is not published yet.
-// The warn-once specs assert message content, not just a count, because the warning
-// must name the missing prerequisite.
-const seamTransportOffWarning = "USE_FSMV2_CPU is enabled but USE_FSMV2_TRANSPORT is off, so the fsmv2 supervisor never runs and no CPU worker client is published; no CPU measurement is available"
-
-const seamCredentialsWarning = "USE_FSMV2_CPU is enabled but API_URL or AUTH_TOKEN is unset, so the fsmv2 supervisor never runs and no CPU worker client is published; no CPU measurement is available"
-
+// seamStillStartingWarning mirrors the diagnostic warning readWorkerCPUHealth
+// emits when the flag is on but the fsmv2 client is not published yet. The
+// warn-once spec asserts message content, not just a count.
 const seamStillStartingWarning = "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no CPU measurement is available"
 
 // cpuStubStateReader is the cpuStubReader harness pattern from
@@ -1462,8 +1456,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 	})
 
 	Context("[warn-once]", func() {
-		// noClient prepares the flag-on-but-no-client state both warn-once specs
-		// share: a nil process client plus an observer on the component logger.
+		// noClient prepares the flag-on-but-no-client state: a nil process
+		// client plus an observer on the component logger.
 		noClient := func() *observer.ObservedLogs {
 			previous := fsmv2client.GetClient()
 			fsmv2client.SetClient(nil)
@@ -1472,135 +1466,35 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			return observeWarns()
 		}
 
-		It("should warn once, naming the off prerequisite, when USE_FSMV2_CPU is on but USE_FSMV2_TRANSPORT is off", func() {
-			setFlag("true")
-			previous, had := os.LookupEnv("USE_FSMV2_TRANSPORT")
-			Expect(os.Setenv("USE_FSMV2_TRANSPORT", "false")).To(Succeed())
+		// setEnv sets an environment variable for one spec and restores it after.
+		setEnv := func(key, value string) {
+			previous, had := os.LookupEnv(key)
+			Expect(os.Setenv(key, value)).To(Succeed())
 			DeferCleanup(func() {
 				if had {
-					_ = os.Setenv("USE_FSMV2_TRANSPORT", previous)
+					_ = os.Setenv(key, previous)
 				} else {
-					_ = os.Unsetenv("USE_FSMV2_TRANSPORT")
+					_ = os.Unsetenv(key)
 				}
 			})
+		}
 
-			logs := noClient()
-
-			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
-
-			// A flag-on box whose supervisor cannot run is not an error, but with
-			// the legacy path off there is nothing left to measure it: the CPU
-			// record degrades and carries the diagnosis. The warning must fire
-			// once and name the transport prerequisite, not a generic
-			// unreachable-client.
-			for i := 0; i < 3; i++ {
-				status, err := service.GetStatus(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(status.CPU).NotTo(BeNil())
-				Expect(status.CPUHealth).To(Equal(models.Degraded))
-				Expect(status.CPU.Health.Message).To(Equal(seamTransportOffWarning))
-				// The state pair is asserted HERE and only here. Everywhere else
-				// it is pinned through status.CPUHealth, which is derived from
-				// Category; this is the one case where a hand-written Health could
-				// carry a state that disagrees with its own category and nothing
-				// would notice.
-				Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
-				Expect(status.CPU.Health.DesiredState).To(Equal("active"))
-			}
-
-			transportWarns := logs.Filter(func(entry observer.LoggedEntry) bool {
-				return entry.LoggerName == logger.ComponentContainerMonitorService &&
-					entry.Message == seamTransportOffWarning
-			}).Len()
-			Expect(transportWarns).To(Equal(1))
-		})
-
-		It("should warn once, naming the missing credentials, when USE_FSMV2_CPU is on, transport is on, and API_URL or AUTH_TOKEN is unset", func() {
+		It("should warn once, naming the still-starting supervisor, when USE_FSMV2_CPU is on and the client is not published yet", func() {
 			setFlag("true")
-			prevTransport, hadTransport := os.LookupEnv("USE_FSMV2_TRANSPORT")
-			Expect(os.Setenv("USE_FSMV2_TRANSPORT", "true")).To(Succeed())
-			DeferCleanup(func() {
-				if hadTransport {
-					_ = os.Setenv("USE_FSMV2_TRANSPORT", prevTransport)
-				} else {
-					_ = os.Unsetenv("USE_FSMV2_TRANSPORT")
-				}
-			})
-			prevAPIURL, hadAPIURL := os.LookupEnv("API_URL")
-			Expect(os.Setenv("API_URL", "")).To(Succeed())
-			DeferCleanup(func() {
-				if hadAPIURL {
-					_ = os.Setenv("API_URL", prevAPIURL)
-				} else {
-					_ = os.Unsetenv("API_URL")
-				}
-			})
-			prevToken, hadToken := os.LookupEnv("AUTH_TOKEN")
-			Expect(os.Setenv("AUTH_TOKEN", "")).To(Succeed())
-			DeferCleanup(func() {
-				if hadToken {
-					_ = os.Setenv("AUTH_TOKEN", prevToken)
-				} else {
-					_ = os.Unsetenv("AUTH_TOKEN")
-				}
-			})
+			// The supervisor no longer depends on USE_FSMV2_TRANSPORT or on
+			// Management Console credentials. Both are set to the values that
+			// used to select a different diagnosis, so a message that still
+			// blamed them would fail here.
+			setEnv("USE_FSMV2_TRANSPORT", "false")
+			setEnv("API_URL", "")
+			setEnv("AUTH_TOKEN", "")
 
 			logs := noClient()
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-			for i := 0; i < 3; i++ {
-				status, err := service.GetStatus(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(status.CPU).NotTo(BeNil())
-				Expect(status.CPUHealth).To(Equal(models.Degraded))
-				Expect(status.CPU.Health.Message).To(Equal(seamCredentialsWarning))
-			}
-
-			credentialsWarns := logs.Filter(func(entry observer.LoggedEntry) bool {
-				return entry.LoggerName == logger.ComponentContainerMonitorService &&
-					entry.Message == seamCredentialsWarning
-			}).Len()
-			Expect(credentialsWarns).To(Equal(1))
-		})
-
-		It("should warn once, naming the still-starting supervisor, when USE_FSMV2_CPU is on, transport and credentials are present, and the client is not published yet", func() {
-			setFlag("true")
-			prevTransport, hadTransport := os.LookupEnv("USE_FSMV2_TRANSPORT")
-			Expect(os.Setenv("USE_FSMV2_TRANSPORT", "true")).To(Succeed())
-			DeferCleanup(func() {
-				if hadTransport {
-					_ = os.Setenv("USE_FSMV2_TRANSPORT", prevTransport)
-				} else {
-					_ = os.Unsetenv("USE_FSMV2_TRANSPORT")
-				}
-			})
-			prevAPIURL, hadAPIURL := os.LookupEnv("API_URL")
-			Expect(os.Setenv("API_URL", "https://management.umh.app")).To(Succeed())
-			DeferCleanup(func() {
-				if hadAPIURL {
-					_ = os.Setenv("API_URL", prevAPIURL)
-				} else {
-					_ = os.Unsetenv("API_URL")
-				}
-			})
-			prevToken, hadToken := os.LookupEnv("AUTH_TOKEN")
-			Expect(os.Setenv("AUTH_TOKEN", "test-token")).To(Succeed())
-			DeferCleanup(func() {
-				if hadToken {
-					_ = os.Setenv("AUTH_TOKEN", prevToken)
-				} else {
-					_ = os.Unsetenv("AUTH_TOKEN")
-				}
-			})
-
-			logs := noClient()
-
-			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
-
-			// This is the branch that fires on the realistic boot path: credentials
-			// are present but the supervisor has not published the client yet. The
-			// diagnostic must name the still-starting supervisor, once, not per
+			// With the legacy path off there is nothing left to measure the box:
+			// the CPU record degrades and carries the diagnosis, once, not per
 			// tick.
 			for i := 0; i < 3; i++ {
 				status, err := service.GetStatus(ctx)
@@ -1608,6 +1502,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Expect(status.CPU).NotTo(BeNil())
 				Expect(status.CPUHealth).To(Equal(models.Degraded))
 				Expect(status.CPU.Health.Message).To(Equal(seamStillStartingWarning))
+				// The state pair is asserted HERE and only here. Everywhere else
+				// it is pinned through status.CPUHealth, which is derived from
+				// Category; this is the one case where a hand-written Health could
+				// carry a state that disagrees with its own category and nothing
+				// would notice.
+				Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
+				Expect(status.CPU.Health.DesiredState).To(Equal("active"))
 			}
 
 			stillStartingWarns := logs.Filter(func(entry observer.LoggedEntry) bool {

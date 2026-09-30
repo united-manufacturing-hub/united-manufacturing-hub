@@ -167,13 +167,8 @@ func main() {
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
 
 	featureUsage := &models.FeatureUsage{
-		ConfigBackupEnabled: configBackupEnabled,
-		FSMv2CPUEnabled: models.FSMv2CPUEnabled(
-			cpuMonitorEnabled,
-			true, // FSMv2 is the only bring-up path
-			configData.Agent.APIURL != "",
-			configData.Agent.AuthToken != "",
-		),
+		ConfigBackupEnabled:           configBackupEnabled,
+		FSMv2CPUEnabled:               models.FSMv2CPUEnabled(cpuMonitorEnabled),
 		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
 		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
 		FSMv2ProtocolConverterEnabled: protocolConverterEnabled,
