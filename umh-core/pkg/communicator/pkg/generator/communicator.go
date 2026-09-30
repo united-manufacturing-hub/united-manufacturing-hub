@@ -16,7 +16,6 @@ package generator
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -62,23 +61,27 @@ func CommunicatorFromFSMv2(ctx context.Context, log *zap.SugaredLogger, subscrib
 
 	var result *models.Communicator
 
-	transport, err := fsmv2client.Get[transportsnapshot.TransportStatus](ctx, client, transportRef)
+	transport, freshness, err := fsmv2client.GetFresh[transportsnapshot.TransportStatus](ctx, client, transportRef, transportMaxAge)
 
-	switch {
-	case err != nil:
-		if !errors.Is(err, fsmv2client.ErrNotFound) {
-			log.Warnw("communicator status: failed to read transport observed state", "error", err)
-		}
-
-		result = &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
-	case time.Since(transport.CollectedAt) > transportMaxAge:
-		result = &models.Communicator{Health: communicatorHealthOf(models.Degraded, "Communicator status is stale")}
-	default:
+	switch freshness {
+	case fsmv2client.Fresh:
 		result = CommunicatorFromObservations(
 			transport,
 			observationOrZero[pushsnapshot.PushStatus](ctx, client, pushRef),
 			observationOrZero[pullsnapshot.PullStatus](ctx, client, pullRef),
 		)
+	case fsmv2client.Stale:
+		result = &models.Communicator{Health: communicatorHealthOf(models.Degraded, "Communicator status is stale")}
+	case fsmv2client.Unknown:
+		log.Warnw("communicator status: failed to read transport observed state", "error", err)
+
+		result = &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
+	case fsmv2client.Deleted, fsmv2client.NotFound:
+		result = &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
+	default:
+		log.Warnw("communicator status: unexpected transport freshness", "freshness", freshness)
+
+		result = &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
 	}
 
 	result.SubscriberCount = subscriberCount

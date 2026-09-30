@@ -142,6 +142,21 @@ var _ = Describe("CommunicatorFromFSMv2", func() {
 		Expect(logs.Len()).To(Equal(0))
 	})
 
+	It("reports unknown without logging when the transport worker was removed", func() {
+		deletedAt := time.Now().Add(-time.Second)
+		removed := transportAt(time.Now())
+		removed.State = "Running"
+		removed.DeletedAt = &deletedAt
+		useStore(&communicatorStore{transport: removed})
+
+		result := generator.CommunicatorFromFSMv2(context.Background(), log, 8)
+
+		expectHealth(result, models.Neutral, "Communicator status unknown")
+		Expect(result.State).To(BeEmpty(), "a removed transport's last state must not be reported")
+		Expect(result.SubscriberCount).To(Equal(8))
+		Expect(logs.Len()).To(Equal(0))
+	})
+
 	It("reports unknown and logs the error once when the transport read fails", func() {
 		useStore(&communicatorStore{err: errors.New("store down")})
 
