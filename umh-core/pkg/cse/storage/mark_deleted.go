@@ -23,8 +23,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// tombstoneRoles are the role documents MarkDeleted stamps and ClearDeleted
-// clears. Both use this one list, so they always cover the same documents.
+// tombstoneRoles are the role documents MarkDeleted tombstones and
+// ClearDeleted clears. Both use this one list, so they always cover the same documents.
 var tombstoneRoles = []string{RoleIdentity, RoleDesired, RoleObserved}
 
 // MarkDeleted tombstones the worker's stored role documents; the

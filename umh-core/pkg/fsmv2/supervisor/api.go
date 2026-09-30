@@ -471,8 +471,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 // RemoveWorker removes a worker from the registry. It serves restarts only:
 // the worker is added again right away, so its documents are not
-// tombstoned. A worker that is removed for good goes through the removal
-// signal, which tombstones its documents.
+// tombstoned. A worker that is removed for good goes through
+// fsmv2.SignalNeedsRemoval, whose handling tombstones its documents.
 func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, workerID string) error {
 	s.mu.Lock()
 

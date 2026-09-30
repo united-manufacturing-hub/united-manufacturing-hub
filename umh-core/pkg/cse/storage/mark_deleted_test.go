@@ -326,7 +326,7 @@ var _ = Describe("MarkDeleted", func() {
 		Expect(resp.RequiresBootstrap).To(BeFalse())
 	})
 
-	It("tombstones the documents a worker without a desired document does have", func() {
+	It("tombstones the identity and observed documents of a worker without a desired document", func() {
 		const missingDesiredID = "worker-2"
 
 		Expect(ts.SaveIdentity(ctx, workerType, missingDesiredID, persistence.Document{

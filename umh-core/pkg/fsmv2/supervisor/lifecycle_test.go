@@ -189,7 +189,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 		})
 	})
 
-	Describe("removal marks the worker's records deleted", func() {
+	Describe("removal tombstones the worker's documents", func() {
 		newRemovalSupervisor := func(store storage.TriangularStoreInterface, logger deps.FSMLogger) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
 			removalState := &mockState{
 				signal: fsmv2.SignalNeedsRemoval,
@@ -199,7 +199,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			return newSupervisorWithWorkerAndLogger(&mockWorker{initialState: removalState}, store, supervisor.CollectorHealthConfig{}, logger)
 		}
 
-		It("marks the records deleted on plain removal", func() {
+		It("tombstones the documents on plain removal", func() {
 			identity := mockIdentity()
 			store := newMockTriangularStore()
 			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
@@ -212,7 +212,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			Expect(store.MarkDeletedCalls[0].By).To(Equal("removed"))
 		})
 
-		It("does not mark the records deleted on restart", func() {
+		It("does not tombstone the documents on restart", func() {
 			identity := mockIdentity()
 			store := newMockTriangularStore()
 			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
@@ -224,7 +224,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			Expect(store.MarkDeletedCalls).To(BeEmpty())
 		})
 
-		It("does not mark the records deleted on RemoveWorker", func() {
+		It("does not tombstone the documents on RemoveWorker", func() {
 			identity := mockIdentity()
 			store := newMockTriangularStore()
 			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
@@ -234,7 +234,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			Expect(store.MarkDeletedCalls).To(BeEmpty())
 		})
 
-		It("still removes the worker and warns when the mark fails", func() {
+		It("still removes the worker and warns when MarkDeleted fails", func() {
 			store := newMockTriangularStore()
 			store.MarkDeletedErr = errors.New("mark deleted failed")
 			logger := &sentryWarnRecorder{}
@@ -250,7 +250,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			Expect(warnings[0].Fields).To(ContainElement(deps.Field{Key: "target_worker_id", Value: mockIdentity().ID}))
 		})
 
-		It("marks the records deleted even when the tick context is cancelled", func() {
+		It("tombstones the documents even when the tick context is cancelled", func() {
 			store := newMockTriangularStore()
 			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
 			ctx, cancel := context.WithCancel(context.Background())
@@ -264,7 +264,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				"MarkDeleted must not be able to block removal forever")
 		})
 
-		It("stamps a non-nil deletion time on the real store's documents", func() {
+		It("writes a non-nil _deleted_at on the real store's documents", func() {
 			identity := mockIdentity()
 			roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
 
@@ -282,13 +282,13 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			for _, role := range roles {
 				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
 				Expect(getErr).ToNot(HaveOccurred())
-				Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the %s document must be marked deleted", role)
-				Expect(doc[storage.FieldDeletedAt]).ToNot(BeNil(), "the %s document's deletion time must be set, or the tombstone is inert", role)
+				Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the %s document must carry a tombstone", role)
+				Expect(doc[storage.FieldDeletedAt]).ToNot(BeNil(), "the %s document's _deleted_at must be non-nil, or it carries no tombstone", role)
 				Expect(doc[storage.FieldDeletedBy]).To(Equal("removed"))
 			}
 		})
 
-		It("does not mark a worker deleted that is added again while the old one is removed", func() {
+		It("does not tombstone a worker added again while the old one is being removed", func() {
 			identity := mockIdentity()
 			roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
 
@@ -302,10 +302,10 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 			addDone := make(chan error, 1)
 
-			// Just before the removal stamps the old worker's documents, add
-			// a worker with the same id. If AddWorker can finish first, give
-			// it the time to do so. If it has to wait for the removal, this
-			// times out and the outcome is the same either way.
+			// Just before the removal tombstones the old worker's documents,
+			// add a worker with the same id. If AddWorker can finish first,
+			// give it the time to do so. If it has to wait for the removal,
+			// this times out. The assertions below must hold in both cases.
 			store.beforeMarkDeleted = func() {
 				go func() { addDone <- s.AddWorker(identity, &mockWorker{}) }()
 
@@ -325,7 +325,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
 				Expect(getErr).ToNot(HaveOccurred())
 				Expect(doc).ToNot(HaveKey(storage.FieldDeletedAt),
-					"the %s document of the worker added again must not be marked deleted", role)
+					"the %s document of the worker added again must not carry a tombstone", role)
 			}
 		})
 	})

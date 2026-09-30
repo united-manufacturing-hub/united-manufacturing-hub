@@ -59,7 +59,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 		}
 	}
 
-	It("marks a deleted worker's documents and clears the mark when the worker is added again", func() {
+	It("tombstones a removed worker's documents and clears the tombstone when the worker is added again", func() {
 		ctx := context.Background()
 		logger := deps.NewNopFSMLogger()
 
@@ -86,10 +86,10 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 			"the helloworld child must first spawn and reach Running")
 
 		for role, doc := range storedDocuments(ctx, store, ref.WorkerType, childID) {
-			Expect(doc).NotTo(HaveKey(storage.FieldDeletedAt), "a running worker's %s document must not be marked", role)
+			Expect(doc).NotTo(HaveKey(storage.FieldDeletedAt), "a running worker's %s document must not carry a tombstone", role)
 		}
 
-		By("deleting the ref: the child is removed and its documents are marked, not deleted")
+		By("deleting the ref: the child is removed and its documents are tombstoned, not deleted")
 		w.Delete(ref)
 
 		Eventually(func() bool {
@@ -103,7 +103,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 		var deletedAt time.Time
 
 		for role, doc := range storedDocuments(ctx, store, ref.WorkerType, childID) {
-			Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the removed worker's %s document must be marked", role)
+			Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the removed worker's %s document must carry a tombstone", role)
 			Expect(doc[storage.FieldDeletedBy]).To(Equal("removed"))
 
 			stamp, ok := doc[storage.FieldDeletedAt].(time.Time)
@@ -112,7 +112,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 			deletedAt = stamp
 		}
 
-		By("adding the ref again: the new child's documents carry no mark and a newer observation")
+		By("adding the ref again: the new child's documents carry no tombstone and a newer observation")
 		Expect(w.Upsert(ref, map[string]any{"state": "running"})).To(Succeed())
 
 		Eventually(childRunning, "5s", "100ms").Should(BeTrue(),
@@ -132,6 +132,6 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 
 			return err == nil && collectedAt.After(deletedAt)
 		}, "5s", "100ms").Should(BeTrue(),
-			"the worker added again must have unmarked documents and an observation taken after the removal")
+			"the worker added again must have documents without a tombstone and an observation taken after the removal")
 	})
 })

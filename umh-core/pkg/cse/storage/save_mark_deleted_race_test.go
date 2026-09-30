@@ -74,8 +74,8 @@ func (p *pausingStore) Get(ctx context.Context, collection string, id string) (p
 
 // giveTimeToFinish waits up to 200 ms for done, then puts back what it
 // received. If the call under test can finish while the save is paused, this
-// gives it the time to do so. If it waits for the save, this times out, and
-// the test's outcome is the same either way.
+// gives it the time to do so. If it waits for the save, this times out. The
+// test's assertions must hold in both cases.
 func giveTimeToFinish(done chan error) {
 	select {
 	case err := <-done:
