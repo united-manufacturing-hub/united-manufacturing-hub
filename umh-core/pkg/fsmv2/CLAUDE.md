@@ -428,7 +428,8 @@ Before each change, call `env.Step` with a short description of the change.
 After the change, call `env.WaitFor` with a check that reads the store through
 the client and returns what it saw. A check that has not seen the worker yet
 reports that it is not done. Each wait fails after `waitForTimeout`
-(`examples/scenariov2.go`).
+(`examples/scenariov2.go`). A check that ignores its context can hold the wait
+past that timeout.
 
 ### What fails a run
 
