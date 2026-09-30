@@ -30,10 +30,8 @@ import (
 //  3. Empty cfg.ChildConfig produces empty child Config — no fallback template.
 //
 // Item 3 is deliberate: legacy DeriveDesiredState injected an "address:..."
-// template, which RenderChildren does not. cfg.ChildConfig is the one source
-// of the child's config, so a fallback template would overwrite what the
-// parent configured. This pin covers the empty-ChildConfig path; the
-// inheritance scenario covers the populated one.
+// template when cfg.ChildConfig was empty, and RenderChildren does not. The
+// RenderChildren doc says why.
 var _ = Describe("exampleparent RenderChildren ChildConfig equivalence", func() {
 	It("RenderChildren threads cfg.ChildConfig to child UserSpec.Config", func() {
 		cfg := exampleparent.ExampleparentConfig{
@@ -68,7 +66,6 @@ var _ = Describe("exampleparent RenderChildren ChildConfig equivalence", func() 
 	})
 
 	It("empty cfg.ChildConfig produces empty child Config — no fallback template", func() {
-		// See file header: no fallback template is injected when ChildConfig is empty.
 		cfg := exampleparent.ExampleparentConfig{ChildrenCount: 1}
 
 		specs, err := exampleparent.RenderChildren(cfg, true)
