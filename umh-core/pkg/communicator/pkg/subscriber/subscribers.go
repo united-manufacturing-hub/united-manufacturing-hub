@@ -92,6 +92,7 @@ func NewHandler(
 		logger,
 		topicBrowserCommunicator,
 		featureUsage,
+		s.subscriberRegistry.Length,
 	)
 
 	return s
