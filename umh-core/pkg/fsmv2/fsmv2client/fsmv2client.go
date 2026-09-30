@@ -30,12 +30,32 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// ErrNotObserved reports that no observed state exists for the ref: the child
-// was never spawned, or the collector has not yet persisted its first
-// observation. It is distinct from a decode or transient store failure, so a
-// caller can treat absence as "appears on a later tick" without swallowing a
-// real read error.
-var ErrNotObserved = errors.New("fsmv2client: ref not observed")
+// ErrNotFound reports that nothing is stored for the ref: the worker has not
+// started yet, or the ref names no worker. It is distinct from a decode or
+// transient store failure, so a caller can treat absence as "appears on a
+// later tick" without swallowing a real read error.
+var ErrNotFound = errors.New("fsmv2client: nothing stored for ref")
+
+// ErrWorkerDeleted reports that the ref's worker was removed. The store keeps
+// the removed worker's last observation as history, but Get does not return
+// it. Match it with errors.Is; the error Get returns is a *WorkerDeletedError.
+var ErrWorkerDeleted = errors.New("fsmv2client: worker was removed")
+
+// WorkerDeletedError is the error Get returns for a removed worker. It carries
+// when the supervisor removed it.
+type WorkerDeletedError struct {
+	Ref       dynamicchildren.Ref
+	DeletedAt time.Time
+}
+
+func (e *WorkerDeletedError) Error() string {
+	return fmt.Sprintf("%s: %s/%s at %s", ErrWorkerDeleted, e.Ref.WorkerType, config.ChildID(e.Ref.Name), e.DeletedAt.Format(time.RFC3339))
+}
+
+// Is makes errors.Is(err, ErrWorkerDeleted) match a *WorkerDeletedError.
+func (e *WorkerDeletedError) Is(target error) bool {
+	return target == ErrWorkerDeleted
+}
 
 // FSMv2Client delegates child-spec writes to the Writer it wraps and
 // reads child observed state through the read-only StateReader it holds (see
@@ -70,11 +90,11 @@ func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
 
 // Get reads the observed state the collector persisted for ref's spawned child
 // and returns it as an Observation[TStatus]. The collection is ref.WorkerType
-// and the child id is config.ChildID(ref.Name). When no observed state exists
-// for the ref it returns ErrNotObserved, so an unobserved ref surfaces as a
-// recognizable not-found error a caller can distinguish from a decode or
-// transient store failure, rather than as a zero-value observation. Any other
-// reader error is returned verbatim.
+// and the child id is config.ChildID(ref.Name). When nothing is stored for the
+// ref it returns ErrNotFound. When the worker was removed it returns a
+// *WorkerDeletedError, which matches ErrWorkerDeleted, and the zero
+// observation. Any other reader error is returned verbatim. In each error
+// case the observation is the zero value.
 //
 // Get does not verify that TStatus matches ref.WorkerType. Pairing a TStatus
 // that does not match the worker type decodes whatever fields overlap and is
@@ -92,10 +112,14 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 
 	if err := c.sr.LoadObservedTyped(ctx, ref.WorkerType, config.ChildID(ref.Name), &obs); err != nil {
 		if errors.Is(err, persistence.ErrNotFound) {
-			return obs, fmt.Errorf("%w: %s/%s", ErrNotObserved, ref.WorkerType, config.ChildID(ref.Name))
+			return obs, fmt.Errorf("%w: %s/%s", ErrNotFound, ref.WorkerType, config.ChildID(ref.Name))
 		}
 
 		return obs, err
+	}
+
+	if obs.DeletedAt != nil {
+		return fsmv2.Observation[TStatus]{}, &WorkerDeletedError{Ref: ref, DeletedAt: *obs.DeletedAt}
 	}
 
 	return obs, nil
@@ -128,7 +152,7 @@ const (
 // ref with no persisted observation is NeverObserved; an observation older than
 // maxAge is Stale; otherwise Fresh.
 //
-// A non-ErrNotObserved read error is returned verbatim alongside the Unknown
+// A non-ErrNotFound read error is returned verbatim alongside the Unknown
 // Freshness. Callers must check err before reading Freshness or the returned
 // status: both are meaningless when err is non-nil, and the returned status is
 // only meaningful when Freshness is Fresh or Stale.
@@ -153,7 +177,7 @@ func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchild
 
 	obs, err := Get[TStatus](ctx, c, ref)
 	if err != nil {
-		if errors.Is(err, ErrNotObserved) {
+		if errors.Is(err, ErrNotFound) {
 			return zero, NeverObserved, nil
 		}
 

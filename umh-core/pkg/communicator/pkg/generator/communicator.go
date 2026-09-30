@@ -66,7 +66,7 @@ func CommunicatorFromFSMv2(ctx context.Context, log *zap.SugaredLogger, subscrib
 
 	switch {
 	case err != nil:
-		if !errors.Is(err, fsmv2client.ErrNotObserved) {
+		if !errors.Is(err, fsmv2client.ErrNotFound) {
 			log.Warnw("communicator status: failed to read transport observed state", "error", err)
 		}
 

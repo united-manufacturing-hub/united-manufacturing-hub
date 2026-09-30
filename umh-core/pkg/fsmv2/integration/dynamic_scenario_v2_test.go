@@ -81,7 +81,7 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		// fsmv2client.Get against the live child, BOTH the create->Running state and
 		// the update's new mood. Each leg in driveDynamicHello is a poll that loops
 		// until the value is observed in the store, surfacing every error except
-		// ErrNotObserved and honoring ctx. So this nil return is the create->update
+		// ErrNotFound and honoring ctx. So this nil return is the create->update
 		// migration-API proof: a runtime Upsert of a real config field (a new
 		// moodFilePath) reached a live child and its new value became observable.
 		//

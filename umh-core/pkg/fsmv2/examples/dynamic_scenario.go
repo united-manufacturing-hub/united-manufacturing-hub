@@ -124,7 +124,7 @@ func driveDynamicHello(ctx context.Context, env Env) error {
 }
 
 // waitForDynamicHello polls the child's typed observation until pred is
-// satisfied or ctx is cancelled. ErrNotObserved means the child has not yet
+// satisfied or ctx is cancelled. ErrNotFound means the child has not yet
 // published an observation this tick, so it is treated as retry-on-a-later-tick;
 // any other error is surfaced, so a real read failure is never swallowed.
 func waitForDynamicHello(ctx context.Context, client *fsmv2client.FSMv2Client, ref dynamicchildren.Ref, pred func(fsmv2.Observation[hello_world.HelloworldStatus]) bool) error {
@@ -138,7 +138,7 @@ func waitForDynamicHello(ctx context.Context, client *fsmv2client.FSMv2Client, r
 			if pred(obs) {
 				return nil
 			}
-		case errors.Is(err, fsmv2client.ErrNotObserved):
+		case errors.Is(err, fsmv2client.ErrNotFound):
 			// Not yet observed: retry on a later tick.
 		default:
 			return fmt.Errorf("get observation: %w", err)
