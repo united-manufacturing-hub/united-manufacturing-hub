@@ -228,6 +228,12 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.logger.Debug("initial_desired_state_saved")
 
+	if err := s.store.ClearDeleted(ctx, s.workerType, identity.ID); err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_tombstone_clear_failed")
+
+		return fmt.Errorf("failed to clear tombstone: %w", err)
+	}
+
 	// Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
 	workerLogger := s.baseLogger.With(deps.String("worker", identity.String()))
 	workerLogger.Info("identity_created")

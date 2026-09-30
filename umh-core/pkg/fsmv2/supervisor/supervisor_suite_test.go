@@ -522,6 +522,11 @@ type markDeletedCall struct {
 	HasDeadline bool
 }
 
+type clearDeletedCall struct {
+	WorkerType string
+	ID         string
+}
+
 type mockTriangularStore struct {
 	mu sync.RWMutex
 
@@ -535,6 +540,13 @@ type mockTriangularStore struct {
 
 	MarkDeletedErr   error
 	MarkDeletedCalls []markDeletedCall
+
+	ClearDeletedErr   error
+	ClearDeletedCalls []clearDeletedCall
+
+	// StoreCalls records the order of the store's write calls, one entry
+	// per call, named after the store method that made it.
+	StoreCalls []string
 
 	identity map[string]map[string]persistence.Document
 	desired  map[string]map[string]persistence.Document
@@ -561,6 +573,8 @@ func (m *mockTriangularStore) SaveIdentity(ctx context.Context, workerType strin
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.StoreCalls = append(m.StoreCalls, "save_identity")
 
 	if m.identity[workerType] == nil {
 		m.identity[workerType] = make(map[string]persistence.Document)
@@ -600,6 +614,7 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 	defer m.mu.Unlock()
 
 	m.SaveDesiredCalled++
+	m.StoreCalls = append(m.StoreCalls, "save_desired")
 
 	if m.desired[workerType] == nil {
 		m.desired[workerType] = make(map[string]persistence.Document)
@@ -672,6 +687,7 @@ func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType strin
 	defer m.mu.Unlock()
 
 	m.SaveObservedCalled++
+	m.StoreCalls = append(m.StoreCalls, "save_observed")
 
 	if m.Observed[workerType] == nil {
 		m.Observed[workerType] = make(map[string]interface{})
@@ -824,7 +840,19 @@ func (m *mockTriangularStore) MarkDeleted(ctx context.Context, workerType string
 	return m.MarkDeletedErr
 }
 
-func (m *mockTriangularStore) ClearDeleted(_ context.Context, _ string, _ string) error {
+func (m *mockTriangularStore) ClearDeleted(_ context.Context, workerType string, id string) error {
+	m.mu.Lock()
+	m.ClearDeletedCalls = append(m.ClearDeletedCalls, clearDeletedCall{
+		WorkerType: workerType,
+		ID:         id,
+	})
+	m.StoreCalls = append(m.StoreCalls, "clear_deleted")
+	m.mu.Unlock()
+
+	if m.ClearDeletedErr != nil {
+		return m.ClearDeletedErr
+	}
+
 	return nil
 }
 
