@@ -116,10 +116,11 @@ func driveDynamicHello(ctx context.Context, env Env) error {
 	}
 
 	// DELETE: remove the child, exercising the despawn path. The driver only
-	// calls Delete. That removal marks the worker's stored documents is checked
-	// in app_removal_marks_deleted_test.go. That Get then returns
-	// ErrWorkerDeleted is checked in churn_capstone_test.go and
-	// app_shutdown_marks_deleted_test.go.
+	// calls Delete. app_removal_marks_deleted_test.go checks that the removal
+	// writes a tombstone on the worker's stored documents (see
+	// storage.FieldDeletedAt). churn_capstone_test.go and
+	// app_shutdown_marks_deleted_test.go check that Get then returns
+	// ErrWorkerDeleted.
 	env.Client.Delete(ref)
 
 	return nil

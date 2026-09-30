@@ -178,8 +178,8 @@ type Observation[TStatus any] struct {
 	// ShutdownRequested mirrors the desired state's shutdown flag.
 	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle // Match existing API field name
 	// DeletedAt is the stored _deleted_at (see storage.FieldDeletedAt). Only
-	// the store sets it; a save drops any value a collector puts here.
-	// fsmv2client.Get refuses an observation that carries it.
+	// the store sets it; a save drops any value a collector puts here. For an
+	// observation that carries it, fsmv2client.Get returns ErrWorkerDeleted.
 	DeletedAt *time.Time `json:"_deleted_at,omitempty"` //nolint:tagliatelle // CSE metadata field name
 }
 

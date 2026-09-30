@@ -1219,9 +1219,9 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// A removed worker is reported as an absence. The message names the
-			// removal, so this branch cannot collapse into
-			// never-observed, and it is neither the staged worker verdict nor
-			// anything getCPUMetrics could emit.
+			// removal, so it differs from the never-observed message. It is also
+			// neither the staged worker verdict nor anything getCPUMetrics could
+			// emit.
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Message).To(ContainSubstring("was removed"))

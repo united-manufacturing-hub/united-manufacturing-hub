@@ -18,22 +18,23 @@
 // # Dynamic and static workers
 //
 // FSMv2 runs each component as a worker, and workers form a tree. The
-// application worker is the root. A worker's observation is what it last
-// reported; the store keeps it.
+// application worker is the root. A supervisor runs each worker on a tick
+// loop and starts and stops its children (see package supervisor). A
+// worker's observation is what it last reported; the store keeps it.
 //
-// Dynamic workers exist only at the root. They are the application worker's
-// direct children, added and removed at runtime through Upsert and Delete.
-// The CPU monitor and the historian monitor are dynamic workers.
+// Dynamic workers are direct children of the application worker. Callers add
+// and remove them at runtime through Upsert and Delete. The CPU monitor and
+// the historian monitor are dynamic workers.
 //
-// Every worker below them is static. Its parent declares it in code, in the
-// parent's list of child specs, and the parent's supervisor starts and stops
-// it. The communicator's transport worker, and the push and pull workers
-// under it, are static workers. Upsert and Delete never add or remove a
-// static worker.
+// Every other worker is static. Its parent declares it in the parent's list
+// of child specs, and the parent's supervisor starts and stops it. The
+// communicator's transport worker, and the push and pull workers under it,
+// are static workers. Upsert and Delete never add or remove a static worker.
 //
-// Get and GetFresh read the store, not the Upsert list. So they read a static
-// worker's observation the same way as a dynamic worker's. A Ref names either
-// kind: its WorkerType, and its Name as the parent declared it.
+// Get and GetFresh read the store, not the specs that Upsert records. So they
+// read a static worker's observation the same way as a dynamic worker's. A
+// Ref names a worker of either kind by its WorkerType and by its Name as the
+// parent declared it.
 package fsmv2client
 
 import (
@@ -51,14 +52,14 @@ import (
 )
 
 // ErrNotFound reports that nothing is stored for the ref: the worker has not
-// started yet, or the ref names no worker. It is distinct from a decode or
+// stored its first observation yet, or the ref names no worker. It is distinct from a decode or
 // transient store failure, so a caller can treat absence as "appears on a
 // later tick" without swallowing a real read error.
 var ErrNotFound = errors.New("fsmv2client: nothing stored for ref")
 
 // ErrWorkerDeleted reports that the ref's worker was removed. The store keeps
-// the removed worker's last observation as history, but Get does not return
-// it. Match it with errors.Is; the error Get returns is a *WorkerDeletedError.
+// the removed worker's last observation with a tombstone (see
+// storage.FieldDeletedAt), but Get does not return it. Match it with errors.Is; the error Get returns is a *WorkerDeletedError.
 var ErrWorkerDeleted = errors.New("fsmv2client: worker was removed")
 
 // WorkerDeletedError is the error Get returns for a removed worker. It carries
@@ -111,10 +112,10 @@ func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
 // Get reads the observed state the collector persisted for ref's spawned child
 // and returns it as an Observation[TStatus]. The collection is ref.WorkerType
 // and the child id is config.ChildID(ref.Name). When nothing is stored for the
-// ref it returns ErrNotFound. When the worker was removed it returns a
-// *WorkerDeletedError, which matches ErrWorkerDeleted, and the zero
-// observation. Any other reader error is returned verbatim. In each error
-// case the observation is the zero value.
+// ref it returns an error that matches ErrNotFound. When the worker was
+// removed it returns a *WorkerDeletedError, which matches ErrWorkerDeleted.
+// Any other reader error is returned verbatim. In each error case the
+// observation is the zero value.
 //
 // Get does not verify that TStatus matches ref.WorkerType. Pairing a TStatus
 // that does not match the worker type decodes whatever fields overlap and is
@@ -151,14 +152,13 @@ type Freshness int
 
 const (
 	// Unknown means the read failed for a reason other than Deleted or
-	// NotFound, so nothing can be decided. GetFresh
-	// returns the error alongside. It is the zero value, so an unclassified
-	// result never reads as healthy.
+	// NotFound. GetFresh returns that error with it. Unknown is the zero
+	// value, so an unclassified result never reads as healthy.
 	Unknown Freshness = iota
 	// Deleted means the supervisor removed the worker (see ErrWorkerDeleted).
 	Deleted
-	// NotFound means nothing is stored for the ref: the worker has not started
-	// yet, or the ref names no worker.
+	// NotFound means nothing is stored for the ref: the worker has not stored
+	// its first observation yet, or the ref names no worker.
 	NotFound
 	// Stale means an observation exists and is older than maxAge. An
 	// observation with a zero CollectedAt is Stale.
@@ -167,8 +167,8 @@ const (
 	Fresh
 )
 
-// freshnessAt classifies a Get result, with the clock as a parameter so tests
-// can pin the age boundary. It returns the error only for Unknown. A removed
+// freshnessAt classifies a Get result. The clock is a parameter so tests can
+// set it exactly at the age boundary. It returns the error only for Unknown. A removed
 // worker and a missing ref come back from Get as errors too, so they are
 // checked before any other error.
 func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge time.Duration, now time.Time) (Freshness, error) {
@@ -187,7 +187,7 @@ func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge 
 }
 
 // GetFresh is Get plus a freshness check. It reads ref's observation with Get
-// and says, as a Freshness value, whether it can be used. It returns the
+// and classifies the result as a Freshness value. It returns the
 // observation only for Fresh and Stale, and the zero observation otherwise.
 // It returns a non-nil error only with Unknown.
 //

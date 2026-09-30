@@ -98,10 +98,11 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 			"the v2 runner must wait out the run and then tear down on its own")
 
 		// DELETE: the driver called Delete, exercising the despawn path without
-		// error. That removal marks the worker's stored documents is checked in
-		// app_removal_marks_deleted_test.go. That Get then returns
-		// ErrWorkerDeleted is checked in churn_capstone_test.go and
-		// app_shutdown_marks_deleted_test.go.
+		// error. app_removal_marks_deleted_test.go checks that the removal
+		// writes a tombstone on the worker's stored documents (see
+		// storage.FieldDeletedAt). churn_capstone_test.go and
+		// app_shutdown_marks_deleted_test.go check that Get then returns
+		// ErrWorkerDeleted.
 
 		// KERNEL SURVIVAL PROOF: the config worker and the supervisor outlived the
 		// child's lifecycle with no panic and no unexpected error/warning. The

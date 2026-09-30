@@ -36,8 +36,8 @@ type deletedTestStatus struct {
 }
 
 // TestGetRefusesARemovedWorker checks what Get returns for a worker whose
-// stored documents MarkDeleted has marked, for a worker that is not marked,
-// and for a ref with nothing stored.
+// stored documents carry a tombstone (written by MarkDeleted), for a worker
+// without one, and for a ref with nothing stored.
 func TestGetRefusesARemovedWorker(t *testing.T) {
 	g := gomega.NewWithT(t)
 	ctx := context.Background()
