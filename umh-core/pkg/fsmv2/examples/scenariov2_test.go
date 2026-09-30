@@ -19,6 +19,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -258,21 +260,68 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the failed run must not replace or clear the already-published registry")
 	})
 
-	It("warns and ignores DumpStore for a v2 scenario", func() {
+	It("prints the store dump after a v2 scenario run", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
 		dumpRequested := examples.ScenarioV2{
 			Name:        "dump-requested",
-			Description: "test-local Run for the DumpStore warning path",
-			Run: func(_ context.Context, _ examples.Env) error {
-				return nil
+			Description: "test-local Run for the DumpStore print path",
+			Run: func(ctx context.Context, env examples.Env) error {
+				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "dump-hello"}
+
+				env.Step("create a helloworld child")
+
+				if err := env.Client.Upsert(ref, map[string]any{"state": "running"}); err != nil {
+					return err
+				}
+
+				return env.WaitFor(ctx, "the helloworld child reaches Running",
+					func(ctx context.Context) (bool, string, error) {
+						obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
+						if err != nil {
+							if errors.Is(err, fsmv2client.ErrNotObserved) {
+								return false, "the child has not published an observation yet", nil
+							}
+
+							return false, "", err
+						}
+
+						return obs.State == "Running", "state=" + obs.State, nil
+					})
 			},
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
+
+		// The dump goes to os.Stdout, so the spec captures stdout for the
+		// run's lifetime.
+		origStdout := os.Stdout
+		reader, writer, err := os.Pipe()
+		Expect(err).NotTo(HaveOccurred())
+
+		// The drain goroutine reads the pipe while the run writes to it. A
+		// dump larger than the OS pipe buffer would otherwise block the
+		// teardown goroutine's print, so Done would never close.
+		var out bytes.Buffer
+		drainDone := make(chan struct{})
+		go func() {
+			defer close(drainDone)
+			_, _ = io.Copy(&out, reader)
+		}()
+
+		// DeferCleanup restores the original stdout and closes both pipe
+		// ends even if an assertion fails during the redirect. Later specs
+		// keep their output.
+		DeferCleanup(func() {
+			os.Stdout = origStdout
+			_ = writer.Close()
+			_ = reader.Close()
+		})
+
+		os.Stdout = writer
 
 		result, err := examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   dumpRequested,
@@ -283,13 +332,28 @@ var _ = Describe("ScenarioV2 framework", func() {
 			DumpStore:    true,
 		})
 		Expect(err).NotTo(HaveOccurred(),
-			"DumpStore must not break a v2 run, only warn")
+			"DumpStore must not break a v2 run")
 		Eventually(result.Done, "55s").Should(BeClosed())
 
-		// A silently ignored DumpStore lets a developer misread "no dump
-		// printed" as "no store changes", so the gap must be logged.
-		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeTrue(),
-			"runV2 must warn that DumpStore is ignored for v2 scenarios")
+		// Restore stdout and close the write end, so the drain goroutine sees
+		// EOF and finishes.
+		os.Stdout = origStdout
+		Expect(writer.Close()).To(Succeed())
+		Eventually(drainDone, "5s").Should(BeClosed())
+
+		Expect(out.String()).To(ContainSubstring("CSE SCENARIO DUMP"),
+			"runV2 must print the store dump when DumpStore is set")
+		Expect(out.String()).To(ContainSubstring("dump-hello"),
+			"the dump must list the worker the scenario created")
+		Expect(result.Err).To(BeNil(),
+			"a clean dump run must not report a failure")
+		// Every v2 run logs v2_run_teardown_starting during teardown. This
+		// positive control makes an empty or malformed log capture fail the
+		// spec before the absence check below runs.
+		Expect(logContainsEvent(logBuf.String(), "v2_run_teardown_starting")).To(BeTrue(),
+			"the log capture must contain the teardown event every v2 run emits")
+		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeFalse(),
+			"the v2 path must not warn that DumpStore is unsupported")
 	})
 
 	It("tears down gracefully on a live tick loop when the caller ctx is cancelled mid-run", func() {
