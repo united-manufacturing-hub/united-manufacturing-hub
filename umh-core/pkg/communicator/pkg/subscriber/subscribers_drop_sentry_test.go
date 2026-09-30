@@ -155,7 +155,6 @@ var _ = Describe("FSMv2 outbound channel drop Sentry warning", func() {
 
 		handler := subscriber.NewHandler(
 			&mockWatchdog{},
-			nil,
 			uuid.New(),
 			time.Minute,
 			time.Minute,
@@ -259,7 +258,6 @@ var _ = Describe("Gatekeeper outbound channel drop Sentry warning", func() {
 
 		handler := subscriber.NewHandler(
 			&mockWatchdog{},
-			nil,
 			uuid.New(),
 			time.Minute,
 			time.Minute,
