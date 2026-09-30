@@ -106,12 +106,11 @@ func failedReads(sample cpuhealth.Sample) []readFailure {
 	return failures
 }
 
-// messageFor says what a failed read cost. A cpu.stat, or v1's cpuacct.usage,
-// that opens and does not parse is the one read whose failure voids the
-// sample: its counters are corrupt, so every number derived from them would be
-// a guess. A file that will not open at all leaves its readings absent and the
-// sample usable, the same as any other file the sampler cannot read, so it
-// stays read_failed along with every other failure.
+// messageFor says what a failed read cost. A cpu.stat or v1 cpuacct.usage that
+// opens and does not parse voids the sample, because its counters are corrupt
+// and every number derived from them would be a guess. Every other failure,
+// including one of those files not opening, leaves that file's readings absent
+// and the sample usable, so it is reported as read_failed.
 func messageFor(read cpuhealth.ReadResult) string {
 	voidsSample := read.Operation == cpuhealth.OperationCPUStat || read.Operation == cpuhealth.OperationCPUAcctUsage
 	if voidsSample && read.Outcome == cpuhealth.ReadUnparsable {

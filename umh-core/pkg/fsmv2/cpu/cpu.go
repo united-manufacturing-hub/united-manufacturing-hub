@@ -50,7 +50,7 @@ const (
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
-	// the directory holding one mount per controller.
+	// the directory that holds the controller mounts.
 	cgroupBase = "/sys/fs/cgroup"
 
 	// PollInterval is how often the worker samples the cgroup. simple.Register
