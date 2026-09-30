@@ -172,23 +172,6 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		return publishWorkerClientWithStub(&cpuStubStateReader{obs: obs})
 	}
 
-	// publishUnregisteredClient publishes a fsmv2 client exactly like
-	// publishWorkerClient except that cpu.Ref is never Upserted into its writer,
-	// so GetFresh maps the ref to Unregistered — the absence-of-worker row of
-	// the seam table. The staged observation is served verbatim if a caller
-	// ever does reach the reader, so a Spec can prove the worker was not
-	// consulted at all.
-	publishUnregisteredClient := func(obs *fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]) *fsmv2client.FSMv2Client {
-		writer := dynamicchildren.NewWriter()
-
-		client := fsmv2client.NewFSMv2Client(writer, &cpuStubStateReader{obs: obs})
-		previous := fsmv2client.GetClient()
-		fsmv2client.SetClient(client)
-		DeferCleanup(func() { fsmv2client.SetClient(previous) })
-
-		return client
-	}
-
 	// setFlag sets USE_FSMV2_CPU to value and restores the previous value (or
 	// absence) when the spec ends.
 	setFlag := func(value string) {
@@ -1156,7 +1139,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// NeverObserved is an absence of measurement, and an absent
+			// NotFound is an absence of measurement, and an absent
 			// measurement is not a healthy one: it must fail closed, not fall
 			// back to the legacy Active judgement, and the message must name the
 			// never-observed cause (the protocol-converter resource-limit check
@@ -1218,15 +1201,17 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(string(data)).NotTo(ContainSubstring("coreCount"))
 		})
 
-		It("should degrade, naming the missing registration, when the worker ref is not registered", func() {
+		It("should degrade, naming the removal, when the CPU worker was removed", func() {
 			setFlag("true")
-			// A client exists but cpu.Ref was never Upserted into its writer,
-			// so GetFresh maps the ref to Unregistered before it ever reads.
-			// The staged observation is one the worker path would serve as
-			// degraded, so any seam that consulted the worker at all for an
-			// unregistered ref fails these assertions.
-			publishUnregisteredClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+			// The stored observation carries a removal time, so GetFresh
+			// reports Deleted and returns the zero observation. The staged
+			// verdict is one the worker path would serve as degraded, so a
+			// seam that still judged a removed worker's last observation fails
+			// these assertions.
+			deletedAt := time.Now().Add(-time.Second)
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				DeletedAt:   &deletedAt,
 				Status: simple.Status[fsmv2cpu.CPUStatus]{
 					Result: fsmv2cpu.CPUStatus{
 						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
@@ -1240,13 +1225,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// An absent worker is reported as an absence, not papered over. The
-			// message names registration specifically, so this branch cannot
-			// collapse into never-observed, and it is neither the staged worker
-			// verdict (never consulted) nor anything getCPUMetrics could emit.
+			// A removed worker is reported as an absence, not papered over. The
+			// message names the removal, so this branch cannot collapse into
+			// never-observed, and it is neither the staged worker verdict nor
+			// anything getCPUMetrics could emit.
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
-			Expect(status.CPU.Health.Message).To(ContainSubstring("not registered"))
+			Expect(status.CPU.Health.Message).To(ContainSubstring("was removed"))
 			Expect(status.CPU.Health.Message).NotTo(Equal(workerVerdictMessage))
 			Expect(status.CPU.Health.Message).NotTo(ContainSubstring("CPU utilization"))
 		})
@@ -1652,10 +1637,10 @@ var _ = Describe("the CPU seam's judgement, called without a client", func() {
 		},
 		Entry("stale", fsmv2client.Stale,
 			"CPU worker observation is stale (older than "+maxAge.String()+"); cannot trust the verdict it carries"),
-		Entry("never observed", fsmv2client.NeverObserved,
+		Entry("never observed", fsmv2client.NotFound,
 			"CPU worker has never observed; no measurement to judge"),
-		Entry("not registered", fsmv2client.Unregistered,
-			"CPU worker is not registered with the fsmv2 runtime; no measurement to judge"),
+		Entry("removed", fsmv2client.Deleted,
+			"CPU worker was removed; no measurement to judge"),
 		Entry("unknown freshness with no read error", fsmv2client.Unknown,
 			"CPU worker observation could not be classified; no measurement to judge"),
 	)

@@ -13,7 +13,27 @@
 // limitations under the License.
 
 // Package fsmv2client exposes the migration-API seam: a thin client that wraps
-// a Writer for writes.
+// a Writer for writes and reads workers' observations from the store.
+//
+// # Dynamic and static workers
+//
+// FSMv2 runs each component as a worker, and workers form a tree. The
+// application worker is the root. A worker's observation is what it last
+// reported; the store keeps it.
+//
+// Dynamic workers exist only at the root. They are the application worker's
+// direct children, added and removed at runtime through Upsert and Delete.
+// The CPU monitor and the historian monitor are dynamic workers.
+//
+// Every worker below them is static. Its parent declares it in code, in the
+// parent's list of child specs, and the parent's supervisor starts and stops
+// it. The communicator's transport worker, and the push and pull workers
+// under it, are static workers. Upsert and Delete never add or remove a
+// static worker.
+//
+// Get and GetFresh read the store, not the Upsert list. So they read a static
+// worker's observation the same way as a dynamic worker's. A Ref names either
+// kind: its WorkerType, and its Name as the parent declared it.
 package fsmv2client
 
 import (
@@ -125,70 +145,68 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 	return obs, nil
 }
 
-// Freshness is the read-side reason GetFresh assigns to a child observation.
-// It lets a caller map an absent or stale read to a distinct recovery policy
-// instead of collapsing every non-fresh case into a single error.
+// Freshness says what GetFresh found for a ref. GetFresh checks the values in
+// the order listed here, and the first that applies wins.
 type Freshness int
 
 const (
-	// Unknown is the zero value of Freshness. It is returned when a read error
-	// prevents GetFresh from classifying the observation, so the healthy reason
-	// Fresh is never the default. Freshness is only meaningful when the
-	// accompanying error is nil.
+	// Unknown means the read failed, so nothing can be decided. GetFresh
+	// returns the error alongside. It is the zero value, so an unclassified
+	// result never reads as healthy.
 	Unknown Freshness = iota
-	// Fresh means the child was observed within maxAge.
-	Fresh
-	// Unregistered means the ref was never Upserted into the writer.
-	Unregistered
-	// NeverObserved means the ref is registered but no observation exists yet.
-	NeverObserved
-	// Stale means the child was observed but CollectedAt is older than maxAge
-	// (the watcher is wedged or slow).
+	// Deleted means the supervisor removed the worker. The store keeps its
+	// last observation as history, but GetFresh does not return it.
+	Deleted
+	// NotFound means nothing is stored for the ref: the worker has not started
+	// yet, or the ref names no worker.
+	NotFound
+	// Stale means an observation exists and is older than maxAge. An
+	// observation with a zero CollectedAt is Stale.
 	Stale
+	// Fresh means an observation exists and is at most maxAge old.
+	Fresh
 )
 
-// GetFresh reads the observed state for ref's spawned child and maps it to a
-// Freshness reason. A ref that was never Upserted is Unregistered; a registered
-// ref with no persisted observation is NeverObserved; an observation older than
-// maxAge is Stale; otherwise Fresh.
-//
-// A non-ErrNotFound read error is returned verbatim alongside the Unknown
-// Freshness. Callers must check err before reading Freshness or the returned
-// status: both are meaningless when err is non-nil, and the returned status is
-// only meaningful when Freshness is Fresh or Stale.
-//
-// The store read is bounded by the passed ctx; callers SHOULD pass a
-// deadline-bounded ctx (see the StateReader non-blocking contract).
-//
-// GetFresh does NOT detect a stale observation left over from a previous
-// incarnation after Delete + re-Upsert: the CSE store does not clear a
-// despawned child's observation until ENG-5107 (store-side despawn tombstone)
-// lands. Until then, such a leftover within maxAge is served as Fresh. When
-// ENG-5107 lands, the store will return a typed ErrWorkerDeleted on a
-// despawned ref; Get/GetFresh must then map ErrWorkerDeleted to NeverObserved
-// (today Get only maps persistence.ErrNotFound → ErrNotObserved, so a
-// tombstone read would currently surface as Unknown+err, not NeverObserved).
-func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (TStatus, Freshness, error) {
-	var zero TStatus
-
-	if !c.w.Registry().Contains(ref) {
-		return zero, Unregistered, nil
+// freshnessAt classifies a Get result, with the clock as a parameter so tests
+// can pin the age boundary. It returns the error only for Unknown.
+func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge time.Duration, now time.Time) (Freshness, error) {
+	switch {
+	case errors.Is(err, ErrWorkerDeleted):
+		return Deleted, nil
+	case errors.Is(err, ErrNotFound):
+		return NotFound, nil
+	case err != nil:
+		return Unknown, err
+	case now.Sub(obs.CollectedAt) > maxAge:
+		return Stale, nil
+	default:
+		return Fresh, nil
 	}
+}
 
+// GetFresh is Get plus a freshness check. It reads ref's observation with Get
+// and says, as a Freshness value, whether it can be used. It returns the
+// observation only for Fresh and Stale, and the zero observation otherwise.
+// It returns a non-nil error only with Unknown.
+//
+// GetFresh reads the store only. It does not check whether the ref was
+// Upserted, so it works for static workers too (see the package doc).
+//
+// Between Delete and the supervisor removing the worker, the worker still
+// runs for a few ticks. In that window GetFresh classifies its latest
+// observation by age, usually as Fresh.
+//
+// The store read is bounded by ctx; callers SHOULD pass a deadline-bounded
+// ctx (see the StateReader non-blocking contract).
+func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (fsmv2.Observation[TStatus], Freshness, error) {
 	obs, err := Get[TStatus](ctx, c, ref)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return zero, NeverObserved, nil
-		}
 
-		return zero, Unknown, err
+	freshness, err := freshnessAt(obs, err, maxAge, time.Now())
+	if freshness != Fresh && freshness != Stale {
+		return fsmv2.Observation[TStatus]{}, freshness, err
 	}
 
-	if time.Since(obs.CollectedAt) > maxAge {
-		return obs.Status, Stale, nil
-	}
-
-	return obs.Status, Fresh, nil
+	return obs, freshness, nil
 }
 
 // globalCli is the process-scoped FSMv2Client published once at startup so any

@@ -159,12 +159,12 @@ func (i *AdaptedInstance[TConfig, TStatus]) getFreshStatus() (TStatus, fsmv2clie
 	ctx, cancel := context.WithTimeout(context.Background(), storeReadTimeout)
 	defer cancel()
 
-	status, freshness, err := fsmv2client.GetFresh[TStatus](ctx, c, i.ref, i.staleAfter)
+	obs, freshness, err := fsmv2client.GetFresh[TStatus](ctx, c, i.ref, i.staleAfter)
 	if err != nil {
 		return zero, fsmv2client.Unknown
 	}
 
-	return status, freshness
+	return obs.Status, freshness
 }
 
 // --- publicfsm.FSMInstance implementation ---
@@ -215,10 +215,10 @@ func (i *AdaptedInstance[TConfig, TStatus]) resolve(status TStatus, freshness fs
 		}
 	}
 
-	// Rung 4: bootstrap (no observation yet) → starting. The consuming fsmv1 FSM
-	// reads this as "coming up" (e.g. nmap's IsStartingState) until the first
-	// observation lands.
-	if freshness == fsmv2client.Unregistered || freshness == fsmv2client.NeverObserved {
+	// Rung 4: no usable observation (nothing stored yet, or the worker was
+	// removed) → starting. The consuming fsmv1 FSM reads this as "coming up"
+	// (e.g. nmap's IsStartingState) until the first observation lands.
+	if freshness == fsmv2client.NotFound || freshness == fsmv2client.Deleted {
 		return startingState
 	}
 

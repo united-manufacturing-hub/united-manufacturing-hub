@@ -40,18 +40,20 @@ func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.His
 		return nil
 	}
 
-	status, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2historian.TimescaleStatus]](ctx, client, fsmv2historian.Ref, historianMaxAge)
+	obs, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2historian.TimescaleStatus]](ctx, client, fsmv2historian.Ref, historianMaxAge)
 	if err != nil {
 		log.Warnw("historian status: failed to read observed state", "error", err)
 
 		return nil
 	}
 
-	// Unregistered (no historian configured) and NeverObserved (registered but
-	// not yet polled) both mean "nothing to report" — omit the section.
+	// NotFound (no historian configured, or not yet polled) and Deleted (the
+	// monitor was removed) both mean "nothing to report", so omit the section.
 	if freshness != fsmv2client.Fresh && freshness != fsmv2client.Stale {
 		return nil
 	}
+
+	status := obs.Status
 
 	result := status.Result
 
