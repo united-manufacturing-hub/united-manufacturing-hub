@@ -744,13 +744,8 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	return nil
 }
 
-// IsResourceLimited mocks the bridge admission decision.
-//
-// It returns:
-//
-//	limited – true when the bridge must wait, false otherwise.
-//	reason  – empty when limited is false; otherwise the refusal reason and how to start bridges anyway.
+// IsResourceLimited admits every bridge: it always returns false and an empty
+// reason.
 func (m *MockProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
-	// For testing, always return false to allow bridge creation
 	return false, ""
 }

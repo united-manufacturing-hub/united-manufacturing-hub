@@ -9,13 +9,11 @@
 
 ### Improvements
 
-- A bridge refused because the instance is short of resources now says which resource and why, such as the CPU health message, instead of "System in degraded state"
-- A refused bridge now says how to start bridges anyway, by setting agent.enableResourceLimitBlocking: false
-- Bridges now wait until the instance's resource health is proven, including bridges from config.yaml after a restart
-- The bridge limit now admits up to the limit instead of one less, and after a restart the first bridges in config.yaml order start up to the limit
+- Bridges now start only once the instance's resource health is confirmed, also after a restart. A refused bridge says which resource stopped it, and how to start it anyway in an emergency
 
 ### Fixes
 
+- An instance now runs up to its full bridge limit instead of stopping one bridge short, and with `USE_FSMV2_CPU=true` the limit follows the container's CPU limit instead of the host's cores
 - Log messages for stopped flows in bridges are now more consistent
 - CPU usage, limit and throttling now read on hosts using the older cgroup v1 hierarchy, such as RHEL 8, where the CPU panel previously showed N/A. Pressure stays unavailable there, since that kernel publishes no per-container pressure figure
 

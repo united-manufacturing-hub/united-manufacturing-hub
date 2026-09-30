@@ -14,22 +14,81 @@
 
 // Package bridgeadmission decides whether umh-core may create a bridge.
 //
-// Decide is a pure function: it reads only its Input and has no logger, clock
-// or system call, so both the FSMv1 protocol converter and an FSMv2 state can
-// call it. The caller gathers the inputs from whatever it observes and acts on
-// the Decision.
+// A bridge connects one device to umh-core; the code calls it a protocol
+// converter. Bridge admission is the check umh-core runs before it creates a
+// bridge. A refused bridge is not created. It waits in the to_be_created state,
+// and the check runs again on every later pass of umh-core's control loop, so
+// the bridge starts on its own once it is admitted.
 //
-// A resource whose health nobody has shown is Unknown, and Unknown refuses.
-// The only way to admit bridges without proven health is to turn bridge
+// # What Decide receives
+//
+// Decide reads only its Input. It logs nothing, reads no clock and makes no
+// system call. The caller gathers the Input and acts on the Decision; today
+// that caller is IsResourceLimited in pkg/service/protocolconverter. The Input
+// fields are:
+//
+//   - BlockingEnabled: the config setting agent.enableResourceLimitBlocking,
+//     which turns bridge admission on or off.
+//   - CPU, Memory and Disk: the health of each resource. Each is Healthy,
+//     Degraded or Unknown, with a message explaining it. Unknown means nobody
+//     has shown the resource to be healthy yet, for example because the
+//     instance has only just started.
+//   - Admitted: how many other bridges have already been admitted and are not
+//     being removed.
+//   - WaitingAhead: how many bridges are still waiting for admission and come
+//     before this bridge in config.yaml.
+//   - CapacityCores: the container's CPU limit in cores, when it is known.
+//   - HostCores: the number of CPU cores on the host.
+//
+// # The rules, in the order Decide applies them
+//
+// The first rule that matches decides.
+//
+//  1. Bridge admission is off: admit the bridge and check nothing else. This
+//     setting exists to start bridges in an emergency while a resource problem
+//     is unfixed.
+//  2. A resource is Degraded: refuse, and name the resource and its message,
+//     so the user knows what to fix. CPU is checked first, then memory, then
+//     disk. This rule comes before rule 3, so a known problem is named even
+//     while another resource has no reading.
+//  3. A resource is Unknown: refuse with "Resource health not proven yet". A
+//     bridge is admitted only on health that a reading has shown, so a fresh
+//     instance starts no bridges until its first health readings arrive.
+//  4. No place under the bridge limit is free: refuse. The next section
+//     defines the limit and its places.
+//  5. Otherwise: admit the bridge.
+//
+// Every refusal carries a hint: Decision.Message appends how to turn bridge
 // admission off with agent.enableResourceLimitBlocking: false.
+//
+// # The bridge limit
+//
+// The limit is (cores - 1) * 5 bridges, rounded down and never below zero.
+// cores is CapacityCores when it is known and above zero, and HostCores
+// otherwise. One core is reserved for Redpanda, the message broker that runs
+// inside umh-core. Each remaining core may run BridgesPerCore bridges.
+// docs/production/sizing-guide.md recommends these figures.
+//
+// A place is one bridge's share of the limit. Each admitted bridge takes a
+// place. Each waiting bridge ahead of this one in config.yaml takes a place
+// too, because it is admitted before this one. Waiting bridges behind it take
+// no place. The bridge is admitted when at least one place is left free.
+//
+// After a restart no bridge is admitted yet and every bridge waits. The first
+// bridges in config.yaml order are then admitted up to the limit. The rest
+// wait until a place frees up, for example when a bridge is removed.
 package bridgeadmission
 
 import "fmt"
 
-// BridgesPerCore defines the maximum number of protocol converter bridges per CPU core.
-// This limit ensures stable performance and prevents resource exhaustion.
-// See docs/production/sizing-guide.md for more details on resource planning.
+// BridgesPerCore is how many bridges each CPU core may run once
+// redpandaReservedCores are set aside. docs/production/sizing-guide.md
+// recommends this figure.
 const BridgesPerCore = 5
+
+// redpandaReservedCores is the CPU, in cores, that the bridge limit leaves to
+// Redpanda.
+const redpandaReservedCores = 1
 
 // emergencyHint says how to start bridges anyway while a resource problem is unfixed.
 const emergencyHint = "In an emergency, you can start bridges anyway by setting agent.enableResourceLimitBlocking: false in the instance's Config File. It takes effect without a restart. Set it back to true once the resource problem is fixed."
@@ -56,8 +115,7 @@ type Resource struct {
 
 // Input is everything Decide reads.
 type Input struct {
-	// BlockingEnabled is agent.enableResourceLimitBlocking. When false, every
-	// bridge is admitted and nothing else is checked.
+	// BlockingEnabled is the config setting agent.enableResourceLimitBlocking.
 	BlockingEnabled bool
 
 	CPU    Resource
@@ -68,15 +126,14 @@ type Input struct {
 	// being removed. It excludes the bridge being decided.
 	Admitted int
 	// WaitingAhead counts the bridges that are still waiting for admission and
-	// come before the bridge being decided in config.yaml. Bridges waiting
-	// behind it are not counted, so after a restart the first bridges up to
-	// the limit start and the rest wait.
+	// come before the bridge being decided in config.yaml.
 	WaitingAhead int
 
-	// CapacityCores is the CPU limit in cores, or nil when it is not known.
+	// CapacityCores is the container's CPU limit in cores, or nil when it is
+	// not known. Decide treats a value of zero or less as not known.
 	CapacityCores *float64
-	// HostCores is the number of cores on the host, used when CapacityCores is
-	// nil.
+	// HostCores is the number of cores on the host. Decide uses it when
+	// CapacityCores is not known.
 	HostCores int
 }
 
@@ -140,7 +197,8 @@ func notProvenDecision(r Resource) Decision {
 	return Decision{Cause: NotProven, Reason: reason}
 }
 
-// Decide returns whether a bridge may be created.
+// Decide returns whether a bridge may be created. The package doc lists the
+// rules in the order Decide applies them.
 func Decide(in Input) Decision {
 	if !in.BlockingEnabled {
 		return Decision{Admit: true, Cause: None}
@@ -161,18 +219,28 @@ func Decide(in Input) Decision {
 		}
 	}
 
-	cores := float64(in.HostCores)
-	if in.CapacityCores != nil && *in.CapacityCores > 0 {
-		cores = *in.CapacityCores
-	}
+	cores := limitCores(in)
+	coresForBridges := max(cores-redpandaReservedCores, 0)
+	maxBridges := int(coresForBridges * BridgesPerCore)
 
-	maxBridges := int(max(cores-1, 0) * BridgesPerCore)
+	placesTaken := in.Admitted + in.WaitingAhead
+	freePlaces := maxBridges - placesTaken
 
-	d := Decision{Admit: in.Admitted+in.WaitingAhead+1 <= maxBridges, Limit: &maxBridges}
+	d := Decision{Admit: freePlaces > 0, Limit: &maxBridges}
 	if !d.Admit {
 		d.Cause = BridgeLimit
-		d.Reason = fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, 1 core reserved for Redpanda)", maxBridges, cores)
+		d.Reason = fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, %d core reserved for Redpanda)", maxBridges, cores, redpandaReservedCores)
 	}
 
 	return d
+}
+
+// limitCores returns the core count the bridge limit is computed from: the CPU
+// limit when it is known and above zero, and the host's cores otherwise.
+func limitCores(in Input) float64 {
+	if in.CapacityCores != nil && *in.CapacityCores > 0 {
+		return *in.CapacityCores
+	}
+
+	return float64(in.HostCores)
 }

@@ -152,6 +152,25 @@ var _ = Describe("IsResourceLimited admission", func() {
 		})
 	})
 
+	Describe("the CPU limit behind the bridge limit", func() {
+		It("reads the fsmv2 CPU worker's capacity without depending on USE_FSMV2_CPU in the config", func() {
+			snapshot := admissionSnapshot("active", bridgeNames(15)...)
+			addWaitingBridge(&snapshot, "new-bridge")
+			// The fsmv2 CPU path fills CPUHealth and leaves CgroupCores empty.
+			// USE_FSMV2_CPU is an environment variable and is not in config.yaml,
+			// so the per-tick config always reads it as false.
+			cpu := coreInstance(snapshot).LastObservedState.(*container.ContainerObservedStateSnapshot).ServiceInfoSnapshot.CPU
+			cpu.CgroupCores = 0
+			cpu.CPUHealth = &models.CPUHealth{}
+			cpu.CPUHealth.CapacityCores = 4
+			snapshot.CurrentConfig.Agent.UseFSMv2CPU = false
+
+			limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+			Expect(limited).To(BeTrue())
+			Expect(reason).To(ContainSubstring("15 bridges maximum with 4.0 CPU cores"))
+		})
+	})
+
 	Describe("before health is proven", func() {
 		DescribeTable("refuses, and admits only with bridge admission turned off",
 			func(mutate func(*pkgfsm.SystemSnapshot)) {

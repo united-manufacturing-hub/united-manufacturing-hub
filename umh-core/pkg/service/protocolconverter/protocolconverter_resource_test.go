@@ -179,25 +179,6 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(ContainSubstring("1 core reserved for Redpanda"))
 			})
 
-			// The pair below is what proves USE_FSMV2_CPU selects WHERE the
-			// capacity is fetched from, rather than one source winning by
-			// preference. Both stage the identical record — the fsmv2 evidence
-			// says 2 usable cores, the legacy field says 8 — and only the flag
-			// differs. Five bridges reaches the fsmv2 ceiling of (2-1)x5, which
-			// IsResourceLimited blocks on with bridgeCount >= maxBridges, and stays
-			// under the legacy one of (8-1)x5, so the outcome names the source.
-			//
-			// Getting this wrong is expensive in one direction: a build that
-			// ignored the fsmv2 figure on a quota-limited container would fall
-			// through to runtime.NumCPU() and admit roughly 31x too many bridges
-			// on a 32-core host.
-			cpuRecordForBothSources := &models.CPU{
-				CgroupCores: 8.0,
-				CPUHealth: &models.CPUHealth{
-					Details: cpuhealth.Details{CapacityCores: 2.0},
-				},
-			}
-
 			stageContainerWithCPU := func(cpu *models.CPU) {
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
@@ -232,9 +213,12 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				}
 			}
 
-			It("should fetch the bridge ceiling from the fsmv2 evidence when USE_FSMV2_CPU is on", func() {
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
-				stageContainerWithCPU(cpuRecordForBothSources)
+			It("should fetch the bridge ceiling from the fsmv2 CPU worker's capacity when the record carries it", func() {
+				// A quota-limited container read as the host's cores would admit
+				// far too many bridges: roughly 31x on a 32-core host.
+				stageContainerWithCPU(&models.CPU{
+					CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{CapacityCores: 2.0}},
+				})
 
 				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
 
@@ -243,26 +227,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
 			})
 
-			It("should fetch the bridge ceiling from the legacy cgroup field when USE_FSMV2_CPU is off", func() {
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = false
-				stageContainerWithCPU(cpuRecordForBothSources)
-
-				// The legacy figure of 8 cores allows (8-1)x5, so the same five
-				// bridges are permitted where the flag-on twin blocked them.
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
-
-				Expect(limited).To(BeFalse())
-				Expect(reason).To(BeEmpty())
-			})
-
-			It("should fall back to the host core count when the flag is on and the worker has not measured", func() {
-				// Under the flag the legacy field is never filled, so a tick with
-				// no evidence leaves admission with no reading at all. It takes
-				// the same runtime.NumCPU() fallback the legacy branch takes when
-				// cgroup data is unreadable.
+			It("should fall back to the host core count when no CPU limit is known", func() {
 				hostCeiling := (runtime.NumCPU() - 1) * bridgeadmission.BridgesPerCore
 
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
 				stageContainerWithCPU(&models.CPU{})
 
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)

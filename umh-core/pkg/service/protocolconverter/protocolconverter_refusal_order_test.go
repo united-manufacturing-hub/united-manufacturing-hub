@@ -28,11 +28,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
-// A refusal names the resource that caused it. A degraded resource also
-// degrades the container's own state, so the resource checks have to come
-// before the state check or every refusal reads "System in degraded state".
-// Moving them must not change admission, so every combination of container
-// state and resource health is checked against the decision the old order made.
+// A refusal names the resource that caused it, even while the container's own
+// state is degraded. Every combination of container state and resource health
+// is checked: a bridge is refused when the container is degraded or any
+// resource is, and the reason names the first degraded resource.
 var _ = Describe("IsResourceLimited refusal reasons", func() {
 	health := func(degraded bool) models.HealthCategory {
 		if degraded {
@@ -120,10 +119,9 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 		}
 	}
 
-	// The branches below the three resource checks: a degraded resource that
-	// carries no message. Each is staged with the container's own state
-	// degraded, the case where the state check used to answer first, and each
-	// must still name its own cause.
+	// A degraded resource with no message still names itself, with the generic
+	// reason. Each entry also sets the container's own state to degraded,
+	// which alone would refuse as not proven, so the resource must win.
 	DescribeTable("names the cause below the resource checks, with the container's state degraded",
 		func(info container_monitor.ServiceInfo, reason string) {
 			snapshot := pkgfsm.SystemSnapshot{

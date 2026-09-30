@@ -1170,13 +1170,10 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 }
 
 // IsResourceLimited decides whether the bridge named bridgeName may be created.
-//
-// It gathers the container's resource health, the bridges that already hold a
-// place and the CPU core count from the snapshot, and lets bridgeadmission.Decide
-// answer. It returns:
-//
-//	limited – true when the bridge must wait, false otherwise.
-//	reason  – empty when limited is false; otherwise the refusal reason and how to start bridges anyway.
+// It reads the container's resource health, the other bridges' states and the
+// CPU core count from the snapshot, and passes them to bridgeadmission.Decide,
+// whose package doc holds the rules. IProtocolConverterService documents the
+// return values.
 func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
 	in := bridgeadmission.Input{
 		BlockingEnabled: snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking,
@@ -1187,7 +1184,7 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 
 	d := bridgeadmission.Decide(in)
 	if d.Limit != nil {
-		p.logger.Debugf("IsResourceLimited: max bridges=%d (1 core reserved for Redpanda), admitted=%d, waiting ahead=%d, candidate %s admitted=%v",
+		p.logger.Debugf("IsResourceLimited: max bridges=%d (1 core reserved for Redpanda), admitted=%d, waiting ahead=%d, bridge %s admit=%v",
 			*d.Limit, in.Admitted, in.WaitingAhead, bridgeName, d.Admit)
 	}
 
@@ -1195,8 +1192,10 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 }
 
 // admissionResources reads the health of CPU, memory and disk, and the CPU
-// limit, from the container instance in the snapshot. A resource nobody has
-// shown healthy is Unknown, and Unknown refuses.
+// limit in cores, from the container instance in the snapshot. All three
+// resources are Unknown when the snapshot has no container monitor, no core
+// instance or no observation of it yet. capacityCores is nil when the CPU
+// limit is not known.
 func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgeadmission.Resource, capacityCores *float64) {
 	unknown := func(message string) bridgeadmission.Resource {
 		return bridgeadmission.Resource{Health: bridgeadmission.Unknown, Message: message}
@@ -1225,8 +1224,10 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 
 	serviceInfo := observed.ServiceInfoSnapshot
 
-	// A resource is healthy only once a reading said so and the container
-	// finished starting. Neutral is the zero value before the first reading.
+	// An Active reading makes a resource Healthy only while the container's own
+	// state is active. In any other container state, such as
+	// monitoring_starting or degraded, the resource stays Unknown. Neutral, the
+	// zero value before the first reading, is Unknown too.
 	classify := func(category models.HealthCategory, health *models.Health) bridgeadmission.Resource {
 		switch category {
 		case models.Degraded:
@@ -1264,20 +1265,16 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 	memory = classify(serviceInfo.MemoryHealth, memoryHealth)
 	disk = classify(serviceInfo.DiskHealth, diskHealth)
 
-	// USE_FSMV2_CPU decides where the core count is fetched from, because
-	// the worker and the legacy path do not fill the same field: with the
-	// flag on the CPU record carries only the fsmv2 evidence, and
-	// CgroupCores is empty. CapacityCores is the quota when one applies and
-	// the usable core count when none does, which is what this ceiling
-	// wants in both cases. It is absent on a tick the worker did not
-	// measure, and Decide falls back to the host core count.
+	// The CPU record carries either the fsmv2 CPU worker's reporting or the
+	// legacy reporting, never both, so the CPU limit is read from whichever is
+	// present. CapacityCores is the quota when one applies and the usable core
+	// count otherwise. CgroupCores is the quota, and 0 when none is set.
 	if serviceInfo.CPU != nil {
-		if snapshot.CurrentConfig.Agent.UseFSMv2CPU {
-			if serviceInfo.CPU.CPUHealth != nil {
-				capacity := serviceInfo.CPU.CPUHealth.CapacityCores
-				capacityCores = &capacity
-			}
-		} else if serviceInfo.CPU.CgroupCores > 0 {
+		switch {
+		case serviceInfo.CPU.CPUHealth != nil:
+			capacity := serviceInfo.CPU.CPUHealth.CapacityCores
+			capacityCores = &capacity
+		case serviceInfo.CPU.CgroupCores > 0:
 			capacity := serviceInfo.CPU.CgroupCores
 			capacityCores = &capacity
 		}
@@ -1286,9 +1283,12 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 	return cpu, memory, disk, capacityCores
 }
 
-// countBridges counts the bridges that hold a place ahead of bridgeName:
-// those already past to_be_created, and those still waiting that config.yaml
-// lists before it. Bridges being removed and bridgeName itself are skipped.
+// countBridges returns the two bridge counts that bridgeadmission.Input needs
+// for bridgeName. admitted counts the other bridges that have left
+// to_be_created, the state a bridge waits in until it is admitted.
+// waitingAhead counts the bridges still in to_be_created that config.yaml
+// lists before bridgeName. Bridges that are being removed or are removed count
+// in neither.
 func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bridgeName string) (admitted, waitingAhead int) {
 	protocolConverterManager, exists := snapshot.Managers[constants.ProtocolConverterManagerName]
 	if !exists {
@@ -1298,7 +1298,7 @@ func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bri
 	protocolConverterInstances := protocolConverterManager.GetInstances()
 	p.logger.Debugf("IsResourceLimited: Total protocol converter instances: %d", len(protocolConverterInstances))
 
-	// A candidate that is not in the config sorts after every bridge in it.
+	// A bridgeName missing from config.yaml sorts after every bridge in it.
 	candidateIndex := len(snapshot.CurrentConfig.ProtocolConverter)
 	indexByName := make(map[string]int, candidateIndex)
 
