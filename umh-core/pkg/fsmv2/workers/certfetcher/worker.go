@@ -33,10 +33,14 @@ const WorkerTypeName = "certfetcher"
 
 const workerType = WorkerTypeName
 
+// certHandlerKeyName is CertHandlerKey's name. It is a constant so the key and
+// the constructor's error text share one spelling.
+const certHandlerKeyName = "certfetcher.cert_handler"
+
 // CertHandlerKey names the certificatehandler.Handler a CertFetcherWorker is
-// built from. When the dependency map holds nothing under it, the worker falls
-// back to the seed published via register.SetGlobalDeps.
-var CertHandlerKey = config.NewDependencyKey[certificatehandler.Handler]("certfetcher.cert_handler")
+// built from. NewCertFetcherWorker returns an error naming it when the
+// dependency map holds nothing under it.
+var CertHandlerKey = config.NewDependencyKey[certificatehandler.Handler](certHandlerKeyName)
 
 var _ fsmv2.Worker = (*CertFetcherWorker)(nil)
 
@@ -46,16 +50,15 @@ type CertFetcherWorker struct {
 }
 
 // NewCertFetcherWorker creates a new cert fetcher worker.
-//
-// dependencies may be a seed (built via NewCertHandlerSeedDependencies, with a nil
-// BaseDependencies) — the constructor rebuilds full deps with this worker's
-// identity/logger/stateReader — or a fully built value (via NewCertFetcherDependencies).
+// The dependency map must hold a certificatehandler.Handler under
+// CertHandlerKey; otherwise it returns an error naming the key.
+// Returns an error if logger is nil.
 func NewCertFetcherWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	dependencies *CertFetcherDependencies,
-) (fsmv2.Worker, error) {
+	dependencies map[string]any,
+) (*CertFetcherWorker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
@@ -64,23 +67,20 @@ func NewCertFetcherWorker(
 		identity.WorkerType = workerType
 	}
 
-	if dependencies == nil {
-		return nil, errors.New("certfetcher worker requires a certHandler; pass via NewCertFetcherDependencies or NewCertHandlerSeedDependencies")
+	handler, ok := config.LookupDependency(dependencies, CertHandlerKey)
+	if !ok {
+		return nil, fmt.Errorf("certfetcher: no cert handler under %q in the dependency map", certHandlerKeyName)
 	}
 
 	w := &CertFetcherWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	if dependencies.BaseDependencies == nil {
-		d, err := NewCertFetcherDependencies(dependencies.certHandler, bd)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create dependencies: %w", err)
-		}
-
-		dependencies = d
+	d, err := NewCertFetcherDependencies(handler, bd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dependencies: %w", err)
 	}
 
-	w.BindDeps(dependencies)
+	w.BindDeps(d)
 
 	return w, nil
 }
@@ -136,12 +136,6 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 func init() {
 	register.Worker[CertFetcherConfig, CertFetcherStatus, *CertFetcherDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
-			d := register.GlobalDeps[*CertFetcherDependencies](WorkerTypeName)
-
-			if handler, ok := config.LookupDependency(m, CertHandlerKey); ok {
-				d = NewCertHandlerSeedDependencies(handler)
-			}
-
-			return NewCertFetcherWorker(id, logger, sr, d)
+			return NewCertFetcherWorker(id, logger, sr, m)
 		})
 }

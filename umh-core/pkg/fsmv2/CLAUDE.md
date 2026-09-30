@@ -61,6 +61,12 @@ supplies a mock provider under the same keys (see "Mocks" below).
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.
 
+The certfetcher worker reads its cert handler from the same map, under
+`certfetcher.CertHandlerKey`. `cmd/main.go` sets it only when the gatekeeper
+feature is enabled, which is also the only case that adds the certfetcher
+child to the YAML config. `NewCertFetcherWorker` returns an error naming the
+key when the map holds none.
+
 ## State Machine States
 
 Each state file follows this pattern:
