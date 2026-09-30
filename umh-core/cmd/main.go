@@ -826,10 +826,7 @@ children:
 	})
 	if err != nil {
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
-		register.ClearDeps(configworker.MemoryMonitorEnabledDepsKey)
+		clearConfigworkerDeps()
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -842,10 +839,7 @@ children:
 		// Clear the client and the configworker deps key after the supervisor
 		// has stopped (the caller runs cleanup after appSup.Run returns).
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
-		register.ClearDeps(configworker.MemoryMonitorEnabledDepsKey)
+		clearConfigworkerDeps()
 		fsmv2Hook.Stop()
 	}
 
@@ -948,4 +942,11 @@ func wireFSMv2Communicator(
 	<-ctx.Done()
 
 	logger.Info("FSMv2 communicator context cancelled")
+}
+
+func clearConfigworkerDeps() {
+	register.ClearDeps(configworker.WorkerTypeName)
+	register.ClearDeps(configworker.ConfigManagerDepsKey)
+	register.ClearDeps(configworker.CPUEnabledDepsKey)
+	register.ClearDeps(configworker.MemoryMonitorEnabledDepsKey)
 }
