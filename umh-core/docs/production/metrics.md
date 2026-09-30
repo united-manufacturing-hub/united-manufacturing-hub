@@ -14,7 +14,7 @@
 
 Every gauge below is exposed as the series `umh_fsmv2_worker_<gauge name>`, carrying a `hierarchy_path` label that names the worker that published it. A rule written against the bare name matches nothing, and Prometheus reports no error for it.
 
-On a tick that could not measure, every gauge on this page keeps being scraped at its previous value, and nothing marks it stale. The age of `cpu_last_sample_unix` is the only thing that reveals such a freeze.
+On a tick that could not measure, every gauge on this page keeps being scraped at its previous value, and nothing marks it stale. The age of `cpu_last_sample_unix`, and of `memory_last_sample_unix` for the memory gauges, is the only thing that reveals such a freeze.
 
 ### Measurements
 
@@ -50,11 +50,13 @@ A `_ring_active` flag covers one 60-second window, and reads 0 until that window
 
 ## Memory evidence (preview)
 
-These gauges appear when the container is started with `-e USE_FSMV2_MEMORY_MONITOR=true -e USE_FSMV2_TRANSPORT=true`. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges above, and they also keep their previous value on a tick that could not measure.
+These gauges appear when the container is started with `-e USE_FSMV2_MEMORY_MONITOR=true` on an instance connected to the Management Console (`API_URL` and `AUTH_TOKEN` set). They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges above, and they also keep their previous value on a tick that could not measure.
+
+With the preview on, the instance's memory status comes from this reading. Memory counts as degraded, and bridges are held back, whenever no reading from the last three seconds is available.
 
 | Gauge | Reports |
 |---|---|
-| `memory_used_bytes` | the container's memory usage, in bytes |
+| `memory_used_bytes` | the memory in use, in bytes: the container's, or the machine's when `memory_used_from_cgroup` is 0 |
 | `memory_total_bytes` | the limit that usage is judged against: the container's memory limit, or the machine's total memory when the container has none |
 | `memory_used_percent` | `memory_used_bytes` as a percentage of `memory_total_bytes` |
 | `memory_used_from_cgroup` | 1 when `memory_used_bytes` is the container's own usage, 0 when the container's cgroup was unreadable and the machine's usage was used |
