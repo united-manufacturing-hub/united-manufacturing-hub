@@ -116,8 +116,9 @@ func driveDynamicHello(ctx context.Context, env Env) error {
 	}
 
 	// DELETE: remove the child, exercising the despawn path. The driver only
-	// calls Delete; proving the store-side reap (the worker gone from the store)
-	// is deferred to ENG-5107, which builds the despawn-tombstone subsystem.
+	// calls Delete. That removal marks the worker's stored documents and that
+	// Get then returns ErrWorkerDeleted is checked in the integration tests
+	// (app_removal_marks_deleted_test.go, churn_capstone_test.go).
 	env.Client.Delete(ref)
 
 	return nil
