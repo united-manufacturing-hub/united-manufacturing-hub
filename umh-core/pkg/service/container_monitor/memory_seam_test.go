@@ -33,10 +33,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-type memoryStatus = simple.Status[fsmv2memory.MemoryStatus]
+type memoryWorkerStatus = simple.Status[fsmv2memory.MemoryStatus]
 
 type memoryStubStateReader struct {
-	observation *fsmv2.Observation[memoryStatus]
+	observation *fsmv2.Observation[memoryWorkerStatus]
 	err         error
 }
 
@@ -49,7 +49,7 @@ func (s *memoryStubStateReader) LoadObservedTyped(_ context.Context, _, _ string
 		return errors.New("memoryStubStateReader: no staged observation")
 	}
 
-	out, ok := result.(*fsmv2.Observation[memoryStatus])
+	out, ok := result.(*fsmv2.Observation[memoryWorkerStatus])
 	if !ok {
 		return errors.New("memoryStubStateReader: unexpected result type")
 	}
@@ -83,8 +83,8 @@ var (
 	}
 )
 
-func freshObservation(status memoryStatus) *fsmv2.Observation[memoryStatus] {
-	return &fsmv2.Observation[memoryStatus]{CollectedAt: time.Now(), Status: status}
+func freshObservation(status memoryWorkerStatus) *fsmv2.Observation[memoryWorkerStatus] {
+	return &fsmv2.Observation[memoryWorkerStatus]{CollectedAt: time.Now(), Status: status}
 }
 
 func publishMemoryClient(stub *memoryStubStateReader, registered bool) {
@@ -113,7 +113,7 @@ func newFlaggedService(memoryFlag string) *container_monitor.ContainerMonitorSer
 
 var _ = Describe("the memory seam's verdict", func() {
 	It("copies a fresh healthy reading", func() {
-		memory := container_monitor.JudgeWorkerMemory(memoryStatus{Result: healthyWorkerMemory}, fsmv2client.Fresh)
+		memory := container_monitor.JudgeWorkerMemory(memoryWorkerStatus{Result: healthyWorkerMemory}, fsmv2client.Fresh)
 
 		Expect(memory.Health.Category).To(Equal(models.Active))
 		Expect(memory.Health.Message).To(Equal(healthyWorkerMemory.Message))
@@ -122,7 +122,7 @@ var _ = Describe("the memory seam's verdict", func() {
 	})
 
 	It("copies a fresh degraded reading", func() {
-		status := memoryStatus{Result: criticalWorkerMemory, Degraded: true, Reason: criticalWorkerMemory.Message}
+		status := memoryWorkerStatus{Result: criticalWorkerMemory, Degraded: true, Reason: criticalWorkerMemory.Message}
 
 		memory := container_monitor.JudgeWorkerMemory(status, fsmv2client.Fresh)
 
@@ -133,7 +133,7 @@ var _ = Describe("the memory seam's verdict", func() {
 
 	DescribeTable("reports a failed poll as degraded without a reading",
 		func(partialResult fsmv2memory.MemoryStatus) {
-			status := memoryStatus{Result: partialResult, Degraded: true, Reason: "poll error: cgroup and host unreadable"}
+			status := memoryWorkerStatus{Result: partialResult, Degraded: true, Reason: "poll error: cgroup and host unreadable"}
 
 			memory := container_monitor.JudgeWorkerMemory(status, fsmv2client.Fresh)
 
@@ -147,7 +147,7 @@ var _ = Describe("the memory seam's verdict", func() {
 
 	DescribeTable("reports a missing reading as degraded",
 		func(freshness fsmv2client.Freshness, messagePart string) {
-			memory := container_monitor.JudgeWorkerMemory(memoryStatus{Result: healthyWorkerMemory}, freshness)
+			memory := container_monitor.JudgeWorkerMemory(memoryWorkerStatus{Result: healthyWorkerMemory}, freshness)
 
 			Expect(memory.Health.Category).To(Equal(models.Degraded))
 			Expect(memory.Health.Message).To(ContainSubstring(messagePart))
@@ -173,7 +173,7 @@ var _ = Describe("the memory seam's worker read", func() {
 	})
 
 	It("returns the context error on a cancelled tick", func() {
-		publishMemoryClient(&memoryStubStateReader{observation: freshObservation(memoryStatus{Result: healthyWorkerMemory})}, true)
+		publishMemoryClient(&memoryStubStateReader{observation: freshObservation(memoryWorkerStatus{Result: healthyWorkerMemory})}, true)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -203,7 +203,7 @@ var _ = Describe("the memory seam's worker read", func() {
 
 var _ = Describe("GetStatus with USE_FSMV2_MEMORY_MONITOR", func() {
 	It("takes memory health from a degraded worker reading", func() {
-		status := memoryStatus{Result: criticalWorkerMemory, Degraded: true, Reason: criticalWorkerMemory.Message}
+		status := memoryWorkerStatus{Result: criticalWorkerMemory, Degraded: true, Reason: criticalWorkerMemory.Message}
 		publishMemoryClient(&memoryStubStateReader{observation: freshObservation(status)}, true)
 
 		info, err := newFlaggedService("true").GetStatus(context.Background())
@@ -215,7 +215,7 @@ var _ = Describe("GetStatus with USE_FSMV2_MEMORY_MONITOR", func() {
 	})
 
 	It("takes the worker's bytes for a healthy reading", func() {
-		publishMemoryClient(&memoryStubStateReader{observation: freshObservation(memoryStatus{Result: healthyWorkerMemory})}, true)
+		publishMemoryClient(&memoryStubStateReader{observation: freshObservation(memoryWorkerStatus{Result: healthyWorkerMemory})}, true)
 
 		info, err := newFlaggedService("true").GetStatus(context.Background())
 
@@ -225,12 +225,14 @@ var _ = Describe("GetStatus with USE_FSMV2_MEMORY_MONITOR", func() {
 	})
 
 	It("ignores the worker when the flag is off", func() {
-		status := memoryStatus{Result: criticalWorkerMemory, Degraded: true, Reason: criticalWorkerMemory.Message}
+		status := memoryWorkerStatus{Result: criticalWorkerMemory, Degraded: true, Reason: criticalWorkerMemory.Message}
 		publishMemoryClient(&memoryStubStateReader{observation: freshObservation(status)}, true)
 
 		info, err := newFlaggedService("false").GetStatus(context.Background())
 
 		Expect(err).ToNot(HaveOccurred())
+		Expect(info.Memory.Health.Message).To(HavePrefix("Memory utilization"))
+		Expect(info.Memory.Health.Message).ToNot(Equal(criticalWorkerMemory.Message))
 		Expect(info.Memory.CGroupTotalBytes).ToNot(Equal(criticalWorkerMemory.TotalBytes))
 	})
 })

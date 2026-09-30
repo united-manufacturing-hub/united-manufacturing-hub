@@ -30,8 +30,8 @@ type CgroupMemory struct {
 	Unlimited    bool
 }
 
-func ReadCgroupMemory(ctx context.Context, fs filesystem.Service, cgroupBase string) (CgroupMemory, error) {
-	memoryMaxData, err := fs.ReadFile(ctx, cgroupBase+"/memory.max")
+func ReadCgroupMemory(ctx context.Context, fileSystem filesystem.Service, cgroupBase string) (CgroupMemory, error) {
+	memoryMaxData, err := fileSystem.ReadFile(ctx, cgroupBase+"/memory.max")
 	if err != nil {
 		return CgroupMemory{}, fmt.Errorf("failed to read memory.max: %w", err)
 	}
@@ -41,7 +41,7 @@ func ReadCgroupMemory(ctx context.Context, fs filesystem.Service, cgroupBase str
 		return CgroupMemory{}, err
 	}
 
-	memoryCurrentData, err := fs.ReadFile(ctx, cgroupBase+"/memory.current")
+	memoryCurrentData, err := fileSystem.ReadFile(ctx, cgroupBase+"/memory.current")
 	if err != nil {
 		return CgroupMemory{}, fmt.Errorf("failed to read memory.current: %w", err)
 	}

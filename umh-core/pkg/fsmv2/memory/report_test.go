@@ -50,15 +50,15 @@ func (l recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath, msg str
 	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
 }
 
-func recordingDeps(fixture filesystem.Service) (*MemoryDeps, *[]sentryEvent) {
+func recordingDeps(fileSystem filesystem.Service) (*MemoryDeps, *[]sentryEvent) {
 	events := &[]sentryEvent{}
 	logger := recordingLogger{FSMLogger: deps.NewNopFSMLogger(), events: events}
 	identity := deps.Identity{ID: "memory-report", WorkerType: WorkerType}
 
 	return &MemoryDeps{
 		BaseDependencies: deps.NewBaseDependencies(logger, nil, identity),
-		filesystem:       fixture,
-		hostMemory:       hostMemoryOf(threeGiBHost, eightGiBHost),
+		fileSystem:       fileSystem,
+		hostMemory:       hostMemoryOf(threeGiBBytes, eightGiBBytes),
 	}, events
 }
 
@@ -69,9 +69,14 @@ func pollTimes(memoryDeps *MemoryDeps, times int) {
 	}
 }
 
+var (
+	missingCgroup    = map[string]string{}
+	unparsableCgroup = cgroupFiles("max\n", "abc\n")
+)
+
 var _ = Describe("the memory worker's Sentry reports", func() {
 	It("reports a missing cgroup once across repeated polls", func() {
-		memoryDeps, events := recordingDeps(fixtureFilesystem(map[string]string{}))
+		memoryDeps, events := recordingDeps(fixtureFilesystem(missingCgroup))
 
 		pollTimes(memoryDeps, 3)
 
@@ -82,14 +87,10 @@ var _ = Describe("the memory worker's Sentry reports", func() {
 	})
 
 	It("reports an unparsable cgroup separately from a missing one", func() {
-		files := map[string]string{}
-		memoryDeps, events := recordingDeps(fixtureFilesystem(files))
-
+		memoryDeps, events := recordingDeps(fixtureFilesystem(missingCgroup))
 		pollTimes(memoryDeps, 1)
 
-		files[fixtureCgroupBase+"/memory.max"] = "max\n"
-		files[fixtureCgroupBase+"/memory.current"] = "abc\n"
-
+		memoryDeps.fileSystem = fixtureFilesystem(unparsableCgroup)
 		pollTimes(memoryDeps, 2)
 
 		Expect(*events).To(HaveLen(2))
@@ -97,7 +98,7 @@ var _ = Describe("the memory worker's Sentry reports", func() {
 	})
 
 	It("reports nothing for a readable cgroup", func() {
-		memoryDeps, events := recordingDeps(fixtureFilesystem(cgroupFiles(oneGiBText, halfGiBText)))
+		memoryDeps, events := recordingDeps(fixtureFilesystem(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes))))
 
 		pollTimes(memoryDeps, 3)
 

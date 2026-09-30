@@ -16,12 +16,15 @@ package fsmv2memory
 
 import (
 	"context"
+	"errors"
 	"io/fs"
+	"strconv"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -30,7 +33,27 @@ func TestMemory(t *testing.T) {
 	RunSpecs(t, "fsmv2memory Suite")
 }
 
-const fixtureCgroupBase = "/sys/fs/cgroup"
+const (
+	halfGiBBytes  int64 = 536870912
+	oneGiBBytes   int64 = 1073741824
+	twoGiBBytes   int64 = 2147483648
+	threeGiBBytes int64 = 3221225472
+	eightGiBBytes int64 = 8589934592
+
+	decimalLimitBytes int64 = 1000000000
+
+	fixtureCgroupBase = "/sys/fs/cgroup"
+)
+
+var errHostUnreadable = errors.New("host memory unreadable")
+
+func bytesText(bytes int64) string {
+	return strconv.FormatInt(bytes, 10) + "\n"
+}
+
+func percentOfDecimalLimitText(percent int64) string {
+	return bytesText(decimalLimitBytes * percent / 100)
+}
 
 func cgroupFiles(memoryMax, memoryCurrent string) map[string]string {
 	return map[string]string{
@@ -52,4 +75,24 @@ func fixtureFilesystem(files map[string]string) *filesystem.MockFileSystem {
 
 		return []byte(content), nil
 	})
+}
+
+func hostMemoryOf(usedBytes, totalBytes int64) HostMemoryReader {
+	return func(context.Context) (uint64, uint64, error) {
+		return uint64(usedBytes), uint64(totalBytes), nil
+	}
+}
+
+func unreadableHostMemory(context.Context) (uint64, uint64, error) {
+	return 0, 0, errHostUnreadable
+}
+
+func newTestDeps(fileSystem filesystem.Service, hostMemory HostMemoryReader) *MemoryDeps {
+	identity := deps.Identity{ID: "memory-test", WorkerType: WorkerType}
+
+	return &MemoryDeps{
+		BaseDependencies: deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity),
+		fileSystem:       fileSystem,
+		hostMemory:       hostMemory,
+	}
 }

@@ -26,15 +26,15 @@ import (
 
 var _ = Describe("the memory worker's gauges", func() {
 	It("publishes a cgroup reading", func() {
-		memoryDeps := newTestDeps(fixtureFilesystem(cgroupFiles(oneGiBText, halfGiBText)), unreadableHostMemory)
+		memoryDeps := newTestDeps(fixtureFilesystem(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes))), unreadableHostMemory)
 
 		_, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
 		Expect(err).ToNot(HaveOccurred())
 
 		gauges := memoryDeps.MetricsRecorder().Drain().Gauges
 
-		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedBytes), float64(oneGiB/2)))
-		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalBytes), float64(oneGiB)))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedBytes), float64(halfGiBBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalBytes), float64(oneGiBBytes)))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedPercent), 50.0))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedFromCgroup), 1.0))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalIsCgroupLimit), 1.0))
@@ -43,7 +43,7 @@ var _ = Describe("the memory worker's gauges", func() {
 
 	DescribeTable("marks which source each number came from",
 		func(files map[string]string, expectedUsedFromCgroup, expectedTotalIsCgroupLimit float64) {
-			memoryDeps := newTestDeps(fixtureFilesystem(files), hostMemoryOf(threeGiBHost, eightGiBHost))
+			memoryDeps := newTestDeps(fixtureFilesystem(files), hostMemoryOf(threeGiBBytes, eightGiBBytes))
 
 			_, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
 			Expect(err).ToNot(HaveOccurred())
@@ -53,7 +53,7 @@ var _ = Describe("the memory worker's gauges", func() {
 			Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedFromCgroup), expectedUsedFromCgroup))
 			Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalIsCgroupLimit), expectedTotalIsCgroupLimit))
 		},
-		Entry("a cgroup without a limit", cgroupFiles("max\n", halfGiBText), 1.0, 0.0),
+		Entry("a cgroup without a limit", cgroupFiles("max\n", bytesText(halfGiBBytes)), 1.0, 0.0),
 		Entry("an unreadable cgroup", map[string]string{}, 0.0, 0.0),
 	)
 

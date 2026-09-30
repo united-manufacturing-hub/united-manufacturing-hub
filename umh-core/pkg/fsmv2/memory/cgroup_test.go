@@ -22,50 +22,45 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const (
-	eightGiB = int64(8589934592)
-	twoGiB   = int64(2147483648)
-)
-
 var _ = Describe("ReadCgroupMemory", func() {
 	It("returns the limit and the current usage", func() {
-		filesystem := fixtureFilesystem(cgroupFiles("8589934592\n", "2147483648\n"))
+		fileSystem := fixtureFilesystem(cgroupFiles(bytesText(eightGiBBytes), bytesText(twoGiBBytes)))
 
-		memory, err := ReadCgroupMemory(context.Background(), filesystem, fixtureCgroupBase)
+		memory, err := ReadCgroupMemory(context.Background(), fileSystem, fixtureCgroupBase)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(memory).To(Equal(CgroupMemory{LimitBytes: eightGiB, CurrentBytes: twoGiB}))
+		Expect(memory).To(Equal(CgroupMemory{LimitBytes: eightGiBBytes, CurrentBytes: twoGiBBytes}))
 	})
 
 	It("reports an unlimited cgroup", func() {
-		filesystem := fixtureFilesystem(cgroupFiles("max\n", "2147483648\n"))
+		fileSystem := fixtureFilesystem(cgroupFiles("max\n", bytesText(twoGiBBytes)))
 
-		memory, err := ReadCgroupMemory(context.Background(), filesystem, fixtureCgroupBase)
+		memory, err := ReadCgroupMemory(context.Background(), fileSystem, fixtureCgroupBase)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(memory).To(Equal(CgroupMemory{CurrentBytes: twoGiB, Unlimited: true}))
+		Expect(memory).To(Equal(CgroupMemory{CurrentBytes: twoGiBBytes, Unlimited: true}))
 	})
 
 	It("fails when memory.max is missing", func() {
-		filesystem := fixtureFilesystem(map[string]string{fixtureCgroupBase + "/memory.current": "2147483648\n"})
+		fileSystem := fixtureFilesystem(map[string]string{fixtureCgroupBase + "/memory.current": bytesText(twoGiBBytes)})
 
-		_, err := ReadCgroupMemory(context.Background(), filesystem, fixtureCgroupBase)
+		_, err := ReadCgroupMemory(context.Background(), fileSystem, fixtureCgroupBase)
 
 		Expect(err).To(MatchError(fs.ErrNotExist))
 	})
 
 	It("fails when memory.current is missing", func() {
-		filesystem := fixtureFilesystem(map[string]string{fixtureCgroupBase + "/memory.max": "max\n"})
+		fileSystem := fixtureFilesystem(map[string]string{fixtureCgroupBase + "/memory.max": "max\n"})
 
-		_, err := ReadCgroupMemory(context.Background(), filesystem, fixtureCgroupBase)
+		_, err := ReadCgroupMemory(context.Background(), fileSystem, fixtureCgroupBase)
 
 		Expect(err).To(MatchError(fs.ErrNotExist))
 	})
 
 	It("fails when memory.current does not parse", func() {
-		filesystem := fixtureFilesystem(cgroupFiles("max\n", "abc\n"))
+		fileSystem := fixtureFilesystem(cgroupFiles("max\n", "abc\n"))
 
-		_, err := ReadCgroupMemory(context.Background(), filesystem, fixtureCgroupBase)
+		_, err := ReadCgroupMemory(context.Background(), fileSystem, fixtureCgroupBase)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -80,7 +75,7 @@ var _ = Describe("parseMemoryMax", func() {
 			Expect(limit).To(Equal(expectedLimit))
 			Expect(unlimited).To(Equal(expectedUnlimited))
 		},
-		Entry("a numeric limit", "8589934592\n", eightGiB, false),
+		Entry("a numeric limit", bytesText(eightGiBBytes), eightGiBBytes, false),
 		Entry("a limit without trailing newline", "4294967296", int64(4294967296), false),
 		Entry("max", "max\n", int64(0), true),
 	)
@@ -105,8 +100,8 @@ var _ = Describe("parseMemoryCurrent", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(current).To(Equal(expected))
 		},
-		Entry("a numeric value", "2147483648\n", twoGiB),
-		Entry("a value without trailing newline", "1073741824", int64(1073741824)),
+		Entry("a numeric value", bytesText(twoGiBBytes), twoGiBBytes),
+		Entry("a value without trailing newline", "1073741824", oneGiBBytes),
 	)
 
 	DescribeTable("rejected values",

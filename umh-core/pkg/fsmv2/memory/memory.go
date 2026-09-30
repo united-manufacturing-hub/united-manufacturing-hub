@@ -72,18 +72,18 @@ type HostMemoryReader func(ctx context.Context) (usedBytes, totalBytes uint64, e
 type MemoryDeps struct {
 	*deps.BaseDependencies
 
-	filesystem    filesystem.Service
+	fileSystem    filesystem.Service
 	hostMemory    HostMemoryReader
 	reportedReads sync.Map
 }
 
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *MemoryDeps {
-	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
-	if fs == nil {
-		fs = filesystem.NewDefaultService()
+	fileSystem := register.GetDeps[filesystem.Service](FilesystemDepsKey)
+	if fileSystem == nil {
+		fileSystem = filesystem.NewDefaultService()
 	}
 
-	return &MemoryDeps{BaseDependencies: bd, filesystem: fs, hostMemory: readHostMemory}
+	return &MemoryDeps{BaseDependencies: bd, fileSystem: fileSystem, hostMemory: readHostMemory}
 }
 
 func readHostMemory(ctx context.Context) (uint64, uint64, error) {
@@ -96,7 +96,7 @@ func readHostMemory(ctx context.Context) (uint64, uint64, error) {
 }
 
 func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, error) {
-	cgroup, cgroupErr := ReadCgroupMemory(ctx, d.filesystem, cgroupBase)
+	cgroup, cgroupErr := ReadCgroupMemory(ctx, d.fileSystem, cgroupBase)
 	if ctx.Err() != nil {
 		return MemoryStatus{}, ctx.Err()
 	}
