@@ -78,9 +78,9 @@ var SimpleScenarioV2 = ScenarioV2{
 			}
 		}
 
-		// ChildrenHealthy is a framework field the supervisor fills in, so
-		// reading it after both children are Connected checks that the
-		// parent observed their health and not just their existence.
+		// The waits above read each child's own observation. ChildrenHealthy
+		// is on the parent's observation, and the supervisor fills it in, so
+		// this wait checks that the parent counted both children healthy.
 		return env.WaitFor(ctx, "the parent reports both children healthy",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
