@@ -102,7 +102,7 @@ func (m *MockCertHandler) FetchAllCerts(_ context.Context) error {
 	return m.fetchError
 }
 
-// Subscribers returns mock subscriber emails via the sub handler.
+// Subscribers returns mock subscriber emails via the subscriber handler.
 func (m *MockCertHandler) Subscribers() []string {
 	m.mu.RLock()
 	sh := m.subHandler
@@ -113,15 +113,15 @@ func (m *MockCertHandler) Subscribers() []string {
 	return sh.Subscribers()
 }
 
-// HasSubHandler returns true when the mock sub handler is set.
+// HasSubHandler returns true when the mock subscriber handler is set.
 func (m *MockCertHandler) HasSubHandler() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.subHandler != nil
 }
 
-// SetSubHandler satisfies certificatehandler.Handler; the mock seeds its sub
-// handler at construction, so this is a no-op.
+// SetSubHandler satisfies certificatehandler.Handler; the mock seeds its
+// subscriber handler at construction, so this is a no-op.
 func (m *MockCertHandler) SetSubHandler(_ certificatehandler.SubHandler) {}
 
 // FetchCallCount returns how many times FetchAllCerts was called.
@@ -219,7 +219,7 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 // moves Running -> Degraded.
 var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-degraded",
-	Description: "Cert fetcher whose fetches fail: enters Degraded after 3 failed fetches in a row",
+	Description: "Cert fetcher whose fetches fail: enters Degraded after DegradedThreshold (certfetcher/state) failed fetches in a row",
 
 	ExpectedErrorCauses: []error{errCertFetchSimulated},
 
@@ -240,15 +240,15 @@ var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	},
 }
 
-// CertFetcherNoSubscribersScenarioV2 runs one certfetcher worker whose
-// handler has no subscriber list. The worker stays Stopped, so the log shows no
-// state_transition line for it. StoppedState starts the worker only once the
-// handler has a subscriber list (certfetcher/state/state_stopped.go), and the
-// "state" key in the upsert has no effect. The scenario passes when the worker
-// is still Stopped after 20 polls, about one second.
+// CertFetcherNoSubscribersScenarioV2 runs one certfetcher worker whose cert
+// handler has no subscriber handler (the SubHandler that lists active
+// subscribers). StoppedState starts the worker only once a subscriber handler
+// exists (certfetcher/state/state_stopped.go). So the worker stays Stopped, and
+// the log shows no state_transition line for it. The scenario passes when the
+// worker is still Stopped after 20 polls.
 var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-no-subscribers",
-	Description: "Cert fetcher with no subscriber list: stays in Stopped",
+	Description: "Cert fetcher with no subscriber handler: stays in Stopped",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		return certFetcherDependencies(nil, nil)
@@ -257,7 +257,7 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
 
-		env.Step("create certfetcher with no subscriber list; it stays Stopped, so no state change appears for it")
+		env.Step("create certfetcher with no subscriber handler; it stays Stopped, so no state change appears for it")
 
 		if err := upsertCertFetcher(env); err != nil {
 			return err
@@ -265,7 +265,7 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 
 		polls := 0
 
-		return env.WaitFor(ctx, "the certfetcher is still Stopped after 20 polls (about 1s)",
+		return env.WaitFor(ctx, "the certfetcher is still Stopped after 20 polls",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
 				if err != nil {
