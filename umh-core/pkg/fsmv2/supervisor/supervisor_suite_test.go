@@ -415,6 +415,10 @@ func mockIdentity() deps.Identity {
 }
 
 func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularStoreInterface, cfg supervisor.CollectorHealthConfig) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+	return newSupervisorWithWorkerAndLogger(worker, customStore, cfg, deps.NewNopFSMLogger())
+}
+
+func newSupervisorWithWorkerAndLogger(worker *mockWorker, customStore storage.TriangularStoreInterface, cfg supervisor.CollectorHealthConfig, logger deps.FSMLogger) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
 	identity := mockIdentity()
 	ctx := context.Background()
 	workerType := "test"
@@ -442,7 +446,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType:              workerType,
-		Logger:                  deps.NewNopFSMLogger(),
+		Logger:                  logger,
 		CollectorHealth:         cfg,
 		Store:                   triangularStore,
 		GracefulShutdownTimeout: 100 * time.Millisecond, // Short timeout for tests
@@ -508,6 +512,16 @@ func createTestTriangularStore() *storage.TriangularStore {
 	return storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 }
 
+type markDeletedCall struct {
+	WorkerType string
+	ID         string
+	By         string
+	CtxErr     error
+	// HasDeadline reports whether the context MarkDeleted received had a
+	// deadline.
+	HasDeadline bool
+}
+
 type mockTriangularStore struct {
 	mu sync.RWMutex
 
@@ -518,6 +532,9 @@ type mockTriangularStore struct {
 	SaveObservedErr error
 	LoadObservedErr error
 	LoadSnapshotErr error
+
+	MarkDeletedErr   error
+	MarkDeletedCalls []markDeletedCall
 
 	identity map[string]map[string]persistence.Document
 	desired  map[string]map[string]persistence.Document
@@ -789,8 +806,22 @@ func (m *mockTriangularStore) Maintenance(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockTriangularStore) MarkDeleted(_ context.Context, _ string, _ string, _ string) error {
-	return nil
+func (m *mockTriangularStore) MarkDeleted(ctx context.Context, workerType string, id string, by string) error {
+	m.mu.Lock()
+	m.MarkDeletedCalls = append(m.MarkDeletedCalls, markDeletedCall{
+		WorkerType: workerType,
+		ID:         id,
+		By:         by,
+		CtxErr:     ctx.Err(),
+		HasDeadline: func() bool {
+			_, ok := ctx.Deadline()
+
+			return ok
+		}(),
+	})
+	m.mu.Unlock()
+
+	return m.MarkDeletedErr
 }
 
 func (m *mockTriangularStore) ClearDeleted(_ context.Context, _ string, _ string) error {

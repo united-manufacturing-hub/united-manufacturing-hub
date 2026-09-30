@@ -1123,6 +1123,23 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
 
+		// Record the removal in the worker's stored documents (see
+		// TriangularStoreInterface.MarkDeleted). Removal also runs during
+		// Shutdown, when ctx can already be cancelled, and the store rejects a
+		// cancelled context. So MarkDeleted gets a context without the
+		// cancellation and with its own deadline. If MarkDeleted fails, nothing
+		// retries it, and the documents stay as if the worker still ran.
+		markCtx, cancelMark := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		err := s.store.MarkDeleted(markCtx, s.workerType, workerID, "removed")
+
+		cancelMark()
+
+		if err != nil {
+			s.logger.SentryWarn(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, "worker_tombstone_failed",
+				deps.Err(err),
+				deps.String("target_worker_id", workerID))
+		}
+
 		s.logger.Debug("worker_removed_successfully",
 			deps.Int("children_cleaned", childCount))
 
