@@ -65,9 +65,10 @@ const (
 // The story is that neither outage changes the worker's state. It stays
 // running, healthy and Fresh through both, and its message becomes "CPU
 // monitoring unavailable". Each outage logs one cpu::read_failed warning,
-// which the scenario expects. Under the 2026-09-23 decision (ENG-5815) a
-// machine the worker cannot measure is reported healthy; ENG-6319 tracks
-// changing that.
+// which the scenario expects. The worker still reports a machine it cannot
+// measure as healthy. ENG-6319 (unreadable cgroup files are reported as
+// healthy) will report it as degraded, and this scenario will then expect
+// degraded.
 //
 // The second outage keeps the first, so the story tests the two failures
 // rather than a recovery.

@@ -173,15 +173,15 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")
 
 		// Only the concrete type tells the real filesystem from a
-		// refuse-everything stub: on a host without cgroup v2 both fail every
-		// read.
+		// refuse-everything stub: on a host without cgroup files both fail
+		// every read.
 		_, isDefault := d.fs.(*filesystem.DefaultService)
 		Expect(isDefault).To(BeTrue(),
 			"with nothing published the resolved filesystem must be the real one, not a stub")
 
 		// errors.Is rather than NotTo(MatchError): MatchError rejects a nil actual
-		// even under NotTo, and Poll returns nil with a cgroup v2 mount and an
-		// error without one, so this must hold for both. It has teeth only
+		// even under NotTo, and whether Poll returns nil or an error depends on
+		// which cgroup files the host has, so this must hold for both. It has teeth only
 		// against a fallback still serving a previously published filesystem.
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(errors.Is(err, errRefusedByStub)).To(BeFalse(),

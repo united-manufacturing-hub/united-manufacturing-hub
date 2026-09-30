@@ -340,8 +340,8 @@ var RegistryV2 = map[string]ScenarioV2{
 }
 
 // LiveRegistryV2 holds scenarios that read the real machine the runner runs
-// on, so their result changes with it. The CLI runs them; the registry spec
-// does not, because nobody picks the CI machine.
+// on, so their result depends on that machine's CPU load and cgroup files. The
+// CLI runs them. The registry spec does not, because CI does not control those.
 var LiveRegistryV2 = map[string]ScenarioV2{
 	"cpu-host": CPUHostScenarioV2,
 }

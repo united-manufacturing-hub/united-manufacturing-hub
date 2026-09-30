@@ -25,10 +25,11 @@
 #              host load.
 #   DURATION   How long the monitor runs after its first reading. Default 0,
 #              which runs until Ctrl+C.
-#   LOG_LEVEL  Runner log level (default debug, where the observed_changed
-#              line carries the worker's message whenever it changes; info
-#              carries the message in the state_transition line's reason
-#              field whenever the worker's state changes).
+#   LOG_LEVEL  Runner log level, default debug. At debug, each save of the
+#              worker's observation logs an observed_changed line, and the
+#              line carries the message when it changed. At info, the
+#              state_transition line's reason field carries the message
+#              whenever the worker's state changes.
 #
 # Any argument is passed to docker run verbatim, such as --name, to make the
 # container easy to exec into while it runs. README.md shows how to load it.
