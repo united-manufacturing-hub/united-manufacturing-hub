@@ -1092,9 +1092,10 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// TriangularStoreInterface.MarkDeleted) before the worker leaves
 		// s.workers, while s.mu is held. AddWorker takes s.mu and refuses an
 		// id that is still in s.workers. So a worker added again with the same
-		// id saves and clears its documents only after this stamp, and the
-		// stamp cannot land on the new worker. The old worker's collector may
-		// still save after this point; a save keeps the stamp.
+		// id saves and clears its documents only after this tombstone is
+		// written, and the tombstone cannot land on the new worker. The old
+		// worker's collector may still save after this point; a save keeps the
+		// tombstone.
 		//
 		// Removal also runs during Shutdown, when ctx can already be
 		// cancelled, and the store rejects a cancelled context. So MarkDeleted

@@ -164,6 +164,15 @@
 // incrementing sync IDs after successful writes, managing versions per role,
 // and setting timestamps appropriately.
 //
+// # Removed workers
+//
+// When the supervisor removes a worker, MarkDeleted tombstones the worker's
+// three documents: it sets _deleted_at and _deleted_by on each and keeps
+// the documents. A later save keeps the tombstone, so a collection that
+// finishes after the removal cannot make the worker look alive again.
+// ClearDeleted removes the tombstone when a worker with the same id is added
+// again. Readers that must not see a removed worker check _deleted_at.
+//
 // # Delta streaming via sync_id
 //
 // The _sync_id field enables efficient client synchronization:

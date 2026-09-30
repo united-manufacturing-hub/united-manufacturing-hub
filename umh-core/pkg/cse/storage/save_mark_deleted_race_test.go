@@ -72,6 +72,18 @@ func (p *pausingStore) Get(ctx context.Context, collection string, id string) (p
 	return doc, err
 }
 
+// giveTimeToFinish waits up to 200 ms for done, then puts back what it
+// received. If the call under test can finish while the save is paused, this
+// gives it the time to do so. If it waits for the save, this times out, and
+// the test's outcome is the same either way.
+func giveTimeToFinish(done chan error) {
+	select {
+	case err := <-done:
+		done <- err
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 var _ = Describe("A save running while the tombstone changes", func() {
 	It("does not lose the tombstone MarkDeleted writes", func() {
 		const (
@@ -112,14 +124,7 @@ var _ = Describe("A save running while the tombstone changes", func() {
 			markDone <- ts.MarkDeleted(ctx, workerType, workerID, "removed")
 		}()
 
-		// If MarkDeleted can finish while the save is paused, give it the
-		// time to do so. If it waits for the save, this times out and the
-		// outcome is the same either way.
-		select {
-		case err := <-markDone:
-			markDone <- err
-		case <-time.After(200 * time.Millisecond):
-		}
+		giveTimeToFinish(markDone)
 
 		close(release)
 
@@ -172,14 +177,7 @@ var _ = Describe("A save running while the tombstone changes", func() {
 			clearDone <- ts.ClearDeleted(ctx, workerType, workerID)
 		}()
 
-		// If ClearDeleted can finish while the save is paused, give it the
-		// time to do so. If it waits for the save, this times out and the
-		// outcome is the same either way.
-		select {
-		case err := <-clearDone:
-			clearDone <- err
-		case <-time.After(200 * time.Millisecond):
-		}
+		giveTimeToFinish(clearDone)
 
 		close(release)
 

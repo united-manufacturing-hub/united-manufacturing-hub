@@ -105,8 +105,8 @@ type TriangularStoreInterface interface {
 	// Desired/Observed may be nil if not yet saved. Returns persistence.ErrNotFound if worker missing.
 	LoadSnapshot(ctx context.Context, workerType string, id string) (*Snapshot, error)
 
-	// MarkDeleted tombstones a worker's stored role documents instead of
-	// deleting them, so a removal stays syncable. Each tombstoned document
+	// MarkDeleted tombstones a worker's stored role documents (see
+	// FieldDeletedAt), so a removal stays syncable. Each tombstoned document
 	// keeps every field it had and gains _deleted_at (the store clock time),
 	// _deleted_by, and a new _sync_id, allocated the same way saveWithDelta
 	// does. A document that already carries a tombstone is left untouched,
