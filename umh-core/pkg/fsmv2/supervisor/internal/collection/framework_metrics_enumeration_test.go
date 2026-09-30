@@ -85,7 +85,7 @@ const registeredFloor = 16
 // the recovered panic is asserted to match that reason, so a skip cannot hide a
 // constructor regression inside one of them.
 var panicOnConstruction = map[string]string{
-	"communicator": "ChannelProvider must be set",
+	"communicator": `no channel provider under "communicator.channel_provider"`,
 	"transport":    `no channel provider under "transport.channel_provider"`,
 	"persistence":  "requires a store",
 	"pull":         "deps builder returned",
