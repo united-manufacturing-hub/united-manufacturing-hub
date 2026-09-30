@@ -51,6 +51,10 @@ func (l recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath, msg str
 }
 
 func recordingDeps(fileSystem filesystem.Service) (*MemoryDeps, *[]sentryEvent) {
+	return recordingDepsWithHost(fileSystem, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+}
+
+func recordingDepsWithHost(fileSystem filesystem.Service, hostMemory HostMemoryReader) (*MemoryDeps, *[]sentryEvent) {
 	events := &[]sentryEvent{}
 	logger := recordingLogger{FSMLogger: deps.NewNopFSMLogger(), events: events}
 	identity := deps.Identity{ID: "memory-report", WorkerType: WorkerType}
@@ -58,7 +62,7 @@ func recordingDeps(fileSystem filesystem.Service) (*MemoryDeps, *[]sentryEvent) 
 	return &MemoryDeps{
 		BaseDependencies: deps.NewBaseDependencies(logger, nil, identity),
 		fileSystem:       fileSystem,
-		hostMemory:       hostMemoryOf(threeGiBBytes, eightGiBBytes),
+		hostMemory:       hostMemory,
 	}, events
 }
 
@@ -69,10 +73,27 @@ func pollTimes(memoryDeps *MemoryDeps, times int) {
 	}
 }
 
+func failingPollTimes(memoryDeps *MemoryDeps, times int) {
+	for range times {
+		_, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
+		Expect(err).To(HaveOccurred())
+	}
+}
+
+func messagesOf(events []sentryEvent) []string {
+	messages := make([]string, 0, len(events))
+	for _, event := range events {
+		messages = append(messages, event.Message)
+	}
+
+	return messages
+}
+
 var (
 	missingCgroup    = map[string]string{}
 	unparsableCgroup = cgroupFiles("max\n", "abc\n")
 	onlyMemoryMax    = map[string]string{fixtureCgroupBase + "/memory.max": "max\n"}
+	unlimitedCgroup  = cgroupFiles("max\n", bytesText(halfGiBBytes))
 )
 
 var _ = Describe("the memory worker's Sentry reports", func() {
@@ -117,6 +138,43 @@ var _ = Describe("the memory worker's Sentry reports", func() {
 
 		pollTimes(memoryDeps, 3)
 
+		Expect(*events).To(BeEmpty())
+	})
+
+	It("reports an unreadable host total for a cgroup without a limit once", func() {
+		memoryDeps, events := recordingDepsWithHost(fixtureFilesystem(unlimitedCgroup), unreadableHostMemory)
+
+		failingPollTimes(memoryDeps, 3)
+
+		Expect(messagesOf(*events)).To(Equal([]string{hostReadFailedTag}))
+		Expect((*events)[0].Feature).To(Equal(deps.FeatureSupportMemory))
+	})
+
+	It("reports both failures when the cgroup and the host are unreadable", func() {
+		memoryDeps, events := recordingDepsWithHost(fixtureFilesystem(missingCgroup), unreadableHostMemory)
+
+		failingPollTimes(memoryDeps, 3)
+
+		Expect(messagesOf(*events)).To(ConsistOf(cgroupReadFailedTag+"::missing", hostReadFailedTag))
+	})
+
+	It("reports a zero total once", func() {
+		memoryDeps, events := recordingDepsWithHost(fixtureFilesystem(unlimitedCgroup), hostMemoryOf(0, 0))
+
+		failingPollTimes(memoryDeps, 3)
+
+		Expect(messagesOf(*events)).To(Equal([]string{zeroTotalTag}))
+	})
+
+	It("reports nothing on a cancelled tick", func() {
+		memoryDeps, events := recordingDepsWithHost(fixtureFilesystem(missingCgroup), unreadableHostMemory)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := Poll(ctx, memoryDeps, MemoryConfig{})
+
+		Expect(err).To(MatchError(context.Canceled))
 		Expect(*events).To(BeEmpty())
 	})
 })

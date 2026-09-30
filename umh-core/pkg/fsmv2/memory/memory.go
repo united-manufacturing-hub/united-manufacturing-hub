@@ -72,9 +72,9 @@ type HostMemoryReader func(ctx context.Context) (usedBytes, totalBytes uint64, e
 type MemoryDeps struct {
 	*deps.BaseDependencies
 
-	fileSystem    filesystem.Service
-	hostMemory    HostMemoryReader
-	reportedReads sync.Map
+	fileSystem       filesystem.Service
+	hostMemory       HostMemoryReader
+	reportedFailures sync.Map
 }
 
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *MemoryDeps {
@@ -111,6 +111,8 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 	}
 
 	if status.TotalBytes <= 0 {
+		d.reportZeroTotal(status.Source)
+
 		return MemoryStatus{}, errZeroTotal
 	}
 
@@ -147,6 +149,8 @@ func chooseSource(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory, cgrou
 func hostFallback(ctx context.Context, d *MemoryDeps, cgroupErr error) (MemoryStatus, error) {
 	hostUsed, hostTotal, hostErr := d.hostMemory(ctx)
 	if hostErr != nil {
+		d.reportHostReadFailure(ctx, hostErr)
+
 		return MemoryStatus{}, fmt.Errorf("cgroup memory is unreadable (%w) and host memory is unreadable: %w", cgroupErr, hostErr)
 	}
 
@@ -156,6 +160,8 @@ func hostFallback(ctx context.Context, d *MemoryDeps, cgroupErr error) (MemorySt
 func cgroupAgainstHostTotal(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory) (MemoryStatus, error) {
 	_, hostTotal, hostErr := d.hostMemory(ctx)
 	if hostErr != nil {
+		d.reportHostReadFailure(ctx, hostErr)
+
 		return MemoryStatus{}, fmt.Errorf("cgroup memory has no limit and host memory is unreadable: %w", hostErr)
 	}
 

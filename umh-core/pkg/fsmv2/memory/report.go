@@ -15,16 +15,21 @@
 package fsmv2memory
 
 import (
+	"context"
 	"errors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-const cgroupReadFailedTag = "memory::cgroup_read_failed"
+const (
+	cgroupReadFailedTag = "memory::cgroup_read_failed"
+	hostReadFailedTag   = "memory::host_read_failed"
+	zeroTotalTag        = "memory::zero_total"
+)
 
-type reportedRead struct {
-	file    string
-	outcome readOutcome
+type reportedFailure struct {
+	source  string
+	outcome string
 }
 
 func (d *MemoryDeps) reportCgroupReadFailure(err error) {
@@ -33,12 +38,28 @@ func (d *MemoryDeps) reportCgroupReadFailure(err error) {
 		readErr = &cgroupReadError{Outcome: readFailed, Err: err}
 	}
 
-	key := reportedRead{file: readErr.File, outcome: readErr.Outcome}
-	if _, reportedBefore := d.reportedReads.LoadOrStore(key, struct{}{}); reportedBefore {
+	d.reportOnce(reportedFailure{source: readErr.File, outcome: string(readErr.Outcome)},
+		cgroupReadFailedTag+"::"+string(readErr.Outcome),
+		deps.String("file", readErr.File), deps.String("cgroup_base", cgroupBase), deps.Err(readErr.Err))
+}
+
+func (d *MemoryDeps) reportHostReadFailure(ctx context.Context, err error) {
+	if ctx.Err() != nil {
 		return
 	}
 
-	d.GetLogger().SentryWarn(deps.FeatureSupportMemory, d.GetHierarchyPath(),
-		cgroupReadFailedTag+"::"+string(readErr.Outcome),
-		deps.String("file", readErr.File), deps.String("cgroup_base", cgroupBase), deps.Err(readErr.Err))
+	d.reportOnce(reportedFailure{source: "host", outcome: string(readFailed)}, hostReadFailedTag, deps.Err(err))
+}
+
+func (d *MemoryDeps) reportZeroTotal(source MemorySource) {
+	d.reportOnce(reportedFailure{source: string(source), outcome: "zero_total"}, zeroTotalTag,
+		deps.String("source", string(source)))
+}
+
+func (d *MemoryDeps) reportOnce(key reportedFailure, message string, fields ...deps.Field) {
+	if _, reportedBefore := d.reportedFailures.LoadOrStore(key, struct{}{}); reportedBefore {
+		return
+	}
+
+	d.GetLogger().SentryWarn(deps.FeatureSupportMemory, d.GetHierarchyPath(), message, fields...)
 }
