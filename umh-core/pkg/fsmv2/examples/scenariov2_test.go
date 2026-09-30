@@ -236,6 +236,86 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the failed run must not replace or clear the already-published registry")
 	})
 
+	It("prints the store dump when a v2 scenario's Run fails", func() {
+		logBuf := &v2LogBuffer{}
+		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
+		store := examples.SetupStore(logger)
+
+		failing := examples.ScenarioV2{
+			Name:        "dump-after-failure",
+			Description: "test-local Run that creates a worker and then fails",
+			Run: func(ctx context.Context, env examples.Env) error {
+				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "dump-failed-hello"}
+
+				env.Step("create a helloworld child")
+
+				if err := env.Client.Upsert(ref, map[string]any{"state": "running"}); err != nil {
+					return err
+				}
+
+				if err := env.WaitFor(ctx, "the helloworld child reaches Running",
+					func(ctx context.Context) (bool, string, error) {
+						obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
+						if err != nil {
+							if errors.Is(err, fsmv2client.ErrNotObserved) {
+								return false, "the child has not published an observation yet", nil
+							}
+
+							return false, "", err
+						}
+
+						return obs.State == "Running", "state=" + obs.State, nil
+					}); err != nil {
+					return err
+				}
+
+				return errors.New("scenario gave up")
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		origStdout := os.Stdout
+		reader, writer, err := os.Pipe()
+		Expect(err).NotTo(HaveOccurred())
+
+		var out bytes.Buffer
+		drainDone := make(chan struct{})
+		go func() {
+			defer close(drainDone)
+			_, _ = io.Copy(&out, reader)
+		}()
+
+		DeferCleanup(func() {
+			os.Stdout = origStdout
+			_ = writer.Close()
+			_ = reader.Close()
+		})
+
+		os.Stdout = writer
+
+		// A failed Run tears down before examples.Run returns, so the dump
+		// is complete when the call returns.
+		_, err = examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   failing,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+			DumpStore:    true,
+		})
+		Expect(err).To(MatchError(ContainSubstring("scenario gave up")))
+
+		os.Stdout = origStdout
+		Expect(writer.Close()).To(Succeed())
+		Eventually(drainDone, "5s").Should(BeClosed())
+
+		Expect(out.String()).To(ContainSubstring("CSE SCENARIO DUMP"),
+			"a failed run must still print the store dump, because that is when it is most needed")
+		Expect(out.String()).To(ContainSubstring("dump-failed-hello"),
+			"the dump must list the worker the scenario created before it failed")
+	})
+
 	It("prints the store dump after a v2 scenario run", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
