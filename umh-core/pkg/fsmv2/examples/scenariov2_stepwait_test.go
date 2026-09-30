@@ -188,6 +188,67 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		Expect(result).To(BeNil())
 	})
 
+	It("lets a goroutine the scenario starts call Step while Run waits", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		var polls atomic.Int32
+
+		concurrent := examples.ScenarioV2{
+			Name:        "step-from-goroutine",
+			Description: "test-local Run that calls Step from a second goroutine",
+			Run: func(ctx context.Context, env examples.Env) error {
+				stop := make(chan struct{})
+				stopped := make(chan struct{})
+
+				go func() {
+					defer close(stopped)
+
+					for {
+						select {
+						case <-stop:
+							return
+						default:
+							env.Step("background step")
+						}
+					}
+				}()
+
+				// The poll errors on its fifth call, so WaitFor reads the last
+				// step while the goroutine is still writing it. The race
+				// detector fails the spec if that read is not synchronised.
+				err := env.WaitFor(ctx, "background steps ran",
+					func(_ context.Context) (bool, string, error) {
+						if polls.Add(1) < 5 {
+							return false, "", nil
+						}
+
+						return false, "", errors.New("poll gave up")
+					})
+
+				close(stop)
+				<-stopped
+
+				return err
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   concurrent,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("background step"),
+			"the failed wait must name the step the goroutine announced")
+	})
+
 	It("returns nil from a wait whose check reports done on its third poll", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
