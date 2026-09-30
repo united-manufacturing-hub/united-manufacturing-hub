@@ -266,7 +266,7 @@ var _ = Describe("Poll on a connection fault", func() {
 			SSLMode: config.HistorianSSLModeDisable,
 		}}
 
-		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
 		dsn := cfg.WithDefaults().Timescale.ToDSN()
 		d.summary = &readCache[timescalemetrics.Summary]{
 			interval: time.Minute,
