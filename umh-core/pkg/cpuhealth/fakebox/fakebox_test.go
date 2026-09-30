@@ -199,9 +199,9 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		// wrong by 2x either side of it. 100ms is left out because it panics at
 		// this Throttle; the panic spec's last case covers it.
 		//
-		// 250ms and 1.5s are here because 500ms, 1s and 2s are all whole
-		// multiples of 100ms and cannot tell a box that quietly rounded ticks
-		// to a tenth of a second from one that did not.
+		// 250ms is here because 500ms, 1s, 1.5s and 2s are all whole multiples
+		// of 100ms. None of them can tell a box that quietly rounded ticks to a
+		// tenth of a second from one that did not.
 		cond := fakebox.Condition{
 			Cores:       4,
 			QuotaCores:  2,

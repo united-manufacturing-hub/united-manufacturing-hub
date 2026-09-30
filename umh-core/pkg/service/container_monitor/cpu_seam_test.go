@@ -1623,8 +1623,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 // reachable through GetStatus too, but only with a published fsmv2 client and a
 // staged store.
 var _ = Describe("the CPU seam's judgement, called without a client", func() {
-	// The window the stale message quotes, derived the way production derives
-	// it, so a change to the worker's poll interval moves both together.
+	// The window the stale message quotes: the constant production passes to
+	// GetFresh.
 	maxAge := fsmv2cpu.MaxObservationAge
 
 	It("keeps the store's own error in the message of a failed read", func() {

@@ -29,7 +29,8 @@ import (
 const (
 	// cpuPressureBase is where the fake machine serves its cgroup files. It
 	// must equal the unexported cgroupBase in pkg/fsmv2/cpu. Nothing checks
-	// that, and a mismatch makes every read fail.
+	// that, and a mismatch makes every cgroup read fail, while the /proc files
+	// still read.
 	cpuPressureBase = "/sys/fs/cgroup"
 
 	// cpuPressureCalm is one point under 0.20, the pressure at which the
@@ -60,10 +61,11 @@ const (
 	//
 	// tickingBox locks per file, so a tick can land between the sampler's
 	// stamp and its counter reads. It adds counters the stamp does not cover,
-	// and that one reading overstates its rate by tick over poll. At a tenth, host busy reads 2.64 against a stated 2.4 and
-	// headroom bottoms out at 0.36, still clear of the mark at 0, and a
-	// 60-second mean damps even that. At a tick equal to the poll it reads
-	// 4.80, headroom is -1.80, and the machine is reported full.
+	// and that one reading overstates its rate by tick over poll. At a tenth,
+	// host busy reads 2.64 against a stated 2.4 and headroom bottoms out at
+	// 0.36, still clear of the mark at 0, and a 60-second mean damps even
+	// that. At a tick equal to the poll it reads 4.80, headroom is -1.80, and
+	// the machine is reported full.
 	//
 	// So a scenario parking a signal near its mark has to check this ratio
 	// against its own margin rather than inherit the number.
