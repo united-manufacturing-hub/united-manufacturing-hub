@@ -281,9 +281,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		var out bytes.Buffer
+
 		drainDone := make(chan struct{})
 		go func() {
 			defer close(drainDone)
+
 			_, _ = io.Copy(&out, reader)
 		}()
 
@@ -307,6 +309,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(err).To(MatchError(ContainSubstring("scenario gave up")))
 
 		os.Stdout = origStdout
+
 		Expect(writer.Close()).To(Succeed())
 		Eventually(drainDone, "5s").Should(BeClosed())
 
@@ -362,9 +365,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// dump larger than the OS pipe buffer would otherwise block the
 		// teardown goroutine's print, so Done would never close.
 		var out bytes.Buffer
+
 		drainDone := make(chan struct{})
 		go func() {
 			defer close(drainDone)
+
 			_, _ = io.Copy(&out, reader)
 		}()
 
@@ -393,6 +398,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		// Closing the write end makes the drain goroutine see EOF and finish.
 		os.Stdout = origStdout
+
 		Expect(writer.Close()).To(Succeed())
 		Eventually(drainDone, "5s").Should(BeClosed())
 
@@ -400,7 +406,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"runV2 must print the store dump when DumpStore is set")
 		Expect(out.String()).To(ContainSubstring("dump-hello"),
 			"the dump must list the worker the scenario created")
-		Expect(result.Err).To(BeNil(),
+		Expect(result.Err).NotTo(HaveOccurred(),
 			"a clean dump run must not report a failure")
 		// Every v2 run logs v2_run_teardown_starting during teardown. This
 		// positive control makes an empty or malformed log capture fail the
