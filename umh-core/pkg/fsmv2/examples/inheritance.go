@@ -26,22 +26,23 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// InheritanceScenarioV2 shows variables flowing from the registry down to a
-// grandchild. The registry's variables reach the parent, the parent passes
-// them on to its children, and each child adds its own DEVICE_ID. Each
-// child's observation reports the address and device it rendered, so the
-// waits prove the values travelled the whole way. The scenario ends when both
-// children are Connected and the parent is Running with both children healthy.
+// InheritanceScenarioV2 shows variables flowing from the application down to
+// the children of an exampleparent. The variables set through
+// env.Client.SetVariables reach the parent. The parent passes them on to its
+// children and gives each child its own DEVICE_ID. Each child's observation
+// reports the address and device it rendered, so the waits prove the values
+// travelled the whole way. The scenario ends when both children are Connected
+// and the parent is Running with both children healthy.
 var InheritanceScenarioV2 = ScenarioV2{
 	Name:        "inheritance",
-	Description: "The registry's variables reach an application child and its grandchildren; each grandchild adds its own DEVICE_ID",
+	Description: "The application's variables reach an exampleparent and its two children; the parent gives each child its own DEVICE_ID",
 
 	Run: func(ctx context.Context, env Env) error {
 		env.Step("set the user variables IP and PORT for every application child")
 
-		// The variables come before the upsert so a child built without IP
-		// never renders: it would fail its template in strict mode, and the
-		// logged error would fail the run.
+		// The variables are set before the upsert, so no child is ever built
+		// without IP. A child without IP would fail its template in strict
+		// mode, and the logged error would fail the run.
 		env.Client.SetVariables(config.VariableBundle{
 			User: map[string]any{
 				"IP":   "192.168.1.100",
