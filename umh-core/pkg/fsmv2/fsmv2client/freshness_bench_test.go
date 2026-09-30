@@ -39,8 +39,7 @@ var freshBenchRef = dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "be
 const freshBenchMaxAge = 10 * time.Second
 
 // stageFreshObservation stages a fresh observation in the stub reader and
-// returns a client ready for GetFresh calls. GetFresh does not read the Upsert
-// list, so the ref is not Upserted.
+// returns a client ready for GetFresh calls.
 func stageFreshObservation(b *testing.B) *fsmv2client.FSMv2Client {
 	b.Helper()
 
@@ -140,11 +139,9 @@ func TestContains_ZeroAllocs(t *testing.T) {
 //
 //   - 1 alloc: the Observation[TStatus] in Get escapes to the heap because its
 //     address is passed through the StateReader interface (the compiler cannot
-//     devirtualize a virtual call, so &obs escapes). Fixable only by making
-//     StateReader a concrete type, which is outside this PR's scope.
+//     devirtualize a virtual call, so &obs escapes).
 //   - 1 alloc: config.ChildID(ref.Name) concatenates name+"-001", allocating
-//     the result string. Fixable only by changing the child-id format, which
-//     is outside this PR's scope.
+//     the result string.
 //
 // The benchmark sink is typed (not any) so it adds zero harness
 // allocs — the gate measures the real production floor. Bump the threshold

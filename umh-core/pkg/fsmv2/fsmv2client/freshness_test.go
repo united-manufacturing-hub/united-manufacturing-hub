@@ -30,15 +30,15 @@ import (
 )
 
 // testStatus is the typed child status GetFresh is parameterized over in these
-// cases. Its contents are irrelevant to the reason mapping; only CollectedAt
-// and the store's presence/absence drive the result.
+// cases. Its contents do not affect the Freshness value; CollectedAt,
+// DeletedAt and whether anything is stored do.
 type testStatus struct {
 	V string
 }
 
-// stubStateReader is a tiny deps.StateReader the test drives to return either
-// persistence.ErrNotFound (child never observed) or a populated Observation
-// whose CollectedAt the case chooses.
+// stubStateReader is a tiny deps.StateReader the test drives to return an
+// error (persistence.ErrNotFound or another) or a populated Observation whose
+// CollectedAt and DeletedAt the case chooses.
 type stubStateReader struct {
 	obs *fsmv2.Observation[testStatus]
 	err error
@@ -65,9 +65,8 @@ func (s *stubStateReader) LoadObservedTyped(_ context.Context, _, _ string, resu
 
 // TestGetFresh_MapsChildObservationToReason asserts GetFresh maps each read
 // result to its Freshness value. It returns the whole observation for Fresh
-// and Stale and the zero observation otherwise. No case Upserts the ref:
-// GetFresh reads the store only, so a worker that another worker started
-// (never Upserted) is classified like any other.
+// and Stale and the zero observation otherwise. No case Upserts the ref, so
+// the Fresh case stands for a worker that another worker started.
 func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 	const maxAge = 10 * time.Second
 
@@ -184,6 +183,26 @@ func TestGetFresh_UnknownReturnsTheZeroObservation(t *testing.T) {
 
 	if obs.Status != (testStatus{}) || !obs.CollectedAt.IsZero() {
 		t.Fatalf("GetFresh observation = %+v, want the zero observation", obs)
+	}
+}
+
+// TestGet_ErrorReturnsTheZeroObservation asserts Get never returns the part
+// of an observation a failed read left behind.
+func TestGet_ErrorReturnsTheZeroObservation(t *testing.T) {
+	ref := dynamicchildren.Ref{WorkerType: "transport", Name: "transport"}
+	partial := fsmv2.Observation[testStatus]{CollectedAt: time.Now(), Status: testStatus{V: "partial"}}
+
+	for _, readErr := range []error{errors.New("decode failed half-way"), persistence.ErrNotFound} {
+		client := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), &partialDecodeReader{obs: partial, err: readErr})
+
+		obs, err := fsmv2client.Get[testStatus](context.Background(), client, ref)
+		if err == nil {
+			t.Fatalf("Get with read error %v returned nil error", readErr)
+		}
+
+		if obs.Status != (testStatus{}) || !obs.CollectedAt.IsZero() {
+			t.Fatalf("Get with read error %v returned observation %+v, want the zero observation", readErr, obs)
+		}
 	}
 }
 

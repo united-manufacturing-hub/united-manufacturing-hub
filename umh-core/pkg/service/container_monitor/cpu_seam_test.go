@@ -1199,9 +1199,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			setFlag("true")
 			// The stored observation carries a removal time, so GetFresh
 			// reports Deleted and returns the zero observation. The staged
-			// verdict is one the worker path would serve as degraded, so a
-			// seam that still judged a removed worker's last observation fails
-			// these assertions.
+			// verdict is Degraded, so these assertions fail if the seam still
+			// uses a removed worker's last observation.
 			deletedAt := time.Now().Add(-time.Second)
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
@@ -1219,8 +1218,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// A removed worker is reported as an absence, not papered over. The
-			// message names the removal, so this branch cannot collapse into
+			// A removed worker is reported as an absence. The message names the
+			// removal, so this branch cannot collapse into
 			// never-observed, and it is neither the staged worker verdict nor
 			// anything getCPUMetrics could emit.
 			Expect(status.CPUHealth).To(Equal(models.Degraded))

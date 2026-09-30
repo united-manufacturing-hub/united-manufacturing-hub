@@ -63,6 +63,8 @@ func CommunicatorFromFSMv2(ctx context.Context, log *zap.SugaredLogger, subscrib
 
 	transport, freshness, err := fsmv2client.GetFresh[transportsnapshot.TransportStatus](ctx, client, transportRef, transportMaxAge)
 
+	unknown := &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
+
 	switch freshness {
 	case fsmv2client.Fresh:
 		result = CommunicatorFromObservations(
@@ -75,13 +77,13 @@ func CommunicatorFromFSMv2(ctx context.Context, log *zap.SugaredLogger, subscrib
 	case fsmv2client.Unknown:
 		log.Warnw("communicator status: failed to read transport observed state", "error", err)
 
-		result = &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
+		result = unknown
 	case fsmv2client.Deleted, fsmv2client.NotFound:
-		result = &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
+		result = unknown
 	default:
 		log.Warnw("communicator status: unexpected transport freshness", "freshness", freshness)
 
-		result = &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
+		result = unknown
 	}
 
 	result.SubscriberCount = subscriberCount

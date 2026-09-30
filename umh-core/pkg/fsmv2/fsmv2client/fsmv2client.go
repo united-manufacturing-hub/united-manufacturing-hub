@@ -62,7 +62,7 @@ var ErrNotFound = errors.New("fsmv2client: nothing stored for ref")
 var ErrWorkerDeleted = errors.New("fsmv2client: worker was removed")
 
 // WorkerDeletedError is the error Get returns for a removed worker. It carries
-// when the supervisor removed it.
+// the time the supervisor removed the worker.
 type WorkerDeletedError struct {
 	Ref       dynamicchildren.Ref
 	DeletedAt time.Time
@@ -132,10 +132,10 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 
 	if err := c.sr.LoadObservedTyped(ctx, ref.WorkerType, config.ChildID(ref.Name), &obs); err != nil {
 		if errors.Is(err, persistence.ErrNotFound) {
-			return obs, fmt.Errorf("%w: %s/%s", ErrNotFound, ref.WorkerType, config.ChildID(ref.Name))
+			return fsmv2.Observation[TStatus]{}, fmt.Errorf("%w: %s/%s", ErrNotFound, ref.WorkerType, config.ChildID(ref.Name))
 		}
 
-		return obs, err
+		return fsmv2.Observation[TStatus]{}, err
 	}
 
 	if obs.DeletedAt != nil {
@@ -145,17 +145,17 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 	return obs, nil
 }
 
-// Freshness says what GetFresh found for a ref. GetFresh checks the values in
-// the order listed here, and the first that applies wins.
+// Freshness says what GetFresh found for a ref. Exactly one value applies to
+// each read.
 type Freshness int
 
 const (
-	// Unknown means the read failed, so nothing can be decided. GetFresh
+	// Unknown means the read failed for a reason other than Deleted or
+	// NotFound, so nothing can be decided. GetFresh
 	// returns the error alongside. It is the zero value, so an unclassified
 	// result never reads as healthy.
 	Unknown Freshness = iota
-	// Deleted means the supervisor removed the worker. The store keeps its
-	// last observation as history, but GetFresh does not return it.
+	// Deleted means the supervisor removed the worker (see ErrWorkerDeleted).
 	Deleted
 	// NotFound means nothing is stored for the ref: the worker has not started
 	// yet, or the ref names no worker.
@@ -168,7 +168,9 @@ const (
 )
 
 // freshnessAt classifies a Get result, with the clock as a parameter so tests
-// can pin the age boundary. It returns the error only for Unknown.
+// can pin the age boundary. It returns the error only for Unknown. A removed
+// worker and a missing ref come back from Get as errors too, so they are
+// checked before any other error.
 func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge time.Duration, now time.Time) (Freshness, error) {
 	switch {
 	case errors.Is(err, ErrWorkerDeleted):
@@ -189,8 +191,7 @@ func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge 
 // observation only for Fresh and Stale, and the zero observation otherwise.
 // It returns a non-nil error only with Unknown.
 //
-// GetFresh reads the store only. It does not check whether the ref was
-// Upserted, so it works for static workers too (see the package doc).
+// Like Get, it works for static workers too (see the package doc).
 //
 // Between Delete and the supervisor removing the worker, the worker still
 // runs for a few ticks. In that window GetFresh classifies its latest

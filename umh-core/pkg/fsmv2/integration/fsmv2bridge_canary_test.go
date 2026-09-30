@@ -122,8 +122,8 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		}, "5s", "100ms").Should(BeTrue(),
 			"after Delete, the child must be fully reaped from the supervisor before respawn")
 
-		// Phase 3(a): the reaped child's documents stay in the store, marked as
-		// removed. GetFresh reports Deleted and returns no observation.
+		// Phase 3(a): GetFresh reports the reaped child as Deleted and returns no
+		// observation.
 		deletedObs, deletedFresh, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(deletedFresh).To(Equal(fsmv2client.Deleted),
@@ -148,8 +148,8 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 			"immediately after re-Upsert (pre-tick), GetFresh must still report Deleted")
 
 		// Phase 3(d): after ticking, the respawned child collects a fresh
-		// observation and GetFresh reports Fresh with the NEW mood. On no read
-		// in between may GetFresh serve the old child's mood.
+		// observation and GetFresh reports Fresh with the NEW mood. GetFresh must
+		// never return the old mood on a read in between.
 		servedOldMood := false
 
 		Eventually(func() bool {
