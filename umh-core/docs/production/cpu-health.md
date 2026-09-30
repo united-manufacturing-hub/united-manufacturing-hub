@@ -119,8 +119,8 @@ minute and look again.
 
 If the file is still missing, run `cat /proc/pressure/cpu` on the host. Output means PSI is on and
 cgroup v2 is what is missing. `No such file or directory` means the kernel ignored `psi=1`, which
-happens on a kernel built without PSI. Setting a CPU limit on the container needs no kernel change:
-UMH then judges the container against its limit, and pressure stays unavailable.
+happens on a kernel built without PSI. If the kernel has no PSI, set a CPU limit on the container
+instead. UMH then judges the container against its limit, and pressure stays unavailable.
 
 ## When UMH refuses a new bridge
 
