@@ -30,11 +30,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
 // v2LogBuffer is a goroutine-safe buffer for capturing JSON log output in
@@ -456,6 +458,69 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		Expect(result.ShutdownClean).To(BeTrue(),
 			"a clean v2 run must report ShutdownClean=true, proving the field is wired to the supervisor's drain outcome")
+	})
+
+	It("reports ShutdownClean=false when a v2 run's drain budget is exhausted", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		// A real worker must be resident when teardown starts, so the drain
+		// has a worker it cannot reap within its budget.
+		degradedDrain := examples.ScenarioV2{
+			Name:        "degraded-drain",
+			Description: "test-local Run for the exhausted drain budget",
+			// A 1ns budget cannot reap even one worker within a tick, so the
+			// drain warns graceful_shutdown_timeout. The v2 teardown puts that
+			// warning into RunResult.Err, and this spec asserts only the drain
+			// outcome, so the scenario declares the warning here.
+			ExpectedWarnings: []string{
+				"graceful_shutdown_timeout",
+				"graceful_shutdown_budget_exhausted",
+			},
+			Run: func(ctx context.Context, env examples.Env) error {
+				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
+
+				env.Step("create a helloworld child")
+
+				if err := env.Client.Upsert(ref, map[string]any{"state": "running"}); err != nil {
+					return err
+				}
+
+				return env.WaitFor(ctx, "the helloworld child reaches Running",
+					func(ctx context.Context) (bool, string, error) {
+						obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
+						if err != nil {
+							if errors.Is(err, fsmv2client.ErrNotObserved) {
+								return false, "the child has not published an observation yet", nil
+							}
+
+							return false, "", err
+						}
+
+						return obs.State == "Running", "state=" + obs.State, nil
+					})
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   degradedDrain,
+			Duration:     time.Second,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+
+			GracefulShutdownTimeout: time.Nanosecond,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(result.Done, "55s").Should(BeClosed())
+
+		Expect(result.ShutdownClean).To(BeFalse(),
+			"a v2 run whose graceful drain budget is exhausted must report ShutdownClean=false")
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"the drain warnings are in ExpectedWarnings, so they must not fail the run")
 	})
 
 	It("tears down and clears the deps key when Run fails", func() {
