@@ -15,8 +15,6 @@
 package transport
 
 import (
-	"sync"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
@@ -29,35 +27,10 @@ type ChannelProvider interface {
 	GetInboundStats(workerID string) (capacity int, length int)
 }
 
+// channelProviderKeyName is the dependency-map name the transport worker reads
+// its ChannelProvider under.
+const channelProviderKeyName = "transport.channel_provider"
+
 // ChannelProviderKey holds the ChannelProvider a TransportWorker gets its
-// channels from. Without one in the map, the worker uses the global provider.
-var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("transport.channel_provider")
-
-var (
-	globalChannelProvider ChannelProvider
-	channelProviderMu     sync.RWMutex
-)
-
-// SetChannelProvider sets the global channel provider.
-func SetChannelProvider(p ChannelProvider) {
-	channelProviderMu.Lock()
-	defer channelProviderMu.Unlock()
-
-	globalChannelProvider = p
-}
-
-// GetChannelProvider returns the current channel provider, or nil if not set.
-func GetChannelProvider() ChannelProvider {
-	channelProviderMu.RLock()
-	defer channelProviderMu.RUnlock()
-
-	return globalChannelProvider
-}
-
-// ClearChannelProvider removes the channel provider (for test cleanup).
-func ClearChannelProvider() {
-	channelProviderMu.Lock()
-	defer channelProviderMu.Unlock()
-
-	globalChannelProvider = nil
-}
+// channels from. The dependency map must carry it; cmd/main.go puts it there.
+var ChannelProviderKey = config.NewDependencyKey[ChannelProvider](channelProviderKeyName)
