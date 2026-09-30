@@ -23,6 +23,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -111,13 +112,12 @@ type IProtocolConverterService interface {
 	// This is used internally for both initial startup and config change re-evaluation.
 	EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string, currentFSMState string, readDFCDesiredState string, writeDFCDesiredState string) error
 
-	// IsResourceLimited checks if the system is at resource limits based on container health
-	// and current bridge count.
+	// IsResourceLimited decides whether the bridge named bridgeName may be created.
 	//
 	// It returns:
-	//    limited – true when resources are limited and bridge creation should be blocked, false otherwise.
-	//    reason  – empty when limited is false; otherwise a short explanation of why resources are limited.
-	IsResourceLimited(snapshot fsm.SystemSnapshot) (bool, string)
+	//    limited – true when the bridge must wait, false otherwise.
+	//    reason  – empty when limited is false; otherwise the refusal reason and how to start bridges anyway.
+	IsResourceLimited(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string)
 }
 
 // ServiceInfo holds information about the ProtocolConverters underlying health states.
@@ -1169,167 +1169,169 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 	return nil
 }
 
-// IsResourceLimited checks if the system is at resource limits based on container health
-// and current bridge count.
+// IsResourceLimited decides whether the bridge named bridgeName may be created.
 //
-// It returns:
+// It gathers the container's resource health, the bridges that already hold a
+// place and the CPU core count from the snapshot, and lets bridgeadmission.Decide
+// answer. It returns:
 //
-//	limited – true when resources are limited and bridge creation should be blocked, false otherwise.
-//	reason  – empty when limited is false; otherwise a short explanation of why resources are limited.
-func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot) (bool, string) {
-	// Check if feature flag is enabled
-	if !snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking {
-		// Feature flag is disabled, don't block bridge creation
-		return false, ""
+//	limited – true when the bridge must wait, false otherwise.
+//	reason  – empty when limited is false; otherwise the refusal reason and how to start bridges anyway.
+func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
+	in := bridgeadmission.Input{
+		BlockingEnabled: snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking,
+		HostCores:       runtime.NumCPU(),
+	}
+	in.CPU, in.Memory, in.Disk, in.CapacityCores = admissionResources(snapshot)
+	in.Admitted, in.WaitingAhead = p.countBridges(snapshot, bridgeName)
+
+	d := bridgeadmission.Decide(in)
+	if d.Limit != nil {
+		p.logger.Debugf("IsResourceLimited: max bridges=%d (1 core reserved for Redpanda), admitted=%d, waiting ahead=%d, candidate %s admitted=%v",
+			*d.Limit, in.Admitted, in.WaitingAhead, bridgeName, d.Admit)
 	}
 
-	// Check if container resources are degraded
+	return !d.Admit, d.Message()
+}
+
+// admissionResources reads the health of CPU, memory and disk, and the CPU
+// limit, from the container instance in the snapshot. A resource nobody has
+// shown healthy is Unknown, and Unknown refuses.
+func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgeadmission.Resource, capacityCores *float64) {
+	unknown := func(message string) bridgeadmission.Resource {
+		return bridgeadmission.Resource{Health: bridgeadmission.Unknown, Message: message}
+	}
+
 	containerManager, managerExists := fsm.FindManager(snapshot, constants.ContainerManagerName)
 	if !managerExists {
-		// If container manager doesn't exist, err on the side of caution and block
-		return true, "Container monitor not available"
+		r := unknown("container monitor not available")
+
+		return r, r, r, nil
 	}
 
-	containerInstance, instanceExists := containerManager.GetInstances()[constants.CoreInstanceName]
+	instance, instanceExists := containerManager.GetInstances()[constants.CoreInstanceName]
 	if !instanceExists {
-		// If Core instance doesn't exist, err on the side of caution and block
-		return true, "Container health status unavailable"
+		r := unknown("container health status unavailable")
+
+		return r, r, r, nil
 	}
 
-	// Check individual resource health before the container's own state, so
-	// that a refusal names its cause. A degraded resource also degrades the
-	// container, so the state check would otherwise match first and the
-	// refusal would read only "System in degraded state".
-	if containerInstance.LastObservedState != nil {
-		if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			serviceInfo := &containerObserved.ServiceInfoSnapshot
+	observed, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot)
+	if !ok || observed == nil {
+		r := unknown("no health reading yet")
 
-			// Check if ANY resource is degraded
-			// We check individual resources first to provide specific feedback
-			if serviceInfo.CPUHealth == models.Degraded {
-				// Use the health message if available from the CPU metrics
-				if serviceInfo.CPU != nil && serviceInfo.CPU.Health != nil && serviceInfo.CPU.Health.Message != "" {
-					return true, "CPU degraded: " + serviceInfo.CPU.Health.Message
-				}
+		return r, r, r, nil
+	}
 
-				return true, "CPU resources degraded"
+	serviceInfo := observed.ServiceInfoSnapshot
+
+	// A resource is healthy only once a reading said so and the container
+	// finished starting. Neutral is the zero value before the first reading.
+	classify := func(category models.HealthCategory, health *models.Health) bridgeadmission.Resource {
+		switch category {
+		case models.Degraded:
+			message := ""
+			if health != nil {
+				message = health.Message
 			}
 
-			if serviceInfo.MemoryHealth == models.Degraded {
-				// Use the health message if available from the Memory metrics
-				if serviceInfo.Memory != nil && serviceInfo.Memory.Health != nil && serviceInfo.Memory.Health.Message != "" {
-					return true, "Memory degraded: " + serviceInfo.Memory.Health.Message
-				}
-
-				return true, "Memory resources degraded"
+			return bridgeadmission.Resource{Health: bridgeadmission.Degraded, Message: message}
+		case models.Active:
+			if instance.CurrentState == "active" {
+				return bridgeadmission.Resource{Health: bridgeadmission.Healthy}
 			}
 
-			if serviceInfo.DiskHealth == models.Degraded {
-				// Use the health message if available from the Disk metrics
-				if serviceInfo.Disk != nil && serviceInfo.Disk.Health != nil && serviceInfo.Disk.Health.Message != "" {
-					return true, "Disk degraded: " + serviceInfo.Disk.Health.Message
-				}
-
-				return true, "Disk resources degraded"
-			}
-
-			// Also check for CPU throttling specifically with improved message
-			if serviceInfo.CPU != nil && serviceInfo.CPU.IsThrottled {
-				// Provide detailed throttling message as per ENG-3423
-				throttlePercent := serviceInfo.CPU.ThrottleRatio * 100
-				cgroupCores := serviceInfo.CPU.CgroupCores
-				hostCores := runtime.NumCPU()
-
-				// Base message explaining the impact
-				message := fmt.Sprintf("CPU throttled (%.0f%% of time). Container limited to %.1f cores, needs more during peaks (host has %d cores available)",
-					throttlePercent, cgroupCores, hostCores)
-
-				return true, message
-			}
-
-			// Check overall health as a fallback
-			if serviceInfo.OverallHealth == models.Degraded {
-				return true, "Overall system resources degraded"
-			}
+			return unknown(fmt.Sprintf("instance not active yet (state %s)", instance.CurrentState))
+		default:
+			return unknown("no health reading yet")
 		}
 	}
 
-	// Check if container FSM state is degraded (overall system state)
-	if containerInstance.CurrentState == "degraded" {
-		return true, "System in degraded state"
+	var cpuHealth, memoryHealth, diskHealth *models.Health
+	if serviceInfo.CPU != nil {
+		cpuHealth = serviceInfo.CPU.Health
 	}
 
-	// Check bridge count limits
+	if serviceInfo.Memory != nil {
+		memoryHealth = serviceInfo.Memory.Health
+	}
+
+	if serviceInfo.Disk != nil {
+		diskHealth = serviceInfo.Disk.Health
+	}
+
+	cpu = classify(serviceInfo.CPUHealth, cpuHealth)
+	memory = classify(serviceInfo.MemoryHealth, memoryHealth)
+	disk = classify(serviceInfo.DiskHealth, diskHealth)
+
+	// USE_FSMV2_CPU decides where the core count is fetched from, because
+	// the worker and the legacy path do not fill the same field: with the
+	// flag on the CPU record carries only the fsmv2 evidence, and
+	// CgroupCores is empty. CapacityCores is the quota when one applies and
+	// the usable core count when none does, which is what this ceiling
+	// wants in both cases. It is absent on a tick the worker did not
+	// measure, and Decide falls back to the host core count.
+	if serviceInfo.CPU != nil {
+		if snapshot.CurrentConfig.Agent.UseFSMv2CPU {
+			if serviceInfo.CPU.CPUHealth != nil {
+				capacity := serviceInfo.CPU.CPUHealth.CapacityCores
+				capacityCores = &capacity
+			}
+		} else if serviceInfo.CPU.CgroupCores > 0 {
+			capacity := serviceInfo.CPU.CgroupCores
+			capacityCores = &capacity
+		}
+	}
+
+	return cpu, memory, disk, capacityCores
+}
+
+// countBridges counts the bridges that hold a place ahead of bridgeName:
+// those already past to_be_created, and those still waiting that config.yaml
+// lists before it. Bridges being removed and bridgeName itself are skipped.
+func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bridgeName string) (admitted, waitingAhead int) {
 	protocolConverterManager, exists := snapshot.Managers[constants.ProtocolConverterManagerName]
 	if !exists {
-		// If protocol converter manager doesn't exist, allow creation
-		return false, ""
+		return 0, 0
 	}
-
-	// Count active protocol converter instances
-	bridgeCount := 0
 
 	protocolConverterInstances := protocolConverterManager.GetInstances()
 	p.logger.Debugf("IsResourceLimited: Total protocol converter instances: %d", len(protocolConverterInstances))
 
+	// A candidate that is not in the config sorts after every bridge in it.
+	candidateIndex := len(snapshot.CurrentConfig.ProtocolConverter)
+	indexByName := make(map[string]int, candidateIndex)
+
+	for i, pcConfig := range snapshot.CurrentConfig.ProtocolConverter {
+		indexByName[pcConfig.Name] = i
+		if pcConfig.Name == bridgeName {
+			candidateIndex = i
+		}
+	}
+
 	for name, instance := range protocolConverterInstances {
-		// Count instances that are not in removal states
-		if instance.CurrentState != internalfsm.LifecycleStateRemoving && instance.CurrentState != internalfsm.LifecycleStateRemoved {
-			p.logger.Debugf("IsResourceLimited: Instance %s in state %s - counting towards limit", name, instance.CurrentState)
+		if name == bridgeName {
+			continue
+		}
 
-			bridgeCount++
-		} else {
+		if instance.CurrentState == internalfsm.LifecycleStateRemoving || instance.CurrentState == internalfsm.LifecycleStateRemoved {
 			p.logger.Debugf("IsResourceLimited: Instance %s in state %s - NOT counting", name, instance.CurrentState)
+
+			continue
 		}
-	}
 
-	// Get CPU core count and calculate max bridges.
-	// USE_FSMV2_CPU decides where the figure is fetched from, because the worker
-	// and the legacy path do not fill the same field: with the flag on the CPU
-	// record carries only the fsmv2 evidence, and CgroupCores is empty.
-	var cpuCores float64
-
-	if containerInstance.LastObservedState != nil {
-		if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			cpu := containerObserved.ServiceInfoSnapshot.CPU
-
-			switch {
-			case cpu == nil:
-			case snapshot.CurrentConfig.Agent.UseFSMv2CPU:
-				// CapacityCores is the quota when one applies and the usable
-				// core count when none does, which is what this ceiling wants
-				// in both cases. It is absent on a tick the worker did not
-				// measure, and the fallback below covers that.
-				if cpu.CPUHealth != nil {
-					cpuCores = cpu.CPUHealth.CapacityCores
-				}
-			case cpu.CgroupCores > 0:
-				cpuCores = cpu.CgroupCores
+		if instance.CurrentState == internalfsm.LifecycleStateToBeCreated {
+			if index, ok := indexByName[name]; ok && index < candidateIndex {
+				waitingAhead++
 			}
+
+			continue
 		}
+
+		p.logger.Debugf("IsResourceLimited: Instance %s in state %s - counting towards limit", name, instance.CurrentState)
+
+		admitted++
 	}
 
-	// Fall back to runtime.NumCPU if cgroup info not available
-	if cpuCores == 0 {
-		cpuCores = float64(runtime.NumCPU())
-	}
-
-	// Calculate max bridges based on available CPU
-	// Reserve 1 CPU core for Redpanda as per sizing guidelines
-	availableCoresForBridges := cpuCores - 1.0
-	if availableCoresForBridges < 0 {
-		availableCoresForBridges = 0
-	}
-
-	maxBridges := int(availableCoresForBridges * float64(constants.MaxBridgesPerCPUCore))
-	p.logger.Debugf("IsResourceLimited: Total CPU cores=%.1f, cores for bridges=%.1f (1 reserved for Redpanda), max bridges=%d, current bridges=%d",
-		cpuCores, availableCoresForBridges, maxBridges, bridgeCount)
-
-	if bridgeCount >= maxBridges {
-		// Clear message explaining the limit and what's reserved
-		return true, fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, 1 core reserved for Redpanda)",
-			maxBridges, cpuCores)
-	}
-
-	return false, ""
+	return admitted, waitingAhead
 }

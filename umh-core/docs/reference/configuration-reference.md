@@ -55,6 +55,7 @@ UMH Core supports both **direct YAML editing** and **Management Console UI** for
 | `communicator.apiUrl`           | `string`           | – (console-managed) | HTTPS endpoint of the Management Console.                                                      |
 | `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `AUTH_TOKEN` env-var.                            |
 | `communicator.allowInsecureTLS` | `bool`             | `false`             | Skip TLS verification, see [Network Configuration](../production/security/umh-core/network-configuration.md#tls-inspection-mitm). Can be set via `ALLOW_INSECURE_TLS` env-var. |
+| `enableResourceLimitBlocking`   | `bool`             | `true` for new installs; a missing key in an existing config.yaml reads as `false` | Whether resource health stops new bridges. See [Bridges Do Not Start](../production/bridges-do-not-start.md). Takes effect without a restart. |
 
 **Location levels**
 

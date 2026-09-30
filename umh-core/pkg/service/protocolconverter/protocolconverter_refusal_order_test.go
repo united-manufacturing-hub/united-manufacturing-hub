@@ -96,21 +96,21 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 							CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 						}
 
-						limited, reason := protocolconverter.NewDefaultProtocolConverterService("test").IsResourceLimited(snapshot)
+						limited, reason := protocolconverter.NewDefaultProtocolConverterService("test").IsResourceLimited(snapshot, "new-bridge")
 
 						Expect(limited).To(Equal(oldRefused(stateDegraded, cpu, mem, disk)),
 							"admission must be what the old order decided")
 
 						switch {
 						case cpu:
-							Expect(reason).To(Equal("CPU degraded: cpu is full"))
+							Expect(reason).To(HavePrefix("CPU degraded: cpu is full"))
 						case mem:
-							Expect(reason).To(Equal("Memory degraded: memory is full"))
+							Expect(reason).To(HavePrefix("Memory degraded: memory is full"))
 						case disk:
-							Expect(reason).To(Equal("Disk degraded: disk is full"))
+							Expect(reason).To(HavePrefix("Disk degraded: disk is full"))
 						case stateDegraded:
-							Expect(reason).To(Equal("System in degraded state"),
-								"with no resource degraded the container's own state is the only cause left to name")
+							Expect(reason).To(HavePrefix("Resource health not proven yet"),
+								"with no resource degraded the unproven health is the only cause left to name")
 						default:
 							Expect(reason).To(BeEmpty())
 						}
@@ -120,10 +120,10 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 		}
 	}
 
-	// The branches below the three resource checks: throttling, the overall
-	// health, and a degraded resource that carries no message. Each is staged
-	// with the container's own state degraded, the case where the state check
-	// used to answer first, and each must still name its own cause.
+	// The branches below the three resource checks: a degraded resource that
+	// carries no message. Each is staged with the container's own state
+	// degraded, the case where the state check used to answer first, and each
+	// must still name its own cause.
 	DescribeTable("names the cause below the resource checks, with the container's state degraded",
 		func(info container_monitor.ServiceInfo, reason string) {
 			snapshot := pkgfsm.SystemSnapshot{
@@ -142,22 +142,11 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 				CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 			}
 
-			limited, got := protocolconverter.NewDefaultProtocolConverterService("test").IsResourceLimited(snapshot)
+			limited, got := protocolconverter.NewDefaultProtocolConverterService("test").IsResourceLimited(snapshot, "new-bridge")
 
 			Expect(limited).To(BeTrue(), "a degraded container state refused before the change, so it must still refuse")
 			Expect(got).To(HavePrefix(reason))
 		},
-		Entry("CPU throttled",
-			container_monitor.ServiceInfo{
-				OverallHealth: models.Active, CPUHealth: models.Active, MemoryHealth: models.Active, DiskHealth: models.Active,
-				CPU: &models.CPU{IsThrottled: true, ThrottleRatio: 0.3, CgroupCores: 2},
-			},
-			"CPU throttled (30% of time)"),
-		Entry("only the overall health degraded",
-			container_monitor.ServiceInfo{
-				OverallHealth: models.Degraded, CPUHealth: models.Active, MemoryHealth: models.Active, DiskHealth: models.Active,
-			},
-			"Overall system resources degraded"),
 		Entry("CPU degraded with an empty message",
 			container_monitor.ServiceInfo{
 				OverallHealth: models.Degraded, CPUHealth: models.Degraded, MemoryHealth: models.Active, DiskHealth: models.Active,

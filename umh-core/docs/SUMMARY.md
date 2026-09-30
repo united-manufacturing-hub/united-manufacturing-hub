@@ -61,6 +61,7 @@
       * [Updating](production/deployment/docker-compose/updating.md)
   * [Sizing Guide](production/sizing-guide.md)
   * [CPU Health](production/cpu-health.md)
+  * [Bridges Do Not Start](production/bridges-do-not-start.md)
   * [High Availability](production/high-availability.md)
   * [Metrics](production/metrics.md)
   * [Migration from Classic](production/migration-from-classic.md)

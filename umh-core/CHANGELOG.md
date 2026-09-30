@@ -9,7 +9,10 @@
 
 ### Improvements
 
-- A bridge refused because the instance is short of resources now says which resource and why, such as the CPU health message, instead of "System in degraded state". Which bridges are refused is unchanged
+- A bridge refused because the instance is short of resources now says which resource and why, such as the CPU health message, instead of "System in degraded state"
+- A refused bridge now says how to start bridges anyway, by setting agent.enableResourceLimitBlocking: false
+- Bridges now wait until the instance's resource health is proven, including bridges from config.yaml after a restart
+- The bridge limit now admits up to the limit instead of one less, and after a restart the first bridges in config.yaml order start up to the limit
 
 ### Fixes
 
