@@ -5,6 +5,7 @@
 ### Improvements
 
 - When a bridge's connection is down, the tooltip on the bridge's connection status now says why, for example that the DNS lookup timed out or the device refused the connection, and what to check
+- Routine start-up and restart messages from umh-core's internal components are now DEBUG instead of INFO, which makes state changes, warnings and errors easier to spot
 
 ### Fixes
 
@@ -57,7 +58,6 @@
 - The CPU status of an instance whose operating system does not report CPU pressure stats now links to instructions for switching them on
 - CPU health readings are now available on the `/metrics` endpoint as a preview, covering the instance's own usage, CPU pressure, throttling and how busy the machine is. Requires `USE_FSMV2_CPU=true` and `USE_FSMV2_TRANSPORT=true`
 - Removed stale documentation on using references within data models
-- Routine start-up and restart messages from umh-core's internal components are now DEBUG instead of INFO, which makes state changes, warnings and errors easier to spot
 
 ### Fixes
 
