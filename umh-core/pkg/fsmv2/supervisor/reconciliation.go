@@ -1123,7 +1123,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
 
-		// Record the removal in the worker's stored documents (see
+		// Stamp the tombstone into the worker's stored documents (see
 		// TriangularStoreInterface.MarkDeleted). Removal also runs during
 		// Shutdown, when ctx can already be cancelled, and the store rejects a
 		// cancelled context. So MarkDeleted gets a context without the
