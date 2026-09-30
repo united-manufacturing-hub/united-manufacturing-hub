@@ -15,12 +15,10 @@
 package health
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // FreshnessChecker validates observation data age against thresholds.
@@ -41,67 +39,6 @@ func NewFreshnessChecker(staleThreshold, timeout time.Duration, workerType strin
 	}
 }
 
-// extractTimestamp extracts the collection timestamp from snapshot.Observed.
-// Returns (timestamp, true) if extraction succeeds, (zero, false) otherwise.
-// Handles both GetTimestamp() interface and persistence.Document formats.
-//
-// NOTE: collected_at is a business field set by FSM v2 workers, not a CSE field.
-func (f *FreshnessChecker) extractTimestamp(snapshot *fsmv2.Snapshot) (time.Time, bool) {
-	if snapshot.Observed == nil {
-		return time.Time{}, false
-	}
-
-	// Prefer typed interface (returns struct's CollectedAt field)
-	if timestampProvider, ok := snapshot.Observed.(fsmv2.TimestampProvider); ok {
-		return timestampProvider.GetTimestamp(), true
-	}
-
-	// Fall back to Document lookup for raw document access
-	doc, ok := snapshot.Observed.(persistence.Document)
-	if !ok {
-		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_type_unknown",
-			deps.String("type", fmt.Sprintf("%T", snapshot.Observed)),
-			deps.String("action", "assuming_fresh"))
-
-		return time.Time{}, false
-	}
-
-	// Check collected_at field (JSON-serialized from struct's CollectedAt)
-	ts, exists := doc["collected_at"]
-	if !exists {
-		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_missing_timestamp",
-			deps.String("action", "assuming_fresh"))
-
-		return time.Time{}, false
-	}
-
-	switch v := ts.(type) {
-	case time.Time:
-		return v, true
-	case int64:
-		return time.UnixMilli(v), true
-	case float64:
-		return time.UnixMilli(int64(v)), true
-	case string:
-		collectedAt, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_invalid_timestamp",
-				deps.String("value", v),
-				deps.String("action", "assuming_fresh"))
-
-			return time.Time{}, false
-		}
-
-		return collectedAt, true
-	default:
-		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_unknown_timestamp_type",
-			deps.String("type", fmt.Sprintf("%T", v)),
-			deps.String("action", "assuming_fresh"))
-
-		return time.Time{}, false
-	}
-}
-
 // Check validates observation freshness.
 // Returns true if data is fresh.
 func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
@@ -109,12 +46,7 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 		return false
 	}
 
-	collectedAt, ok := f.extractTimestamp(snapshot)
-	if !ok {
-		return true
-	}
-
-	age := time.Since(collectedAt)
+	age := time.Since(snapshot.Observed.GetTimestamp())
 	isFresh := age < f.staleThreshold
 
 	if !isFresh {
@@ -130,11 +62,11 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 // IsTimeout checks if observation data has exceeded the timeout threshold.
 // Returns true if data is stale and requires collector restart.
 func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
-	collectedAt, ok := f.extractTimestamp(snapshot)
-	if !ok {
+	if snapshot.Observed == nil {
 		return false
 	}
 
+	collectedAt := snapshot.Observed.GetTimestamp()
 	age := time.Since(collectedAt)
 	isTimedOut := age >= f.timeout
 
