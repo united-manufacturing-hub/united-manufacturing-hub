@@ -161,8 +161,8 @@ func (ts *TriangularStore) saveWithDelta(
 		}
 	}
 
-	// A save never adds, changes or removes a tombstone, which is a non-nil
-	// _deleted_at with its _deleted_by. A collection can still be running
+	// A save never adds, changes or removes a tombstone (see FieldDeletedAt).
+	// A collection can still be running
 	// when its worker is removed, and its late save must not make the worker
 	// look alive again. So the stored tombstone is kept, and any tombstone
 	// the incoming document carries is dropped.

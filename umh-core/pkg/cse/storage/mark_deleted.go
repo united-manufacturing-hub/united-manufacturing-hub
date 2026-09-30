@@ -67,8 +67,7 @@ func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, i
 			return fmt.Errorf("failed to load %s for %s/%s: %w", role, workerType, id, err)
 		}
 
-		// A tombstone is a non-nil _deleted_at: a document that already
-		// carries one keeps the first tombstone.
+		// A document that already carries a tombstone keeps the first one.
 		if existing, ok := doc[FieldDeletedAt]; ok && existing != nil {
 			continue
 		}

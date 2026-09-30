@@ -483,7 +483,6 @@ var _ = Describe("Supervisor Lifecycle", func() {
 	})
 })
 
-// sentryWarnRecorder is an FSMLogger that records SentryWarn calls.
 // markDeletedHookStore runs beforeMarkDeleted once, just before it passes a
 // MarkDeleted call on to the store it wraps.
 type markDeletedHookStore struct {
@@ -501,6 +500,7 @@ func (h *markDeletedHookStore) MarkDeleted(ctx context.Context, workerType strin
 	return h.TriangularStoreInterface.MarkDeleted(ctx, workerType, id, deletedBy)
 }
 
+// sentryWarnRecorder is an FSMLogger that records SentryWarn calls.
 type sentryWarnRecorder struct {
 	mu       sync.Mutex
 	warnings []sentryWarn
