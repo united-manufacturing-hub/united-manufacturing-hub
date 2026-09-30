@@ -76,10 +76,10 @@ func (r warningRecorder) SentryWarn(feature deps.Feature, _ string, msg string, 
 
 var (
 	healthyWorkerMemory = fsmv2memory.MemoryStatus{
-		Source: fsmv2memory.SourceCgroup, UsedBytes: 500, TotalBytes: 1000, UsedPercent: 50, Message: "worker says normal",
+		Source: fsmv2memory.SourceCgroupLimit, UsedBytes: 500, TotalBytes: 1000, UsedPercent: 50, Message: "worker says normal",
 	}
 	criticalWorkerMemory = fsmv2memory.MemoryStatus{
-		Source: fsmv2memory.SourceCgroup, UsedBytes: 900, TotalBytes: 1000, UsedPercent: 90, Message: "worker says critical",
+		Source: fsmv2memory.SourceCgroupLimit, UsedBytes: 900, TotalBytes: 1000, UsedPercent: 90, Message: "worker says critical",
 	}
 )
 

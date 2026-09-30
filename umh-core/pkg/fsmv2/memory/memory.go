@@ -53,15 +53,15 @@ type MemoryConfig struct{}
 type MemorySource string
 
 const (
-	SourceCgroup MemorySource = "cgroup"
-	SourceHost   MemorySource = "host"
+	SourceCgroupLimit                  MemorySource = "cgroup_limit"
+	SourceHostTotalNoCgroupLimit       MemorySource = "host_total_no_cgroup_limit"
+	SourceHostFallbackCgroupUnreadable MemorySource = "host_fallback_cgroup_unreadable"
 )
 
 type MemoryStatus struct {
 	Source      MemorySource `json:"source"`
 	UsedBytes   int64        `json:"usedBytes"`
 	TotalBytes  int64        `json:"totalBytes"`
-	Unlimited   bool         `json:"unlimited"`
 	UsedPercent float64      `json:"usedPercent"`
 	Message     string       `json:"message"`
 }
@@ -126,7 +126,8 @@ func recordMetrics(recorder *deps.MetricsRecorder, sampledAt time.Time, status M
 	recorder.SetGauge(deps.GaugeMemoryUsedBytes, float64(status.UsedBytes))
 	recorder.SetGauge(deps.GaugeMemoryTotalBytes, float64(status.TotalBytes))
 	recorder.SetGauge(deps.GaugeMemoryUsedPercent, status.UsedPercent)
-	recorder.SetGaugeFlag(deps.GaugeMemorySourceIsCgroup, status.Source == SourceCgroup)
+	recorder.SetGaugeFlag(deps.GaugeMemoryUsedFromCgroup, status.Source != SourceHostFallbackCgroupUnreadable)
+	recorder.SetGaugeFlag(deps.GaugeMemoryTotalIsCgroupLimit, status.Source == SourceCgroupLimit)
 }
 
 func chooseSource(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory, cgroupErr error) (MemoryStatus, error) {
@@ -138,7 +139,7 @@ func chooseSource(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory, cgrou
 		return cgroupAgainstHostTotal(ctx, d, cgroup)
 	}
 
-	return MemoryStatus{Source: SourceCgroup, UsedBytes: cgroup.CurrentBytes, TotalBytes: cgroup.LimitBytes}, nil
+	return MemoryStatus{Source: SourceCgroupLimit, UsedBytes: cgroup.CurrentBytes, TotalBytes: cgroup.LimitBytes}, nil
 }
 
 func hostFallback(ctx context.Context, d *MemoryDeps, cgroupErr error) (MemoryStatus, error) {
@@ -147,7 +148,7 @@ func hostFallback(ctx context.Context, d *MemoryDeps, cgroupErr error) (MemorySt
 		return MemoryStatus{}, fmt.Errorf("cgroup memory is unreadable (%w) and host memory is unreadable: %w", cgroupErr, hostErr)
 	}
 
-	return MemoryStatus{Source: SourceHost, UsedBytes: int64(hostUsed), TotalBytes: int64(hostTotal)}, nil
+	return MemoryStatus{Source: SourceHostFallbackCgroupUnreadable, UsedBytes: int64(hostUsed), TotalBytes: int64(hostTotal)}, nil
 }
 
 func cgroupAgainstHostTotal(ctx context.Context, d *MemoryDeps, cgroup CgroupMemory) (MemoryStatus, error) {
@@ -156,12 +157,7 @@ func cgroupAgainstHostTotal(ctx context.Context, d *MemoryDeps, cgroup CgroupMem
 		return MemoryStatus{}, fmt.Errorf("cgroup memory has no limit and host memory is unreadable: %w", hostErr)
 	}
 
-	return MemoryStatus{
-		Source:     SourceCgroup,
-		UsedBytes:  cgroup.CurrentBytes,
-		TotalBytes: int64(hostTotal),
-		Unlimited:  cgroup.Unlimited,
-	}, nil
+	return MemoryStatus{Source: SourceHostTotalNoCgroupLimit, UsedBytes: cgroup.CurrentBytes, TotalBytes: int64(hostTotal)}, nil
 }
 
 func usedPercent(usedBytes, totalBytes int64) float64 {

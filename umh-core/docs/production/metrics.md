@@ -57,5 +57,6 @@ These gauges appear when the container is started with `-e USE_FSMV2_MEMORY_MONI
 | `memory_used_bytes` | the container's memory usage, in bytes |
 | `memory_total_bytes` | the limit that usage is judged against: the container's memory limit, or the machine's total memory when the container has none |
 | `memory_used_percent` | `memory_used_bytes` as a percentage of `memory_total_bytes` |
-| `memory_source_is_cgroup` | 1 when the reading came from the container's cgroup, 0 when the cgroup was unreadable and the machine's values were used |
+| `memory_used_from_cgroup` | 1 when `memory_used_bytes` is the container's own usage, 0 when the container's cgroup was unreadable and the machine's usage was used |
+| `memory_total_is_cgroup_limit` | 1 when `memory_total_bytes` is the container's memory limit, 0 when it is the machine's total memory |
 | `memory_last_sample_unix` | the unix seconds of the last tick that measured |

@@ -36,18 +36,26 @@ var _ = Describe("the memory worker's gauges", func() {
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedBytes), float64(oneGiB/2)))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalBytes), float64(oneGiB)))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedPercent), 50.0))
-		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemorySourceIsCgroup), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedFromCgroup), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalIsCgroupLimit), 1.0))
 		Expect(gauges[string(deps.GaugeMemoryLastSampleUnix)]).To(BeNumerically("~", float64(time.Now().Unix()), 5))
 	})
 
-	It("marks a host reading", func() {
-		memoryDeps := newTestDeps(fixtureFilesystem(map[string]string{}), hostMemoryOf(threeGiBHost, eightGiBHost))
+	DescribeTable("marks which source each number came from",
+		func(files map[string]string, expectedUsedFromCgroup, expectedTotalIsCgroupLimit float64) {
+			memoryDeps := newTestDeps(fixtureFilesystem(files), hostMemoryOf(threeGiBHost, eightGiBHost))
 
-		_, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
-		Expect(err).ToNot(HaveOccurred())
+			_, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
+			Expect(err).ToNot(HaveOccurred())
 
-		Expect(memoryDeps.MetricsRecorder().Drain().Gauges).To(HaveKeyWithValue(string(deps.GaugeMemorySourceIsCgroup), 0.0))
-	})
+			gauges := memoryDeps.MetricsRecorder().Drain().Gauges
+
+			Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedFromCgroup), expectedUsedFromCgroup))
+			Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalIsCgroupLimit), expectedTotalIsCgroupLimit))
+		},
+		Entry("a cgroup without a limit", cgroupFiles("max\n", halfGiBText), 1.0, 0.0),
+		Entry("an unreadable cgroup", map[string]string{}, 0.0, 0.0),
+	)
 
 	It("publishes nothing when the poll fails", func() {
 		memoryDeps := newTestDeps(fixtureFilesystem(map[string]string{}), unreadableHostMemory)

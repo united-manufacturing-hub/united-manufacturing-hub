@@ -240,11 +240,12 @@ const (
 )
 
 const (
-	GaugeMemoryUsedBytes      GaugeName = "memory_used_bytes"
-	GaugeMemoryTotalBytes     GaugeName = "memory_total_bytes"
-	GaugeMemoryUsedPercent    GaugeName = "memory_used_percent"
-	GaugeMemoryLastSampleUnix GaugeName = "memory_last_sample_unix"
-	GaugeMemorySourceIsCgroup GaugeName = "memory_source_is_cgroup"
+	GaugeMemoryUsedBytes          GaugeName = "memory_used_bytes"
+	GaugeMemoryTotalBytes         GaugeName = "memory_total_bytes"
+	GaugeMemoryUsedPercent        GaugeName = "memory_used_percent"
+	GaugeMemoryLastSampleUnix     GaugeName = "memory_last_sample_unix"
+	GaugeMemoryUsedFromCgroup     GaugeName = "memory_used_from_cgroup"
+	GaugeMemoryTotalIsCgroupLimit GaugeName = "memory_total_is_cgroup_limit"
 )
 
 // CPU worker flags, 1 for true and 0 for false. A 0 on any of them means the

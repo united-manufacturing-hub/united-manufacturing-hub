@@ -73,10 +73,9 @@ var _ = Describe("the memory worker's poll", func() {
 	It("reports a cgroup with a limit", func() {
 		status, health := pollAndJudge(fixtureFilesystem(cgroupFiles(oneGiBText, halfGiBText)))
 
-		Expect(status.Source).To(Equal(SourceCgroup))
+		Expect(status.Source).To(Equal(SourceCgroupLimit))
 		Expect(status.UsedBytes).To(Equal(oneGiB / 2))
 		Expect(status.TotalBytes).To(Equal(oneGiB))
-		Expect(status.Unlimited).To(BeFalse())
 		Expect(status.UsedPercent).To(BeNumerically("~", 50.0, 0.001))
 		Expect(health.Degraded).To(BeFalse())
 	})
@@ -116,17 +115,20 @@ const (
 )
 
 var _ = Describe("the memory worker's fallbacks", func() {
-	It("measures an unlimited cgroup against the host total", func() {
-		memoryDeps := newTestDeps(fixtureFilesystem(cgroupFiles("max\n", halfGiBText)), hostMemoryOf(threeGiBHost, eightGiBHost))
+	DescribeTable("measures a cgroup without a limit against the host total",
+		func(memoryMax string) {
+			memoryDeps := newTestDeps(fixtureFilesystem(cgroupFiles(memoryMax, halfGiBText)), hostMemoryOf(threeGiBHost, eightGiBHost))
 
-		status, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
+			status, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
 
-		Expect(err).ToNot(HaveOccurred())
-		Expect(status.Source).To(Equal(SourceCgroup))
-		Expect(status.Unlimited).To(BeTrue())
-		Expect(status.UsedBytes).To(Equal(halfGiBBytes))
-		Expect(status.TotalBytes).To(Equal(int64(eightGiBHost)))
-	})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status.Source).To(Equal(SourceHostTotalNoCgroupLimit))
+			Expect(status.UsedBytes).To(Equal(halfGiBBytes))
+			Expect(status.TotalBytes).To(Equal(int64(eightGiBHost)))
+		},
+		Entry("memory.max is max", "max\n"),
+		Entry("memory.max is 0", "0\n"),
+	)
 
 	It("fails an unlimited cgroup when the host total is unreadable", func() {
 		memoryDeps := newTestDeps(fixtureFilesystem(cgroupFiles("max\n", halfGiBText)), unreadableHostMemory)
@@ -143,7 +145,7 @@ var _ = Describe("the memory worker's fallbacks", func() {
 			status, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(status.Source).To(Equal(SourceHost))
+			Expect(status.Source).To(Equal(SourceHostFallbackCgroupUnreadable))
 			Expect(status.UsedBytes).To(Equal(int64(threeGiBHost)))
 			Expect(status.TotalBytes).To(Equal(int64(eightGiBHost)))
 			Expect(status.UsedPercent).To(BeNumerically("~", 37.5, 0.001))
