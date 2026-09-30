@@ -607,8 +607,8 @@ var _ = Describe("WorkerManager", func() {
 			return inst.GetCurrentFSMState()
 		}
 
-		// (1) BOOTSTRAP (via NeverObserved): reader returns persistence.ErrNotFound
-		// => NeverObserved => the worker's declared Starting word.
+		// (1) BOOTSTRAP (via NotFound): reader returns persistence.ErrNotFound
+		// => NotFound => the worker's declared Starting word.
 		setupClient(&stubReader{err: persistence.ErrNotFound})
 		reconcile("r1-bootstrap")
 		Expect(stateOf("r1-bootstrap")).To(Equal("benthos_monitoring_starting"))
