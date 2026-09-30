@@ -199,10 +199,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// During graceful shutdown, child supervisors shut down first (correct order),
 	// which causes parent's observation to become stale (collectors can't observe gone children).
 	// The shutdown transition only needs the ShutdownRequested flag, not fresh observation data.
-	var isShutdownRequested bool
-	if ds, ok := snapshot.Desired.(fsmv2.DesiredState); ok {
-		isShutdownRequested = ds.IsShutdownRequested()
-	}
+	isShutdownRequested := desired.IsShutdownRequested()
 
 	// I3: Check data freshness BEFORE calling state.Next()
 	// This is the trust boundary: states assume data is always fresh

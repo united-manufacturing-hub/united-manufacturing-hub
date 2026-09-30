@@ -473,9 +473,8 @@ func (d *DesiredState) GetState() string {
 // Example usage in State.Next():
 //
 //	func (s RunningState) Next(snapshot fsmv2.Snapshot) (State, Signal, Action) {
-//	    desired := snapshot.Desired.(types.DesiredState)
 //	    // Always check shutdown first
-//	    if desired.IsShutdownRequested() {
+//	    if snapshot.Desired.IsShutdownRequested() {
 //	        return StoppingState{}, fsmv2.SignalNone, nil
 //	    }
 //	    // ... rest of logic

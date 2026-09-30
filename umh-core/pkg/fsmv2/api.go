@@ -111,14 +111,12 @@ type Disableable interface {
 
 // Snapshot is the complete view of the worker at a point in time (immutable).
 //
-// Observed is typed: the supervisor is generic over TObserved constrained to
-// ObservedState, and the store deserialises into that concrete type before the
-// snapshot is built, so an observation always carries a readable timestamp.
-// Desired stays untyped because a raw persistence.Document cannot honestly
-// provide IsShutdownRequested or IsDisabled.
+// Both states are typed: the supervisor is generic over TObserved and TDesired,
+// constrained to ObservedState and DesiredState, and the store deserialises into
+// those concrete types before the snapshot is built.
 type Snapshot struct {
 	Observed ObservedState // What is the actual state?
-	Desired  interface{}   // What should the state be? (DesiredState or persistence.Document).
+	Desired  DesiredState  // What should the state be?
 	Identity deps.Identity // Who am I?
 }
 
