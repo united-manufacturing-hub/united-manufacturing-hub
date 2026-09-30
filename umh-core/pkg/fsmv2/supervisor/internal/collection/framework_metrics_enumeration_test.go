@@ -88,7 +88,7 @@ const registeredFloor = 16
 var panicOnConstruction = map[string]string{
 	"communicator": `no channel provider under "communicator.channel_provider"`,
 	"transport":    `no channel provider under "transport.channel_provider"`,
-	"persistence":  "requires a store",
+	"persistence":  `no store under "persistence.store"`,
 	"pull":         "deps builder returned",
 	"push":         "deps builder returned",
 }
