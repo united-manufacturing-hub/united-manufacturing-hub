@@ -91,53 +91,32 @@ func TestFatalMessage(t *testing.T) {
 }
 
 func TestRunnerCLIRouting(t *testing.T) {
-	t.Run("duration routing v2 takes RunConfig.Duration", func(t *testing.T) {
-		runDuration, applyCtxTimeout := routeDuration(true, 5*time.Second)
-		if applyCtxTimeout {
-			t.Error("a v2 scenario must not bound its run with a ctx timeout; the duration is a settle window after Run returns")
-		}
-
+	t.Run("duration routing takes RunConfig.Duration", func(t *testing.T) {
+		runDuration := routeDuration(5 * time.Second)
 		if runDuration != 5*time.Second {
-			t.Errorf("a v2 scenario must route --duration into RunConfig.Duration, got %v", runDuration)
+			t.Errorf("--duration must route into RunConfig.Duration, got %v", runDuration)
 		}
 	})
 
-	t.Run("duration routing v1 takes a ctx timeout", func(t *testing.T) {
-		runDuration, applyCtxTimeout := routeDuration(false, 5*time.Second)
-		if !applyCtxTimeout {
-			t.Error("a v1 scenario must bound the whole run via a ctx timeout")
-		}
-
-		if runDuration != 0 {
-			t.Errorf("a v1 scenario must not set RunConfig.Duration, got %v", runDuration)
+	t.Run("duration routing zero stays endless", func(t *testing.T) {
+		if got := routeDuration(0); got != 0 {
+			t.Errorf("--duration 0 must stay endless, got %v", got)
 		}
 	})
 
-	t.Run("duration routing zero stays endless on both paths", func(t *testing.T) {
-		v1Duration, v1Timeout := routeDuration(false, 0)
-		if v1Timeout || v1Duration != 0 {
-			t.Errorf("v1 --duration 0 must stay endless: timeout=%t duration=%v", v1Timeout, v1Duration)
-		}
-
-		v2Duration, v2Timeout := routeDuration(true, 0)
-		if v2Timeout || v2Duration != 0 {
-			t.Errorf("v2 --duration 0 must stay endless: timeout=%t duration=%v", v2Timeout, v2Duration)
-		}
-	})
-
-	t.Run("duration default: v2 without --duration settles 1s", func(t *testing.T) {
-		got, defaulted := defaultDuration(true, false, 0)
+	t.Run("duration default: without --duration settles 1s", func(t *testing.T) {
+		got, defaulted := defaultDuration(false, 0)
 		if got != defaultSettle {
-			t.Errorf("a v2 scenario given no --duration must settle %s after Run returns, got %v", defaultSettle, got)
+			t.Errorf("a run given no --duration must settle %s after Run returns, got %v", defaultSettle, got)
 		}
 
 		if !defaulted {
-			t.Error("a v2 scenario given no --duration must report the default as applied")
+			t.Error("a run given no --duration must report the default as applied")
 		}
 	})
 
 	t.Run("duration default: explicit --duration 0 stays endless", func(t *testing.T) {
-		got, defaulted := defaultDuration(true, true, 0)
+		got, defaulted := defaultDuration(true, 0)
 		if got != 0 {
 			t.Errorf("an explicit --duration 0 must stay endless, got %v", got)
 		}
@@ -148,7 +127,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 	})
 
 	t.Run("duration default: explicit --duration is kept", func(t *testing.T) {
-		got, defaulted := defaultDuration(true, true, 5*time.Second)
+		got, defaulted := defaultDuration(true, 5*time.Second)
 		if got != 5*time.Second {
 			t.Errorf("an explicit --duration must be kept as given, got %v", got)
 		}
@@ -158,37 +137,23 @@ func TestRunnerCLIRouting(t *testing.T) {
 		}
 	})
 
-	t.Run("duration default: v1 is unchanged", func(t *testing.T) {
-		got, defaulted := defaultDuration(false, false, 0)
-		if got != 0 {
-			t.Errorf("a v1 scenario given no --duration must stay endless, got %v", got)
+	t.Run("duration default and routing compose: a defaulted run settles via RunConfig, explicit values pass through", func(t *testing.T) {
+		effective, _ := defaultDuration(false, 0)
+
+		if runDuration := routeDuration(effective); runDuration != defaultSettle {
+			t.Errorf("a run without --duration must settle %s via RunConfig.Duration, got duration=%v", defaultSettle, runDuration)
 		}
 
-		if defaulted {
-			t.Error("a v1 scenario must never report the default as applied")
-		}
-	})
+		effective, _ = defaultDuration(true, 5*time.Second)
 
-	t.Run("duration default and routing compose: a defaulted v2 run settles via RunConfig, explicit values pass through", func(t *testing.T) {
-		effective, _ := defaultDuration(true, false, 0)
-
-		runDuration, applyCtxTimeout := routeDuration(true, effective)
-		if runDuration != defaultSettle || applyCtxTimeout {
-			t.Errorf("a v2 run without --duration must settle %s via RunConfig.Duration with no ctx timeout, got duration=%v timeout=%t", defaultSettle, runDuration, applyCtxTimeout)
+		if runDuration := routeDuration(effective); runDuration != 5*time.Second {
+			t.Errorf("an explicit --duration 5s must reach RunConfig.Duration, got duration=%v", runDuration)
 		}
 
-		effective, _ = defaultDuration(true, true, 5*time.Second)
+		effective, _ = defaultDuration(true, 0)
 
-		runDuration, applyCtxTimeout = routeDuration(true, effective)
-		if runDuration != 5*time.Second || applyCtxTimeout {
-			t.Errorf("an explicit --duration 5s must reach RunConfig.Duration with no ctx timeout, got duration=%v timeout=%t", runDuration, applyCtxTimeout)
-		}
-
-		effective, _ = defaultDuration(true, true, 0)
-
-		runDuration, applyCtxTimeout = routeDuration(true, effective)
-		if runDuration != 0 || applyCtxTimeout {
-			t.Errorf("an explicit --duration 0 must stay endless after routing, got duration=%v timeout=%t", runDuration, applyCtxTimeout)
+		if runDuration := routeDuration(effective); runDuration != 0 {
+			t.Errorf("an explicit --duration 0 must stay endless after routing, got duration=%v", runDuration)
 		}
 	})
 
@@ -231,7 +196,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 
 	t.Run("genuine startup failure is not a clean exit", func(t *testing.T) {
 		ctx := context.Background()
-		runErr := errors.New("conflicting configuration: both Scenario and ScenarioV2 are set")
+		runErr := errors.New("v2 scenario \"probe\" is not properly configured: Run is nil")
 
 		if isCleanInterruptExit(runErr, ctx.Err()) {
 			t.Error("a genuine startup failure with no ctx cancellation must remain fatal exit-1")

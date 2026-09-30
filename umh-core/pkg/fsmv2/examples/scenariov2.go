@@ -307,9 +307,9 @@ var NoopScenarioV2 = ScenarioV2{
 }
 
 // RegistryV2 contains all available v2 scenarios, merged into ListScenarios
-// alongside the v1 Registry. Names must not collide with v1 Registry names
-// (enforced by the disjointness test in scenariov2_test.go, which documents
-// what breaks on a collision).
+// alongside LiveRegistryV2. Names must not collide between the two
+// registries (enforced by the disjointness test in scenariov2_test.go, which
+// documents what breaks on a collision).
 var RegistryV2 = map[string]ScenarioV2{
 	"noop":         NoopScenarioV2,
 	"helloworld":   HelloworldScenarioV2,
