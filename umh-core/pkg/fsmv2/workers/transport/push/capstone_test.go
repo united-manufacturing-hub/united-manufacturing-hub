@@ -51,7 +51,6 @@ var _ = Describe("ENG-5275 incident reproduction (P8 capstone)", func() {
 
 		buf := new(bytes.Buffer)
 		jsonLogger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
-		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps := createParentDeps(jsonLogger)
 		identity := deps.Identity{ID: "push-capstone", WorkerType: "push"}
 		pushDeps, err := push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(jsonLogger, nil, identity))

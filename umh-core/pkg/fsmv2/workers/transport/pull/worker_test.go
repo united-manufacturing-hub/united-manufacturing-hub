@@ -47,16 +47,11 @@ var _ = Describe("PullWorker", func() {
 	BeforeEach(func() {
 		logger = depspkg.NewNopFSMLogger()
 		identity = depspkg.Identity{ID: "test-pull", Name: "Test Pull"}
-		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
 
 		var err error
 		pullDeps, err = pull.NewPullDependencies(parentDeps, depspkg.NewBaseDependencies(logger, nil, identity))
 		Expect(err).ToNot(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		transport.ClearChannelProvider()
 	})
 
 	Describe("Compile-time interface check", func() {

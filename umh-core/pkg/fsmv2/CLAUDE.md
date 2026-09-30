@@ -40,25 +40,21 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 
 Children aggregation (health counts) is handled by the supervisor, not in `CollectObservedState`. The supervisor calls `SetChildrenCounts()` after collection.
 
-## Channel Singleton Pattern
+## Channel Provider via the Dependency Map
 
-For workers that share channels (like TransportWorker with Push/Pull children), use a singleton `ChannelProvider`. Production sets it in `cmd/main.go`:
+Workers that share channels (like TransportWorker with its Push/Pull children)
+read their `ChannelProvider` from the dependency map, under
+`transport.ChannelProviderKey`. Production puts it there in `cmd/main.go`:
 
 ```go
-// Set before creating workers
-transport.SetChannelProvider(provider)
-
-// Dependencies get channels from singleton
-func NewDependencies(...) *Dependencies {
-    provider := GetChannelProvider()
-    inbound, outbound := provider.GetChannels(identity.ID)
-    // ...
-}
+fsmv2Deps := map[string]any{}
+config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
 ```
 
-A scenario supplies a mock provider under `transport.ChannelProviderKey` in the
-dependency map; the worker falls back to the global when the key is absent (see
-"Mocks" below).
+The supervisor merges its map into every child, so the provider reaches the
+worker however deep it sits. `NewTransportWorker` returns an error naming the
+key when the map holds none. A scenario supplies a mock provider under the
+same key (see "Mocks" below).
 
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.

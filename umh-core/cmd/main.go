@@ -51,6 +51,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -685,7 +686,6 @@ func buildFSMv2Supervisor(
 	// Phase 1 architecture: singleton is THE ONLY way to provide channels to the communicator.
 	// The factory will panic if this is not set.
 	communicator.SetChannelProvider(channelAdapter)
-	transportWorker.SetChannelProvider(channelAdapter)
 
 	var certHandler *certificatehandler.CertHandler
 
@@ -769,6 +769,11 @@ children:
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
 	fsmv2Deps := map[string]any{}
+
+	// The transport worker reads its channel provider from this map. The
+	// supervisor merges the map into every child, so the provider reaches the
+	// transport worker however deep it sits.
+	fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
 
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		register.SetGlobalDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
