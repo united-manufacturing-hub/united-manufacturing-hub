@@ -96,6 +96,8 @@ const (
 
 	// FeatureSupportCPU covers the fsmv2 CPU monitor feature.
 	FeatureSupportCPU Feature = "support_cpu"
+
+	FeatureSupportMemory Feature = "support_memory"
 )
 
 // FeatureForWorker returns the Feature for a specific worker type.

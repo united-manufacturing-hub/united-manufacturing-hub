@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Improvements
+
+- A preview of a new container memory reading is available on the `/metrics` endpoint. It says whether each number came from the container or from the machine. Turn it on with `USE_FSMV2_MEMORY_MONITOR=true` on an instance connected to the Management Console (`API_URL` and `AUTH_TOKEN` set), then recreate the container.
+- With the memory preview on, memory counts as degraded and bridges are held back whenever no recent memory reading is available. This includes the first seconds after a restart, and every restart of an instance that is not connected to the Management Console.
+
 ### Fixes
 
 - Log messages for stopped flows in bridges are now more consistent

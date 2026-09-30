@@ -37,7 +37,8 @@ type FeatureUsage struct {
 	// FSMv2CPUEnabled reports whether the fsmv2 CPU path is effectively running,
 	// which is not the same as USE_FSMV2_CPU being set. The FSMv2CPUEnabled
 	// function below computes it and says why the two differ.
-	FSMv2CPUEnabled bool `json:"fsmv2CpuEnabled"`
+	FSMv2CPUEnabled           bool `json:"fsmv2CpuEnabled"`
+	FSMv2MemoryMonitorEnabled bool `json:"fsmv2MemoryMonitorEnabled"`
 	// ResourceLimitBlockingEnabled reports the value of agent.enableResourceLimitBlocking in config.yaml (defaults to true).
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.
@@ -54,5 +55,9 @@ type FeatureUsage struct {
 // credentials; once it lands an instance without them still runs the fsmv2 CPU
 // path, and this condition would report it as disabled while it is enabled.
 func FSMv2CPUEnabled(flag, transport, apiURLSet, authTokenSet bool) bool {
+	return FSMv2MonitorEnabled(flag, transport, apiURLSet, authTokenSet)
+}
+
+func FSMv2MonitorEnabled(flag, transport, apiURLSet, authTokenSet bool) bool {
 	return flag && transport && apiURLSet && authTokenSet
 }

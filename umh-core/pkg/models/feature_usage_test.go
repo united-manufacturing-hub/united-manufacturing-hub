@@ -51,6 +51,16 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).To(HaveKeyWithValue("fsmv2CpuEnabled", true))
 	})
 
+	It("serializes the FSMv2 memory monitor flag under the JSON key fsmv2MemoryMonitorEnabled", func() {
+		data, err := json.Marshal(models.FeatureUsage{FSMv2MemoryMonitorEnabled: true})
+		Expect(err).NotTo(HaveOccurred())
+
+		var raw map[string]interface{}
+		Expect(json.Unmarshal(data, &raw)).To(Succeed())
+
+		Expect(raw).To(HaveKeyWithValue("fsmv2MemoryMonitorEnabled", true))
+	})
+
 	It("serializes the historian adoption fields", func() {
 		usage := models.FeatureUsage{
 			HistorianConfigured:  true,
@@ -82,5 +92,18 @@ var _ = Describe("FSMv2CPUEnabled, the fsmv2 CPU adoption flag", func() {
 		Entry("flag on, transport on, API_URL missing", true, true, false, true, false),
 		Entry("flag on, transport on, AUTH_TOKEN missing", true, true, true, false, false),
 		Entry("flag off even with every prerequisite present", false, true, true, true, false),
+	)
+})
+
+var _ = Describe("FSMv2MonitorEnabled, the adoption flag for an env-gated fsmv2 monitor", func() {
+	DescribeTable("reports the effective state of the monitor",
+		func(flag, transport, apiURLSet, authTokenSet, expected bool) {
+			Expect(models.FSMv2MonitorEnabled(flag, transport, apiURLSet, authTokenSet)).To(Equal(expected))
+		},
+		Entry("flag on and every prerequisite present", true, true, true, true, true),
+		Entry("flag on but transport off", true, false, true, true, false),
+		Entry("flag on but API_URL missing", true, true, false, true, false),
+		Entry("flag on but AUTH_TOKEN missing", true, true, true, false, false),
+		Entry("flag off", false, true, true, true, false),
 	)
 })

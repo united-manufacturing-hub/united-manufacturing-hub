@@ -347,6 +347,7 @@ docker run -d \
 | `USE_FSMV2_MEMORY_CLEANUP` | No | FSMv2 memory cleanup (persistence worker); defaults to `true` (enabled). Set to `false` to revert. |
 | `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter |
 | `USE_FSMV2_CPU` | No | FSMv2 container CPU monitoring; defaults to `false` (legacy operating-system metrics). Read once at startup, so changing it requires a restart. Temporary migration flag |
+| `USE_FSMV2_MEMORY_MONITOR` | No | FSMv2 container memory monitoring; defaults to `false` (legacy memory reading). Read once at startup, so changing it requires a restart. Needs `API_URL` and `AUTH_TOKEN`. While no fresh reading is available, memory counts as degraded and bridges are held back. Temporary migration flag |
 
 ### Disabling FSMv2 Features
 

@@ -31,6 +31,8 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	fsmv2memory "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -81,6 +83,10 @@ type ContainerMonitorService struct {
 	useFSMv2CPU       bool                         // when true the fsmv2 CPU worker's verdict replaces the legacy CPU health; read once at construction
 	cpuWorkerWarnOnce sync.Once
 	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
+
+	useFSMv2MemoryMonitor bool
+	memoryWorkerWarnOnce  sync.Once
+	sentryLogger          deps.FSMLogger
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -93,14 +99,17 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 	log := logger.For(logger.ComponentContainerMonitorService)
 
 	useFSMv2CPU, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
+	useFSMv2MemoryMonitor, _ := env.GetAsBool("USE_FSMV2_MEMORY_MONITOR", false, false)
 
 	return &ContainerMonitorService{
-		fs:               fs,
-		logger:           log,
-		instanceName:     constants.CoreInstanceName, // Single container instance name
-		dataPath:         dataPath,
-		useFSMv2CPU:      useFSMv2CPU,
-		cpuUsageProvider: defaultCPUUsagePercent,
+		fs:                    fs,
+		logger:                log,
+		instanceName:          constants.CoreInstanceName, // Single container instance name
+		dataPath:              dataPath,
+		useFSMv2CPU:           useFSMv2CPU,
+		useFSMv2MemoryMonitor: useFSMv2MemoryMonitor,
+		sentryLogger:          containerMonitorSentryLogger(),
+		cpuUsageProvider:      defaultCPUUsagePercent,
 	}
 }
 
@@ -144,7 +153,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	}
 
 	// Get memory stats
-	memStat, err := c.getMemoryMetrics(ctx)
+	memStat, err := c.collectMemory(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get memory metrics: %w", err)
 	}
@@ -180,7 +189,12 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	}
 
 	// Assess memory health
-	if memStat.CGroupTotalBytes > 0 {
+	if c.useFSMv2MemoryMonitor {
+		status.MemoryHealth = memStat.Health.Category
+		if status.MemoryHealth == models.Degraded {
+			status.OverallHealth = models.Degraded
+		}
+	} else if memStat.CGroupTotalBytes > 0 {
 		memPercent := float64(memStat.CGroupUsedBytes) / float64(memStat.CGroupTotalBytes) * 100.0
 
 		if memPercent > constants.MemoryHighThresholdPercent {
@@ -203,6 +217,14 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	RecordContainerStatus(status, c.instanceName, c.useFSMv2CPU)
 
 	return status, nil
+}
+
+func (c *ContainerMonitorService) collectMemory(ctx context.Context) (*models.Memory, error) {
+	if c.useFSMv2MemoryMonitor {
+		return c.collectMemoryFromWorker(ctx)
+	}
+
+	return c.getMemoryMetrics(ctx)
 }
 
 // GetHealth returns the health status of the container based on current metrics.
@@ -254,7 +276,7 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 	totalBytes := vmStat.Total
 
 	// Try cgroup values: prefer container-aware limits over host values
-	cgroupInfo, cgroupErr := c.getCgroupMemoryInfo(ctx)
+	cgroupInfo, cgroupErr := fsmv2memory.ReadCgroupMemory(ctx, c.fs, "/sys/fs/cgroup")
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
