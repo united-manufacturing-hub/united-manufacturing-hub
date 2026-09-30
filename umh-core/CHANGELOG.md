@@ -7,6 +7,10 @@
 - With the historian feature flag enabled in the Management Console, the instance reports the state of its historian database: versions, disk usage and growth, and background job counts with every status update, and compression savings, per-table details and the job list on request
 - The communicator now reports its own health, queue usage, and queue peak usage
 
+### Improvements
+
+- A bridge refused because the instance is short of resources now says which resource and why, such as the CPU health message, instead of "System in degraded state". Which bridges are refused is unchanged
+
 ### Fixes
 
 - Log messages for stopped flows in bridges are now more consistent
