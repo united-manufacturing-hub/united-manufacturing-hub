@@ -183,6 +183,25 @@ var _ = Describe("the memory seam's worker read", func() {
 		Expect(err).To(MatchError(context.Canceled))
 	})
 
+	DescribeTable("names the missing prerequisite when there is no client",
+		func(transport, apiURL, authToken, expectedPart string) {
+			clearMemoryClient()
+			GinkgoT().Setenv("USE_FSMV2_TRANSPORT", transport)
+			GinkgoT().Setenv("API_URL", apiURL)
+			GinkgoT().Setenv("AUTH_TOKEN", authToken)
+
+			memory, err := newFlaggedService("true").CollectMemoryFromWorker(context.Background())
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(memory.Health.Category).To(Equal(models.Degraded))
+			Expect(memory.Health.Message).To(ContainSubstring(expectedPart))
+		},
+		Entry("transport off", "false", "https://example.invalid", "token", "USE_FSMV2_TRANSPORT is off"),
+		Entry("no API_URL", "true", "", "token", "API_URL or AUTH_TOKEN is unset"),
+		Entry("no AUTH_TOKEN", "true", "https://example.invalid", "", "API_URL or AUTH_TOKEN is unset"),
+		Entry("supervisor still starting", "true", "https://example.invalid", "token", "may still be starting"),
+	)
+
 	It("reports a missing client as degraded and warns Sentry once", func() {
 		clearMemoryClient()
 

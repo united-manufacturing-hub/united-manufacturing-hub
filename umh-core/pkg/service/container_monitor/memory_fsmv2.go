@@ -17,11 +17,13 @@ package container_monitor
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	fsmv2memory "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/memory"
@@ -34,8 +36,7 @@ import (
 const (
 	memoryWorkerMaxAge = 3 * fsmv2memory.PollInterval
 
-	memoryClientUnavailableMessage = "USE_FSMV2_MEMORY_MONITOR is enabled but no fsmv2 client is published, so no memory measurement is available"
-	memoryClientUnavailableTag     = "memory::worker_client_unavailable"
+	memoryClientUnavailableTag = "memory::worker_client_unavailable"
 )
 
 var containerMonitorSentryLogger = sync.OnceValue(func() deps.FSMLogger {
@@ -52,12 +53,13 @@ func (c *ContainerMonitorService) collectMemoryFromWorker(ctx context.Context) (
 
 	client := fsmv2client.GetClient()
 	if client == nil {
+		message := memorySeamClientUnavailableMessage()
+
 		c.memoryWorkerWarnOnce.Do(func() {
-			c.sentryLogger.SentryWarn(deps.FeatureSupportMemory, "", memoryClientUnavailableTag,
-				deps.String("detail", memoryClientUnavailableMessage))
+			c.sentryLogger.SentryWarn(deps.FeatureSupportMemory, "", memoryClientUnavailableTag, deps.String("detail", message))
 		})
 
-		return degradedMemory(memoryClientUnavailableMessage), nil
+		return degradedMemory(message), nil
 	}
 
 	status, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2memory.MemoryStatus]](ctx, client, fsmv2memory.Ref, memoryWorkerMaxAge)
@@ -66,6 +68,19 @@ func (c *ContainerMonitorService) collectMemoryFromWorker(ctx context.Context) (
 	}
 
 	return judgeWorkerMemory(status, freshness), nil
+}
+
+func memorySeamClientUnavailableMessage() string {
+	transportOn, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
+	if !transportOn {
+		return "USE_FSMV2_MEMORY_MONITOR is enabled but USE_FSMV2_TRANSPORT is off, so the fsmv2 supervisor never runs and no memory worker client is published; no memory measurement is available"
+	}
+
+	if os.Getenv("API_URL") == "" || os.Getenv("AUTH_TOKEN") == "" {
+		return "USE_FSMV2_MEMORY_MONITOR is enabled but API_URL or AUTH_TOKEN is unset, so the fsmv2 supervisor never runs and no memory worker client is published; no memory measurement is available"
+	}
+
+	return "USE_FSMV2_MEMORY_MONITOR is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no memory measurement is available"
 }
 
 func judgeWorkerMemory(status simple.Status[fsmv2memory.MemoryStatus], freshness fsmv2client.Freshness) *models.Memory {
