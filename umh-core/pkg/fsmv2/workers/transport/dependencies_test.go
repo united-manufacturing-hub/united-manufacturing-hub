@@ -453,12 +453,12 @@ var _ = Describe("TransportDependencies", func() {
 
 	Describe("NewTransportDependencies", func() {
 		Context("when the provider is nil", func() {
-			It("should panic with clear error message", func() {
+			It("panics with a message naming the nil ChannelProvider", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
 
 				Expect(func() {
 					transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), nil)
-				}).To(PanicWith(ContainSubstring("ChannelProvider must not be nil")))
+				}).To(PanicWith(ContainSubstring("transport: NewTransportDependencies got a nil ChannelProvider")))
 			})
 		})
 

@@ -42,9 +42,11 @@ Children aggregation (health counts) is handled by the supervisor, not in `Colle
 
 ## Channel Provider via the Dependency Map
 
-Workers that share channels (like TransportWorker with its Push/Pull children)
-read their `ChannelProvider` from the dependency map, under
-`transport.ChannelProviderKey`. Production puts it there in `cmd/main.go`:
+The transport worker reads its `ChannelProvider` from the dependency map, under
+`transport.ChannelProviderKey`. Its push and pull children get the channels
+from the transport worker's dependencies. The communicator reads its own
+global provider. Production puts the transport provider in the map in
+`cmd/main.go`:
 
 ```go
 fsmv2Deps := map[string]any{}

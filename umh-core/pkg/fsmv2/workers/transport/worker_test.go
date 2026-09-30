@@ -46,8 +46,8 @@ var _ = Describe("TransportWorker", func() {
 		logger = deps.NewNopFSMLogger()
 		identity = deps.Identity{ID: "test-transport", Name: "Test Transport"}
 
-		// Every worker in this file gets its mock channel provider from this
-		// map, the way the supervisor delivers one.
+		// providerDeps holds a mock channel provider under ChannelProviderKey,
+		// the way the supervisor delivers one.
 		providerDeps = map[string]any{}
 		fsmv2types.SetDependency(providerDeps, transport.ChannelProviderKey, transport.ChannelProvider(newTestChannelProvider()))
 	})
@@ -467,7 +467,7 @@ func (p *recordingChannelProvider) GetInboundStats(workerID string) (capacity in
 }
 
 var _ = Describe("TransportWorker channel provider dependency", func() {
-	It("uses the provider from the dependency map", func() {
+	It("uses the provider from the dependency map when built through the factory", func() {
 		mapProvider := newRecordingChannelProvider(7, 3)
 
 		dependencyMap := map[string]any{}

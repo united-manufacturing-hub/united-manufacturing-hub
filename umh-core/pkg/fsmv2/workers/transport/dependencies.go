@@ -91,14 +91,15 @@ type TransportDependencies struct {
 }
 
 // NewTransportDependencies creates dependencies for the transport worker from
-// the given channel provider. It panics when the provider is nil, because a
-// dependency without channels fails on first use with a nil dereference.
+// the given channel provider. It panics when the provider is nil, with a
+// message naming the worker. Without the check, the GetChannels call below
+// would fail with a bare nil dereference.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 // The supervisor writes framework metrics into this instance after construction;
 // constructing a second instance inside the factory would leave those metrics unreachable.
 func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *TransportDependencies {
 	if provider == nil {
-		panic(fmt.Sprintf("ChannelProvider must not be nil when creating dependencies (worker=%s).",
+		panic(fmt.Sprintf("transport: NewTransportDependencies got a nil ChannelProvider (worker=%s)",
 			bd.GetWorkerID()))
 	}
 
