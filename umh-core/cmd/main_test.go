@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,6 +25,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -190,5 +194,56 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(appSup).NotTo(BeNil())
+	})
+
+	// Without credentials and with USE_FSMV2_CPU on, the CPU worker must run.
+	// Before this PR no FSMv2 runtime existed on such an instance, so the
+	// container monitor saw no CPU reading and refused every new bridge.
+	// Fresh proves the worker was started and is being observed; it says
+	// nothing about whether the cgroup read succeeded, so this passes on
+	// macOS too.
+	It("runs the CPU worker to a fresh reading with empty credentials", func() {
+		cfg := &config.FullConfig{
+			Agent: config.AgentConfig{
+				CommunicatorConfig: config.CommunicatorConfig{
+					APIURL:    "",
+					AuthToken: "",
+				},
+				UseFSMv2CPU: true,
+			},
+		}
+
+		commState := communication_state.NewCommunicationState(
+			nil,
+			make(chan *models.UMHMessage, 1),
+			make(chan *models.UMHMessage, 1),
+			"",
+			nil,
+			// The config worker panics on a nil config manager when it is
+			// created, and it is the worker that adds the CPU child.
+			config.NewMockConfigManager(),
+			logger.For(logger.ComponentCore),
+			nil,
+			nil,
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+
+		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		DeferCleanup(cleanup)
+		Expect(err).NotTo(HaveOccurred())
+
+		go func() { _ = appSup.Run(ctx) }()
+
+		Eventually(func() fsmv2client.Freshness {
+			_, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](
+				ctx, fsmv2client.GetClient(), fsmv2cpu.Ref, 3*fsmv2cpu.PollInterval)
+			if err != nil {
+				return fsmv2client.Unknown
+			}
+
+			return freshness
+		}, 15*time.Second, 200*time.Millisecond).Should(Equal(fsmv2client.Fresh))
 	})
 })
