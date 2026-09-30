@@ -1,0 +1,210 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package container_monitor
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+)
+
+// cpuWorkerMaxAge is how old the fsmv2 CPU worker's observation may be and still
+// count as Fresh for the seam. It leaves enough slack that one slow or missed
+// poll cannot flip the instance to degraded. The seam is the code path that
+// reports CPU from the fsmv2 worker instead of the legacy sampler, selected at
+// construction by USE_FSMV2_CPU.
+const cpuWorkerMaxAge = 3 * fsmv2cpu.PollInterval
+
+// collectCPUFromWorker builds the whole CPU record from the fsmv2 CPU worker's
+// last observation. The legacy fields stay empty on purpose: old and new
+// reporting stay cleanly separated, so nothing here re-derives a legacy-named
+// number from worker data. models.CPU says which fields the worker fills and
+// which the legacy path does.
+//
+// It errors only when the tick was cancelled: a cancelled tick measured
+// nothing, so it has no verdict to report. getCPUMetrics aborts on a cancelled
+// ctx the same way.
+func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) (*models.CPU, error) {
+	health, cpuHealth, err := c.readWorkerCPUHealth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.CPU{Health: health, CPUHealth: cpuHealth}, nil
+}
+
+// cpuVerdict is the seam's judgement about the CPU worker's last observation:
+// what to say, how to classify it, and the measurement it was drawn from.
+// cpuHealth is nil whenever there was no measurement to judge.
+type cpuVerdict struct {
+	cpuHealth *models.CPUHealth
+	message   string
+	category  models.HealthCategory
+}
+
+// health renders the verdict as the models.Health the seam reports. It is the
+// one place the seam builds that struct, so ObservedState tracking Category and
+// DesiredState being Active hold by construction rather than by agreement
+// between the places that build it.
+func (v cpuVerdict) health() *models.Health {
+	return &models.Health{
+		Message:       v.message,
+		ObservedState: v.category.String(),
+		DesiredState:  models.Active.String(),
+		Category:      v.category,
+	}
+}
+
+// degradedCPU is the fail-closed verdict: degraded, with no measurement behind
+// it. Used wherever the seam could not measure or could not classify.
+func degradedCPU(message string) cpuVerdict {
+	return cpuVerdict{message: message, category: models.Degraded}
+}
+
+// judgeWorkerCPUReadError is the verdict for an observation the store could not
+// return. GetFresh reports Unknown freshness in that case: the read failure
+// prevented the observation from being classified, so it cannot be called
+// healthy. Fail closed with the verbatim store error as the message.
+func judgeWorkerCPUReadError(err error) cpuVerdict {
+	return degradedCPU(fmt.Sprintf("CPU worker observation could not be read: %v", err))
+}
+
+// judgeWorkerCPU turns the observation fsmv2client.GetFresh returned into a
+// verdict.
+func judgeWorkerCPU(
+	status simple.Status[fsmv2cpu.CPUStatus],
+	freshness fsmv2client.Freshness,
+) cpuVerdict {
+	// If it is not fresh, handle these cases here.
+	if freshness != fsmv2client.Fresh {
+		message := "CPU worker observation could not be classified; no measurement to judge"
+
+		switch freshness {
+		case fsmv2client.Stale:
+			message = fmt.Sprintf("CPU worker observation is stale (older than %s); cannot trust the verdict it carries", cpuWorkerMaxAge)
+		case fsmv2client.NeverObserved:
+			message = "CPU worker has never observed; no measurement to judge"
+		case fsmv2client.Unregistered:
+			message = "CPU worker is not registered with the fsmv2 runtime; no measurement to judge"
+		}
+
+		return degradedCPU(message)
+	}
+
+	// Degraded without a degraded verdict means the poll failed, not that the box
+	// is degraded.
+	if status.Degraded && status.Result.Verdict.State != cpuhealth.StateDegraded {
+		return degradedCPU(status.Reason)
+	}
+
+	// A Fresh observation carries the developer's judgement in Result. The
+	// switch maps only the two spelled-out states, so a rename of either
+	// fails the seam tests too.
+	switch status.Result.Verdict.State {
+	case cpuhealth.StateHealthy:
+		return cpuVerdict{
+			cpuHealth: &models.CPUHealth{
+				Verdict: status.Result.Verdict,
+				Details: status.Result.Details,
+			},
+			message:  status.Result.Message,
+			category: models.Active,
+		}
+	case cpuhealth.StateDegraded:
+		return cpuVerdict{
+			cpuHealth: &models.CPUHealth{
+				Verdict: status.Result.Verdict,
+				Details: status.Result.Details,
+			},
+			message:  status.Result.Message,
+			category: models.Degraded,
+		}
+	default:
+		// Empty result verdict AND Degraded == false is a genuine "no
+		// determination" — a successful poll produced no verdict. There is no
+		// second opinion to defer to, so say so rather than read it as healthy.
+		return degradedCPU("CPU worker produced no verdict for its last observation")
+	}
+}
+
+// readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a
+// models.Health. Every outcome it can judge produces one, and the protocol
+// converter's IsResourceLimited reads that message as its bridge-block reason.
+// A cancelled tick is the one case with nothing to judge: it returns the ctx
+// error and no health.
+func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, *models.CPUHealth, error) {
+	// A cancelled tick is not a degraded box. This is the first thing the
+	// function does, so nothing below it can publish a verdict nothing
+	// measured -- including the missing-client case, which reports an absent
+	// prerequisite that a cancelled tick has not established. getCPUMetrics
+	// likewise aborts on a cancelled ctx rather than reporting.
+	//
+	// It catches a ctx already cancelled on entry, not one cancelled during the
+	// store read below. That window is deliberately uncovered: no store in this
+	// repo fails a read on a cancelled ctx (persistence/memory's validateContext
+	// rejects only a nil ctx), so a second check after GetFresh would never fire.
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
+
+	client := fsmv2client.GetClient()
+	// Fallback for a misconfiguration: USE_FSMV2_CPU is on but nothing published
+	// a client, so the fsmv2 supervisor never started (or has not yet).
+	if client == nil {
+		message := c.cpuSeamClientUnavailableMessage()
+
+		c.cpuWorkerWarnOnce.Do(func() {
+			c.logger.Warn(message)
+		})
+
+		return degradedCPU(message).health(), nil, nil
+	}
+
+	// Get the latest poll result from the worker.
+	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
+
+	if err != nil {
+		v := judgeWorkerCPUReadError(err)
+
+		return v.health(), v.cpuHealth, nil
+	}
+
+	v := judgeWorkerCPU(workerStatus, freshness)
+
+	return v.health(), v.cpuHealth, nil
+}
+
+// cpuSeamClientUnavailableMessage says which prerequisite is missing when
+// USE_FSMV2_CPU is on but no CPU worker client was published, or that the
+// supervisor may still be starting.
+func (c *ContainerMonitorService) cpuSeamClientUnavailableMessage() string {
+	transportOn, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
+	if !transportOn {
+		return "USE_FSMV2_CPU is enabled but USE_FSMV2_TRANSPORT is off, so the fsmv2 supervisor never runs and no CPU worker client is published; no CPU measurement is available"
+	}
+
+	if os.Getenv("API_URL") == "" || os.Getenv("AUTH_TOKEN") == "" {
+		return "USE_FSMV2_CPU is enabled but API_URL or AUTH_TOKEN is unset, so the fsmv2 supervisor never runs and no CPU worker client is published; no CPU measurement is available"
+	}
+
+	return "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no CPU measurement is available"
+}

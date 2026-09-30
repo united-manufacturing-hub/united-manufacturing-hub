@@ -19,6 +19,9 @@ structure:
   summary: SUMMARY.md
 
 redirects:
+  usage/management-console: management-console/README.md
+  production/security/management-console: management-console/README.md
+  production/security/management-console/authentication-and-authorization: management-console/authentication/README.md
   production/deployment/docker-compose/advanced: production/deployment/docker-compose/additional-services/README.md
   production/deployment/docker-compose/advanced/nginx: production/deployment/docker-compose/additional-services/nginx.md
   production/corporate-firewalls: production/security/umh-core/network-configuration.md

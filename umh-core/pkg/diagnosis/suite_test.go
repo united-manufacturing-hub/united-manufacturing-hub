@@ -53,7 +53,7 @@ var _ = Describe("Suite", func() {
 	}
 
 	instrument := func(reduction Reduction) Instrument[snap] {
-		return Instrument[snap]{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: reduction, Span: 60 * time.Second, Marks: marks()}
+		return Instrument[snap]{Measurement: Measurement[snap]{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: reduction, Span: 60 * time.Second}, Marks: marks()}
 	}
 
 	// Signal A reduces by Last (m == 1), signal B by Mean (m == 2). Both require
@@ -105,7 +105,7 @@ var _ = Describe("Suite", func() {
 		return NoInstrument
 	}
 
-	It("generates one scenario per (signal, case): 6 x len(signals), never over tracks", func() {
+	It("generates one scenario per (signal, case): 6 x len(signals), never over measurements", func() {
 		cases := []Case{CaseLive, CaseBriefOutage, CaseLongOutage, CaseUnsupported, CasePostOutageDip, CaseBelowFloor}
 
 		tbl := table()
@@ -124,18 +124,18 @@ var _ = Describe("Suite", func() {
 			}
 		}
 
-		// A table that also declares tracks still emits 6 x len(signals): a
-		// track has no availability to assert, so no scenario may name one.
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Reduction: Mean, Span: 60 * time.Second}}
+		// A table that also declares measurements still emits 6 x len(signals): a
+		// measurement has no availability to assert, so no scenario may name one.
+		tbl.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Reduction: Mean, Span: 60 * time.Second}}
 		Expect(Suite(tbl)).To(HaveLen(6 * len(tbl.Signals)))
 
-		// A table with only tracks emits zero scenarios.
-		Expect(Suite(Table[snap]{Tracks: tbl.Tracks, Interval: time.Second})).To(BeEmpty())
+		// A table with only measurements emits zero scenarios.
+		Expect(Suite(Table[snap]{Measurements: tbl.Measurements, Interval: time.Second})).To(BeEmpty())
 	})
 
 	It("refuses a table whose instrument cannot reach its reduction's minimum within its span at the interval", func() {
 		sig := Signal[snap]{Name: "A", DemoteSpan: 60 * time.Second, Instruments: []Instrument[snap]{
-			{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: P99, Span: 60 * time.Second, Marks: marks()},
+			{Measurement: Measurement[snap]{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: P99, Span: 60 * time.Second}, Marks: marks()},
 		}}
 		tbl := Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
 		_, err := NewEngine(tbl)
@@ -145,17 +145,17 @@ var _ = Describe("Suite", func() {
 
 	It("does not refuse an instrument whose span can hold its reduction's minimum at the interval", func() {
 		sig := Signal[snap]{Name: "A", DemoteSpan: 60 * time.Second, Instruments: []Instrument[snap]{
-			{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: P95, Span: 60 * time.Second, Marks: marks()},
+			{Measurement: Measurement[snap]{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: P95, Span: 60 * time.Second}, Marks: marks()},
 		}}
 		tbl := Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
 		_, err := NewEngine(tbl)
 		Expect(err).ToNot(HaveOccurred(), "a p95 over 60s at 1s holds 61 entries against a minimum of 20")
 	})
 
-	It("refuses a track whose span cannot hold its reduction's minimum at the interval", func() {
+	It("refuses a measurement whose span cannot hold its reduction's minimum at the interval", func() {
 		tbl := Table[snap]{
-			Tracks:   []Track[snap]{{Name: "T", Extract: extract, Reduction: P99, Span: 60 * time.Second}},
-			Interval: time.Second,
+			Measurements: []Measurement[snap]{{Name: "T", Extract: extract, Reduction: P99, Span: 60 * time.Second}},
+			Interval:     time.Second,
 		}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
@@ -243,7 +243,7 @@ var _ = Describe("Suite", func() {
 		tbl := Table[snap]{
 			Signals: []Signal[snap]{
 				{Name: "N", DemoteSpan: 60 * time.Second, Instruments: []Instrument[snap]{
-					{Name: "I", Requires: []Capability{}, Extract: extract, Reduction: Last, Span: 60 * time.Second, Marks: marks()},
+					{Measurement: Measurement[snap]{Name: "I", Requires: []Capability{}, Extract: extract, Reduction: Last, Span: 60 * time.Second}, Marks: marks()},
 				}},
 			},
 			Interval: time.Second,

@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -68,7 +69,9 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				logger,
 				nil, // topicBrowserCommunicator
 				fsmOutboundChannel,
-				nil, // featureUsage
+				nil,                    // gatekeeperOutboundChannel
+				nil,                    // featureUsage
+				deps.NewNopFSMLogger(), // fsmLogger
 			)
 		})
 
@@ -88,7 +91,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 		})
 	})
 
-	})
+})
 
 var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 	// The guard for the FSMv2 status path: a subscriber registers, the notifier
@@ -141,7 +144,9 @@ var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 			logger,
 			topicBrowserCommunicator,
 			fsmOutboundChannel,
-			nil, // featureUsage
+			nil,                    // gatekeeperOutboundChannel
+			nil,                    // featureUsage
+			deps.NewNopFSMLogger(), // fsmLogger
 		)
 
 		const subscriberEmail = "status-test@example.com"

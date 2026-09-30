@@ -22,3 +22,4 @@ finalization/
 .worktrees/
 .self-review/
 vsdd/
+/umh-core/compose.yaml

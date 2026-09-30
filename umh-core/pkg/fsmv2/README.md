@@ -340,6 +340,7 @@ docker run -d \
 |----------|----------|-------------|
 | `AUTH_TOKEN` | Yes | Authentication token from Management Console |
 | `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
+| `USE_FSMV2_CPU` | No | FSMv2 container CPU monitoring; defaults to `false` (legacy operating-system metrics). Read once at startup, so changing it requires a restart. Temporary migration flag |
 
 ### Disabling FSMv2 Features
 

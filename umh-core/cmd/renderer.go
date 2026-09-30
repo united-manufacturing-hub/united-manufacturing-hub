@@ -79,6 +79,10 @@ func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) (
 		})
 	}
 
+	if cfg.UseGatekeeper {
+		children = append(children, childNode{Name: "certfetcher", WorkerType: "certfetcher"})
+	}
+
 	doc, err := yaml.Marshal(map[string]any{"children": children})
 	if err != nil {
 		return "", fmt.Errorf("marshal supervisor children document: %w", err)

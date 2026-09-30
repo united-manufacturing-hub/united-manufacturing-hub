@@ -49,7 +49,7 @@ type Scenario struct {
 	Case   Case
 }
 
-// Suite generates one Scenario per (signal, case) over t.Signals, never t.Tracks.
+// Suite generates one Scenario per (signal, case) over t.Signals, never t.Measurements.
 func Suite[S any](t Table[S]) []Scenario {
 	cases := []Case{CaseLive, CaseBriefOutage, CaseLongOutage, CaseUnsupported, CasePostOutageDip, CaseBelowFloor}
 
@@ -198,7 +198,9 @@ func drive[S any](e *Engine[S], interval time.Duration, env Environment, seq []b
 		}
 
 		_, readiness := e.Observe(sample, env, at)
-		// One row, because runScenario builds this engine over a single signal.
+		// Row 0, because the rows come depth-first and runScenario builds this
+		// engine over one signal: that signal's own row is first, and the rows
+		// of any refinements under it follow.
 		availability = readiness[0].Availability
 		at = at.Add(interval)
 	}
@@ -210,7 +212,7 @@ func drive[S any](e *Engine[S], interval time.Duration, env Environment, seq []b
 // instruments, falling back to the smallest on the signal, then to one.
 func minCapableMin[S any](s Signal[S], env Environment) int {
 	m := 0
-	for _, inst := range s.Capable(env) {
+	for _, inst := range s.CapableInstruments(env) {
 		if m == 0 || inst.Reduction.Min < m {
 			m = inst.Reduction.Min
 		}

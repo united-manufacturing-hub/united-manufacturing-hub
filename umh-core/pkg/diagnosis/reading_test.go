@@ -15,6 +15,9 @@
 package diagnosis
 
 import (
+	"encoding/json"
+	"math"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -53,5 +56,53 @@ var _ = Describe("Reading", func() {
 
 		_, ok = Unknown().Get()
 		Expect(ok).To(BeFalse(), "an absence returns no presence at all")
+	})
+
+	// A Reading holds both of its fields unexported, so an encoder given the
+	// bare struct writes {} and the number is lost without an error. These
+	// specs pin the wire form the custom marshaller provides instead.
+	Describe("on the wire", func() {
+		It("should carry a value as a JSON number, keeping a known zero apart from an absence", func() {
+			for _, v := range []float64{0.42, -1.5, 0} {
+				b, err := json.Marshal(Known(v))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(b)).NotTo(Equal("{}"),
+					"a Reading whose fields are unexported must not marshal as an empty object")
+				Expect(string(b)).NotTo(Equal("null"),
+					"a value is a number on the wire; only an absence is null")
+
+				var back Reading
+				Expect(json.Unmarshal(b, &back)).To(Succeed())
+
+				got, ok := back.Get()
+				Expect(ok).To(BeTrue(), "a value must still be present after a round trip")
+				Expect(got).To(Equal(v))
+			}
+		})
+
+		It("should carry an absence as null and read it back as an absence", func() {
+			b, err := json.Marshal(Unknown())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(b)).To(Equal("null"))
+
+			var back Reading
+			Expect(json.Unmarshal(b, &back)).To(Succeed())
+
+			_, ok := back.Get()
+			Expect(ok).To(BeFalse(), "null must read back as an absence, not a zero")
+		})
+
+		// JSON cannot spell NaN or an infinity, and the encoder errors on both.
+		// Reporting them as an absence keeps one bad reading from failing the
+		// whole document it sits in.
+		It("should report a non-finite value as an absence rather than failing the document around it", func() {
+			for _, v := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+				b, err := json.Marshal(struct {
+					R Reading `json:"r"`
+				}{R: Known(v)})
+				Expect(err).NotTo(HaveOccurred(), "a non-finite reading must not fail the surrounding document")
+				Expect(string(b)).To(Equal(`{"r":null}`))
+			}
+		})
 	})
 })

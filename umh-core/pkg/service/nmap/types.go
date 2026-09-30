@@ -62,6 +62,9 @@ type INmapService interface {
 type NmapScanResult struct {
 	// Timestamp of the scan
 	Timestamp time.Time `json:"timestamp"`
+	// Target the scan dialled, empty when the scan recorded no command to read
+	// it back from
+	Target string `json:"target"`
 	// Raw output from nmap
 	RawOutput string `json:"rawOutput"`
 	// Error message if scan failed
@@ -81,6 +84,18 @@ type PortResult struct {
 	// Port number
 	Port uint16 `json:"port"`
 }
+
+// PortState is the state nmap reports for the scanned port.
+type PortState string
+
+const (
+	PortStateOpen           PortState = "open"
+	PortStateFiltered       PortState = "filtered"
+	PortStateClosed         PortState = "closed"
+	PortStateUnfiltered     PortState = "unfiltered"
+	PortStateOpenFiltered   PortState = "open|filtered"
+	PortStateClosedFiltered PortState = "closed|filtered"
+)
 
 // ScanMetrics contains overall metrics for the scan.
 type ScanMetrics struct {

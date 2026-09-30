@@ -8,11 +8,26 @@ import (
 	"errors"
 	"strings"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/shirou/gopsutil/v4/internal/common"
 )
 
 func LabelWithContext(_ context.Context, _ string) (string, error) {
 	return "", common.ErrNotImplementedError
+}
+
+// FSType maps AIX filesystem type numbers (as reported by statfs and perfstat)
+// to their string name. Shared by the cgo and nocgo build variants.
+var FSType = map[int]string{
+	0: "jfs2", 1: "namefs", 2: "nfs", 3: "jfs", 5: "cdrom", 6: "proc",
+	16: "special-fs", 17: "cache-fs", 18: "nfs3", 19: "automount-fs", 20: "pool-fs", 32: "vxfs",
+	33: "veritas-fs", 34: "udfs", 35: "nfs4", 36: "nfs4-pseudo", 37: "smbfs", 38: "mcr-pseudofs",
+	39: "ahafs", 40: "sterm-nfs", 41: "asmfs",
+}
+
+func getFsType(stat unix.Statfs_t) string {
+	return FSType[int(stat.Vfstype)]
 }
 
 // Using lscfg and a device name, we can get the device information
@@ -22,6 +37,10 @@ func SerialNumberWithContext(ctx context.Context, name string) (string, error) {
 	// This isn't linux, these aren't actual disk devices
 	if strings.HasPrefix(name, "/dev/") {
 		return "", errors.New("devices on /dev are not physical disks on aix")
+	}
+	// Reject names that would be interpreted as command-line options by lscfg.
+	if strings.HasPrefix(name, "-") {
+		return "", errors.New("invalid device name")
 	}
 	out, err := invoke.CommandWithContext(ctx, "lscfg", "-vl", name)
 	if err != nil {

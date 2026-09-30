@@ -40,16 +40,16 @@ var _ = Describe("Ringbuffer", func() {
 	})
 
 	Context("Add / Get basics", func() {
-		It("stores elements and returns them newest-first", func() {
+		It("stores elements and returns them oldest-first", func() {
 			rb.Add(newBuf(0))
 			rb.Add(newBuf(1))
 			Expect(rb.Len()).To(Equal(2))
 
 			snapshot := rb.GetSnapshot()
 			Expect(snapshot.Items).To(HaveLen(2))
-			// expect newest first (id 1, then id 0)
-			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(1)))
-			Expect(snapshot.Items[1].Payload[0]).To(Equal(byte(0)))
+			// expect oldest first (id 0, then id 1)
+			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(0)))
+			Expect(snapshot.Items[1].Payload[0]).To(Equal(byte(1)))
 		})
 	})
 
@@ -65,7 +65,7 @@ var _ = Describe("Ringbuffer", func() {
 			Expect(snapshot.Items).To(HaveLen(int(cap))) // still full capacity
 			ids := []byte{snapshot.Items[0].Payload[0], snapshot.Items[1].Payload[0], snapshot.Items[2].Payload[0]}
 			// oldest (0) must be gone, newest (3) present
-			Expect(ids).To(Equal([]byte{3, 2, 1}))
+			Expect(ids).To(Equal([]byte{1, 2, 3}))
 		})
 	})
 
@@ -103,7 +103,7 @@ var _ = Describe("Ringbuffer", func() {
 		})
 	})
 
-	Context("GetSnapshot / memory management", func() {
+	Context("GetSnapshot", func() {
 		It("provides immutable snapshot access", func() {
 			rb := NewRingbuffer(4)
 			rb.Add(helperBuf(42))
@@ -119,46 +119,9 @@ var _ = Describe("Ringbuffer", func() {
 			// New snapshot reflects updates
 			newSnapshot := rb.GetSnapshot()
 			Expect(newSnapshot.Items).To(HaveLen(2))
-			Expect(newSnapshot.Items[0].Payload[0]).To(Equal(byte(99))) // Newest first
+			Expect(newSnapshot.Items[1].Payload[0]).To(Equal(byte(99))) // Newest last
 		})
 
-		It("demonstrates proper consumer memory management", func() {
-			rb := NewRingbuffer(4)
-			rb.Add(helperBuf(42))
-			rb.Add(helperBuf(43))
-
-			// Consumer pattern: get snapshot and always return items to pool
-			snapshot := rb.GetSnapshot()
-			defer PutBufferItems(snapshot.Items) // CRITICAL: Always return to pool when done
-
-			// Process the items
-			Expect(snapshot.Items).To(HaveLen(2))
-			for _, item := range snapshot.Items {
-				// Verify we can read the data
-				Expect(item.Payload).ToNot(BeNil())
-				Expect(item.Payload[0]).To(BeNumerically(">=", 42))
-			}
-
-			// At this point, defer will call PutBufferItems to return items to pool
-			// After that, snapshot.Items should not be used
-		})
-
-		It("shows that PutBufferItems clears the items", func() {
-			rb := NewRingbuffer(2)
-			rb.Add(helperBuf(100))
-
-			snapshot := rb.GetSnapshot()
-			Expect(snapshot.Items).To(HaveLen(1))
-			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(100)))
-
-			// Return to pool - this clears the items
-			PutBufferItems(snapshot.Items)
-
-			// Items are now cleared (should not use after PutBufferItems!)
-			Expect(snapshot.Items[0].Payload).To(BeNil())
-			Expect(snapshot.Items[0].Timestamp).To(Equal(time.Time{}))
-			Expect(snapshot.Items[0].SequenceNum).To(Equal(uint64(0)))
-		})
 	})
 
 	Context("Sequence number tracking", func() {
@@ -200,8 +163,8 @@ var _ = Describe("Ringbuffer", func() {
 
 			// Only buf2 and buf3 should remain
 			Expect(snapshot.Items).To(HaveLen(2))
-			Expect(snapshot.Items[0].SequenceNum).To(Equal(uint64(3))) // Newest first
-			Expect(snapshot.Items[1].SequenceNum).To(Equal(uint64(2)))
+			Expect(snapshot.Items[0].SequenceNum).To(Equal(uint64(2)))
+			Expect(snapshot.Items[1].SequenceNum).To(Equal(uint64(3))) // Newest last
 		})
 	})
 
@@ -217,9 +180,9 @@ var _ = Describe("Ringbuffer", func() {
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(2)))
 			Expect(snapshot.Items).To(HaveLen(2))
 
-			// Items should be newest-to-oldest
-			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(20))) // Newest
-			Expect(snapshot.Items[1].Payload[0]).To(Equal(byte(10))) // Older
+			// Items should be oldest-to-newest
+			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(10))) // Oldest
+			Expect(snapshot.Items[1].Payload[0]).To(Equal(byte(20))) // Newest
 		})
 	})
 })

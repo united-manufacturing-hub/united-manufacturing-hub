@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -30,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -45,6 +47,7 @@ type CommunicationState struct {
 	SubscriberHandler     *subscriber.Handler
 	OutboundChannel       chan *models.UMHMessage
 	Router                *router.Router
+	Gatekeeper            *gatekeeper.Gatekeeper
 	SystemSnapshotManager *fsm.SnapshotManager
 	Logger                *zap.SugaredLogger
 	TopicBrowserCache     *topicbrowser.Cache
@@ -146,7 +149,7 @@ func (c *CommunicationState) UpdateTopicBrowserCache() error {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers.
-func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, fsmOutboundChannel chan<- *types.UMHMessage) {
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, fsmOutboundChannel chan<- *types.UMHMessage, gatekeeperOutboundChannel chan<- *types.MessageWithSender) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -190,8 +193,10 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		configManager,
 		c.Logger,
 		topicBrowserCommunicator,
-		fsmOutboundChannel, // FSMv2 direct channel for status delivery
+		fsmOutboundChannel,        // FSMv2 without gatekeeper (nil when gatekeeper enabled)
+		gatekeeperOutboundChannel, // Gatekeeper channel (nil when gatekeeper disabled)
 		c.FeatureUsage,
+		actions.CommunicatorFSMLogger(), // fsmLogger: hooked so drops reach Sentry
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
@@ -257,7 +262,11 @@ func (c *CommunicationState) InitializeRouterForFSMv2() {
 	c.mu.Lock()
 	c.LoginResponseMu.RLock()
 	// Note: Puller is nil for FSMv2 mode - FSMv2 handles pulling via PullWorker
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	if c.Gatekeeper != nil {
+		c.Router = router.NewRouterForFSMv2(c.Watchdog, c.Gatekeeper.VerifiedInboundChan(), c.LoginResponse.UUID, c.Gatekeeper.LegacyOutboundChan(), c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	} else {
+		c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	}
 	c.LoginResponseMu.RUnlock()
 	c.mu.Unlock()
 
@@ -268,6 +277,13 @@ func (c *CommunicationState) InitializeRouterForFSMv2() {
 	}
 
 	c.Router.Start()
+}
+
+// GetSubscriberHandler returns the current subscriber handler (thread-safe).
+func (c *CommunicationState) GetSubscriberHandler() *subscriber.Handler {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.SubscriberHandler
 }
 
 // parseUUIDForFSMv2 attempts to parse a UUID string, returning uuid.Nil on failure.

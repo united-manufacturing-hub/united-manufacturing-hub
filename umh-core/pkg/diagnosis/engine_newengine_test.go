@@ -44,10 +44,15 @@ var _ = Describe("NewEngine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[snap]{
 				{
-					Name: "I1", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Last, Span: 60 * time.Second, Marks: validMarks(),
+					Measurement: Measurement[snap]{
+						Name: "I1", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Last, Span: 60 * time.Second,
+					},
+					Marks: validMarks(),
 				},
 				{
-					Name: "I2", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Mean, Span: 3 * time.Second,
+					Measurement: Measurement[snap]{
+						Name: "I2", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Mean, Span: 3 * time.Second,
+					},
 					Marks: Marks{Unit: "cores", Fire: Mark{At: 8, Inclusive: true}, Clear: Mark{At: 4, Inclusive: true}, Polarity: HigherIsWorse, Worst: 16},
 				},
 			},
@@ -72,6 +77,8 @@ var _ = Describe("NewEngine", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("A"))
 		Expect(err.Error()).To(ContainSubstring("I1"))
+		Expect(err.Error()).To(ContainSubstring("window span"),
+			"an instrument sizes a window, and the measurement spec below reads the other wording; the pair is why validateMeasurement takes the noun as a parameter")
 	})
 
 	It("refuses a HigherIsWorse mark pair whose clear mark is not below its fire mark", func() {
@@ -119,12 +126,48 @@ var _ = Describe("NewEngine", func() {
 		Expect(err.Error()).To(ContainSubstring("I1"))
 	})
 
-	It("refuses a track whose reduction has nil fold, which a caller can leave nil by writing a Reduction literal", func() {
+	It("refuses a measurement whose reduction has nil fold, which a caller can leave nil by writing a Reduction literal", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Reduction{Name: "x", Min: 2}}}
+		tbl.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Reduction{Name: "x", Min: 2}}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
+	})
+
+	It("refuses a table-level measurement that sets Against, which is only meaningful for an instrument", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "M-against", Extract: extract, Span: 60 * time.Second, Reduction: Last, Against: against}}
+		_, err := NewEngine(tbl)
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a table-level measurement that sets Against")
+		Expect(err.Error()).To(ContainSubstring("M-against"))
+		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
+	})
+
+	It("refuses a table-level measurement that sets Requires, which is only meaningful for an instrument", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "M-requires", Extract: extract, Span: 60 * time.Second, Reduction: Last, Requires: []Capability{"psi"}}}
+		_, err := NewEngine(tbl)
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a table-level measurement that sets Requires")
+		Expect(err.Error()).To(ContainSubstring("M-requires"))
+		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
+	})
+
+	It("refuses a table-level measurement that sets Boolean, which is only meaningful for an instrument", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "M-boolean", Extract: extract, Span: 60 * time.Second, Reduction: Last, Boolean: true}}
+		_, err := NewEngine(tbl)
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a table-level measurement that sets Boolean")
+		Expect(err.Error()).To(ContainSubstring("M-boolean"))
+		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
+	})
+
+	It("refuses a table-level measurement that sets Counter, which is only meaningful for an instrument", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "M-counter", Extract: extract, Span: 60 * time.Second, Reduction: Last, Counter: true}}
+		_, err := NewEngine(tbl)
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a table-level measurement that sets Counter")
+		Expect(err.Error()).To(ContainSubstring("M-counter"))
+		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
 	})
 
 	It("refuses an instrument whose reduction minimum sample count is below one", func() {
@@ -142,22 +185,22 @@ var _ = Describe("NewEngine", func() {
 	// refusals with minimums far from the capacity, which leaves where each rule
 	// cuts unpinned. Capacity counts both edges, span/interval + 1: a 60s span at
 	// 1s holds the entries at 0s and at 60s and the 59 between them, so 61.
-	It("cuts the capacity rule at exactly the entries a span holds, 61 over a 60s span at a 1s interval and not 60, for an instrument and a track alike", func() {
+	It("cuts the capacity rule at exactly the entries a span holds, 61 over a 60s span at a 1s interval and not 60, for an instrument and a measurement alike", func() {
 		for _, count := range []int{61, 62} {
 			reduction, rerr := NewReduction("boundary", count, func([]Point) float64 { return 0 })
 			Expect(rerr).ToNot(HaveOccurred())
 
 			sig := validSignal("A")
 			sig.Instruments[0].Reduction = reduction // I1 spans 60s
-			byTrack := validTable([]Signal[snap]{validSignal("A")})
-			byTrack.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: reduction}}
+			byMeasurement := validTable([]Signal[snap]{validSignal("A")})
+			byMeasurement.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: reduction}}
 
 			for _, row := range []struct {
 				name string
 				tbl  Table[snap]
 			}{
 				{name: "instrument", tbl: validTable([]Signal[snap]{sig})},
-				{name: "track", tbl: byTrack},
+				{name: "measurement", tbl: byMeasurement},
 			} {
 				_, err := NewEngine(row.tbl)
 				if count <= 61 {
@@ -206,33 +249,36 @@ var _ = Describe("NewEngine", func() {
 		Expect(err.Error()).To(ContainSubstring("I1"))
 	})
 
-	It("refuses a track whose span is zero or negative", func() {
+	It("refuses a measurement whose span is zero or negative", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 0, Reduction: Mean}}
+		tbl.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Span: 0, Reduction: Mean}}
+		_, err := NewEngine(tbl)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("T"))
+		Expect(err.Error()).To(ContainSubstring("span"))
+		Expect(err.Error()).ToNot(ContainSubstring("window span"),
+			"a table measurement hangs under no signal, so there is no signal's window to name and the error says the shorter word")
+	})
+
+	It("refuses a measurement whose reduction minimum sample count is below one", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Reduction{Name: "low", Min: 0, fold: func([]Point) float64 { return 0 }}}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
 	})
 
-	It("refuses a track whose reduction minimum sample count is below one", func() {
+	It("refuses a measurement that names a dividing reduction, because a measurement declares no denominator series", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Reduction{Name: "low", Min: 0, fold: func([]Point) float64 { return 0 }}}}
+		tbl.Measurements = []Measurement[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: DeltaRatio}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
 	})
 
-	It("refuses a track that names a dividing reduction, because a track declares no denominator series", func() {
+	It("refuses a measurement whose Extract is nil, which would panic in the observe loop", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: DeltaRatio}}
-		_, err := NewEngine(tbl)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("T"))
-	})
-
-	It("refuses a track whose Extract is nil, which would panic in the observe loop", func() {
-		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Span: 60 * time.Second, Reduction: Mean}}
+		tbl.Measurements = []Measurement[snap]{{Name: "T", Span: 60 * time.Second, Reduction: Mean}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
@@ -245,9 +291,9 @@ var _ = Describe("NewEngine", func() {
 		Expect(err).ToNot(HaveOccurred(), "a non-nil against under a non-dividing reduction is a redundant declaration, not a refusal")
 	})
 
-	It("refuses duplicate track names, which would leave Track returning whichever one it reached first", func() {
+	It("refuses duplicate measurement names, which would leave Measurement returning whichever one it reached first", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{
+		tbl.Measurements = []Measurement[snap]{
 			{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Mean},
 			{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Mean},
 		}
@@ -390,9 +436,6 @@ var _ = Describe("NewEngine", func() {
 	// accepts the endpoints are exact, whatever the unit or direction. Rising
 	// ratio: (4.0 - 2.0) / (4.0 - 2.0) = 1. Falling headroom, worse() negating
 	// every term: (1.0 - 0.0) / (1.0 - 0.0) = 1 at the value -1.0 against fire 0.0.
-	// Under the earlier design the falling denominator was fire - (-worst), which
-	// put severity 1 at a value the quantity could not reach and scored a signal
-	// at its worst near zero.
 	It("scores exactly 0.0 at the fire mark and exactly 1.0 at the worst value, under both polarities", func() {
 		rising := Marks{Unit: "ratio", Fire: Mark{At: 2.0, Inclusive: true}, Clear: Mark{At: 1.0, Inclusive: true}, Polarity: HigherIsWorse, Worst: 4.0}
 		falling := Marks{Unit: "cores", Fire: Mark{At: 0.0, Inclusive: true}, Clear: Mark{At: 0.5, Inclusive: true}, Polarity: LowerIsWorse, Worst: -1.0}
@@ -407,5 +450,92 @@ var _ = Describe("NewEngine", func() {
 			Expect(Fired{Marks: m, Value: m.Worst}.Severity()).To(Equal(1.0), m.Unit)
 			Expect(Fired{Marks: m, Value: m.Fire.At}.Severity()).To(Equal(0.0), m.Unit)
 		}
+	})
+
+	It("rejects a refinement under its parent's path, so the error names A/A1 and not the bare A1", func() {
+		ref := validSignal("A1")
+		ref.DemoteSpan = 0
+		parent := validSignal("A")
+		parent.Refinements = []Signal[snap]{ref}
+		_, err := NewEngine(validTable([]Signal[snap]{parent}))
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a refinement whose demote span is zero")
+		Expect(err.Error()).To(ContainSubstring("A/A1"),
+			"the error names the parent and the refinement, not the refinement alone")
+	})
+
+	It("refuses two sibling refinements with the same name under one parent", func() {
+		parent := validSignal("A")
+		parent.Refinements = []Signal[snap]{validSignal("A1"), validSignal("A1")}
+		_, err := NewEngine(validTable([]Signal[snap]{parent}))
+		Expect(err).To(HaveOccurred(), "NewEngine must reject duplicate sibling refinement names")
+		Expect(err.Error()).To(ContainSubstring("A"))
+		Expect(err.Error()).To(ContainSubstring("A1"))
+	})
+
+	It("accepts the same refinement name under different parents, because uniqueness is among siblings only", func() {
+		a := validSignal("A")
+		a.Refinements = []Signal[snap]{validSignal("X")}
+		b := validSignal("B")
+		b.Refinements = []Signal[snap]{validSignal("X")}
+		_, err := NewEngine(validTable([]Signal[snap]{a, b}))
+		Expect(err).ToNot(HaveOccurred(),
+			"a refinement name is unique among its parent's refinements, not across the tree")
+	})
+
+	// A refinement's windows are keyed under its parent's path plus its own
+	// name, joined with "/", so a top-level signal named "A/X" is keyed under
+	// the same "A/X" as the refinement X of a signal A. The second one built
+	// overwrites the first, and from then on both signals judge whichever window
+	// survived. Refusing "/" inside any name makes that collision unreachable:
+	// no segment can hold the separator, so no composed path can equal a bare
+	// name.
+	It("refuses a top-level signal whose name holds the path separator", func() {
+		_, err := NewEngine(validTable([]Signal[snap]{validSignal("A/X")}))
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a top-level signal named A/X")
+		Expect(err.Error()).To(ContainSubstring("A/X"))
+		Expect(err.Error()).To(ContainSubstring(`may not contain "/"`))
+	})
+
+	It("refuses a refinement whose name holds the path separator, so the rule reaches every depth and not just top-level signals", func() {
+		parent := validSignal("A")
+		parent.Refinements = []Signal[snap]{validSignal("B/C")}
+		_, err := NewEngine(validTable([]Signal[snap]{parent}))
+		Expect(err).To(HaveOccurred(), "NewEngine must reject a refinement named B/C")
+		Expect(err.Error()).To(ContainSubstring("B/C"))
+		Expect(err.Error()).To(ContainSubstring(`may not contain "/"`))
+	})
+
+	// Two parents each declaring a refinement called X is the case paths exist
+	// for, and the refusal above must not reach it. Reading both reduced values
+	// is what pins that down: a rule that rejected this table, or one that let
+	// the two share a window, would leave the two refusals above green while the
+	// feature was broken. Each X reads the snapshot through its own extractor,
+	// so one shared window could not report both numbers.
+	It("keeps the windows of a refinement named X under A and one named X under B separate", func() {
+		refinementReading := func(read func(snap) float64) Signal[snap] {
+			r := validSignal("X")
+			r.Instruments[0].Extract = func(s snap) Reading { return Known(read(s)) }
+
+			return r
+		}
+
+		a := validSignal("A")
+		a.Refinements = []Signal[snap]{refinementReading(func(s snap) float64 { return s.v })}
+		b := validSignal("B")
+		b.Refinements = []Signal[snap]{refinementReading(func(s snap) float64 { return s.v * 3 })}
+
+		e, err := NewEngine(validTable([]Signal[snap]{a, b}))
+		Expect(err).ToNot(HaveOccurred(),
+			"two parents may each declare a refinement called X: the paths A/X and B/X keep them apart")
+
+		e.Observe(snap{v: 2}, NewEnvironment("source-1"), time.Unix(1_000_000, 0))
+
+		underA, stateA := e.Reduction("A/X", "I1").Get()
+		Expect(stateA).To(Equal(StateValue))
+		Expect(underA).To(Equal(2.0))
+
+		underB, stateB := e.Reduction("B/X", "I1").Get()
+		Expect(stateB).To(Equal(StateValue))
+		Expect(underB).To(Equal(6.0), "B/X reads three times what A/X does, so one shared window could not report both")
 	})
 })

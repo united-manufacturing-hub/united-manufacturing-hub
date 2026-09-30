@@ -133,13 +133,11 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.logger.Debug("identity_saved")
 
-	// Read the prior StartupCount from the stored observation BEFORE the initial
-	// SaveObserved below overwrites it. The initial COS run carries no framework
-	// metrics (AddWorker bypasses the collector), so saving it first would clobber
-	// the count we are about to read back and StartupCount would never advance
-	// past 1 on re-created workers. A load error other than "not yet present" is
-	// surfaced, so a transient store failure does not silently look like a fresh
-	// worker.
+	// Read the prior StartupCount before the SaveObserved below, which would
+	// otherwise overwrite it. The ordering is pinned by "StartupCount persistence
+	// advances across a worker respawn instead of resetting to 1". A load error other
+	// than "not yet present" is surfaced, so a transient store failure does not
+	// silently look like a fresh worker.
 	var startupCount int64 = 1
 
 	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -560,6 +558,7 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkers() []deps.Identity {
 }
 
 // GetCurrentState returns the current state of the first worker.
+//
 // Deprecated: Use GetCurrentStateName() for interface compatibility, or
 // GetWorkerState(workerID) for full state information including reason.
 // This method will be removed in a future version.

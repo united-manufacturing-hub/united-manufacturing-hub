@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -39,7 +40,9 @@ type Handler struct {
 	dog                        watchdog.Iface
 	configManager              config.ConfigManager
 	subscriberRegistry         *subscribers.Registry
-	fsmOutboundChannel         chan<- *types.UMHMessage // FSMv2 direct channel for status delivery
+	fsmOutboundChannel         chan<- *types.UMHMessage        // FSMv2 without gatekeeper (nil when gatekeeper enabled)
+	gatekeeperOutboundChannel  chan<- *types.MessageWithSender // FSMv2 with gatekeeper (nil when gatekeeper disabled)
+	fsmLogger                  deps.FSMLogger                  // Sentry-routed logger for the FSMv2 drop site
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
@@ -62,17 +65,21 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 direct channel for status delivery
+	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 without gatekeeper (nil when gatekeeper enabled)
+	gatekeeperOutboundChannel chan<- *types.MessageWithSender, // FSMv2 with gatekeeper (nil when gatekeeper disabled)
 	featureUsage *models.FeatureUsage,
+	fsmLogger deps.FSMLogger, // Sentry-routed logger for the FSMv2 drop warning
 ) *Handler {
-	if fsmOutboundChannel == nil {
-		panic("subscriber.NewHandler: fsmOutboundChannel must be non-nil (FSMv2 is the only status delivery path)")
+	if fsmOutboundChannel == nil && gatekeeperOutboundChannel == nil {
+		panic("subscriber.NewHandler: fsmOutboundChannel or gatekeeperOutboundChannel must be non-nil (FSMv2 is the only status delivery path)")
 	}
 
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
 	s.fsmOutboundChannel = fsmOutboundChannel
+	s.gatekeeperOutboundChannel = gatekeeperOutboundChannel
+	s.fsmLogger = fsmLogger
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
@@ -104,6 +111,12 @@ func (s *Handler) GetSubscribers() []string {
 	s.dog.SetHasSubscribers(len(subscribers) > 0)
 
 	return subscribers
+}
+
+// Subscribers returns the list of active subscriber emails.
+// Implements certificatehandler.SubHandler interface.
+func (s *Handler) Subscribers() []string {
+	return s.GetSubscribers()
 }
 
 // SetInstanceUUID updates the instance UUID used for status messages.
@@ -182,28 +195,60 @@ func (s *Handler) notify() {
 			return
 		}
 
-		message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
-			MessageType: models.Status,
-			Payload:     statusMessage,
-		})
-		if err != nil {
-			s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
+		// Gatekeeper mode: write raw MessageWithSender
+		if s.gatekeeperOutboundChannel != nil {
+			msg := &types.MessageWithSender{
+				Content: models.UMHMessageContent{
+					MessageType: models.Status,
+					Payload:     statusMessage,
+				},
+				SenderEmail: email,
+			}
+			select {
+			case s.gatekeeperOutboundChannel <- msg:
+				// Successfully sent to gatekeeper
+			default:
+				s.fsmLogger.SentryWarn(
+					deps.FeatureFSMv1Communicator,
+					"fsmv1.Communicator",
+					"gatekeeper_outbound_channel_full",
+					deps.Int("channel_len", len(s.gatekeeperOutboundChannel)),
+					deps.Int("channel_cap", cap(s.gatekeeperOutboundChannel)),
+				)
 
-			return
-		}
+				return
+			}
+		} else {
+			message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
+				MessageType: models.Status,
+				Payload:     statusMessage,
+			})
+			if err != nil {
+				s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
 
-		msg := &types.UMHMessage{
-			InstanceUUID: s.GetInstanceUUID().String(),
-			Content:      message,
-			Email:        email,
-		}
-		select {
-		case s.fsmOutboundChannel <- msg:
-			// Successfully sent to FSMv2 transport
-		default:
-			s.logger.Warnf("FSMv2 outbound channel full, dropping message for subscriber %s", email)
+				return
+			}
 
-			return
+			// FSMv2 mode without gatekeeper: write encoded types.UMHMessage
+			msg := &types.UMHMessage{
+				InstanceUUID: s.GetInstanceUUID().String(),
+				Content:      message,
+				Email:        email,
+			}
+			select {
+			case s.fsmOutboundChannel <- msg:
+				// Successfully sent to FSMv2 transport
+			default:
+				s.fsmLogger.SentryWarn(
+					deps.FeatureFSMv1Communicator,
+					"fsmv1.Communicator",
+					"fsmv2_outbound_channel_full",
+					deps.Int("channel_len", len(s.fsmOutboundChannel)),
+					deps.Int("channel_cap", cap(s.fsmOutboundChannel)),
+				)
+
+				return
+			}
 		}
 
 		// Mark subscriber as bootstrapped after first message
@@ -217,6 +262,6 @@ func (s *Handler) notify() {
 
 	// Mark data as sent for tracking purposes
 	if notified > 0 && s.topicBrowserCommunicator != nil {
-		s.topicBrowserCommunicator.MarkDataAsSent(time.Now())
+		s.topicBrowserCommunicator.MarkDataAsSent()
 	}
 }
