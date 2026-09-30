@@ -15,6 +15,7 @@
 package communicator
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -31,20 +32,14 @@ type CommunicatorDependencies struct {
 	outboundChan    <-chan *types.UMHMessage
 }
 
-// NewCommunicatorDependencies creates dependencies for the communicator worker,
-// acquiring channels from the global channel provider set with SetChannelProvider.
-// Panics when that global is unset.
+// NewCommunicatorDependencies creates dependencies for the communicator worker
+// from the given channel provider. It panics when the provider is nil, because
+// a dependency without channels fails on first use with a nil dereference.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
-func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies) *CommunicatorDependencies {
-	return newCommunicatorDependenciesWithProvider(t, bd, GetChannelProvider())
-}
-
-// newCommunicatorDependenciesWithProvider is NewCommunicatorDependencies with
-// an explicit provider in place of the global one.
-func newCommunicatorDependenciesWithProvider(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *CommunicatorDependencies {
+func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *CommunicatorDependencies {
 	if provider == nil {
-		panic("ChannelProvider must be set before creating communicator dependencies. " +
-			"Call SetChannelProvider() in main.go before starting the FSMv2 supervisor.")
+		panic(fmt.Sprintf("ChannelProvider must not be nil when creating communicator dependencies (worker=%s).",
+			bd.GetWorkerID()))
 	}
 
 	inbound, outbound := provider.GetChannels(bd.GetWorkerID())

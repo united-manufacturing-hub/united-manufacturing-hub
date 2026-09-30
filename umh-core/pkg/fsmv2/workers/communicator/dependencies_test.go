@@ -81,31 +81,25 @@ var _ = Describe("CommunicatorDependencies", func() {
 	BeforeEach(func() {
 		mt = &mockTransport{}
 		logger = depspkg.NewNopFSMLogger()
-		// Every spec gets a global provider; the singleton specs below clear it.
-		communicator.SetChannelProvider(newTestChannelProvider())
-	})
-
-	AfterEach(func() {
-		communicator.ClearChannelProvider()
 	})
 
 	Describe("NewCommunicatorDependencies", func() {
 		Context("when creating a new dependencies", func() {
 			It("should return a non-nil dependencies", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 				Expect(deps).NotTo(BeNil())
 			})
 
 			It("should store the transport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 				Expect(deps.GetTransport()).To(Equal(mt))
 			})
 
 			It("should store the logger", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 				Expect(deps.GetLogger()).NotTo(BeNil())
 			})
 		})
@@ -114,7 +108,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("GetTransport", func() {
 		It("should return the transport passed to the constructor", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 			Expect(deps.GetTransport()).To(Equal(mt))
 		})
 	})
@@ -122,7 +116,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("GetLogger", func() {
 		It("should return the logger inherited from BaseDependencies", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 			// Logger is enriched with worker context
 			Expect(deps.GetLogger()).NotTo(BeNil())
 		})
@@ -131,7 +125,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("Dependencies interface implementation", func() {
 		It("should implement deps.Dependencies interface", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 			var _ depspkg.Dependencies = deps
 			Expect(deps).To(Satisfy(func(d interface{}) bool {
 				_, ok := d.(depspkg.Dependencies)
@@ -146,7 +140,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 		})
 
 		Describe("GetConsecutiveErrors", func() {
@@ -235,7 +229,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 		BeforeEach(func() {
 			mockTrans = NewMockTransport()
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mockTrans, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps = communicator.NewCommunicatorDependencies(mockTrans, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 		})
 
 		Context("when errors are below threshold", func() {
@@ -273,7 +267,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 		Context("when transport is nil", func() {
 			It("should not panic when recording errors without transport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, depspkg.NewBaseDependencies(logger, nil, identity))
+				depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 
 				Expect(func() {
 					for range 10 {
@@ -309,7 +303,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 		})
 
 		Describe("GetDegradedEnteredAt", func() {
@@ -395,53 +389,32 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 	})
 
-	// NewCommunicatorDependencies reads only the global provider. The
-	// dependency-map route is specified in worker_test.go.
-	Describe("Phase 1: ChannelProvider Singleton Architecture", func() {
-		BeforeEach(func() {
-			// Ensure singleton is cleared before each test
-			communicator.ClearChannelProvider()
-		})
+	Describe("NewCommunicatorDependencies", func() {
+		Context("when the provider is nil", func() {
+			It("should panic with clear error message", func() {
+				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
 
-		AfterEach(func() {
-			// Clean up singleton after each test
-			communicator.ClearChannelProvider()
-		})
-
-		Describe("NewCommunicatorDependencies", func() {
-			Context("when ChannelProvider singleton is NOT set", func() {
-				It("should panic with clear error message", func() {
-					// Ensure singleton is nil
-					Expect(communicator.GetChannelProvider()).To(BeNil())
-
-					// Creating dependencies without singleton should panic
-					identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-					Expect(func() {
-						communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
-					}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
-				})
+				Expect(func() {
+					communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), nil)
+				}).To(PanicWith(ContainSubstring("ChannelProvider must not be nil")))
 			})
+		})
 
-			Context("when ChannelProvider singleton IS set", func() {
-				It("should NOT panic and create dependencies with channels from singleton", func() {
-					inbound := make(chan<- *types.UMHMessage, 10)
-					outbound := make(<-chan *types.UMHMessage, 10)
-					mockProvider := &mockChannelProvider{
-						inbound:  inbound,
-						outbound: outbound,
-					}
-					communicator.SetChannelProvider(mockProvider)
+		Context("when the provider is given", func() {
+			It("should create dependencies with the provider's channels", func() {
+				inbound := make(chan<- *types.UMHMessage, 10)
+				outbound := make(<-chan *types.UMHMessage, 10)
+				mockProvider := &mockChannelProvider{
+					inbound:  inbound,
+					outbound: outbound,
+				}
 
-					identity := depspkg.Identity{ID: "test-singleton-id", WorkerType: "communicator"}
-					var deps *communicator.CommunicatorDependencies
-					Expect(func() {
-						deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
-					}).NotTo(Panic())
+				identity := depspkg.Identity{ID: "test-provider-id", WorkerType: "communicator"}
+				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), mockProvider)
 
-					Expect(deps).NotTo(BeNil())
-					Expect(deps.GetInboundChan()).To(Equal(inbound))
-					Expect(deps.GetOutboundChan()).To(Equal(outbound))
-				})
+				Expect(deps).NotTo(BeNil())
+				Expect(deps.GetInboundChan()).To(Equal(inbound))
+				Expect(deps.GetOutboundChan()).To(Equal(outbound))
 			})
 		})
 	})
