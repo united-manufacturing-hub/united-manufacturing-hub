@@ -119,6 +119,20 @@ type TriangularStoreInterface interface {
 	// failed append is logged, not returned.
 	MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error
 
+	// ClearDeleted removes the tombstone MarkDeleted wrote from a worker's
+	// stored role documents, so a worker added again starts without one.
+	// Each cleared document loses _deleted_at and _deleted_by and keeps
+	// every other field. It gets a new _sync_id, as with any other write.
+	// One delta entry per cleared document lists the tombstone keys under
+	// Removed. A missing document and a document without a tombstone are
+	// skipped. So ClearDeleted writes nothing for a live worker and never
+	// creates a document.
+	//
+	// The clearing writes happen in one transaction: on a returned error no
+	// document is cleared. Delta entries are appended after the commit; a
+	// failed append is logged, not returned.
+	ClearDeleted(ctx context.Context, workerType string, id string) error
+
 	// GetLatestSyncID returns the current sync_id for clients to establish initial sync position.
 	GetLatestSyncID(ctx context.Context) (int64, error)
 

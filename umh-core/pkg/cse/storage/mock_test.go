@@ -225,6 +225,10 @@ func (m *mockTriangularStore) MarkDeleted(_ context.Context, _ string, _ string,
 	return nil
 }
 
+func (m *mockTriangularStore) ClearDeleted(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
 func (m *mockTriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 	return 0, nil
 }

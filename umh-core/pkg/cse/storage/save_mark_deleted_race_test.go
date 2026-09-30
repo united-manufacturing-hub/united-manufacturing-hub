@@ -72,7 +72,7 @@ func (p *pausingStore) Get(ctx context.Context, collection string, id string) (p
 	return doc, err
 }
 
-var _ = Describe("A save running while MarkDeleted runs", func() {
+var _ = Describe("A save running while the tombstone changes", func() {
 	It("does not lose the tombstone MarkDeleted writes", func() {
 		const (
 			workerType = "container"
@@ -129,6 +129,67 @@ var _ = Describe("A save running while MarkDeleted runs", func() {
 		stored, err := backend.mockStore.Get(ctx, observedCollection, workerID)
 		Expect(err).NotTo(HaveOccurred())
 		expectTombstone(stored, t0, "removed")
+		Expect(stored["collected_at"]).To(Equal(t0.Add(time.Hour)))
+	})
+
+	It("does not bring back a tombstone ClearDeleted removes", func() {
+		const (
+			workerType = "container"
+			workerID   = "worker-1"
+		)
+
+		ctx := context.Background()
+		mockClock := clock.NewMock()
+		t0 := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+		mockClock.Set(t0)
+
+		backend := &pausingStore{mockStore: newMockStore()}
+		ts := storage.NewTriangularStoreWithClock(backend, deps.NewNopFSMLogger(), mockClock)
+
+		saveInitialDocuments(ctx, ts, workerType, workerID)
+		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+
+		observedCollection := workerType + "_" + storage.RoleObserved
+		backend.pauseNextGet(observedCollection, workerID)
+		paused, release := backend.paused, backend.release
+
+		saveDone := make(chan error, 1)
+
+		go func() {
+			_, err := ts.SaveObserved(ctx, workerType, workerID, persistence.Document{
+				"id":           workerID,
+				"status":       "running",
+				"collected_at": t0.Add(time.Hour),
+			})
+			saveDone <- err
+		}()
+
+		Eventually(paused).Should(BeClosed())
+
+		clearDone := make(chan error, 1)
+
+		go func() {
+			clearDone <- ts.ClearDeleted(ctx, workerType, workerID)
+		}()
+
+		// If ClearDeleted can finish while the save is paused, give it the
+		// time to do so. If it waits for the save, this times out and the
+		// outcome is the same either way.
+		select {
+		case err := <-clearDone:
+			clearDone <- err
+		case <-time.After(200 * time.Millisecond):
+		}
+
+		close(release)
+
+		Eventually(saveDone).Should(Receive(BeNil()))
+		Eventually(clearDone).Should(Receive(BeNil()))
+
+		stored, err := backend.mockStore.Get(ctx, observedCollection, workerID)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stored).NotTo(HaveKey(storage.FieldDeletedAt))
+		Expect(stored).NotTo(HaveKey(storage.FieldDeletedBy))
 		Expect(stored["collected_at"]).To(Equal(t0.Add(time.Hour)))
 	})
 })
