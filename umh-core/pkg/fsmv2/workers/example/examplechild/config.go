@@ -17,11 +17,20 @@ package example_child
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 
 // ExamplechildConfig is the typed configuration for the child worker.
+// The yaml tags are read when DeriveDesiredState parses the rendered
+// template. The json tags are read when the supervisor persists the
+// derived desired state as a JSON document.
 type ExamplechildConfig struct {
 	config.BaseUserSpec
+	Address string `yaml:"address" json:"address"`
+	Device  string `yaml:"device" json:"device"`
 }
 
 // ExamplechildStatus is the observed status for the child worker.
+// Observation flattens these fields to the top level of its JSON output,
+// so the json tags set the persisted key spelling.
 type ExamplechildStatus struct {
 	ConnectionHealth string `json:"connection_health"`
+	Address          string `json:"address"`
+	Device           string `json:"device"`
 }
