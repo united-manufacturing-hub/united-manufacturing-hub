@@ -5,11 +5,11 @@
 ### Improvements
 
 - `USE_FSMV2_TRANSPORT` and `USE_FSMV2_MEMORY_CLEANUP` are now always on and can be removed from your configuration
-- `ALLOW_INSECURE_TLS` and `agent.communicator.allowInsecureTLS` no longer have any effect. The new FSMv2 communicator never implemented this option, and nothing indicated it was in use. For corporate networks that intercept TLS, add your corporate CA certificate instead; see the network configuration guide. The config key is still accepted, so you do not need to edit your `config.yaml`
-- umh-core now starts and runs without `AUTH_TOKEN` or `API_URL`. Previously an instance with no Management Console credentials brought up no runtime at all: its components reported `starting` indefinitely, with no error and no exit, so a missing or mistyped token looked like a hung container. Such an instance now runs fully — it simply cannot reach the Management Console
+- `ALLOW_INSECURE_TLS` no longer has any effect. To trust a proxy that intercepts TLS, add your corporate CA certificate instead (see the network configuration guide)
 
 ### Fixes
 
+- umh-core runs without the Management Console again. It is designed to work without `AUTH_TOKEN` and `API_URL`, but FSMv2 features such as `USE_FSMV2_CPU` accidentally depended on them
 - Log messages for stopped flows in bridges are now more consistent
 
 ## [0.44.41]
