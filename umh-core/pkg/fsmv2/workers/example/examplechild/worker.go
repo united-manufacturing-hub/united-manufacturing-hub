@@ -104,6 +104,7 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context, desired fsmv2.De
 	}
 
 	var address, device string
+
 	if desired != nil {
 		cfg := fsmv2.ExtractConfig[ExamplechildConfig](desired)
 		address = cfg.Address

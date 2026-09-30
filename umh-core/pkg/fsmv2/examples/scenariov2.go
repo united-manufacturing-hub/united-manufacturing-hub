@@ -324,7 +324,7 @@ var RegistryV2 = map[string]ScenarioV2{
 	"simple":       SimpleScenarioV2,
 	"cascade":      CascadeScenarioV2,
 	"configerror":  ConfigErrorScenarioV2,
-	"inheritance": InheritanceScenarioV2,
+	"inheritance":  InheritanceScenarioV2,
 	"communicator": CommunicatorScenarioV2,
 	"persistence":  PersistenceScenarioV2,
 
