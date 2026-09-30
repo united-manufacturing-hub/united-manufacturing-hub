@@ -71,20 +71,28 @@ type CollectorConfig[TObserved any] struct {
 	// workers that need per-child detail.
 	ChildrenViewProvider func() config.ChildrenView
 	// FrameworkMetricsProvider returns current framework metrics from supervisor.
-	// Called BEFORE collection to inject into worker dependencies.
-	// The provider captures workerCtx and acquires RLock when called (thread-safe).
+	// Called before collection; the value is captured into a collector local and
+	// injected onto the Observation in wrapNewObservation, so this must be set for
+	// any worker that needs framework metrics on its Observation. The provider
+	// captures workerCtx and acquires RLock when called (thread-safe).
 	FrameworkMetricsProvider func() *deps.FrameworkMetrics
-	// FrameworkMetricsSetter sets framework metrics on worker dependencies.
-	// Called BEFORE CollectObservedState so workers can access via deps.GetFrameworkState().
-	// Replaces the duck-typing injection pattern for explicit metrics copying.
+	// FrameworkMetricsSetter writes the captured framework metrics into worker
+	// dependencies before CollectObservedState, so a worker can read
+	// deps.GetFrameworkState() during collection. It does not feed the Observation
+	// injection, which uses the same collector local. Invoked only when the
+	// Provider is also set.
 	FrameworkMetricsSetter func(*deps.FrameworkMetrics)
-	// ActionHistoryProvider returns buffered action results from supervisor's workerCtx.
-	// Called BEFORE CollectObservedState to get action results for injection into deps.
-	// The supervisor auto-records action results via ActionExecutor callback.
+	// ActionHistoryProvider returns buffered action results from supervisor's
+	// workerCtx. Called before collection; the value is captured into a collector
+	// local and injected onto the Observation in wrapNewObservation, so this must
+	// be set for any worker that needs action history on its Observation. The
+	// supervisor auto-records action results via ActionExecutor callback.
 	ActionHistoryProvider func() []deps.ActionResult
-	// ActionHistorySetter sets action history on worker dependencies BEFORE CollectObservedState.
-	// Workers then access via deps.GetActionHistory() and assign to their ObservedState.
-	// This follows the same pattern as FrameworkMetricsSetter.
+	// ActionHistorySetter writes the captured action history into worker
+	// dependencies before CollectObservedState, so a worker can read
+	// deps.GetActionHistory() during collection. It does not feed the Observation
+	// injection, which uses the same collector local. Invoked only when the
+	// Provider is also set.
 	ActionHistorySetter func([]deps.ActionResult)
 	// DesiredStateProvider returns the current desired state from the CSE store.
 	// Called BEFORE CollectObservedState so workers can access configuration
@@ -418,16 +426,31 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	c.logTrace("observation_collection_starting",
 		deps.String("collection_start_time", collectionStartTime.Format(time.RFC3339Nano)))
 
-	// Inject framework metrics before CollectObservedState so workers can access via deps.GetFrameworkState()
-	if c.config.FrameworkMetricsProvider != nil && c.config.FrameworkMetricsSetter != nil {
-		fm := c.config.FrameworkMetricsProvider()
-		c.config.FrameworkMetricsSetter(fm)
+	// A worker whose deps fail the baseDepsAccessor assertion (step 4 in
+	// wrapNewObservation) carries no framework state of its own. So fetch the metrics
+	// into a local here, ahead of that guard, and wrapNewObservation injects them
+	// whatever the deps shape. Fetching on the Provider alone calls the provider
+	// exactly once per tick even when the Setter is nil.
+	var frameworkMetrics *deps.FrameworkMetrics
+	if c.config.FrameworkMetricsProvider != nil {
+		frameworkMetrics = c.config.FrameworkMetricsProvider()
+		if c.config.FrameworkMetricsSetter != nil {
+			// Preserved for workers that read deps.GetFrameworkState() during
+			// CollectObservedState.
+			c.config.FrameworkMetricsSetter(frameworkMetrics)
+		}
 	}
 
-	// Inject action history before CollectObservedState so workers can access via deps.GetActionHistory()
-	if c.config.ActionHistoryProvider != nil && c.config.ActionHistorySetter != nil {
-		actionHistory := c.config.ActionHistoryProvider()
-		c.config.ActionHistorySetter(actionHistory)
+	// Fetch action history into a local for the same reason and with the same
+	// split guard.
+	var actionHistory []deps.ActionResult
+	if c.config.ActionHistoryProvider != nil {
+		actionHistory = c.config.ActionHistoryProvider()
+		if c.config.ActionHistorySetter != nil {
+			// Preserved for workers that read deps.GetActionHistory() during
+			// CollectObservedState.
+			c.config.ActionHistorySetter(actionHistory)
+		}
 	}
 
 	// Load desired state to pass to CollectObservedState.
@@ -450,9 +473,8 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 			// fire SentryError on every tick (~1/s/worker) and exhaust Sentry quota
 			// during brief store outages. Sentry escalation happens upstream in api.go's
 			// DesiredStateProvider closure, which fires SentryWarn at the source.
-			// (Sticky-error dedup at that layer is deferred to a follow-up ticket;
-			// FSMLogger lacks a Loki-only Warn method today, which is why Info is the
-			// current best fit.)
+			// (Sticky-error dedup at that layer is ENG-5658; FSMLogger lacks a
+			// Loki-only Warn method today, which is why Info is the current best fit.)
 			c.config.Logger.Info("collector_skipped_desired_state_error",
 				deps.Err(providerErr))
 
@@ -485,7 +507,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Post-COS framework wrapping for NewObservation-based workers.
 	// Gate: zero CollectedAt means NewObservation (not WrapStatus).
 	if observed.GetTimestamp().IsZero() {
-		observed = c.wrapNewObservation(ctx, observed)
+		observed = c.wrapNewObservation(ctx, observed, frameworkMetrics, actionHistory)
 	}
 
 	// Inject FSM state via callback to preserve "Collector-only writes ObservedState" boundary
@@ -591,11 +613,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	return nil
 }
 
-// baseDepsAccessor is a duck-type interface for extracting framework data from
-// any worker's dependencies (BaseDependencies or a struct embedding it).
+// baseDepsAccessor accesses a worker's MetricsRecorder for step 5 (worker-metric
+// accumulation).
 type baseDepsAccessor interface {
-	GetFrameworkState() *deps.FrameworkMetrics
-	GetActionHistory() []deps.ActionResult
 	MetricsRecorder() *deps.MetricsRecorder
 }
 
@@ -605,7 +625,7 @@ type baseDepsAccessor interface {
 //
 // Steps: set CollectedAt, inject framework metrics + action history,
 // accumulate worker metrics (load previous from CSE, drain recorder, merge).
-func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed fsmv2.ObservedState) fsmv2.ObservedState {
+func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed fsmv2.ObservedState, frameworkMetrics *deps.FrameworkMetrics, actionHistory []deps.ActionResult) fsmv2.ObservedState {
 	// Step 1: Set CollectedAt to now.
 	if setter, ok := observed.(interface {
 		SetCollectedAt(time.Time) fsmv2.ObservedState
@@ -613,7 +633,29 @@ func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed 
 		observed = setter.SetCollectedAt(time.Now())
 	}
 
-	// Step 2: Get BaseDependencies from worker via DependencyProvider → baseDepsAccessor.
+	// Step 2: Inject framework metrics from the collector's local, ahead of the deps
+	// guard at step 4.
+	if frameworkMetrics != nil {
+		if setter, ok := observed.(interface {
+			SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
+		}); ok {
+			observed = setter.SetFrameworkMetrics(*frameworkMetrics)
+		}
+	}
+
+	// Step 3: Inject action history from the collector's local, before the deps
+	// guard, for the same reason.
+	if actionHistory != nil {
+		if setter, ok := observed.(interface {
+			SetActionHistory([]deps.ActionResult) fsmv2.ObservedState
+		}); ok {
+			observed = setter.SetActionHistory(actionHistory)
+		}
+	}
+
+	// Step 4: deps guard  -  DependencyProvider → baseDepsAccessor gates step 5
+	// (worker-metric accumulation) only. Framework metrics and action history
+	// are already injected from the collector locals above.
 	depProvider, ok := c.config.Worker.(fsmv2.DependencyProvider)
 	if !ok {
 		c.config.Logger.Debug("wrap_new_observation_no_dependency_provider",
@@ -630,24 +672,6 @@ func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed 
 			deps.String("deps_type", fmt.Sprintf("%T", depsAny)))
 
 		return observed
-	}
-
-	// Step 3: Inject framework metrics.
-	if fm := bd.GetFrameworkState(); fm != nil {
-		if setter, ok := observed.(interface {
-			SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
-		}); ok {
-			observed = setter.SetFrameworkMetrics(*fm)
-		}
-	}
-
-	// Step 4: Inject action history.
-	if ah := bd.GetActionHistory(); ah != nil {
-		if setter, ok := observed.(interface {
-			SetActionHistory([]deps.ActionResult) fsmv2.ObservedState
-		}); ok {
-			observed = setter.SetActionHistory(ah)
-		}
 	}
 
 	// Step 5: Accumulate worker metrics (load previous → drain → merge).

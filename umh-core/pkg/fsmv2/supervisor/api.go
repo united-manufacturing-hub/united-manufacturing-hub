@@ -133,6 +133,39 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.logger.Debug("identity_saved")
 
+	// Read the prior StartupCount before the SaveObserved below, which would
+	// otherwise overwrite it. The ordering is pinned by "StartupCount persistence
+	// advances across a worker respawn instead of resetting to 1". A load error other
+	// than "not yet present" is surfaced, so a transient store failure does not
+	// silently look like a fresh worker.
+	var startupCount int64 = 1
+
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer loadCancel()
+
+	var prevObserved TObserved
+
+	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
+	if loadErr == nil {
+		if holder, ok := any(prevObserved).(deps.MetricsHolder); ok {
+			fm := holder.GetFrameworkMetrics()
+			if fm.StartupCount > 0 {
+				startupCount = fm.StartupCount + 1
+			}
+		}
+	} else if !errors.Is(loadErr, persistence.ErrNotFound) {
+		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_load_prev_observation_failed", deps.Err(loadErr))
+	}
+
+	// Persist the computed StartupCount on the initial observation so a crash
+	// between this save and the first collector tick does not reset it. The
+	// collector still owns the full framework metrics on every later tick.
+	if setter, ok := observed.(interface {
+		SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
+	}); ok {
+		observed = setter.SetFrameworkMetrics(deps.FrameworkMetrics{StartupCount: startupCount})
+	}
+
 	observedJSON, err := json.Marshal(observed)
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_observed_failed")
@@ -304,15 +337,15 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		},
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
 			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
-			// Injection reaches a worker only when its bound deps implement
-			// SetFrameworkState. NoDeps workers (TDeps = struct{}) return struct{}{}
-			// here, which does not, so they get no framework telemetry and no error
-			// either. Overriding GetDependenciesAny() to return nil has the same
-			// effect: correct for application, which holds no dependencies, and a
-			// mislabel for configworker, which holds two as plain struct fields and is
-			// skipped despite them. A worker built on pkg/fsmv2/simple is injected only
-			// when its spec declares a NewDeps returning a TDeps that embeds
-			// BaseDependencies: historian does, nmap does not.
+			// This write feeds a worker that reads deps.GetFrameworkState() during
+			// CollectObservedState, so it reaches only a bound deps that implements
+			// SetFrameworkState (a deps embedding *deps.BaseDependencies). It is
+			// separate from the Observation injection, which the collector performs
+			// from its own local in wrapNewObservation regardless of the deps shape —
+			// a struct{}-deps worker (nmap) still carries framework metrics on its
+			// Observation. Application and configworker bind no deps and so simply
+			// get no pre-COS write; returning nil or struct{}{} from
+			// GetDependenciesAny is equivalent and neither is overridden.
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
@@ -386,24 +419,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			}
 		}
 	})
-
-	// Survives restarts, incremented on each AddWorker().
-	var startupCount int64 = 1
-
-	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer loadCancel()
-
-	var prevObserved TObserved
-
-	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
-	if loadErr == nil {
-		if holder, ok := any(prevObserved).(deps.MetricsHolder); ok {
-			fm := holder.GetFrameworkMetrics()
-			if fm.StartupCount > 0 {
-				startupCount = fm.StartupCount + 1
-			}
-		}
-	}
 
 	initialState := worker.GetInitialState()
 
@@ -543,6 +558,7 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkers() []deps.Identity {
 }
 
 // GetCurrentState returns the current state of the first worker.
+//
 // Deprecated: Use GetCurrentStateName() for interface compatibility, or
 // GetWorkerState(workerID) for full state information including reason.
 // This method will be removed in a future version.

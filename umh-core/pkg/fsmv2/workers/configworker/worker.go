@@ -130,15 +130,12 @@ func (w *ConfigworkerWorker) Registry() *dynamicchildren.Registry {
 	return w.registry
 }
 
-// GetDependenciesAny returns nil so the framework skips metrics injection for
-// this no-deps worker (a boxed struct{}{} would be non-nil).
-func (w *ConfigworkerWorker) GetDependenciesAny() any {
-	return nil
-}
-
-// CollectObservedState is the only per-tick hook available: DeriveDesiredState
-// must not touch dependencies (an architecture validator enforces that) and
-// GetInitialState runs once.
+// CollectObservedState reconciles the historian monitor child from the live
+// config, then returns the observed state. It reads config through the config
+// manager and upserts or deletes the historian child in the shared registry so
+// live edits apply without a restart. Reconcile failures are logged, not
+// returned: a transient config read or upsert error must not fail the tick and
+// stall the worker.
 func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():

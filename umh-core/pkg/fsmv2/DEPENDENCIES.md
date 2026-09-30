@@ -9,12 +9,12 @@ This guide covers dependency injection patterns for FSMv2 workers.
 | `Logger` | `deps.FSMLogger` | Structured logging with worker context | All workers via `BaseDependencies` |
 | `StateReader` | `deps.StateReader` | Read-only access to observed state from CSE | All workers via `BaseDependencies` |
 | `MetricsRecorder` | `*deps.MetricsRecorder` | Buffer and record per-tick metrics | All workers via `BaseDependencies` |
-| `FrameworkMetrics` | `*deps.FrameworkMetrics` | Supervisor-tracked metrics (read-only) | Injected via `deps.GetFrameworkState()` |
+| `FrameworkMetrics` | `*deps.FrameworkMetrics` | Supervisor-tracked metrics (read-only) | On the Observation for every worker; also via `deps.GetFrameworkState()` when `TDeps` embeds `BaseDependencies` |
 | `ChildrenView` | `config.ChildrenView` | Access child worker info (read-only) | Injected by the supervisor via `ChildrenViewConsumer.SetChildrenView`; read in `State.Next()` from `snapshot.Observed.ChildrenView` |
 | `WorkerType` | `string` | Worker type identifier | All workers via `BaseDependencies` |
 | `WorkerID` | `string` | Worker instance ID | All workers via `BaseDependencies` |
 
-**ActionHistory** follows the same pattern as FrameworkMetrics: Supervisor records → `ActionHistorySetter` injects into deps → Worker reads via `deps.GetActionHistory()` → Worker assigns in CollectObservedState. The collector never modifies ObservedState.
+**ActionHistory** follows the same pattern as FrameworkMetrics. The collector holds both values and writes them onto the Observation after `CollectObservedState` returns. That happens for every worker, whatever its `TDeps` is. It also writes them into the deps before `CollectObservedState`. A worker that reads `deps.GetActionHistory()` or `deps.GetFrameworkState()` during collection therefore still works. That second path needs a `TDeps` embedding `*deps.BaseDependencies`, so a worker with no dependencies does not get it.
 
 Custom dependencies (e.g., `Transport`, `ConnectionPool`, channels) can be added by embedding `BaseDependencies` in your own struct. See `workers/communicator/dependencies.go` for an example.
 
@@ -313,11 +313,11 @@ All workers automatically receive these via `BaseDependencies`:
 | Logger | Structured logging | `deps.GetLogger()`, `deps.ActionLogger(name)` | N/A |
 | StateReader | Read state from CSE | `deps.GetStateReader()` | N/A (query) |
 | MetricsRecorder | Record custom metrics | `deps.MetricsRecorder().IncrementCounter()` | Actions |
-| FrameworkMetrics | Supervisor metrics | `deps.GetFrameworkState()` | Supervisor |
+| FrameworkMetrics | Supervisor metrics | `deps.GetFrameworkState()`, or `snapshot.Observed.Metrics.Framework` | Supervisor |
 | ChildrenView | Access child info | `snapshot.Observed.ChildrenView` (set by supervisor via `ChildrenViewConsumer.SetChildrenView`) | Supervisor |
 | WorkerType/ID | Worker identity | `deps.GetWorkerType()`, `deps.GetWorkerID()` | N/A |
 
-**ActionHistory** is accessed via `deps.GetActionHistory()` which returns `[]ActionResult` (read-only). The supervisor injects the data via `ActionHistorySetter` before `CollectObservedState` is called. Workers read and assign: `ObservedState.LastActionResults = deps.GetActionHistory()`. This matches the FrameworkMetrics pattern exactly.
+**ActionHistory** is accessed via `deps.GetActionHistory()` which returns `[]ActionResult` (read-only). The supervisor writes the data into the deps via `ActionHistorySetter` before `CollectObservedState` is called. Workers read and assign: `ObservedState.LastActionResults = deps.GetActionHistory()`. The collector also writes its own copy onto the Observation afterwards, so the field is populated even for a worker that never reads the deps. This matches the FrameworkMetrics pattern exactly.
 
 ## Optional Patterns for Worker-Specific Dependencies
 
@@ -435,12 +435,13 @@ func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedStat
 
 // Data flow (Provider/Setter pattern):
 // 1. ActionExecutor records to supervisor's buffer after Execute()
-// 2. Before CollectObservedState: ActionHistorySetter injects into deps
+// 2. Before CollectObservedState: ActionHistorySetter writes into deps
 // 3. During CollectObservedState: Worker calls deps.GetActionHistory() and assigns
-// 4. Collector saves what CollectObservedState returned (no modifications)
+// 4. After CollectObservedState: collector writes its own copy onto the Observation
+// 5. Collector saves the Observation
 ```
 
-This mirrors `FrameworkMetrics` exactly - supervisor owns the data, injects into deps, worker reads and assigns in CollectObservedState.
+This mirrors `FrameworkMetrics` exactly. The supervisor owns the data. The collector writes it onto the Observation for every worker, and into the deps as well for workers that read it during collection.
 
 ### Key Differences from FSMv1
 
