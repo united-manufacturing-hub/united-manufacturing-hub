@@ -32,10 +32,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// cpuMachineSecond is the machine time a read-driven box advances per sampler
-// read: one second, the cadence the worker reads at in production.
-const cpuMachineSecond = time.Second
-
 // cpuMachineReadAdvance is a read-driven box's machine time per sampler read
 // when a scenario's story turns on 60-second windows: ten machine seconds per
 // read fills one in six readings at the worker's 1s poll.
