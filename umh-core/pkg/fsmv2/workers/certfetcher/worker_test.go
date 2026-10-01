@@ -58,10 +58,7 @@ var _ = Describe("CertFetcherWorker cert handler dependency", func() {
 
 		dependencyMap := map[string]any{}
 
-		// Declared as the interface: a *recordingCertHandler argument does not
-		// match the key's type, so SetDependency would not compile.
-		var mapHandlerAsHandler certificatehandler.Handler = mapHandler
-		config.SetDependency(dependencyMap, certfetcher.CertHandlerKey, mapHandlerAsHandler)
+		config.SetDependency[certificatehandler.Handler](dependencyMap, certfetcher.CertHandlerKey, mapHandler)
 
 		identity := deps.Identity{ID: "map-handler-worker", WorkerType: "certfetcher"}
 		built, err := certfetcher.NewCertFetcherWorker(identity, deps.NewNopFSMLogger(), nil, dependencyMap)
