@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// tombstoneRoles are the role documents MarkDeleted tombstones and
+// tombstoneRoles are the role records MarkDeleted tombstones and
 // ClearDeleted clears.
 var tombstoneRoles = []string{RoleIdentity, RoleDesired, RoleObserved}
 
@@ -37,9 +37,8 @@ func hasTombstone(doc persistence.Document) bool {
 	return doc[FieldDeletedAt] != nil
 }
 
-// tombstoneChange is what sets MarkDeleted and ClearDeleted apart: which
-// records the change applies to, how it edits a record, the Diff it records
-// per edited role, and the wording of its update error.
+// tombstoneChange holds the per-operation parts of a tombstone write, so one
+// function can serve both MarkDeleted and ClearDeleted.
 type tombstoneChange struct {
 	appliesTo   func(doc persistence.Document) bool
 	edit        func(doc persistence.Document, at time.Time, deletedBy string)
