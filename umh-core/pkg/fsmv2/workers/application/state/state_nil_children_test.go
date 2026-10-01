@@ -115,8 +115,6 @@ func buildInfraIssueSnap(ownChildren, dynamicChildren []config.ChildSpec, regist
 }
 
 var _ = Describe("Application renderUnion registry variable bundle", func() {
-	// withVars returns snap with vars on its status, so renderUnion sees the
-	// variable bundle the application worker recorded from the registry.
 	withVars := func(snap fsmv2.Snapshot, vars *config.VariableBundle) fsmv2.Snapshot {
 		obs := snap.Observed.(fsmv2.Observation[snapshot.ApplicationStatus])
 		obs.Status.Variables = vars
