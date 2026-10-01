@@ -66,7 +66,7 @@ var (
 	}
 )
 
-// saveResult reports what a locked save did, so saveWithDelta can log after
+// saveResult reports what writeDocument did, so saveWithDelta can log after
 // releasing the lock.
 type saveResult struct {
 	isNew   bool
@@ -97,39 +97,24 @@ func (ts *TriangularStore) saveWithDelta(
 		return false, nil, fmt.Errorf("document id %q does not match parameter id %q", docID, id)
 	}
 
-	result, err := ts.lockedSave(ctx, workerType, id, doc, opts)
+	result, err := ts.writeDocument(ctx, workerType, id, doc, opts)
 	if err != nil {
 		return false, nil, err
 	}
 
 	if !opts.SkipDeltaCheck {
-		if result.isNew {
-			var hierarchyPath string
-			if opts.Role == RoleIdentity {
-				if hp, ok := doc["hierarchy_path"].(string); ok {
-					hierarchyPath = hp
-				}
-			} else {
-				if identity, err := ts.LoadIdentity(ctx, workerType, id); err == nil {
-					if hp, ok := identity["hierarchy_path"].(string); ok {
-						hierarchyPath = hp
-					}
-				}
-			}
+		switch {
+		case result.isNew && opts.Role == RoleIdentity:
+			hp, _ := doc["hierarchy_path"].(string)
 
 			ts.logger.Debug(opts.Role+"_created",
-				deps.String("worker", hierarchyPath))
-		} else if result.changed {
-			var hierarchyPath string
-
-			if identity, err := ts.LoadIdentity(ctx, workerType, id); err == nil {
-				if hp, ok := identity["hierarchy_path"].(string); ok {
-					hierarchyPath = hp
-				}
-			}
-
+				deps.String("worker", hp))
+		case result.isNew:
+			ts.logger.Debug(opts.Role+"_created",
+				deps.String("worker", ts.hierarchyPath(ctx, workerType, id)))
+		case result.changed:
 			ts.logger.Debug(opts.Role+"_changed",
-				deps.String("worker", hierarchyPath),
+				deps.String("worker", ts.hierarchyPath(ctx, workerType, id)),
 				deps.Any("changes", result.changes))
 		}
 	}
@@ -137,9 +122,17 @@ func (ts *TriangularStore) saveWithDelta(
 	return result.changed, result.diff, nil
 }
 
-// lockedSave is the part of a save that documentWriteMu covers: reading the
-// existing record, deciding what changed, and writing the result back.
-func (ts *TriangularStore) lockedSave(
+func (ts *TriangularStore) hierarchyPath(ctx context.Context, workerType, id string) string {
+	if identity, err := ts.LoadIdentity(ctx, workerType, id); err == nil {
+		if hp, ok := identity["hierarchy_path"].(string); ok {
+			return hp
+		}
+	}
+
+	return ""
+}
+
+func (ts *TriangularStore) writeDocument(
 	ctx context.Context,
 	workerType, id string,
 	doc persistence.Document,
