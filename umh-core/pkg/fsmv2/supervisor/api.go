@@ -101,6 +101,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 // deriveInitialDesired passes s.userSpec to DeriveDesiredState when its
 // Config is set, nil otherwise.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Worker, identity deps.Identity) (fsmv2.DesiredState, error) {
 	var ddsSpec interface{}
 	if s.userSpec.Config != "" {
@@ -134,6 +135,7 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 // set it now: AddWorker bypasses the collector, so without a timestamp here
 // the tick loop's checkDataFreshness would treat the first observation as
 // timed out.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, initialDesired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	observed, err := worker.CollectObservedState(ctx, initialDesired)
 	if err != nil {
@@ -158,6 +160,7 @@ func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.
 }
 
 // saveIdentity writes a worker's identity document.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) saveIdentity(ctx context.Context, identity deps.Identity) error {
 	identityDoc := persistence.Document{
 		"id":             identity.ID,
@@ -182,6 +185,7 @@ func (s *Supervisor[TObserved, TDesired]) saveIdentity(ctx context.Context, iden
 // count; the ordering is pinned by "StartupCount persistence advances across
 // a worker respawn instead of resetting to 1". A load error other than
 // "not yet present" is logged, and the count restarts at 1.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) nextStartupCount(identity deps.Identity) int64 {
 	var startupCount int64 = 1
 
@@ -207,6 +211,7 @@ func (s *Supervisor[TObserved, TDesired]) nextStartupCount(identity deps.Identit
 
 // saveInitialState writes a worker's observed and desired documents and
 // clears its tombstone.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, observed fsmv2.ObservedState, initialDesired fsmv2.DesiredState, startupCount int64) error {
 	// Persist the computed StartupCount on the initial observation so a crash
 	// between this save and the first collector tick does not reset it. The
@@ -291,6 +296,7 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 }
 
 // newCollector builds the collector for a newly added worker.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, workerCtx *WorkerContext[TObserved, TDesired]) *collection.Collector[TObserved] {
 	// A worker type may register a custom collection cadence (simple.MonitorSpec.Interval);
 	// fall back to the default when it did not.
@@ -451,6 +457,7 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 
 // newWorkerContext builds the executor, the action history and the worker
 // context around them.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, startupCount int64) *WorkerContext[TObserved, TDesired] {
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
@@ -458,9 +465,9 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 
 	initialState := worker.GetInitialState()
 
-	// Initialize lastLifecyclePhase to avoid use-before-initialization where
-	// the collector reads this field before the first tick sets it.
-	// Without this, lastLifecyclePhase defaults to PhaseUnknown (zero value).
+	// lastLifecyclePhase starts at the worker's initial phase so
+	// GetLifecyclePhase reports it before the first tick runs, not the
+	// PhaseUnknown zero value.
 	var initialPhase config.LifecyclePhase
 	if initialState != nil {
 		initialPhase = initialState.LifecyclePhase()
@@ -496,8 +503,7 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 }
 
 // registerWorker puts a built worker context into the supervisor's registry.
-// Must be called with s.mu held; it mutates s.workers, cachedFirstWorkerID
-// and s.logger without locking.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContext[TObserved, TDesired], identity deps.Identity, workerLogger deps.FSMLogger) {
 	s.workers[identity.ID] = workerCtx
 
