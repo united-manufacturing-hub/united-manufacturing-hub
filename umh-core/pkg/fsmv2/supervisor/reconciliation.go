@@ -1101,9 +1101,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// cancelled, and the store rejects a cancelled context. So MarkDeleted
 		// gets a context without the cancellation and with its own deadline.
 		// If MarkDeleted fails, nothing retries it, and the documents stay as
-		// if the worker still ran.
+		// if the worker still ran (ENG-6348).
 		markCtx, cancelMark := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		markErr := s.store.MarkDeleted(markCtx, s.workerType, workerID, "removed")
+		markErr := s.store.MarkDeleted(markCtx, s.workerType, workerID, "supervisor")
 
 		cancelMark()
 

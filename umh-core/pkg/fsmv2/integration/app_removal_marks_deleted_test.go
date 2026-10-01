@@ -104,7 +104,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 
 		for role, doc := range storedDocuments(ctx, store, ref.WorkerType, childID) {
 			Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the removed worker's %s document must carry a tombstone", role)
-			Expect(doc[storage.FieldDeletedBy]).To(Equal("removed"))
+			Expect(doc[storage.FieldDeletedBy]).To(Equal("supervisor"))
 
 			stamp, ok := doc[storage.FieldDeletedAt].(time.Time)
 			Expect(ok).To(BeTrue(), "%s must be a time.Time", storage.FieldDeletedAt)
