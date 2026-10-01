@@ -85,12 +85,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	workerLogger := s.baseLogger.With(deps.String("worker", identity.String()))
 	workerLogger.Info("identity_created")
 
-	// Declared before construction; see newCollector for why.
-	var workerCtx *WorkerContext[TObserved, TDesired]
+	workerCtx := s.newWorkerContext(worker, identity, workerLogger, startupCount)
 
-	collector := s.newCollector(worker, identity, workerLogger, &workerCtx)
-
-	workerCtx = s.newWorkerContext(worker, identity, workerLogger, collector, startupCount)
+	workerCtx.collector = s.newCollector(worker, identity, workerLogger, workerCtx)
 
 	s.registerWorker(workerCtx, identity, workerLogger)
 
@@ -283,10 +280,8 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 	return startupCount, nil
 }
 
-// newCollector builds the collector for a newly added worker. The closures
-// read workerCtx through workerCtxPtr, which AddWorker assigns once the
-// WorkerContext exists; until then they see nil.
-func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, workerCtxPtr **WorkerContext[TObserved, TDesired]) *collection.Collector[TObserved] {
+// newCollector builds the collector for a newly added worker.
+func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, workerCtx *WorkerContext[TObserved, TDesired]) *collection.Collector[TObserved] {
 	// A worker type may register a custom collection cadence (simple.MonitorSpec.Interval);
 	// fall back to the default when it did not.
 	observationInterval := DefaultObservationInterval
@@ -302,12 +297,6 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 		ObservationInterval: observationInterval,
 		ObservationTimeout:  s.collectorHealth.observationTimeout,
 		StateProvider: func() string {
-			workerCtx := *workerCtxPtr
-
-			if workerCtx == nil {
-				return "unknown"
-			}
-
 			workerCtx.mu.RLock()
 			defer workerCtx.mu.RUnlock()
 
@@ -357,12 +346,6 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 		},
 		// Called BEFORE CollectObservedState to compute metrics.
 		FrameworkMetricsProvider: func() *deps.FrameworkMetrics {
-			workerCtx := *workerCtxPtr
-
-			if workerCtx == nil {
-				return nil
-			}
-
 			workerCtx.mu.RLock()
 			defer workerCtx.mu.RUnlock()
 
@@ -414,9 +397,7 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 		},
 		// Called BEFORE CollectObservedState to drain action history buffer.
 		ActionHistoryProvider: func() []deps.ActionResult {
-			workerCtx := *workerCtxPtr
-
-			if workerCtx == nil || workerCtx.actionHistory == nil {
+			if workerCtx.actionHistory == nil {
 				return nil
 			}
 
@@ -459,9 +440,8 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 }
 
 // newWorkerContext builds the executor, the action history and the worker
-// context around them. The returned context carries the collector, which
-// the executor's completion callback reads through it.
-func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, collector *collection.Collector[TObserved], startupCount int64) *WorkerContext[TObserved, TDesired] {
+// context around them.
+func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, startupCount int64) *WorkerContext[TObserved, TDesired] {
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
 	actionHistoryBuffer := deps.NewInMemoryActionHistoryRecorder()
@@ -483,7 +463,6 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 		currentState:       initialState,
 		currentStateReason: "initial",
 		lastLifecyclePhase: initialPhase,
-		collector:          collector,
 		executor:           executor,
 		actionHistory:      actionHistoryBuffer,
 		stateEnteredAt:     time.Now(),
@@ -497,15 +476,9 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 	executor.SetOnActionComplete(func(result deps.ActionResult) {
 		actionHistoryBuffer.Record(result)
 
-		// Trigger immediate observation after action completes.
 		// This eliminates the delay between action and FSM progression.
-		// Capture collector under lock to prevent race with RemoveWorker().
-		workerCtx.mu.RLock()
-		collector := workerCtx.collector
-		workerCtx.mu.RUnlock()
-
-		if collector != nil && collector.IsRunning() {
-			collector.TriggerNow()
+		if workerCtx.collector.IsRunning() {
+			workerCtx.collector.TriggerNow()
 		}
 	})
 
