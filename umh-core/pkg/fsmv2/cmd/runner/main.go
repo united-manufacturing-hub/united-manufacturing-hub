@@ -345,9 +345,7 @@ func startingScenarioFields(name, description, duration string, tick time.Durati
 	}, expectedFields(s)...)
 }
 
-// expectedFields returns one log field per expectation kind the scenario
-// declares, omitting each the scenario leaves empty. A nil expected cause
-// matches nothing, so the causes field omits it.
+// expectedFields returns one field per expectation list the scenario fills.
 func expectedFields(s examples.ScenarioV2) []zap.Field {
 	var fields []zap.Field
 
@@ -355,18 +353,8 @@ func expectedFields(s examples.ScenarioV2) []zap.Field {
 		fields = append(fields, zap.Reflect("expected_errors", s.ExpectedErrors))
 	}
 
-	if len(s.ExpectedErrorCauses) > 0 {
-		causes := make([]string, 0, len(s.ExpectedErrorCauses))
-		for _, cause := range s.ExpectedErrorCauses {
-			if cause == nil {
-				continue
-			}
-			causes = append(causes, cause.Error())
-		}
-
-		if len(causes) > 0 {
-			fields = append(fields, zap.Reflect("expected_error_causes", causes))
-		}
+	if causes := nonNilCauseMessages(s.ExpectedErrorCauses); len(causes) > 0 {
+		fields = append(fields, zap.Reflect("expected_error_causes", causes))
 	}
 
 	if len(s.ExpectedWarnings) > 0 {
@@ -374,6 +362,19 @@ func expectedFields(s examples.ScenarioV2) []zap.Field {
 	}
 
 	return fields
+}
+
+// nonNilCauseMessages skips nil causes: runRecorder.errorCauseAllowed never matches one.
+func nonNilCauseMessages(causes []error) []string {
+	messages := make([]string, 0, len(causes))
+
+	for _, cause := range causes {
+		if cause != nil {
+			messages = append(messages, cause.Error())
+		}
+	}
+
+	return messages
 }
 
 // parseLogLevel converts string log level to zap level using zap's built-in parser.
