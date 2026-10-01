@@ -25,6 +25,8 @@ import (
 	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
 )
 
+const failureLimitNeverReached = 999999
+
 // FailingScenarioV2 runs three examplefailing workers. The recovery worker
 // fails three connects, connects, stays Connected for 5 s
 // (healthyDurationMsBeforeNextCycle in examplefailing/state), disconnects once
@@ -57,12 +59,12 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert recovery worker: %w", err)
 		}
 
-		env.Step("create the permanent worker: its failure limit is 999999, so it never connects")
+		env.Step("create the permanent worker: its failure limit is never reached, so it never connects")
 
 		if err := env.Client.Upsert(permanentRef, map[string]any{
 			"state":        "running",
 			"should_fail":  true,
-			"max_failures": 999999,
+			"max_failures": failureLimitNeverReached,
 		}); err != nil {
 			return fmt.Errorf("upsert permanent worker: %w", err)
 		}
@@ -72,7 +74,7 @@ var FailingScenarioV2 = ScenarioV2{
 		if err := env.Client.Upsert(restartRef, map[string]any{
 			"state":                  "running",
 			"should_fail":            true,
-			"max_failures":           999999,
+			"max_failures":           failureLimitNeverReached,
 			"restart_after_failures": 5,
 		}); err != nil {
 			return fmt.Errorf("upsert restart worker: %w", err)
@@ -104,7 +106,7 @@ var FailingScenarioV2 = ScenarioV2{
 		}
 
 		if obs.State == "Connected" {
-			return fmt.Errorf("the permanent worker reached Connected after %d attempts, although its failure limit is 999999", obs.Status.ConnectAttempts)
+			return fmt.Errorf("the permanent worker reached Connected after %d attempts, although its failure limit is %d", obs.Status.ConnectAttempts, failureLimitNeverReached)
 		}
 
 		if err := env.WaitFor(ctx, "the restart worker records five failed attempts",
