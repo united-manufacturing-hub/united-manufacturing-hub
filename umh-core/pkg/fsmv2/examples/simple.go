@@ -38,8 +38,7 @@ package examples
 //
 // ## 2. Scenario Registry (scenario.go)
 //
-// v1 scenarios are registered in the Registry map, making them available to
-// both tests and CLI.
+// v1 scenarios are registered in the Registry map.
 //
 // ## 3. Test Usage
 //
