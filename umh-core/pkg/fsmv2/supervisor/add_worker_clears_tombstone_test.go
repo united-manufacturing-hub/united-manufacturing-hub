@@ -158,6 +158,8 @@ var _ = Describe("AddWorker error paths", func() {
 
 		Expect(errors.Is(addErr, store.SaveIdentityErr)).To(BeTrue(),
 			"AddWorker must report the failing identity save, not swallow it")
+		Expect(addErr).To(MatchError(ContainSubstring("failed to save identity")),
+			"AddWorker must wrap the failing identity save with its context")
 		Expect(s.ListWorkers()).To(BeEmpty())
 		Expect(store.SaveAndClearCalls).To(BeEmpty(),
 			"a failed identity save must not be followed by further writes")
