@@ -34,5 +34,4 @@ const channelProviderKeyName = "communicator.channel_provider"
 // ChannelProviderKey names the ChannelProvider a CommunicatorWorker acquires its
 // inbound and outbound channels through. The worker looks the key up in its
 // dependency map, the map[string]any its register.Worker constructor receives.
-// The map must carry the key; cmd/main.go puts it there.
 var ChannelProviderKey = config.NewDependencyKey[ChannelProvider](channelProviderKeyName)
