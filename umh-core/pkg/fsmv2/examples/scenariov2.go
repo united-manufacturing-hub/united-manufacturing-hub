@@ -257,8 +257,8 @@ type ScenarioV2 struct {
 	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 
-// NoopScenarioV2 starts the kernel-only supervisor and changes nothing: the
-// application worker spawns only its config worker kernel child.
+// NoopScenarioV2 changes nothing, so the application worker spawns only its
+// config worker kernel child.
 var NoopScenarioV2 = ScenarioV2{
 	Name:        "noop",
 	Description: "Runs the kernel-only supervisor and changes nothing (v2)",
