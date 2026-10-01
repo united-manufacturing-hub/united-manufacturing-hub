@@ -361,12 +361,13 @@ var _ = Describe("CommunicatorWorker channel provider dependency", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("communicator.channel_provider"))
 		Expect(worker).To(BeNil())
+	})
 
-		// A map value of another type reads as absent to LookupDependency, so
-		// it takes the same route to the same error.
+	It("returns the same error when the key holds a value that is not a ChannelProvider", func() {
+		identity := depspkg.Identity{ID: "no-provider-worker", WorkerType: "communicator"}
 		wronglyTypedMap := map[string]any{"communicator.channel_provider": "not a provider"}
 
-		worker, err = communicator.NewCommunicatorWorker(identity, nil, depspkg.NewNopFSMLogger(), nil, wronglyTypedMap)
+		worker, err := communicator.NewCommunicatorWorker(identity, nil, depspkg.NewNopFSMLogger(), nil, wronglyTypedMap)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("communicator.channel_provider"))
 		Expect(worker).To(BeNil())
