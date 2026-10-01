@@ -90,10 +90,8 @@ var CascadeScenarioV2 = ScenarioV2{
 		for _, name := range []string{"child-0", "child-1"} {
 			childRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: name}
 
-			// CurrentCycle is zero based, so 2 means the child finished its
-			// second failure cycle. The child keeps that value until the
-			// parent's RunningDuration ends and the parent removes it.
-			if err := env.WaitFor(ctx, "the child "+name+" finishes its second failure cycle",
+			// AllCyclesComplete stays true until the parent removes the child after RunningDuration.
+			if err := env.WaitFor(ctx, "the child "+name+" completes all its failure cycles",
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, childRef)
 					if err != nil {
@@ -104,9 +102,7 @@ var CascadeScenarioV2 = ScenarioV2{
 						return false, "", err
 					}
 
-					done := obs.Status.CurrentCycle == 2
-
-					return done, fmt.Sprintf("state=%s cycle=%d attempts=%d", obs.State, obs.Status.CurrentCycle, obs.Status.ConnectAttempts), nil
+					return obs.Status.AllCyclesComplete, fmt.Sprintf("state=%s cycle=%d complete=%t attempts=%d", obs.State, obs.Status.CurrentCycle, obs.Status.AllCyclesComplete, obs.Status.ConnectAttempts), nil
 				}); err != nil {
 				return err
 			}
