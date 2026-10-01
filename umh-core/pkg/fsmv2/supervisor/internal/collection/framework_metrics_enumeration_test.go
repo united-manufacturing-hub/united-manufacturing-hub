@@ -15,7 +15,8 @@
 // Every registered worker type gets framework metrics on its Observation,
 // whatever its TDeps and whatever GetDependenciesAny returns. The collector
 // injects framework metrics from its own locals before the deps guard, so a
-// struct{}-deps worker (nmap) carries them like any other.
+// worker whose deps do not embed BaseDependencies (nmap) carries them like any
+// other.
 //
 // The registry is populated by package init(). A missing blank import leaves it
 // empty, so the HaveLen(16) floor below is what makes a forgotten import fail
@@ -91,11 +92,9 @@ var panicOnConstruction = map[string]string{
 	"push":         "deps builder returned",
 }
 
-// targetWorkers are the three workers the design exists to fix: they are the
-// types whose Observation lacked framework metrics before this change
-// (application and configworker return nil deps, nmap returns struct{}). They
-// are named explicitly here rather than relying on the enumeration to reach
-// them silently.
+// targetWorkers have deps that cannot receive framework metrics: application
+// and configworker return nil deps, and nmap's deps do not embed
+// BaseDependencies. Naming them catches an enumeration that stops reaching them.
 var targetWorkers = []string{"application", "configworker", "nmap"}
 
 type observedFrameworkProbe struct {

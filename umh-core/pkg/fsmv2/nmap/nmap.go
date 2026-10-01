@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
@@ -38,9 +40,6 @@ const (
 
 	// pollInterval is the cadence at which the framework calls Poll.
 	pollInterval = 1 * time.Second
-
-	// The dialer sets no timeout: the collector already bounds every Poll with
-	// its ObservationTimeout, which cancels the dial context.
 )
 
 // NmapStatus is the result of one TCP-dial observation of the target port.
@@ -62,20 +61,43 @@ type NmapStatus struct {
 	ScannedAt time.Time `json:"scanned_at"`
 }
 
+// Dialer is what Poll dials the target through.
+type Dialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
+
+// DialerKey holds a Dialer that Poll uses instead of a *net.Dialer.
+var DialerKey = fsmv2config.NewDependencyKey[Dialer]("nmap.dialer")
+
+// Deps is the per-instance value Poll receives.
+type Deps struct {
+	dialer Dialer
+}
+
+func newDeps(_ deps.Identity, _ *deps.BaseDependencies, m map[string]any) Deps {
+	// No timeout: the collector bounds every Poll with its ObservationTimeout,
+	// which cancels the dial context.
+	var dialer Dialer = &net.Dialer{}
+
+	if injected, ok := fsmv2config.LookupDependency(m, DialerKey); ok {
+		dialer = injected
+	}
+
+	return Deps{
+		dialer: dialer,
+	}
+}
+
 // Poll dials the configured target once and reports the port state. A
-// successful dial yields an open/running status with the measured latency; any
-// dial failure yields a closed port. A closed port is a legitimate scan
-// outcome, not a poll failure, so Poll returns it with a nil error. Poll
-// returns an error only when the context is cancelled (worker shutdown), so the
-// framework does not misreport a shutdown as a port state.
-func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, error) {
+// failed dial reports the port closed with a nil error, because a closed port
+// is a scan result, not a poll failure. A cancelled context (worker shutdown)
+// is the exception: Poll returns an error and no port state.
+func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error) {
 	target := net.JoinHostPort(cfg.NmapServiceConfig.Target, strconv.Itoa(int(cfg.NmapServiceConfig.Port)))
 
 	start := time.Now()
 
-	dialer := net.Dialer{}
-
-	conn, err := dialer.DialContext(ctx, "tcp", target)
+	conn, err := d.dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
 		// Worker shutdown cancels the context; surface it as an error so the
 		// framework does not misreport a shutdown as a port state. This
@@ -112,9 +134,10 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 }
 
 func init() {
-	simple.Register(simple.MonitorSpec[config.NmapConfig, NmapStatus, struct{}]{
+	simple.Register(simple.MonitorSpec[config.NmapConfig, NmapStatus, Deps]{
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
+		NewDeps:    newDeps,
 		Poll:       Poll,
 	})
 }
