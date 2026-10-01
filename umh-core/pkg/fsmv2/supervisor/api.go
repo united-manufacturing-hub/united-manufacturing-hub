@@ -76,8 +76,13 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		return err
 	}
 
-	startupCount, err := s.saveInitialDocuments(ctx, worker, identity, observed, initialDesired)
-	if err != nil {
+	if err := s.saveIdentity(ctx, identity); err != nil {
+		return err
+	}
+
+	startupCount := s.nextStartupCount(identity)
+
+	if err := s.saveInitialState(ctx, worker, identity, observed, initialDesired, startupCount); err != nil {
 		return err
 	}
 
@@ -94,11 +99,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	return nil
 }
 
-// deriveInitialDesired derives the desired state a worker starts with. A
-// worker whose supervisor has a userSpec gets it as the spec (reconcileChildren
-// sets it before calling AddWorker); a worker without one gets nil, which
-// workers are required to accept.
-// Must be called with s.mu held; it reads s.userSpec without locking.
+// deriveInitialDesired passes s.userSpec to DeriveDesiredState when its
+// Config is set, nil otherwise.
 func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Worker, identity deps.Identity) (fsmv2.DesiredState, error) {
 	var ddsSpec interface{}
 	if s.userSpec.Config != "" {
@@ -130,7 +132,8 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 // collectInitialObservation collects the observed state a worker is added
 // with. If CollectObservedState returned a NewObservation (zero CollectedAt),
 // set it now: AddWorker bypasses the collector, so without a timestamp here
-// the supervisor's IsObservationStale would report the worker as stale.
+// the tick loop's checkDataFreshness would treat the first observation as
+// timed out.
 func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, initialDesired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	observed, err := worker.CollectObservedState(ctx, initialDesired)
 	if err != nil {
@@ -154,12 +157,8 @@ func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.
 	return observed, nil
 }
 
-// saveInitialDocuments writes a worker's identity, observed and desired
-// documents and clears its tombstone. It reads the previous observed
-// document to advance the worker's StartupCount and returns it; the count
-// reaches the stored document only when the observed state accepts
-// framework metrics.
-func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, observed fsmv2.ObservedState, initialDesired fsmv2.DesiredState) (int64, error) {
+// saveIdentity writes a worker's identity document.
+func (s *Supervisor[TObserved, TDesired]) saveIdentity(ctx context.Context, identity deps.Identity) error {
 	identityDoc := persistence.Document{
 		"id":             identity.ID,
 		"name":           identity.Name,
@@ -169,16 +168,21 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_identity_failed")
 
-		return 0, fmt.Errorf("failed to save identity: %w", err)
+		return fmt.Errorf("failed to save identity: %w", err)
 	}
 
 	s.logger.Debug("identity_saved")
 
-	// Read the prior StartupCount before the SaveObserved below, which would
-	// otherwise overwrite it. The ordering is pinned by "StartupCount persistence
-	// advances across a worker respawn instead of resetting to 1". A load error other
-	// than "not yet present" is surfaced, so a transient store failure does not
-	// silently look like a fresh worker.
+	return nil
+}
+
+// nextStartupCount returns the worker's next StartupCount, advanced by one
+// from the previous observation when it recorded one. It runs before the
+// SaveObserved in saveInitialState, which would otherwise overwrite the
+// count; the ordering is pinned by "StartupCount persistence advances across
+// a worker respawn instead of resetting to 1". A load error other than
+// "not yet present" is logged, and the count restarts at 1.
+func (s *Supervisor[TObserved, TDesired]) nextStartupCount(identity deps.Identity) int64 {
 	var startupCount int64 = 1
 
 	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -198,6 +202,12 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_load_prev_observation_failed", deps.Err(loadErr))
 	}
 
+	return startupCount
+}
+
+// saveInitialState writes a worker's observed and desired documents and
+// clears its tombstone.
+func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, observed fsmv2.ObservedState, initialDesired fsmv2.DesiredState, startupCount int64) error {
 	// Persist the computed StartupCount on the initial observation so a crash
 	// between this save and the first collector tick does not reset it. The
 	// collector still owns the full framework metrics on every later tick.
@@ -211,14 +221,14 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_observed_failed")
 
-		return 0, fmt.Errorf("failed to marshal observed state: %w", err)
+		return fmt.Errorf("failed to marshal observed state: %w", err)
 	}
 
 	observedDoc := make(persistence.Document)
 	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_observed_failed")
 
-		return 0, fmt.Errorf("failed to unmarshal observed state to document: %w", err)
+		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
 	}
 
 	observedDoc["id"] = identity.ID
@@ -239,7 +249,7 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_observed_failed")
 
-		return 0, fmt.Errorf("failed to save initial observation: %w", err)
+		return fmt.Errorf("failed to save initial observation: %w", err)
 	}
 
 	s.logger.Debug("initial_observation_saved")
@@ -248,14 +258,14 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_desired_failed")
 
-		return 0, fmt.Errorf("failed to marshal desired state: %w", err)
+		return fmt.Errorf("failed to marshal desired state: %w", err)
 	}
 
 	desiredDoc := make(persistence.Document)
 	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_desired_failed")
 
-		return 0, fmt.Errorf("failed to unmarshal desired state to document: %w", err)
+		return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
 	}
 
 	desiredDoc["id"] = identity.ID
@@ -264,7 +274,7 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
 
-		return 0, fmt.Errorf("failed to save initial desired state: %w", err)
+		return fmt.Errorf("failed to save initial desired state: %w", err)
 	}
 
 	s.logger.Debug("initial_desired_state_saved")
@@ -274,10 +284,10 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_clear_tombstone_failed")
 
 		// The store error already names the operation and the worker.
-		return 0, err
+		return err
 	}
 
-	return startupCount, nil
+	return nil
 }
 
 // newCollector builds the collector for a newly added worker.
