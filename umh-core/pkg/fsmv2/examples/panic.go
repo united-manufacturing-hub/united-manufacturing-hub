@@ -14,21 +14,81 @@
 
 package examples
 
-// PanicScenario demonstrates panic recovery in action handlers.
-//
-// ActionExecutor catches panics via defer/recover, logs with stack trace, and
-// allows retry on next tick. Worker stays in TryingToConnect, never reaching Connected.
-var PanicScenario = Scenario{
-	Name: "panic",
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
 
-	Description: "Demonstrates panic recovery in action handlers",
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	example_panic "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
+)
 
-	YAMLConfig: `
-children:
-  - name: "panic-worker-1"
-    workerType: "examplepanic"
-    userSpec:
-      config: |
-        should_panic: true
-`,
+// PanicScenarioV2 runs a worker whose connect action panics on every attempt.
+// ActionExecutor (supervisor/internal/execution) recovers each panic and logs
+// it as action_panic.
+var PanicScenarioV2 = ScenarioV2{
+	Name:        "panic",
+	Description: "A worker whose connect panics every time: the supervisor recovers each panic, and the worker stays in TryingToConnect",
+
+	ExpectedWarnings: []string{"simulating_panic"},
+
+	ExpectedErrors: []string{"action_panic"},
+
+	Run: func(ctx context.Context, env Env) error {
+		ref := dynamicchildren.Ref{WorkerType: "examplepanic", Name: "panic-worker-1"}
+
+		env.Step("create the panic worker, whose every connect panics")
+
+		if err := env.Client.Upsert(ref, map[string]any{
+			"state":        "running",
+			"should_panic": true,
+		}); err != nil {
+			return fmt.Errorf("upsert panic worker: %w", err)
+		}
+
+		if err := env.WaitFor(ctx, "the panic worker is observed in TryingToConnect",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[example_panic.ExamplepanicStatus](ctx, env.Client, ref)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the worker has not published an observation yet", nil
+					}
+
+					return false, "", err
+				}
+
+				return obs.State == "TryingToConnect", "state=" + obs.State, nil
+			}); err != nil {
+			return err
+		}
+
+		// A poll can read the same observation twice.
+		failedConnectTimestamps := make(map[time.Time]bool)
+
+		return env.WaitFor(ctx, "the panic worker fails its connect three times without reaching Connected",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[example_panic.ExamplepanicStatus](ctx, env.Client, ref)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the worker has not published an observation yet", nil
+					}
+
+					return false, "", err
+				}
+
+				if obs.State == "Connected" {
+					return false, "", fmt.Errorf("the panic worker reached Connected, so its panics did not keep it out")
+				}
+
+				for _, result := range obs.LastActionResults {
+					if result.ActionType == "connect" && !result.Success {
+						failedConnectTimestamps[result.Timestamp] = true
+					}
+				}
+
+				return len(failedConnectTimestamps) >= 3, fmt.Sprintf("state=%s failed_connects=%d", obs.State, len(failedConnectTimestamps)), nil
+			})
+	},
 }

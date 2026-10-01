@@ -14,62 +14,103 @@
 
 package examples
 
-// TimeoutScenario demonstrates action timeout handling and retry behavior.
-//
-// Tests three timeout patterns:
-//  1. Quick action - completes immediately (happy path)
-//  2. Slow action - takes 2 seconds but completes
-//  3. Failing action - fails 3 times then succeeds (retry behavior)
-//
-// # Action Timeout Architecture
-//
-// ActionExecutor enforces 30s default timeout per action. Actions must check
-// ctx.Done() to respect cancellation. On timeout or failure, FSM stays in
-// current state and retries on next tick (~100ms). No built-in exponential backoff.
-//
-// # Implementing Backoff
-//
-// Three levels: action-internal (recommended), state-based, or restart-based
-// (via SignalNeedsRestart after N failures).
-//
-// # Hierarchy Created
-//
-//	timeout-quick (exampleslow with 0 delay)
-//	timeout-slow (exampleslow with 2s delay)
-//	timeout-retry (examplefailing with 3 max failures)
-//	timeout-combined (examplefailing with 5 max failures)
-var TimeoutScenario = Scenario{
-	Name: "timeout",
+import (
+	"context"
+	"errors"
+	"fmt"
 
-	Description: "Demonstrates action timeout handling and retry behavior patterns",
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
+	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
+)
 
-	YAMLConfig: `
-children:
-  - name: "timeout-quick"
-    workerType: "exampleslow"
-    userSpec:
-      config: |
-        delaySeconds: 0
+// TimeoutScenarioV2 runs four workers that connect at different speeds. Its
+// longest action, the two-second delay, stays far below the 30 s action
+// timeout (defaultActionTimeout in supervisor/internal/execution).
+var TimeoutScenarioV2 = ScenarioV2{
+	Name:        "timeout",
+	Description: "Four workers that connect at different speeds; the longest action takes 2 s, far below the 30 s action timeout",
 
-  - name: "timeout-slow"
-    workerType: "exampleslow"
-    userSpec:
-      config: |
-        delaySeconds: 2
+	ExpectedWarnings: []string{"connect_failed_simulated"},
 
-  - name: "timeout-retry"
-    workerType: "examplefailing"
-    userSpec:
-      config: |
-        should_fail: true
-        max_failures: 3
+	ExpectedErrorCauses: []error{example_failing_action.ErrSimulatedFailure},
 
-  - name: "timeout-combined"
-    workerType: "examplefailing"
-    userSpec:
-      config: |
-        should_fail: true
-        max_failures: 5
-        restart_after_failures: 10
-`,
+	Run: func(ctx context.Context, env Env) error {
+		quickRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "timeout-quick"}
+		slowRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "timeout-slow"}
+		retryRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "timeout-retry"}
+		combinedRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "timeout-combined"}
+
+		env.Step("create the quick worker, which connects at once")
+
+		if err := env.Client.Upsert(quickRef, map[string]any{
+			"state":        "running",
+			"delaySeconds": 0,
+		}); err != nil {
+			return fmt.Errorf("upsert quick worker: %w", err)
+		}
+
+		env.Step("create the slow worker, which connects after a two-second delay")
+
+		if err := env.Client.Upsert(slowRef, map[string]any{
+			"state":        "running",
+			"delaySeconds": 2,
+		}); err != nil {
+			return fmt.Errorf("upsert slow worker: %w", err)
+		}
+
+		env.Step("create the retry worker, which fails three times before it connects")
+
+		if err := env.Client.Upsert(retryRef, map[string]any{
+			"state":          "running",
+			"should_fail":    true,
+			"max_failures":   3,
+			"failure_cycles": 1,
+		}); err != nil {
+			return fmt.Errorf("upsert retry worker: %w", err)
+		}
+
+		env.Step("create the combined worker: it fails five times and connects on attempt six, before its restart limit of ten")
+
+		if err := env.Client.Upsert(combinedRef, map[string]any{
+			"state":                  "running",
+			"should_fail":            true,
+			"max_failures":           5,
+			"restart_after_failures": 10,
+			"failure_cycles":         1,
+		}); err != nil {
+			return fmt.Errorf("upsert combined worker: %w", err)
+		}
+
+		if err := waitReconnectedAfterFailureCycle(ctx, env, retryRef); err != nil {
+			return err
+		}
+
+		if err := waitReconnectedAfterFailureCycle(ctx, env, combinedRef); err != nil {
+			return err
+		}
+
+		waitSlowConnected := func(ref dynamicchildren.Ref) error {
+			return env.WaitFor(ctx, "the worker "+ref.Name+" reaches Connected",
+				func(ctx context.Context) (bool, string, error) {
+					obs, err := fsmv2client.Get[example_slow.ExampleslowStatus](ctx, env.Client, ref)
+					if err != nil {
+						if errors.Is(err, fsmv2client.ErrNotObserved) {
+							return false, "the worker has not published an observation yet", nil
+						}
+
+						return false, "", err
+					}
+
+					return obs.State == "Connected", "state=" + obs.State, nil
+				})
+		}
+
+		if err := waitSlowConnected(quickRef); err != nil {
+			return err
+		}
+
+		return waitSlowConnected(slowRef)
+	},
 }

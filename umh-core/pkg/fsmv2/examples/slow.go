@@ -14,35 +14,57 @@
 
 package examples
 
-// SlowScenario demonstrates long-running action handling and context cancellation.
-//
-// # Flow
-//
-//  1. Worker starts in Stopped state
-//  2. Worker transitions to TryingToConnect (desired state is "running")
-//  3. ConnectAction executes with 2-second delay
-//  4. Action sleeps, checking for context cancellation
-//  5. After delay completes, action succeeds
-//  6. Worker transitions to Connected state
-//
-// # What to Observe
-//
-// In logs: "connect_attempting" with delay_seconds: 2, 2-second pause,
-// "Connect delay completed successfully", state transition to Connected.
-//
-// On shutdown during delay: Action returns ctx.Err() immediately,
-// worker transitions to TryingToStop instead of Connected.
-var SlowScenario = Scenario{
-	Name: "slow",
+import (
+	"context"
+	"errors"
+	"fmt"
 
-	Description: "Demonstrates long-running action handling and context cancellation",
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
+)
 
-	YAMLConfig: `
-children:
-  - name: "slow-worker-1"
-    workerType: "exampleslow"
-    userSpec:
-      config: |
-        delaySeconds: 2
-`,
+const (
+	slowConnectDelaySeconds = 2
+	minTryingToConnectMs    = slowConnectDelaySeconds*1000 - 100
+)
+
+// SlowScenarioV2 checks that a slow worker spends its connect delay in
+// TryingToConnect.
+var SlowScenarioV2 = ScenarioV2{
+	Name:        "slow",
+	Description: "A worker whose connect takes two seconds; checks that it spent them in TryingToConnect",
+
+	Run: func(ctx context.Context, env Env) error {
+		slowRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "slow-worker-1"}
+
+		env.Step(fmt.Sprintf("create the slow worker with a %d-second connect delay", slowConnectDelaySeconds))
+
+		if err := env.Client.Upsert(slowRef, map[string]any{
+			"state":        "running",
+			"delaySeconds": slowConnectDelaySeconds,
+		}); err != nil {
+			return fmt.Errorf("upsert slow worker: %w", err)
+		}
+
+		// CumulativeTimeByStateMs only grows, so a slow machine delays this
+		// reading but cannot shrink it.
+		return env.WaitFor(ctx, fmt.Sprintf("the slow worker is Connected after at least %d ms in TryingToConnect", minTryingToConnectMs),
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[example_slow.ExampleslowStatus](ctx, env.Client, slowRef)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the worker has not published an observation yet", nil
+					}
+
+					return false, "", err
+				}
+
+				timeTrying := obs.Metrics.Framework.CumulativeTimeByStateMs["TryingToConnect"]
+
+				done := obs.State == "Connected" && timeTrying >= minTryingToConnectMs
+
+				return done, fmt.Sprintf("state=%s trying_to_connect_ms=%d", obs.State, timeTrying), nil
+			})
+	},
 }
