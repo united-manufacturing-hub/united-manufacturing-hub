@@ -73,12 +73,8 @@ type RunResult struct {
 	// after Done closes.
 	ShutdownClean bool
 
-	// Err is nil, or holds a failure the runner found after Run returned this
-	// result. In order of precedence it is an unexpected error logged after
-	// Run returned, the first unexpected warning, or the stored-state check's
-	// failure: a stored state its worker type may not report, or a failed
-	// store read. Only the v2 path sets it; read it after Done closes.
-	// shutdownExitCode in cmd/runner exits 1 when it is set.
+	// Err is nil, or the first failure postRunFailure found once teardown
+	// finished. Only the v2 path sets it; read it after Done closes.
 	Err error
 }
 
@@ -414,21 +410,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		teardown()
 
-		// An error recorded by now was logged after Run returned, inside the
-		// Duration window.
-		result.Err = recorder.loggedError()
-		if result.Err == nil {
-			result.Err = recorder.loggedWarning()
-		}
-
-		// The check runs on a fresh context, so a caller cancelling after Run
-		// returned cannot fail the store read.
-		if result.Err == nil {
-			checkCtx, checkCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-
-			result.Err = checkStoredWorkerStates(checkCtx, cfg.Store, cfg.Logger)
-			checkCancel()
-		}
+		result.Err = postRunFailure(ctx, recorder, cfg.Store, cfg.Logger)
 
 		close(done)
 	}()
@@ -441,6 +423,24 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	return result, nil
+}
+
+const storedStateCheckTimeout = 10 * time.Second
+
+func postRunFailure(ctx context.Context, recorder *runRecorder, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
+	if err := recorder.loggedError(); err != nil {
+		return err
+	}
+
+	if warn := recorder.loggedWarning(); warn != nil {
+		return warn
+	}
+
+	// WithoutCancel: a Ctrl+C after Run returned is not a failed store read.
+	checkCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storedStateCheckTimeout)
+	defer cancel()
+
+	return checkStoredWorkerStates(checkCtx, store, logger)
 }
 
 // SetupStore creates an in-memory TriangularStore for testing and CLI usage.
