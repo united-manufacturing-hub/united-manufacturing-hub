@@ -33,14 +33,9 @@ const WorkerTypeName = "certfetcher"
 
 const workerType = WorkerTypeName
 
-// certHandlerKeyName is CertHandlerKey's name. It is a constant so
-// NewCertFetcherWorker's error can print it, because DependencyKey does not
-// expose its name.
-const certHandlerKeyName = "certfetcher.cert_handler"
-
 // CertHandlerKey names the certificatehandler.Handler a CertFetcherWorker is
 // built from.
-var CertHandlerKey = config.NewDependencyKey[certificatehandler.Handler](certHandlerKeyName)
+var CertHandlerKey = config.NewDependencyKey[certificatehandler.Handler]("certfetcher.cert_handler")
 
 var _ fsmv2.Worker = (*CertFetcherWorker)(nil)
 
@@ -68,7 +63,7 @@ func NewCertFetcherWorker(
 
 	handler, ok := config.LookupDependency(dependencies, CertHandlerKey)
 	if !ok {
-		return nil, fmt.Errorf("certfetcher: no cert handler under %q in the dependency map", certHandlerKeyName)
+		return nil, fmt.Errorf("certfetcher: no cert handler under %q in the dependency map", CertHandlerKey.Name())
 	}
 
 	w := &CertFetcherWorker{}
