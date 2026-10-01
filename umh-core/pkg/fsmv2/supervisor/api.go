@@ -71,26 +71,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		return err
 	}
 
-	observed, err := worker.CollectObservedState(ctx, initialDesired)
+	observed, err := s.collectInitialObservation(ctx, worker, identity, initialDesired)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
-
-		return fmt.Errorf("failed to collect initial observed state: %w", err)
-	}
-
-	// If COS returned a NewObservation (zero CollectedAt), set it now.
-	// AddWorker bypasses the collector, so we must set CollectedAt here
-	// to prevent the freshness checker from declaring the observation stale.
-	if observed.GetTimestamp().IsZero() {
-		if setter, ok := observed.(interface {
-			SetCollectedAt(time.Time) fsmv2.ObservedState
-		}); ok {
-			observed = setter.SetCollectedAt(time.Now())
-		} else {
-			s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath,
-				"worker_add_zero_timestamp_not_settable",
-				deps.String("type", fmt.Sprintf("%T", observed)))
-		}
+		return err
 	}
 
 	identityDoc := persistence.Document{
@@ -479,6 +462,33 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 	}
 
 	return initialDesired, nil
+}
+
+// collectInitialObservation collects the observed state a worker is added
+// with. If COS returned a NewObservation (zero CollectedAt), set it now.
+// AddWorker bypasses the collector, so we must set CollectedAt here
+// to prevent the freshness checker from declaring the observation stale.
+func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, initialDesired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	observed, err := worker.CollectObservedState(ctx, initialDesired)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
+
+		return nil, fmt.Errorf("failed to collect initial observed state: %w", err)
+	}
+
+	if observed.GetTimestamp().IsZero() {
+		if setter, ok := observed.(interface {
+			SetCollectedAt(time.Time) fsmv2.ObservedState
+		}); ok {
+			observed = setter.SetCollectedAt(time.Now())
+		} else {
+			s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath,
+				"worker_add_zero_timestamp_not_settable",
+				deps.String("type", fmt.Sprintf("%T", observed)))
+		}
+	}
+
+	return observed, nil
 }
 
 // RemoveWorker removes a worker from the registry for a restart, which adds
