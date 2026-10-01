@@ -50,13 +50,9 @@ const (
 	DefaultMaintenanceInterval = snapshot.DefaultMaintenanceInterval
 )
 
-// storeKeyName is StoreKey's name. It is a constant so the key and the
-// constructor's error text share one spelling.
-const storeKeyName = "persistence.store"
-
 // StoreKey names the store a PersistenceWorker is built from. NewPersistenceWorker
 // returns an error naming it when the dependency map holds nothing under it.
-var StoreKey = fsmv2config.NewDependencyKey[storage.TriangularStoreInterface](storeKeyName)
+var StoreKey = fsmv2config.NewDependencyKey[storage.TriangularStoreInterface]("persistence.store")
 
 // Compile-time interface check: PersistenceWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*PersistenceWorker)(nil)
@@ -83,7 +79,7 @@ func NewPersistenceWorker(
 
 	store, ok := fsmv2config.LookupDependency(dependencies, StoreKey)
 	if !ok {
-		return nil, fmt.Errorf("persistence: no store under %q in the dependency map", storeKeyName)
+		return nil, fmt.Errorf("persistence: no store under %q in the dependency map", StoreKey.Name())
 	}
 
 	w := &PersistenceWorker{}
