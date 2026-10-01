@@ -107,9 +107,7 @@ var TransportScenarioV2 = ScenarioV2{
 
 		deps := map[string]any{}
 
-		// Typed as the interface, or SetDependency cannot infer its type parameter.
-		var p transportWorker.ChannelProvider = provider
-		config.SetDependency(deps, transportWorker.ChannelProviderKey, p)
+		config.SetDependency[transportWorker.ChannelProvider](deps, transportWorker.ChannelProviderKey, provider)
 		config.SetDependency(deps, relayServerKey, server)
 
 		return deps, func() { server.Close() }, nil
