@@ -90,7 +90,6 @@ func TestFatalMessage(t *testing.T) {
 	}
 }
 
-// The routing seams stay decidable without os.Exit or real OS signals.
 func TestRunnerCLIRouting(t *testing.T) {
 	t.Run("duration routing v2 takes RunConfig.Duration", func(t *testing.T) {
 		runDuration, applyCtxTimeout := routeDuration(true, 5*time.Second)
@@ -273,9 +272,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 
 		runLogger := newRunLogger(zap.New(obsCore))
 
-		// A busy scenario emits far more than five identical info lines in one
-		// second (state transitions, passed waits); every one must reach the
-		// output, so none may be sampled away.
+		// 20 is more identical lines in one second than deps.samplerWrap lets through.
 		for range 20 {
 			runLogger.Info("state_transition")
 		}
