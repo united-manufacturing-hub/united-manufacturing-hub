@@ -78,7 +78,7 @@ var SimpleScenarioV2 = ScenarioV2{
 			}
 		}
 
-		var stoppedBefore int64
+		var stoppedCountWhileRunning int64
 
 		if err := env.WaitFor(ctx, "the parent reports both children healthy",
 			func(ctx context.Context) (bool, string, error) {
@@ -87,8 +87,7 @@ var SimpleScenarioV2 = ScenarioV2{
 					return false, "", fmt.Errorf("read the parent again: %w", err)
 				}
 
-				// Record the Stopped counter here; the next wait passes once it rises.
-				stoppedBefore = obs.Metrics.Framework.TransitionsByState["Stopped"]
+				stoppedCountWhileRunning = timesEntered(obs, "Stopped")
 
 				return obs.ChildrenHealthy == 2, fmt.Sprintf("state=%s healthy=%d", obs.State, obs.ChildrenHealthy), nil
 			}); err != nil {
@@ -97,12 +96,8 @@ var SimpleScenarioV2 = ScenarioV2{
 
 		env.Step("let the parent stop on its own: after RunningDuration in Running it removes its children and reaches Stopped")
 
-		// Stopped lasts only StoppedWaitDuration before the parent starts
-		// again, so the wait reads the transition counter, which keeps its
-		// value afterward. TryingToStop moves to Stopped only when the parent
-		// counts no healthy and no unhealthy children. The supervisor counts a
-		// stopped child as neither, so a count higher than stoppedBefore shows
-		// that every child has stopped or been removed.
+		// TryingToStop enters Stopped only when the parent counts no child as healthy
+		// or unhealthy, and the supervisor counts a stopped child as neither.
 		return env.WaitFor(ctx, "the parent has stopped its children and entered Stopped",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
@@ -110,9 +105,9 @@ var SimpleScenarioV2 = ScenarioV2{
 					return false, "", fmt.Errorf("read the parent again: %w", err)
 				}
 
-				stopped := obs.Metrics.Framework.TransitionsByState["Stopped"]
+				stopped := timesEntered(obs, "Stopped")
 
-				return stopped > stoppedBefore, fmt.Sprintf("state=%s stopped_transitions=%d (was %d)", obs.State, stopped, stoppedBefore), nil
+				return stopped > stoppedCountWhileRunning, fmt.Sprintf("state=%s stopped_transitions=%d (was %d)", obs.State, stopped, stoppedCountWhileRunning), nil
 			})
 	},
 }

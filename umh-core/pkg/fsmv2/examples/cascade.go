@@ -56,9 +56,7 @@ var CascadeScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert parent: %w", err)
 		}
 
-		// Degraded lasts only while a child is unhealthy, so the wait reads the
-		// transition counter, which keeps its value afterward. Degraded can
-		// only follow Running, so this wait also covers the parent's start.
+		// Degraded can only follow Running, so this wait also covers the parent's start.
 		if err := env.WaitFor(ctx, "the parent has been Degraded once",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
@@ -70,7 +68,7 @@ var CascadeScenarioV2 = ScenarioV2{
 					return false, "", err
 				}
 
-				degradedCount := obs.Metrics.Framework.TransitionsByState["Degraded"]
+				degradedCount := timesEntered(obs, "Degraded")
 
 				return degradedCount >= 1, fmt.Sprintf("state=%s degraded_transitions=%d", obs.State, degradedCount), nil
 			}); err != nil {
