@@ -72,16 +72,11 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 			Store:        store,
 		})
 
-		// Run returns nil only after it has read the child's Running state and its
-		// updated mood through fsmv2client.Get. So a nil error proves that a runtime
-		// Upsert of moodFilePath reached a live child. Run also fails when the
-		// config worker is not readable after the Delete.
-		//
 		// The final mood is not re-read here. After Delete, nothing stops the
 		// supervisor ticking the child (ENG-5107). Once Run removes its temp mood
 		// files, CollectObservedState overwrites the observed mood with "".
 		Expect(err).NotTo(HaveOccurred(),
-			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, then Delete, without error")
+			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, Delete the child, and still read the config worker")
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the v2 runner must wait out the run and then tear down on its own")
 
