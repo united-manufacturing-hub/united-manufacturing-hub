@@ -20,154 +20,92 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	persistenceworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	persistencesnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
-type PersistenceRunConfig struct {
-	Logger       deps.FSMLogger
-	Duration     time.Duration
-	TickInterval time.Duration
-}
+// PersistenceScenarioV2 runs one persistence worker against an in-memory
+// store held in the dependency map.
+var PersistenceScenarioV2 = ScenarioV2{
+	Name:        "persistence",
+	Description: "Compacts and maintains an in-memory store through the dependency map",
 
-type PersistenceRunResult struct {
-	Done              <-chan struct{}
-	Shutdown          func()
-	Error             error
-	LastCompactionAt  time.Time
-	LastMaintenanceAt time.Time
-	Healthy           bool
-	CompactionCycles  int64
-	MaintenanceCycles int64
-}
+	Dependencies: func() (map[string]any, func(), error) {
+		// The collector writes observations to RunConfig.Store, not to this store.
+		var maintainedStore storage.TriangularStoreInterface = SetupStore(deps.NewNopFSMLogger())
 
-func RunPersistenceScenario(ctx context.Context, cfg PersistenceRunConfig) *PersistenceRunResult {
-	done := make(chan struct{})
+		m := map[string]any{}
 
-	if cfg.Duration < 0 {
-		close(done)
+		config.SetDependency(m, persistenceworker.StoreKey, maintainedStore)
 
-		return &PersistenceRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("invalid duration %v: must be non-negative", cfg.Duration),
-		}
-	}
+		return m, nil, nil
+	},
 
-	if ctx.Err() != nil {
-		close(done)
+	Run: func(ctx context.Context, env Env) error {
+		ref := dynamicchildren.Ref{WorkerType: "persistence", Name: "persistence-1"}
 
-		return &PersistenceRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("context already cancelled: %w", ctx.Err()),
-		}
-	}
+		env.Step("create the persistence worker")
 
-	logger := cfg.Logger
-	if logger == nil {
-		logger = deps.NewNopFSMLogger()
-	}
-
-	tickInterval := cfg.TickInterval
-	if tickInterval < 0 {
-		close(done)
-
-		return &PersistenceRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("invalid tick interval %v: must be non-negative", cfg.TickInterval),
-		}
-	}
-
-	if tickInterval == 0 {
-		tickInterval = 100 * time.Millisecond
-	}
-
-	store := SetupStore(logger)
-
-	yamlConfig := `
-children:
-  - name: "persistence"
-    workerType: "persistence"
-`
-
-	register.SetGlobalDeps[*persistenceworker.PersistenceDependencies](persistenceworker.WorkerTypeName, persistenceworker.NewStoreOnlyDependencies(store))
-
-	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:           "scenario-persistence",
-		Name:         "persistence",
-		Store:        store,
-		Logger:       logger,
-		TickInterval: tickInterval,
-		YAMLConfig:   yamlConfig,
-		Dependencies: map[string]any{},
-	})
-	if err != nil {
-		register.ClearGlobalDeps(persistenceworker.WorkerTypeName)
-		close(done)
-
-		return &PersistenceRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("failed to create supervisor: %w", err),
-		}
-	}
-
-	// Detached from the caller's ctx so cancelling the caller's ctx triggers
-	// teardown (via the watcher goroutine below) instead of killing the tick
-	// loop; a loop killed by the cancel would force every graceful-drain phase
-	// of the subsequent Shutdown to wait out its full timeout.
-	supDone := appSup.Start(context.WithoutCancel(ctx))
-
-	result := &PersistenceRunResult{
-		Done:     done,
-		Shutdown: appSup.Shutdown,
-	}
-
-	go func() {
-		if cfg.Duration > 0 {
-			select {
-			case <-time.After(cfg.Duration):
-				appSup.Shutdown()
-			case <-ctx.Done():
-				appSup.Shutdown()
-			case <-supDone:
-			}
-		} else {
-			select {
-			case <-ctx.Done():
-				appSup.Shutdown()
-			case <-supDone:
-			}
+		if err := env.Client.Upsert(ref, map[string]any{}); err != nil {
+			return err
 		}
 
-		<-supDone
+		// Running lasts to the end: only ShouldStop() or a failed action
+		// leaves it, and both actions succeed against the in-memory store.
+		// No counter or timestamp in this scenario is ever reset.
+		if err := env.WaitFor(ctx, "store shows Running after startup maintenance",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[persistencesnapshot.PersistenceStatus](ctx, env.Client, ref)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the worker has not published an observation yet", nil
+					}
 
-		loadCtx := context.Background()
+					return false, "", err
+				}
 
-		var observed fsmv2.Observation[persistencesnapshot.PersistenceStatus]
-		if loadErr := store.LoadObservedTyped(loadCtx, "persistence", "persistence-001", &observed); loadErr != nil {
-			if !errors.Is(loadErr, context.Canceled) {
-				logger.SentryWarn(deps.FeatureExamples, "", "failed to load persistence observed state",
-					deps.Err(loadErr))
-			}
-		} else {
-			workerMetrics := observed.Metrics.Worker
-			result.CompactionCycles = workerMetrics.Counters[string(deps.CounterCompactionCyclesTotal)]
-			result.MaintenanceCycles = workerMetrics.Counters[string(deps.CounterMaintenanceCyclesTotal)]
-			result.LastCompactionAt = observed.Status.LastCompactionAt
-			result.LastMaintenanceAt = observed.Status.LastMaintenanceAt
-			result.Healthy = observed.Status.IsHealthy()
+				maintenanceCycles := obs.Metrics.Worker.Counters[string(deps.CounterMaintenanceCyclesTotal)]
+
+				done := obs.State == "Running" &&
+					obs.Status.IsHealthy() &&
+					maintenanceCycles >= 1 &&
+					!obs.Status.LastMaintenanceAt.IsZero()
+
+				seen := fmt.Sprintf("state=%s maintenance_cycles=%d last_maintenance_at=%s",
+					obs.State, maintenanceCycles, obs.Status.LastMaintenanceAt.Format(time.RFC3339))
+
+				return done, seen, nil
+			}); err != nil {
+			return err
 		}
 
-		register.ClearGlobalDeps(persistenceworker.WorkerTypeName)
-		close(done)
-	}()
+		// A zero LastCompactionAt is due at once, so compaction runs on the
+		// first Running tick.
+		return env.WaitFor(ctx, "compaction has run",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[persistencesnapshot.PersistenceStatus](ctx, env.Client, ref)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the worker has not published an observation yet", nil
+					}
 
-	return result
+					return false, "", err
+				}
+
+				compactionCycles := obs.Metrics.Worker.Counters[string(deps.CounterCompactionCyclesTotal)]
+
+				done := compactionCycles >= 1 &&
+					!obs.Status.LastCompactionAt.IsZero()
+
+				seen := fmt.Sprintf("compaction_cycles=%d last_compaction_at=%s",
+					compactionCycles, obs.Status.LastCompactionAt.Format(time.RFC3339))
+
+				return done, seen, nil
+			})
+	},
 }

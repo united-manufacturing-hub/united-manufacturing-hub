@@ -79,6 +79,10 @@ var validWorkerStates = map[string]map[string]bool{
 		"running": true, "degraded": true,
 		"stopped": true, "unknown": true,
 	},
+	"persistence": {
+		"Stopped": true, "TryingToStart": true, "Running": true,
+		"Degraded": true, "Stopping": true, "unknown": true,
+	},
 	"transport": {
 		"Stopped": true, "Starting": true, "Running": true,
 		"Degraded": true, "AuthFailed": true, "Stopping": true,
