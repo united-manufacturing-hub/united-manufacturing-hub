@@ -32,6 +32,5 @@ type ChannelProvider interface {
 // expose its name.
 const channelProviderKeyName = "transport.channel_provider"
 
-// ChannelProviderKey names the dependency-map entry that holds the transport
-// worker's ChannelProvider.
+// ChannelProviderKey is the dependency-map key for the transport worker's ChannelProvider.
 var ChannelProviderKey = config.NewDependencyKey[ChannelProvider](channelProviderKeyName)
