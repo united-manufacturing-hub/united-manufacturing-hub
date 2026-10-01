@@ -177,18 +177,13 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		// examples.Run calls Run on the caller's goroutine, so the spec reads
-		// firstPolls without a lock.
 		var firstPolls atomic.Int32
 
 		waiting := examples.ScenarioV2{
 			Name:        "wait-passed-logging",
 			Description: "test-local Run for the wait-passed log line",
 			Run: func(ctx context.Context, env examples.Env) error {
-				// The first check reports done on its second poll, so the
-				// value it passes with differs from the stale one the poll
-				// before it saw. A pass line quoting that stale value fails
-				// the seen assertion below.
+				// Done on the second poll, so a pass line quoting the first poll's value fails the seen assertion.
 				if err := env.WaitFor(ctx, "first check",
 					func(_ context.Context) (bool, string, error) {
 						if firstPolls.Add(1) < 2 {
@@ -207,8 +202,6 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 					return err
 				}
 
-				// The third check never reports done, so the short ctx is
-				// the only thing that can end its wait.
 				return env.WaitFor(ctx, "never check",
 					func(_ context.Context) (bool, string, error) {
 						return false, "seen=never", nil

@@ -105,8 +105,6 @@ func parseableLogLineCount(logOutput string) int {
 
 var _ = Describe("ScenarioV2 run end", func() {
 	It("logs one scenario_run_finished line after a Run that returned nil", func() {
-		// The configworker deps key is process-global; a spec that fails
-		// mid-run would otherwise leak it into every later spec.
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
 		logBuf := &v2LogBuffer{}
@@ -210,9 +208,6 @@ var _ = Describe("ScenarioV2 run end", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		// Run returns nil, so the error-return check passes; only the
-		// logged-error check after it can fail the run. This spec pins that
-		// branch, which the error-returning spec above cannot reach.
 		swallowing := examples.ScenarioV2{
 			Name:        "run-swallowed-error",
 			Description: "test-local Run that logs an error and still returns nil",
