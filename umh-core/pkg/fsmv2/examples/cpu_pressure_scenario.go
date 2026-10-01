@@ -27,12 +27,6 @@ import (
 )
 
 const (
-	// cpuPressureBase is where the fake machine serves its cgroup files. It
-	// must equal the unexported cgroupBase in pkg/fsmv2/cpu. Nothing checks
-	// that, and a mismatch makes every cgroup read fail, while the /proc files
-	// still read.
-	cpuPressureBase = "/sys/fs/cgroup"
-
 	// cpuPressureCalm is one point under the 0.20 fire mark.
 	cpuPressureCalm = 0.19
 
@@ -79,7 +73,7 @@ var CPUPressureScenarioV2 = ScenarioV2{
 	Description: "Raises a fake machine's CPU pressure from 19% to 25%, over the 20% at which the monitor degrades (v2)",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(cpuPressureBase, cpuPressureMachine(cpuPressureCalm))
+		box := newTickingBox(fsmv2cpu.CgroupBase, cpuPressureMachine(cpuPressureCalm))
 		m := cpuMachineDeps(box)
 
 		box.Start(cpuPressureMachineTick)

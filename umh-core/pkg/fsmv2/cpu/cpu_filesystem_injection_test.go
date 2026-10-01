@@ -65,7 +65,7 @@ type markedStatFilesystem struct {
 }
 
 func (markedStatFilesystem) ReadFile(_ context.Context, path string) ([]byte, error) {
-	if path == cgroupBase+"/cpu.stat" {
+	if path == CgroupBase+"/cpu.stat" {
 		return []byte("usage_usec " + stubStatMarker + "\n"), nil
 	}
 
@@ -77,7 +77,7 @@ func (markedStatFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, err
 }
 
 func (markedStatFilesystem) FileExists(_ context.Context, path string) (bool, error) {
-	return path == cgroupBase+"/cpu.stat", nil
+	return path == CgroupBase+"/cpu.stat", nil
 }
 
 var _ = Describe("the filesystem the CPU worker reads", func() {
