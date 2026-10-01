@@ -132,15 +132,8 @@ func (m *MockCertHandler) FetchCallCount() int {
 var errCertFetchSimulated = errors.New("simulated cert fetch failure")
 
 func certFetcherDependencies(emails []string, fetchErr error) (map[string]any, func(), error) {
-	handler := NewMockCertHandler(emails, fetchErr)
-
 	deps := map[string]any{}
-
-	// Declared as the interface: a *MockCertHandler argument does not match
-	// the key's type, so SetDependency would not compile.
-	var h certificatehandler.Handler = handler
-
-	config.SetDependency(deps, certfetcher.CertHandlerKey, h)
+	config.SetDependency[certificatehandler.Handler](deps, certfetcher.CertHandlerKey, NewMockCertHandler(emails, fetchErr))
 
 	return deps, nil, nil
 }
