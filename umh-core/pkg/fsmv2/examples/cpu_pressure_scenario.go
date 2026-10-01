@@ -33,16 +33,11 @@ const (
 	// still read.
 	cpuPressureBase = "/sys/fs/cgroup"
 
-	// cpuPressureCalm is one point under 0.20, the pressure at which the
-	// pressure signal fires, so the crossing later is a one-point change.
+	// cpuPressureCalm is one point under the 0.20 fire mark.
 	cpuPressureCalm = 0.19
 
-	// cpuPressureFiring is over 0.20, so the signal fires.
 	cpuPressureFiring = 0.25
 
-	// cpuPressureCores is the fake machine's CPU count, and cpuPressureHostBusy
-	// how much of it the whole machine is using.
-	//
 	// The capacity signal reads headroom as cores minus busy minus a one-core
 	// reserve, averaged over 60 seconds, and calls the machine full below zero.
 	// Four cores at 60% busy is 4 - 2.4 - 1.0 = 0.6 cores from the first
@@ -51,8 +46,7 @@ const (
 	cpuPressureCores    = 4
 	cpuPressureHostBusy = 0.60
 
-	// cpuPressureUsageCores is what this instance itself uses, 0.5 of the 2.4
-	// busy cores. Nothing in the story turns on that split.
+	// Nothing in the story turns on this instance's own share of the busy cores.
 	cpuPressureUsageCores = 0.5
 
 	// cpuPressureMachineTick is how much machine time one tick of the ticker
@@ -77,8 +71,7 @@ const (
 // pressure signal fires.
 //
 // The story is that pressure alone degrades the machine: tasks are queueing
-// for a free core. Pressure moves from 19% to 25%, over the 20% at which the
-// monitor degrades. The scenario does not check the capacity signal. It
+// for a free core. The scenario does not check the capacity signal. It
 // averages over 60 seconds and the run is a few seconds long, so its line
 // reads "Machine headroom not available (measuring)" throughout.
 var CPUPressureScenarioV2 = ScenarioV2{
@@ -122,9 +115,8 @@ var CPUPressureScenarioV2 = ScenarioV2{
 		env.Step("raise CPU pressure to 25%; wait for the worker to go degraded")
 		machine.box.Set(cpuPressureMachine(cpuPressureFiring))
 
-		// PSI is a level, so the next reading fires the signal, and the latch
-		// holds it while pressure stays over the 0.12 clear mark: this
-		// condition lasts to the end of the run.
+		// PSI is a level, so the next reading fires, and the latch holds it while
+		// pressure stays over the 0.12 clear mark.
 		return waitCPUFresh(ctx, env, "degraded by pressure at 25%", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			degraded := st.Degraded && st.Result.Verdict.State == cpuhealth.StateDegraded
 			done := degraded && strings.Contains(st.Result.Message, "spent 25% of the last minute waiting for a free CPU core")

@@ -69,9 +69,8 @@ var CPUStallScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert cpu monitor: %w", err)
 		}
 
-		// The headline names the machine's usage, so the waits after the hang
-		// can tell the recovered reading from the startup reading and from a
-		// machine the worker cannot measure.
+		// The headline names the machine's usage, which a reading of a machine the
+		// worker cannot measure does not carry.
 		if err := waitCPUFirstReading(ctx, env, "first reading healthy", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Verdict.State == cpuhealth.StateHealthy
 			done := healthy && strings.Contains(st.Result.Message, "The machine is using 1.2 of 4 cores")
@@ -91,13 +90,10 @@ var CPUStallScenarioV2 = ScenarioV2{
 
 		// Staleness is decided on the wall clock: the collector stamps
 		// CollectedAt with time.Now() when it wraps each observation
-		// (wrapNewObservation, pkg/fsmv2/supervisor/internal/collection), and
-		// the box's clock reaches only the sample's own Timestamp. Machine time
-		// stops while the read hangs, so a wait on it would run out its 30
-		// seconds; this wait is plain wall time. The collector goroutine blocks
-		// inside Poll and holds collectionMu, and its ticker drops ticks, so
-		// nothing is saved and the reading stays Stale for as long as the read
-		// hangs.
+		// (wrapNewObservation, pkg/fsmv2/supervisor/internal/collection). This
+		// wait therefore runs on wall time. The collector goroutine blocks inside
+		// Poll and holds collectionMu, so nothing is saved and the reading stays
+		// Stale for as long as the read hangs.
 		if err := env.WaitFor(ctx, "reading stale while the read hangs", func(ctx context.Context) (bool, string, error) {
 			st, fresh, err := cpuReading(ctx, env)
 			if err != nil {
@@ -108,8 +104,6 @@ var CPUStallScenarioV2 = ScenarioV2{
 			case fsmv2client.Stale:
 				return true, "stale", nil
 			case fsmv2client.Fresh:
-				// A Fresh reading means the collector's last save is still
-				// inside the staleness limit: not done yet.
 				return false, fmt.Sprintf("fresh %s", cpuStatusSeen(st)), nil
 			default:
 				return false, "", fmt.Errorf("the CPU reading is %s while the read hangs", freshnessName(fresh))

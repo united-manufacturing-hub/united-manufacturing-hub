@@ -27,13 +27,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// A sampler stamping from time.Now() cannot produce the instant these specs
-// pin, 2020-03-14T15:09:26Z, so only the injected clock can pass them.
 var _ = Describe("sampler-injected clock", func() {
 	const base = "/sys/fs/cgroup"
 
-	// Read tolerates the errors unserved paths return, so the sample succeeds
-	// and the assertions land on the timestamp rather than an error path.
+	// Read tolerates the errors unserved paths return.
 	readableFS := func() filesystem.Service {
 		fs := filesystem.NewMockFileSystem()
 		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
@@ -84,10 +81,8 @@ var _ = Describe("sampler-injected clock", func() {
 		start := time.Date(2020, time.March, 14, 15, 9, 26, 0, time.UTC)
 		clk.Set(start)
 
-		// First and second cpu.stat: usage_usec rises 5000000 -> 12000000.
-		// First and second /proc/stat: the busy jiffies (user+nice+sys+irq+
-		// softirq) rise 410 -> 820. Every other read answers with an error
-		// Read tolerates.
+		// Busy jiffies are user+nice+system+irq+softirq: 410 on the first
+		// /proc/stat, 820 on the second.
 		var statCalls, procStatCalls int
 
 		fs := filesystem.NewMockFileSystem()

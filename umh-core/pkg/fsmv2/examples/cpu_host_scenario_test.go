@@ -42,9 +42,6 @@ var _ = Describe("CPU host ScenarioV2", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// Only one arm runs per machine: macOS and cgroup v1 hosts have no
-		// /sys/fs/cgroup/cpu.stat and take the refusal; a cgroup v2 host
-		// proceeds.
 		_, statErr := os.Stat("/sys/fs/cgroup/cpu.stat")
 
 		// The budget is for the proceed arm: a handful of one-second polls,
@@ -62,8 +59,7 @@ var _ = Describe("CPU host ScenarioV2", func() {
 
 		if statErr != nil {
 			// The scenario's error returns synchronously, after teardown, so
-			// there is no Done channel to wait for. The message names the
-			// tool, the only place a developer on a Mac learns of it.
+			// there is no Done channel to wait for.
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("tools/cpu-host"))
 

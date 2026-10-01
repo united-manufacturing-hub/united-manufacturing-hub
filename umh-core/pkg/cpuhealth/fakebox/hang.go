@@ -30,8 +30,7 @@ import (
 type HangingFS struct {
 	filesystem.Service
 
-	// mu guards hung against the collector's reads and a scenario's Hang
-	// calls.
+	// mu guards hung.
 	mu   sync.Mutex
 	hung map[string]chan struct{}
 }

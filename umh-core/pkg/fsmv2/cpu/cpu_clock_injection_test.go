@@ -28,11 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// ClockKey's doc is the contract these specs check. A mock pinned to
-// 2020-03-14T15:09:26Z can appear in a Sample only through the dependency map.
 var _ = Describe("the clock the CPU worker samples on", func() {
-	// readableFS serves the signal files under cgroupBase and fails every
-	// other read, which the sampler tolerates.
+	// readableFS fails every read it does not serve, which the sampler tolerates.
 	readableFS := func() filesystem.Service {
 		fs := filesystem.NewMockFileSystem()
 		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {

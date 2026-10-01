@@ -73,7 +73,6 @@ type linuxSampler struct {
 	fs   filesystem.Service
 	base string
 
-	// clock stamps every Sample. NewLinuxSampler uses wall time.
 	clock clock.Clock
 
 	// cgroup is the v2 reader until reader detects v1 and replaces it, so it is never nil.

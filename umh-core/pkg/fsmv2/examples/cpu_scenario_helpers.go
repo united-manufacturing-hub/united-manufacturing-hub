@@ -36,17 +36,15 @@ import (
 // read: one second, the cadence the worker reads at in production.
 const cpuMachineSecond = time.Second
 
-// cpuMachineReadAdvance is the machine time one sampler read advances the box
-// in cpu-filling and cpu-latch. Every window, coverage rule and re-fire bar in
-// pkg/cpuhealth is judged on sample timestamps, so ten machine seconds per read
-// fills a 60-second window in six readings at the worker's 1s poll.
+// cpuMachineReadAdvance is a read-driven box's machine time per sampler read
+// when a scenario's story turns on 60-second windows: ten machine seconds per
+// read fills one in six readings at the worker's 1s poll.
 const cpuMachineReadAdvance = 10 * time.Second
 
 // cpuMachine is a scenario's fake CPU machine: a tickingBox wrapped in a
 // HangingFS, so reads of a chosen path can be held up mid-poll. The
 // HangingFS wraps outside the box's mutex, so a hung read does not block Set
-// or Stop. It holds the box so Run can read machine time and change the
-// condition.
+// or Stop.
 type cpuMachine struct {
 	*fakebox.HangingFS
 	box *tickingBox
@@ -54,9 +52,7 @@ type cpuMachine struct {
 
 // cpuMachineDeps returns the dependency map a CPU scenario's Dependencies
 // builds over box: the box's filesystem, wrapped as a cpuMachine, and its
-// clock. The two go in together because publishing only one fails quietly: a
-// filesystem with no clock leaves the sampler stamping wall time while the
-// counters accrue on the box's clock. The caller starts the box.
+// clock. ClockKey says what publishing the filesystem alone costs.
 func cpuMachineDeps(box *tickingBox) map[string]any {
 	machine := &cpuMachine{HangingFS: fakebox.NewHangingFS(box.fs()), box: box}
 
@@ -111,8 +107,6 @@ func freshnessName(f fsmv2client.Freshness) string {
 	}
 }
 
-// firstLine cuts a message at its first newline, so a wait's seen value stays
-// one line and names the headline the worker composed.
 func firstLine(msg string) string {
 	if i := strings.IndexByte(msg, '\n'); i >= 0 {
 		return msg[:i]
@@ -134,9 +128,8 @@ func cpuStatusSeen(st simple.Status[fsmv2cpu.CPUStatus]) string {
 		st.Degraded, st.Result.Verdict.State, firstLine(msg))
 }
 
-// waitCPUFirstReading waits for a Fresh reading on which pass holds.
-// NeverObserved means the first poll has not completed yet, so it is not done
-// rather than a failure.
+// waitCPUFirstReading waits for a Fresh reading on which pass holds. pass must
+// name a condition that lasts once reached, as waitCPUFresh says.
 func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
 	return env.WaitFor(ctx, check, func(ctx context.Context) (bool, string, error) {
 		st, fresh, err := cpuReading(ctx, env)
@@ -163,7 +156,8 @@ func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(s
 
 // waitCPUFresh waits for pass to hold on a Fresh reading. Any other freshness
 // fails the wait at once: the container monitor's judgeWorkerCPU reports any
-// reading that is not Fresh as degraded.
+// reading that is not Fresh as degraded. The wait polls, so pass must name a
+// condition that lasts once reached; a short-lived one can be missed.
 func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
 	return env.WaitFor(ctx, check, func(ctx context.Context) (bool, string, error) {
 		st, fresh, err := cpuReading(ctx, env)
@@ -183,8 +177,7 @@ func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.S
 
 // tickingBox is a fakebox.Box that advances on its own and can be read while
 // it does. A plain Box moves only when someone calls Tick, and is not safe for
-// the collector's goroutine to read. cpuMachineDeps puts it in a scenario's
-// dependency map.
+// the collector's goroutine to read.
 //
 // mu covers every touch of the Box's counters: reads, ticks and Set. It is
 // taken per file, not per sampler read. clock.Mock synchronises itself.
@@ -245,8 +238,7 @@ func (t *tickingBox) MachineNow() time.Time {
 	return t.box.Clock().Now()
 }
 
-// Set changes the condition later ticks accrue at. A level such as PSI
-// pressure changes on the next read.
+// Set changes the condition later ticks accrue at.
 func (t *tickingBox) Set(c fakebox.Condition) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

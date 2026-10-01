@@ -66,7 +66,6 @@ const userHz = 100
 const psiScale = 100
 
 // cfsPeriodsUs are the cpu.max periods a Box may write, largest first.
-// chooseCfsPeriodUs picks one.
 var cfsPeriodsUs = []int64{100_000, 10_000, 1_000}
 
 // referenceTick is the tick length NewBox assumes when it picks the CFS period.
@@ -87,8 +86,6 @@ var fixtureEpoch = time.Date(2020, time.March, 14, 15, 9, 26, 0, time.UTC)
 // not ReadMissing.
 var errUnreadable = errors.New("no such file or directory")
 
-// unreadable is the error for one path, wrapping errUnreadable so a caller can
-// still match it with errors.Is.
 func unreadable(path string) error {
 	return fmt.Errorf("fakebox: %s: %w", path, errUnreadable)
 }
@@ -140,29 +137,21 @@ type Condition struct {
 	Affinity int
 
 	// Unreadable lists absolute paths this machine cannot read, whatever the
-	// rest of the condition says — an unreadable /proc/stat, a cgroup whose
-	// cpu.stat the process may not open. Each entry is matched whole, against
-	// the same path the sampler asks for, so a cgroup file needs the base:
-	// "/sys/fs/cgroup/cpu.stat", not "cpu.stat". An entry that is relative, or
-	// that names no file this box serves, panics rather than being ignored:
-	// ignored, it would leave a spec asserting against the readable machine it
-	// was written to rule out.
+	// rest of the condition says. Each entry is matched whole against the path
+	// the sampler asks for: "/sys/fs/cgroup/cpu.stat", not "cpu.stat". An entry
+	// that is relative, or names no file this box serves, panics: ignored, it
+	// would leave a spec asserting against a readable machine.
 	Unreadable []string
 }
 
 // Box serves one machine's cgroup and /proc files from a Condition, and owns
 // the clock the sampler stamps its samples from.
 type Box struct {
-	// clk is the mock the sampler stamps from. It is set once at construction
-	// and only advanced after that; shieldedClock says what a backwards step
-	// costs.
 	clk *clock.Mock
 
 	base string
 	cond Condition
 
-	// servers is the path-to-renderer table, built once in NewBox because it
-	// closes over base.
 	servers map[string]func() string
 
 	// periodUs is the CFS period, chosen once in NewBox. It is fixed for the
@@ -171,14 +160,12 @@ type Box struct {
 	// counter's own history inconsistent.
 	periodUs int64
 
-	// The cumulative counters, in the units their files carry. They only
-	// rise, and the two throttle counters stand still without a quota.
+	// Cumulative counters, in the units their files carry.
 	usageUsec    int64
 	nrPeriods    int64
 	nrThrottled  int64
 	psiTotalUsec int64
 
-	// The /proc/stat jiffy totals.
 	jiffiesUser  int64
 	jiffiesIdle  int64
 	jiffiesSteal int64
@@ -208,8 +195,7 @@ func NewBox(base string, initial Condition) *Box {
 
 // FS returns a filesystem service serving this box's files. It reads the box's
 // state at each call rather than a snapshot, so one service stays correct
-// across later Set and Tick calls. Every path the box does not serve reads as
-// errUnreadable, which classifyRead records as ReadError.
+// across later Set and Tick calls.
 func (b *Box) FS() filesystem.Service {
 	fs := filesystem.NewMockFileSystem()
 	fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
@@ -219,13 +205,10 @@ func (b *Box) FS() filesystem.Service {
 	return fs
 }
 
-// shieldedClock hides the mock behind a plain clock.Clock. A bare interface
-// would not: box.Clock().(*clock.Mock) would succeed and hand the caller Set,
-// which can move the clock backwards. A backwards step leaves the tick it
-// lands on with no rate, because advanceUsageRate (cgroup_source.go) and
-// advanceHostRates (host_source.go) publish only over a positive gap.
-// Embedding the interface in an unexported struct leaves no way back to the
-// mock.
+// shieldedClock hides the mock, so a caller cannot type-assert the clock back
+// to *clock.Mock and call Set. A backwards step leaves the tick it lands on
+// with no rate: advanceUsageRate and advanceHostRates publish only over a
+// positive gap.
 type shieldedClock struct{ clock.Clock }
 
 // Clock returns the clock to hand to cpuhealth.NewLinuxSamplerWithClock. Tick
@@ -243,10 +226,6 @@ func (b *Box) Set(c Condition) {
 	validate(c)
 	b.checkUnreadable(c)
 
-	// A machine does not lose CPUs and keep its counters. Dropping Cores would
-	// cut HostCpus at once while the jiffy totals kept rising from the
-	// wider-machine era, and the tick that straddled the change would report
-	// more busy cores than the machine now has.
 	if c.Cores != b.cond.Cores {
 		panic(fmt.Sprintf(
 			"fakebox: Set Cores %d on a %d-CPU box: a machine does not gain or lose CPUs mid-run while its /proc/stat counters keep rising; construct a new Box instead",
@@ -280,9 +259,6 @@ func (b *Box) Tick(d time.Duration) {
 		b.nrThrottled += throttled
 	}
 
-	// The machine's jiffies for the interval. Busy and steal are fractions of
-	// this total and idle takes the rest, so the denominator the sampler
-	// computes off the served line is exactly this total.
 	total := whole("/proc/stat jiffies over the tick", float64(b.cond.Cores)*userHz*seconds)
 	busy := whole("/proc/stat busy jiffies over the tick", b.cond.HostBusy*float64(total))
 	steal := whole("/proc/stat steal jiffies over the tick", b.cond.Steal*float64(total))
@@ -299,8 +275,6 @@ func (b *Box) Tick(d time.Duration) {
 	b.clk.Add(d)
 }
 
-// readFile serves one path, or reports the error the sampler would see for a
-// file this machine does not have.
 func (b *Box) readFile(path string) ([]byte, error) {
 	// Checked before anything else, so a path the box would otherwise serve
 	// still fails when the condition says this machine cannot read it.
@@ -338,8 +312,7 @@ func (b *Box) newServers() map[string]func() string {
 	}
 }
 
-// ServablePaths returns every path this box serves, sorted. Exported so a test
-// can walk the whole set rather than repeating it and drifting from it.
+// ServablePaths returns every path this box serves, sorted.
 func (b *Box) ServablePaths() []string {
 	paths := make([]string, 0, len(b.servers))
 	for path := range b.servers {
@@ -379,8 +352,6 @@ func (b *Box) cpuStat() string {
 }
 
 // cpuMax writes the cgroup's CPU limit as the kernel's quota-and-period pair.
-// The quota scales with whichever period this box picked, so the cores the
-// sampler divides back out are the stated ones at any period.
 func (b *Box) cpuMax() string {
 	if b.cond.QuotaCores <= 0 {
 		return fmt.Sprintf("max %d\n", b.periodUs)
@@ -401,8 +372,7 @@ func (b *Box) cpuPressure() string {
 		avg, avg, avg, b.psiTotalUsec, avg, avg, avg, b.psiTotalUsec)
 }
 
-// cpusetEffective writes the CPUs the cgroup may run on, as the contiguous
-// range starting at 0 that the kernel writes for a run of CPUs.
+// cpusetEffective writes the CPUs the cgroup may run on.
 func (b *Box) cpusetEffective() string {
 	allowed := b.cond.Affinity
 	if allowed == 0 {
@@ -448,14 +418,10 @@ func (b *Box) procCpuinfo() string {
 	return "processor\t: 0\nvendor_id\t: GenuineIntel\nflags\t\t: " + flags + "\n"
 }
 
-// dmiProductName writes the SMBIOS product name, and always a bare-metal one.
-// There is no hypervisor branch because nothing could reach it: a virtualized
-// Box writes the hypervisor flag into /proc/cpuinfo, and the sampler settles
-// the fact there and never opens DMI.
-//
-// A bare-metal box has to serve this file. With no readable DMI source the
-// sampler leaves virtualisation unresolved and re-reads it every tick, so a Box
-// that errored here would never let the fact settle.
+// dmiProductName writes a bare-metal SMBIOS product name. A virtualized Box is
+// settled by the hypervisor flag in /proc/cpuinfo first, so DMI is never read.
+// A bare-metal Box must serve this file: with no readable DMI source the
+// sampler re-reads virtualisation every tick and the fact never settles.
 func (b *Box) dmiProductName() string { return "PowerEdge R640\n" }
 
 // chooseCfsPeriodUs picks the largest CFS period at which Throttle is a whole
@@ -480,9 +446,7 @@ func chooseCfsPeriodUs(throttle float64) int64 {
 		throttle, referenceTick))
 }
 
-// validate panics on a Condition no machine could be in. Served, such a
-// condition would read back as some other machine: a Steal above 1 as a
-// negative idle, an Affinity above Cores as a cpuset the machine does not have.
+// validate panics on a Condition no machine could be in.
 func validate(c Condition) {
 	if c.Cores < 1 {
 		panic(fmt.Sprintf("fakebox: Cores %d: a machine has at least one CPU", c.Cores))
@@ -522,20 +486,16 @@ func validate(c Condition) {
 	}
 }
 
-// unitFraction panics unless v is a fraction from 0 to 1.
 func unitFraction(name string, v float64) {
 	if v < 0 || v > 1 {
 		panic(fmt.Sprintf("fakebox: %s %v: expected a fraction from 0 to 1", name, v))
 	}
 }
 
-// wholeTolerance is the slack whole allows for float64 representation. The
-// products it checks are computed from decimal fractions, whose error at these
-// magnitudes is many orders below this, while the smallest fractional part it
-// has to reject is 0.5.
+// wholeTolerance is the slack isWhole allows for float64 representation error,
+// which for the decimal fractions a Condition holds is many orders below this.
 const wholeTolerance = 1e-6
 
-// isWhole reports whether v is an integer up to float64 representation.
 func isWhole(v float64) bool { return math.Abs(v-math.Round(v)) <= wholeTolerance }
 
 // whole rounds v to the integer the file will carry, and panics naming what

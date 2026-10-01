@@ -52,7 +52,7 @@ const (
 // is released when the pressure drops under the clear mark. When the pressure
 // comes back, the report is late: a released signal cannot fire again for 60
 // machine seconds, so the machine sits over its fire mark while reported
-// healthy. The last wait checks that the new verdict came no earlier than that.
+// healthy.
 var CPULatchScenarioV2 = ScenarioV2{
 	Name:        "cpu-latch",
 	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and shows the bar on re-firing (v2)",
@@ -78,19 +78,15 @@ var CPULatchScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert cpu monitor: %w", err)
 		}
 
-		// PSI is a level and the pressure reduction is the newest reading, so
-		// the first reading fires, and the verdict holds while pressure stays
-		// over the 0.12 clear mark.
+		// PSI is a level, so the first reading already fires.
 		if err := waitCPUFirstReading(ctx, env, "first reading degraded by pressure at 25%", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			return cpuLatchDegradedAt(st, 25)
 		}); err != nil {
 			return err
 		}
 
-		// The latch cannot release until the window covers 60 machine seconds.
-		// Before that, the noise below would hold the verdict whatever the clear
-		// mark, and the release would come late. Machine time only rises, so
-		// this lasts.
+		// Before the window covers 60 machine seconds the noise below would hold the
+		// verdict whatever the clear mark. Machine time only rises, so this lasts.
 		firstAt := machine.box.MachineNow()
 		coveredAt := firstAt.Add(cpuLatchWindow)
 
@@ -116,8 +112,7 @@ var CPULatchScenarioV2 = ScenarioV2{
 		calmAt := machine.box.MachineNow()
 		machine.box.Set(cpuPressureMachine(cpuLatchCalm))
 
-		// The window is covered, so the first reading at 5% releases. The
-		// healthy verdict then lasts while pressure stays at 5%.
+		// The window is covered, so the first reading at 5% releases.
 		if err := waitCPUFresh(ctx, env, "healthy with pressure at 5%", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Verdict.State == cpuhealth.StateHealthy
 			done := healthy && strings.Contains(st.Result.Message, "Pressure 5% (degrades above 20%)")
