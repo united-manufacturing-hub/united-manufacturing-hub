@@ -61,13 +61,12 @@ type NmapStatus struct {
 	ScannedAt time.Time `json:"scanned_at"`
 }
 
-// Dialer is the one dialing capability Poll needs. *net.Dialer satisfies it.
+// Dialer is what Poll dials the target through.
 type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
-// DialerKey is where a scenario or test stores its own Dialer, to fake or
-// observe the dial.
+// DialerKey holds a Dialer that Poll uses instead of a *net.Dialer.
 var DialerKey = fsmv2config.NewDependencyKey[Dialer]("nmap.dialer")
 
 // Deps is the per-instance value Poll receives.
@@ -90,10 +89,9 @@ func newDeps(_ deps.Identity, _ *deps.BaseDependencies, m map[string]any) Deps {
 }
 
 // Poll dials the configured target once and reports the port state. A
-// successful dial yields an open/running status with the measured latency. A
-// failed dial yields a closed port with a nil error, because a closed port is a
-// legitimate scan outcome, not a poll failure. The exception is a cancelled
-// context (worker shutdown): then Poll returns an error and no port state.
+// failed dial reports the port closed with a nil error, because a closed port
+// is a scan result, not a poll failure. A cancelled context (worker shutdown)
+// is the exception: Poll returns an error and no port state.
 func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error) {
 	target := net.JoinHostPort(cfg.NmapServiceConfig.Target, strconv.Itoa(int(cfg.NmapServiceConfig.Port)))
 

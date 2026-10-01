@@ -337,15 +337,11 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		},
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
 			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
-			// This write feeds a worker that reads deps.GetFrameworkState() during
-			// CollectObservedState, so it reaches only a bound deps that implements
-			// SetFrameworkState (a deps embedding *deps.BaseDependencies, such as
-			// historian's). It is separate from the Observation injection, which
-			// the collector performs from its own local in wrapNewObservation
-			// regardless of the deps shape. Application and
-			// configworker bind no deps and so simply get no pre-COS write;
-			// returning nil or struct{}{} from GetDependenciesAny is equivalent and
-			// neither is overridden.
+			// Only a deps embedding *deps.BaseDependencies (historian's, for example)
+			// implements SetFrameworkState, so only such a worker can read
+			// deps.GetFrameworkState() during CollectObservedState. Every worker still gets
+			// framework metrics on its Observation, because the collector adds them in
+			// wrapNewObservation whatever the deps shape.
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}

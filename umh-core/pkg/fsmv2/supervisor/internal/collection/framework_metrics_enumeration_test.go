@@ -92,11 +92,9 @@ var panicOnConstruction = map[string]string{
 	"push":         "deps builder returned",
 }
 
-// targetWorkers are the three workers whose deps cannot receive framework
-// metrics: application and configworker return nil deps, and nmap's deps do not
-// embed BaseDependencies. They
-// are named explicitly here rather than relying on the enumeration to reach
-// them silently.
+// targetWorkers have deps that cannot receive framework metrics: application
+// and configworker return nil deps, and nmap's deps do not embed
+// BaseDependencies. Naming them catches an enumeration that stops reaching them.
 var targetWorkers = []string{"application", "configworker", "nmap"}
 
 type observedFrameworkProbe struct {
