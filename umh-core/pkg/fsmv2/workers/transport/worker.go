@@ -93,7 +93,7 @@ func NewTransportWorker(
 
 	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
 	if identity.WorkerType == "" {
-		identity.WorkerType = "transport"
+		identity.WorkerType = WorkerTypeName
 	}
 
 	w := &TransportWorker{}
@@ -219,21 +219,20 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
 
-// DepsKey is the register.SetGlobalDeps key the transport worker stores its
-// dependencies under. The push and pull children read them with this key.
-const DepsKey = "transport"
+// WorkerTypeName is the transport worker's type and its register.SetGlobalDeps key.
+const WorkerTypeName = "transport"
 
 func init() {
-	fsmv2.RegisterObservationInterval(DepsKey, channelusage.SampleInterval)
+	fsmv2.RegisterObservationInterval(WorkerTypeName, channelusage.SampleInterval)
 
-	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](DepsKey,
+	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			w, err := NewTransportWorker(id, logger, sr)
 			if err != nil {
 				return nil, err
 			}
 
-			register.SetGlobalDeps[*TransportDependencies](DepsKey, w.GetDependencies())
+			register.SetGlobalDeps[*TransportDependencies](WorkerTypeName, w.GetDependencies())
 
 			return w, nil
 		})

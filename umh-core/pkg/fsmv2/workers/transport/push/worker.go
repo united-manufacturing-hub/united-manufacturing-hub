@@ -173,7 +173,7 @@ func init() {
 
 	register.SetGlobalDepsBuilder[*PushDependencies]("push",
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PushDependencies {
-			parentDeps := register.GlobalDeps[*transport_pkg.TransportDependencies](transport_pkg.DepsKey)
+			parentDeps := register.GlobalDeps[*transport_pkg.TransportDependencies](transport_pkg.WorkerTypeName)
 			if parentDeps == nil {
 				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath,
 					errors.New("parent transport deps not published"),

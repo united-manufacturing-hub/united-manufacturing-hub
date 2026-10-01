@@ -295,13 +295,13 @@ Transport / push canonical example:
 ```go
 // transport/worker.go
 func init() {
-    register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies]("transport",
+    register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](WorkerTypeName,
         func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
             w, err := NewTransportWorker(id, logger, sr)
             if err != nil {
                 return nil, err
             }
-            register.SetGlobalDeps[*TransportDependencies]("transport", w.GetDependencies())
+            register.SetGlobalDeps[*TransportDependencies](WorkerTypeName, w.GetDependencies())
             return w, nil
         })
 }
@@ -320,7 +320,7 @@ func init() {
 
     register.SetGlobalDepsBuilder[*PushDependencies]("push",
         func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PushDependencies {
-            parent := register.GlobalDeps[*transport_pkg.TransportDependencies]("transport")
+            parent := register.GlobalDeps[*transport_pkg.TransportDependencies](transport_pkg.WorkerTypeName)
             if parent == nil {
                 return nil
             }
