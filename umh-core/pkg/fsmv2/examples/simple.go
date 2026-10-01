@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	parentstate "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
 // SimpleScenarioV2 runs one exampleparent with two examplechild children through start and stop.
@@ -33,7 +34,7 @@ var SimpleScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		parentRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "parent-1"}
 
-		env.Step("create the parent with two children; the parent waits 5 s in Stopped before it creates them")
+		env.Step(fmt.Sprintf("create the parent with two children; the parent waits %s in Stopped before it creates them", parentstate.StoppedWaitDuration))
 
 		if err := env.Client.Upsert(parentRef, map[string]any{
 			"state":          "running",
