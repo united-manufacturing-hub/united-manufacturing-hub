@@ -26,11 +26,11 @@
 // Tests use scenarios via the Run function:
 //
 //	result, err := examples.Run(ctx, examples.RunConfig{
-//	    ScenarioV2:  examples.RegistryV2["helloworld"],
-//	    Duration:    10 * time.Second,
+//	    ScenarioV2:   examples.RegistryV2["helloworld"],
+//	    Duration:     10 * time.Second,
 //	    TickInterval: 100 * time.Millisecond,
-//	    Logger:      testLogger,
-//	    Store:       store,
+//	    Logger:       testLogger,
+//	    Store:        store,
 //	})
 //
 // CLI uses the same scenarios via pkg/fsmv2/cmd/runner.
@@ -56,8 +56,7 @@ type RunConfig struct {
 	// ShutdownClean=false path deterministically.
 	GracefulShutdownTimeout time.Duration
 	EnableTraceLogging      bool
-	// DumpStore prints the store's changes and final state to stdout after
-	// the scenario run.
+	// DumpStore prints the store's changes and final state to stdout after the run.
 	DumpStore bool
 }
 
