@@ -1427,10 +1427,9 @@ func (s *Supervisor[TObserved, TDesired]) getEscalationSteps(childName string) s
 	return "1) Check component logs 2) Verify network connectivity 3) Restart component manually"
 }
 
-// mergeChildVariables returns childVars merged with the supervisor's
-// variables, with the precedence config.Merge documents. It logs a warning
-// the first time it drops a value for each child, namespace and key. The
-// caller holds s.mu.
+// mergeChildVariables merges the supervisor's variables into childVars and
+// warns once about each key whose value it drops. The warning never names a
+// value: variables can hold credentials. The caller holds s.mu.
 func (s *Supervisor[TObserved, TDesired]) mergeChildVariables(childName string, childVars config.VariableBundle) config.VariableBundle {
 	result := config.MergeWithConflicts(s.userSpec.Variables, childVars)
 

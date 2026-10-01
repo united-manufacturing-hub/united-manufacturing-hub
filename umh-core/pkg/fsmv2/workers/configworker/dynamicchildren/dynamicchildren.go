@@ -48,7 +48,6 @@ type Registry struct {
 }
 
 // Variables returns a copy of the variable bundle recorded by SetVariables.
-// The application worker puts it on every child spec it renders.
 func (r *Registry) Variables() config.VariableBundle {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

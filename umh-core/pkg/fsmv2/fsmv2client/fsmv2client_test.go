@@ -63,8 +63,6 @@ func TestGetReturnsErrorOnNilStateReader(t *testing.T) {
 	}
 }
 
-// TestSetVariablesPassesThroughToWriter verifies the FSMv2Client delegates
-// SetVariables to the Writer it wraps.
 func TestSetVariablesPassesThroughToWriter(t *testing.T) {
 	w := dynamicchildren.NewWriter()
 	client := NewFSMv2Client(w, nil)
