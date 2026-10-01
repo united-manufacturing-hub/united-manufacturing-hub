@@ -55,6 +55,20 @@ func hostPort(addr string) (string, uint16) {
 	return host, uint16(p)
 }
 
+func closedLoopbackPort() (string, uint16) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		Fail("listen on a free loopback port: " + err.Error())
+
+		return "", 0
+	}
+
+	host, port := hostPort(ln.Addr().String())
+	Expect(ln.Close()).To(Succeed())
+
+	return host, port
+}
+
 // newPollDeps builds the deps value Poll dials through, via newDeps.
 func newPollDeps(m map[string]any) fsmv2nmap.Deps {
 	id := deps.Identity{ID: "nmap-poll", WorkerType: fsmv2nmap.WorkerType}
@@ -140,11 +154,7 @@ var _ = Describe("Nmap Poll", func() {
 
 		openHost, openPort := hostPort(openListener.Addr().String())
 
-		refusedListener, err := net.Listen("tcp", "127.0.0.1:0")
-		Expect(err).NotTo(HaveOccurred())
-
-		refusedHost, refusedPort := hostPort(refusedListener.Addr().String())
-		Expect(refusedListener.Close()).To(Succeed())
+		refusedHost, refusedPort := closedLoopbackPort()
 
 		before := time.Now()
 
@@ -186,11 +196,7 @@ var _ = Describe("Nmap Poll", func() {
 		// kernel answers the dial with a TCP RST (connection refused). A refused
 		// connection is a legitimate scan outcome, not a poll failure, so Poll
 		// returns a nil error.
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		Expect(err).NotTo(HaveOccurred())
-
-		host, port := hostPort(ln.Addr().String())
-		Expect(ln.Close()).To(Succeed())
+		host, port := closedLoopbackPort()
 
 		cfg := newNmapConfig(host, port)
 
@@ -245,13 +251,7 @@ var _ = Describe("Nmap Poll", func() {
 
 var _ = Describe("Nmap Poll dependencies", func() {
 	It("dials through the dialer stored under its dependency key", func() {
-		// The target is a loopback port nothing listens on, so a Poll that
-		// still dials for real reports closed and the fake records nothing.
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		Expect(err).NotTo(HaveOccurred())
-
-		host, port := hostPort(ln.Addr().String())
-		Expect(ln.Close()).To(Succeed())
+		host, port := closedLoopbackPort()
 
 		fake := &fakeDialer{}
 
@@ -312,11 +312,7 @@ var _ = Describe("the registered nmap worker type", func() {
 		// init()'s NewDeps wiring is what hands a production worker the dialer
 		// from its dependency map; a spec that builds Deps through
 		// NewDepsForTest directly passes with that wiring broken.
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		Expect(err).NotTo(HaveOccurred())
-
-		host, port := hostPort(ln.Addr().String())
-		Expect(ln.Close()).To(Succeed())
+		host, port := closedLoopbackPort()
 
 		fake := &fakeDialer{}
 
