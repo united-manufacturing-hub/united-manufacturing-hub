@@ -215,9 +215,8 @@ func (i *AdaptedInstance[TConfig, TStatus]) resolve(status TStatus, freshness fs
 		}
 	}
 
-	// Rung 4: no usable observation (nothing stored yet, or the worker was
-	// removed) → starting. The consuming fsmv1 FSM reads this as "coming up"
-	// (e.g. nmap's IsStartingState) until the first observation lands.
+	// Rung 4: nothing to read → starting. The consuming fsmv1 FSM reads this as
+	// "coming up" (e.g. nmap's IsStartingState).
 	if freshness == fsmv2client.NotFound || freshness == fsmv2client.Deleted {
 		return startingState
 	}

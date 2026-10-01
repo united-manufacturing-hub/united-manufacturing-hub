@@ -35,9 +35,6 @@ type deletedTestStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-// TestGetRefusesARemovedWorker checks what Get returns for a worker whose
-// stored documents carry a tombstone (written by MarkDeleted), for a worker
-// without one, and for a ref with nothing stored.
 func TestGetRefusesARemovedWorker(t *testing.T) {
 	g := gomega.NewWithT(t)
 	ctx := context.Background()

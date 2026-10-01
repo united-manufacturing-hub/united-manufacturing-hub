@@ -63,11 +63,7 @@ func (s *stubStateReader) LoadObservedTyped(_ context.Context, _, _ string, resu
 	return nil
 }
 
-// TestGetFresh_MapsChildObservationToReason asserts GetFresh maps each read
-// result to its Freshness value. It returns the whole observation for Fresh
-// and Stale and the zero observation otherwise. No case Upserts the ref, so
-// the Fresh case also covers a static worker (see the package doc).
-func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
+func TestGetFresh_ClassifiesEachReadResult(t *testing.T) {
 	const maxAge = 10 * time.Second
 
 	ref := dynamicchildren.Ref{WorkerType: "transport", Name: "transport"}
@@ -75,13 +71,12 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 	storeErr := errors.New("generic store failure")
 
 	cases := []struct {
-		name      string
-		stubErr   error
-		staged    *fsmv2.Observation[testStatus]
-		want      fsmv2client.Freshness
-		wantObs   bool // whether GetFresh returns the staged observation
-		wantErr   error
-		wantNoErr bool
+		name    string
+		stubErr error
+		staged  *fsmv2.Observation[testStatus]
+		want    fsmv2client.Freshness
+		wantObs bool // whether GetFresh returns the staged observation
+		wantErr error
 	}{
 		{
 			name:    "Unknown when the store returns another error",
@@ -90,30 +85,26 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 			wantErr: storeErr,
 		},
 		{
-			name:      "Deleted when the stored observation carries a removal time",
-			staged:    &fsmv2.Observation[testStatus]{CollectedAt: time.Now(), Status: testStatus{V: "observed"}, DeletedAt: &deletedAt},
-			want:      fsmv2client.Deleted,
-			wantNoErr: true,
+			name:   "Deleted when the stored observation carries a removal time",
+			staged: &fsmv2.Observation[testStatus]{CollectedAt: time.Now(), Status: testStatus{V: "observed"}, DeletedAt: &deletedAt},
+			want:   fsmv2client.Deleted,
 		},
 		{
-			name:      "NotFound when nothing is stored",
-			stubErr:   persistence.ErrNotFound,
-			want:      fsmv2client.NotFound,
-			wantNoErr: true,
+			name:    "NotFound when nothing is stored",
+			stubErr: persistence.ErrNotFound,
+			want:    fsmv2client.NotFound,
 		},
 		{
-			name:      "Stale when CollectedAt is older than maxAge",
-			staged:    &fsmv2.Observation[testStatus]{CollectedAt: time.Now().Add(-3 * maxAge), Status: testStatus{V: "observed"}},
-			want:      fsmv2client.Stale,
-			wantObs:   true,
-			wantNoErr: true,
+			name:    "Stale when CollectedAt is older than maxAge",
+			staged:  &fsmv2.Observation[testStatus]{CollectedAt: time.Now().Add(-3 * maxAge), Status: testStatus{V: "observed"}},
+			want:    fsmv2client.Stale,
+			wantObs: true,
 		},
 		{
-			name:      "Fresh when CollectedAt is within maxAge, although the ref was never Upserted",
-			staged:    &fsmv2.Observation[testStatus]{CollectedAt: time.Now().Add(-time.Second), State: "Running", Status: testStatus{V: "observed"}},
-			want:      fsmv2client.Fresh,
-			wantObs:   true,
-			wantNoErr: true,
+			name:    "Fresh when CollectedAt is within maxAge, although the ref was never Upserted",
+			staged:  &fsmv2.Observation[testStatus]{CollectedAt: time.Now().Add(-time.Second), State: "Running", Status: testStatus{V: "observed"}},
+			want:    fsmv2client.Fresh,
+			wantObs: true,
 		},
 	}
 
@@ -123,12 +114,12 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 
 			gotObs, got, err := fsmv2client.GetFresh[testStatus](context.Background(), client, ref, maxAge)
 
-			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
-				t.Fatalf("GetFresh err = %v, want %v returned verbatim", err, tc.wantErr)
+			if tc.wantErr == nil && err != nil {
+				t.Fatalf("GetFresh returned unexpected error: %v", err)
 			}
 
-			if tc.wantNoErr && err != nil {
-				t.Fatalf("GetFresh returned unexpected error: %v", err)
+			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+				t.Fatalf("GetFresh err = %v, want %v returned verbatim", err, tc.wantErr)
 			}
 
 			if got != tc.want {
@@ -164,8 +155,6 @@ func (p *partialDecodeReader) LoadObservedTyped(_ context.Context, _, _ string, 
 	return p.err
 }
 
-// TestGetFresh_UnknownReturnsTheZeroObservation asserts GetFresh never returns
-// the part of an observation a failed read left behind.
 func TestGetFresh_UnknownReturnsTheZeroObservation(t *testing.T) {
 	decodeErr := errors.New("decode failed half-way")
 	reader := &partialDecodeReader{
@@ -186,8 +175,6 @@ func TestGetFresh_UnknownReturnsTheZeroObservation(t *testing.T) {
 	}
 }
 
-// TestGet_ErrorReturnsTheZeroObservation asserts Get never returns the part
-// of an observation a failed read left behind.
 func TestGet_ErrorReturnsTheZeroObservation(t *testing.T) {
 	ref := dynamicchildren.Ref{WorkerType: "transport", Name: "transport"}
 	partial := fsmv2.Observation[testStatus]{CollectedAt: time.Now(), Status: testStatus{V: "partial"}}

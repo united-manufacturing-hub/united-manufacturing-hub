@@ -51,9 +51,8 @@ var _ = Describe("Application supervisor shutdown", func() {
 
 		sup, store, _ := newAppSupervisorWithStore(logger)
 
-		// On Shutdown the supervisor removes each worker on its tick loop (the
-		// shutdown drain). So this test runs the real tick loop rather than
-		// ticking by hand.
+		// On Shutdown the supervisor removes each worker from its tick loop (the
+		// shutdown drain), so this test runs the real loop, not TestTick.
 		runCtx, cancel := context.WithCancel(ctx)
 		DeferCleanup(cancel)
 

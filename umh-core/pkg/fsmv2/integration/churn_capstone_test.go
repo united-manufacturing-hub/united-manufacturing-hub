@@ -113,8 +113,7 @@ var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end",
 		}, "20s", "100ms").Should(BeTrue(),
 			"after deleting all three helloworld refs the application must converge to exactly {config-worker}")
 
-		// (5) Get on each removed worker returns ErrWorkerDeleted and the zero
-		// observation.
+		// (5) Get refuses each removed worker.
 		for _, ref := range refs {
 			obs, getErr := fsmv2client.Get[hello_world.HelloworldStatus](ctx, client, ref)
 			Expect(errors.Is(getErr, fsmv2client.ErrWorkerDeleted)).To(BeTrue(),

@@ -31,10 +31,9 @@
 // communicator's transport worker, and the push and pull workers under it,
 // are static workers. Upsert and Delete never add or remove a static worker.
 //
-// Get and GetFresh read the store, not the specs that Upsert records. So they
-// read a static worker's observation the same way as a dynamic worker's. A
-// Ref names a worker of either kind by its WorkerType and by its Name as the
-// parent declared it.
+// Get and GetFresh read the store, not the specs that Upsert records, so they
+// read both kinds the same way. A Ref names a worker of either kind by its
+// WorkerType and by its Name as the parent declared it.
 package fsmv2client
 
 import (
@@ -52,18 +51,16 @@ import (
 )
 
 // ErrNotFound reports that nothing is stored for the ref: the worker has not
-// stored its first observation yet, or the ref names no worker. It is distinct from a decode or
-// transient store failure, so a caller can treat absence as "appears on a
-// later tick" without swallowing a real read error.
+// stored its first observation yet, or the ref names no worker. A caller can
+// retry it on a later tick, unlike a decode or store failure.
 var ErrNotFound = errors.New("fsmv2client: nothing stored for ref")
 
 // ErrWorkerDeleted reports that the ref's worker was removed. The store keeps
-// the removed worker's last observation with a tombstone (see
-// storage.FieldDeletedAt), but Get does not return it. Match it with errors.Is; the error Get returns is a *WorkerDeletedError.
+// the removed worker's last observation, marked with a removal time (see
+// storage.FieldDeletedAt), but Get does not return it.
 var ErrWorkerDeleted = errors.New("fsmv2client: worker was removed")
 
-// WorkerDeletedError is the error Get returns for a removed worker. It carries
-// the time the supervisor removed the worker.
+// WorkerDeletedError is the error Get returns for a removed worker.
 type WorkerDeletedError struct {
 	Ref       dynamicchildren.Ref
 	DeletedAt time.Time
@@ -110,12 +107,11 @@ func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
 }
 
 // Get reads the observation the collector stored for ref's worker, dynamic or
-// static, and returns it as an Observation[TStatus]. The collection is ref.WorkerType
-// and the child id is config.ChildID(ref.Name). When nothing is stored for the
-// ref it returns an error that matches ErrNotFound. When the worker was
-// removed it returns a *WorkerDeletedError, which matches ErrWorkerDeleted.
-// Any other reader error is returned verbatim. In each error case the
-// observation is the zero value.
+// static. The collection is ref.WorkerType and the child id is
+// config.ChildID(ref.Name). It returns an error matching ErrNotFound when
+// nothing is stored, a *WorkerDeletedError when the worker was removed, and
+// any other reader error verbatim. On every error the observation is the zero
+// value.
 //
 // Get does not verify that TStatus matches ref.WorkerType. Pairing a TStatus
 // that does not match the worker type decodes whatever fields overlap and is
@@ -146,8 +142,7 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 	return obs, nil
 }
 
-// Freshness says what GetFresh found for a ref. Exactly one value applies to
-// each read.
+// Freshness says what GetFresh found for a ref.
 type Freshness int
 
 const (
@@ -167,10 +162,8 @@ const (
 	Fresh
 )
 
-// freshnessAt classifies a Get result. The clock is a parameter so tests can
-// set it exactly at the age boundary. It returns the error only for Unknown. A removed
-// worker and a missing ref come back from Get as errors too, so they are
-// checked before any other error.
+// freshnessAt classifies a Get result. now is a parameter so tests can hit the
+// age boundary exactly.
 func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge time.Duration, now time.Time) (Freshness, error) {
 	switch {
 	case errors.Is(err, ErrWorkerDeleted):
@@ -186,12 +179,8 @@ func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge 
 	}
 }
 
-// GetFresh is Get plus a freshness check. It reads ref's observation with Get
-// and classifies the result as a Freshness value. It returns the
-// observation only for Fresh and Stale, and the zero observation otherwise.
-// It returns a non-nil error only with Unknown.
-//
-// Like Get, it works for static workers too (see the package doc).
+// GetFresh is Get plus a freshness check. It returns the observation only for
+// Fresh and Stale, and a non-nil error only with Unknown.
 //
 // Between Delete and the supervisor removing the worker, the worker still
 // runs for a few ticks. In that window GetFresh classifies its latest
@@ -201,13 +190,9 @@ func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge 
 // ctx (see the StateReader non-blocking contract).
 func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (fsmv2.Observation[TStatus], Freshness, error) {
 	obs, err := Get[TStatus](ctx, c, ref)
-
 	freshness, err := freshnessAt(obs, err, maxAge, time.Now())
-	if freshness != Fresh && freshness != Stale {
-		return fsmv2.Observation[TStatus]{}, freshness, err
-	}
 
-	return obs, freshness, nil
+	return obs, freshness, err
 }
 
 // globalCli is the process-scoped FSMv2Client published once at startup so any
