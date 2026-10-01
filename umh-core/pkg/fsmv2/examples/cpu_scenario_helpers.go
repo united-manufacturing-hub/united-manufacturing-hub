@@ -90,23 +90,6 @@ func cpuReading(ctx context.Context, env Env) (simple.Status[fsmv2cpu.CPUStatus]
 	return fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, env.Client, fsmv2cpu.Ref, fsmv2cpu.MaxObservationAge)
 }
 
-// freshnessName prints a freshness without its numeric value: the numbers are
-// an enum, and a failure line that reads fresh=4 hides which freshness it was.
-func freshnessName(f fsmv2client.Freshness) string {
-	switch f {
-	case fsmv2client.Fresh:
-		return "fresh"
-	case fsmv2client.Unregistered:
-		return "unregistered"
-	case fsmv2client.NeverObserved:
-		return "never-observed"
-	case fsmv2client.Stale:
-		return "stale"
-	default:
-		return "unknown"
-	}
-}
-
 func firstLine(msg string) string {
 	if i := strings.IndexByte(msg, '\n'); i >= 0 {
 		return msg[:i]
@@ -147,9 +130,9 @@ func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(s
 		case fsmv2client.Fresh:
 			done, seen := pass(st)
 
-			return done, fmt.Sprintf("fresh=%s %s", freshnessName(fresh), seen), nil
+			return done, "fresh " + seen, nil
 		default:
-			return false, "", fmt.Errorf("the cpu worker's freshness is %s", freshnessName(fresh))
+			return false, "", fmt.Errorf("the cpu worker's freshness is %s", fresh)
 		}
 	})
 }
@@ -166,12 +149,12 @@ func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.S
 		}
 
 		if fresh != fsmv2client.Fresh {
-			return false, "", fmt.Errorf("the CPU reading is %s, not Fresh, at stage %q", freshnessName(fresh), check)
+			return false, "", fmt.Errorf("the CPU reading is %s, not Fresh, at stage %q", fresh, check)
 		}
 
 		done, seen := pass(st)
 
-		return done, fmt.Sprintf("fresh=%s %s", freshnessName(fresh), seen), nil
+		return done, "fresh " + seen, nil
 	})
 }
 
