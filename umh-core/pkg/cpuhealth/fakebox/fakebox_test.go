@@ -74,9 +74,7 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		return v
 	}
 
-	// readTwice drives the real sampler across one tick of the box and returns
-	// both samples: the baseline read, then the read after the tick.
-	readTwice := func(box *fakebox.Box, d time.Duration) (cpuhealth.Sample, cpuhealth.Sample) {
+	readTwice := func(box *fakebox.Box, d time.Duration) (baseline, afterTick cpuhealth.Sample) {
 		ctx := context.Background()
 		sampler := cpuhealth.NewLinuxSamplerWithClock(box.FS(), base, box.Clock())
 
