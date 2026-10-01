@@ -139,6 +139,7 @@ func (ts *TriangularStore) applyTombstoneChange(
 		}
 
 		syncID := ts.syncID.Add(1)
+
 		change.edit(doc, at, deletedBy)
 		doc[FieldSyncID] = syncID
 
@@ -178,6 +179,7 @@ func (ts *TriangularStore) appendDeltaOrWarn(ctx context.Context, entry DeltaEnt
 	}
 
 	var hierarchyPath string
+
 	if identity, loadErr := ts.LoadIdentity(ctx, entry.WorkerType, entry.ID); loadErr == nil {
 		if hp, ok := identity["hierarchy_path"].(string); ok {
 			hierarchyPath = hp

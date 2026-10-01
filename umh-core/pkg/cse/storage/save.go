@@ -121,6 +121,7 @@ func (ts *TriangularStore) saveWithDelta(
 				deps.String("worker", hierarchyPath))
 		} else if result.changed {
 			var hierarchyPath string
+
 			if identity, err := ts.LoadIdentity(ctx, workerType, id); err == nil {
 				if hp, ok := identity["hierarchy_path"].(string); ok {
 					hierarchyPath = hp

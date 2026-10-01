@@ -168,6 +168,7 @@ func (tx *updateFailingTx) Update(ctx context.Context, collection, id string, do
 
 var _ = Describe("MarkDeleted", func() {
 	const workerType = "container"
+
 	const workerID = "worker-1"
 
 	var (
@@ -213,9 +214,11 @@ var _ = Describe("MarkDeleted", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		before = make(map[string]persistence.Document)
+
 		for role, collection := range collections {
 			doc, err := backend.Get(ctx, collection, workerID)
 			Expect(err).NotTo(HaveOccurred())
+
 			before[role] = doc
 		}
 
@@ -240,6 +243,7 @@ var _ = Describe("MarkDeleted", func() {
 		Expect(resp.Deltas).To(HaveLen(3))
 
 		rolesSeen := make(map[string]bool)
+
 		for _, delta := range resp.Deltas {
 			Expect(delta.WorkerType).To(Equal(workerType))
 			Expect(delta.WorkerID).To(Equal(workerID))
