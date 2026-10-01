@@ -106,7 +106,6 @@ func closedLoopbackPort() (string, uint16) {
 	return host, port
 }
 
-// newPollDeps builds the deps value Poll dials through, via newDeps.
 func newPollDeps(m map[string]any) fsmv2nmap.Deps {
 	id := deps.Identity{ID: "nmap-poll", WorkerType: fsmv2nmap.WorkerType}
 	bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
@@ -114,7 +113,6 @@ func newPollDeps(m map[string]any) fsmv2nmap.Deps {
 	return fsmv2nmap.NewDepsForTest(id, bd, m)
 }
 
-// nmapID builds the identity a supervisor hands an nmap worker.
 func nmapID() deps.Identity {
 	return deps.Identity{
 		ID:            "nmap-001",
@@ -124,8 +122,6 @@ func nmapID() deps.Identity {
 	}
 }
 
-// fakeDialer records each address it dials. Its net.Pipe answer makes Poll
-// report the port open with nothing listening.
 type fakeDialer struct {
 	addresses []string
 	err       error
@@ -477,8 +473,6 @@ var _ = Describe("Nmap Poll dependencies", func() {
 })
 
 var _ = Describe("the registered nmap worker type", func() {
-	// boundDepsOf builds one worker through the factory init() registered, as
-	// production does, and returns the Deps the worker holds.
 	boundDepsOf := func(id deps.Identity, dependencies map[string]any) fsmv2nmap.Deps {
 		w, err := factory.NewWorkerByType(fsmv2nmap.WorkerType, id, deps.NewNopFSMLogger(), nil, dependencies)
 		Expect(err).NotTo(HaveOccurred(), "init() left an instantiable factory for the worker type")
@@ -494,9 +488,7 @@ var _ = Describe("the registered nmap worker type", func() {
 	}
 
 	It("dials through the dialer stored in the dependency map the worker was built with", func() {
-		// init()'s NewDeps wiring is what hands a production worker the dialer
-		// from its dependency map; a spec that builds Deps through
-		// NewDepsForTest directly passes with that wiring broken.
+		// NewDepsForTest bypasses init(), so only this spec fails if init() drops NewDeps.
 		host, port := closedLoopbackPort()
 
 		fake := &fakeDialer{}
