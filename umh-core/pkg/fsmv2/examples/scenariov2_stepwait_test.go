@@ -16,7 +16,6 @@ package examples_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"sync/atomic"
@@ -41,39 +40,6 @@ func logLinesNaming(logOutput, s string) int {
 	}
 
 	return count
-}
-
-// waitPassedEntry is one parsed scenario_wait_passed log line.
-type waitPassedEntry struct {
-	Level    string `json:"level"`
-	Msg      string `json:"msg"`
-	Scenario string `json:"scenario"`
-	Check    string `json:"check"`
-	Seen     string `json:"seen"`
-}
-
-// waitPassedEntries returns the log's scenario_wait_passed lines, parsed, in
-// the order they were logged. Matching the parsed msg value, not a raw
-// substring, keeps a line that merely mentions the name out of the count.
-func waitPassedEntries(logOutput string) []waitPassedEntry {
-	var entries []waitPassedEntry
-
-	for _, line := range strings.Split(logOutput, "\n") {
-		if line == "" {
-			continue
-		}
-
-		var entry waitPassedEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-
-		if entry.Msg == "scenario_wait_passed" {
-			entries = append(entries, entry)
-		}
-	}
-
-	return entries
 }
 
 var _ = Describe("ScenarioV2 steps and waits", func() {
@@ -221,7 +187,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		Expect(err).To(HaveOccurred(),
 			"the never-passing wait must fail the run once the short ctx ends")
 
-		entries := waitPassedEntries(logBuf.String())
+		entries := entriesWithMsg(parseLogEntries(logBuf.String()), "scenario_wait_passed")
 
 		Expect(entries).To(HaveLen(2),
 			"each of the two passing waits must log exactly one scenario_wait_passed line")
