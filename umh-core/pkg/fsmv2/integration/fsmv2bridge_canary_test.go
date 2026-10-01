@@ -36,14 +36,10 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
-// This canary is the cross-boundary proof for the fsmv2client read path: it
-// drives a helloworld worker THROUGH the process-scoped fsmv2client (the seam
-// any FSMv1 benthos manager will use), exercising Upsert -> GetFresh
-// Fresh+Running -> Delete -> reap -> Deleted -> re-Upsert (respawn) -> Fresh
-// with the new mood, never the old observation. It inlines the production
-// wiring (dynamicchildren registry + SetClient) so the seam is exercised
-// end-to-end, and uses manual ticking so the multi-tick despawn/reap sequence
-// is deterministic.
+// This canary drives a helloworld worker THROUGH the process-scoped
+// fsmv2client, the seam any FSMv1 benthos manager uses. It inlines the
+// production wiring (dynamicchildren registry + SetClient) and ticks by hand,
+// so the multi-tick reap (the supervisor removing the child) is deterministic.
 var _ = Describe("fsmv2bridge helloworld canary", func() {
 	const (
 		maxAge      = 10 * time.Second
@@ -91,8 +87,8 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		Eventually(func() bool {
 			_ = sup.TestTick(ctx)
 
-			obs, fresh, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
-			if err != nil || fresh != fsmv2client.Fresh {
+			obs, freshness, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
+			if err != nil || freshness != fsmv2client.Fresh {
 				return false
 			}
 
@@ -108,10 +104,9 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		// Phase 2: Delete, then reap. Despawn is multi-tick (a single TestTick
 		// does NOT reap: tick1 pendingRemoval+RequestShutdown; tick2
 		// Running->Stopped; tick3 Stopped->SignalNeedsRemoval->reap+collector
-		// stopped). Until the reap the worker still runs, so GetFresh may still
-		// report its latest observation. Reap the old child fully BEFORE
-		// re-Upsert so the respawn is genuine (re-Upsert before reap would
-		// cancel pendingRemoval and reuse the same child).
+		// stopped). Reap the old child fully BEFORE re-Upsert so the respawn is
+		// genuine (re-Upsert before reap would cancel pendingRemoval and reuse
+		// the same child).
 		bridge.Delete(ref)
 
 		Eventually(func() bool {
@@ -122,13 +117,12 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		}, "5s", "100ms").Should(BeTrue(),
 			"after Delete, the child must be fully reaped from the supervisor before respawn")
 
-		// Phase 3(a): GetFresh reports the reaped child as Deleted and returns no
-		// observation.
-		deletedObs, deletedFresh, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
+		// Phase 3(a): the reaped child reads as Deleted.
+		reapedObs, reapedFreshness, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(deletedFresh).To(Equal(fsmv2client.Deleted),
+		Expect(reapedFreshness).To(Equal(fsmv2client.Deleted),
 			"after the reap, GetFresh must report the removed child as Deleted")
-		Expect(deletedObs.Status.Mood).To(BeEmpty(),
+		Expect(reapedObs.Status.Mood).To(BeEmpty(),
 			"GetFresh must not return the removed child's last observation")
 
 		// Phase 3(b): genuine respawn. The old child is gone, so this Upsert
@@ -139,24 +133,21 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		spec2 := map[string]any{"state": "running", "moodFilePath": moodPath2}
 		Expect(bridge.Upsert(ref, spec2)).To(Succeed())
 
-		// Phase 3(c): with no further tick yet, the respawned child has not been
-		// added. The store still holds the removed child's documents with their
-		// tombstone, so GetFresh still reports Deleted, not the old observation.
-		_, preTickFresh, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
+		// Phase 3(c): before the next tick the new child does not exist yet, and
+		// the store still marks the old one as removed.
+		_, preTickFreshness, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(preTickFresh).To(Equal(fsmv2client.Deleted),
+		Expect(preTickFreshness).To(Equal(fsmv2client.Deleted),
 			"immediately after re-Upsert (pre-tick), GetFresh must still report Deleted")
 
-		// Phase 3(d): after ticking, the respawned child collects a fresh
-		// observation and GetFresh reports Fresh with the NEW mood. GetFresh must
-		// never return the old mood on a read in between.
+		// Phase 3(d): after ticking, the respawned child reports the NEW mood.
 		servedOldMood := false
 
 		Eventually(func() bool {
 			_ = sup.TestTick(ctx)
 
-			obs, fresh, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
-			if err != nil || fresh != fsmv2client.Fresh {
+			obs, freshness, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
+			if err != nil || freshness != fsmv2client.Fresh {
 				return false
 			}
 

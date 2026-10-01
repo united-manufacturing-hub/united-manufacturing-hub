@@ -215,10 +215,8 @@ func (i *AdaptedInstance[TConfig, TStatus]) resolve(status TStatus, freshness fs
 		}
 	}
 
-	// Step 4: no usable observation (nothing stored yet, or the worker was
-	// removed) → the declared Starting word. The consuming fsmv1 FSM reads this
-	// as "coming up" (e.g. nmap's IsStartingState) until the first observation
-	// lands.
+	// Step 4: nothing to read → the declared Starting word. The consuming fsmv1
+	// FSM reads this as "coming up" (e.g. nmap's IsStartingState).
 	if freshness == fsmv2client.NotFound || freshness == fsmv2client.Deleted {
 		return i.states.Starting
 	}

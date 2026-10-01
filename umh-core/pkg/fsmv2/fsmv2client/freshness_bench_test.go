@@ -29,8 +29,6 @@ import (
 // are dead.
 var sink fsmv2.Observation[testStatus]
 
-// freshBenchRef is the ref the benchmarks read. It is built once and reused
-// across iterations.
 var freshBenchRef = dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "benthos-bridge-bench"}
 
 // freshBenchMaxAge is wide enough that the staged observation is always Fresh,
@@ -43,16 +41,12 @@ const freshBenchMaxAge = 10 * time.Second
 func stageFreshObservation(b *testing.B) *fsmv2client.FSMv2Client {
 	b.Helper()
 
-	writer := dynamicchildren.NewWriter()
-
 	obs := &fsmv2.Observation[testStatus]{
 		CollectedAt: time.Now().Add(-1 * time.Second),
 		Status:      testStatus{V: "observed"},
 	}
 
-	stubSr := &stubStateReader{obs: obs}
-
-	return fsmv2client.NewFSMv2Client(writer, stubSr)
+	return fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), &stubStateReader{obs: obs})
 }
 
 // BenchmarkContains measures the registry's non-allocating existence check.
