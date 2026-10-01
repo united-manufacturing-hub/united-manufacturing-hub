@@ -25,9 +25,7 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// SimpleScenarioV2 brings up one exampleparent and its examplechild children,
-// then waits for the parent's own stop: after RunningDuration in Running, the
-// parent removes its children and reaches Stopped.
+// SimpleScenarioV2 runs one exampleparent with two examplechild children through start and stop.
 var SimpleScenarioV2 = ScenarioV2{
 	Name:        "simple",
 	Description: "One exampleparent starts two examplechild workers, reports both healthy, then stops them and reaches Stopped",
@@ -82,9 +80,6 @@ var SimpleScenarioV2 = ScenarioV2{
 
 		var stoppedBefore int64
 
-		// The waits above read each child's own observation. ChildrenHealthy
-		// is on the parent's observation, and the supervisor fills it in, so
-		// this wait checks that the parent counted both children healthy.
 		if err := env.WaitFor(ctx, "the parent reports both children healthy",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)

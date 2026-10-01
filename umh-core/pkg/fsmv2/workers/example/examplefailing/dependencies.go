@@ -50,7 +50,7 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 type FailingDependencies struct {
 	*deps.BaseDependencies                   // Embedded pointer (8 bytes)
 	connectionPool            ConnectionPool // Interface (16 bytes)
-	lastFailureTime           time.Time      // When the last connect failure occurred; ShouldDelayRecovery measures recoveryDelayMs from it (24 bytes)
+	lastFailureTime           time.Time      // When the last connect failure occurred (24 bytes)
 	mu                        sync.RWMutex   // Protects mutable fields below (24 bytes)
 	maxFailures               int
 	attempts                  int
@@ -58,7 +58,7 @@ type FailingDependencies struct {
 	failureCycles             int // Total number of failure cycles to perform
 	currentCycle              int // Current failure cycle (0-indexed)
 	ticksInConnectedState     int // Number of ticks spent in Connected state
-	recoveryDelayMs           int // Wall-clock milliseconds to wait after the last failure before retrying
+	recoveryDelayMs           int // Wait after the last failure before retrying
 	recoveryDelayObservations int // Number of observations to wait after failure before retrying
 	observationsSinceFailure  int // Counter incremented each time CollectObservedState is called
 	shouldFail                bool
@@ -252,8 +252,6 @@ func (d *FailingDependencies) GetLastFailureTime() time.Time {
 
 // ShouldDelayRecovery returns true if we should wait before retrying after a failure.
 // This keeps the worker in the unhealthy state long enough for parents to observe.
-// It returns true while recovery_delay_ms of wall-clock time, or
-// recovery_delay_observations observations, have not passed since the last failure.
 func (d *FailingDependencies) ShouldDelayRecovery() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
