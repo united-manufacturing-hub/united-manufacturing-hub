@@ -106,7 +106,7 @@ var CPUStallScenarioV2 = ScenarioV2{
 			case fsmv2client.Fresh:
 				return false, fmt.Sprintf("fresh %s", cpuStatusSeen(st)), nil
 			default:
-				return false, "", fmt.Errorf("the CPU reading is %s while the read hangs", freshnessName(fresh))
+				return false, "", fmt.Errorf("the CPU reading is %s while the read hangs", fresh)
 			}
 		}); err != nil {
 			return err
@@ -132,7 +132,7 @@ var CPUStallScenarioV2 = ScenarioV2{
 			}
 
 			if fresh != fsmv2client.Fresh {
-				return false, "", fmt.Errorf("the CPU reading is %s, not Fresh, after the release", freshnessName(fresh))
+				return false, "", fmt.Errorf("the CPU reading is %s, not Fresh, after the release", fresh)
 			}
 
 			seenFresh = true
