@@ -92,9 +92,9 @@ func TestFatalMessage(t *testing.T) {
 
 func TestRunnerCLIRouting(t *testing.T) {
 	t.Run("duration default: without --duration settles 1s", func(t *testing.T) {
-		got, defaulted := defaultDuration(false, 0)
-		if got != defaultSettle {
-			t.Errorf("a run given no --duration must settle %s after Run returns, got %v", defaultSettle, got)
+		got, defaulted := resolveDuration(false, 0)
+		if got != defaultSettleWindow {
+			t.Errorf("a run given no --duration must settle %s after Run returns, got %v", defaultSettleWindow, got)
 		}
 
 		if !defaulted {
@@ -103,7 +103,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 	})
 
 	t.Run("duration default: explicit --duration 0 stays endless", func(t *testing.T) {
-		got, defaulted := defaultDuration(true, 0)
+		got, defaulted := resolveDuration(true, 0)
 		if got != 0 {
 			t.Errorf("an explicit --duration 0 must stay endless, got %v", got)
 		}
@@ -114,7 +114,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 	})
 
 	t.Run("duration default: explicit --duration is kept", func(t *testing.T) {
-		got, defaulted := defaultDuration(true, 5*time.Second)
+		got, defaulted := resolveDuration(true, 5*time.Second)
 		if got != 5*time.Second {
 			t.Errorf("an explicit --duration must be kept as given, got %v", got)
 		}
