@@ -85,7 +85,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	workerLogger := s.baseLogger.With(deps.String("worker", identity.String()))
 	workerLogger.Info("identity_created")
 
-	// Declared early so closures can capture it by reference.
+	// Declared before construction; see newCollector for why.
 	var workerCtx *WorkerContext[TObserved, TDesired]
 
 	collector := s.newCollector(worker, identity, workerLogger, &workerCtx)
@@ -97,14 +97,11 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	return nil
 }
 
-// deriveInitialDesired derives the desired state a worker is added with.
-// Derive desired state first so we can pass it to CollectObservedState.
-// Workers are guaranteed a non-nil desired state parameter.
-// Use the current userSpec if non-empty so that the initial COS call receives
-// the correct configuration (e.g., DelaySeconds, connection parameters).
-// reconcileChildren sets updateUserSpec before AddWorker, so s.userSpec is
-// already populated for child workers. Workers added without a userSpec
-// (empty Config) receive nil, preserving the original behaviour.
+// deriveInitialDesired derives the desired state a worker starts with. A
+// worker whose supervisor has a userSpec gets it as the spec (reconcileChildren
+// sets it before calling AddWorker); a worker without one gets nil, which
+// workers are required to accept.
+// Must be called with s.mu held; it reads s.userSpec without locking.
 func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Worker, identity deps.Identity) (fsmv2.DesiredState, error) {
 	var ddsSpec interface{}
 	if s.userSpec.Config != "" {
@@ -134,9 +131,9 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 }
 
 // collectInitialObservation collects the observed state a worker is added
-// with. If COS returned a NewObservation (zero CollectedAt), set it now.
-// AddWorker bypasses the collector, so we must set CollectedAt here
-// to prevent the freshness checker from declaring the observation stale.
+// with. If CollectObservedState returned a NewObservation (zero CollectedAt),
+// set it now: AddWorker bypasses the collector, so without a timestamp here
+// the supervisor's IsObservationStale would report the worker as stale.
 func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, initialDesired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	observed, err := worker.CollectObservedState(ctx, initialDesired)
 	if err != nil {
@@ -161,8 +158,10 @@ func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.
 }
 
 // saveInitialDocuments writes a worker's identity, observed and desired
-// documents and clears its tombstone, and returns the StartupCount it
-// persisted on the observed document.
+// documents and clears its tombstone. It reads the previous observed
+// document to advance the worker's StartupCount and returns it; the count
+// reaches the stored document only when the observed state accepts
+// framework metrics.
 func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, observed fsmv2.ObservedState, initialDesired fsmv2.DesiredState) (int64, error) {
 	identityDoc := persistence.Document{
 		"id":             identity.ID,
@@ -460,7 +459,8 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 }
 
 // newWorkerContext builds the executor, the action history and the worker
-// context that ties them and the collector together.
+// context around them. The returned context carries the collector, which
+// the executor's completion callback reads through it.
 func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, collector *collection.Collector[TObserved], startupCount int64) *WorkerContext[TObserved, TDesired] {
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
@@ -513,6 +513,8 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 }
 
 // registerWorker puts a built worker context into the supervisor's registry.
+// Must be called with s.mu held; it mutates s.workers, cachedFirstWorkerID
+// and s.logger without locking.
 func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContext[TObserved, TDesired], identity deps.Identity, workerLogger deps.FSMLogger) {
 	s.workers[identity.ID] = workerCtx
 
