@@ -730,8 +730,6 @@ children:
 		yamlConfig += `  - name: "certfetcher"
     workerType: "certfetcher"
 `
-		register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
-			certfetcher.NewCertHandlerSeedDependencies(communicationState.Gatekeeper.CertificateHandler()))
 	}
 
 	if configData.Agent.UseFSMv2MemoryCleanup {
@@ -769,6 +767,13 @@ children:
 	// its worker however deep it sits.
 	fsmv2config.SetDependency(fsmv2Deps, communicator.ChannelProviderKey, communicator.ChannelProvider(channelAdapter))
 	fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
+
+	// The certfetcher worker reads its cert handler from the same map. The
+	// handler is created only when gatekeeper is enabled, which is also the only
+	// case that adds the certfetcher child to yamlConfig above.
+	if configData.Agent.UseGatekeeper {
+		fsmv2config.SetDependency(fsmv2Deps, certfetcher.CertHandlerKey, communicationState.Gatekeeper.CertificateHandler())
+	}
 
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		register.SetGlobalDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
