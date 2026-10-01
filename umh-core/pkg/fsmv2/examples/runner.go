@@ -303,7 +303,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		expectedErrors:   cfg.ScenarioV2.ExpectedErrors,
 		expectedWarnings: cfg.ScenarioV2.ExpectedWarnings,
 	}
-	runLogger := &runErrorLogger{FSMLogger: cfg.Logger, recorder: recorder}
+	runLogger := &recordingLogger{FSMLogger: cfg.Logger, recorder: recorder}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:                      "scenariov2-" + cfg.ScenarioV2.Name,
