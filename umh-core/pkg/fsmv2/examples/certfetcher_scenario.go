@@ -138,13 +138,7 @@ func certFetcherDependencies(emails []string, fetchErr error) (map[string]any, f
 	return deps, nil, nil
 }
 
-// upsertCertFetcher creates the certfetcher worker. CertFetcherConfig has no
-// fields, so the state key has no effect.
-func upsertCertFetcher(env Env) error {
-	ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
-
-	return env.Client.Upsert(ref, map[string]any{"state": "running"})
-}
+var certFetcherRef = dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
 
 func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.Ref, want string) error {
 	return env.WaitFor(ctx, "store shows state "+want,
@@ -172,21 +166,19 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 	},
 
 	Run: func(ctx context.Context, env Env) error {
-		ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
-
 		env.Step("create certfetcher; its mock handler lists one subscriber, alice@example.com")
 
-		if err := upsertCertFetcher(env); err != nil {
+		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {
 			return err
 		}
 
-		if err := waitForCertFetcherState(ctx, env, ref, "Running"); err != nil {
+		if err := waitForCertFetcherState(ctx, env, certFetcherRef, "Running"); err != nil {
 			return err
 		}
 
 		return env.WaitFor(ctx, "store shows a successful fetch (last_fetch_at is set)",
 			func(ctx context.Context) (bool, string, error) {
-				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
+				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, certFetcherRef)
 				if err != nil {
 					if errors.Is(err, fsmv2client.ErrNotObserved) {
 						return false, "the worker has not published an observation yet", nil
@@ -213,15 +205,13 @@ var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	},
 
 	Run: func(ctx context.Context, env Env) error {
-		ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
-
 		env.Step("create certfetcher whose every fetch fails; each failure logs an expected action_failed error")
 
-		if err := upsertCertFetcher(env); err != nil {
+		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {
 			return err
 		}
 
-		return waitForCertFetcherState(ctx, env, ref, "Degraded")
+		return waitForCertFetcherState(ctx, env, certFetcherRef, "Degraded")
 	},
 }
 
@@ -237,11 +227,9 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 	},
 
 	Run: func(ctx context.Context, env Env) error {
-		ref := dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
-
 		env.Step("create certfetcher with no subscriber handler; it stays Stopped, so no state change appears for it")
 
-		if err := upsertCertFetcher(env); err != nil {
+		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {
 			return err
 		}
 
@@ -249,7 +237,7 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 
 		return env.WaitFor(ctx, "the certfetcher is still Stopped after 20 polls",
 			func(ctx context.Context) (bool, string, error) {
-				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
+				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, certFetcherRef)
 				if err != nil {
 					if errors.Is(err, fsmv2client.ErrNotObserved) {
 						return false, "the worker has not published an observation yet", nil
