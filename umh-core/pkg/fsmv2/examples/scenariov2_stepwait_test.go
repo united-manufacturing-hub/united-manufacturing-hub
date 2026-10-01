@@ -44,11 +44,11 @@ func logLinesNaming(logOutput, s string) int {
 }
 
 var _ = Describe("ScenarioV2 steps and waits", func() {
-	It("logs each step once, and fails a never-done wait naming the last step, the check and the last value seen", func() {
-		// The configworker deps key is process-global; a spec that fails
-		// mid-run would otherwise leak it into every later spec.
+	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
 
+	It("logs each step once, and fails a never-done wait naming the last step, the check and the last value seen", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
@@ -144,8 +144,6 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 	})
 
 	It("fails a wait whose poll errors, naming the last step, the check and the poll's error", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -189,8 +187,6 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 	})
 
 	It("lets a goroutine the scenario starts call Step while Run waits", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -250,8 +246,6 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 	})
 
 	It("returns nil from a wait whose check reports done on its third poll", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -293,8 +287,6 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 	})
 
 	It("fails a wait that never completes within its own timeout, with no deadline on the caller's ctx", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		restore := examples.SetWaitForTimeoutForTest(300 * time.Millisecond)
 		defer restore()
 
@@ -348,9 +340,11 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 })
 
 var _ = Describe("ScenarioV2 wait context", func() {
-	It("keeps ctx.Err in a wait the caller's ctx cancelled", func() {
+	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
 
+	It("keeps ctx.Err in a wait the caller's ctx cancelled", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
