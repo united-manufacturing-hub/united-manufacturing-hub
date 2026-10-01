@@ -36,13 +36,12 @@ var PersistenceScenarioV2 = ScenarioV2{
 	Description: "Compacts and maintains an in-memory store through the dependency map",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		// The worker maintains this store. The collector writes the worker's
-		// observations to RunConfig.Store, a separate store.
-		var store storage.TriangularStoreInterface = SetupStore(deps.NewNopFSMLogger())
+		// The collector writes observations to RunConfig.Store, not to this store.
+		var maintainedStore storage.TriangularStoreInterface = SetupStore(deps.NewNopFSMLogger())
 
 		m := map[string]any{}
 
-		config.SetDependency(m, persistenceworker.StoreKey, store)
+		config.SetDependency(m, persistenceworker.StoreKey, maintainedStore)
 
 		return m, nil, nil
 	},
