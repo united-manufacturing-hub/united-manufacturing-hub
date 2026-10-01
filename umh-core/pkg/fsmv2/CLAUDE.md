@@ -61,6 +61,11 @@ supplies a mock provider under the same keys (see "Mocks" below).
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.
 
+## Cert Handler via the Dependency Map
+
+The certfetcher worker reads its cert handler from the dependency map, under
+`certfetcher.CertHandlerKey`. `cmd/main.go` explains when it sets it.
+
 ## State Machine States
 
 Each state file follows this pattern:
