@@ -92,18 +92,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.newWorkerContext(worker, identity, workerLogger, collector, startupCount, &workerCtx)
 
-	s.workers[identity.ID] = workerCtx
-
-	// Cache the first worker ID for lock-free access in GetHierarchyPathUnlocked()
-	if s.cachedFirstWorkerID.Load() == nil {
-		s.cachedFirstWorkerID.Store(identity.ID)
-	}
-
-	if len(s.workers) == 1 && identity.HierarchyPath != "" {
-		s.logger = workerLogger
-	}
-
-	s.logger.Info("worker_added")
+	s.registerWorker(workerCtx, identity, workerLogger)
 
 	return nil
 }
@@ -522,6 +511,22 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 		collectorRestarts:  0,
 		startupCount:       startupCount,
 	}
+}
+
+// registerWorker puts a built worker context into the supervisor's registry.
+func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContext[TObserved, TDesired], identity deps.Identity, workerLogger deps.FSMLogger) {
+	s.workers[identity.ID] = workerCtx
+
+	// Cache the first worker ID for lock-free access in GetHierarchyPathUnlocked()
+	if s.cachedFirstWorkerID.Load() == nil {
+		s.cachedFirstWorkerID.Store(identity.ID)
+	}
+
+	if len(s.workers) == 1 && identity.HierarchyPath != "" {
+		s.logger = workerLogger
+	}
+
+	s.logger.Info("worker_added")
 }
 
 // RemoveWorker removes a worker from the registry for a restart, which adds
