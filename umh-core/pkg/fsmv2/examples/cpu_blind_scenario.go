@@ -75,7 +75,7 @@ var CPUBlindScenarioV2 = ScenarioV2{
 		// The box advances on the sampler's read of cpu.pressure, which this
 		// scenario never takes away, so machine time keeps moving through both
 		// outages.
-		box.StartPerRead(cpuMachineSecond)
+		box.StartPerRead(fsmv2cpu.PollInterval)
 
 		return m, box.Stop, nil
 	},
