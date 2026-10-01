@@ -18,263 +18,75 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-// TestChannelProvider implements communicator.ChannelProvider for test scenarios.
-type TestChannelProvider struct {
-	inbound  chan *types.UMHMessage
-	outbound chan *types.UMHMessage
-}
+// CommunicatorScenarioV2 runs one communicator child against a mock relay server.
+var CommunicatorScenarioV2 = ScenarioV2{
+	Name:        "communicator",
+	Description: "Communicator worker: reaches Syncing once its transport child authenticates against a mock relay server",
 
-// NewTestChannelProvider creates a test channel provider with buffered channels.
-func NewTestChannelProvider(bufferSize int) *TestChannelProvider {
-	return &TestChannelProvider{
-		inbound:  make(chan *types.UMHMessage, bufferSize),
-		outbound: make(chan *types.UMHMessage, bufferSize),
-	}
-}
+	Dependencies: func() (map[string]any, func(), error) {
+		server := testutil.NewMockRelayServer()
 
-// GetChannels returns the inbound (pulled from HTTP) and outbound (to push) channels.
-func (p *TestChannelProvider) GetChannels(_ string) (
-	chan<- *types.UMHMessage,
-	<-chan *types.UMHMessage,
-) {
-	return p.inbound, p.outbound
-}
-
-// GetInboundStats returns the capacity and current length of the inbound channel.
-// Used by PullWorker to detect backpressure before pulling messages.
-func (p *TestChannelProvider) GetInboundStats(_ string) (capacity int, length int) {
-	return cap(p.inbound), len(p.inbound)
-}
-
-// GetInboundChan returns the inbound channel for reading received messages from the worker.
-func (p *TestChannelProvider) GetInboundChan() <-chan *types.UMHMessage {
-	return p.inbound
-}
-
-// QueueOutbound queues a message for the worker to push.
-func (p *TestChannelProvider) QueueOutbound(msg *types.UMHMessage) {
-	p.outbound <- msg
-}
-
-// DrainInbound reads all available messages from the inbound channel (non-blocking).
-func (p *TestChannelProvider) DrainInbound() []*types.UMHMessage {
-	var messages []*types.UMHMessage
-
-drainLoop:
-	for {
-		select {
-		case msg, ok := <-p.inbound:
-			if !ok {
-				break drainLoop
-			}
-
-			messages = append(messages, msg)
-		default:
-			break drainLoop
-		}
-	}
-
-	return messages
-}
-
-// CommunicatorRunConfig configures a communicator scenario run with a mock relay server.
-type CommunicatorRunConfig struct {
-	Logger                  deps.FSMLogger
-	MockServer              *testutil.MockRelayServer // If nil, creates and manages internally; caller closes if provided
-	AuthToken               string                    // Defaults to "test-auth-token"
-	InitialPullMessages     []*types.UMHMessage       // Messages queued for communicator to pull
-	InitialOutboundMessages []*types.UMHMessage       // Messages queued for worker to push
-	Duration                time.Duration             // 0 = run until context cancelled; negative = error
-	TickInterval            time.Duration             // Defaults to 100ms
-}
-
-// CommunicatorRunResult contains observable results after scenario completion (populated after Done closes).
-type CommunicatorRunResult struct {
-	Error             error               // Non-nil if scenario setup failed
-	Done              <-chan struct{}     // Closes when scenario completes
-	Shutdown          func()              // Triggers graceful shutdown
-	ReceivedMessages  []*types.UMHMessage // Messages pulled from HTTP (nil for HTTP-only tests)
-	PushedMessages    []*types.UMHMessage // Messages pushed to HTTP
-	ConsecutiveErrors int                 // Final consecutive error count from mock server
-	AuthCallCount     int                 // Auth endpoint calls (>1 indicates re-auth)
-}
-
-// RunCommunicatorScenario runs the FSMv2 communicator worker via ApplicationSupervisor with a mock relay server.
-func RunCommunicatorScenario(ctx context.Context, cfg CommunicatorRunConfig) *CommunicatorRunResult {
-	done := make(chan struct{})
-
-	if cfg.Duration < 0 {
-		close(done)
-
-		return &CommunicatorRunResult{
-			Done:  done,
-			Error: fmt.Errorf("invalid duration %v: must be non-negative", cfg.Duration),
-		}
-	}
-
-	if ctx.Err() != nil {
-		close(done)
-
-		return &CommunicatorRunResult{
-			Done:  done,
-			Error: fmt.Errorf("context already cancelled: %w", ctx.Err()),
-		}
-	}
-
-	var mockServer *testutil.MockRelayServer
-
-	var ownsMockServer bool
-
-	if cfg.MockServer != nil {
-		mockServer = cfg.MockServer
-		ownsMockServer = false
-	} else {
-		mockServer = testutil.NewMockRelayServer()
-		ownsMockServer = true
-	}
-
-	serverURL := mockServer.URL()
-
-	if serverURL == "" {
-		if ownsMockServer {
-			mockServer.Close()
+		serverURL := server.URL()
+		if serverURL == "" {
+			server.Close()
+			return nil, nil, errors.New("mock relay server started but its URL is empty")
 		}
 
-		close(done)
+		provider := NewTransportTestChannelProvider(100)
 
-		return &CommunicatorRunResult{
-			Done:  done,
-			Error: errors.New("mock server started but URL is empty"),
-		}
-	}
+		deps := map[string]any{}
 
-	for _, msg := range cfg.InitialPullMessages {
-		mockServer.QueuePullMessage(msg)
-	}
+		// The communicator's transport child inherits this map and reads transport.ChannelProviderKey.
+		config.SetDependency(deps, communicator.ChannelProviderKey, communicator.ChannelProvider(provider))
+		config.SetDependency(deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(provider))
+		config.SetDependency(deps, relayServerKey, server)
 
-	channelProvider := NewTestChannelProvider(100)
-	communicator.SetChannelProvider(channelProvider)
+		return deps, func() { server.Close() }, nil
+	},
 
-	scenarioDeps := map[string]any{}
-	config.SetDependency(scenarioDeps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelProvider))
-
-	for _, msg := range cfg.InitialOutboundMessages {
-		channelProvider.QueueOutbound(msg)
-	}
-
-	authToken := cfg.AuthToken
-	if authToken == "" {
-		authToken = "test-auth-token"
-	}
-
-	scenarioConfig := fmt.Sprintf(`
-children:
-  - name: "communicator-1"
-    workerType: "communicator"
-    userSpec:
-      config: |
-        relayURL: "%s"
-        instanceUUID: "test-instance-uuid"
-        authToken: "%s"
-        timeout: "5s"
-`, serverURL, authToken)
-
-	testScenario := Scenario{
-		Name:        "communicator-test",
-		Description: "Test communicator with mock server",
-		YAMLConfig:  scenarioConfig,
-	}
-
-	logger := cfg.Logger
-	if logger == nil {
-		logger = deps.NewNopFSMLogger()
-	}
-
-	tickInterval := cfg.TickInterval
-	if tickInterval == 0 {
-		tickInterval = 100 * time.Millisecond
-	}
-
-	store := SetupStore(logger)
-
-	runResult, err := Run(ctx, RunConfig{
-		Scenario:     testScenario,
-		Duration:     0,
-		TickInterval: tickInterval,
-		Logger:       logger,
-		Store:        store,
-		Dependencies: scenarioDeps,
-	})
-	if err != nil {
-		if channelProvider != nil {
-			communicator.ClearChannelProvider()
+	Run: func(ctx context.Context, env Env) error {
+		server, ok := config.LookupDependency(env.Dependencies, relayServerKey)
+		if !ok {
+			return errors.New("the communicator scenario's dependency map holds no relay server under relayServerKey")
 		}
 
-		if ownsMockServer {
-			mockServer.Close()
+		ref := dynamicchildren.Ref{WorkerType: "communicator", Name: "communicator-1"}
+
+		env.Step("create communicator-1 against the mock relay server; it reports Recovering with healthy=0 until its transport child authenticates")
+
+		if err := env.Client.Upsert(ref, map[string]any{
+			"state":        "running",
+			"relayURL":     server.URL(),
+			"instanceUUID": "test-instance-uuid",
+			"authToken":    "test-auth-token",
+			"timeout":      "5s",
+		}); err != nil {
+			return err
 		}
 
-		close(done)
+		return env.WaitFor(ctx, "the communicator reaches Syncing after its transport child authenticates",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[communicator.CommunicatorStatus](ctx, env.Client, ref)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the communicator child has not published an observation yet", nil
+					}
 
-		return &CommunicatorRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("failed to start scenario: %w", err),
-		}
-	}
+					return false, "", err
+				}
 
-	result := &CommunicatorRunResult{
-		Done:     done,
-		Shutdown: runResult.Shutdown,
-		Error:    nil,
-	}
-
-	go func() {
-		if cfg.Duration > 0 {
-			select {
-			case <-time.After(cfg.Duration):
-				runResult.Shutdown()
-			case <-ctx.Done():
-				runResult.Shutdown()
-			case <-runResult.Done:
-			}
-		} else {
-			select {
-			case <-ctx.Done():
-				runResult.Shutdown()
-			case <-runResult.Done:
-			}
-		}
-
-		<-runResult.Done
-
-		if channelProvider != nil {
-			result.ReceivedMessages = channelProvider.DrainInbound()
-		}
-
-		result.PushedMessages = mockServer.GetPushedMessages()
-		result.AuthCallCount = mockServer.AuthCallCount()
-
-		if channelProvider != nil {
-			communicator.ClearChannelProvider()
-		}
-
-		if ownsMockServer {
-			mockServer.Close()
-		}
-
-		close(done)
-	}()
-
-	return result
+				authCalls := server.AuthCallCount()
+				done := obs.State == "Syncing" && authCalls >= 1
+				return done, fmt.Sprintf("state=%s authCalls=%d", obs.State, authCalls), nil
+			})
+	},
 }

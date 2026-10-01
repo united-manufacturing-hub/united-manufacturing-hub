@@ -53,8 +53,10 @@ fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transpo
 
 The supervisor merges its map into every child, so the provider reaches the
 worker however deep it sits. `NewTransportWorker` returns an error naming the
-key when the map holds none. A scenario supplies a mock provider under the
-same key (see "Mocks" below).
+key when the map holds none. A scenario supplies a mock provider under
+`transport.ChannelProviderKey` or `communicator.ChannelProviderKey`. The
+communicator still falls back to its global when its key is absent (see
+"Mocks" below).
 
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.
