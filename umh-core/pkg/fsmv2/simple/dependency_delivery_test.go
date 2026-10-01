@@ -37,10 +37,9 @@ type deliveryDeps struct {
 }
 
 var _ = Describe("dependency delivery to a monitor worker", func() {
-	// buildWith registers a monitor worker under workerType and builds one
-	// instance with the given dependencies. Each spec needs its own workerType,
-	// because Register panics on a worker type that is already registered.
-	buildWith := func(workerType string, dependencies map[string]any) *deliveryDeps {
+	// Each spec passes its own workerType, because Register panics on a worker type
+	// that is already registered.
+	registerAndBuild := func(workerType string, dependencies map[string]any) *deliveryDeps {
 		var built *deliveryDeps
 
 		Register(MonitorSpec[probeConfig, probeStatus, *deliveryDeps]{
@@ -72,10 +71,10 @@ var _ = Describe("dependency delivery to a monitor worker", func() {
 		dependencies := map[string]any{}
 		config.SetDependency(dependencies, deliveryLabelKey, "from-the-run")
 
-		Expect(buildWith("simpleworker_delivery_supplied", dependencies).label).To(Equal("from-the-run"))
+		Expect(registerAndBuild("simpleworker_delivery_supplied", dependencies).label).To(Equal("from-the-run"))
 	})
 
 	It("hands NewDeps nothing readable when the run supplied none", func() {
-		Expect(buildWith("simpleworker_delivery_none", nil).label).To(BeEmpty())
+		Expect(registerAndBuild("simpleworker_delivery_none", nil).label).To(BeEmpty())
 	})
 })
