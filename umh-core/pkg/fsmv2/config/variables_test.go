@@ -492,11 +492,9 @@ global:
 
 			result := config.Merge(parent, child)
 
-			// User variables should be merged (the child adds keys)
 			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))
 			Expect(result.User).To(HaveKeyWithValue("PORT", 502))
 
-			// Global variables should be merged the same way
 			Expect(result.Global).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
 			Expect(result.Global).To(HaveKeyWithValue("cluster_id", "prod-cluster"))
 

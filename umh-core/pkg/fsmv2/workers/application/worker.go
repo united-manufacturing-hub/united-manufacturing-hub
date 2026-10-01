@@ -121,11 +121,9 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, desired fs
 	return fsmv2.NewObservation(status), nil
 }
 
-// warnVariableConflicts warns about each key that both the registry's bundle
-// and an own child's spec set. renderUnion keeps the bundle's value for that
-// key. Each variableConflictKey is warned about once per worker instance. The
-// warning names the key and never a value, because variables can hold
-// credentials.
+// warnVariableConflicts warns once about each key that both the registry's
+// bundle and an own child's spec set. renderUnion keeps the bundle's value.
+// The warning names the key and never a value: variables can hold credentials.
 func (w *ApplicationWorker) warnVariableConflicts(bundle config.VariableBundle, desired fsmv2.DesiredState) {
 	provider, ok := desired.(config.ChildSpecProvider)
 	if !ok {

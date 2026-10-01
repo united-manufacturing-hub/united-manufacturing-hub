@@ -306,7 +306,7 @@ var _ = Describe("Variable Injection", func() {
 			childUserSpec := config.UserSpec{
 				Variables: config.VariableBundle{
 					User: map[string]any{
-						"PORT":      503, // child also sets PORT; the merge keeps the parent's 502
+						"PORT":      503,
 						"DEVICE_ID": "child-device",
 					},
 				},
@@ -334,7 +334,6 @@ var _ = Describe("Variable Injection", func() {
 			child := children["same-key-child"]
 			capturedChildSpec := child.TestGetUserSpec()
 
-			// Verify: IP inherited, PORT kept from the parent, DEVICE_ID added by the child.
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("PORT", 502))
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
@@ -365,9 +364,8 @@ var _ = Describe("Variable Injection", func() {
 			return lines
 		}
 
-		// A conflict warning must not carry a variable value: variables can hold
-		// credentials. Each value is matched in its JSON-quoted form so the log
-		// line's timestamp cannot collide with a numeric value.
+		// Each value is matched JSON-quoted, so a log line's timestamp
+		// cannot match a numeric value.
 		noValueInWarnings := func(values ...string) {
 			all := strings.Join(conflictLines(), "\n")
 			for _, value := range values {
@@ -570,8 +568,6 @@ var _ = Describe("Variable Injection", func() {
 				return !exists
 			}, 10*time.Second).Should(BeTrue())
 
-			// Re-added with the same key: the warned pair survives the
-			// removal, so the re-added child is not warned again.
 			deriveChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
 			s.TestUpdateUserSpec(config.UserSpec{
 				Variables: config.VariableBundle{User: map[string]any{"PORT": 502, "IP": "10.0.0.2"}},
