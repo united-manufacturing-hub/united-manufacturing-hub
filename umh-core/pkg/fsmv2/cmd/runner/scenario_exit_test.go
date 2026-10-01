@@ -31,6 +31,10 @@ import (
 // Drives a real v2 run through examples.Run and hands the result to
 // shutdownExitCode, so it lives in the CLI package.
 var _ = Describe("Scenario warnings and late errors", func() {
+	BeforeEach(func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
+
 	// runScenario runs one v2 scenario on a real supervisor and returns its
 	// result after Done closes.
 	runScenario := func(scenario examples.ScenarioV2, settle time.Duration) *examples.RunResult {
@@ -57,8 +61,6 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	}
 
 	It("sets RunResult.Err on an unexpected warning, and the exit code follows Err", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		warning := examples.ScenarioV2{
 			Name:        "unexpected-warning",
 			Description: "test-local Run for the unexpected-warning check",
@@ -81,8 +83,6 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("does not set RunResult.Err on a warning the scenario expects", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		expected := examples.ScenarioV2{
 			Name:             "expected-warning",
 			Description:      "test-local Run for the ExpectedWarnings check",
@@ -102,8 +102,6 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("does not set RunResult.Err on a warning every run allows", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		allowed := examples.ScenarioV2{
 			Name:        "allowed-warning",
 			Description: "test-local Run for the always-allowed warning check",
@@ -122,8 +120,6 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("sets RunResult.Err on an error logged after Run returned, and the exit code follows Err", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		// The error lands inside the settle window, after the checks that
 		// already ran, so it sets Err when the run ends instead.
 		lateError := examples.ScenarioV2{

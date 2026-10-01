@@ -63,6 +63,10 @@ func init() {
 }
 
 var _ = Describe("ScenarioV2 error checks", func() {
+	BeforeEach(func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
+
 	// loggedErrorRun runs a v2 scenario whose Run logs msg as an error, then
 	// waits on a check that is done at once when waitFor is true. It returns
 	// the run's result, the error from examples.Run and the wait's error.
@@ -110,10 +114,6 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	}
 
 	It("fails the next wait and the run when Run logs an error the scenario does not expect", func() {
-		// The configworker deps key is process-global; a spec that fails
-		// mid-run would otherwise leak it into every later spec.
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		_, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
 			Name:        "unexpected-error",
 			Description: "test-local Run for the unexpected-error check",
@@ -140,8 +140,6 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	})
 
 	It("fails the run when Run logs an unexpected error and returns without waiting", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		_, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
 			Name:        "unexpected-error-no-wait",
 			Description: "test-local Run for the post-Run error check",
@@ -161,8 +159,6 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	})
 
 	It("does not fail the run when the logged error matches ExpectedErrors", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		result, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
 			Name:        "expected-error",
 			Description: "test-local Run for the ExpectedErrors check",
@@ -181,8 +177,6 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	})
 
 	It("does not fail the run when the logged error is one every run allows", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		result, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
 			Name:        "allowed-error",
 			Description: "test-local Run for the always-allowed error check",
@@ -199,8 +193,6 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	})
 
 	It("fails the run when a worker it creates logs an error the scenario does not expect", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -241,9 +233,11 @@ var _ = Describe("ScenarioV2 error checks", func() {
 })
 
 var _ = Describe("ScenarioV2 stored-state check", func() {
-	It("sets RunResult.Err when the store holds a state that is not a valid state name for its worker type", func() {
+	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
 
+	It("sets RunResult.Err when the store holds a state that is not a valid state name for its worker type", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -323,8 +317,6 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 	})
 
 	It("leaves RunResult.Err nil after a run that stores only valid states", func() {
-		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -368,9 +360,11 @@ func (failingDeltasStore) GetDeltas(_ context.Context, _ storage.Subscription) (
 }
 
 var _ = Describe("ScenarioV2 store-read failure", func() {
-	It("sets RunResult.Err when the stored-state check cannot read the store", func() {
+	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
 
+	It("sets RunResult.Err when the stored-state check cannot read the store", func() {
 		logger := deps.NewNopFSMLogger()
 		inner := examples.SetupStore(logger)
 		store := failingDeltasStore{TriangularStoreInterface: inner}
@@ -407,9 +401,11 @@ var _ = Describe("ScenarioV2 store-read failure", func() {
 })
 
 var _ = Describe("ScenarioV2 empty expected entries", func() {
-	It("fails the run when an expected entry is the empty string", func() {
+	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
 
+	It("fails the run when an expected entry is the empty string", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -444,9 +440,11 @@ var _ = Describe("ScenarioV2 empty expected entries", func() {
 })
 
 var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
-	It("ends with no stored-state failure when the caller cancels after Run returned", func() {
+	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
 
+	It("ends with no stored-state failure when the caller cancels after Run returned", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 

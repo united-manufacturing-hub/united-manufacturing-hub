@@ -31,6 +31,10 @@ import (
 // One spec per RegistryV2 entry, so a scenario that breaks only under the
 // runner fails by name.
 var _ = Describe("RegistryV2 scenarios", func() {
+	BeforeEach(func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
+
 	It("registers at least one v2 scenario", func() {
 		Expect(examples.RegistryV2).NotTo(BeEmpty(),
 			"the per-scenario specs below run nothing when the registry is empty")
@@ -45,8 +49,6 @@ var _ = Describe("RegistryV2 scenarios", func() {
 
 	for _, name := range names {
 		It("runs the registered scenario "+name+" from start to a clean end", func() {
-			DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
-
 			logger := deps.NewNopFSMLogger()
 			store := examples.SetupStore(logger)
 
