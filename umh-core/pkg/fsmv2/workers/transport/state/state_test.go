@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/channelusage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -872,5 +873,32 @@ var _ = Describe("TransportWorker States", func() {
 				Expect(tt.state.LifecyclePhase()).To(Equal(tt.expected), "State %s has wrong lifecycle phase", tt.state.String())
 			}
 		})
+	})
+})
+
+var _ = Describe("Outbound queue", func() {
+	degradedQueue := func() fsmv2.Snapshot {
+		snap := makeSnapshot(false, config.DesiredStateRunning, "valid-token", time.Now().Add(time.Hour), 2, 0)
+		observed := snap.Observed.(fsmv2.Observation[snapshot.TransportStatus])
+		observed.Status.OutboundQueue = channelusage.Verdict{
+			Measured: true, Degraded: true, FillDegraded: true, FillPercent: 100, PeakPercent: 80,
+		}
+		snap.Observed = observed
+
+		return snap
+	}
+
+	It("moves Running to Degraded when the outbound queue is degraded", func() {
+		result := (&state.RunningState{}).Next(degradedQueue())
+
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Reason).To(Equal(
+			"outbound queue degraded (fill 100%, recovers below 30%; peak 80%, degrades above 90%), transitioning to Degraded"))
+	})
+
+	It("keeps Degraded while the outbound queue is degraded", func() {
+		result := (&state.DegradedState{}).Next(degradedQueue())
+
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 	})
 })

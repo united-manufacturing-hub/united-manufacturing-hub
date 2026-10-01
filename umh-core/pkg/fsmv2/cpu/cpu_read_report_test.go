@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
@@ -98,6 +99,12 @@ type reportFS struct {
 	reads *int
 }
 
+func (f reportFS) FileExists(ctx context.Context, p string) (bool, error) {
+	data, err := f.ReadFile(ctx, p)
+
+	return err == nil && data != nil, nil
+}
+
 func (f reportFS) ReadFile(ctx context.Context, p string) ([]byte, error) {
 	*f.reads++
 
@@ -165,6 +172,12 @@ func buildReport(overrides map[string]error, fileOverrides map[string][]byte, er
 func withFiles(fileOverrides map[string][]byte) map[string][]byte {
 	files := healthyContainer()
 	for path, content := range fileOverrides {
+		if content == nil {
+			delete(files, path)
+
+			continue
+		}
+
 		files[path] = content
 	}
 
@@ -242,9 +255,32 @@ var _ = Describe("the message carries the sad path, the fields carry the read", 
 		Expect((*events)[0].Msg).To(Equal("cpu::sample_failed::unparsable"))
 		Expect((*events)[0].Fields).To(HaveKeyWithValue("read_op", "cpu_stat"))
 	})
+
+	It("keeps an unparsable v1 cpuacct.usage under the voided-sample message", func() {
+		read := cpuhealth.ReadResult{Operation: cpuhealth.OperationCPUAcctUsage, Outcome: cpuhealth.ReadUnparsable}
+
+		Expect(messageFor(read)).To(Equal("cpu::sample_failed::unparsable"))
+	})
 })
 
 var _ = Describe("a failed cgroup read is reported to Sentry", func() {
+	It("reports nothing at all from a healthy cgroup v1 container", func() {
+		events := buildWithFiles(map[string][]byte{
+			cgroupBase + "/cpu.stat":                      nil,
+			cgroupBase + "/cpu.max":                       nil,
+			cgroupBase + "/cpu.pressure":                  nil,
+			cgroupBase + "/cpuset.cpus.effective":         nil,
+			cgroupBase + "/cgroup.controllers":            nil,
+			cgroupBase + "/cpu,cpuacct/cpu.stat":          []byte("nr_periods 338962\nnr_throttled 903\n"),
+			cgroupBase + "/cpu,cpuacct/cpu.cfs_quota_us":  []byte("-1\n"),
+			cgroupBase + "/cpu,cpuacct/cpu.cfs_period_us": []byte("100000\n"),
+			cgroupBase + "/cpu,cpuacct/cpuacct.usage":     []byte("11457863754000\n"),
+			cgroupBase + "/cpuset/cpuset.effective_cpus":  []byte("0\n"),
+		})
+
+		Expect(msgs(events)).To(BeEmpty())
+	})
+
 	It("reports nothing at all from a healthy container", func() {
 		events, _, _ := build(nil)
 

@@ -41,6 +41,22 @@ const (
 	LowerIsWorse
 )
 
+// MarkSide names the side of a mark in the reader's words. A fire mark is
+// crossed toward the worse side and a clear mark toward the better one, so one
+// polarity reads both ways. An inclusive mark counts landing exactly on it and
+// reads "at" - "degrades at 70%", where 70% busy is already a full machine.
+func MarkSide(m Mark, p Polarity, clearing bool) string {
+	if m.Inclusive {
+		return "at"
+	}
+
+	if (p == HigherIsWorse) == clearing {
+		return "below"
+	}
+
+	return "above"
+}
+
 // Marks is a threshold pair: a value past Fire fires the signal, a value past
 // Clear releases it again.
 type Marks struct {

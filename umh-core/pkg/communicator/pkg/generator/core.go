@@ -30,6 +30,7 @@ func DeriveCoreHealth(
 	redpandaHealth *models.Health,
 	topicBrowserHealth *models.Health,
 	releaseHealth *models.Health,
+	communicatorHealth *models.Health,
 	dfcs []models.Dfc,
 	logger *zap.SugaredLogger,
 ) *models.Health {
@@ -59,6 +60,11 @@ func DeriveCoreHealth(
 	// Release health check - only consider degraded as unhealthy
 	if releaseHealth != nil && releaseHealth.Category == models.Degraded {
 		unhealthyComponents = append(unhealthyComponents, "Release: "+releaseHealth.Message)
+	}
+
+	// Communicator health check - only consider degraded as unhealthy
+	if communicatorHealth != nil && communicatorHealth.Category == models.Degraded {
+		unhealthyComponents = append(unhealthyComponents, "Communicator: "+communicatorHealth.Message)
 	}
 
 	// DFCs health check

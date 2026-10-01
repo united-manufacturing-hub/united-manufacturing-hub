@@ -22,7 +22,8 @@
 //   - PullWorker: Handles inbound message pulling from backend
 //
 // The worker authenticates with the relay server and coordinates its children
-// for continuous message exchange.
+// for continuous message exchange. It also samples the outbound message queue
+// once per observation.
 //
 // # FSM v2 Pattern
 //
@@ -59,6 +60,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/channelusage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
@@ -144,6 +146,7 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 			RelayURL:     failedRelay,
 			InstanceUUID: failedUUID,
 		},
+		OutboundQueue: d.SampleOutboundQueue(time.Now()),
 	}
 
 	return fsmv2.NewObservation(status), nil
@@ -221,6 +224,8 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 const transportDepsKey = "transport"
 
 func init() {
+	fsmv2.RegisterObservationInterval(transportDepsKey, channelusage.SampleInterval)
+
 	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](transportDepsKey,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			w, err := NewTransportWorker(id, logger, sr)

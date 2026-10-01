@@ -102,6 +102,15 @@ var _ = Describe("Reduction", func() {
 		n, s = p99W.Reduce().Get()
 		Expect(s).To(Equal(StateValue))
 		Expect(n).To(Equal(98.0), "nearest-rank 99th percentile of 0..99 is 98")
+
+		// Max: the highest value, wherever it sits in the window.
+		maxW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Max, false)
+		for i, v := range []float64{3, 9, 4} {
+			maxW.appendPoint(Known(v), Unknown(), t0.Add(time.Duration(i)*time.Second))
+		}
+		n, s = maxW.Reduce().Get()
+		Expect(s).To(Equal(StateValue))
+		Expect(n).To(Equal(9.0), "max of 3, 9, 4 is 9")
 	})
 
 	It("should compute slope over the window's own first and last timestamps, never against wall-clock now", func() {
@@ -125,6 +134,7 @@ var _ = Describe("Reduction", func() {
 		Expect(DeltaRatio.Min).To(Equal(2))
 		Expect(P95.Min).To(Equal(20))
 		Expect(P99.Min).To(Equal(100))
+		Expect(Max.Min).To(Equal(1))
 	})
 
 	It("should report StateUntrusted below that minimum, while stale, or when the fold's divisor is zero, StateAbsent only when the window is empty or its newest entry is older than the demote span, and StateValue otherwise", func() {

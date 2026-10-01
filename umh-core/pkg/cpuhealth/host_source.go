@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The host source: everything this package reads machine-wide, independent
-// of any particular cgroup — /proc/stat, /proc/cpuinfo, and the DMI identity
-// files. Distinct from cgroupSource, which reads one cgroup's own accounting
+// The host source reads the machine-wide files: /proc/stat, /proc/cpuinfo and
+// the DMI identity files. The cgroup readers read one cgroup's own accounting
 // files under its base.
 
 package cpuhealth
@@ -99,11 +98,11 @@ func (h *hostSource) advanceHostRates(timestamp time.Time, busy, steal, denomina
 }
 
 // readProcSelfCgroup returns /proc/self/cgroup verbatim: which cgroup this
-// process runs in. The file is machine-wide, not under any cgroup's base,
-// which is why it is read here and not by cgroupSource. Any outcome other than
-// ReadOK means no text was read, and names the cause.
+// process runs in. The file is outside any cgroup's base, so hostSource reads
+// it and a cgroup reader does not. Any outcome other than ReadOK means no text
+// was read, and names the cause.
 func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcome, error) {
-	return readRawFile(ctx, h.fs, PathOf("", OperationProcSelfCgroup))
+	return readRawFile(ctx, h.fs, pathOf("", OperationProcSelfCgroup))
 }
 
 // readHost yields /proc/stat's busy, steal and denominator jiffy totals, plus
@@ -114,7 +113,7 @@ func (h *hostSource) readProcSelfCgroup(ctx context.Context) (string, ReadOutcom
 // per-CPU lines are counted before the aggregate line is parsed, so they can be
 // readable on a file whose aggregate line is not.
 func (h *hostSource) readHost(ctx context.Context) (busy, steal, denominator, machine float64, err error) {
-	data, err := h.fs.ReadFile(ctx, PathOf("", OperationProcStat))
+	data, err := h.fs.ReadFile(ctx, pathOf("", OperationProcStat))
 	if err != nil {
 		return 0, 0, 0, 0, err
 	}
@@ -180,7 +179,7 @@ func (h *hostSource) readVirtualized(ctx context.Context) (virtualized bool, cpu
 	}
 	// The x86 route. The "hypervisor" flag is the guest's own evidence, so a
 	// match settles the fact without reading DMI at all.
-	data, err := h.fs.ReadFile(ctx, PathOf("", OperationProcCpuinfo))
+	data, err := h.fs.ReadFile(ctx, pathOf("", OperationProcCpuinfo))
 	cpuinfo = classifyRead(err)
 	readErr = err
 	if err == nil && cpuinfoHasHypervisorFlag(data) {

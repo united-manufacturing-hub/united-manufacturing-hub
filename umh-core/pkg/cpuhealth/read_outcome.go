@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Which file each read opens (ReadOperation, PathOf), and how it ended (ReadOutcome).
+// Which file each read opens (ReadOperation, pathOf), and how it ended (ReadOutcome).
 // Every read on a Sample carries an outcome, though a reader may return an
 // error that classifyRead turns into one. The fsmv2 CPU worker reports the
 // failures to Sentry.
@@ -22,6 +22,7 @@ package cpuhealth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -53,6 +54,8 @@ const (
 var (
 	errEmptyRead      = errors.New("file is empty")
 	errUnparsableRead = errors.New("content did not parse")
+	// errNoPressureFile wraps fs.ErrNotExist so it reads as ReadMissing, which the fsmv2 CPU worker's excusedReads does not report.
+	errNoPressureFile = fmt.Errorf("hierarchy publishes no cpu.pressure: %w", fs.ErrNotExist)
 )
 
 // pathErrorFor gives a failure the shape Go uses for a failed file operation,
@@ -61,19 +64,20 @@ var (
 // report: it reaches Sentry as the event's subtitle, and the fingerprint is
 // built from error TYPES, so wording one well costs no extra issues.
 //
-// An error that already names its file, which is every error the kernel
-// returns, is returned unchanged rather than wrapped twice.
-func pathErrorFor(base string, operation ReadOperation, readErr error) error {
+// An error that already names its file is returned unchanged rather than
+// wrapped twice. Every error the kernel returns names its file. An error for a
+// read with no file (an empty path) is also returned unchanged.
+func pathErrorFor(path string, readErr error) error {
 	if readErr == nil {
 		return nil
 	}
 
 	var pathErr *fs.PathError
-	if errors.As(readErr, &pathErr) {
+	if path == "" || errors.As(readErr, &pathErr) {
 		return readErr
 	}
 
-	return &fs.PathError{Op: "read", Path: PathOf(base, operation), Err: readErr}
+	return &fs.PathError{Op: "read", Path: path, Err: readErr}
 }
 
 // classifyRead maps an unrecognised error to ReadError rather than to the
@@ -124,6 +128,8 @@ const (
 	OperationProcCpuinfo ReadOperation = "proc_cpuinfo"
 	// OperationCPUStat is the cgroup's cpu.stat read.
 	OperationCPUStat ReadOperation = "cpu_stat"
+	// OperationCPUAcctUsage is the cgroup v1 cpuacct.usage read; v2 never makes it.
+	OperationCPUAcctUsage ReadOperation = "cpuacct_usage"
 	// OperationCPUMax is the cgroup's cpu.max read.
 	OperationCPUMax ReadOperation = "cpu_max"
 	// OperationCPUPressure is the cgroup's cpu.pressure read.
@@ -162,18 +168,19 @@ var allReadOperations = []readOperationSpec{
 	{Operation: OperationCgroupControllers, name: "/cgroup.controllers", cgroupRelative: true},
 	{Operation: OperationProcSelfCgroup, name: "/proc/self/cgroup"},
 	{Operation: OperationCgroupBaseDir, cgroupRelative: true},
-	{Operation: OperationCPUPressure, name: "/cpu.pressure", cgroupRelative: true},
-	{Operation: OperationCPUStat, name: "/cpu.stat", cgroupRelative: true},
+	{Operation: OperationCPUPressure, name: "/" + v2CPUPressureFile, cgroupRelative: true},
+	{Operation: OperationCPUStat, name: "/" + v2CPUStatFile, cgroupRelative: true},
+	{Operation: OperationCPUAcctUsage},
 	{Operation: OperationProcStat, name: "/proc/stat"},
-	{Operation: OperationCpusetCPUs, name: "/cpuset.cpus.effective", cgroupRelative: true},
+	{Operation: OperationCpusetCPUs, name: "/" + v2CpusetFile, cgroupRelative: true},
 	{Operation: OperationProcCpuinfo, name: "/proc/cpuinfo"},
-	{Operation: OperationCPUMax, name: "/cpu.max", cgroupRelative: true},
+	{Operation: OperationCPUMax, name: "/" + v2CPUMaxFile, cgroupRelative: true},
 }
 
-// PathOf returns the file this operation opens under base, so a reader and a
-// report of that read name the same path by construction. base is ignored for a
-// machine-wide file. An operation with no entry returns "".
-func PathOf(base string, operation ReadOperation) string {
+// pathOf returns the file cgroupV2Source and hostSource open for operation under
+// base. base is ignored for a machine-wide file. An operation with no such file
+// returns "".
+func pathOf(base string, operation ReadOperation) string {
 	for _, spec := range allReadOperations {
 		if spec.Operation != operation {
 			continue

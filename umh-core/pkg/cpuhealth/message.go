@@ -269,22 +269,7 @@ func (r cpuRule) render() string {
 	}
 
 	return fmt.Sprintf("%s %s (%s %s %s).",
-		r.label, r.measured, verb, markSide(mark, r.marks.Polarity, r.latched), markValue(mark, r.marks.Unit))
-}
-
-// markSide names the side of a mark in the reader's words. A fire mark is
-// crossed toward the worse side and a clear mark toward the better one, so one
-// polarity reads both ways. An inclusive mark counts landing exactly on it and
-// reads "at" - "degrades at 70%", where 70% busy is already a full machine.
-func markSide(m diagnosis.Mark, p diagnosis.Polarity, clearing bool) string {
-	if m.Inclusive {
-		return "at"
-	}
-	if (p == diagnosis.HigherIsWorse) == clearing {
-		return "below"
-	}
-
-	return "above"
+		r.label, r.measured, verb, diagnosis.MarkSide(mark, r.marks.Polarity, r.latched), markValue(mark, r.marks.Unit))
 }
 
 // markValue writes a mark in the unit its own pair declares: a ratio or a
