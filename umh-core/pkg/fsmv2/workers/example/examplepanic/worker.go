@@ -130,7 +130,7 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 
 func init() {
 	register.Worker[ExamplepanicConfig, ExamplepanicStatus, *ExamplepanicDependencies]("examplepanic",
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewExamplepanicWorker(id, &DefaultConnectionPool{}, logger, sr)
 		})
 }

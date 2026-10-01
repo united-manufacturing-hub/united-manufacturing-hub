@@ -25,11 +25,11 @@
 // Two fields are required, three are optional:
 //
 //	MonitorSpec[TConfig, TStatus, TDeps]{
-//	    WorkerType string                                                       // required
-//	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)             // required
-//	    Health     func(cfg TConfig, status TStatus) Health                     // optional
-//	    NewDeps    func(id deps.Identity, bd *deps.BaseDependencies) TDeps      // optional (built once per instance)
-//	    Interval   time.Duration                                               // optional (collector default if 0)
+//	    WorkerType string                                                                                // required
+//	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)                                      // required
+//	    Health     func(cfg TConfig, status TStatus) Health                                              // optional
+//	    NewDeps    func(id deps.Identity, bd *deps.BaseDependencies, dependencies map[string]any) TDeps  // optional (built once per instance)
+//	    Interval   time.Duration                                                                         // optional (collector default if 0)
 //	}
 //
 // A poll that needs no dependencies instantiates TDeps as struct{} and leaves

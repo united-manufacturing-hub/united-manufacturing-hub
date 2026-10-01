@@ -46,10 +46,10 @@ type NoDeps = struct{}
 // verify that TDeps here matches the TDeps in the concrete WorkerBase[TConfig, TStatus, TDeps]
 // embed inside the worker struct. By convention, callers pass the same TDeps in both places.
 //
-// Constructor receives the standard framework dependencies (identity, logger, stateReader).
-// Workers that need parent-injected deps fetch them via register.GlobalDeps inside the
-// constructor closure. Workers with custom ObservedState types must use
-// factory.RegisterWorkerType directly.
+// Read dependencies with config.LookupDependency. The constructor must not write
+// to it: on a restart it is the supervisor's own map, so a write reaches every
+// worker the supervisor builds afterwards.
+// Workers with custom ObservedState types must use factory.RegisterWorkerType directly.
 //
 // Panics at init time when:
 //   - workerType is the empty string,
@@ -59,7 +59,7 @@ type NoDeps = struct{}
 //   - the factory or CSE TypeRegistry already has an entry for workerType.
 func Worker[TConfig any, TStatus any, TDeps any](
 	workerType string,
-	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader) (fsmv2.Worker, error),
+	constructor func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, dependencies map[string]any) (fsmv2.Worker, error),
 ) {
 	if workerType == "" {
 		panic("register.Worker: workerType must be non-empty")
@@ -73,8 +73,8 @@ func Worker[TConfig any, TStatus any, TDeps any](
 		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
 	}
 
-	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) fsmv2.Worker {
-		w, err := constructor(id, logger, sr)
+	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, dependencies map[string]any) fsmv2.Worker {
+		w, err := constructor(id, logger, sr, dependencies)
 		if err != nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}
