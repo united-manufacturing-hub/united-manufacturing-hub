@@ -40,7 +40,7 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		register.ClearGlobalDeps(configWorkerKey)
 	})
 
-	It("drives one helloworld child through create->Running, update->observed-change, then Delete while the kernel survives", func() {
+	It("drives one helloworld child through create->Running, update->observed-change, then Delete while the kernel keeps running", func() {
 		// The dynamic scenario must be registered beside noop and reachable
 		// through the same merged listing the CLI reads. A missing entry here is
 		// the first thing this rung adds.
@@ -72,17 +72,13 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 			Store:        store,
 		})
 
-		// The final mood is not re-read here. After Delete, nothing stops the
-		// supervisor ticking the child (ENG-5107). Once Run removes its temp mood
-		// files, CollectObservedState overwrites the observed mood with "".
+		// Run checks each step itself through env.WaitFor. The check that a deleted
+		// child is gone from the store waits on ENG-5107.
 		Expect(err).NotTo(HaveOccurred(),
 			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, Delete the child, and still read the config worker")
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the v2 runner must wait out the run and then tear down on its own")
-
-		// ENG-5114 moves these checks into the runner. Until then they run here,
-		// against the allowed-warning list every integration scenario shares.
-		verifyNoErrorsOrWarnings(testLogger)
-		verifyStateFieldsAreValid(store)
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"the dynamic scenario must end with a clean RunResult")
 	})
 })

@@ -98,7 +98,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 
 		result, err := examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   normal,
-			Duration:     2 * time.Second,
+			Duration:     10 * time.Second,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,

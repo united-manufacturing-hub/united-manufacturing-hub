@@ -359,8 +359,7 @@ func verifyStateFieldsAreValid(store storage.TriangularStoreInterface) {
 		"unknown": true,
 	}
 	validApplicationStates := map[string]bool{
-		"TryingToStart": true, "Running": true,
-		"TryingToStop": true, "Stopped": true,
+		"Running": true, "Degraded": true, "Stopped": true,
 		"unknown": true,
 	}
 	// helloworld is the dynamic child the v2 dynamic scenario churns; configworker

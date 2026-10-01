@@ -16,6 +16,10 @@ package examples
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -28,8 +32,8 @@ type Env struct {
 	// Writer and store.
 	Client *fsmv2client.FSMv2Client
 
-	// Logger is the run's logger (the same logger RunConfig.Logger carries),
-	// so Run logs into the same stream the post-run log checks read.
+	// Logger wraps RunConfig.Logger. All output still reaches that logger, and
+	// an error or warning a Run logs also reaches the run's checks.
 	Logger deps.FSMLogger
 
 	// Dependencies is the map the scenario's Dependencies returned, or nil when
@@ -37,6 +41,185 @@ type Env struct {
 	// builds workers, so Run must not write to it: Run reads a mock out with
 	// config.LookupDependency and changes the mock itself.
 	Dependencies map[string]any
+
+	// recorder is set by the runner before Run sees this Env.
+	recorder *runRecorder
+}
+
+// runRecorder is the per-run state that Step and WaitFor share across copies
+// of Env. The fields above mu are set before the supervisor starts and never change.
+type runRecorder struct {
+	// scenario is the name of the run's scenario, so a step line can be
+	// attributed when several scenarios run in one process.
+	scenario string
+
+	expectedErrors   []string
+	expectedWarnings []string
+
+	// mu guards the fields below. Step may run on a goroutine the scenario
+	// starts, and any goroutine that logs writes the first unexpected values.
+	mu                  sync.Mutex
+	lastStep            string
+	firstUnexpectedErr  error
+	firstUnexpectedWarn error
+}
+
+// alwaysAllowedMessages are logged by the collector in normal operation, so
+// every run may log them at error or warning level without declaring them.
+var alwaysAllowedMessages = []string{
+	"data_stale",
+	"collector_observation_failed",
+	"collector_stop_skipped",
+}
+
+func (r *runRecorder) recordLoggedError(err error, msg string) {
+	if r.messageAllowed(msg, r.expectedErrors) {
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.firstUnexpectedErr == nil {
+		r.firstUnexpectedErr = fmt.Errorf("the scenario does not expect this error: %s (%w)", msg, err)
+	}
+}
+
+// An empty expected entry matches nothing: strings.Contains would match every message.
+func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
+	for _, substr := range expected {
+		if substr != "" && strings.Contains(msg, substr) {
+			return true
+		}
+	}
+
+	for _, substr := range alwaysAllowedMessages {
+		if strings.Contains(msg, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *runRecorder) recordLoggedWarning(msg string) {
+	if r.messageAllowed(msg, r.expectedWarnings) {
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.firstUnexpectedWarn == nil {
+		r.firstUnexpectedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
+	}
+}
+
+func (r *runRecorder) loggedWarning() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.firstUnexpectedWarn
+}
+
+func (r *runRecorder) loggedError() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.firstUnexpectedErr
+}
+
+func (r *runRecorder) setLastStep(description string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.lastStep = description
+}
+
+func (r *runRecorder) lastStepDescription() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.lastStep
+}
+
+// recordingLogger passes every call to the run's logger and records each
+// error and warning for the run's checks.
+type recordingLogger struct {
+	deps.FSMLogger
+	recorder *runRecorder
+}
+
+func (l *recordingLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
+	l.recorder.recordLoggedError(err, msg)
+
+	l.FSMLogger.SentryError(feature, hierarchyPath, err, msg, fields...)
+}
+
+func (l *recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
+	l.recorder.recordLoggedWarning(msg)
+
+	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
+}
+
+// With wraps again, so a logger carrying context fields records too.
+func (l *recordingLogger) With(fields ...deps.Field) deps.FSMLogger {
+	return &recordingLogger{FSMLogger: l.FSMLogger.With(fields...), recorder: l.recorder}
+}
+
+const waitForPollInterval = 50 * time.Millisecond
+
+// A poll that ignores its ctx can hold a WaitFor past waitForTimeout.
+var waitForTimeout = 30 * time.Second
+
+// Step logs one line naming the change the scenario is about to make, and
+// remembers it, so a later failed wait can name the change it followed.
+func (e Env) Step(description string) {
+	e.recorder.setLastStep(description)
+
+	e.Logger.Info("scenario_step",
+		deps.String("scenario", e.recorder.scenario),
+		deps.String("step", description))
+}
+
+// WaitFor calls poll until it reports done, ctx ends, or waitForTimeout passes.
+// An unexpected error the run logged fails the wait before the next poll.
+// Every failure names check and the last Step. A timeout or a ctx end also
+// names the last value poll saw.
+func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Context) (done bool, seen string, err error)) error {
+	waitCtx, cancel := context.WithTimeout(ctx, waitForTimeout)
+	defer cancel()
+
+	var lastSeen string
+
+	for {
+		if logged := e.recorder.loggedError(); logged != nil {
+			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStepDescription(), logged)
+		}
+
+		done, seen, err := poll(waitCtx)
+		if err != nil {
+			return fmt.Errorf("wait %q after step %q: %w", check, e.recorder.lastStepDescription(), err)
+		}
+
+		lastSeen = seen
+
+		if done {
+			return nil
+		}
+
+		select {
+		case <-waitCtx.Done():
+			if ctx.Err() != nil {
+				return fmt.Errorf("wait %q after step %q did not complete before ctx ended: last seen %q: %w",
+					check, e.recorder.lastStepDescription(), lastSeen, ctx.Err())
+			}
+
+			return fmt.Errorf("wait %q after step %q timed out after %s: last seen %q",
+				check, e.recorder.lastStepDescription(), waitForTimeout, lastSeen)
+		case <-time.After(waitForPollInterval):
+		}
+	}
 }
 
 // ScenarioV2 is a scenario that drives the kernel-only supervisor.
@@ -47,6 +230,16 @@ type ScenarioV2 struct {
 	// supervisor down. Run must honor ctx cancellation: teardown cannot start
 	// until Run returns.
 	Run func(ctx context.Context, env Env) error
+
+	// ExpectedErrors lists substrings of error log messages this scenario
+	// expects. Any other error logged during the run fails it, or sets
+	// RunResult.Err when it is logged after Run returned.
+	ExpectedErrors []string
+
+	// ExpectedWarnings lists substrings of warning log messages this
+	// scenario expects. Any other warning logged during the run sets
+	// RunResult.Err once the run has ended.
+	ExpectedWarnings []string
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
 	Name string
@@ -83,6 +276,7 @@ var NoopScenarioV2 = ScenarioV2{
 // (enforced by the disjointness test in scenariov2_test.go, which documents
 // what breaks on a collision).
 var RegistryV2 = map[string]ScenarioV2{
-	"noop":    NoopScenarioV2,
-	"dynamic": DynamicScenarioV2,
+	"noop":       NoopScenarioV2,
+	"helloworld": HelloworldScenarioV2,
+	"dynamic":    DynamicScenarioV2,
 }

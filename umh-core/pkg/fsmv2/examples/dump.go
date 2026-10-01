@@ -53,27 +53,48 @@ type WorkerSnapshot struct {
 
 // DumpScenario captures deltas and final state. Use startSyncID=0 for all history.
 func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, startSyncID int64) (*ScenarioDump, error) {
-	resp, err := store.GetDeltas(ctx, storage.Subscription{LastSyncID: startSyncID})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get deltas: %w", err)
-	}
+	var (
+		allDeltas []storage.Delta
+		workers   []WorkerSnapshot
+		endSyncID int64
+	)
 
-	// Use LatestSyncID from response to avoid race between GetDeltas and GetLatestSyncID
-	endSyncID := resp.LatestSyncID
+	for syncID := startSyncID; ; {
+		resp, err := store.GetDeltas(ctx, storage.Subscription{LastSyncID: syncID})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get deltas: %w", err)
+		}
 
-	var workers []WorkerSnapshot
+		endSyncID = resp.LatestSyncID
+		allDeltas = append(allDeltas, resp.Deltas...)
 
-	// Handle bootstrap case: when client is too far behind, use Bootstrap.Workers
-	if resp.RequiresBootstrap && resp.Bootstrap != nil {
-		workers = convertStorageWorkers(resp.Bootstrap.Workers)
-	} else {
-		workers = extractAndLoadWorkers(ctx, store, resp.Deltas)
+		if resp.RequiresBootstrap && resp.Bootstrap != nil {
+			workers = convertStorageWorkers(resp.Bootstrap.Workers)
+
+			break
+		}
+
+		if !resp.HasMore {
+			workers = extractAndLoadWorkers(ctx, store, allDeltas)
+
+			break
+		}
+
+		if len(resp.Deltas) == 0 {
+			// HasMore with an empty page cannot advance the cursor; break to
+			// avoid an endless loop, at the cost of missing later deltas.
+			workers = extractAndLoadWorkers(ctx, store, allDeltas)
+
+			break
+		}
+
+		syncID = resp.Deltas[len(resp.Deltas)-1].SyncID
 	}
 
 	return &ScenarioDump{
 		StartSyncID: startSyncID,
 		EndSyncID:   endSyncID,
-		Deltas:      resp.Deltas,
+		Deltas:      allDeltas,
 		Workers:     workers,
 	}, nil
 }

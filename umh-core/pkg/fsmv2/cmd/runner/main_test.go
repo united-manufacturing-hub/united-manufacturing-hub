@@ -26,10 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
-// TestShutdownExitCode locks the exit-code mapping for a completed scenario
-// run. A run whose supervisor did not drain cleanly within its budget
-// (ShutdownClean=false) must exit non-zero so an outer harness/CI can detect a
-// degraded shutdown; every other case (nil result, or a clean drain) exits 0.
 func TestShutdownExitCode(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -47,6 +43,14 @@ func TestShutdownExitCode(t *testing.T) {
 			want:   0,
 		},
 		{
+			name: "clean drain with Err exits non-zero",
+			result: &examples.RunResult{
+				ShutdownClean: true,
+				Err:           errors.New("the scenario does not expect this warning: probe"),
+			},
+			want: 1,
+		},
+		{
 			name:   "unclean drain exits non-zero",
 			result: &examples.RunResult{ShutdownClean: false},
 			want:   1,
@@ -59,6 +63,24 @@ func TestShutdownExitCode(t *testing.T) {
 				t.Errorf("shutdownExitCode(%+v) = %d, want %d", tt.result, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFatalMessage(t *testing.T) {
+	failedRun := fmt.Errorf("scenario %q %w: %w", "probe", examples.ErrScenarioFailed, errors.New("the mood file is corrupt"))
+	if got := fatalMessage(failedRun); got != "Scenario failed" {
+		t.Errorf("fatalMessage(%v) = %q, want %q", failedRun, got, "Scenario failed")
+	}
+
+	_, notStarted := examples.Run(context.Background(), examples.RunConfig{
+		ScenarioV2: examples.ScenarioV2{Name: "probe"},
+	})
+	if notStarted == nil {
+		t.Fatal("examples.Run must reject a v2 scenario whose Run is nil")
+	}
+
+	if got := fatalMessage(notStarted); got != "Failed to start scenario" {
+		t.Errorf("fatalMessage(%v) = %q, want %q", notStarted, got, "Failed to start scenario")
 	}
 }
 
