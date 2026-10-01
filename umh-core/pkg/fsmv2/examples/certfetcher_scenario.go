@@ -215,6 +215,8 @@ var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	},
 }
 
+const pollsStoppedBeforePass = 20
+
 // CertFetcherNoSubscribersScenarioV2 runs a certfetcher whose cert handler has no
 // subscriber handler (the SubHandler that lists active subscribers). StoppedState
 // starts the worker only once one exists (certfetcher/state/state_stopped.go).
@@ -235,7 +237,7 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 
 		polls := 0
 
-		return env.WaitFor(ctx, "the certfetcher is still Stopped after 20 polls",
+		return env.WaitFor(ctx, fmt.Sprintf("the certfetcher is still Stopped after %d polls", pollsStoppedBeforePass),
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, certFetcherRef)
 				if err != nil {
@@ -252,7 +254,7 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 
 				polls++
 
-				return polls >= 20, fmt.Sprintf("state=%s polls=%d", obs.State, polls), nil
+				return polls >= pollsStoppedBeforePass, fmt.Sprintf("state=%s polls=%d", obs.State, polls), nil
 			})
 	},
 }
