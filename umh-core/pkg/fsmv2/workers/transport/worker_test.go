@@ -36,20 +36,18 @@ import (
 
 var _ = Describe("TransportWorker", func() {
 	var (
-		worker       *transport.TransportWorker
-		logger       deps.FSMLogger
-		identity     deps.Identity
-		providerDeps map[string]any
+		worker               *transport.TransportWorker
+		logger               deps.FSMLogger
+		identity             deps.Identity
+		depsWithMockProvider map[string]any
 	)
 
 	BeforeEach(func() {
 		logger = deps.NewNopFSMLogger()
 		identity = deps.Identity{ID: "test-transport", Name: "Test Transport"}
 
-		// providerDeps holds a mock channel provider under ChannelProviderKey,
-		// the way the supervisor delivers one.
-		providerDeps = map[string]any{}
-		fsmv2types.SetDependency(providerDeps, transport.ChannelProviderKey, transport.ChannelProvider(newTestChannelProvider()))
+		depsWithMockProvider = map[string]any{}
+		fsmv2types.SetDependency(depsWithMockProvider, transport.ChannelProviderKey, transport.ChannelProvider(newTestChannelProvider()))
 	})
 
 	Describe("Compile-time interface check", func() {
@@ -63,7 +61,7 @@ var _ = Describe("TransportWorker", func() {
 			It("should create a worker with valid dependencies", func() {
 				var err error
 
-				worker, err = transport.NewTransportWorker(identity, logger, nil, providerDeps)
+				worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(worker).NotTo(BeNil())
 			})
@@ -85,9 +83,7 @@ var _ = Describe("TransportWorker", func() {
 				provider := newRecordingChannelProvider(7, 3)
 
 				dependencyMap := map[string]any{}
-
-				var providerAsChannelProvider transport.ChannelProvider = provider
-				fsmv2types.SetDependency(dependencyMap, transport.ChannelProviderKey, providerAsChannelProvider)
+				fsmv2types.SetDependency(dependencyMap, transport.ChannelProviderKey, transport.ChannelProvider(provider))
 
 				worker, err := transport.NewTransportWorker(identity, logger, nil, dependencyMap)
 				Expect(err).NotTo(HaveOccurred())
@@ -107,7 +103,7 @@ var _ = Describe("TransportWorker", func() {
 		BeforeEach(func() {
 			var err error
 
-			worker, err = transport.NewTransportWorker(identity, logger, nil, providerDeps)
+			worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -169,7 +165,7 @@ var _ = Describe("TransportWorker", func() {
 		BeforeEach(func() {
 			var err error
 
-			worker, err = transport.NewTransportWorker(identity, logger, nil, providerDeps)
+			worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -387,7 +383,7 @@ authToken: "test-token"`,
 		BeforeEach(func() {
 			var err error
 
-			worker, err = transport.NewTransportWorker(identity, logger, nil, providerDeps)
+			worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -415,7 +411,7 @@ authToken: "test-token"`,
 		It("should use pointer receiver for all Worker methods", func() {
 			var err error
 
-			worker, err = transport.NewTransportWorker(identity, logger, nil, providerDeps)
+			worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 			Expect(err).ToNot(HaveOccurred())
 
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
