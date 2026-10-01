@@ -34,13 +34,13 @@ var _ = Describe("the clock the CPU worker samples on", func() {
 		fs := filesystem.NewMockFileSystem()
 		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
 			switch path {
-			case cgroupBase + "/cpu.stat":
+			case CgroupBase + "/cpu.stat":
 				return []byte("usage_usec 5000000\nuser_usec 4000000\nsystem_usec 1000000\nnr_periods 10\nnr_throttled 2\n"), nil
-			case cgroupBase + "/cpu.max":
+			case CgroupBase + "/cpu.max":
 				return []byte("200000 100000"), nil
-			case cgroupBase + "/cpu.pressure":
+			case CgroupBase + "/cpu.pressure":
 				return []byte("some avg10=1.00 avg60=2.00 avg300=3.00 total=0\n"), nil
-			case cgroupBase + "/cpuset.cpus.effective":
+			case CgroupBase + "/cpuset.cpus.effective":
 				return []byte("0-1"), nil
 			case "/proc/stat":
 				return []byte("cpu  100 0 300 5000 0 0 10 0 0 0\ncpu0 50 0 150 2500 0 0 5 0 0 0\ncpu1 50 0 150 2500 0 0 5 0 0 0\n"), nil

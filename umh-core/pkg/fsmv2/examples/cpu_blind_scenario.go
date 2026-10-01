@@ -27,13 +27,8 @@ import (
 )
 
 const (
-	// cpuBlindBase is where this scenario's fake machine serves its cgroup
-	// files, and has to equal the unexported cgroupBase in pkg/fsmv2/cpu.
-	// cpuPressureBase carries the full note on why nothing checks that.
-	cpuBlindBase = "/sys/fs/cgroup"
-
 	cpuBlindHostStat   = "/proc/stat"
-	cpuBlindCgroupStat = cpuBlindBase + "/cpu.stat"
+	cpuBlindCgroupStat = fsmv2cpu.CgroupBase + "/cpu.stat"
 
 	// The machine this scenario runs on, while it can still be read. It is a
 	// quiet four-core box with no CPU limit: nothing here is near any mark, so
@@ -74,7 +69,7 @@ var CPUBlindScenarioV2 = ScenarioV2{
 	ExpectedWarnings: []string{"cpu::read_failed::error"},
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(cpuBlindBase, cpuBlindMachine())
+		box := newTickingBox(fsmv2cpu.CgroupBase, cpuBlindMachine())
 		m := cpuMachineDeps(box)
 
 		// The box advances on the sampler's read of cpu.pressure, which this

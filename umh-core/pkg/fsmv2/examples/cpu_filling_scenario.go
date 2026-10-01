@@ -51,7 +51,7 @@ var CPUFillingScenarioV2 = ScenarioV2{
 	Description: "Fills a fake machine from outside, then from this instance, and shows the remedy change (v2)",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(cpuPressureBase, cpuFillingQuiet())
+		box := newTickingBox(fsmv2cpu.CgroupBase, cpuFillingQuiet())
 		m := cpuMachineDeps(box)
 
 		box.StartPerRead(cpuMachineReadAdvance)
