@@ -77,7 +77,12 @@ func TestGetRefusesARemovedWorker(t *testing.T) {
 	g.Expect(obs.Status.Reachable).To(gomega.BeFalse())
 
 	var deletedErr *fsmv2client.WorkerDeletedError
-	g.Expect(errors.As(err, &deletedErr)).To(gomega.BeTrue())
+	if !errors.As(err, &deletedErr) || deletedErr == nil {
+		t.Fatalf("Get on a removed worker returned %v, want a *WorkerDeletedError", err)
+
+		return
+	}
+
 	g.Expect(deletedErr.Ref).To(gomega.Equal(removed))
 	g.Expect(deletedErr.DeletedAt.IsZero()).To(gomega.BeFalse())
 
