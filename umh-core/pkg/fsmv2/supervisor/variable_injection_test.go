@@ -373,6 +373,12 @@ var _ = Describe("Variable Injection", func() {
 			}
 		}
 
+		// tick re-derives only when the user-spec hash changes
+		// ("Result cached based on UserSpec hash" in supervisor/doc.go).
+		rederiveWithParentVars := func(user map[string]any) {
+			s.TestUpdateUserSpec(config.UserSpec{Variables: config.VariableBundle{User: user}})
+		}
+
 		emitChild := func(vars config.VariableBundle) {
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
 				return &config.DesiredState{
@@ -413,12 +419,9 @@ var _ = Describe("Variable Injection", func() {
 				ContainSubstring(`"namespace":"Global"`),
 				ContainSubstring(`"key":"cluster_id"`),
 			)))
-			// The warning names the key, never a value: variables can hold
-			// credentials. The parent's dropped value is as sensitive as the
-			// child's, so both must stay out of the logs.
-			Expect(logs.String()).NotTo(ContainSubstring("cluster-b"))
-			Expect(logs.String()).NotTo(ContainSubstring("cluster-a"))
-			Expect(logs.String()).NotTo(ContainSubstring("192.168.1.100"))
+			Expect(logs.String()).NotTo(ContainSubstring("cluster-b"), "the warning names the key, never a value")
+			Expect(logs.String()).NotTo(ContainSubstring("cluster-a"), "the warning names the key, never a value")
+			Expect(logs.String()).NotTo(ContainSubstring("192.168.1.100"), "the warning names the key, never a value")
 			noValueInWarnings("502", "503")
 
 			childSpec := s.GetChildren()["conflict-child"].TestGetUserSpec()
@@ -436,10 +439,9 @@ var _ = Describe("Variable Injection", func() {
 				Expect(s.TestTick(ctx)).To(Succeed())
 			}
 
-			// The merge ran: without this, an empty conflictLines() could also
-			// mean no child was ever created.
 			childSpec := s.GetChildren()["conflict-child"].TestGetUserSpec()
-			Expect(childSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
+			Expect(childSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"),
+				"the child must exist, or an empty conflictLines() proves nothing")
 			Expect(childSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
 
 			Expect(conflictLines()).To(BeEmpty())
@@ -481,12 +483,7 @@ var _ = Describe("Variable Injection", func() {
 			Expect(conflictLines()).To(BeEmpty())
 
 			emitChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
-			// The parent's spec must change: tick caches the derived state by the
-			// user-spec hash (lastUserSpecHash; see supervisor/doc.go), so a new
-			// deriveDesiredStateFunc alone never re-derives.
-			s.TestUpdateUserSpec(config.UserSpec{
-				Variables: config.VariableBundle{User: map[string]any{"PORT": 502, "IP": "10.0.0.1"}},
-			})
+			rederiveWithParentVars(map[string]any{"PORT": 502, "IP": "10.0.0.1"})
 			Expect(s.TestTick(ctx)).To(Succeed())
 			Expect(s.TestTick(ctx)).To(Succeed())
 
@@ -556,12 +553,8 @@ var _ = Describe("Variable Injection", func() {
 			Expect(s.TestTick(ctx)).To(Succeed())
 			Expect(conflictLines()).To(HaveLen(1))
 
-			// Remove the child from the specs; the parent spec must change too,
-			// or tick keeps the cached desired state.
 			deriveNoChild()
-			s.TestUpdateUserSpec(config.UserSpec{
-				Variables: config.VariableBundle{User: map[string]any{"PORT": 502, "IP": "10.0.0.1"}},
-			})
+			rederiveWithParentVars(map[string]any{"PORT": 502, "IP": "10.0.0.1"})
 			Eventually(func() bool {
 				Expect(s.TestTick(ctx)).To(Succeed())
 				_, exists := s.GetChildren()["conflict-child"]
@@ -569,9 +562,7 @@ var _ = Describe("Variable Injection", func() {
 			}, 10*time.Second).Should(BeTrue())
 
 			deriveChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
-			s.TestUpdateUserSpec(config.UserSpec{
-				Variables: config.VariableBundle{User: map[string]any{"PORT": 502, "IP": "10.0.0.2"}},
-			})
+			rederiveWithParentVars(map[string]any{"PORT": 502, "IP": "10.0.0.2"})
 			Expect(s.TestTick(ctx)).To(Succeed())
 
 			Expect(conflictLines()).To(HaveLen(1))
