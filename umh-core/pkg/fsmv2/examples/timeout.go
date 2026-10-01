@@ -67,9 +67,10 @@ var TimeoutScenarioV2 = ScenarioV2{
 		env.Step("create the retry worker, which fails three times before it connects")
 
 		if err := env.Client.Upsert(retryRef, map[string]any{
-			"state":        "running",
-			"should_fail":  true,
-			"max_failures": 3,
+			"state":          "running",
+			"should_fail":    true,
+			"max_failures":   3,
+			"failure_cycles": 1,
 		}); err != nil {
 			return fmt.Errorf("upsert retry worker: %w", err)
 		}
@@ -81,6 +82,7 @@ var TimeoutScenarioV2 = ScenarioV2{
 			"should_fail":            true,
 			"max_failures":           5,
 			"restart_after_failures": 10,
+			"failure_cycles":         1,
 		}); err != nil {
 			return fmt.Errorf("upsert combined worker: %w", err)
 		}
