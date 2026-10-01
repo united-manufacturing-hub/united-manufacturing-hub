@@ -165,8 +165,6 @@ func RunCommunicatorScenario(ctx context.Context, cfg CommunicatorRunConfig) *Co
 	channelProvider := NewTestChannelProvider(100)
 	communicator.SetChannelProvider(channelProvider)
 
-	// The scenario's transport child reads the provider from this map under
-	// the transport worker's ChannelProviderKey.
 	scenarioDeps := map[string]any{}
 	config.SetDependency(scenarioDeps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelProvider))
 
