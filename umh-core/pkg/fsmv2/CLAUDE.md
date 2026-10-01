@@ -403,6 +403,68 @@ The shutdown flow:
 3. Request worker shutdown and drain on the remainder (warn and break out on exhaustion, including when the level has children but no workers of its own)
 4. Cancel context, join the tick loop and metrics reporter
 
+## Writing a scenario
+
+A scenario runs the real supervisor and real workers against mocks, and checks
+what the store shows. It is a `ScenarioV2` registered in `RegistryV2`
+(`examples/scenariov2.go`), and `examples/registry_run_test.go` runs every
+registered one. The example to copy is `HelloworldScenarioV2` in
+`examples/helloworld.go`.
+
+### Mocks
+
+`Dependencies` builds the mocks and returns the dependency map (and optionally
+a cleanup). A mock implements the interface the worker already uses; for
+helloworld that is its `filesystem.Service` (`examples/mock_filesystem.go`).
+The worker declares a typed key (`hello_world.FilesystemKey`), reads it in its
+constructor with `config.LookupDependency`, and falls back to the real
+implementation when the key is absent. `Run` changes the mock, never the map
+(see `Env.Dependencies`).
+
+### Run
+
+`Run` creates workers with `env.Client.Upsert`, the way a user's config does.
+Before each change, call `env.Step` with a short description of the change.
+After the change, call `env.WaitFor` with a check that reads the store through
+the client and returns what it saw. A check that has not seen the worker yet
+reports that it is not done. Each wait fails after `waitForTimeout`
+(`examples/scenariov2.go`). A check that ignores its context can hold the wait
+past that timeout.
+
+### What fails a run
+
+A logged error is unexpected unless its message contains an entry of
+`ExpectedErrors` or of `alwaysAllowedMessages` (`examples/scenariov2.go`). A
+logged warning is checked the same way against `ExpectedWarnings`.
+
+`examples.Run` returns an error when `Run` returns one. It also returns an
+error when the run logs an unexpected error before `Run` returns.
+
+Four other failures do not make `examples.Run` return an error. After the
+run ends, `RunResult.Err` holds the first of these that applies:
+
+1. an unexpected error logged after `Run` returns;
+2. an unexpected warning;
+3. a stored state that its worker type may not report;
+4. a store read that fails during that state check.
+
+The CLI exits 1 on a set `Err`, and `examples/registry_run_test.go` fails on it.
+Valid states per worker type are in `validWorkerStates`
+(`examples/state_check.go`). Add a new worker type there, or its states go
+unchecked.
+
+### Running it
+
+```bash
+go run ./pkg/fsmv2/cmd/runner --scenario=helloworld --duration=5s
+go test -tags=test -count=1 -v ./pkg/fsmv2/examples/ -ginkgo.focus="helloworld"
+```
+
+### Rules
+
+- No global setters for mocks: `register.SetGlobalDeps` is not for scenarios.
+- Do not add to the v1 `Registry`: `examples/v1_registry_test.go` fails if you do.
+
 ## Testing Patterns
 
 - Use Ginkgo/Gomega for tests

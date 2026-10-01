@@ -14,8 +14,8 @@
 
 package examples
 
-// This file defines the SimpleScenario, which serves as both a working example
-// and documentation for creating FSM v2 test scenarios.
+// This file defines SimpleScenario, a v1 scenario, and documents the v1
+// scenario format and how to write a custom test worker.
 //
 // # What is a Scenario?
 //
@@ -38,11 +38,7 @@ package examples
 //
 // ## 2. Scenario Registry (scenario.go)
 //
-// All scenarios are registered in the Registry map, making them available to
-// both tests and CLI. To add a new scenario:
-//   - Create a new file (e.g., stress.go)
-//   - Define your Scenario
-//   - Add it to Registry in scenario.go
+// v1 scenarios are registered in the Registry map.
 //
 // ## 3. Test Usage
 //
@@ -176,20 +172,7 @@ package examples
 //
 // ## 5. Use in Scenario
 //
-//	import _ "path/to/myworker"
-//
-//	var MyScenario = Scenario{
-//	    Name: "my-scenario",
-//	    YAMLConfig: `
-//	children:
-//	  - name: "my-worker-1"
-//	    workerType: "myworker"
-//	    userSpec:
-//	      config: |
-//	        setting1: "value"
-//	        setting2: 42
-//	`,
-//	}
+// See pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 //
 // # Store Injection for Assertions
 //
