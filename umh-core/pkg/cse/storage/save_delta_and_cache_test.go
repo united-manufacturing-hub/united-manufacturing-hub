@@ -89,20 +89,21 @@ var _ = Describe("A committed write whose delta append fails", func() {
 		ts := storage.NewTriangularStore(backend, rec)
 
 		saveInitialDocuments(ctx, ts, workerType, workerID)
+		Expect(rec.sentryWarns()).To(HaveLen(3), "saves warn")
 
 		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(rec.sentryWarns()).To(HaveLen(6), "MarkDeleted warns")
 
 		tombstoned, err := backend.Get(ctx, workerType+"_observed", workerID)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(tombstoned).To(HaveKey(storage.FieldDeletedAt))
 
 		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
+		Expect(rec.sentryWarns()).To(HaveLen(9), "ClearDeleted warns")
 
 		cleared, err := backend.Get(ctx, workerType+"_observed", workerID)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cleared).NotTo(HaveKey(storage.FieldDeletedAt))
-
-		Expect(rec.sentryWarns()).To(ContainElement("delta_append_failed"))
 	})
 })
 
@@ -128,11 +129,12 @@ var _ = Describe("An unchanged observed save", func() {
 
 		mockClock.Add(time.Hour)
 
-		_, err = ts.SaveObserved(ctx, workerType, workerID, persistence.Document{
+		changed, err := ts.SaveObserved(ctx, workerType, workerID, persistence.Document{
 			"id":     workerID,
 			"status": "running",
 		})
 		Expect(err).NotTo(HaveOccurred())
+		Expect(changed).To(BeFalse())
 
 		snap, err := ts.LoadSnapshot(ctx, workerType, workerID)
 		Expect(err).NotTo(HaveOccurred())
