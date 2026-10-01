@@ -297,9 +297,6 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		os.Stdout = writer
 
-		// When the scenario's Run fails, examples.Run tears down and prints
-		// the dump before it returns, so the dump is complete when the call
-		// returns.
 		_, err = examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   failing,
 			TickInterval: 50 * time.Millisecond,
@@ -477,8 +474,6 @@ var _ = Describe("ScenarioV2 framework", func() {
 	})
 
 	It("lists noop in the merged registry and runs a v2 scenario end-to-end on the kernel-only supervisor", func() {
-		// The v2 scenarios must appear in the same listing the CLI reads, so
-		// --list and --scenario find every registered scenario.
 		listing := examples.ListScenarios()
 		Expect(listing).To(HaveKey("noop"),
 			"merged ListScenarios must contain the v2 noop scenario")
@@ -588,16 +583,10 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// A real worker must be running when teardown starts, so the drain
-		// has a worker to stop.
 		degradedDrain := examples.ScenarioV2{
 			Name:        "degraded-drain",
-			Description: "test-local Run for the exhausted drain budget",
-			// A 1ns budget runs out before the drain can stop even one
-			// worker, so the drain warns graceful_shutdown_timeout. The v2
-			// teardown puts that warning into RunResult.Err, and this spec
-			// asserts only the drain outcome, so the scenario declares the
-			// warning here.
+			Description: "test-local Run that leaves a helloworld worker running, so the drain has a worker to stop",
+			// The 1ns GracefulShutdownTimeout below makes the drain log these.
 			ExpectedWarnings: []string{
 				"graceful_shutdown_timeout",
 				"graceful_shutdown_budget_exhausted",
