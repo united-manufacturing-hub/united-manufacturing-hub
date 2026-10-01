@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -1173,10 +1172,11 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 func (p *ProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
 	in := bridgeadmission.Input{
 		EnableResourceLimitBlocking: snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking,
-		HostCores:                   runtime.NumCPU(),
 	}
-	in.CPU, in.Memory, in.Disk, in.CapacityCores = admissionResources(snapshot)
-	in.Created, in.WaitingBefore = p.countBridges(snapshot, bridgeName)
+	// Health of CPU, memory and disk, and the cores the container may use, from the container monitor.
+	in.CPU, in.Memory, in.Disk, in.Cores = admissionResources(snapshot)
+	// Count the bridges that already exist, and the bridges in front of this one in config.yaml that are also waiting.
+	in.Created, in.WaitingBefore = countBridges(snapshot, bridgeName)
 
 	d := bridgeadmission.Decide(in)
 	if d.MaxBridges != nil {
@@ -1187,7 +1187,7 @@ func (p *ProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, b
 	return !d.Admit, d.Message()
 }
 
-func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgeadmission.Resource, capacityCores *float64) {
+func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgeadmission.Resource, cores float64) {
 	unproven := func(message string) bridgeadmission.Resource {
 		return bridgeadmission.Resource{Health: bridgeadmission.Unproven, Message: message}
 	}
@@ -1196,21 +1196,21 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 	if !managerExists {
 		r := unproven("container monitor not available")
 
-		return r, r, r, nil
+		return r, r, r, 0
 	}
 
 	instance, instanceExists := containerManager.GetInstances()[constants.CoreInstanceName]
 	if !instanceExists {
 		r := unproven("container health status unavailable")
 
-		return r, r, r, nil
+		return r, r, r, 0
 	}
 
 	observed, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot)
 	if !ok || observed == nil {
 		r := unproven("no health reading yet")
 
-		return r, r, r, nil
+		return r, r, r, 0
 	}
 
 	serviceInfo := observed.ServiceInfoSnapshot
@@ -1253,71 +1253,55 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 	memory = classify(serviceInfo.MemoryHealth, memoryHealth)
 	disk = classify(serviceInfo.DiskHealth, diskHealth)
 
-	return cpu, memory, disk, cpuLimitCores(serviceInfo.CPU)
+	return cpu, memory, disk, containerCores(serviceInfo.CPU)
 }
 
-// cpuLimitCores reads the CPU limit from whichever CPU path filled the record: the fsmv2 worker fills CPUHealth, the legacy reader fills CgroupCores.
-func cpuLimitCores(cpu *models.CPU) *float64 {
-	if cpu == nil {
-		return nil
-	}
-
+// containerCores reads how many cores the container may use from whichever
+// CPU path filled the record: the fsmv2 worker fills CPUHealth, the legacy
+// reader fills CgroupCores (its CPU limit) and CoreCount (the host's cores).
+func containerCores(cpu *models.CPU) float64 {
 	switch {
+	case cpu == nil:
+		return 0
 	case cpu.CPUHealth != nil:
-		capacity := cpu.CPUHealth.CapacityCores
-
-		return &capacity
+		return cpu.CPUHealth.CapacityCores
 	case cpu.CgroupCores > 0:
-		capacity := cpu.CgroupCores
-
-		return &capacity
+		return cpu.CgroupCores
+	case cpu.CoreCount != nil:
+		return float64(*cpu.CoreCount)
 	default:
-		return nil
+		return 0
 	}
 }
 
-func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bridgeName string) (created, waitingBefore int) {
-	protocolConverterManager, exists := snapshot.Managers[constants.ProtocolConverterManagerName]
+func countBridges(snapshot fsm.SystemSnapshot, bridgeName string) (created, waitingBefore int) {
+	manager, exists := snapshot.Managers[constants.ProtocolConverterManagerName]
 	if !exists {
 		return 0, 0
 	}
 
-	protocolConverterInstances := protocolConverterManager.GetInstances()
-	p.logger.Debugf("BridgeMustWait: Total protocol converter instances: %d", len(protocolConverterInstances))
+	instances := manager.GetInstances()
 
-	notInConfig := len(snapshot.CurrentConfig.ProtocolConverter)
-	bridgeIndex := notInConfig
-	indexByName := make(map[string]int, notInConfig)
-
-	for i, pcConfig := range snapshot.CurrentConfig.ProtocolConverter {
-		indexByName[pcConfig.Name] = i
-		if pcConfig.Name == bridgeName {
-			bridgeIndex = i
+	for name, instance := range instances {
+		switch {
+		case name == bridgeName,
+			instance.CurrentState == internalfsm.LifecycleStateToBeCreated,
+			instance.CurrentState == internalfsm.LifecycleStateRemoving,
+			instance.CurrentState == internalfsm.LifecycleStateRemoved:
+			continue
+		default:
+			created++
 		}
 	}
 
-	for name, instance := range protocolConverterInstances {
-		if name == bridgeName {
-			continue
+	for _, pcConfig := range snapshot.CurrentConfig.ProtocolConverter {
+		if pcConfig.Name == bridgeName {
+			break
 		}
 
-		if instance.CurrentState == internalfsm.LifecycleStateRemoving || instance.CurrentState == internalfsm.LifecycleStateRemoved {
-			p.logger.Debugf("BridgeMustWait: Instance %s in state %s - NOT counting", name, instance.CurrentState)
-
-			continue
+		if instance, ok := instances[pcConfig.Name]; ok && instance.CurrentState == internalfsm.LifecycleStateToBeCreated {
+			waitingBefore++
 		}
-
-		if instance.CurrentState == internalfsm.LifecycleStateToBeCreated {
-			if index, ok := indexByName[name]; ok && index < bridgeIndex {
-				waitingBefore++
-			}
-
-			continue
-		}
-
-		p.logger.Debugf("BridgeMustWait: Instance %s in state %s - counting towards limit", name, instance.CurrentState)
-
-		created++
 	}
 
 	return created, waitingBefore

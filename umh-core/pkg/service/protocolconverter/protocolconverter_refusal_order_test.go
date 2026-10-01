@@ -33,6 +33,8 @@ import (
 // is checked: a bridge is refused when the container is degraded or any
 // resource is, and the reason names the first degraded resource.
 var _ = Describe("BridgeMustWait refusal reasons", func() {
+	hostCores := 8
+
 	health := func(degraded bool) models.HealthCategory {
 		if degraded {
 			return models.Degraded
@@ -81,7 +83,7 @@ var _ = Describe("BridgeMustWait refusal reasons", func() {
 													CPUHealth:     health(cpu),
 													MemoryHealth:  health(mem),
 													DiskHealth:    health(disk),
-													CPU:           &models.CPU{Health: withMessage(cpu, "cpu is full")},
+													CPU:           &models.CPU{Health: withMessage(cpu, "cpu is full"), CoreCount: &hostCores},
 													Memory:        &models.Memory{Health: withMessage(mem, "memory is full")},
 													Disk:          &models.Disk{Health: withMessage(disk, "disk is full")},
 												},

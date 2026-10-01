@@ -63,10 +63,9 @@ type Input struct {
 	// before this one.
 	WaitingBefore int
 
-	// CapacityCores is the container's CPU limit in cores, or nil when it is
-	// not known. Decide treats a value of zero or less as not known.
-	CapacityCores *float64
-	HostCores     int
+	// Cores is how many CPU cores the container may use: its CPU limit, or
+	// every core of the host when it has none. Zero means not measured yet.
+	Cores float64
 }
 
 // Cause names why a bridge was refused.
@@ -117,24 +116,19 @@ func Decide(in Input) Decision {
 		}
 	}
 
-	maxBridges, cores := maxBridgesFor(in)
+	if in.Cores <= 0 {
+		return refuse(NotProven, "Resource health not proven yet: CPU cores not measured yet")
+	}
+
+	maxBridges := int(max(in.Cores-redpandaReservedCores, 0) * BridgesPerCore)
 	if in.Created+in.WaitingBefore >= maxBridges {
-		d := refuse(BridgeLimit, fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, %d core reserved for Redpanda)", maxBridges, cores, redpandaReservedCores))
+		d := refuse(BridgeLimit, fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, %d core reserved for Redpanda)", maxBridges, in.Cores, redpandaReservedCores))
 		d.MaxBridges = &maxBridges
 
 		return d
 	}
 
 	return Decision{Admit: true, MaxBridges: &maxBridges}
-}
-
-func maxBridgesFor(in Input) (maxBridges int, cores float64) {
-	cores = float64(in.HostCores)
-	if in.CapacityCores != nil && *in.CapacityCores > 0 {
-		cores = *in.CapacityCores
-	}
-
-	return int(max(cores-redpandaReservedCores, 0) * BridgesPerCore), cores
 }
 
 func refuse(cause Cause, reason string) Decision {

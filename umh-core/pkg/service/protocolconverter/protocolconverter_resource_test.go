@@ -75,6 +75,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									CPU:           legacyCPUWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -225,10 +226,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
 			})
 
-			It("should fall back to the host core count when no CPU limit is known", func() {
+			It("should use the host's cores the legacy monitor reports when no CPU limit is set", func() {
 				hostCeiling := (runtime.NumCPU() - 1) * bridgeadmission.BridgesPerCore
 
-				stageContainerWithCPU(&models.CPU{})
+				stageContainerWithCPU(legacyCPUWithHostCores())
 
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
 				for i := range hostCeiling {
@@ -583,10 +584,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
-									CPU: &models.CPU{
-										IsThrottled:   false,
-										ThrottleRatio: 0.0,
-									},
+									CPU:           legacyCPUWithHostCores(),
 								},
 							},
 						},
@@ -628,6 +626,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									CPU:           legacyCPUWithHostCores(),
 									OverallHealth: models.Degraded,
 									CPUHealth:     models.Degraded,
 									MemoryHealth:  models.Active,
@@ -667,6 +666,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									CPU:           legacyCPUWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -716,6 +716,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									CPU:           legacyCPUWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -789,4 +790,12 @@ func (m *MockManagerSnapshot) GetSnapshotTime() time.Time {
 
 func (m *MockManagerSnapshot) GetManagerTick() uint64 {
 	return m.Tick
+}
+
+// legacyCPUWithHostCores is the CPU record the legacy monitor reports for a
+// container without a CPU limit.
+func legacyCPUWithHostCores() *models.CPU {
+	hostCores := runtime.NumCPU()
+
+	return &models.CPU{CoreCount: &hostCores}
 }

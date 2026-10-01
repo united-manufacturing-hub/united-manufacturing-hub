@@ -23,8 +23,6 @@ import (
 
 const hint = "agent.enableResourceLimitBlocking: false"
 
-func cores(c float64) *float64 { return &c }
-
 func healthy() ba.Resource { return ba.Resource{Health: ba.Healthy} }
 
 // allHealthy is an instance with proven health and a 4-core CPU limit, so the
@@ -35,8 +33,7 @@ func allHealthy() ba.Input {
 		CPU:                         healthy(),
 		Memory:                      healthy(),
 		Disk:                        healthy(),
-		CapacityCores:               cores(4),
-		HostCores:                   32,
+		Cores:                       4,
 	}
 }
 
@@ -158,11 +155,10 @@ var _ = Describe("Decide", func() {
 			Entry("created and waiting together over the limit", 10, 5, false),
 		)
 
-		DescribeTable("computes the limit as (cores - 1) * 5 from the CPU limit, else the host cores",
-			func(capacity *float64, hostCores, limit int) {
+		DescribeTable("computes the limit as (cores - 1) * 5",
+			func(cores float64, limit int) {
 				in := allHealthy()
-				in.CapacityCores = capacity
-				in.HostCores = hostCores
+				in.Cores = cores
 
 				d := ba.Decide(in)
 
@@ -170,13 +166,23 @@ var _ = Describe("Decide", func() {
 				Expect(*d.MaxBridges).To(Equal(limit))
 				Expect(d.Admit).To(Equal(limit > 0))
 			},
-			Entry("CPU limit of 4 cores", cores(4), 32, 15),
-			Entry("CPU limit of 2.5 cores", cores(2.5), 32, 7),
-			Entry("no CPU limit known: host cores", nil, 3, 10),
-			Entry("CPU limit of 0: host cores", cores(0), 3, 10),
-			Entry("one core leaves no room for bridges", cores(1), 32, 0),
-			Entry("less than one core", cores(0.5), 32, 0),
+			Entry("4 cores", 4.0, 15),
+			Entry("2.5 cores", 2.5, 7),
+			Entry("one core leaves no room for bridges", 1.0, 0),
+			Entry("less than one core", 0.5, 0),
 		)
+
+		It("refuses as not proven while the cores are not measured yet", func() {
+			in := allHealthy()
+			in.Cores = 0
+
+			d := ba.Decide(in)
+
+			Expect(d.Admit).To(BeFalse())
+			Expect(d.Cause).To(Equal(ba.NotProven))
+			Expect(d.Reason).To(Equal("Resource health not proven yet: CPU cores not measured yet"))
+			Expect(d.MaxBridges).To(BeNil())
+		})
 	})
 
 	Describe("Message", func() {

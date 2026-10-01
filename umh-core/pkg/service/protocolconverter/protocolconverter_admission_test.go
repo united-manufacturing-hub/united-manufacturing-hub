@@ -209,6 +209,9 @@ var _ = Describe("BridgeMustWait admission", func() {
 			Entry("container degraded right after start, every resource healthy", func(s *pkgfsm.SystemSnapshot) {
 				coreInstance(*s).CurrentState = "degraded"
 			}),
+			Entry("CPU record without a core count", func(s *pkgfsm.SystemSnapshot) {
+				coreInstance(*s).LastObservedState.(*container.ContainerObservedStateSnapshot).ServiceInfoSnapshot.CPU = &models.CPU{}
+			}),
 			Entry("container observed before its first health reading", func(s *pkgfsm.SystemSnapshot) {
 				coreInstance(*s).LastObservedState = &container.ContainerObservedStateSnapshot{}
 			}),
