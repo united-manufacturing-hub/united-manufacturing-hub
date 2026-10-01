@@ -59,11 +59,9 @@ func NewPersistenceDependencies(
 	}
 }
 
-// NewStoreOnlyDependencies builds a seed PersistenceDependencies carrying only
-// the triangular store, for parent wiring at cmd/main.go to publish via
-// register.SetGlobalDeps. The persistence worker constructor detects the missing
-// BaseDependencies and rebuilds a full dependencies struct with the worker's
-// own identity, logger, and stateReader. Panics on nil store.
+// NewStoreOnlyDependencies builds seed dependencies carrying only the triangular
+// store, to store with register.SetGlobalDeps before the worker is constructed.
+// NewPersistenceWorker describes how it completes a seed. Panics on nil store.
 func NewStoreOnlyDependencies(store storage.TriangularStoreInterface) *PersistenceDependencies {
 	if store == nil {
 		panic("NewStoreOnlyDependencies: store cannot be nil")

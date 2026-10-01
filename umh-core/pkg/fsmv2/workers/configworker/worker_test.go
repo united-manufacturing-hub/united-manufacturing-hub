@@ -50,8 +50,6 @@ func TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy(t *testing.T) {
 		t.Fatalf("healthy state DeriveStateName = %q, want %q", got, "Running")
 	}
 
-	// Publish the shared registry under the worker type so the constructor's
-	// register.GlobalDeps wiring can pick it up; tear it down afterwards.
 	shared := dynamicchildren.NewWriter().Registry()
 	register.SetGlobalDeps[*dynamicchildren.Registry](workerType, shared)
 	t.Cleanup(func() { register.ClearGlobalDeps(workerType) })

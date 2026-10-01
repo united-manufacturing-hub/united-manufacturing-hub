@@ -114,7 +114,6 @@ var _ = Describe("Application worker surfaces the shared registry into Applicati
 		ctx := context.Background()
 		logger := deps.NewNopFSMLogger()
 
-		// No SetGlobalDeps: the collector's register.GlobalDeps returns a nil handle.
 		register.ClearGlobalDeps(configWorkerKey)
 
 		sup, store, appID := newAppSupervisorWithStore(logger)

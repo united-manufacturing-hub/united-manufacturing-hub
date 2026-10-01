@@ -19,13 +19,6 @@ import (
 	"sync"
 )
 
-// Package-level typed deps registry consumed by the register.Worker factory
-// closure during worker construction. Parent wiring (cmd/main.go or a parent
-// worker constructor) calls SetGlobalDeps[TDeps](workerType, deps) before
-// factory.NewWorkerByType(workerType, ...) runs; the closure then calls
-// GlobalDeps[TDeps](workerType) and forwards the value to the user-defined
-// constructor.
-
 var (
 	depsRegistryMu sync.RWMutex
 	depsRegistry   = map[string]any{}
@@ -41,10 +34,8 @@ func SetGlobalDeps[TDeps any](workerType string, deps TDeps) {
 	depsRegistry[workerType] = deps
 }
 
-// GlobalDeps returns the value stored under workerType. When nothing is stored,
-// it returns the zero value of TDeps, so a pointer TDeps gets nil.
-//
-// It panics when the stored value's type is not TDeps.
+// GlobalDeps returns the value stored under workerType, or the zero value of
+// TDeps when nothing is stored. It panics when the stored value's type is not TDeps.
 func GlobalDeps[TDeps any](workerType string) TDeps {
 	depsRegistryMu.RLock()
 	defer depsRegistryMu.RUnlock()
