@@ -78,8 +78,7 @@ func logContainsEvent(logOutput, msg string) bool {
 	return false
 }
 
-// scenarioDepsKey is the key the dependency-delivery spec sets and the probe worker reads.
-var scenarioDepsKey = config.NewDependencyKey[string]("examples.test.scenario_deps")
+var scenarioDepsProbeLabelKey = config.NewDependencyKey[string]("examples.test.scenario_deps")
 
 const scenarioDepsProbeType = "scenariov2-deps-probe"
 
@@ -115,7 +114,7 @@ func init() {
 	simple.Register(simple.MonitorSpec[scenarioDepsProbeConfig, scenarioDepsProbeStatus, scenarioDepsProbeDeps]{
 		WorkerType: scenarioDepsProbeType,
 		NewDeps: func(_ deps.Identity, _ *deps.BaseDependencies, rd map[string]any) scenarioDepsProbeDeps {
-			label, ok := config.LookupDependency(rd, scenarioDepsKey)
+			label, ok := config.LookupDependency(rd, scenarioDepsProbeLabelKey)
 			scenarioDepsProbeSeen.Store(&scenarioDepsProbeRecord{label: label, present: ok})
 
 			return scenarioDepsProbeDeps{label: label}
@@ -647,7 +646,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 			Description: "test-local Run for the dependency-delivery path",
 			Dependencies: func() (map[string]any, func(), error) {
 				scenarioDeps := map[string]any{}
-				config.SetDependency(scenarioDeps, scenarioDepsKey, "from-the-scenario")
+				config.SetDependency(scenarioDeps, scenarioDepsProbeLabelKey, "from-the-scenario")
 
 				return scenarioDeps, nil, nil
 			},
