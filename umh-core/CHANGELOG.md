@@ -10,6 +10,7 @@
 ### Improvements
 
 - A bridge refused because the instance is short of resources now says which resource and why, such as the CPU health message, instead of "System in degraded state". Which bridges are refused is unchanged
+- Routine start-up and restart messages from umh-core's internal components are now DEBUG instead of INFO, which makes state changes, warnings and errors easier to spot
 
 ### Fixes
 

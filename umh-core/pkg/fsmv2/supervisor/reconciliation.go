@@ -1051,7 +1051,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		s.mu.Unlock()
 
 		if shouldRestart {
-			s.logger.Info("worker_restarting",
+			s.logger.Debug("worker_restarting",
 				deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 				deps.String("target_worker_id", workerID),
 				deps.Reason("restart requested after graceful shutdown"))
@@ -1483,7 +1483,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				deps.String("child_worker_type", spec.WorkerType),
 				deps.String("parent_worker_type", s.workerType))
 
-			s.logger.Info("child_adding",
+			s.logger.Debug("child_adding",
 				deps.String("child_name", spec.Name),
 				deps.String("child_worker_type", spec.WorkerType))
 
