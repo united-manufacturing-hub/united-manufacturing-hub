@@ -33,9 +33,7 @@ type CommunicatorDependencies struct {
 }
 
 // NewCommunicatorDependencies creates dependencies for the communicator worker
-// from the given channel provider. It panics when the provider is nil, with a
-// message naming the worker. Without that check, the GetChannels call below
-// would fail with a bare nil dereference.
+// from provider. A nil provider panics with the worker's ID in the message.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *CommunicatorDependencies {
 	if provider == nil {
