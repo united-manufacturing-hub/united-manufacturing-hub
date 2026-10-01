@@ -10,9 +10,12 @@
 ### Improvements
 
 - A bridge refused because the instance is short of resources now says which resource and why, such as the CPU health message, instead of "System in degraded state". Which bridges are refused is unchanged
+- `USE_FSMV2_TRANSPORT` and `USE_FSMV2_MEMORY_CLEANUP` are now always on and can be removed from your configuration
+- `ALLOW_INSECURE_TLS` no longer has any effect. To trust a proxy that intercepts TLS, add your corporate CA certificate instead (see the network configuration guide)
 
 ### Fixes
 
+- umh-core runs without the Management Console again. It is designed to work without `AUTH_TOKEN` and `API_URL`, but FSMv2 features such as `USE_FSMV2_CPU` accidentally depended on them
 - Log messages for stopped flows in bridges are now more consistent
 - CPU usage, limit and throttling now read on hosts using the older cgroup v1 hierarchy, such as RHEL 8, where the CPU panel previously showed N/A. Pressure stays unavailable there, since that kernel publishes no per-container pressure figure
 

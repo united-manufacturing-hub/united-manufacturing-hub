@@ -133,9 +133,16 @@ type WorkerManager[TConfig StateConfig, TStatus any] struct {
 	instances     map[string]publicfsm.FSMInstance
 	domainConfigs map[string]TConfig
 	spec          WorkerManagerSpec[TConfig, TStatus]
-	// mu guards instances, domainConfigs, and tick: Reconcile (control loop) and
-	// CreateSnapshot / the getters (status reporting) can run on different
-	// goroutines.
+	// warnedNilClient records the enabled worker names that have warned about a
+	// missing fsmv2 runtime, so the nil-client branch warns once per name for
+	// the manager's lifetime instead of once per reconcile tick. A name stays in
+	// the set forever: removing it from config and re-adding it under a still-nil
+	// client is intended-silent (the dedup keys on the name, not on nil-client
+	// episodes).
+	warnedNilClient map[string]struct{}
+	// mu guards instances, domainConfigs, warnedNilClient, and tick: Reconcile
+	// (control loop) and CreateSnapshot / the getters (status reporting) can run
+	// on different goroutines.
 	mu   sync.RWMutex
 	tick uint64
 }
@@ -186,9 +193,10 @@ func NewWorkerManager[TConfig StateConfig, TStatus any](spec WorkerManagerSpec[T
 	}
 
 	return &WorkerManager[TConfig, TStatus]{
-		spec:          spec,
-		instances:     make(map[string]publicfsm.FSMInstance),
-		domainConfigs: make(map[string]TConfig),
+		spec:            spec,
+		instances:       make(map[string]publicfsm.FSMInstance),
+		domainConfigs:   make(map[string]TConfig),
+		warnedNilClient: make(map[string]struct{}),
 	}
 }
 
@@ -356,15 +364,23 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 // applyDesired actuates the desired state for one config into the fsmv2 runtime:
 // Upsert when enabled, Delete when disabled. It reports whether the caller may
 // advance its stored config/instance for that name. A CfgFor/Upsert failure
-// while enabled returns false (skip and retry next tick); a nil client, or any
-// disabled/success path, returns true. The instance map is authoritative even
-// when the client is nil.
+// while enabled returns false (skip and retry next tick); a disabled entry
+// under a nil client, and every disabled/success path, returns true. An enabled
+// entry under a nil client returns false so it is retried every tick until the
+// runtime appears. The instance map is authoritative even when the client is nil.
 func (m *WorkerManager[TConfig, TStatus]) applyDesired(client *fsmv2client.FSMv2Client, cfg TConfig, name string, enabled bool) bool {
 	if client == nil {
 		// A disabled entry needs no Upsert, so recording it now is correct even
 		// without a client. An enabled entry must be Upserted once the client
 		// appears; return false so it is retried every tick instead of being
 		// recorded as done and orphaned when the client shows up later.
+		if enabled {
+			if _, warned := m.warnedNilClient[name]; !warned {
+				m.spec.Log.SentryWarn(deps.FeatureForWorker(m.spec.WorkerType), name, "fsmv2 runtime unavailable (client nil); warning once per worker", deps.String("worker", name))
+				m.warnedNilClient[name] = struct{}{}
+			}
+		}
+
 		return !enabled
 	}
 

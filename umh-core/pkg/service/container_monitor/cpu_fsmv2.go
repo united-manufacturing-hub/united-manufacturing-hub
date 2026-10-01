@@ -17,10 +17,8 @@ package container_monitor
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
@@ -170,13 +168,11 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	// Fallback for a misconfiguration: USE_FSMV2_CPU is on but nothing published
 	// a client, so the fsmv2 supervisor never started (or has not yet).
 	if client == nil {
-		message := c.cpuSeamClientUnavailableMessage()
-
 		c.cpuWorkerWarnOnce.Do(func() {
-			c.logger.Warn(message)
+			c.logger.Warn(cpuSeamClientUnavailableMessage)
 		})
 
-		return degradedCPU(message).health(), nil, nil
+		return degradedCPU(cpuSeamClientUnavailableMessage).health(), nil, nil
 	}
 
 	// Get the latest poll result from the worker.
@@ -193,18 +189,8 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	return v.health(), v.cpuHealth, nil
 }
 
-// cpuSeamClientUnavailableMessage says which prerequisite is missing when
-// USE_FSMV2_CPU is on but no CPU worker client was published, or that the
-// supervisor may still be starting.
-func (c *ContainerMonitorService) cpuSeamClientUnavailableMessage() string {
-	transportOn, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
-	if !transportOn {
-		return "USE_FSMV2_CPU is enabled but USE_FSMV2_TRANSPORT is off, so the fsmv2 supervisor never runs and no CPU worker client is published; no CPU measurement is available"
-	}
-
-	if os.Getenv("API_URL") == "" || os.Getenv("AUTH_TOKEN") == "" {
-		return "USE_FSMV2_CPU is enabled but API_URL or AUTH_TOKEN is unset, so the fsmv2 supervisor never runs and no CPU worker client is published; no CPU measurement is available"
-	}
-
-	return "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no CPU measurement is available"
-}
+// cpuSeamClientUnavailableMessage is the diagnosis when USE_FSMV2_CPU is on
+// but no fsmv2 client is published yet. The supervisor runs with or without
+// Management Console credentials, so a missing client means it is still
+// starting.
+const cpuSeamClientUnavailableMessage = "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no CPU measurement is available"
