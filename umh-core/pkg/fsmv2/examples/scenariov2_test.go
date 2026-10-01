@@ -82,6 +82,41 @@ func logContainsEvent(logOutput, msg string) bool {
 	return false
 }
 
+// captureStdout sends os.Stdout into a pipe until stop is called, and stop
+// returns what was written. A goroutine reads the pipe while the run writes:
+// a dump larger than the pipe buffer would otherwise block the teardown
+// goroutine's print, and Done would never close.
+func captureStdout() (stop func() string) {
+	origStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	Expect(err).NotTo(HaveOccurred())
+
+	var out bytes.Buffer
+
+	drainDone := make(chan struct{})
+	go func() {
+		defer close(drainDone)
+
+		_, _ = io.Copy(&out, reader)
+	}()
+
+	DeferCleanup(func() {
+		os.Stdout = origStdout
+		_ = writer.Close()
+		_ = reader.Close()
+	})
+
+	os.Stdout = writer
+
+	return func() string {
+		os.Stdout = origStdout
+		Expect(writer.Close()).To(Succeed())
+		Eventually(drainDone, "5s").Should(BeClosed())
+
+		return out.String()
+	}
+}
+
 var scenarioDepsProbeLabelKey = config.NewDependencyKey[string]("examples.test.scenario_deps")
 
 const scenarioDepsProbeType = "scenariov2-deps-probe"
@@ -276,28 +311,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		origStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		Expect(err).NotTo(HaveOccurred())
+		stop := captureStdout()
 
-		var out bytes.Buffer
-
-		drainDone := make(chan struct{})
-		go func() {
-			defer close(drainDone)
-
-			_, _ = io.Copy(&out, reader)
-		}()
-
-		DeferCleanup(func() {
-			os.Stdout = origStdout
-			_ = writer.Close()
-			_ = reader.Close()
-		})
-
-		os.Stdout = writer
-
-		_, err = examples.Run(ctx, examples.RunConfig{
+		_, err := examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -306,14 +322,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).To(MatchError(ContainSubstring("scenario gave up")))
 
-		os.Stdout = origStdout
+		out := stop()
 
-		Expect(writer.Close()).To(Succeed())
-		Eventually(drainDone, "5s").Should(BeClosed())
-
-		Expect(out.String()).To(ContainSubstring("CSE SCENARIO DUMP"),
+		Expect(out).To(ContainSubstring("CSE SCENARIO DUMP"),
 			"a failed run must still print the store dump, because that is when it is most needed")
-		Expect(out.String()).To(ContainSubstring("dump-failed-hello"),
+		Expect(out).To(ContainSubstring("dump-failed-hello"),
 			"the dump must list the worker the scenario created before it failed")
 	})
 
@@ -353,34 +366,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		// The dump goes to os.Stdout, so the spec captures stdout for the
-		// run's lifetime.
-		origStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		Expect(err).NotTo(HaveOccurred())
-
-		// The drain goroutine reads the pipe while the run writes to it. A
-		// dump larger than the OS pipe buffer would otherwise block the
-		// teardown goroutine's print, so Done would never close.
-		var out bytes.Buffer
-
-		drainDone := make(chan struct{})
-		go func() {
-			defer close(drainDone)
-
-			_, _ = io.Copy(&out, reader)
-		}()
-
-		// DeferCleanup restores the original stdout and closes both pipe
-		// ends even if an assertion fails during the redirect. Later specs
-		// keep their output.
-		DeferCleanup(func() {
-			os.Stdout = origStdout
-			_ = writer.Close()
-			_ = reader.Close()
-		})
-
-		os.Stdout = writer
+		stop := captureStdout()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   dumpRequested,
@@ -394,15 +380,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"DumpStore must not break a v2 run")
 		Eventually(result.Done, "55s").Should(BeClosed())
 
-		// Closing the write end makes the drain goroutine see EOF and finish.
-		os.Stdout = origStdout
+		out := stop()
 
-		Expect(writer.Close()).To(Succeed())
-		Eventually(drainDone, "5s").Should(BeClosed())
-
-		Expect(out.String()).To(ContainSubstring("CSE SCENARIO DUMP"),
+		Expect(out).To(ContainSubstring("CSE SCENARIO DUMP"),
 			"runV2 must print the store dump when DumpStore is set")
-		Expect(out.String()).To(ContainSubstring("dump-hello"),
+		Expect(out).To(ContainSubstring("dump-hello"),
 			"the dump must list the worker the scenario created")
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"a clean dump run must not report a failure")
