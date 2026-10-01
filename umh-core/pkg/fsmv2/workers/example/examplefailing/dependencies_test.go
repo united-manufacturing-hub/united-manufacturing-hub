@@ -16,11 +16,10 @@ package examplefailing_test
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	
 
 	fsmdeps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
@@ -80,6 +79,24 @@ var _ = Describe("FailingDependencies Observation-Based Recovery", func() {
 
 			failDeps.ResetObservationsSinceFailure()
 			Expect(failDeps.GetObservationsSinceFailure()).To(Equal(0))
+		})
+	})
+
+	Describe("ShouldDelayRecovery (time-based)", func() {
+		It("should delay while the configured milliseconds since the failure have not passed", func() {
+			failDeps.SetRecoveryDelayMs(50)
+			failDeps.SetLastFailureTime(time.Now())
+
+			Expect(failDeps.ShouldDelayRecovery()).To(BeTrue(),
+				"the delay must be active while less than recovery_delay_ms has passed since the failure")
+		})
+
+		It("should stop delaying once the configured milliseconds have passed", func() {
+			failDeps.SetRecoveryDelayMs(50)
+			failDeps.SetLastFailureTime(time.Now())
+
+			Eventually(failDeps.ShouldDelayRecovery, "1s", "10ms").Should(BeFalse(),
+				"the delay must end once recovery_delay_ms has passed since the failure")
 		})
 	})
 

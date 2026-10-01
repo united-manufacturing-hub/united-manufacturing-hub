@@ -14,45 +14,107 @@
 
 package examples
 
-// CascadeScenario shows parent-child health propagation.
-//
-// What happens:
-//  1. Parent starts with 2 children (examplefailing workers)
-//  2. Children fail 3 times, parent goes to Degraded state
-//  3. Children recover, parent returns to Running state
-//
-// Key concept: FSMv2 automatically injects ChildrenHealthy/ChildrenUnhealthy
-// counts into parent's ObservedState. The parent's state machine reads these
-// and decides when to transition to/from Degraded.
-//
-// See exampleparent/state/ for the transition logic.
-var CascadeScenario = Scenario{
-	Name: "cascade",
+import (
+	"context"
+	"errors"
+	"fmt"
 
-	Description: "Shows cascade failure: child failures propagate to parent state, parent recovery when children heal",
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	example_failing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
+	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
+	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	parentstate "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
+)
 
-	YAMLConfig: `
-children:
-  # Parent that creates 2 children of type examplefailing
-  # Children will fail 3 times per cycle, for 2 cycles total:
-  # Cycle 1 (startup): Children fail 3x, then connect -> Parent reaches Running
-  # Cycle 2 (runtime): Children disconnect, fail 3x again -> Parent goes Degraded
-  # After cycle 2: Children connect permanently -> Parent returns to Running
-  # This tests the complete cascade flow including Degraded state transitions.
-  - name: "cascade-parent"
-    workerType: "exampleparent"
-    userSpec:
-      config: |
-        children_count: 2
-        child_worker_type: "examplefailing"
-        child_config: |
-          should_fail: true
-          max_failures: 3
-          failure_cycles: 2
-          recovery_delay_observations: 3
-      variables:
-        user:
-          IP: "127.0.0.1"
-          PORT: 8080
-`,
+// CascadeScenarioV2 runs one exampleparent whose examplefailing children fail their connects in repeated cycles.
+var CascadeScenarioV2 = ScenarioV2{
+	Name:        "cascade",
+	Description: "A parent goes Degraded while its failing children reconnect, and returns to Running when both are Connected",
+
+	ExpectedWarnings: []string{"connect_failed_simulated"},
+
+	ExpectedErrorCauses: []error{example_failing_action.ErrSimulatedFailure},
+
+	Run: func(ctx context.Context, env Env) error {
+		parentRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "cascade-parent"}
+
+		const (
+			childMaxFailures   = 3
+			childFailureCycles = 2
+		)
+
+		// recovery_delay_ms keeps each failed child unhealthy for longer than the
+		// parent's observation interval, so the parent sees it.
+		childConfig := "should_fail: true\n" +
+			fmt.Sprintf("max_failures: %d\n", childMaxFailures) +
+			fmt.Sprintf("failure_cycles: %d\n", childFailureCycles) +
+			"recovery_delay_ms: 700\n"
+
+		env.Step(fmt.Sprintf("create the parent with two children that each fail %d connects, then connect, and repeat for %d cycles; the parent waits %s before it creates them",
+			childMaxFailures, childFailureCycles, parentstate.StoppedWaitDuration))
+
+		if err := env.Client.Upsert(parentRef, map[string]any{
+			"state":             "running",
+			"children_count":    2,
+			"child_worker_type": "examplefailing",
+			"child_config":      childConfig,
+		}); err != nil {
+			return fmt.Errorf("upsert parent: %w", err)
+		}
+
+		// Degraded can only follow Running, so this wait also covers the parent's start.
+		if err := env.WaitFor(ctx, "the parent has been Degraded once",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the parent has not published an observation yet", nil
+					}
+
+					return false, "", err
+				}
+
+				degradedCount := timesEntered(obs, "Degraded")
+
+				return degradedCount >= 1, fmt.Sprintf("state=%s degraded_transitions=%d", obs.State, degradedCount), nil
+			}); err != nil {
+			return err
+		}
+
+		if err := env.WaitFor(ctx, "the parent returns to Running",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, parentRef)
+				if err != nil {
+					return false, "", fmt.Errorf("read the parent again: %w", err)
+				}
+
+				return obs.State == "Running", "state=" + obs.State, nil
+			}); err != nil {
+			return err
+		}
+
+		for _, name := range []string{"child-0", "child-1"} {
+			childRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: name}
+
+			// AllCyclesComplete stays true until the parent removes the child after RunningDuration.
+			if err := env.WaitFor(ctx, "the child "+name+" completes all its failure cycles",
+				func(ctx context.Context) (bool, string, error) {
+					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, childRef)
+					if err != nil {
+						if errors.Is(err, fsmv2client.ErrNotObserved) {
+							return false, "the child has not published an observation yet", nil
+						}
+
+						return false, "", err
+					}
+
+					return obs.Status.AllCyclesComplete, fmt.Sprintf("state=%s cycle=%d complete=%t attempts=%d", obs.State, obs.Status.CurrentCycle, obs.Status.AllCyclesComplete, obs.Status.ConnectAttempts), nil
+				}); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	},
 }

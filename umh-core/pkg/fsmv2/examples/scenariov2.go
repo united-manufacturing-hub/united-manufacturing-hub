@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 )
@@ -246,6 +247,13 @@ func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Co
 	}
 }
 
+// timesEntered returns how many times the worker has entered state. The count
+// keeps its value after the worker leaves the state, so a wait still sees a
+// state the worker has already left.
+func timesEntered[TStatus any](obs fsmv2.Observation[TStatus], state string) int64 {
+	return obs.Metrics.Framework.TransitionsByState[state]
+}
+
 // ScenarioV2 is a scenario that drives the kernel-only supervisor.
 type ScenarioV2 struct {
 	// Run creates workers through env.Client, changes the mocks, and checks the
@@ -303,14 +311,17 @@ var NoopScenarioV2 = ScenarioV2{
 // (enforced by the disjointness test in scenariov2_test.go, which documents
 // what breaks on a collision).
 var RegistryV2 = map[string]ScenarioV2{
-	"noop":       NoopScenarioV2,
-	"helloworld": HelloworldScenarioV2,
-	"failing":    FailingScenarioV2,
-	"slow":       SlowScenarioV2,
-	"timeout":    TimeoutScenarioV2,
-	"panic":      PanicScenarioV2,
-	"dynamic":    DynamicScenarioV2,
-	"nmap":       NmapScenarioV2,
-	"transport":  TransportScenarioV2,
-	"concurrent": ConcurrentScenarioV2,
+	"noop":        NoopScenarioV2,
+	"helloworld":  HelloworldScenarioV2,
+	"failing":     FailingScenarioV2,
+	"slow":        SlowScenarioV2,
+	"timeout":     TimeoutScenarioV2,
+	"panic":       PanicScenarioV2,
+	"dynamic":     DynamicScenarioV2,
+	"nmap":        NmapScenarioV2,
+	"transport":   TransportScenarioV2,
+	"concurrent":  ConcurrentScenarioV2,
+	"simple":      SimpleScenarioV2,
+	"cascade":     CascadeScenarioV2,
+	"configerror": ConfigErrorScenarioV2,
 }

@@ -72,7 +72,7 @@ var _ = Describe("Runner CustomRunner Support", func() {
 		defer cancel()
 
 		result, err := examples.Run(shortCtx, examples.RunConfig{
-			Scenario: examples.SimpleScenario,
+			Scenario: examples.InheritanceScenario,
 			Duration: 1 * time.Second,
 			Logger:   logger,
 			Store:    examples.SetupStore(logger),
