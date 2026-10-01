@@ -318,12 +318,7 @@ func TestUpsertRejectsNameReuseAcrossWorkerTypes(t *testing.T) {
 	}
 }
 
-// TestSetVariablesIsReadBackAsACopy verifies the registry stores the variable
-// bundle SetVariables records as a copy and returns a copy: neither the
-// caller that recorded the bundle nor a reader that got one back can mutate
-// what the registry holds, and a second SetVariables replaces the bundle
-// instead of merging into it.
-func TestSetVariablesIsReadBackAsACopy(t *testing.T) {
+func TestSetVariablesStoresAndReturnsCopies(t *testing.T) {
 	w := NewWriter()
 
 	if got := w.Registry().Variables(); len(got.User) > 0 || len(got.Global) > 0 {
@@ -349,6 +344,14 @@ func TestSetVariablesIsReadBackAsACopy(t *testing.T) {
 	if again := w.Registry().Variables(); again.User["IP"] != "10.0.0.1" {
 		t.Errorf("User[IP] = %v on second read, want 10.0.0.1: Variables() must return a copy", again.User["IP"])
 	}
+}
+
+func TestSetVariablesReplacesTheBundle(t *testing.T) {
+	w := NewWriter()
+	w.SetVariables(config.VariableBundle{
+		User:   map[string]any{"IP": "10.0.0.1"},
+		Global: map[string]any{"cluster_id": "c1"},
+	})
 
 	w.SetVariables(config.VariableBundle{User: map[string]any{"PORT": "502"}})
 	replaced := w.Registry().Variables()
