@@ -36,7 +36,7 @@ func main() {
 	// Command-line flags
 	var (
 		scenarioName = flag.String("scenario", "simple", "scenario name from registry")
-		duration     = flag.Duration("duration", 0, fmt.Sprintf("settle window after the scenario ends (default %s when unset); 0 means endless until Ctrl+C", defaultSettle))
+		duration     = flag.Duration("duration", 0, fmt.Sprintf("settle window after the scenario ends (default %s when unset); 0 means endless until Ctrl+C", defaultSettleWindow))
 		logLevel     = flag.String("log-level", "info", "debug, info, warn, error")
 		tickInterval = flag.Duration("tick", 100*time.Millisecond, "tick interval")
 		listFlag     = flag.Bool("list", false, "list available scenarios and exit")
@@ -139,7 +139,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	settleWindow, defaulted := defaultDuration(durationSet, *duration)
+	settleWindow, defaulted := resolveDuration(durationSet, *duration)
 
 	// runDone closes once main returns, i.e. once the run has fully torn down.
 	// The signal owner waits on it so a second SIGINT can still force-exit
@@ -172,7 +172,7 @@ func main() {
 
 	switch {
 	case defaulted:
-		durationStr = fmt.Sprintf("%s after the scenario ends", defaultSettle)
+		durationStr = fmt.Sprintf("%s after the scenario ends", defaultSettleWindow)
 	case settleWindow > 0:
 		durationStr = settleWindow.String()
 	}
@@ -258,16 +258,13 @@ func shutdownExitCode(result *examples.RunResult) int {
 	return 0
 }
 
-// defaultSettle is how long a run without --duration keeps going after the
-// scenario's Run returns.
-const defaultSettle = time.Second
+// defaultSettleWindow is the settle window of a run given no --duration: how
+// long the run keeps going after the scenario's Run returns.
+const defaultSettleWindow = time.Second
 
-// defaultDuration returns the duration a run uses. A scenario given no
-// --duration keeps going defaultSettle after its Run returns; defaulted
-// reports that case.
-func defaultDuration(durationSet bool, duration time.Duration) (effective time.Duration, defaulted bool) {
+func resolveDuration(durationSet bool, duration time.Duration) (effective time.Duration, defaulted bool) {
 	if !durationSet {
-		return defaultSettle, true
+		return defaultSettleWindow, true
 	}
 
 	return duration, false
