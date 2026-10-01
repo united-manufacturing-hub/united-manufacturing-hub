@@ -117,9 +117,7 @@ var _ = Describe("DependencyKey", func() {
 		Expect(count).To(Equal(0))
 	})
 
-	It("reports absent when the stored value is not the key's type", func() {
-		// A key cannot store a wrong type, but code that writes the map by name
-		// can, and LookupDependency must still read that as absent.
+	It("reports absent when code that writes the map by name stored a value of another type", func() {
 		m := map[string]any{"test.sampler": "not a sampler"}
 
 		got, ok := config.LookupDependency(m, samplerKey)

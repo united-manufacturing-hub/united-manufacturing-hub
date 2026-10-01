@@ -55,9 +55,7 @@ func (w *deliveryWorker) CollectObservedState(_ context.Context, _ fsmv2.Desired
 var _ = Describe("dependency delivery through register.Worker", func() {
 	const workerType = "delivery-probe"
 
-	// buildWith registers the probe worker afresh and builds one instance with
-	// the given dependencies.
-	buildWith := func(dependencies map[string]any) *deliveryWorker {
+	registerAndBuild := func(dependencies map[string]any) *deliveryWorker {
 		factory.ResetRegistry()
 		storage.ResetGlobalRegistry()
 
@@ -88,10 +86,10 @@ var _ = Describe("dependency delivery through register.Worker", func() {
 		dependencies := map[string]any{}
 		config.SetDependency(dependencies, deliveryLabelKey, "from-the-run")
 
-		Expect(buildWith(dependencies).Label).To(Equal("from-the-run"))
+		Expect(registerAndBuild(dependencies).Label).To(Equal("from-the-run"))
 	})
 
 	It("hands the constructor nothing readable when the caller supplied none", func() {
-		Expect(buildWith(nil).Label).To(BeEmpty())
+		Expect(registerAndBuild(nil).Label).To(BeEmpty())
 	})
 })
