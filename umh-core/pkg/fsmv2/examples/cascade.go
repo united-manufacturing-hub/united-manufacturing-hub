@@ -26,9 +26,7 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// CascadeScenarioV2 runs one exampleparent whose children are examplefailing
-// workers that fail in repeated cycles. The parent reports Degraded when its
-// children leave Connected for the next cycle while it is Running.
+// CascadeScenarioV2 runs one exampleparent whose examplefailing children fail their connects in repeated cycles.
 var CascadeScenarioV2 = ScenarioV2{
 	Name:        "cascade",
 	Description: "A parent goes Degraded while its failing children reconnect, and returns to Running when both are Connected",
@@ -40,9 +38,8 @@ var CascadeScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		parentRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "cascade-parent"}
 
-		// recovery_delay_ms is wall-clock time, so a child's unhealthy window
-		// does not stretch with the tick interval. The window must outlast the
-		// parent's observation interval for the parent to see it.
+		// recovery_delay_ms keeps each failed child unhealthy for longer than the
+		// parent's observation interval, so the parent sees it.
 		childConfig := "should_fail: true\n" +
 			"max_failures: 3\n" +
 			"failure_cycles: 2\n" +
