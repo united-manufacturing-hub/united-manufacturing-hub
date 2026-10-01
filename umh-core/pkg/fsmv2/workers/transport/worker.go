@@ -99,7 +99,7 @@ func NewTransportWorker(
 
 	provider, ok := config.LookupDependency(dependencies, ChannelProviderKey)
 	if !ok {
-		return nil, fmt.Errorf("transport: no channel provider under %q in the dependency map; set one with config.SetDependency(m, transport.ChannelProviderKey, p)", channelProviderKeyName)
+		return nil, fmt.Errorf("transport: no channel provider under %q in the dependency map; set one with config.SetDependency(m, transport.ChannelProviderKey, p)", ChannelProviderKey.Name())
 	}
 
 	w := &TransportWorker{}

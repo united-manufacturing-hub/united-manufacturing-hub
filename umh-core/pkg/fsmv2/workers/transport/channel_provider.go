@@ -27,10 +27,5 @@ type ChannelProvider interface {
 	GetInboundStats(workerID string) (capacity int, length int)
 }
 
-// channelProviderKeyName is ChannelProviderKey's name. It is a constant so
-// NewTransportWorker's error can print it, because DependencyKey does not
-// expose its name.
-const channelProviderKeyName = "transport.channel_provider"
-
 // ChannelProviderKey is the dependency-map key for the transport worker's ChannelProvider.
-var ChannelProviderKey = config.NewDependencyKey[ChannelProvider](channelProviderKeyName)
+var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("transport.channel_provider")
