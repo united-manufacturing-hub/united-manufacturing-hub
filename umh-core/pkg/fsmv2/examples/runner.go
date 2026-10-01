@@ -372,8 +372,6 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		return nil, scenarioFailed(cfg.ScenarioV2.Name, logged)
 	}
 
-	// Logged before the teardown goroutine starts, so the line marks the end of
-	// the scenario's Run itself: any return above logs no line.
 	cfg.Logger.Info("scenario_run_finished",
 		deps.String("scenario", cfg.ScenarioV2.Name))
 

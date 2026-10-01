@@ -205,8 +205,7 @@ func (e Env) Step(description string) {
 // An unexpected error the run logged fails the wait before the next poll.
 // Every failure names check and the last Step. A timeout or a ctx end also
 // names the last value poll saw.
-// A passed wait logs one scenario_wait_passed line naming the scenario,
-// check and the value poll saw.
+// A passed wait logs one scenario_wait_passed line.
 func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Context) (done bool, seen string, err error)) error {
 	waitCtx, cancel := context.WithTimeout(ctx, waitForTimeout)
 	defer cancel()

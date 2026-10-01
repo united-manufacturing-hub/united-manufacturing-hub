@@ -296,9 +296,7 @@ func defaultDuration(isV2, durationSet bool, duration time.Duration) (effective 
 	return duration, false
 }
 
-// durationWasSet reports whether the duration flag was given explicitly:
-// flag.Visit visits only flags that were actually set, so a duration left at
-// its default reads as unset.
+// durationWasSet tells an explicit --duration=0 apart from no --duration.
 func durationWasSet(fs *flag.FlagSet) bool {
 	set := false
 
@@ -333,16 +331,11 @@ func handleSignals(sigCh <-chan os.Signal, done <-chan struct{}, onFirstSignal f
 	}
 }
 
-// newRunLogger returns the FSMLogger a scenario run logs through. The CLI
-// keeps every line, so a reader sees every step, wait and state_transition;
-// the sampled logger dropped state_transition lines.
+// newRunLogger is unsampled, so the CLI prints every line a run logs.
 func newRunLogger(logger *zap.Logger) deps.FSMLogger {
 	return deps.NewUnsampledFSMLogger(logger.Sugar())
 }
 
-// startingScenarioFields returns the fields the "Starting scenario" log line
-// carries: the run's name, description, duration and tick interval, plus what
-// the scenario expects.
 func startingScenarioFields(name, description, duration string, tick time.Duration, s examples.ScenarioV2) []zap.Field {
 	return append([]zap.Field{
 		zap.String("name", name),
