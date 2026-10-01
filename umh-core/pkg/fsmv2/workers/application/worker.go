@@ -94,7 +94,7 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	// one publisher; same pattern as pull/push reading the transport deps). When
 	// nothing publishes it, RegistryConfigured stays false and the application
 	// renders only its declared children: dynamic spawning is off, not broken.
-	if reg := register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName); reg != nil {
+	if reg := register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName); reg != nil {
 		status.RegistryConfigured = true
 		status.DynamicChildren = reg.Specs()
 	}

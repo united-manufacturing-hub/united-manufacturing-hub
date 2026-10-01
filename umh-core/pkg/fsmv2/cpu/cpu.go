@@ -38,15 +38,14 @@ const (
 	// InstanceName names the child in Ref.
 	InstanceName = "cpu"
 
-	// FilesystemDepsKey is the register.SetDeps key under which a caller
+	// FilesystemDepsKey is the register.SetGlobalDeps key under which a caller
 	// publishes the filesystem.Service the sampler reads the cgroup files
 	// through. Publish before the instance spawns: a caller that meant to
 	// publish a fixture and forgot gets no error, and that instance silently
 	// reads the real machine instead. NewDeps does the lookup.
 	//
-	// The key is not WorkerType: the typed deps registry keys on the string
-	// alone, so two payloads cannot share one key. Same convention as
-	// configworker.ConfigManagerDepsKey.
+	// A key holds one value, so each payload gets its own key rather than
+	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
 	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
@@ -183,7 +182,7 @@ func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.D
 // capacity signal from this instance's table for its whole lifetime; a later
 // successful read does not restore it (ENG-5752).
 func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
+	fs := register.GlobalDeps[filesystem.Service](FilesystemDepsKey)
 	if fs == nil {
 		fs = filesystem.NewDefaultService()
 	}

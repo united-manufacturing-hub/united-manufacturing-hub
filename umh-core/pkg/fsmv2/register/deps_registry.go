@@ -19,41 +19,24 @@ import (
 	"sync"
 )
 
-// Package-level typed deps registry consumed by the register.Worker factory
-// closure during worker construction. Parent wiring (cmd/main.go or a parent
-// worker constructor) calls SetDeps[TDeps](workerType, deps) before
-// factory.NewWorkerByType(workerType, ...) runs; the closure then calls
-// GetDeps[TDeps](workerType) and forwards the value to the user-defined
-// constructor.
-//
-// Workers that never call SetDeps receive the Go-native zero value of TDeps,
-// preserving the legacy factory closure behaviour for workers that have no
-// parent-injected payload.
-
 var (
 	depsRegistryMu sync.RWMutex
 	depsRegistry   = map[string]any{}
 )
 
-// SetDeps publishes typed deps for workerType. Parent wiring calls this
-// before the register.Worker factory closure runs for that type. Thread-safe.
-// Overwrites any prior value for the same key.
-func SetDeps[TDeps any](workerType string, deps TDeps) {
+// SetGlobalDeps stores deps under workerType and replaces any earlier value.
+// Every worker in the process can read it until ClearGlobalDeps or ResetRegistry
+// removes it. Safe for concurrent use.
+func SetGlobalDeps[TDeps any](workerType string, deps TDeps) {
 	depsRegistryMu.Lock()
 	defer depsRegistryMu.Unlock()
 
 	depsRegistry[workerType] = deps
 }
 
-// GetDeps retrieves typed deps for workerType. Returns the Go-native zero
-// value of TDeps when no SetDeps call has happened for the key - intentionally
-// `var zero TDeps` rather than reflect.Zero so pointer-TDeps callers see a
-// predictable Go-native nil (comparable via `== nil`).
-//
-// Panics when SetDeps published a value under workerType whose dynamic type
-// does not match TDeps. The panic names the registry key, the stored type,
-// and the requested type so the call-site is obvious from the stack trace.
-func GetDeps[TDeps any](workerType string) TDeps {
+// GlobalDeps returns the value stored under workerType, or the zero value of
+// TDeps when nothing is stored. It panics when the stored value's type is not TDeps.
+func GlobalDeps[TDeps any](workerType string) TDeps {
 	depsRegistryMu.RLock()
 	defer depsRegistryMu.RUnlock()
 
@@ -61,7 +44,7 @@ func GetDeps[TDeps any](workerType string) TDeps {
 		typed, ok := d.(TDeps)
 		if !ok {
 			var want TDeps
-			panic(fmt.Sprintf("register.GetDeps(%q): stored deps have type %T, requested %T - parent wiring published an incompatible value", workerType, d, want))
+			panic(fmt.Sprintf("register.GlobalDeps(%q): stored deps have type %T, requested %T - parent wiring published an incompatible value", workerType, d, want))
 		}
 
 		return typed
@@ -72,8 +55,8 @@ func GetDeps[TDeps any](workerType string) TDeps {
 	return zero
 }
 
-// ClearDeps removes a single workerType from the registry. Test cleanup hook.
-func ClearDeps(workerType string) {
+// ClearGlobalDeps removes the value stored under workerType.
+func ClearGlobalDeps(workerType string) {
 	depsRegistryMu.Lock()
 	defer depsRegistryMu.Unlock()
 
