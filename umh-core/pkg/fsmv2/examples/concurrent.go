@@ -14,65 +14,61 @@
 
 package examples
 
-// ConcurrentScenario tests multiple independent workers running concurrently.
-//
-// This scenario verifies that:
-// - Multiple workers can run simultaneously without interference
-// - Each worker independently transitions through its state machine
-// - No race conditions occur between workers
-// - All workers reach their target states
-//
-// The scenario creates 5 independent helloworld workers that all start
-// at the same time and run their state machines concurrently.
-var ConcurrentScenario = Scenario{
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
+)
+
+const concurrentWorkerCount = 5
+
+// ConcurrentScenarioV2 creates several helloworld workers without waiting between them; each must reach Running.
+var ConcurrentScenarioV2 = ScenarioV2{
 	Name:        "concurrent",
-	Description: "Tests multiple independent workers running concurrently without interference",
-	YAMLConfig: `
-children:
-  - name: "concurrent-worker-1"
-    workerType: "helloworld"
-    location:
-      - enterprise: "test"
-      - site: "concurrent"
-    userSpec:
-      config: |
-        state: running
-        message: "Hello from worker 1"
-  - name: "concurrent-worker-2"
-    workerType: "helloworld"
-    location:
-      - enterprise: "test"
-      - site: "concurrent"
-    userSpec:
-      config: |
-        state: running
-        message: "Hello from worker 2"
-  - name: "concurrent-worker-3"
-    workerType: "helloworld"
-    location:
-      - enterprise: "test"
-      - site: "concurrent"
-    userSpec:
-      config: |
-        state: running
-        message: "Hello from worker 3"
-  - name: "concurrent-worker-4"
-    workerType: "helloworld"
-    location:
-      - enterprise: "test"
-      - site: "concurrent"
-    userSpec:
-      config: |
-        state: running
-        message: "Hello from worker 4"
-  - name: "concurrent-worker-5"
-    workerType: "helloworld"
-    location:
-      - enterprise: "test"
-      - site: "concurrent"
-    userSpec:
-      config: |
-        state: running
-        message: "Hello from worker 5"
-`,
+	Description: "Helloworld workers created without waiting between them; each one reaches Running",
+
+	Run: func(ctx context.Context, env Env) error {
+		refs := make([]dynamicchildren.Ref, 0, concurrentWorkerCount)
+
+		for i := 1; i <= concurrentWorkerCount; i++ {
+			refs = append(refs, dynamicchildren.Ref{
+				WorkerType: "helloworld",
+				Name:       fmt.Sprintf("concurrent-worker-%d", i),
+			})
+		}
+
+		env.Step("create every helloworld worker without waiting between them")
+
+		for _, ref := range refs {
+			if err := env.Client.Upsert(ref, map[string]any{
+				"state": "running",
+			}); err != nil {
+				return fmt.Errorf("upsert %s: %w", ref.Name, err)
+			}
+		}
+
+		for _, ref := range refs {
+			if err := env.WaitFor(ctx, "the worker "+ref.Name+" reaches Running",
+				func(ctx context.Context) (bool, string, error) {
+					obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
+					if err != nil {
+						if errors.Is(err, fsmv2client.ErrNotObserved) {
+							return false, "the worker has not published an observation yet", nil
+						}
+
+						return false, "", err
+					}
+
+					return obs.State == "Running", "state=" + obs.State, nil
+				}); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	},
 }
