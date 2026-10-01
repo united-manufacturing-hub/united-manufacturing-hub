@@ -118,8 +118,6 @@ func (w *HelloworldWorker) Actions() map[string]fsmv2.Action[any] {
 	}
 }
 
-// readMoodFile reads the mood from a file path through w.moodFS. Returns empty
-// string on error or empty path.
 func (w *HelloworldWorker) readMoodFile(ctx context.Context, path string) string {
 	if path == "" {
 		return ""

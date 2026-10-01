@@ -44,10 +44,9 @@ var validWorkerStates = map[string]map[string]bool{
 	},
 }
 
-// checkStoredWorkerStates returns an error naming the first stored worker whose
-// type is in validWorkerStates and whose state is not listed for that type.
-// Call it after the supervisor has stopped, so no supervisor write races the
-// read.
+// checkStoredWorkerStates returns an error for the first stored worker whose
+// type is in validWorkerStates and whose state is not. Call it only after the
+// supervisor stopped, so no supervisor write races the read.
 func checkStoredWorkerStates(ctx context.Context, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
 	dump, err := DumpScenario(ctx, store, 0)
 	if err != nil {

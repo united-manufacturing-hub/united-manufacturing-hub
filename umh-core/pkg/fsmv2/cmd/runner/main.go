@@ -234,8 +234,6 @@ func main() {
 	}
 }
 
-// fatalMessage returns the log message for an error from examples.Run: a
-// scenario that started and then failed, or one that could not start.
 func fatalMessage(runErr error) string {
 	if errors.Is(runErr, examples.ErrScenarioFailed) {
 		return "Scenario failed"
@@ -245,8 +243,6 @@ func fatalMessage(runErr error) string {
 }
 
 // shutdownExitCode returns the process exit code for a completed scenario run.
-// A run whose RunResult.Err is set, or whose supervisor did not drain cleanly
-// within its budget, exits non-zero so an outer harness/CI can detect it.
 func shutdownExitCode(result *examples.RunResult) int {
 	if result == nil {
 		return 0

@@ -72,9 +72,8 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 			Store:        store,
 		})
 
-		// Run checks each leg through env.WaitFor, so this battery checks the
-		// outcome only. The store-side reap proof (the deleted ref returning ErrNotObserved
-		// and the worker gone from the store) is deferred to ENG-5107.
+		// Run checks each step itself through env.WaitFor. The check that a deleted
+		// child is gone from the store waits on ENG-5107.
 		Expect(err).NotTo(HaveOccurred(),
 			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, Delete the child, and still read the config worker")
 		Eventually(result.Done, "55s").Should(BeClosed(),

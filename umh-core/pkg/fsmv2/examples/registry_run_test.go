@@ -28,8 +28,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
-// One spec per RegistryV2 entry, so a scenario that breaks only under the
-// runner fails by name.
 var _ = Describe("RegistryV2 scenarios", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)

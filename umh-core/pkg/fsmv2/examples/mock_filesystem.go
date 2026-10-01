@@ -23,9 +23,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// mockFilesystem is an in-memory filesystem.Service for scenarios that drive
-// a helloworld child's mood file. It implements only ReadFile, the one method
-// helloworld calls; any other method of the interface panics.
+// mockFilesystem is an in-memory filesystem.Service. Only ReadFile is
+// implemented; any other method panics on the nil embedded Service.
 type mockFilesystem struct {
 	filesystem.Service
 
@@ -33,7 +32,6 @@ type mockFilesystem struct {
 	files map[string][]byte
 }
 
-// SetFile stores contents under path, replacing any previous version.
 func (m *mockFilesystem) SetFile(path, contents string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -41,7 +39,6 @@ func (m *mockFilesystem) SetFile(path, contents string) {
 	m.files[path] = []byte(contents)
 }
 
-// RemoveFile deletes path from the mock, so a later read reports it missing.
 func (m *mockFilesystem) RemoveFile(path string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -49,8 +46,6 @@ func (m *mockFilesystem) RemoveFile(path string) {
 	delete(m.files, path)
 }
 
-// ReadFile returns a copy of the bytes stored under path, or os.ErrNotExist
-// wrapped in a *fs.PathError when the mock holds no such path.
 func (m *mockFilesystem) ReadFile(_ context.Context, path string) ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

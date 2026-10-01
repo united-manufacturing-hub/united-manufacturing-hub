@@ -59,8 +59,6 @@ func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, s
 		endSyncID int64
 	)
 
-	// GetDeltas returns at most one page of deltas and sets HasMore when more
-	// remain, so the dump reads every page before it extracts workers.
 	for syncID := startSyncID; ; {
 		resp, err := store.GetDeltas(ctx, storage.Subscription{LastSyncID: syncID})
 		if err != nil {
@@ -70,7 +68,6 @@ func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, s
 		endSyncID = resp.LatestSyncID
 		allDeltas = append(allDeltas, resp.Deltas...)
 
-		// Handle bootstrap case: when client is too far behind, use Bootstrap.Workers
 		if resp.RequiresBootstrap && resp.Bootstrap != nil {
 			workers = convertStorageWorkers(resp.Bootstrap.Workers)
 
