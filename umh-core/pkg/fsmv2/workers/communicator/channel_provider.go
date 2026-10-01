@@ -15,8 +15,6 @@
 package communicator
 
 import (
-	"sync"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
@@ -32,35 +30,4 @@ type ChannelProvider interface {
 // ChannelProviderKey names the ChannelProvider a CommunicatorWorker acquires its
 // inbound and outbound channels through. The worker looks the key up in its
 // dependency map, the map[string]any its register.Worker constructor receives.
-// When the map holds nothing under the key, the worker uses the provider set
-// with SetChannelProvider, and construction panics if that is unset too.
 var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("communicator.channel_provider")
-
-var (
-	globalChannelProvider ChannelProvider
-	channelProviderMu     sync.RWMutex
-)
-
-// SetChannelProvider sets the global channel provider.
-func SetChannelProvider(p ChannelProvider) {
-	channelProviderMu.Lock()
-	defer channelProviderMu.Unlock()
-
-	globalChannelProvider = p
-}
-
-// GetChannelProvider returns the current channel provider, or nil if not set.
-func GetChannelProvider() ChannelProvider {
-	channelProviderMu.RLock()
-	defer channelProviderMu.RUnlock()
-
-	return globalChannelProvider
-}
-
-// ClearChannelProvider removes the channel provider (for test cleanup).
-func ClearChannelProvider() {
-	channelProviderMu.Lock()
-	defer channelProviderMu.Unlock()
-
-	globalChannelProvider = nil
-}

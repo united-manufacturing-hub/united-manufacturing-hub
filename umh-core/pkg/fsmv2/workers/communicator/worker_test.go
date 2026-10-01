@@ -83,6 +83,7 @@ var _ = Describe("CommunicatorWorker", func() {
 		ctx           context.Context
 		mockTransport *MockTransport
 		logger        depspkg.FSMLogger
+		providerDeps  map[string]any
 	)
 
 	BeforeEach(func() {
@@ -90,7 +91,8 @@ var _ = Describe("CommunicatorWorker", func() {
 		logger = depspkg.NewNopFSMLogger()
 		mockTransport = NewMockTransport()
 
-		communicator.SetChannelProvider(NewMockChannelProvider())
+		providerDeps = map[string]any{}
+		fsmv2types.SetDependency(providerDeps, communicator.ChannelProviderKey, communicator.ChannelProvider(NewMockChannelProvider()))
 
 		var err error
 		worker, err = communicator.NewCommunicatorWorker(
@@ -98,13 +100,9 @@ var _ = Describe("CommunicatorWorker", func() {
 			mockTransport,
 			logger,
 			nil,
-			nil,
+			providerDeps,
 		)
 		Expect(err).ToNot(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		communicator.ClearChannelProvider()
 	})
 
 	Describe("Worker interface implementation", func() {
@@ -321,14 +319,8 @@ func (p *recordingChannelProvider) GetInboundStats(workerID string) (capacity in
 }
 
 var _ = Describe("CommunicatorWorker channel provider dependency", func() {
-	It("uses the provider from the dependency map over the global one", func() {
-		globalProvider := newRecordingChannelProvider(100, 0)
+	It("uses the provider from the dependency map", func() {
 		mapProvider := newRecordingChannelProvider(7, 3)
-
-		previous := communicator.GetChannelProvider()
-
-		communicator.SetChannelProvider(globalProvider)
-		DeferCleanup(func() { communicator.SetChannelProvider(previous) })
 
 		dependencyMap := map[string]any{}
 
@@ -360,62 +352,49 @@ var _ = Describe("CommunicatorWorker channel provider dependency", func() {
 			"GetChannels must run at construction against the map's provider")
 		Expect(mapProvider.getInboundStatsIDs).To(ContainElement("map-provider-worker"),
 			"GetInboundStats must read through the map's provider")
-		Expect(globalProvider.getChannelsIDs).To(BeEmpty(),
-			"GetChannels at construction must not touch the global provider")
-		Expect(globalProvider.getInboundStatsIDs).To(BeEmpty(),
-			"GetInboundStats must not touch the global provider")
-
-		Expect(communicator.GetChannelProvider()).To(BeIdenticalTo(globalProvider))
 	})
 
-	It("falls back to the global provider when the dependency map holds none", func() {
-		globalProvider := newRecordingChannelProvider(50, 4)
+	It("returns an error naming the key when the dependency map holds no channel provider", func() {
+		identity := depspkg.Identity{ID: "no-provider-worker", WorkerType: "communicator"}
 
-		previous := communicator.GetChannelProvider()
+		worker, err := communicator.NewCommunicatorWorker(identity, nil, depspkg.NewNopFSMLogger(), nil, map[string]any{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("communicator.channel_provider"))
+		Expect(worker).To(BeNil())
+	})
 
-		communicator.SetChannelProvider(globalProvider)
-		DeferCleanup(func() { communicator.SetChannelProvider(previous) })
+	It("returns the same error when the key holds a value that is not a ChannelProvider", func() {
+		identity := depspkg.Identity{ID: "no-provider-worker", WorkerType: "communicator"}
+		wronglyTypedMap := map[string]any{"communicator.channel_provider": "not a provider"}
 
-		identity := depspkg.Identity{ID: "global-provider-worker", WorkerType: "communicator"}
-		built, err := factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, nil)
+		worker, err := communicator.NewCommunicatorWorker(identity, nil, depspkg.NewNopFSMLogger(), nil, wronglyTypedMap)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("communicator.channel_provider"))
+		Expect(worker).To(BeNil())
+	})
+
+	It("returns the map's provider through its dependencies", func() {
+		provider := newRecordingChannelProvider(7, 3)
+
+		dependencyMap := map[string]any{}
+		var providerAsChannelProvider communicator.ChannelProvider = provider
+		fsmv2types.SetDependency(dependencyMap, communicator.ChannelProviderKey, providerAsChannelProvider)
+
+		worker, err := communicator.NewCommunicatorWorker(
+			depspkg.Identity{ID: "provider-return-worker", WorkerType: "communicator"},
+			nil,
+			depspkg.NewNopFSMLogger(),
+			nil,
+			dependencyMap,
+		)
 		Expect(err).NotTo(HaveOccurred())
 
-		commWorker, ok := built.(*communicator.CommunicatorWorker)
-		Expect(ok).To(BeTrue(), "expected *communicator.CommunicatorWorker, got %T", built)
-
-		workerDeps := commWorker.GetDependencies()
-
-		Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(globalProvider.inbound),
-			"GetChannels at construction must wire the worker to the global provider's inbound channel")
-		Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(globalProvider.outbound),
-			"GetChannels at construction must wire the worker to the global provider's outbound channel")
+		workerDeps := worker.GetDependencies()
+		Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(provider.inbound))
+		Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(provider.outbound))
 
 		capacity, length := workerDeps.GetInboundChanStats()
-		Expect(capacity).To(Equal(50))
-		Expect(length).To(Equal(4))
-
-		Expect(globalProvider.getChannelsIDs).To(ContainElement("global-provider-worker"),
-			"GetChannels must run at construction against the global provider")
-		Expect(globalProvider.getInboundStatsIDs).To(ContainElement("global-provider-worker"),
-			"GetInboundStats must read through the global provider")
-	})
-
-	It("panics when neither the dependency map nor the global provider holds a provider", func() {
-		previous := communicator.GetChannelProvider()
-
-		communicator.ClearChannelProvider()
-		DeferCleanup(func() { communicator.SetChannelProvider(previous) })
-
-		identity := depspkg.Identity{ID: "no-provider-worker", WorkerType: "communicator"}
-		Expect(func() {
-			_, _ = factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, nil)
-		}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
-
-		// A map value of another type reads as absent to LookupDependency, so
-		// it takes the same global-fallback route to the same panic.
-		wronglyTypedMap := map[string]any{"communicator.channel_provider": "not a provider"}
-		Expect(func() {
-			_, _ = factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, wronglyTypedMap)
-		}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
+		Expect(capacity).To(Equal(7))
+		Expect(length).To(Equal(3))
 	})
 })
