@@ -59,9 +59,8 @@ func (k DependencyKey[T]) Name() string {
 	return k.name
 }
 
-// SetDependency stores value under key. A nil value panics: a nil pointer or map
-// would read as present through LookupDependency, and the worker would call it
-// instead of falling back to its real implementation.
+// SetDependency stores value under key. A nil value panics, so a wiring mistake
+// fails where the map is filled instead of silently reading as absent later.
 func SetDependency[T any](m map[string]any, key DependencyKey[T], value T) {
 	if isNil(value) {
 		panic(fmt.Sprintf("config.SetDependency(%q): value is nil", key.name))
@@ -70,8 +69,7 @@ func SetDependency[T any](m map[string]any, key DependencyKey[T], value T) {
 	m[key.name] = value
 }
 
-// isNil reports whether value is nil. Unlike value == nil, it also catches a nil
-// pointer, map or other nilable value held in an interface.
+// isNil, unlike value == nil, also catches a nil pointer, map or other nilable value in an interface.
 func isNil(value any) bool {
 	v := reflect.ValueOf(value)
 	if !v.IsValid() {
@@ -91,7 +89,6 @@ func isNil(value any) bool {
 // holds a nil value, so a worker whose dependency was wired up wrongly stays on
 // its real implementation.
 func LookupDependency[T any](m map[string]any, key DependencyKey[T]) (T, bool) {
-	// A missing name reads as a nil any, which fails this assertion too.
 	value, ok := m[key.name].(T)
 
 	return value, ok && !isNil(value)

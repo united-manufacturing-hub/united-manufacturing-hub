@@ -29,8 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// These specs check which map the supervisor passes to factory.NewWorkerByType.
-
 var (
 	deliveryParentKey  = config.NewDependencyKey[string]("supervisor.test.parent")
 	deliveryChildKey   = config.NewDependencyKey[string]("supervisor.test.child")
@@ -139,8 +137,7 @@ var _ = Describe("dependency delivery from the supervisor", func() {
 			Dependencies:            supervisorDeps,
 		})
 
-		// A worker that is pending restart and signals removal is rebuilt
-		// through the factory rather than removed.
+		// processSignal rebuilds a worker that signals removal while pending restart.
 		stopped := &mockState{signal: fsmv2.SignalNeedsRemoval}
 		stopped.nextState = stopped
 

@@ -21,8 +21,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// sampler is an interface a worker calls, with a real implementation in
-// production and a fixed one under test.
 type sampler interface {
 	Sample() int
 }
