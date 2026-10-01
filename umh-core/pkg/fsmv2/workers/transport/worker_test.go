@@ -402,8 +402,6 @@ authToken: "test-token"`,
 	})
 })
 
-// recordingChannelProvider is a transport.ChannelProvider that records the
-// worker IDs it is called with and the channels it returned.
 type recordingChannelProvider struct {
 	getChannelsIDs     []string
 	getInboundStatsIDs []string
