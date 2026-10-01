@@ -90,7 +90,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	collector := s.newCollector(worker, identity, workerLogger, &workerCtx)
 
-	s.newWorkerContext(worker, identity, workerLogger, collector, startupCount, &workerCtx)
+	workerCtx = s.newWorkerContext(worker, identity, workerLogger, collector, startupCount)
 
 	s.registerWorker(workerCtx, identity, workerLogger)
 
@@ -460,29 +460,11 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 }
 
 // newWorkerContext builds the executor, the action history and the worker
-// context that ties them and the collector together, and assigns it through
-// workerCtxPtr so the collector's closures see it.
-func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, collector *collection.Collector[TObserved], startupCount int64, workerCtxPtr **WorkerContext[TObserved, TDesired]) {
+// context that ties them and the collector together.
+func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, collector *collection.Collector[TObserved], startupCount int64) *WorkerContext[TObserved, TDesired] {
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
 	actionHistoryBuffer := deps.NewInMemoryActionHistoryRecorder()
-
-	executor.SetOnActionComplete(func(result deps.ActionResult) {
-		actionHistoryBuffer.Record(result)
-
-		// Trigger immediate observation after action completes.
-		// This eliminates the delay between action and FSM progression.
-		// Capture collector under lock to prevent race with RemoveWorker().
-		if workerCtx := *workerCtxPtr; workerCtx != nil {
-			workerCtx.mu.RLock()
-			collector := workerCtx.collector
-			workerCtx.mu.RUnlock()
-
-			if collector != nil && collector.IsRunning() {
-				collector.TriggerNow()
-			}
-		}
-	})
 
 	initialState := worker.GetInitialState()
 
@@ -494,7 +476,7 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 		initialPhase = initialState.LifecyclePhase()
 	}
 
-	*workerCtxPtr = &WorkerContext[TObserved, TDesired]{
+	workerCtx := &WorkerContext[TObserved, TDesired]{
 		mu:                 s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
 		identity:           identity,
 		worker:             worker,
@@ -511,6 +493,23 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 		collectorRestarts:  0,
 		startupCount:       startupCount,
 	}
+
+	executor.SetOnActionComplete(func(result deps.ActionResult) {
+		actionHistoryBuffer.Record(result)
+
+		// Trigger immediate observation after action completes.
+		// This eliminates the delay between action and FSM progression.
+		// Capture collector under lock to prevent race with RemoveWorker().
+		workerCtx.mu.RLock()
+		collector := workerCtx.collector
+		workerCtx.mu.RUnlock()
+
+		if collector != nil && collector.IsRunning() {
+			collector.TriggerNow()
+		}
+	})
+
+	return workerCtx
 }
 
 // registerWorker puts a built worker context into the supervisor's registry.
