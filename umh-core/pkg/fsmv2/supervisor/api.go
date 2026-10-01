@@ -66,35 +66,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Derive desired state first so we can pass it to CollectObservedState.
-	// Workers are guaranteed a non-nil desired state parameter.
-	// Use the current userSpec if non-empty so that the initial COS call receives
-	// the correct configuration (e.g., DelaySeconds, connection parameters).
-	// reconcileChildren sets updateUserSpec before AddWorker, so s.userSpec is
-	// already populated for child workers. Workers added without a userSpec
-	// (empty Config) receive nil, preserving the original behaviour.
-	var ddsSpec interface{}
-	if s.userSpec.Config != "" {
-		ddsSpec = s.userSpec
-	}
-
-	initialDesired, err := worker.DeriveDesiredState(ddsSpec)
-	if err != nil && ddsSpec != nil && errors.Is(err, config.ErrVariablesNotPropagated) {
-		// Template rendering failed because parent variables (IP/PORT, auth token, …)
-		// haven't propagated yet. Fall back to nil so the worker gets a valid default
-		// desired state; the tick loop re-derives with the full spec on the next
-		// reconciliation cycle. Hard errors (parse failures, type mismatches, YAML
-		// validation issues) are NOT wrapped with ErrVariablesNotPropagated and bubble
-		// up below so they don't get silently swallowed at startup.
-		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_derive_desired_fallback_to_nil",
-			deps.Err(err))
-		initialDesired, err = worker.DeriveDesiredState(nil)
-	}
-
+	initialDesired, err := s.deriveInitialDesired(worker, identity)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
-
-		return fmt.Errorf("failed to derive initial desired state: %w", err)
+		return err
 	}
 
 	observed, err := worker.CollectObservedState(ctx, initialDesired)
@@ -469,6 +443,42 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	s.logger.Info("worker_added")
 
 	return nil
+}
+
+// deriveInitialDesired derives the desired state a worker is added with.
+// Derive desired state first so we can pass it to CollectObservedState.
+// Workers are guaranteed a non-nil desired state parameter.
+// Use the current userSpec if non-empty so that the initial COS call receives
+// the correct configuration (e.g., DelaySeconds, connection parameters).
+// reconcileChildren sets updateUserSpec before AddWorker, so s.userSpec is
+// already populated for child workers. Workers added without a userSpec
+// (empty Config) receive nil, preserving the original behaviour.
+func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Worker, identity deps.Identity) (fsmv2.DesiredState, error) {
+	var ddsSpec interface{}
+	if s.userSpec.Config != "" {
+		ddsSpec = s.userSpec
+	}
+
+	initialDesired, err := worker.DeriveDesiredState(ddsSpec)
+	if err != nil && ddsSpec != nil && errors.Is(err, config.ErrVariablesNotPropagated) {
+		// Template rendering failed because parent variables (IP/PORT, auth token, …)
+		// haven't propagated yet. Fall back to nil so the worker gets a valid default
+		// desired state; the tick loop re-derives with the full spec on the next
+		// reconciliation cycle. Hard errors (parse failures, type mismatches, YAML
+		// validation issues) are NOT wrapped with ErrVariablesNotPropagated and bubble
+		// up below so they don't get silently swallowed at startup.
+		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_derive_desired_fallback_to_nil",
+			deps.Err(err))
+		initialDesired, err = worker.DeriveDesiredState(nil)
+	}
+
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
+
+		return nil, fmt.Errorf("failed to derive initial desired state: %w", err)
+	}
+
+	return initialDesired, nil
 }
 
 // RemoveWorker removes a worker from the registry for a restart, which adds
