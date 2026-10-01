@@ -15,24 +15,24 @@
 package examples_test
 
 import (
+	"maps"
+	"slices"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
-// v1ScenarioNames is the frozen list of the v1 registry's names. Names leave
-// it as their scenarios move to v2 (ENG-5114), and none are added.
-var v1ScenarioNames = []string{
+// Remove a name here when its scenario moves to RegistryV2 (ENG-5114).
+var frozenV1ScenarioNames = []string{
 	"simple", "failing", "panic", "slow", "cascade", "timeout",
 	"configerror", "inheritance", "communicator", "concurrent", "persistence",
 }
 
 var _ = Describe("the v1 scenario registry", func() {
-	It("does not grow the v1 scenario registry", func() {
-		for name := range examples.Registry {
-			Expect(v1ScenarioNames).To(ContainElement(name),
-				"the v1 registry gained %q: write new scenarios as a ScenarioV2 in RegistryV2; see the \"Writing a scenario\" section of pkg/fsmv2/CLAUDE.md", name)
-		}
+	It("holds exactly the frozen v1 names", func() {
+		Expect(slices.Collect(maps.Keys(examples.Registry))).To(ConsistOf(frozenV1ScenarioNames),
+			"the v1 registry changed: write new scenarios as a ScenarioV2 in RegistryV2 (see the \"Writing a scenario\" section of pkg/fsmv2/CLAUDE.md), and remove a name here when its scenario moves to v2")
 	})
 })
