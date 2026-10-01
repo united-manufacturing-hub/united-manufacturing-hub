@@ -88,169 +88,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	// Declared early so closures can capture it by reference.
 	var workerCtx *WorkerContext[TObserved, TDesired]
 
-	// A worker type may register a custom collection cadence (simple.MonitorSpec.Interval);
-	// fall back to the default when it did not.
-	observationInterval := DefaultObservationInterval
-	if iv, ok := fsmv2.ObservationIntervalFor(s.workerType); ok {
-		observationInterval = iv
-	}
-
-	collector := collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
-		Worker:              worker,
-		Identity:            identity,
-		Store:               s.store,
-		Logger:              workerLogger,
-		ObservationInterval: observationInterval,
-		ObservationTimeout:  s.collectorHealth.observationTimeout,
-		StateProvider: func() string {
-			if workerCtx == nil {
-				return "unknown"
-			}
-
-			workerCtx.mu.RLock()
-			defer workerCtx.mu.RUnlock()
-
-			if workerCtx.currentState == nil {
-				return "unknown"
-			}
-
-			return workerCtx.currentState.String()
-		},
-		ShutdownRequestedProvider: func() bool {
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			defer cancel()
-
-			var desired TDesired
-			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "shutdown_requested_load_failed",
-					deps.Err(err))
-
-				return true
-			}
-
-			return desired.IsShutdownRequested()
-		},
-		// A child is healthy ONLY if in PhaseRunningHealthy (fully stable).
-		// PhaseRunningDegraded is operational but NOT healthy.
-		// Uses lifecycle phase enum for type-safe health checks.
-		ChildrenCountsProvider: func() (healthy int, unhealthy int) {
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-
-			for _, child := range s.children {
-				phase := child.GetLifecyclePhase()
-				if phase.IsHealthy() {
-					healthy++
-				} else if !phase.IsStopped() {
-					// Everything except healthy and stopped is unhealthy
-					// This includes: PhaseUnknown, PhaseStarting, PhaseRunningDegraded, PhaseStopping
-					unhealthy++
-				}
-				// Stopped states are neither healthy nor unhealthy
-			}
-
-			return healthy, unhealthy
-		},
-		ChildrenViewProvider: func() config.ChildrenView {
-			return config.NewChildrenView(s.childInfoSlice())
-		},
-		// Called BEFORE CollectObservedState to compute metrics.
-		FrameworkMetricsProvider: func() *deps.FrameworkMetrics {
-			if workerCtx == nil {
-				return nil
-			}
-
-			workerCtx.mu.RLock()
-			defer workerCtx.mu.RUnlock()
-
-			// Copy stateTransitions to avoid race condition with reconciliation goroutine.
-			// Without this copy, the map reference escapes the lock and can be read
-			// while reconciliation writes to it.
-			transitionsCopy := make(map[string]int64, len(workerCtx.stateTransitions))
-			for state, count := range workerCtx.stateTransitions {
-				transitionsCopy[state] = count
-			}
-
-			// Convert stateDurations (map[string]time.Duration) to milliseconds
-			cumulativeTimeMs := make(map[string]int64, len(workerCtx.stateDurations))
-			for state, duration := range workerCtx.stateDurations {
-				cumulativeTimeMs[state] = duration.Milliseconds()
-			}
-
-			return &deps.FrameworkMetrics{
-				TimeInCurrentStateMs:    time.Since(workerCtx.stateEnteredAt).Milliseconds(),
-				StateEnteredAtUnix:      workerCtx.stateEnteredAt.Unix(),
-				StateTransitionsTotal:   workerCtx.totalTransitions,
-				TransitionsByState:      transitionsCopy,
-				CumulativeTimeByStateMs: cumulativeTimeMs,
-				CollectorRestarts:       workerCtx.collectorRestarts,
-				StartupCount:            workerCtx.startupCount,
-				StateReason:             workerCtx.currentStateReason,
-			}
-		},
-		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
-			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
-			// This write feeds a worker that reads deps.GetFrameworkState() during
-			// CollectObservedState, so it reaches only a bound deps that implements
-			// SetFrameworkState (a deps embedding *deps.BaseDependencies). It is
-			// separate from the Observation injection, which the collector performs
-			// from its own local in wrapNewObservation regardless of the deps shape —
-			// a struct{}-deps worker (nmap) still carries framework metrics on its
-			// Observation. Application and configworker bind no deps and so simply
-			// get no pre-COS write; returning nil or struct{}{} from
-			// GetDependenciesAny is equivalent and neither is overridden.
-			type depsGetter interface {
-				GetDependenciesAny() any
-			}
-			if dg, ok := worker.(depsGetter); ok {
-				workerDeps := dg.GetDependenciesAny()
-				if setter, ok := workerDeps.(interface{ SetFrameworkState(*deps.FrameworkMetrics) }); ok {
-					setter.SetFrameworkState(fm)
-				}
-			}
-		},
-		// Called BEFORE CollectObservedState to drain action history buffer.
-		ActionHistoryProvider: func() []deps.ActionResult {
-			if workerCtx == nil || workerCtx.actionHistory == nil {
-				return nil
-			}
-
-			return workerCtx.actionHistory.Drain()
-		},
-		ActionHistorySetter: func(history []deps.ActionResult) {
-			type depsGetter interface {
-				GetDependenciesAny() any
-			}
-			if dg, ok := worker.(depsGetter); ok {
-				workerDeps := dg.GetDependenciesAny()
-				if setter, ok := workerDeps.(interface{ SetActionHistory([]deps.ActionResult) }); ok {
-					setter.SetActionHistory(history)
-				}
-			}
-		},
-		DesiredStateProvider: func() (fsmv2.DesiredState, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			defer cancel()
-
-			var desired TDesired
-			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
-				// ErrNotFound is expected on first boot before the initial desired state
-				// has been written to CSE storage. Return ErrNoDesiredState to signal
-				// the collector to skip collection without flooding Sentry with expected
-				// startup noise (persistence.ErrNotFound is the store-level sentinel).
-				if errors.Is(err, persistence.ErrNotFound) {
-					return nil, fsmv2.ErrNoDesiredState
-				}
-
-				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
-					deps.Err(err))
-
-				return nil, err
-			}
-
-			return desired, nil
-		},
-	})
+	collector := s.newCollector(worker, identity, workerLogger, &workerCtx)
 
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
 
@@ -501,6 +339,181 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Conte
 	}
 
 	return startupCount, nil
+}
+
+// newCollector builds the collector for a newly added worker. The closures
+// read workerCtx through workerCtxPtr, which AddWorker assigns once the
+// WorkerContext exists; until then they see nil.
+func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, workerCtxPtr **WorkerContext[TObserved, TDesired]) *collection.Collector[TObserved] {
+	// A worker type may register a custom collection cadence (simple.MonitorSpec.Interval);
+	// fall back to the default when it did not.
+	observationInterval := DefaultObservationInterval
+	if iv, ok := fsmv2.ObservationIntervalFor(s.workerType); ok {
+		observationInterval = iv
+	}
+
+	return collection.NewCollector[TObserved](collection.CollectorConfig[TObserved]{
+		Worker:              worker,
+		Identity:            identity,
+		Store:               s.store,
+		Logger:              workerLogger,
+		ObservationInterval: observationInterval,
+		ObservationTimeout:  s.collectorHealth.observationTimeout,
+		StateProvider: func() string {
+			workerCtx := *workerCtxPtr
+
+			if workerCtx == nil {
+				return "unknown"
+			}
+
+			workerCtx.mu.RLock()
+			defer workerCtx.mu.RUnlock()
+
+			if workerCtx.currentState == nil {
+				return "unknown"
+			}
+
+			return workerCtx.currentState.String()
+		},
+		ShutdownRequestedProvider: func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+
+			var desired TDesired
+			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
+				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "shutdown_requested_load_failed",
+					deps.Err(err))
+
+				return true
+			}
+
+			return desired.IsShutdownRequested()
+		},
+		// A child is healthy ONLY if in PhaseRunningHealthy (fully stable).
+		// PhaseRunningDegraded is operational but NOT healthy.
+		// Uses lifecycle phase enum for type-safe health checks.
+		ChildrenCountsProvider: func() (healthy int, unhealthy int) {
+			s.mu.RLock()
+			defer s.mu.RUnlock()
+
+			for _, child := range s.children {
+				phase := child.GetLifecyclePhase()
+				if phase.IsHealthy() {
+					healthy++
+				} else if !phase.IsStopped() {
+					// Everything except healthy and stopped is unhealthy
+					// This includes: PhaseUnknown, PhaseStarting, PhaseRunningDegraded, PhaseStopping
+					unhealthy++
+				}
+				// Stopped states are neither healthy nor unhealthy
+			}
+
+			return healthy, unhealthy
+		},
+		ChildrenViewProvider: func() config.ChildrenView {
+			return config.NewChildrenView(s.childInfoSlice())
+		},
+		// Called BEFORE CollectObservedState to compute metrics.
+		FrameworkMetricsProvider: func() *deps.FrameworkMetrics {
+			workerCtx := *workerCtxPtr
+
+			if workerCtx == nil {
+				return nil
+			}
+
+			workerCtx.mu.RLock()
+			defer workerCtx.mu.RUnlock()
+
+			// Copy stateTransitions to avoid race condition with reconciliation goroutine.
+			// Without this copy, the map reference escapes the lock and can be read
+			// while reconciliation writes to it.
+			transitionsCopy := make(map[string]int64, len(workerCtx.stateTransitions))
+			for state, count := range workerCtx.stateTransitions {
+				transitionsCopy[state] = count
+			}
+
+			// Convert stateDurations (map[string]time.Duration) to milliseconds
+			cumulativeTimeMs := make(map[string]int64, len(workerCtx.stateDurations))
+			for state, duration := range workerCtx.stateDurations {
+				cumulativeTimeMs[state] = duration.Milliseconds()
+			}
+
+			return &deps.FrameworkMetrics{
+				TimeInCurrentStateMs:    time.Since(workerCtx.stateEnteredAt).Milliseconds(),
+				StateEnteredAtUnix:      workerCtx.stateEnteredAt.Unix(),
+				StateTransitionsTotal:   workerCtx.totalTransitions,
+				TransitionsByState:      transitionsCopy,
+				CumulativeTimeByStateMs: cumulativeTimeMs,
+				CollectorRestarts:       workerCtx.collectorRestarts,
+				StartupCount:            workerCtx.startupCount,
+				StateReason:             workerCtx.currentStateReason,
+			}
+		},
+		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
+			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
+			// This write feeds a worker that reads deps.GetFrameworkState() during
+			// CollectObservedState, so it reaches only a bound deps that implements
+			// SetFrameworkState (a deps embedding *deps.BaseDependencies). It is
+			// separate from the Observation injection, which the collector performs
+			// from its own local in wrapNewObservation regardless of the deps shape —
+			// a struct{}-deps worker (nmap) still carries framework metrics on its
+			// Observation. Application and configworker bind no deps and so simply
+			// get no pre-COS write; returning nil or struct{}{} from
+			// GetDependenciesAny is equivalent and neither is overridden.
+			type depsGetter interface {
+				GetDependenciesAny() any
+			}
+			if dg, ok := worker.(depsGetter); ok {
+				workerDeps := dg.GetDependenciesAny()
+				if setter, ok := workerDeps.(interface{ SetFrameworkState(*deps.FrameworkMetrics) }); ok {
+					setter.SetFrameworkState(fm)
+				}
+			}
+		},
+		// Called BEFORE CollectObservedState to drain action history buffer.
+		ActionHistoryProvider: func() []deps.ActionResult {
+			workerCtx := *workerCtxPtr
+
+			if workerCtx == nil || workerCtx.actionHistory == nil {
+				return nil
+			}
+
+			return workerCtx.actionHistory.Drain()
+		},
+		ActionHistorySetter: func(history []deps.ActionResult) {
+			type depsGetter interface {
+				GetDependenciesAny() any
+			}
+			if dg, ok := worker.(depsGetter); ok {
+				workerDeps := dg.GetDependenciesAny()
+				if setter, ok := workerDeps.(interface{ SetActionHistory([]deps.ActionResult) }); ok {
+					setter.SetActionHistory(history)
+				}
+			}
+		},
+		DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+
+			var desired TDesired
+			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
+				// ErrNotFound is expected on first boot before the initial desired state
+				// has been written to CSE storage. Return ErrNoDesiredState to signal
+				// the collector to skip collection without flooding Sentry with expected
+				// startup noise (persistence.ErrNotFound is the store-level sentinel).
+				if errors.Is(err, persistence.ErrNotFound) {
+					return nil, fsmv2.ErrNoDesiredState
+				}
+
+				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
+					deps.Err(err))
+
+				return nil, err
+			}
+
+			return desired, nil
+		},
+	})
 }
 
 // RemoveWorker removes a worker from the registry for a restart, which adds
