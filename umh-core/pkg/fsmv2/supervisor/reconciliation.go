@@ -1434,16 +1434,12 @@ func (s *Supervisor[TObserved, TDesired]) mergeChildVariables(childName string, 
 	result := config.MergeWithConflicts(s.userSpec.Variables, childVars)
 
 	for _, c := range result.Conflicts {
-		key := c.Namespace + "/" + c.Key
-		if _, done := s.warnedConflicts[childName][key]; done {
+		id := config.ChildVariableConflict{Child: childName, Namespace: c.Namespace, Key: c.Key}
+		if _, done := s.warnedConflicts[id]; done {
 			continue
 		}
 
-		if s.warnedConflicts[childName] == nil {
-			s.warnedConflicts[childName] = make(map[string]struct{})
-		}
-
-		s.warnedConflicts[childName][key] = struct{}{}
+		s.warnedConflicts[id] = struct{}{}
 		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_variable_conflict",
 			deps.String("child_name", childName),
 			deps.String("namespace", c.Namespace),

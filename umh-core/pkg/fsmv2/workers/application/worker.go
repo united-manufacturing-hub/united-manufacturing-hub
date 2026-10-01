@@ -70,19 +70,13 @@ var _ fsmv2.Worker = (*ApplicationWorker)(nil)
 type ApplicationWorker struct {
 	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus, struct{}]
 
-	// warnedMu guards warnedConflicts.
-	warnedMu sync.Mutex
-	// warnedConflicts holds each variableConflictKey that
-	// warnVariableConflicts has warned about. Entries are never removed.
-	warnedConflicts map[variableConflictKey]struct{}
+	warnedConflictsMu sync.Mutex
+	warnedConflicts   map[config.ChildVariableConflict]struct{}
 }
-
-// variableConflictKey names one variable of one own child.
-type variableConflictKey struct{ child, namespace, key string }
 
 // NewApplicationWorker creates a new application worker.
 func NewApplicationWorker(identity deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *ApplicationWorker {
-	w := &ApplicationWorker{warnedConflicts: make(map[variableConflictKey]struct{})}
+	w := &ApplicationWorker{warnedConflicts: make(map[config.ChildVariableConflict]struct{})}
 	w.InitBase(identity, logger, sr)
 
 	return w
@@ -130,12 +124,12 @@ func (w *ApplicationWorker) warnVariableConflicts(bundle config.VariableBundle, 
 		return
 	}
 
-	w.warnedMu.Lock()
-	defer w.warnedMu.Unlock()
+	w.warnedConflictsMu.Lock()
+	defer w.warnedConflictsMu.Unlock()
 
 	for _, child := range provider.GetChildrenSpecs() {
 		for _, c := range config.MergeWithConflicts(bundle, child.UserSpec.Variables).Conflicts {
-			id := variableConflictKey{child: child.Name, namespace: c.Namespace, key: c.Key}
+			id := config.ChildVariableConflict{Child: child.Name, Namespace: c.Namespace, Key: c.Key}
 			if _, done := w.warnedConflicts[id]; done {
 				continue
 			}
