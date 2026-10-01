@@ -209,7 +209,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			Expect(store.MarkDeletedCalls).To(HaveLen(1))
 			Expect(store.MarkDeletedCalls[0].WorkerType).To(Equal("test"))
 			Expect(store.MarkDeletedCalls[0].ID).To(Equal(identity.ID))
-			Expect(store.MarkDeletedCalls[0].By).To(Equal("removed"))
+			Expect(store.MarkDeletedCalls[0].By).To(Equal("supervisor"))
 		})
 
 		It("does not tombstone the documents on restart", func() {
@@ -284,7 +284,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				Expect(getErr).ToNot(HaveOccurred())
 				Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the %s document must carry a tombstone", role)
 				Expect(doc[storage.FieldDeletedAt]).ToNot(BeNil(), "the %s document's _deleted_at must be non-nil, or it carries no tombstone", role)
-				Expect(doc[storage.FieldDeletedBy]).To(Equal("removed"))
+				Expect(doc[storage.FieldDeletedBy]).To(Equal("supervisor"))
 			}
 		})
 
