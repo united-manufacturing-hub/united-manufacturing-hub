@@ -30,77 +30,52 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
-// runFinishedEntry is one parsed scenario_run_finished log line.
-type runFinishedEntry struct {
+type logEntry struct {
 	Level    string `json:"level"`
 	Msg      string `json:"msg"`
 	Scenario string `json:"scenario"`
+	Check    string `json:"check"`
+	Seen     string `json:"seen"`
 }
 
-// runFinishedEntries returns the log's scenario_run_finished lines, parsed, in
-// the order they were logged. Matching the parsed msg value, not a raw
-// substring, keeps a line that merely mentions the name out of the count.
-func runFinishedEntries(logOutput string) []runFinishedEntry {
-	var entries []runFinishedEntry
+// parseLogEntries decodes each JSON line of logOutput, in log order, and skips lines that do not decode.
+func parseLogEntries(logOutput string) []logEntry {
+	var entries []logEntry
 
 	for _, line := range strings.Split(logOutput, "\n") {
-		if line == "" {
-			continue
-		}
-
-		var entry runFinishedEntry
+		var entry logEntry
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			continue
 		}
 
-		if entry.Msg == "scenario_run_finished" {
-			entries = append(entries, entry)
-		}
+		entries = append(entries, entry)
 	}
 
 	return entries
 }
 
-// firstMsgLineIndex returns the index of the first log line whose parsed msg
-// value equals msg, or -1 when no line has it.
-func firstMsgLineIndex(logOutput, msg string) int {
-	for i, line := range strings.Split(logOutput, "\n") {
-		if line == "" {
-			continue
-		}
+func entriesWithMsg(entries []logEntry, msg string) []logEntry {
+	var matching []logEntry
 
-		var entry struct {
-			Msg string `json:"msg"`
-		}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-
+	for _, entry := range entries {
 		if entry.Msg == msg {
-			return i
+			matching = append(matching, entry)
 		}
 	}
 
-	return -1
+	return matching
 }
 
-// parseableLogLineCount returns how many lines parse as JSON, so an absence
-// assertion can prove the buffer carried the run's log output at all.
-func parseableLogLineCount(logOutput string) int {
-	count := 0
+func msgIndexes(entries []logEntry, msg string) []int {
+	var indexes []int
 
-	for _, line := range strings.Split(logOutput, "\n") {
-		if line == "" {
-			continue
-		}
-
-		var entry struct{}
-		if err := json.Unmarshal([]byte(line), &entry); err == nil {
-			count++
+	for i, entry := range entries {
+		if entry.Msg == msg {
+			indexes = append(indexes, i)
 		}
 	}
 
-	return count
+	return indexes
 }
 
 var _ = Describe("ScenarioV2 run end", func() {
@@ -138,31 +113,27 @@ var _ = Describe("ScenarioV2 run end", func() {
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the run must tear down once its short Duration ends")
 
-		entries := runFinishedEntries(logBuf.String())
+		entries := parseLogEntries(logBuf.String())
+		finished := entriesWithMsg(entries, "scenario_run_finished")
 
-		Expect(entries).To(HaveLen(1),
+		Expect(finished).To(HaveLen(1),
 			"a run whose Run returned nil must log exactly one scenario_run_finished line")
 
-		Expect(entries[0].Level).To(Equal("info"),
+		Expect(finished[0].Level).To(Equal("info"),
 			"the line must be logged at info, the runner CLI's default level, or it disappears from run output")
-		Expect(entries[0].Scenario).To(Equal("run-finished-logging"),
+		Expect(finished[0].Scenario).To(Equal("run-finished-logging"),
 			"the line must name the scenario that finished")
 
-		waitIdx := firstMsgLineIndex(logBuf.String(), "scenario_wait_passed")
-		finishedIdx := firstMsgLineIndex(logBuf.String(), "scenario_run_finished")
-		teardownIdx := firstMsgLineIndex(logBuf.String(), "v2_run_teardown_starting")
+		waitIdxs := msgIndexes(entries, "scenario_wait_passed")
+		finishedIdx := msgIndexes(entries, "scenario_run_finished")[0]
+		teardownIdxs := msgIndexes(entries, "v2_run_teardown_starting")
 
-		Expect(waitIdx).To(BeNumerically(">=", 0),
+		Expect(waitIdxs).NotTo(BeEmpty(),
 			"the passing wait must log its scenario_wait_passed line before the run ends")
-		Expect(finishedIdx).To(BeNumerically(">", waitIdx),
-			"the scenario_run_finished line must come after the scenario_wait_passed line, so the log reads in the order the run happened")
-		Expect(teardownIdx).To(BeNumerically(">", finishedIdx),
+		Expect(waitIdxs).To(HaveEach(BeNumerically("<", finishedIdx)),
+			"the scenario_run_finished line must come after every scenario_wait_passed line, so the log reads in the order the run happened")
+		Expect(teardownIdxs).To(HaveEach(BeNumerically(">", finishedIdx)),
 			"the scenario_run_finished line must come before the teardown starts, so it marks the end of Run itself")
-
-		// The ordering guard compares against the first scenario_wait_passed
-		// line. This scenario runs exactly one wait, so first and last
-		// coincide; a scenario with a second wait needs the guard to compare
-		// against the last one instead.
 	})
 
 	It("logs no scenario_run_finished line for a Run that returns an error", func() {
@@ -195,9 +166,9 @@ var _ = Describe("ScenarioV2 run end", func() {
 		Expect(err.Error()).To(ContainSubstring("scenario says no"),
 			"the failure must carry the error Run returned")
 
-		Expect(parseableLogLineCount(logBuf.String())).To(BeNumerically(">", 0),
+		Expect(parseLogEntries(logBuf.String())).NotTo(BeEmpty(),
 			"the failing run must have logged something, so the absence below observed a run that actually ran")
-		Expect(runFinishedEntries(logBuf.String())).To(BeEmpty(),
+		Expect(entriesWithMsg(parseLogEntries(logBuf.String()), "scenario_run_finished")).To(BeEmpty(),
 			"a run whose Run returned an error must not log a scenario_run_finished line")
 	})
 
@@ -236,9 +207,9 @@ var _ = Describe("ScenarioV2 run end", func() {
 		Expect(err.Error()).To(ContainSubstring("probe_run_error"),
 			"the failure must name the error the scenario logged")
 
-		Expect(parseableLogLineCount(logBuf.String())).To(BeNumerically(">", 0),
+		Expect(parseLogEntries(logBuf.String())).NotTo(BeEmpty(),
 			"the failing run must have logged something, so the absence below observed a run that actually ran")
-		Expect(runFinishedEntries(logBuf.String())).To(BeEmpty(),
+		Expect(entriesWithMsg(parseLogEntries(logBuf.String()), "scenario_run_finished")).To(BeEmpty(),
 			"a run whose logged-error check fails must not log a scenario_run_finished line")
 	})
 })
