@@ -27,11 +27,7 @@ type ChannelProvider interface {
 	GetInboundStats(workerID string) (capacity int, length int)
 }
 
-// channelProviderKeyName is the dependency-map name the communicator worker
-// reads its ChannelProvider under.
-const channelProviderKeyName = "communicator.channel_provider"
-
 // ChannelProviderKey names the ChannelProvider a CommunicatorWorker acquires its
 // inbound and outbound channels through. The worker looks the key up in its
 // dependency map, the map[string]any its register.Worker constructor receives.
-var ChannelProviderKey = config.NewDependencyKey[ChannelProvider](channelProviderKeyName)
+var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("communicator.channel_provider")
