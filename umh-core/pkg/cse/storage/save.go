@@ -66,6 +66,15 @@ var (
 	}
 )
 
+// saveResult reports what a locked save did, so saveWithDelta can log after
+// releasing the lock.
+type saveResult struct {
+	isNew   bool
+	changed bool
+	changes []FieldChange
+	diff    *Diff
+}
+
 // saveWithDelta is the unified write path for all triangular store save operations.
 // Eliminates ~60% code duplication across SaveIdentity, SaveDesired, SaveObserved
 // by using role-specific configuration for versioning, timestamps, and delta checking.
@@ -88,24 +97,13 @@ func (ts *TriangularStore) saveWithDelta(
 		return false, nil, fmt.Errorf("document id %q does not match parameter id %q", docID, id)
 	}
 
-	collectionName := workerType + "_" + opts.Role
-
-	ts.documentWriteMu.Lock()
-	defer ts.documentWriteMu.Unlock()
-
-	existing, err := ts.store.Get(ctx, collectionName, id)
-
-	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
-	if err != nil && !isNew {
-		return false, nil, fmt.Errorf("failed to load existing %s for %s/%s: %w", opts.Role, workerType, id, err)
+	result, err := ts.lockedSave(ctx, workerType, id, doc, opts)
+	if err != nil {
+		return false, nil, err
 	}
 
-	var changes []FieldChange
-
 	if !opts.SkipDeltaCheck {
-		if isNew {
-			diff = ts.computeCreatedDiff(doc, opts.Role)
-
+		if result.isNew {
 			var hierarchyPath string
 			if opts.Role == RoleIdentity {
 				if hp, ok := doc["hierarchy_path"].(string); ok {
@@ -121,28 +119,7 @@ func (ts *TriangularStore) saveWithDelta(
 
 			ts.logger.Debug(opts.Role+"_created",
 				deps.String("worker", hierarchyPath))
-		} else {
-			var hasChanges bool
-
-			hasChanges, changes, diff = ts.performDeltaCheck(existing, doc, opts.Role)
-
-			if !hasChanges {
-				if opts.UpdateTimestampOnNoChange && existing != nil {
-					// Staleness detection for observed state
-					now := ts.clock.Now().UTC()
-					existing[FieldUpdatedAt] = now
-
-					err = ts.store.Update(ctx, collectionName, id, existing)
-					if err != nil {
-						return false, nil, fmt.Errorf("failed to update timestamp for %s/%s: %w", workerType, id, err)
-					}
-
-					ts.invalidateSnapshot(workerType, id)
-				}
-
-				return false, nil, nil
-			}
-
+		} else if result.changed {
 			var hierarchyPath string
 			if identity, err := ts.LoadIdentity(ctx, workerType, id); err == nil {
 				if hp, ok := identity["hierarchy_path"].(string); ok {
@@ -152,8 +129,62 @@ func (ts *TriangularStore) saveWithDelta(
 
 			ts.logger.Debug(opts.Role+"_changed",
 				deps.String("worker", hierarchyPath),
-				deps.Any("changes", changes))
+				deps.Any("changes", result.changes))
 		}
+	}
+
+	return result.changed, result.diff, nil
+}
+
+// lockedSave is the part of a save that documentWriteMu covers: reading the
+// existing record, deciding what changed, and writing the result back.
+func (ts *TriangularStore) lockedSave(
+	ctx context.Context,
+	workerType, id string,
+	doc persistence.Document,
+	opts SaveOptions,
+) (saveResult, error) {
+	ts.documentWriteMu.Lock()
+	defer ts.documentWriteMu.Unlock()
+
+	collectionName := workerType + "_" + opts.Role
+
+	existing, err := ts.store.Get(ctx, collectionName, id)
+
+	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
+	if err != nil && !isNew {
+		return saveResult{}, fmt.Errorf("failed to load existing %s for %s/%s: %w", opts.Role, workerType, id, err)
+	}
+
+	var changes []FieldChange
+
+	var diff *Diff
+
+	if !opts.SkipDeltaCheck && !isNew {
+		var hasChanges bool
+
+		hasChanges, changes, diff = ts.performDeltaCheck(existing, doc, opts.Role)
+
+		if !hasChanges {
+			if opts.UpdateTimestampOnNoChange && existing != nil {
+				// Staleness detection for observed state
+				now := ts.clock.Now().UTC()
+				existing[FieldUpdatedAt] = now
+
+				err = ts.store.Update(ctx, collectionName, id, existing)
+				if err != nil {
+					return saveResult{}, fmt.Errorf("failed to update timestamp for %s/%s: %w", workerType, id, err)
+				}
+
+				ts.invalidateSnapshot(workerType, id)
+			}
+
+			return saveResult{isNew: isNew}, nil
+		}
+	}
+
+	if !opts.SkipDeltaCheck && isNew {
+		diff = ts.computeCreatedDiff(doc, opts.Role)
 	}
 
 	// A save keeps the stored tombstone (see FieldDeletedAt) and drops any
@@ -187,7 +218,7 @@ func (ts *TriangularStore) saveWithDelta(
 	}
 
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to save %s for %s/%s: %w", opts.Role, workerType, id, err)
+		return saveResult{}, fmt.Errorf("failed to save %s for %s/%s: %w", opts.Role, workerType, id, err)
 	}
 
 	if diff != nil && ts.deltaStore != nil {
@@ -203,7 +234,7 @@ func (ts *TriangularStore) saveWithDelta(
 
 	ts.invalidateSnapshot(workerType, id)
 
-	return true, diff, nil
+	return saveResult{isNew: isNew, changed: true, changes: changes, diff: diff}, nil
 }
 
 // injectMetadataWithOptions adds or updates CSE metadata fields based on SaveOptions.
