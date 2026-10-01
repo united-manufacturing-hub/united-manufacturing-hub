@@ -46,10 +46,9 @@ type NoDeps = struct{}
 // verify that TDeps here matches the TDeps in the concrete WorkerBase[TConfig, TStatus, TDeps]
 // embed inside the worker struct. By convention, callers pass the same TDeps in both places.
 //
-// Constructor receives the standard framework dependencies (identity, logger, stateReader)
-// and the dependency map this worker was created with; read it with config.LookupDependency.
-// The constructor must not write to the map. On a restart the map is the supervisor's own,
-// so a write would reach every worker the supervisor builds afterwards.
+// Read dependencies with config.LookupDependency. The constructor must not write
+// to it: on a restart it is the supervisor's own map, so a write reaches every
+// worker the supervisor builds afterwards.
 // Workers with custom ObservedState types must use factory.RegisterWorkerType directly.
 //
 // Panics at init time when:
@@ -60,7 +59,7 @@ type NoDeps = struct{}
 //   - the factory or CSE TypeRegistry already has an entry for workerType.
 func Worker[TConfig any, TStatus any, TDeps any](
 	workerType string,
-	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) (fsmv2.Worker, error),
+	constructor func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, dependencies map[string]any) (fsmv2.Worker, error),
 ) {
 	if workerType == "" {
 		panic("register.Worker: workerType must be non-empty")
