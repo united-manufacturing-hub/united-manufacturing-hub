@@ -24,6 +24,11 @@ import (
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
 
+const (
+	slowConnectDelaySeconds = 2
+	minTryingToConnectMs    = slowConnectDelaySeconds*1000 - 100
+)
+
 // SlowScenarioV2 checks that a slow worker spends its connect delay in
 // TryingToConnect.
 var SlowScenarioV2 = ScenarioV2{
@@ -33,20 +38,18 @@ var SlowScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		slowRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "slow-worker-1"}
 
-		env.Step("create the slow worker with a two-second connect delay")
+		env.Step(fmt.Sprintf("create the slow worker with a %d-second connect delay", slowConnectDelaySeconds))
 
 		if err := env.Client.Upsert(slowRef, map[string]any{
 			"state":        "running",
-			"delaySeconds": 2,
+			"delaySeconds": slowConnectDelaySeconds,
 		}); err != nil {
 			return fmt.Errorf("upsert slow worker: %w", err)
 		}
 
-		// The connect action sleeps its whole delay before it reports
-		// success, so the worker spends at least that long in
-		// TryingToConnect. CumulativeTimeByStateMs only grows, so a slow
-		// machine delays this reading but cannot shrink it.
-		return env.WaitFor(ctx, "the slow worker is Connected after at least 1.9 s in TryingToConnect",
+		// CumulativeTimeByStateMs only grows, so a slow machine delays this
+		// reading but cannot shrink it.
+		return env.WaitFor(ctx, fmt.Sprintf("the slow worker is Connected after at least %d ms in TryingToConnect", minTryingToConnectMs),
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_slow.ExampleslowStatus](ctx, env.Client, slowRef)
 				if err != nil {
@@ -59,7 +62,7 @@ var SlowScenarioV2 = ScenarioV2{
 
 				timeTrying := obs.Metrics.Framework.CumulativeTimeByStateMs["TryingToConnect"]
 
-				done := obs.State == "Connected" && timeTrying >= 1900
+				done := obs.State == "Connected" && timeTrying >= minTryingToConnectMs
 
 				return done, fmt.Sprintf("state=%s trying_to_connect_ms=%d", obs.State, timeTrying), nil
 			})
