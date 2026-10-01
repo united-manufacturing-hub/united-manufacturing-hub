@@ -26,10 +26,8 @@ import (
 )
 
 // PanicScenarioV2 runs a worker whose connect action panics on every attempt.
-// ActionExecutor (supervisor/internal/execution) recovers each panic, logs it
-// as action_panic with a stack trace, and records a failed connect. The worker
-// retries on its next tick and stays in TryingToConnect for the whole run, so
-// the scenario counts the failed connects in its action results.
+// ActionExecutor (supervisor/internal/execution) recovers each panic and logs
+// it as action_panic.
 var PanicScenarioV2 = ScenarioV2{
 	Name:        "panic",
 	Description: "A worker whose connect panics every time: the supervisor recovers each panic, and the worker stays in TryingToConnect",
@@ -41,7 +39,7 @@ var PanicScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		ref := dynamicchildren.Ref{WorkerType: "examplepanic", Name: "panic-worker-1"}
 
-		env.Step("create the panic worker: every connect panics, so it stays in TryingToConnect; wait for three failed connects in its action results")
+		env.Step("create the panic worker, whose every connect panics")
 
 		if err := env.Client.Upsert(ref, map[string]any{
 			"state":        "running",

@@ -74,8 +74,7 @@ var alwaysAllowedMessages = []string{
 	"collector_stop_skipped",
 }
 
-// recordLoggedError keeps the first error that neither messageAllowed nor
-// errorCauseAllowed allows, wrapped so a failure names its message.
+// recordLoggedError keeps the first error the scenario does not expect.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
 	if r.messageAllowed(msg, r.expectedErrors) {
 		return
@@ -110,9 +109,8 @@ func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	return false
 }
 
-// errorCauseAllowed reports whether errors.Is finds one of the scenario's
-// expected causes in err. A nil entry matches nothing, the same as an empty
-// expected message.
+// errorCauseAllowed reports whether err is or wraps one of the scenario's
+// expected causes. A nil entry matches nothing.
 func (r *runRecorder) errorCauseAllowed(err error) bool {
 	for _, cause := range r.expectedErrorCauses {
 		if cause != nil && errors.Is(err, cause) {
