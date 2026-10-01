@@ -27,9 +27,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // MockStateReader implements deps.StateReader for testing.
@@ -95,6 +97,7 @@ var _ = Describe("CommunicatorWorker", func() {
 			depspkg.Identity{ID: "test-id", Name: "Test Communicator", WorkerType: "communicator"},
 			mockTransport,
 			logger,
+			nil,
 			nil,
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -279,5 +282,140 @@ state: "running"
 			Expect(communicatorObserved.Status.DegradedEnteredAt).NotTo(BeZero(),
 				"DegradedEnteredAt should be set once errors are recorded")
 		})
+	})
+})
+
+var _ communicator.ChannelProvider = (*recordingChannelProvider)(nil)
+
+type recordingChannelProvider struct {
+	getChannelsIDs     []string
+	getInboundStatsIDs []string
+	inboundCapacity    int
+	inboundLength      int
+	inbound            chan<- *types.UMHMessage
+	outbound           <-chan *types.UMHMessage
+}
+
+func newRecordingChannelProvider(capacity int, length int) *recordingChannelProvider {
+	return &recordingChannelProvider{
+		inboundCapacity: capacity,
+		inboundLength:   length,
+	}
+}
+
+func (p *recordingChannelProvider) GetChannels(workerID string) (
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
+) {
+	p.getChannelsIDs = append(p.getChannelsIDs, workerID)
+	p.inbound = make(chan *types.UMHMessage, 1)
+	p.outbound = make(chan *types.UMHMessage, 1)
+
+	return p.inbound, p.outbound
+}
+
+func (p *recordingChannelProvider) GetInboundStats(workerID string) (capacity int, length int) {
+	p.getInboundStatsIDs = append(p.getInboundStatsIDs, workerID)
+
+	return p.inboundCapacity, p.inboundLength
+}
+
+var _ = Describe("CommunicatorWorker channel provider dependency", func() {
+	It("uses the provider from the dependency map over the global one", func() {
+		globalProvider := newRecordingChannelProvider(100, 0)
+		mapProvider := newRecordingChannelProvider(7, 3)
+
+		previous := communicator.GetChannelProvider()
+
+		communicator.SetChannelProvider(globalProvider)
+		DeferCleanup(func() { communicator.SetChannelProvider(previous) })
+
+		dependencyMap := map[string]any{}
+
+		var mapProviderAsProvider communicator.ChannelProvider = mapProvider
+		fsmv2types.SetDependency(dependencyMap, communicator.ChannelProviderKey, mapProviderAsProvider)
+
+		Expect(dependencyMap).To(HaveKey("communicator.channel_provider"),
+			"the wrongly typed map spec below builds its map with this literal key")
+
+		identity := depspkg.Identity{ID: "map-provider-worker", WorkerType: "communicator"}
+		built, err := factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, dependencyMap)
+		Expect(err).NotTo(HaveOccurred())
+
+		commWorker, ok := built.(*communicator.CommunicatorWorker)
+		Expect(ok).To(BeTrue(), "expected *communicator.CommunicatorWorker, got %T", built)
+
+		workerDeps := commWorker.GetDependencies()
+
+		Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(mapProvider.inbound),
+			"GetChannels at construction must wire the worker to the map provider's inbound channel")
+		Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(mapProvider.outbound),
+			"GetChannels at construction must wire the worker to the map provider's outbound channel")
+
+		capacity, length := workerDeps.GetInboundChanStats()
+		Expect(capacity).To(Equal(7))
+		Expect(length).To(Equal(3))
+
+		Expect(mapProvider.getChannelsIDs).To(ContainElement("map-provider-worker"),
+			"GetChannels must run at construction against the map's provider")
+		Expect(mapProvider.getInboundStatsIDs).To(ContainElement("map-provider-worker"),
+			"GetInboundStats must read through the map's provider")
+		Expect(globalProvider.getChannelsIDs).To(BeEmpty(),
+			"GetChannels at construction must not touch the global provider")
+		Expect(globalProvider.getInboundStatsIDs).To(BeEmpty(),
+			"GetInboundStats must not touch the global provider")
+
+		Expect(communicator.GetChannelProvider()).To(BeIdenticalTo(globalProvider))
+	})
+
+	It("falls back to the global provider when the dependency map holds none", func() {
+		globalProvider := newRecordingChannelProvider(50, 4)
+
+		previous := communicator.GetChannelProvider()
+
+		communicator.SetChannelProvider(globalProvider)
+		DeferCleanup(func() { communicator.SetChannelProvider(previous) })
+
+		identity := depspkg.Identity{ID: "global-provider-worker", WorkerType: "communicator"}
+		built, err := factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		commWorker, ok := built.(*communicator.CommunicatorWorker)
+		Expect(ok).To(BeTrue(), "expected *communicator.CommunicatorWorker, got %T", built)
+
+		workerDeps := commWorker.GetDependencies()
+
+		Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(globalProvider.inbound),
+			"GetChannels at construction must wire the worker to the global provider's inbound channel")
+		Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(globalProvider.outbound),
+			"GetChannels at construction must wire the worker to the global provider's outbound channel")
+
+		capacity, length := workerDeps.GetInboundChanStats()
+		Expect(capacity).To(Equal(50))
+		Expect(length).To(Equal(4))
+
+		Expect(globalProvider.getChannelsIDs).To(ContainElement("global-provider-worker"),
+			"GetChannels must run at construction against the global provider")
+		Expect(globalProvider.getInboundStatsIDs).To(ContainElement("global-provider-worker"),
+			"GetInboundStats must read through the global provider")
+	})
+
+	It("panics when neither the dependency map nor the global provider holds a provider", func() {
+		previous := communicator.GetChannelProvider()
+
+		communicator.ClearChannelProvider()
+		DeferCleanup(func() { communicator.SetChannelProvider(previous) })
+
+		identity := depspkg.Identity{ID: "no-provider-worker", WorkerType: "communicator"}
+		Expect(func() {
+			_, _ = factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, nil)
+		}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
+
+		// A map value of another type reads as absent to LookupDependency, so
+		// it takes the same global-fallback route to the same panic.
+		wronglyTypedMap := map[string]any{"communicator.channel_provider": "not a provider"}
+		Expect(func() {
+			_, _ = factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, wronglyTypedMap)
+		}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
 	})
 })

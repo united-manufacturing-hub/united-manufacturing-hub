@@ -26,15 +26,22 @@ type CommunicatorDependencies struct {
 	transport types.Transport
 
 	*deps.BaseDependencies
-	inboundChan  chan<- *types.UMHMessage
-	outboundChan <-chan *types.UMHMessage
+	channelProvider ChannelProvider
+	inboundChan     chan<- *types.UMHMessage
+	outboundChan    <-chan *types.UMHMessage
 }
 
-// NewCommunicatorDependencies creates dependencies for the communicator worker.
-// Panics if SetChannelProvider was not called first.
+// NewCommunicatorDependencies creates dependencies for the communicator worker,
+// acquiring channels from the global channel provider set with SetChannelProvider.
+// Panics when that global is unset.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies) *CommunicatorDependencies {
-	provider := GetChannelProvider()
+	return newCommunicatorDependenciesWithProvider(t, bd, GetChannelProvider())
+}
+
+// newCommunicatorDependenciesWithProvider is NewCommunicatorDependencies with
+// an explicit provider in place of the global one.
+func newCommunicatorDependenciesWithProvider(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *CommunicatorDependencies {
 	if provider == nil {
 		panic("ChannelProvider must be set before creating communicator dependencies. " +
 			"Call SetChannelProvider() in main.go before starting the FSMv2 supervisor.")
@@ -45,6 +52,7 @@ func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies) *
 	return &CommunicatorDependencies{
 		BaseDependencies: bd,
 		transport:        t,
+		channelProvider:  provider,
 		inboundChan:      inbound,
 		outboundChan:     outbound,
 	}
@@ -94,17 +102,6 @@ func (d *CommunicatorDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 }
 
 // GetInboundChanStats returns the capacity and current length of the inbound channel.
-// Returns (0, 0) if no channel provider is set.
-//
-// Returning (0, 0) when provider is nil intentionally triggers backpressure as a safe default.
-// With capacity=0 and length=0, available = 0 - 0 = 0, which is < ExpectedBatchSize (50),
-// so PullAction will skip pulling. This prevents pulling messages when we have no
-// channel to deliver them to, avoiding potential message loss.
 func (d *CommunicatorDependencies) GetInboundChanStats() (capacity int, length int) {
-	provider := GetChannelProvider()
-	if provider == nil {
-		return 0, 0
-	}
-
-	return provider.GetInboundStats(d.GetWorkerID())
+	return d.channelProvider.GetInboundStats(d.GetWorkerID())
 }
