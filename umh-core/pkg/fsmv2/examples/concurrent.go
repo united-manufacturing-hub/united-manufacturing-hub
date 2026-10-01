@@ -29,7 +29,7 @@ const concurrentWorkerCount = 5
 // ConcurrentScenarioV2 creates several helloworld workers without waiting between them; each must reach Running.
 var ConcurrentScenarioV2 = ScenarioV2{
 	Name:        "concurrent",
-	Description: "Five helloworld workers created without waiting between them; each one reaches Running",
+	Description: "Helloworld workers created without waiting between them; each one reaches Running",
 
 	Run: func(ctx context.Context, env Env) error {
 		refs := make([]dynamicchildren.Ref, 0, concurrentWorkerCount)
@@ -41,9 +41,8 @@ var ConcurrentScenarioV2 = ScenarioV2{
 			})
 		}
 
-		env.Step("create five helloworld workers without waiting between them")
+		env.Step("create every helloworld worker without waiting between them")
 
-		// Upsert every worker before waiting on any, so no worker's creation waits for another to reach Running.
 		for _, ref := range refs {
 			if err := env.Client.Upsert(ref, map[string]any{
 				"state": "running",
