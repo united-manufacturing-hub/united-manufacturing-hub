@@ -46,9 +46,6 @@ const (
 // advice is to reduce this instance's load. The machine is 80% busy in both,
 // its pressure is the same, and this instance stays under its own limit in
 // both. The one difference is how much of the busy time is ours.
-//
-// Every number this story turns on is a 60-second mean. The box advances
-// cpuMachineReadAdvance per read, so a window fills in a few readings.
 var CPUFillingScenarioV2 = ScenarioV2{
 	Name:        "cpu-filling",
 	Description: "Fills a fake machine from outside, then from this instance, and shows the remedy change (v2)",
@@ -74,8 +71,6 @@ var CPUFillingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert cpu monitor: %w", err)
 		}
 
-		// The quiet machine reads the same on every reading, so this text holds
-		// while the condition does.
 		if err := waitCPUFirstReading(ctx, env, "first reading healthy on the quiet machine", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Verdict.State == cpuhealth.StateHealthy
 			done := healthy && strings.Contains(st.Result.Message, "This instance is using 0.5 of 3 cores (17% of its limit)")
@@ -103,7 +98,6 @@ var CPUFillingScenarioV2 = ScenarioV2{
 		env.Step("fill the machine with this instance's own load: still 80% busy, this instance now using 2.56 cores")
 		machine.box.Set(cpuFillingOursFilled())
 
-		// This condition lasts to the end of the run.
 		return waitCPUFresh(ctx, env, "degraded, advising to reduce this instance's load", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			degraded := st.Degraded && st.Result.Verdict.State == cpuhealth.StateDegraded
 			done := degraded && strings.Contains(st.Result.Message, "this instance is using most of it")

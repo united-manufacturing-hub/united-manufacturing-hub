@@ -32,10 +32,6 @@ const (
 	// cpuPressureBase carries the full note on why nothing checks that.
 	cpuBlindBase = "/sys/fs/cgroup"
 
-	// The files this scenario takes away, in the order it takes them.
-	// /proc/stat is the machine's CPU accounting, outside the cgroup; cpu.stat
-	// is the cgroup's. When either cannot be opened, the sampler records its
-	// readings as absent and the sample still succeeds.
 	cpuBlindHostStat   = "/proc/stat"
 	cpuBlindCgroupStat = cpuBlindBase + "/cpu.stat"
 
@@ -64,8 +60,7 @@ const (
 //
 // The story is that neither outage changes the worker's state. It stays
 // running, healthy and Fresh through both, and its message becomes "CPU
-// monitoring unavailable". Each outage logs one cpu::read_failed warning,
-// which the scenario expects. The worker still reports a machine it cannot
+// monitoring unavailable". The worker still reports a machine it cannot
 // measure as healthy. ENG-6319 (unreadable cgroup files are reported as
 // healthy) will report it as degraded, and this scenario will then expect
 // degraded.

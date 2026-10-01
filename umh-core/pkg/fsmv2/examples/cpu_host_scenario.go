@@ -25,12 +25,9 @@ import (
 
 // CPUHostScenarioV2 runs the CPU monitor against the machine it is running
 // on. It publishes no fake machine, so the CPU worker reads the host's own
-// cgroup v2 and /proc/stat files. It is for watching the monitor work: the
-// wait asserts only that a fresh reading arrived, nothing about the verdict.
-//
-// On a machine without /sys/fs/cgroup/cpu.stat, such as a developer Mac, Run
-// refuses rather than watch readings that cannot describe the cgroup. The
-// refusal names tools/cpu-host, which runs this scenario in a Linux container.
+// cgroup v2 and /proc/stat files. The wait asserts only that a fresh reading
+// arrived, nothing about the verdict. On a host without cgroup v2 files, such
+// as a developer Mac, Run refuses with an error that names tools/cpu-host.
 var CPUHostScenarioV2 = ScenarioV2{
 	Name:        "cpu-host",
 	Description: "Runs the CPU monitor against the machine it is running on, unmodified (v2)",
