@@ -55,16 +55,21 @@ fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transpo
 
 The supervisor merges its map into every child, so a provider reaches its
 worker however deep it sits. `NewTransportWorker` and `NewCommunicatorWorker`
-each return an error naming the key when the map holds none. A scenario
-supplies a mock provider under the same keys (see "Mocks" below).
+each return an error naming the key when the map holds none. A scenario must
+supply a mock provider under the same keys, as "Mocks" below describes.
 
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.
 
-## Cert Handler via the Dependency Map
+## Cert Handler and Store via the Dependency Map
 
-The certfetcher worker reads its cert handler from the dependency map, under
-`certfetcher.CertHandlerKey`. `cmd/main.go` explains when it sets it.
+| Worker | Key | Value type | `cmd/main.go` sets it |
+|---|---|---|---|
+| certfetcher | `certfetcher.CertHandlerKey` | `certificatehandler.Handler` | only with the gatekeeper enabled; the comment above that call says why |
+| persistence | `persistence.StoreKey` | `storage.TriangularStoreInterface` | only with memory cleanup enabled; the comment above that call says why |
+
+Like the channel providers, `NewCertFetcherWorker` and `NewPersistenceWorker`
+return an error naming the key when the map holds none.
 
 ## State Machine States
 
