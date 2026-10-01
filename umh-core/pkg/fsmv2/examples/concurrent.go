@@ -24,15 +24,17 @@ import (
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
+const concurrentWorkerCount = 5
+
 // ConcurrentScenarioV2 creates several helloworld workers without waiting between them; each must reach Running.
 var ConcurrentScenarioV2 = ScenarioV2{
 	Name:        "concurrent",
 	Description: "Five helloworld workers created without waiting between them; each one reaches Running",
 
 	Run: func(ctx context.Context, env Env) error {
-		refs := make([]dynamicchildren.Ref, 0, 5)
+		refs := make([]dynamicchildren.Ref, 0, concurrentWorkerCount)
 
-		for i := 1; i <= 5; i++ {
+		for i := 1; i <= concurrentWorkerCount; i++ {
 			refs = append(refs, dynamicchildren.Ref{
 				WorkerType: "helloworld",
 				Name:       fmt.Sprintf("concurrent-worker-%d", i),
@@ -50,24 +52,28 @@ var ConcurrentScenarioV2 = ScenarioV2{
 			}
 		}
 
-		for _, ref := range refs {
-			if err := env.WaitFor(ctx, "the worker "+ref.Name+" reaches Running",
-				func(ctx context.Context) (bool, string, error) {
-					obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
-					if err != nil {
-						if errors.Is(err, fsmv2client.ErrNotObserved) {
-							return false, "the worker has not published an observation yet", nil
-						}
+		// The wait compares against concurrentWorkerCount, not len(refs), so a run that creates no workers fails.
+		return env.WaitFor(ctx, fmt.Sprintf("all %d workers reach Running", concurrentWorkerCount),
+			func(ctx context.Context) (bool, string, error) {
+				running := 0
 
+				for _, ref := range refs {
+					obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						continue
+					}
+
+					if err != nil {
 						return false, "", err
 					}
 
-					return obs.State == "Running", "state=" + obs.State, nil
-				}); err != nil {
-				return err
-			}
-		}
+					if obs.State == "Running" {
+						running++
+					}
+				}
 
-		return nil
+				return running == concurrentWorkerCount,
+					fmt.Sprintf("%d of %d workers in Running", running, concurrentWorkerCount), nil
+			})
 	},
 }
