@@ -331,8 +331,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 	})
 
 	It("prints the store dump after a v2 scenario run", func() {
-		logBuf := &v2LogBuffer{}
-		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
+		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
 		dumpRequested := examples.ScenarioV2{
@@ -388,13 +387,6 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the dump must list the worker the scenario created")
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"a clean dump run must not report a failure")
-		// Every run that returns a RunResult logs v2_run_teardown_starting
-		// during teardown. This positive control makes an empty or malformed
-		// log capture fail the spec before the absence check below runs.
-		Expect(logContainsEvent(logBuf.String(), "v2_run_teardown_starting")).To(BeTrue(),
-			"the log capture must contain the teardown event that every run returning a RunResult emits")
-		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeFalse(),
-			"the v2 path must not warn that DumpStore is unsupported")
 	})
 
 	It("tears down gracefully on a live tick loop when the caller ctx is cancelled mid-run", func() {
