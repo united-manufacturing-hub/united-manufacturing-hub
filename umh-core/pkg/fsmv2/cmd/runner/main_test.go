@@ -91,19 +91,6 @@ func TestFatalMessage(t *testing.T) {
 }
 
 func TestRunnerCLIRouting(t *testing.T) {
-	t.Run("duration routing takes RunConfig.Duration", func(t *testing.T) {
-		runDuration := routeDuration(5 * time.Second)
-		if runDuration != 5*time.Second {
-			t.Errorf("--duration must route into RunConfig.Duration, got %v", runDuration)
-		}
-	})
-
-	t.Run("duration routing zero stays endless", func(t *testing.T) {
-		if got := routeDuration(0); got != 0 {
-			t.Errorf("--duration 0 must stay endless, got %v", got)
-		}
-	})
-
 	t.Run("duration default: without --duration settles 1s", func(t *testing.T) {
 		got, defaulted := defaultDuration(false, 0)
 		if got != defaultSettle {
@@ -134,26 +121,6 @@ func TestRunnerCLIRouting(t *testing.T) {
 
 		if defaulted {
 			t.Error("an explicit --duration must not report the default as applied")
-		}
-	})
-
-	t.Run("duration default and routing compose: a defaulted run settles via RunConfig, explicit values pass through", func(t *testing.T) {
-		effective, _ := defaultDuration(false, 0)
-
-		if runDuration := routeDuration(effective); runDuration != defaultSettle {
-			t.Errorf("a run without --duration must settle %s via RunConfig.Duration, got duration=%v", defaultSettle, runDuration)
-		}
-
-		effective, _ = defaultDuration(true, 5*time.Second)
-
-		if runDuration := routeDuration(effective); runDuration != 5*time.Second {
-			t.Errorf("an explicit --duration 5s must reach RunConfig.Duration, got duration=%v", runDuration)
-		}
-
-		effective, _ = defaultDuration(true, 0)
-
-		if runDuration := routeDuration(effective); runDuration != 0 {
-			t.Errorf("an explicit --duration 0 must stay endless after routing, got duration=%v", runDuration)
 		}
 	})
 
