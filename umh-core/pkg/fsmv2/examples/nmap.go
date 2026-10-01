@@ -82,14 +82,16 @@ var NmapScenarioV2 = ScenarioV2{
 			return errors.New("the dialer under fsmv2nmap.DialerKey is not the scenario's mockDialer")
 		}
 
+		const target = "10.0.0.1"
+
 		ref := dynamicchildren.Ref{WorkerType: "nmap", Name: "nmap-1"}
 
-		env.Step("create nmap aimed at 10.0.0.1:502 with the port open")
+		env.Step("create nmap aimed at " + target + ":502 with the port open")
 
 		if err := env.Client.Upsert(ref, map[string]any{
 			"state": "running",
 			"nmapServiceConfig": map[string]any{
-				"target": "10.0.0.1",
+				"target": target,
 				"port":   502,
 			},
 		}); err != nil {
@@ -108,10 +110,8 @@ var NmapScenarioV2 = ScenarioV2{
 						return false, "", err
 					}
 
-					// mockDialer answers every address, so only Target shows
-					// this poll dialed the Upserted config.
-					done := obs.Status.Result.Target == "10.0.0.1" &&
-						obs.Status.Result.PortState == want
+					dialedUpsertedTarget := obs.Status.Result.Target == target
+					done := dialedUpsertedTarget && obs.Status.Result.PortState == want
 
 					seen := "target=" + obs.Status.Result.Target +
 						" port_state=" + obs.Status.Result.PortState
