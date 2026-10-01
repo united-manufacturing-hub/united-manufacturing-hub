@@ -155,31 +155,30 @@ func (r *runRecorder) lastStepDescription() string {
 	return r.lastStep
 }
 
-// runErrorLogger wraps the run's logger so every error the run logs, from
-// the scenario's own code or from the supervisor's workers, reaches the
-// recorder, while all output still flows to the underlying logger.
-type runErrorLogger struct {
+// recordingLogger passes every call to the run's logger and records each
+// error and warning for the run's checks.
+type recordingLogger struct {
 	deps.FSMLogger
 	recorder *runRecorder
 }
 
 // SentryError records the error for the run's checks, then delegates.
-func (l *runErrorLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
+func (l *recordingLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
 	l.recorder.recordLoggedError(err, msg)
 
 	l.FSMLogger.SentryError(feature, hierarchyPath, err, msg, fields...)
 }
 
 // SentryWarn records the warning for RunResult.Err, then delegates.
-func (l *runErrorLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
+func (l *recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
 	l.recorder.recordLoggedWarning(msg)
 
 	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
 }
 
 // With wraps again, so a logger carrying context fields records too.
-func (l *runErrorLogger) With(fields ...deps.Field) deps.FSMLogger {
-	return &runErrorLogger{FSMLogger: l.FSMLogger.With(fields...), recorder: l.recorder}
+func (l *recordingLogger) With(fields ...deps.Field) deps.FSMLogger {
+	return &recordingLogger{FSMLogger: l.FSMLogger.With(fields...), recorder: l.recorder}
 }
 
 const waitForPollInterval = 50 * time.Millisecond
