@@ -90,54 +90,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	collector := s.newCollector(worker, identity, workerLogger, &workerCtx)
 
-	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
+	s.newWorkerContext(worker, identity, workerLogger, collector, startupCount, &workerCtx)
 
-	actionHistoryBuffer := deps.NewInMemoryActionHistoryRecorder()
-
-	executor.SetOnActionComplete(func(result deps.ActionResult) {
-		actionHistoryBuffer.Record(result)
-
-		// Trigger immediate observation after action completes.
-		// This eliminates the delay between action and FSM progression.
-		// Capture collector under lock to prevent race with RemoveWorker().
-		if workerCtx != nil {
-			workerCtx.mu.RLock()
-			collector := workerCtx.collector
-			workerCtx.mu.RUnlock()
-
-			if collector != nil && collector.IsRunning() {
-				collector.TriggerNow()
-			}
-		}
-	})
-
-	initialState := worker.GetInitialState()
-
-	// Initialize lastLifecyclePhase to avoid use-before-initialization where
-	// the collector reads this field before the first tick sets it.
-	// Without this, lastLifecyclePhase defaults to PhaseUnknown (zero value).
-	var initialPhase config.LifecyclePhase
-	if initialState != nil {
-		initialPhase = initialState.LifecyclePhase()
-	}
-
-	workerCtx = &WorkerContext[TObserved, TDesired]{
-		mu:                 s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
-		identity:           identity,
-		worker:             worker,
-		currentState:       initialState,
-		currentStateReason: "initial",
-		lastLifecyclePhase: initialPhase,
-		collector:          collector,
-		executor:           executor,
-		actionHistory:      actionHistoryBuffer,
-		stateEnteredAt:     time.Now(),
-		stateTransitions:   make(map[string]int64),
-		stateDurations:     make(map[string]time.Duration),
-		totalTransitions:   0,
-		collectorRestarts:  0,
-		startupCount:       startupCount,
-	}
 	s.workers[identity.ID] = workerCtx
 
 	// Cache the first worker ID for lock-free access in GetHierarchyPathUnlocked()
@@ -514,6 +468,60 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 			return desired, nil
 		},
 	})
+}
+
+// newWorkerContext builds the executor, the action history and the worker
+// context that ties them and the collector together, and assigns it through
+// workerCtxPtr so the collector's closures see it.
+func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, collector *collection.Collector[TObserved], startupCount int64, workerCtxPtr **WorkerContext[TObserved, TDesired]) {
+	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
+
+	actionHistoryBuffer := deps.NewInMemoryActionHistoryRecorder()
+
+	executor.SetOnActionComplete(func(result deps.ActionResult) {
+		actionHistoryBuffer.Record(result)
+
+		// Trigger immediate observation after action completes.
+		// This eliminates the delay between action and FSM progression.
+		// Capture collector under lock to prevent race with RemoveWorker().
+		if workerCtx := *workerCtxPtr; workerCtx != nil {
+			workerCtx.mu.RLock()
+			collector := workerCtx.collector
+			workerCtx.mu.RUnlock()
+
+			if collector != nil && collector.IsRunning() {
+				collector.TriggerNow()
+			}
+		}
+	})
+
+	initialState := worker.GetInitialState()
+
+	// Initialize lastLifecyclePhase to avoid use-before-initialization where
+	// the collector reads this field before the first tick sets it.
+	// Without this, lastLifecyclePhase defaults to PhaseUnknown (zero value).
+	var initialPhase config.LifecyclePhase
+	if initialState != nil {
+		initialPhase = initialState.LifecyclePhase()
+	}
+
+	*workerCtxPtr = &WorkerContext[TObserved, TDesired]{
+		mu:                 s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
+		identity:           identity,
+		worker:             worker,
+		currentState:       initialState,
+		currentStateReason: "initial",
+		lastLifecyclePhase: initialPhase,
+		collector:          collector,
+		executor:           executor,
+		actionHistory:      actionHistoryBuffer,
+		stateEnteredAt:     time.Now(),
+		stateTransitions:   make(map[string]int64),
+		stateDurations:     make(map[string]time.Duration),
+		totalTransitions:   0,
+		collectorRestarts:  0,
+		startupCount:       startupCount,
+	}
 }
 
 // RemoveWorker removes a worker from the registry for a restart, which adds
