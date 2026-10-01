@@ -366,9 +366,8 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		close(done)
 	}()
 
-	// Shutdown waits for Done so the deps key is already cleared when the
-	// caller starts the next v2 run; returning earlier would let this run's
-	// late ClearGlobalDeps delete the next run's freshly published key.
+	// Shutdown waits for Done: returning earlier would let this run's late
+	// ClearGlobalDeps delete the key the next v2 run has just stored.
 	result.Shutdown = func() {
 		appSup.Shutdown()
 		<-done

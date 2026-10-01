@@ -270,10 +270,8 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"cancelling the caller ctx must trigger a complete teardown")
 
-		// The supervisor must be fully stopped: ClearGlobalDeps runs strictly
-		// after supDone, so a cleared key proves the supervisor exited.
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the deps key must be cleared after the cancellation-triggered teardown")
+			"the deps key must be cleared: ClearGlobalDeps runs only after supDone, so a set key means the supervisor did not exit")
 
 		// The graceful drain must run against a LIVE tick loop. If the tick
 		// loop shared the caller's ctx, the cancel would kill it before

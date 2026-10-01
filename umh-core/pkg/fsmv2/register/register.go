@@ -107,8 +107,7 @@ func Worker[TConfig any, TStatus any, TDeps any](
 }
 
 // SetGlobalDepsBuilder registers a typed deps builder function for workerType.
-// The builder receives the standard framework deps so workers can wire per-instance
-// resources (metrics recorders keyed by identity, loggers, state readers).
+// The builder runs once per child instance, so it can build per-instance resources.
 //
 // Panics if workerType is empty or builderFn is nil (fail-fast at init time).
 func SetGlobalDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {
@@ -126,8 +125,7 @@ func SetGlobalDepsBuilder[T any](workerType string, builderFn func(deps.Identity
 	depsBuilderRegistry.Store(workerType, wrapped)
 }
 
-// GlobalDepsBuilder retrieves the deps builder function for workerType.
-// Returns (nil, false) if no builder was registered for this worker type.
+// GlobalDepsBuilder returns the builder stored under workerType, and false when there is none.
 func GlobalDepsBuilder(workerType string) (func(deps.Identity, deps.FSMLogger, deps.StateReader) any, bool) {
 	v, ok := depsBuilderRegistry.Load(workerType)
 	if !ok {

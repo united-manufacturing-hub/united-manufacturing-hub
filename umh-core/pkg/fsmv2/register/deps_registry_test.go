@@ -103,19 +103,19 @@ var _ = Describe("register deps registry", func() {
 	})
 
 	Context("zero-value fallback", func() {
-		It("returns Go-native nil for pointer TDeps when never SetGlobalDeps", func() {
+		It("returns nil for pointer TDeps when nothing is stored", func() {
 			got := register.GlobalDeps[*depsRegistryDeps]("never-set")
 
 			Expect(got).To(BeNil())
 		})
 
-		It("returns struct{} zero value for register.NoDeps when never SetGlobalDeps", func() {
+		It("returns the zero struct for register.NoDeps when nothing is stored", func() {
 			got := register.GlobalDeps[register.NoDeps]("never-set-nodeps")
 
 			Expect(got).To(Equal(register.NoDeps{}))
 		})
 
-		It("returns value-type zero for value TDeps when never SetGlobalDeps", func() {
+		It("returns the zero value for value TDeps when nothing is stored", func() {
 			type zeroCheck struct {
 				S string
 				I int
@@ -126,7 +126,7 @@ var _ = Describe("register deps registry", func() {
 			Expect(got).To(Equal(zeroCheck{}))
 		})
 
-		It("returns nil interface for interface-typed TDeps when never SetGlobalDeps", func() {
+		It("returns a nil interface for interface TDeps when nothing is stored", func() {
 			type someIface interface{ Ping() }
 
 			got := register.GlobalDeps[someIface]("never-set-iface")

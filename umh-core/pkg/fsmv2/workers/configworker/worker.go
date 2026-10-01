@@ -70,8 +70,7 @@ const WorkerTypeName = "configworker"
 const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 
 // CPUEnabledDepsKey is the register.SetGlobalDeps key for the bool that says
-// whether the fsmv2 CPU monitor child runs (USE_FSMV2_CPU). It needs its own key
-// for the reason at ConfigManagerDepsKey.
+// whether the fsmv2 CPU monitor child runs (USE_FSMV2_CPU).
 const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
 
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
@@ -94,8 +93,7 @@ type ConfigworkerWorker struct {
 
 // NewConfigworkerWorker creates a config worker holding the registry published
 // under WorkerTypeName via register.SetGlobalDeps. It returns an error when no
-// registry was published. Without that check, a nil *Registry would panic at its
-// first method call, far from the missing wiring.
+// registry was published.
 func NewConfigworkerWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,

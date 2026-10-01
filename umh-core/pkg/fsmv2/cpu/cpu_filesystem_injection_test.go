@@ -87,8 +87,6 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 	}
 
 	It("samples through a published filesystem rather than the real one", func() {
-		// The registry outlives the spec and SetGlobalDeps overwrites, so publishing
-		// without clearing hands this stub to every later spec.
 		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
