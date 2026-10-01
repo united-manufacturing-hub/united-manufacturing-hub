@@ -285,8 +285,8 @@ state: "running"
 	})
 })
 
-// recordingChannelProvider is a communicator.ChannelProvider that records the
-// worker IDs it is called with and keeps the channels it hands out.
+var _ communicator.ChannelProvider = (*recordingChannelProvider)(nil)
+
 type recordingChannelProvider struct {
 	getChannelsIDs     []string
 	getInboundStatsIDs []string
