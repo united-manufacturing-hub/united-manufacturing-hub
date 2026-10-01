@@ -17,6 +17,7 @@ package transport
 import (
 	"sync"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
@@ -28,12 +29,16 @@ type ChannelProvider interface {
 	GetInboundStats(workerID string) (capacity int, length int)
 }
 
+// ChannelProviderKey holds the ChannelProvider a TransportWorker gets its
+// channels from. Without one in the map, the worker uses the global provider.
+var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("transport.channel_provider")
+
 var (
 	globalChannelProvider ChannelProvider
 	channelProviderMu     sync.RWMutex
 )
 
-// SetChannelProvider sets the global channel provider. Must be called before starting TransportWorker.
+// SetChannelProvider sets the global channel provider.
 func SetChannelProvider(p ChannelProvider) {
 	channelProviderMu.Lock()
 	defer channelProviderMu.Unlock()

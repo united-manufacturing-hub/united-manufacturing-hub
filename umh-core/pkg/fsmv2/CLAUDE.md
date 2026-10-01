@@ -42,7 +42,7 @@ Children aggregation (health counts) is handled by the supervisor, not in `Colle
 
 ## Channel Singleton Pattern
 
-For workers that share channels (like TransportWorker with Push/Pull children), use a singleton `ChannelProvider`:
+For workers that share channels (like TransportWorker with Push/Pull children), use a singleton `ChannelProvider`. Production sets it in `cmd/main.go`:
 
 ```go
 // Set before creating workers
@@ -56,7 +56,12 @@ func NewDependencies(...) *Dependencies {
 }
 ```
 
-This enables parent-child channel sharing without tight coupling.
+A scenario supplies a mock provider under `transport.ChannelProviderKey` in the
+dependency map; the worker falls back to the global when the key is absent (see
+"Mocks" below).
+
+The push and pull children read the transport worker's channels through its
+dependencies, so they share its channels without a provider of their own.
 
 ## State Machine States
 
@@ -302,8 +307,8 @@ Transport / push canonical example:
 // transport/worker.go
 func init() {
     register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](WorkerTypeName,
-        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
-            w, err := NewTransportWorker(id, logger, sr)
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
+            w, err := NewTransportWorker(id, logger, sr, m)
             if err != nil {
                 return nil, err
             }
@@ -506,10 +511,10 @@ func TestExamples(t *testing.T) {
     RunSpecs(t, "Examples Suite")
 }
 
-// transport_scenario_test.go - NO RunSpecs, just Describe blocks
+// transport_channel_provider_test.go - NO RunSpecs, just Describe blocks
 package examples_test
 
-var _ = Describe("Transport Scenario", func() {
+var _ = Describe("TransportTestChannelProvider", func() {
     // tests...
 })
 ```
