@@ -51,10 +51,7 @@ var PersistenceScenarioV2 = ScenarioV2{
 
 		env.Step("create the persistence worker")
 
-		// The persistence worker's FSM ignores the "state" config key:
-		// StoppedState moves to TryingToStart unless a shutdown is requested.
-		// The key is sent so this config has the same shape as the other scenarios.
-		if err := env.Client.Upsert(ref, map[string]any{"state": "running"}); err != nil {
+		if err := env.Client.Upsert(ref, map[string]any{}); err != nil {
 			return err
 		}
 
