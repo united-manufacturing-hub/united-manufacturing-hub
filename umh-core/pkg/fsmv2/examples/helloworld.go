@@ -27,14 +27,9 @@ import (
 
 const mockMoodPath = "mood"
 
-// HelloworldScenarioV2 runs one helloworld child against a mock filesystem
-// held in the dependency map. It creates the child with a happy mood file,
-// rewrites the file to grumpy, and deletes it. After each change it waits for
-// the child's observation to show the new mood.
-//
-// The child starts and then stays Running through all three moods, because
-// only the mood "sad" moves it to Degraded. So this scenario waits for the
-// mood in the observation.
+// HelloworldScenarioV2 runs one helloworld child against a mockFilesystem in
+// the dependency map. It waits for the mood in the observation, not for a
+// state: only the mood "sad" moves the child out of Running.
 var HelloworldScenarioV2 = ScenarioV2{
 	Name:        "helloworld",
 	Description: "A helloworld child reads its mood from a file. The scenario changes the file twice and checks that the observed mood follows each time",
@@ -53,8 +48,6 @@ var HelloworldScenarioV2 = ScenarioV2{
 	},
 
 	Run: func(ctx context.Context, env Env) error {
-		// Assert the Service back to *mockFilesystem, so Run can change the
-		// file the worker reads.
 		service, ok := config.LookupDependency(env.Dependencies, hello_world.FilesystemKey)
 		if !ok {
 			return errors.New("the helloworld scenario's dependency map holds no filesystem under hello_world.FilesystemKey")

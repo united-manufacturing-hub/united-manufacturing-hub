@@ -108,12 +108,8 @@ type scenarioEnvMock struct {
 
 var scenarioEnvMockKey = config.NewDependencyKey[*scenarioEnvMock]("examples.test.env_deps_mock")
 
-// The probe registers once for the test binary, not per spec: its constructor
-// publishes the label it was handed, so the spec can ask whether the map
-// ScenarioV2.Dependencies returned reached a worker the Run
-// created. register.Worker panics on a duplicate worker type, so a re-run of
-// the suite in one process (go test -count=2) must not reach simple.Register
-// a second time.
+// Registered in init: register.Worker panics on a duplicate worker type,
+// so a per-spec registration would panic under go test -count=2.
 func init() {
 	simple.Register(simple.MonitorSpec[scenarioDepsProbeConfig, scenarioDepsProbeStatus, scenarioDepsProbeDeps]{
 		WorkerType: scenarioDepsProbeType,
@@ -345,19 +341,17 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 	It("lists noop in the merged registry and runs a v2 scenario end-to-end on the kernel-only supervisor", func() {
 		// The v2 scenarios must appear in the same listing the CLI reads, so
-		// --list and --scenario find v1 and v2 scenarios alike. helloworld is a
-		// v2 scenario only.
+		// --list and --scenario find v1 and v2 scenarios alike.
 		listing := examples.ListScenarios()
 		Expect(listing).To(HaveKey("noop"),
 			"merged ListScenarios must contain the v2 noop scenario")
 		Expect(listing).To(HaveKey("helloworld"),
 			"merged ListScenarios must contain the v2 helloworld scenario")
 		Expect(examples.Registry).NotTo(HaveKey("helloworld"),
-			"the v1 Registry must not carry helloworld after the move to RegistryV2")
+			"helloworld must be a v2 scenario only")
 
-		// run a test-local v2 scenario through the v2 runner. The
-		// sentinel bool proves the runner actually invoked Run; noop's
-		// own Run returns nil immediately, so it cannot prove execution.
+		// The sentinel bool proves the runner invoked Run; noop's own Run
+		// returns nil at once, so it cannot.
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -675,9 +669,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Settle gate: wait until the upserted child's constructor ran before
-		// tearing down, so the verdict below is about delivery, not about a
-		// race between Upsert and teardown.
+		// Settle gate: wait for the child's constructor, so teardown cannot race the Upsert.
 		Eventually(scenarioDepsProbeSeen.Load, "30s").ShouldNot(BeNil(),
 			"the upserted child's constructor must run while the scenario's supervisor is live")
 

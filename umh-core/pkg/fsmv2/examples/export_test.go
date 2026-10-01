@@ -16,8 +16,7 @@ package examples
 
 import "time"
 
-// SetWaitForTimeoutForTest overrides how long a single WaitFor may take
-// before it fails the run, and returns a func restoring the default.
+// SetWaitForTimeoutForTest sets waitForTimeout and returns a func that restores it.
 func SetWaitForTimeoutForTest(d time.Duration) (restore func()) {
 	prev := waitForTimeout
 	waitForTimeout = d

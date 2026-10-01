@@ -30,7 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
-// logLinesNaming counts the JSON log lines that mention s.
 func logLinesNaming(logOutput, s string) int {
 	count := 0
 
@@ -53,8 +52,6 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		// examples.Run calls Run on the caller's goroutine, so the spec reads
-		// waitErr without a lock.
 		var waitErr error
 		var firstWaitPolls atomic.Int32
 
@@ -64,8 +61,6 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 			Run: func(ctx context.Context, env examples.Env) error {
 				env.Step("change the mood file to grumpy")
 
-				// The first check reports done on its third poll, so a WaitFor
-				// that gives up after one poll fails here and fails the run.
 				if err := env.WaitFor(ctx, "store shows the grumpy mood",
 					func(_ context.Context) (bool, string, error) {
 						n := firstWaitPolls.Add(1)
@@ -80,10 +75,8 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 
 				env.Step("remove the mood file")
 
-				// The second check never reports done, so ctx must end first.
-				// The wait's error is recorded instead of returned, so the
-				// spec can assert on the error text while the run itself
-				// still finishes cleanly.
+				// Recorded, not returned, so Run returns nil and the spec can still
+				// read the wait's error.
 				waitErr = env.WaitFor(ctx, "store shows an empty mood",
 					func(_ context.Context) (bool, string, error) {
 						return false, "mood=grumpy", nil
@@ -306,9 +299,6 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 			},
 		}
 
-		// The caller's ctx has no deadline, so only the wait's own timeout can
-		// end it. The examples.Run call sits in a goroutine so a hung wait
-		// fails this spec through Eventually.
 		type runOutcome struct {
 			result *examples.RunResult
 			err    error
@@ -316,6 +306,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 
 		outcome := make(chan runOutcome, 1)
 
+		// In a goroutine, so a hung wait fails the spec through Eventually.
 		go func() {
 			result, err := examples.Run(context.Background(), examples.RunConfig{
 				ScenarioV2:   neverDone,
@@ -348,8 +339,6 @@ var _ = Describe("ScenarioV2 wait context", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// examples.Run calls Run on the caller's goroutine, so the spec reads
-		// waitErr without a lock.
 		var waitErr error
 
 		cancelled := examples.ScenarioV2{
@@ -358,8 +347,6 @@ var _ = Describe("ScenarioV2 wait context", func() {
 			Run: func(ctx context.Context, env examples.Env) error {
 				env.Step("wait on a check that never passes")
 
-				// The poll never reports done, so the ctx the spec cancels
-				// is the only thing that can end this wait.
 				waitErr = env.WaitFor(ctx, "store shows the grumpy mood",
 					func(_ context.Context) (bool, string, error) {
 						return false, "mood=still-happy", nil

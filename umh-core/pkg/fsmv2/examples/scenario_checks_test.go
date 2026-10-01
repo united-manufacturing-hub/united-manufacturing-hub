@@ -32,9 +32,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// scenarioErrorProbeType names the monitor worker the worker-logged error
-// spec upserts. simple.Register wires its factory, supervisor and CSE type,
-// so its constructor runs the way any worker a scenario creates runs.
 const scenarioErrorProbeType = "scenarioerrorprobe"
 
 type scenarioErrorProbeConfig struct{}
@@ -43,11 +40,8 @@ type scenarioErrorProbeDeps struct{}
 
 type scenarioErrorProbeStatus struct{}
 
-// The probe registers once for the test binary, not per spec. Its constructor
-// logs one error through the logger the framework enriched with its identity
-// (BaseDependencies stores a With-wrapped logger), so the spec can ask
-// whether an error a worker logs reaches the run's checks through the
-// supervisor's logger rather than only through Env.Logger.
+// The probe's constructor logs one error through its BaseDependencies
+// logger, the With-wrapped logger the supervisor gives every worker.
 func init() {
 	simple.Register(simple.MonitorSpec[scenarioErrorProbeConfig, scenarioErrorProbeStatus, scenarioErrorProbeDeps]{
 		WorkerType: scenarioErrorProbeType,
@@ -76,15 +70,13 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		scenario.Run = func(ctx context.Context, env examples.Env) error {
 			env.Step("change the mood file to grumpy")
 
-			// With adds context fields, the shape a supervisor's worker logger
-			// has.
+			// With, as the supervisor's worker loggers do.
 			env.Logger.With(deps.String("probe", "logger-context")).SentryError(
 				deps.FeatureExamples, "",
 				errors.New("the mood file is corrupt"),
 				msg)
 
-			// The check is done on its first poll, so only the logged error
-			// can fail this wait.
+			// Only the logged error can fail this wait.
 			if waitFor {
 				waitErr = env.WaitFor(ctx, "store shows the grumpy mood",
 					func(_ context.Context) (bool, string, error) {
@@ -123,8 +115,6 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		Expect(waitErr.Error()).To(ContainSubstring("store shows the grumpy mood"),
 			"the wait's failure must name the check that was running")
 
-		// Run returned nil after swallowing the wait failure; the runner fails
-		// it anyway.
 		Expect(runErr).To(HaveOccurred(),
 			"an error logged during a run must fail the run again once Run has returned")
 		Expect(runErr.Error()).To(ContainSubstring("probe_unexpected_error"),
@@ -155,9 +145,8 @@ var _ = Describe("ScenarioV2 error checks", func() {
 
 	It("does not fail the run when the logged error matches ExpectedErrors", func() {
 		result, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
-			Name:        "expected-error",
-			Description: "test-local Run for the ExpectedErrors check",
-			// A substring, not the whole message: matching is by substring.
+			Name:           "expected-error",
+			Description:    "test-local Run for the ExpectedErrors check",
 			ExpectedErrors: []string{"probe_unexpected"},
 		}, "probe_unexpected_error", true)
 
@@ -200,9 +189,8 @@ var _ = Describe("ScenarioV2 error checks", func() {
 					return err
 				}
 
-				// The poll is never done: only the worker's logged error
-				// ends the wait, so a ctx timeout here would mean the error
-				// never reached the recorder.
+				// Only the worker's logged error can end this wait; a ctx timeout
+				// means the error never reached the run's checks.
 				return env.WaitFor(ctx, "store shows the grumpy mood",
 					func(_ context.Context) (bool, string, error) {
 						return false, "mood=still-happy", nil
@@ -236,7 +224,6 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// badStateName is in no worker type's validWorkerStates entry.
 		const badStateName = "NotAValidState"
 		const probeWorkerID = "bad-state-probe"
 
@@ -244,8 +231,7 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 			Name:        "invalid-stored-state",
 			Description: "test-local Run for the stored-state check",
 			Run: func(ctx context.Context, env examples.Env) error {
-				// Wait for the config worker's real Running state, so the check
-				// also meets a valid state it must not flag.
+				// So the stored-state check also meets a valid state it must not flag.
 				if err := env.WaitFor(ctx, "the kernel config worker reports Running",
 					func(ctx context.Context) (bool, string, error) {
 						dump, err := examples.DumpScenario(ctx, store, 0)
@@ -344,8 +330,6 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 	})
 })
 
-// failingDeltasStore wraps a real store and fails every GetDeltas call, so a
-// spec can drive the stored-state check into its read-error branch.
 type failingDeltasStore struct {
 	storage.TriangularStoreInterface
 }
@@ -443,8 +427,6 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// Duration 0: the run ends when the caller cancels, so the stored-state
-		// check starts after ctx is cancelled.
 		returning := examples.ScenarioV2{
 			Name:        "cancel-after-return",
 			Description: "test-local Run for the post-return cancellation",
@@ -455,6 +437,7 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 
 		ctx, cancel := context.WithCancel(context.Background())
 
+		// No Duration: the run ends only when the caller cancels.
 		result, err := examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   returning,
 			TickInterval: 50 * time.Millisecond,
@@ -464,8 +447,6 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 		Expect(err).NotTo(HaveOccurred(),
 			"a run whose Run returned must succeed")
 
-		// The caller cancels after Run returned; the teardown wakes on that
-		// cancellation and reads the store for the state check.
 		cancel()
 
 		Eventually(result.Done, "55s").Should(BeClosed(),

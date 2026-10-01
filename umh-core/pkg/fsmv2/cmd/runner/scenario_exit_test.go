@@ -28,15 +28,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
-// Drives a real v2 run through examples.Run and hands the result to
-// shutdownExitCode, so it lives in the CLI package.
+// In package main so it can hand a real run's result to shutdownExitCode.
 var _ = Describe("Scenario warnings and late errors", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
 
-	// runScenario runs one v2 scenario on a real supervisor and returns its
-	// result after Done closes.
 	runScenario := func(scenario examples.ScenarioV2, settle time.Duration) *examples.RunResult {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
@@ -120,8 +117,6 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("sets RunResult.Err on an error logged after Run returned, and the exit code follows Err", func() {
-		// The error lands inside the settle window, after the checks that
-		// already ran, so it sets Err when the run ends instead.
 		lateError := examples.ScenarioV2{
 			Name:        "late-error",
 			Description: "test-local Run for the late-error check",

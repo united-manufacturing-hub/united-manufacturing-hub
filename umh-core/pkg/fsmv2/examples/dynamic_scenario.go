@@ -53,11 +53,7 @@ const (
 // DynamicScenarioV2 drives one helloworld child through the migration-API
 // client: create it to Running, Upsert an observable config change (a new
 // moodFilePath whose file contents land in observed status), then Delete it.
-// The kernel-only supervisor and its config worker run the whole time.
-//
-// Run returns right after the delete and the config worker check. The child
-// stops about a second later, while the runner keeps going for --duration,
-// and no check reads that Stopped line.
+// Run does not wait for the child to stop after the delete.
 var DynamicScenarioV2 = ScenarioV2{
 	Name:        "dynamic",
 	Description: "Creates a helloworld child, points it at a second mood file, then deletes it, all through the fsmv2 client",
@@ -87,8 +83,6 @@ func runDynamicHello(ctx context.Context, env Env) error {
 		return fmt.Errorf("write updated mood file: %w", err)
 	}
 
-	// CREATE: Upsert the child pointing at the initial mood file, wait until it
-	// reaches Running.
 	env.Step("create the child with the initial mood file")
 
 	if err := env.Client.Upsert(ref, map[string]any{
@@ -114,9 +108,6 @@ func runDynamicHello(ctx context.Context, env Env) error {
 		return err
 	}
 
-	// UPDATE: Upsert a changed config field (a different moodFilePath), wait
-	// until the new mood lands in observed status. The config field itself
-	// changes here; the worker re-reads the new path in CollectObservedState.
 	env.Step("point the child at a second mood file that says " + dynamicHelloUpdatedMood + "; wait for mood=" + dynamicHelloUpdatedMood + " in the observation")
 
 	if err := env.Client.Upsert(ref, map[string]any{

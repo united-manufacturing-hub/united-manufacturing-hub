@@ -72,10 +72,8 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 			Store:        store,
 		})
 
-		// Run checks each leg through env.WaitFor, so this battery checks the
-		// outcome only. What a removal leaves in the store and what Get then
-		// returns are checked in app_removal_marks_deleted_test.go,
-		// app_shutdown_marks_deleted_test.go and churn_capstone_test.go.
+		// Run checks each step itself through env.WaitFor. What a removal leaves in
+		// the store is checked in app_removal_marks_deleted_test.go.
 		Expect(err).NotTo(HaveOccurred(),
 			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, Delete the child, and still read the config worker")
 		Eventually(result.Done, "55s").Should(BeClosed(),

@@ -294,9 +294,8 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	writer := dynamicchildren.NewWriter()
 	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
 
-	// The recorder and the wrapped logger exist before the supervisor starts,
-	// so an error any worker logs from the first tick on fails the run's
-	// checks, not just one the scenario's Run logs itself.
+	// Built before the supervisor, so an error a worker logs on its first
+	// tick also fails the run.
 	recorder := &runRecorder{
 		scenario:         cfg.ScenarioV2.Name,
 		expectedErrors:   cfg.ScenarioV2.ExpectedErrors,
@@ -367,8 +366,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		return nil, scenarioFailed(cfg.ScenarioV2.Name, err)
 	}
 
-	// Checked again after Run returned, so a scenario that swallows the wait
-	// failure cannot hide the error. A later error sets RunResult.Err instead.
+	// Checked again: a Run that swallows a failed wait must still fail.
 	if logged := recorder.loggedError(); logged != nil {
 		return nil, scenarioFailed(cfg.ScenarioV2.Name, logged)
 	}

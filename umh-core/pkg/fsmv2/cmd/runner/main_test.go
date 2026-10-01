@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
-// TestShutdownExitCode checks shutdownExitCode for each kind of completed run.
 func TestShutdownExitCode(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -67,8 +66,6 @@ func TestShutdownExitCode(t *testing.T) {
 	}
 }
 
-// TestFatalMessage checks fatalMessage for a scenario that failed after it
-// started and for one that could not start.
 func TestFatalMessage(t *testing.T) {
 	failedRun := fmt.Errorf("scenario %q %w: %w", "probe", examples.ErrScenarioFailed, errors.New("the mood file is corrupt"))
 	if got := fatalMessage(failedRun); got != "Scenario failed" {

@@ -31,8 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// fakeMoodFilesystem is a filesystem.Service whose ReadFile returns fixed
-// contents, so a test can hand the worker a mood without a file on disk.
 type fakeMoodFilesystem struct {
 	filesystem.Service
 	contents string

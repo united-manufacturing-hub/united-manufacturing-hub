@@ -64,17 +64,14 @@ type runRecorder struct {
 	firstUnexpectedWarn error
 }
 
-// alwaysAllowedMessages lists the message substrings every run may log at
-// error or warning level without failing: the collector reports these while
-// it does its job, so no scenario should have to declare them.
+// alwaysAllowedMessages are logged by the collector in normal operation, so
+// every run may log them at error or warning level without declaring them.
 var alwaysAllowedMessages = []string{
 	"data_stale",
 	"collector_observation_failed",
 	"collector_stop_skipped",
 }
 
-// recordLoggedError keeps the first error whose message messageAllowed does
-// not allow, wrapped so a failure names that message.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
 	if r.messageAllowed(msg, r.expectedErrors) {
 		return
@@ -88,10 +85,7 @@ func (r *runRecorder) recordLoggedError(err error, msg string) {
 	}
 }
 
-// messageAllowed reports whether a logged message contains a substring the
-// scenario declared in ExpectedErrors or ExpectedWarnings, or one of the
-// messages every run allows. An empty entry matches nothing, because
-// strings.Contains would match every message.
+// An empty expected entry matches nothing: strings.Contains would match every message.
 func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	for _, substr := range expected {
 		if substr != "" && strings.Contains(msg, substr) {
@@ -108,8 +102,6 @@ func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	return false
 }
 
-// recordLoggedWarning keeps the first warning whose message messageAllowed
-// does not allow.
 func (r *runRecorder) recordLoggedWarning(msg string) {
 	if r.messageAllowed(msg, r.expectedWarnings) {
 		return
@@ -123,7 +115,6 @@ func (r *runRecorder) recordLoggedWarning(msg string) {
 	}
 }
 
-// loggedWarning returns the first unexpected logged warning, or nil.
 func (r *runRecorder) loggedWarning() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -131,7 +122,6 @@ func (r *runRecorder) loggedWarning() error {
 	return r.firstUnexpectedWarn
 }
 
-// loggedError returns the first unexpected logged error, or nil.
 func (r *runRecorder) loggedError() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -139,7 +129,6 @@ func (r *runRecorder) loggedError() error {
 	return r.firstUnexpectedErr
 }
 
-// setLastStep remembers description as the last change Step announced.
 func (r *runRecorder) setLastStep(description string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -147,7 +136,6 @@ func (r *runRecorder) setLastStep(description string) {
 	r.lastStep = description
 }
 
-// lastStepDescription returns the last change Step announced.
 func (r *runRecorder) lastStepDescription() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -162,14 +150,12 @@ type recordingLogger struct {
 	recorder *runRecorder
 }
 
-// SentryError records the error for the run's checks, then delegates.
 func (l *recordingLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
 	l.recorder.recordLoggedError(err, msg)
 
 	l.FSMLogger.SentryError(feature, hierarchyPath, err, msg, fields...)
 }
 
-// SentryWarn records the warning for RunResult.Err, then delegates.
 func (l *recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
 	l.recorder.recordLoggedWarning(msg)
 
@@ -183,8 +169,7 @@ func (l *recordingLogger) With(fields ...deps.Field) deps.FSMLogger {
 
 const waitForPollInterval = 50 * time.Millisecond
 
-// waitForTimeout bounds one WaitFor call. A poll that ignores its ctx can hold
-// the wait past it.
+// A poll that ignores its ctx can hold a WaitFor past waitForTimeout.
 var waitForTimeout = 30 * time.Second
 
 // Step logs one line naming the change the scenario is about to make, and
