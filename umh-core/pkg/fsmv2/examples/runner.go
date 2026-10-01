@@ -56,12 +56,10 @@ import (
 // RunResult contains the result of running a scenario.
 type RunResult struct {
 	// Done closes when teardown is complete: the supervisor has stopped, its
-	// cleanup ran, the store dump printed when DumpStore is set, and the
-	// published configworker deps key is cleared. The cleared key is what
-	// makes back-to-back runs in one process safe.
+	// cleanup ran, the published configworker deps key is cleared, and the
+	// store dump printed when DumpStore is set.
 	Done <-chan struct{}
-	// Shutdown initiates teardown and blocks until Done closes, so the deps
-	// key is already cleared when the caller starts the next run.
+	// Shutdown starts teardown and blocks until Done closes.
 	Shutdown func()
 	// ShutdownClean is the root supervisor's DrainOutcomeClean. Read it after
 	// Done closes.
@@ -80,11 +78,9 @@ func scenarioFailed(name string, err error) error {
 	return fmt.Errorf("scenario %q %w: %w", name, ErrScenarioFailed, err)
 }
 
-// Run executes a v2 scenario with the given configuration (see runV2).
-//
-// If DumpStore is set, Run prints the store dump after teardown, before Done
-// closes. When the scenario's Run fails, the dump is printed before Run
-// returns its error.
+// Run executes a v2 scenario (see runV2). With DumpStore set, the store dump
+// prints after teardown: before Done closes, or, when the scenario's Run
+// fails, before Run returns the error.
 func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	if cfg.ScenarioV2.Run == nil {
 		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Run is nil",
@@ -217,14 +213,12 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		releaseScenarioDeps()
 	}
 
-	// printStoreDump prints the store's changes since the run started when
-	// DumpStore is set. It reads the store on context.Background(), so a
-	// cancelled caller ctx cannot cut the dump short.
 	printStoreDump := func() {
 		if !cfg.DumpStore {
 			return
 		}
 
+		// A cancelled caller ctx must not cut the dump short.
 		dump, err := DumpScenario(context.Background(), cfg.Store, startSyncID)
 		if err != nil {
 			cfg.Logger.SentryWarn(deps.FeatureExamples, "", "scenario_dump_failed",
@@ -236,15 +230,10 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		fmt.Print(dump.FormatHuman())
 	}
 
-	// The scenario's Run is user-authored code, so it may return an error or
-	// panic. Either way the supervisor must stop and the deps key must be
-	// cleared before runV2's frame unwinds, otherwise every later runV2 in
-	// this process fails its already-published check. The flag stays false
-	// until the teardown goroutine takes ownership of cleanup.
+	// Until the teardown goroutine owns cleanup, every return below and a panic
+	// in the scenario's Run tear down and print the dump here.
 	teardownOwnedByGoroutine := false
 
-	// Every return below this line, and a panic in the scenario's Run, tears
-	// down and prints the dump here.
 	defer func() {
 		if !teardownOwnedByGoroutine {
 			teardown()
