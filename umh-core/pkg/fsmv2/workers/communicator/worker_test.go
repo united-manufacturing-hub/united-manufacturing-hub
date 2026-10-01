@@ -335,8 +335,8 @@ var _ = Describe("CommunicatorWorker channel provider dependency", func() {
 		var mapProviderAsProvider communicator.ChannelProvider = mapProvider
 		fsmv2types.SetDependency(dependencyMap, communicator.ChannelProviderKey, mapProviderAsProvider)
 
-		// The worker reads the provider under this literal map key.
-		Expect(dependencyMap).To(HaveKey("communicator.channel_provider"))
+		Expect(dependencyMap).To(HaveKey("communicator.channel_provider"),
+			"the wrongly typed map spec below builds its map with this literal key")
 
 		identity := depspkg.Identity{ID: "map-provider-worker", WorkerType: "communicator"}
 		built, err := factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, dependencyMap)
