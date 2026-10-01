@@ -76,120 +76,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		return err
 	}
 
-	identityDoc := persistence.Document{
-		"id":             identity.ID,
-		"name":           identity.Name,
-		"worker_type":    identity.WorkerType,
-		"hierarchy_path": identity.HierarchyPath,
-	}
-	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_identity_failed")
-
-		return fmt.Errorf("failed to save identity: %w", err)
-	}
-
-	s.logger.Debug("identity_saved")
-
-	// Read the prior StartupCount before the SaveObserved below, which would
-	// otherwise overwrite it. The ordering is pinned by "StartupCount persistence
-	// advances across a worker respawn instead of resetting to 1". A load error other
-	// than "not yet present" is surfaced, so a transient store failure does not
-	// silently look like a fresh worker.
-	var startupCount int64 = 1
-
-	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer loadCancel()
-
-	var prevObserved TObserved
-
-	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
-	if loadErr == nil {
-		if holder, ok := any(prevObserved).(deps.MetricsHolder); ok {
-			fm := holder.GetFrameworkMetrics()
-			if fm.StartupCount > 0 {
-				startupCount = fm.StartupCount + 1
-			}
-		}
-	} else if !errors.Is(loadErr, persistence.ErrNotFound) {
-		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_load_prev_observation_failed", deps.Err(loadErr))
-	}
-
-	// Persist the computed StartupCount on the initial observation so a crash
-	// between this save and the first collector tick does not reset it. The
-	// collector still owns the full framework metrics on every later tick.
-	if setter, ok := observed.(interface {
-		SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
-	}); ok {
-		observed = setter.SetFrameworkMetrics(deps.FrameworkMetrics{StartupCount: startupCount})
-	}
-
-	observedJSON, err := json.Marshal(observed)
+	startupCount, err := s.saveInitialDocuments(ctx, worker, identity, observed, initialDesired)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_observed_failed")
-
-		return fmt.Errorf("failed to marshal observed state: %w", err)
-	}
-
-	observedDoc := make(persistence.Document)
-	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_observed_failed")
-
-		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
-	}
-
-	observedDoc["id"] = identity.ID
-
-	// Inject the initial FSM state name so the store never contains state="".
-	// CollectObservedState runs before the collector's StateProvider closure is
-	// wired up, so the Observation struct leaves State="" at this point. The
-	// StateProvider fires on every subsequent collection tick, but if the
-	// scenario ends before the first tick fires (e.g., during the last cycle's
-	// shutdown), the store would retain state="" and fail the
-	// verifyObservedStateHasState check. Injecting the registered initial state
-	// here closes that window.
-	if initialStateForDoc := worker.GetInitialState(); initialStateForDoc != nil {
-		observedDoc["state"] = initialStateForDoc.String()
-	}
-
-	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
-	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_observed_failed")
-
-		return fmt.Errorf("failed to save initial observation: %w", err)
-	}
-
-	s.logger.Debug("initial_observation_saved")
-
-	desiredJSON, err := json.Marshal(initialDesired)
-	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_desired_failed")
-
-		return fmt.Errorf("failed to marshal desired state: %w", err)
-	}
-
-	desiredDoc := make(persistence.Document)
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_desired_failed")
-
-		return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
-	}
-
-	desiredDoc["id"] = identity.ID
-
-	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
-	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
-
-		return fmt.Errorf("failed to save initial desired state: %w", err)
-	}
-
-	s.logger.Debug("initial_desired_state_saved")
-
-	// This ID may belong to a removed worker; its tombstone must not apply to the new one.
-	if err := s.store.ClearTombstone(ctx, s.workerType, identity.ID); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_clear_tombstone_failed")
-
-		// The store error already names the operation and the worker.
 		return err
 	}
 
@@ -489,6 +377,130 @@ func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.
 	}
 
 	return observed, nil
+}
+
+// saveInitialDocuments writes a worker's identity, observed and desired
+// documents and clears its tombstone, and returns the StartupCount it
+// persisted on the observed document.
+func (s *Supervisor[TObserved, TDesired]) saveInitialDocuments(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, observed fsmv2.ObservedState, initialDesired fsmv2.DesiredState) (int64, error) {
+	identityDoc := persistence.Document{
+		"id":             identity.ID,
+		"name":           identity.Name,
+		"worker_type":    identity.WorkerType,
+		"hierarchy_path": identity.HierarchyPath,
+	}
+	if err := s.store.SaveIdentity(ctx, s.workerType, identity.ID, identityDoc); err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_identity_failed")
+
+		return 0, fmt.Errorf("failed to save identity: %w", err)
+	}
+
+	s.logger.Debug("identity_saved")
+
+	// Read the prior StartupCount before the SaveObserved below, which would
+	// otherwise overwrite it. The ordering is pinned by "StartupCount persistence
+	// advances across a worker respawn instead of resetting to 1". A load error other
+	// than "not yet present" is surfaced, so a transient store failure does not
+	// silently look like a fresh worker.
+	var startupCount int64 = 1
+
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer loadCancel()
+
+	var prevObserved TObserved
+
+	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
+	if loadErr == nil {
+		if holder, ok := any(prevObserved).(deps.MetricsHolder); ok {
+			fm := holder.GetFrameworkMetrics()
+			if fm.StartupCount > 0 {
+				startupCount = fm.StartupCount + 1
+			}
+		}
+	} else if !errors.Is(loadErr, persistence.ErrNotFound) {
+		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_load_prev_observation_failed", deps.Err(loadErr))
+	}
+
+	// Persist the computed StartupCount on the initial observation so a crash
+	// between this save and the first collector tick does not reset it. The
+	// collector still owns the full framework metrics on every later tick.
+	if setter, ok := observed.(interface {
+		SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
+	}); ok {
+		observed = setter.SetFrameworkMetrics(deps.FrameworkMetrics{StartupCount: startupCount})
+	}
+
+	observedJSON, err := json.Marshal(observed)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_observed_failed")
+
+		return 0, fmt.Errorf("failed to marshal observed state: %w", err)
+	}
+
+	observedDoc := make(persistence.Document)
+	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_observed_failed")
+
+		return 0, fmt.Errorf("failed to unmarshal observed state to document: %w", err)
+	}
+
+	observedDoc["id"] = identity.ID
+
+	// Inject the initial FSM state name so the store never contains state="".
+	// CollectObservedState runs before the collector's StateProvider closure is
+	// wired up, so the Observation struct leaves State="" at this point. The
+	// StateProvider fires on every subsequent collection tick, but if the
+	// scenario ends before the first tick fires (e.g., during the last cycle's
+	// shutdown), the store would retain state="" and fail the
+	// verifyObservedStateHasState check. Injecting the registered initial state
+	// here closes that window.
+	if initialStateForDoc := worker.GetInitialState(); initialStateForDoc != nil {
+		observedDoc["state"] = initialStateForDoc.String()
+	}
+
+	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_observed_failed")
+
+		return 0, fmt.Errorf("failed to save initial observation: %w", err)
+	}
+
+	s.logger.Debug("initial_observation_saved")
+
+	desiredJSON, err := json.Marshal(initialDesired)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_desired_failed")
+
+		return 0, fmt.Errorf("failed to marshal desired state: %w", err)
+	}
+
+	desiredDoc := make(persistence.Document)
+	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_desired_failed")
+
+		return 0, fmt.Errorf("failed to unmarshal desired state to document: %w", err)
+	}
+
+	desiredDoc["id"] = identity.ID
+
+	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
+
+		return 0, fmt.Errorf("failed to save initial desired state: %w", err)
+	}
+
+	s.logger.Debug("initial_desired_state_saved")
+
+	// This ID may belong to a removed worker; its tombstone must not apply to the new one.
+	if err := s.store.ClearTombstone(ctx, s.workerType, identity.ID); err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_clear_tombstone_failed")
+
+		// The store error already names the operation and the worker.
+		return 0, err
+	}
+
+	return startupCount, nil
 }
 
 // RemoveWorker removes a worker from the registry for a restart, which adds
