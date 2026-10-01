@@ -85,7 +85,16 @@ func bridgeNames(n int) []string {
 }
 
 func coreInstance(s pkgfsm.SystemSnapshot) *pkgfsm.FSMInstanceSnapshot {
-	return s.Managers[constants.ContainerManagerName].GetInstances()[constants.CoreInstanceName]
+	return managerInstances(s, constants.ContainerManagerName)[constants.CoreInstanceName]
+}
+
+func managerInstances(s pkgfsm.SystemSnapshot, manager string) map[string]*pkgfsm.FSMInstanceSnapshot {
+	m, ok := s.Managers[manager]
+	if !ok || m == nil {
+		panic("test snapshot has no " + manager)
+	}
+
+	return m.GetInstances()
 }
 
 var _ = Describe("IsResourceLimited admission", func() {
@@ -228,7 +237,7 @@ func addWaitingBridge(s *pkgfsm.SystemSnapshot, name string) {
 	s.CurrentConfig.ProtocolConverter = append(s.CurrentConfig.ProtocolConverter, config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{Name: name, DesiredFSMState: "active"},
 	})
-	s.Managers[constants.ProtocolConverterManagerName].GetInstances()[name] = &pkgfsm.FSMInstanceSnapshot{
+	managerInstances(*s, constants.ProtocolConverterManagerName)[name] = &pkgfsm.FSMInstanceSnapshot{
 		ID: name, CurrentState: internalfsm.LifecycleStateToBeCreated, DesiredState: "active",
 	}
 }
