@@ -20,9 +20,7 @@ import (
 	"sync"
 )
 
-// dependencyKeyTypes maps each declared key name to the type it was first
-// declared with.
-var dependencyKeyTypes sync.Map
+var firstDeclaredTypeByName sync.Map
 
 // DependencyKey names one entry in a dependency map and records the type stored
 // under it.
@@ -47,7 +45,7 @@ type DependencyKey[T any] struct {
 // under one of the two keys would read as absent through the other.
 func NewDependencyKey[T any](name string) DependencyKey[T] {
 	t := reflect.TypeFor[T]()
-	if prev, loaded := dependencyKeyTypes.LoadOrStore(name, t); loaded && prev != t {
+	if prev, loaded := firstDeclaredTypeByName.LoadOrStore(name, t); loaded && prev != t {
 		panic(fmt.Sprintf("config.NewDependencyKey(%q): already declared with type %s, now %s", name, prev, t))
 	}
 
