@@ -168,7 +168,6 @@ func (ts *TriangularStore) lockedSave(
 
 		if !hasChanges {
 			if opts.UpdateTimestampOnNoChange && existing != nil {
-				// Staleness detection for observed state
 				now := ts.clock.Now().UTC()
 				existing[FieldUpdatedAt] = now
 

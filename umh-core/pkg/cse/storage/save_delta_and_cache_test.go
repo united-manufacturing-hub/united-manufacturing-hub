@@ -41,8 +41,6 @@ func (d *deltaFailingStore) Insert(ctx context.Context, collection string, doc p
 		return "", errors.New("delta insert failed")
 	}
 
-	// The explicit mockStore selector is required: d.Insert would recurse
-	// into this override.
 	return d.mockStore.Insert(ctx, collection, doc)
 }
 
