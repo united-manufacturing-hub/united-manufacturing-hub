@@ -73,9 +73,8 @@ var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 // FilesystemKey names the filesystem.Service the sampler reads the cgroup
 // files through. NewDeps reads it first, then the global published under
-// FilesystemDepsKey (the same literal, cpu.filesystem), and falls back to
-// filesystem.NewDefaultService().
-var FilesystemKey = config.NewDependencyKey[filesystem.Service]("cpu.filesystem")
+// FilesystemDepsKey, and falls back to filesystem.NewDefaultService().
+var FilesystemKey = config.NewDependencyKey[filesystem.Service](FilesystemDepsKey)
 
 // ClockKey names the clock.Clock the sampler stamps every Sample from. NewDeps
 // does the lookup and falls back to clock.New() when the map holds nothing
