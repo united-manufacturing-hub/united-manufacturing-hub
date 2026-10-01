@@ -77,24 +77,7 @@ var FailingScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert restart worker: %w", err)
 		}
 
-		// AllCyclesComplete turns true when the worker disconnects after 5 s
-		// Connected. It stays true after the reconnect, so this state lasts
-		// until the run ends.
-		if err := env.WaitFor(ctx, "the recovery worker is connected again after its one disconnect",
-			func(ctx context.Context) (bool, string, error) {
-				obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, recoveryRef)
-				if err != nil {
-					if errors.Is(err, fsmv2client.ErrNotObserved) {
-						return false, "the worker has not published an observation yet", nil
-					}
-
-					return false, "", err
-				}
-
-				done := obs.State == "Connected" && obs.Status.AllCyclesComplete
-
-				return done, fmt.Sprintf("state=%s all_cycles_complete=%t", obs.State, obs.Status.AllCyclesComplete), nil
-			}); err != nil {
+		if err := waitReconnectedAfterFailureCycle(ctx, env, recoveryRef); err != nil {
 			return err
 		}
 
@@ -157,4 +140,26 @@ var FailingScenarioV2 = ScenarioV2{
 				return done, fmt.Sprintf("state=%s attempts=%d", obs.State, obs.Status.ConnectAttempts), nil
 			})
 	},
+}
+
+// waitReconnectedAfterFailureCycle waits until an examplefailing worker is
+// Connected with AllCyclesComplete set. The worker sets the flag when it
+// disconnects after healthyDurationMsBeforeNextCycle (examplefailing/state) in
+// Connected, and the flag stays set after the reconnect.
+func waitReconnectedAfterFailureCycle(ctx context.Context, env Env, ref dynamicchildren.Ref) error {
+	return env.WaitFor(ctx, "the worker "+ref.Name+" is connected again after its one disconnect",
+		func(ctx context.Context) (bool, string, error) {
+			obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, ref)
+			if err != nil {
+				if errors.Is(err, fsmv2client.ErrNotObserved) {
+					return false, "the worker has not published an observation yet", nil
+				}
+
+				return false, "", err
+			}
+
+			done := obs.State == "Connected" && obs.Status.AllCyclesComplete
+
+			return done, fmt.Sprintf("state=%s all_cycles_complete=%t", obs.State, obs.Status.AllCyclesComplete), nil
+		})
 }

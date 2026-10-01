@@ -21,7 +21,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
-	example_failing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
@@ -86,31 +85,11 @@ var TimeoutScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert combined worker: %w", err)
 		}
 
-		// The wait reads AllCyclesComplete for the reason given in
-		// FailingScenarioV2.
-		waitFailingConnected := func(ref dynamicchildren.Ref) error {
-			return env.WaitFor(ctx, "the worker "+ref.Name+" is connected again after its one disconnect",
-				func(ctx context.Context) (bool, string, error) {
-					obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, ref)
-					if err != nil {
-						if errors.Is(err, fsmv2client.ErrNotObserved) {
-							return false, "the worker has not published an observation yet", nil
-						}
-
-						return false, "", err
-					}
-
-					done := obs.State == "Connected" && obs.Status.AllCyclesComplete
-
-					return done, fmt.Sprintf("state=%s all_cycles_complete=%t", obs.State, obs.Status.AllCyclesComplete), nil
-				})
-		}
-
-		if err := waitFailingConnected(retryRef); err != nil {
+		if err := waitReconnectedAfterFailureCycle(ctx, env, retryRef); err != nil {
 			return err
 		}
 
-		if err := waitFailingConnected(combinedRef); err != nil {
+		if err := waitReconnectedAfterFailureCycle(ctx, env, combinedRef); err != nil {
 			return err
 		}
 
