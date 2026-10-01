@@ -427,12 +427,37 @@ registered one. The example to copy is `HelloworldScenarioV2` in
 ### Mocks
 
 `Dependencies` builds the mocks and returns the dependency map (and optionally
-a cleanup). A mock implements the interface the worker already uses; for
-helloworld that is its `filesystem.Service` (`examples/mock_filesystem.go`).
-The worker declares a typed key (`hello_world.FilesystemKey`), reads it in its
-constructor with `config.LookupDependency`, and falls back to the real
-implementation when the key is absent. `Run` changes the mock, never the map
-(see `Env.Dependencies`).
+a cleanup). `Run` changes a mock, never the map (see `Env.Dependencies`).
+
+**Where to mock.** Mock the lowest interface the production code already uses
+to reach outside the process: the network, a database, the filesystem.
+Everything above that interface then runs for real in the scenario.
+
+| Worker | Production uses | The scenario passes |
+|---|---|---|
+| nmap | `*net.Dialer`, through `fsmv2nmap.Dialer` | `mockDialer` (`examples/nmap.go`) |
+| historian | `*pgxpool.Pool`, through `timescalemetrics.Database` | `timescalemetrics.FakeDatabase` |
+
+**The production change.** The worker declares a typed key for that interface
+(`fsmv2nmap.DialerKey`) and reads it in its constructor with
+`config.LookupDependency`. When production has a default, such as the dialer
+or the shared pool, the worker uses it when the key is absent. When production
+supplies the value itself, as `cmd/main.go` does for the channel provider,
+there is no default, and a missing key is an error that names the key.
+
+The interface may be new if it is small, declared where it is used, and the
+real type already satisfies it, as `*net.Dialer` satisfies `fsmv2nmap.Dialer`.
+Do not wrap production code in a new layer, or move it, only so that a
+scenario can replace it.
+
+**Which mock.** Use a standard mock when one exists. That is either a mock the
+package ships beside the real code, such as `filesystem.NewMockFileSystem`, or
+one from the Go standard library or the dependency's own library, such as
+`httptest.Server`, `fstest.MapFS` or `net.Pipe`. Otherwise, write a fake next
+to the code it imitates, so the fake changes when that code changes. A fake
+answers every call for the whole run. `Run` changes its answers through a
+setter. Return errors the code classifies the same way as the real ones, for
+example a `*pgconn.PgError` with code `28P01` for a rejected password.
 
 ### Run
 
