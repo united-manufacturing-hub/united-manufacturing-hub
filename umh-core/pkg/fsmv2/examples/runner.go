@@ -262,17 +262,20 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	// Call Dependencies before publishing the deps key, so a Dependencies error has nothing to clear.
-	var (
-		scenarioDeps    map[string]any
-		scenarioCleanup func()
-	)
+	var scenarioDeps map[string]any
+
+	releaseScenarioDeps := func() {}
 
 	if cfg.ScenarioV2.Dependencies != nil {
-		var err error
-
-		scenarioDeps, scenarioCleanup, err = cfg.ScenarioV2.Dependencies()
+		depsMap, cleanup, err := cfg.ScenarioV2.Dependencies()
 		if err != nil {
 			return nil, fmt.Errorf("scenario %q dependencies: %w", cfg.ScenarioV2.Name, err)
+		}
+
+		scenarioDeps = depsMap
+
+		if cleanup != nil {
+			releaseScenarioDeps = cleanup
 		}
 	}
 
@@ -291,11 +294,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	})
 	if err != nil {
 		register.ClearGlobalDeps(configworker.WorkerTypeName)
-		// No spec can reach this branch: it fails only when AddWorker fails on
-		// a fresh supervisor.
-		if scenarioCleanup != nil {
-			scenarioCleanup()
-		}
+		releaseScenarioDeps()
 
 		return nil, err
 	}
@@ -325,11 +324,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// ClearGlobalDeps strictly after supDone: clearing earlier flips the
 		// application worker's RegistryConfigured observation mid-shutdown.
 		register.ClearGlobalDeps(configworker.WorkerTypeName)
-		// A supervisor build error never reaches teardown. That path calls
-		// scenarioCleanup itself.
-		if scenarioCleanup != nil {
-			scenarioCleanup()
-		}
+		releaseScenarioDeps()
 	}
 
 	// ScenarioV2.Run is user-authored code, so it may return an error or panic.
