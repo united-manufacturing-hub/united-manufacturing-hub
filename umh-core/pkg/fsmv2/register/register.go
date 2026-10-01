@@ -52,9 +52,6 @@ type NoDeps = struct{}
 // so a write would reach every worker the supervisor builds afterwards.
 // Workers with custom ObservedState types must use factory.RegisterWorkerType directly.
 //
-// SetGlobalDeps and GlobalDeps are a separate store that lives for the life of
-// the process, keyed by a string, usually the worker type.
-//
 // Panics at init time when:
 //   - workerType is the empty string,
 //   - constructor is nil,
