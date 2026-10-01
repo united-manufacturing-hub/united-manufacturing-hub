@@ -137,12 +137,7 @@ func (ts *TriangularStore) saveWithDelta(
 						return false, nil, fmt.Errorf("failed to update timestamp for %s/%s: %w", workerType, id, err)
 					}
 
-					// Invalidate cache so LoadSnapshot returns updated timestamp
-					cacheKey := workerType + "_" + id
-
-					ts.cacheMutex.Lock()
-					delete(ts.snapshotCache, cacheKey)
-					ts.cacheMutex.Unlock()
+					ts.invalidateSnapshot(workerType, id)
 				}
 
 				return false, nil, nil
@@ -196,34 +191,17 @@ func (ts *TriangularStore) saveWithDelta(
 	}
 
 	if diff != nil && ts.deltaStore != nil {
-		entry := DeltaEntry{
+		ts.appendDeltaOrWarn(ctx, DeltaEntry{
 			SyncID:     syncID,
 			WorkerType: workerType,
 			ID:         id,
 			Role:       opts.Role,
 			Changes:    diff,
 			Timestamp:  ts.clock.Now().UTC(),
-		}
-
-		if appendErr := ts.deltaStore.Append(ctx, entry); appendErr != nil {
-			var hierarchyPath string
-			if identity, loadErr := ts.LoadIdentity(ctx, workerType, id); loadErr == nil {
-				if hp, ok := identity["hierarchy_path"].(string); ok {
-					hierarchyPath = hp
-				}
-			}
-
-			ts.logger.SentryWarn(deps.FeatureCSE, hierarchyPath, "delta_append_failed",
-				deps.Err(appendErr),
-				deps.String("role", opts.Role))
-		}
+		})
 	}
 
-	cacheKey := workerType + "_" + id
-
-	ts.cacheMutex.Lock()
-	delete(ts.snapshotCache, cacheKey)
-	ts.cacheMutex.Unlock()
+	ts.invalidateSnapshot(workerType, id)
 
 	return true, diff, nil
 }
