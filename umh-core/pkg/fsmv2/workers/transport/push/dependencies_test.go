@@ -96,8 +96,6 @@ var _ = Describe("PushDependencies", func() {
 		identity = deps.Identity{ID: "push-child-id", WorkerType: "push"}
 	})
 
-	AfterEach(func() {})
-
 	Describe("NewPushDependencies", func() {
 		It("should return non-nil with valid parentDeps", func() {
 			d, err := push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
@@ -355,8 +353,6 @@ var _ = Describe("RecordTypedError status_code and error_detail emission", func(
 		d, err = push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(jsonLogger, nil, identity))
 		Expect(err).NotTo(HaveOccurred())
 	})
-
-	AfterEach(func() {})
 
 	It("emits status_code and error_detail on persistent_push_failure after escalation", func() {
 		detail := "HTTP 502 (server_error): error code: 502"

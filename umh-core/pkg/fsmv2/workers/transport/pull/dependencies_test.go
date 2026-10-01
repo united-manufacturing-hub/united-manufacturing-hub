@@ -102,8 +102,6 @@ var _ = Describe("PullDependencies", func() {
 		identity = deps.Identity{ID: "pull-child-id", WorkerType: "pull"}
 	})
 
-	AfterEach(func() {})
-
 	Describe("NewPullDependencies", func() {
 		It("should return error with nil parentDeps", func() {
 			d, err := pull.NewPullDependencies(nil, deps.NewBaseDependencies(logger, nil, identity))
@@ -419,8 +417,6 @@ var _ = Describe("RecordTypedError status_code and error_detail emission (pull)"
 		d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(jsonLogger, nil, identity))
 		Expect(err).NotTo(HaveOccurred())
 	})
-
-	AfterEach(func() {})
 
 	It("emits status_code and error_detail on persistent_pull_failure after escalation", func() {
 		detail := "HTTP 502 (server_error): error code: 502"
