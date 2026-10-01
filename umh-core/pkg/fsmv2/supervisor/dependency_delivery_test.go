@@ -33,11 +33,6 @@ var (
 	deliveryParentKey  = config.NewDependencyKey[string]("supervisor.test.parent")
 	deliveryChildKey   = config.NewDependencyKey[string]("supervisor.test.child")
 	deliveryRestartKey = config.NewDependencyKey[string]("supervisor.test.restart")
-
-	// Factories are registered once per test binary, so what a factory received
-	// is kept here rather than in a closure over one spec's variables.
-	deliveredToChild   map[string]any
-	deliveredOnRestart map[string]any
 )
 
 const (
@@ -46,24 +41,24 @@ const (
 )
 
 func registerDeliveryType(workerType string, record func(map[string]any)) {
-	_ = factory.RegisterFactoryByType(workerType, func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, dependencies map[string]any) fsmv2.Worker {
+	Expect(factory.RegisterFactoryByType(workerType, func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, dependencies map[string]any) fsmv2.Worker {
 		record(dependencies)
 
 		state := &mockState{}
 		state.nextState = state
 
 		return &mockWorker{initialState: state}
-	})
+	})).To(Succeed())
 
-	_ = factory.RegisterSupervisorFactoryByType(workerType, func(cfg interface{}) interface{} {
+	Expect(factory.RegisterSupervisorFactoryByType(workerType, func(cfg interface{}) interface{} {
 		return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg.(supervisor.Config))
-	})
+	})).To(Succeed())
 }
 
 var _ = Describe("dependency delivery from the supervisor", func() {
 	It("hands a child its parent's dependencies merged with its own spec's", func() {
-		deliveredToChild = nil
-		registerDeliveryType(deliveryChildType, func(d map[string]any) { deliveredToChild = d })
+		var delivered map[string]any
+		registerDeliveryType(deliveryChildType, func(d map[string]any) { delivered = d })
 
 		parentDeps := map[string]any{}
 		config.SetDependency(parentDeps, deliveryParentKey, "from-parent")
@@ -109,20 +104,20 @@ var _ = Describe("dependency delivery from the supervisor", func() {
 		}
 
 		Expect(parent.TestTick(context.Background())).To(Succeed())
-		Expect(deliveredToChild).NotTo(BeNil(), "the child was built, so the assertions below are not vacuous")
+		Expect(delivered).NotTo(BeNil(), "the child was built, so the assertions below are not vacuous")
 
-		fromParent, ok := config.LookupDependency(deliveredToChild, deliveryParentKey)
+		fromParent, ok := config.LookupDependency(delivered, deliveryParentKey)
 		Expect(ok).To(BeTrue(), "the parent's dependency reached the child")
 		Expect(fromParent).To(Equal("from-parent"))
 
-		fromSpec, ok := config.LookupDependency(deliveredToChild, deliveryChildKey)
+		fromSpec, ok := config.LookupDependency(delivered, deliveryChildKey)
 		Expect(ok).To(BeTrue(), "the child spec's own dependency reached the child")
 		Expect(fromSpec).To(Equal("from-child-spec"))
 	})
 
 	It("hands a restarted worker its supervisor's dependencies", func() {
-		deliveredOnRestart = nil
-		registerDeliveryType(deliveryRestartType, func(d map[string]any) { deliveredOnRestart = d })
+		var delivered map[string]any
+		registerDeliveryType(deliveryRestartType, func(d map[string]any) { delivered = d })
 
 		supervisorDeps := map[string]any{}
 		config.SetDependency(supervisorDeps, deliveryRestartKey, "from-supervisor")
@@ -161,9 +156,9 @@ var _ = Describe("dependency delivery from the supervisor", func() {
 		s.TestMarkAsStarted()
 
 		Expect(s.TestTick(ctx)).To(Succeed())
-		Expect(deliveredOnRestart).NotTo(BeNil(), "the worker was rebuilt, so the assertions below are not vacuous")
+		Expect(delivered).NotTo(BeNil(), "the worker was rebuilt, so the assertions below are not vacuous")
 
-		fromSupervisor, ok := config.LookupDependency(deliveredOnRestart, deliveryRestartKey)
+		fromSupervisor, ok := config.LookupDependency(delivered, deliveryRestartKey)
 		Expect(ok).To(BeTrue(), "the supervisor's dependency reached the rebuilt worker")
 		Expect(fromSupervisor).To(Equal("from-supervisor"))
 	})
