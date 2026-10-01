@@ -36,8 +36,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// dmiProductName is the SMBIOS identity file the bare-metal path resolves
-// against.
 const dmiProductName = "/sys/class/dmi/id/product_name"
 
 // countingFS counts reads per path on the way through to the box. Some facts
@@ -69,8 +67,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	// that rounds a counter and reports a neighbouring value instead.
 	const tol = 1e-9
 
-	// known returns a Reading's value and fails the spec when it is absent, so
-	// a missing reading reports as itself rather than as a zero value.
 	known := func(r diagnosis.Reading, what string) float64 {
 		v, ok := r.Get()
 		ExpectWithOffset(1, ok).To(BeTrue(), what+" must be a present reading")
@@ -96,9 +92,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	}
 
 	It("reads back every number of a busy, throttled, virtualized machine", func() {
-		// A four-CPU VM capped at two cores, using 1.2 of them, on a machine
-		// that is 60% busy and losing 5% to steal, throttled in 8% of its CFS
-		// periods, with PSI reporting a quarter of the time stalled.
 		box := fakebox.NewBox(base, fakebox.Condition{
 			Cores:       4,
 			QuotaCores:  2,
@@ -121,15 +114,12 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		Expect(known(s2.UsageCores, "UsageCores")).To(BeNumerically("~", 1.2, tol),
 			"a cgroup using 1.2 cores must read back as 1.2 cores")
 
-		// HostBusy is in CORES, not a fraction: 60% of a four-CPU machine.
 		Expect(known(s2.HostBusy, "HostBusy")).To(BeNumerically("~", 2.4, tol),
 			"a machine 60 percent busy across 4 CPUs must read back as 2.4 busy cores")
 
 		Expect(known(s2.Steal, "Steal")).To(BeNumerically("~", 0.05, tol),
 			"5 percent steal must read back as the fraction 0.05")
 
-		// The throttle ratio is the two counters' deltas across the window,
-		// which is what the throttling instrument's DeltaRatio reduction takes.
 		// Asserting the ratio rather than either counter is what catches a
 		// fixture that rounds nr_throttled to a neighbouring integer.
 		dPeriods := known(s2.NrPeriods, "NrPeriods") - known(s1.NrPeriods, "NrPeriods")
@@ -157,8 +147,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	})
 
 	It("reads back a bare-metal machine with no PSI, pinned to a subset of its CPUs", func() {
-		// The same four-CPU machine, but the kernel publishes no PSI, the host
-		// is bare metal, and the container is pinned to two of the four CPUs.
 		box := fakebox.NewBox(base, fakebox.Condition{
 			Cores:       4,
 			QuotaCores:  2,
@@ -174,8 +162,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 
 		_, s2 := readTwice(box, time.Second)
 
-		// Pressure is stated but unreachable: PsiPresent false makes
-		// cpu.pressure unreadable, so the stated level must not surface.
 		_, ok := s2.Pressure.Get()
 		Expect(ok).To(BeFalse(),
 			"an unreadable cpu.pressure must leave Pressure absent, never a confident zero")
@@ -194,14 +180,10 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	})
 
 	It("derives the same rates from any servable tick length", func() {
-		// A Box that advanced the clock by d but accrued counters for a
-		// hard-coded one second would agree with the 1s case above and be
-		// wrong by 2x either side of it. 100ms is left out because it panics at
-		// this Throttle; the panic spec's last case covers it.
-		//
-		// 250ms is here because 500ms, 1s, 1.5s and 2s are all whole multiples
-		// of 100ms. None of them can tell a box that quietly rounded ticks to a
-		// tenth of a second from one that did not.
+		// 100ms is left out because it panics at this Throttle; the panic spec's
+		// last case covers it. 250ms is here because the other lengths are all
+		// whole multiples of 100ms, so none of them can tell a box that rounds
+		// ticks to a tenth of a second from one that does not.
 		cond := fakebox.Condition{
 			Cores:       4,
 			QuotaCores:  2,
@@ -256,7 +238,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		Expect(known(s2.NrThrottled, "NrThrottled")).To(Equal(0.0),
 			"a cgroup with no bandwidth control is never throttled")
 
-		// Everything not gated on the quota still moves.
 		Expect(known(s2.Quota, "Quota")).To(Equal(0.0),
 			"cpu.max \"max\" is a present no-limit, not an absent reading")
 		Expect(known(s2.UsageCores, "UsageCores")).To(BeNumerically("~", 1.2, tol),
@@ -286,8 +267,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		Expect(counted.reads[dmiProductName]).To(Equal(1),
 			"the bare-metal path must find product_name READABLE; a Sample cannot say so on its own, since an unreadable one also reads Virtualized false")
 
-		// A settled fact is not re-read, which is why a bare-metal box has to
-		// serve DMI (dmiProductName in fakebox.go).
 		settled := counted.reads[dmiProductName] + counted.reads["/proc/cpuinfo"]
 		box.Tick(time.Second)
 		_, err = sampler.Read(ctx)
@@ -295,9 +274,8 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		Expect(counted.reads[dmiProductName]+counted.reads["/proc/cpuinfo"]).To(Equal(settled),
 			"a resolved virtualisation fact must not be read again on the next tick")
 
-		// The control. With product_name unreadable the fact cannot settle, so
-		// the sampler retries every tick. Virtualized reads false either way,
-		// which is exactly why the count is what has to be measured.
+		// The control: with product_name unreadable the fact cannot settle, so
+		// the sampler retries every tick.
 		unresolvable := bareMetal
 		unresolvable.Unreadable = []string{dmiProductName}
 
@@ -329,8 +307,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 			PsiPresent: true,
 		}
 
-		// An unreadable cpu.stat reads as absent: the sample carries on with
-		// its three readings missing.
 		noStat := readable
 		noStat.Unreadable = []string{base + "/cpu.stat"}
 		box := fakebox.NewBox(base, noStat)
@@ -342,8 +318,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 		Expect(usageOK).To(BeFalse(),
 			"an unreadable cpu.stat must leave its readings absent, not served")
 
-		// An unreadable /proc/stat does not fail the sample either. It loses
-		// the machine's CPU count, and with it the scope that needs it.
 		noProcStat := readable
 		noProcStat.Unreadable = []string{"/proc/stat"}
 		box2 := fakebox.NewBox(base, noProcStat)
@@ -398,8 +372,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 			To(PanicWith(ContainSubstring("is not an absolute path")),
 				"Set must reject what NewBox rejects")
 
-		// Every path the box claims to serve must actually read, or the table
-		// the rejection above is checked against is itself wrong.
 		box := fakebox.NewBox(base, base10)
 		Expect(box.ServablePaths()).To(HaveLen(7))
 
@@ -408,23 +380,18 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 			Expect(err).NotTo(HaveOccurred(), "the box claims to serve "+path+", so it must read")
 			Expect(data).NotTo(BeEmpty(), path+" must not read as empty")
 
-			// And each one must then be accepted as an Unreadable entry.
 			Expect(func() { fakebox.NewBox(base, with(path)) }).NotTo(Panic(),
 				"every servable path must be listable as unreadable: "+path)
 		}
 	})
 
 	It("hands out a clock the caller cannot move backwards", func() {
-		// fakebox.go's shieldedClock says why the mock must not come back out
-		// of a type assertion.
 		box := fakebox.NewBox(base, fakebox.Condition{Cores: 4, QuotaCores: 2, PsiPresent: true})
 
 		_, recovered := box.Clock().(*clock.Mock)
 		Expect(recovered).To(BeFalse(),
 			"the mock must not be recoverable from the clock a Box hands out, or the caller can move time backwards")
 
-		// The clock still has to work as a clock, and still has to move under
-		// Tick — hiding the mock must not have hidden the time.
 		before := box.Clock().Now()
 		box.Tick(time.Second)
 		Expect(box.Clock().Now().Sub(before)).To(Equal(time.Second),
@@ -432,7 +399,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 	})
 
 	It("panics on a machine it cannot serve, naming what it could not serve", func() {
-		// No other spec reaches these guards.
 		ok := fakebox.Condition{Cores: 4, QuotaCores: 2, UsageCores: 1.2, PsiPresent: true}
 
 		with := func(f func(c *fakebox.Condition)) fakebox.Condition {
@@ -489,8 +455,6 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 var _ = Describe("a hanging filesystem", func() {
 	const base = "/sys/fs/cgroup"
 
-	// A box whose files read without failing, so the only thing that can hold
-	// a read up is the hang.
 	readable := fakebox.Condition{Cores: 4, QuotaCores: 2, PsiPresent: true}
 
 	newHangingFS := func() (*fakebox.HangingFS, filesystem.Service) {

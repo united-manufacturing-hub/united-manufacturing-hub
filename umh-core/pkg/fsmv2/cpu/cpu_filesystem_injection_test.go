@@ -88,9 +88,6 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 	}
 
 	It("samples through the filesystem in its dependency map over the global one", func() {
-		// The global stub refuses every read, so a Poll through it reports a
-		// machine it cannot measure as healthy. Only the map's marked cpu.stat
-		// can make the sample fail, so the error below names which one was read.
 		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
@@ -110,9 +107,6 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 	})
 
 	It("falls back to the published global when the map holds nothing under the key", func() {
-		// The map holds nothing under FilesystemKey, and the published global
-		// serves the marked cpu.stat, so the error below names the global as
-		// the filesystem that was read.
 		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
@@ -124,9 +118,6 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
 			"only the published global serves this counter value")
 
-		// A value of the wrong type under the literal reads as absent
-		// (LookupDependency type-asserts with comma-ok), so the global serves
-		// here too.
 		wrongTyped := map[string]any{"cpu.filesystem": "not a filesystem"}
 		_, err = Poll(context.Background(), monitorSpec.NewDeps(id, bd, wrongTyped), CPUConfig{})
 		Expect(err).To(HaveOccurred(),

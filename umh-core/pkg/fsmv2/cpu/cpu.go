@@ -45,8 +45,7 @@ const (
 	// publishes the filesystem.Service the sampler reads the cgroup files
 	// through. Publish before the instance spawns: a caller that meant to
 	// publish a fixture and forgot gets no error, and that instance silently
-	// reads the real machine instead. NewDeps does the lookup. A value under
-	// FilesystemKey in the worker's dependency map wins over this global.
+	// reads the real machine instead. NewDeps does the lookup.
 	//
 	// A key holds one value, so each payload gets its own key rather than
 	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
@@ -118,10 +117,8 @@ type CPUStatus struct {
 type CPUDeps struct {
 	*deps.BaseDependencies
 
-	// fs is the filesystem the sampler reads through. It is kept so a spec can
-	// check that NewDeps fell back to the real machine. On a host without cgroup
-	// files, Poll returns the same result for the real filesystem and for a stub
-	// that refuses every read.
+	// fs is the filesystem the sampler reads through, kept so a spec can check
+	// that NewDeps fell back to the real machine.
 	fs filesystem.Service
 
 	// sampler reads the cgroup. Behind the interface it is a pointer holding the
