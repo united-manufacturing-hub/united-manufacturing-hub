@@ -24,6 +24,7 @@ import (
 	example_failing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	parentstate "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
 // CascadeScenarioV2 runs one exampleparent whose examplefailing children fail their connects in repeated cycles.
@@ -38,14 +39,20 @@ var CascadeScenarioV2 = ScenarioV2{
 	Run: func(ctx context.Context, env Env) error {
 		parentRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "cascade-parent"}
 
+		const (
+			childMaxFailures   = 3
+			childFailureCycles = 2
+		)
+
 		// recovery_delay_ms keeps each failed child unhealthy for longer than the
 		// parent's observation interval, so the parent sees it.
 		childConfig := "should_fail: true\n" +
-			"max_failures: 3\n" +
-			"failure_cycles: 2\n" +
+			fmt.Sprintf("max_failures: %d\n", childMaxFailures) +
+			fmt.Sprintf("failure_cycles: %d\n", childFailureCycles) +
 			"recovery_delay_ms: 700\n"
 
-		env.Step("create the parent with two children that each fail 3 connects, then connect, and repeat for 2 cycles; the parent waits 5 s before it creates them")
+		env.Step(fmt.Sprintf("create the parent with two children that each fail %d connects, then connect, and repeat for %d cycles; the parent waits %s before it creates them",
+			childMaxFailures, childFailureCycles, parentstate.StoppedWaitDuration))
 
 		if err := env.Client.Upsert(parentRef, map[string]any{
 			"state":             "running",

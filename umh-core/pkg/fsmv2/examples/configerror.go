@@ -131,9 +131,11 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 
 		// This check runs after the valid parent reached Running, so an
 		// invalid-config worker has had as long to appear as a valid one.
+		const unobservedPolls = 20
+
 		polls := 0
 
-		return env.WaitFor(ctx, "the two invalid-config workers stay unobserved across 20 polls",
+		return env.WaitFor(ctx, fmt.Sprintf("the two invalid-config workers stay unobserved across %d polls", unobservedPolls),
 			func(ctx context.Context) (bool, string, error) {
 				if _, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, mismatchRef); err == nil {
 					return false, "", errors.New("the type-mismatch parent was observed, although its children_count is not a number")
@@ -149,7 +151,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 
 				polls++
 
-				return polls >= 20, fmt.Sprintf("unobserved polls=%d", polls), nil
+				return polls >= unobservedPolls, fmt.Sprintf("unobserved polls=%d", polls), nil
 			})
 	},
 }
