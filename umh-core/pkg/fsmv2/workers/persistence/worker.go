@@ -50,8 +50,7 @@ const (
 	DefaultMaintenanceInterval = snapshot.DefaultMaintenanceInterval
 )
 
-// StoreKey names the store a PersistenceWorker is built from. NewPersistenceWorker
-// returns an error naming it when the dependency map holds nothing under it.
+// StoreKey names the store in the persistence worker's dependency map.
 var StoreKey = fsmv2config.NewDependencyKey[storage.TriangularStoreInterface]("persistence.store")
 
 // Compile-time interface check: PersistenceWorker implements fsmv2.Worker.
@@ -63,10 +62,8 @@ type PersistenceWorker struct {
 	fsmv2.WorkerBase[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies]
 }
 
-// NewPersistenceWorker creates a new persistence worker.
-// The dependency map must hold a TriangularStoreInterface under StoreKey;
-// otherwise it returns an error naming the key.
-// Returns fsmv2.Worker to align with the factory constructor signature.
+// NewPersistenceWorker builds a worker around the store under StoreKey. It
+// returns an error naming the key when dependencies holds none.
 func NewPersistenceWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,

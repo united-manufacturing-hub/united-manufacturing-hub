@@ -55,29 +55,21 @@ fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transpo
 
 The supervisor merges its map into every child, so a provider reaches its
 worker however deep it sits. `NewTransportWorker` and `NewCommunicatorWorker`
-each return an error naming the key when the map holds none. A scenario
-supplies a mock provider under the same keys, as "Mocks" below describes.
-Unlike helloworld's filesystem there, these workers have no fallback.
+each return an error naming the key when the map holds none. A scenario must
+supply a mock provider under the same keys, as "Mocks" below describes.
 
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.
 
-## Cert Handler via the Dependency Map
+## Cert Handler and Store via the Dependency Map
 
-The certfetcher worker reads its cert handler, a
-`certificatehandler.Handler`, from the dependency map under
-`certfetcher.CertHandlerKey`. `cmd/main.go` sets it only when the gatekeeper is
-enabled; the comment above that `SetDependency` call says why. Like the channel
-providers, `NewCertFetcherWorker` returns an error naming the key when the map
-holds none.
+| Worker | Key | Value type | `cmd/main.go` sets it |
+|---|---|---|---|
+| certfetcher | `certfetcher.CertHandlerKey` | `certificatehandler.Handler` | only with the gatekeeper enabled; the comment above that call says why |
+| persistence | `persistence.StoreKey` | `storage.TriangularStoreInterface` | only with memory cleanup enabled; the comment above that call says why |
 
-## Store via the Dependency Map
-
-The persistence worker reads its store, a `storage.TriangularStoreInterface`,
-from the dependency map under `persistence.StoreKey`. `cmd/main.go` sets it only
-when memory cleanup is enabled; the comment above that `SetDependency` call
-says why. `NewPersistenceWorker` returns an error naming the key when the map
-holds none.
+Like the channel providers, `NewCertFetcherWorker` and `NewPersistenceWorker`
+return an error naming the key when the map holds none.
 
 ## State Machine States
 

@@ -775,8 +775,7 @@ children:
 		fsmv2config.SetDependency(fsmv2Deps, certfetcher.CertHandlerKey, communicationState.Gatekeeper.CertificateHandler())
 	}
 
-	// The persistence worker reads its store from the same map. The store is
-	// set only when memory cleanup is enabled, which is also the only case that
+	// The store is set only when memory cleanup is enabled, the only case that
 	// adds the persistence child to yamlConfig above.
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
