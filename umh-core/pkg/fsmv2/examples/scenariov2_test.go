@@ -695,6 +695,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
+		Consistently(result.Done, "1s").ShouldNot(BeClosed(),
+			"a Duration=0 run must keep going until the context is cancelled")
+
 		// Caller-ctx cancellation is the only teardown path for a Duration=0
 		// run; a regression here leaves such a run hanging forever.
 		cancel()
