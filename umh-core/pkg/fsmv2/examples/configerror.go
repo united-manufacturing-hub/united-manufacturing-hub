@@ -26,11 +26,8 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// ConfigErrorScenarioV2 runs a valid parent beside workers with invalid
-// configs and a parent with an empty config. An invalid config is rejected
-// when the supervisor derives the worker's desired state: the worker never
-// starts, and the rejection is logged on every reconciliation tick. The
-// empty-config parent is accepted and gets zero children.
+// ConfigErrorScenarioV2 runs a valid parent beside workers whose config the
+// supervisor rejects when it derives their desired state.
 var ConfigErrorScenarioV2 = ScenarioV2{
 	Name:        "configerror",
 	Description: "Workers with a bad config are rejected and never start; beside them a valid parent reaches Running and an empty-config parent stays in TryingToStart",
@@ -115,9 +112,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 			}
 		}
 
-		// A parent with zero children never meets TryingToStartState's
-		// ChildrenHealthy > 0 condition, so the empty-config parent stays in
-		// TryingToStart.
+		// With zero children, TryingToStartState's ChildrenHealthy > 0 condition never holds.
 		if err := env.WaitFor(ctx, "the empty-config parent is in TryingToStart",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, emptyRef)

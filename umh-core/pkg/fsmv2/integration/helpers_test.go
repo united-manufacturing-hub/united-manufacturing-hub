@@ -314,7 +314,6 @@ func setupTestStoreForScenario(logger deps.FSMLogger) storage.TriangularStoreInt
 	return storage.NewTriangularStore(basicStore, logger)
 }
 
-// getWorkersFromStore discovers all workers by examining deltas.
 func getWorkersFromStore(store storage.TriangularStoreInterface) []examples.WorkerSnapshot {
 	ctx := context.Background()
 
