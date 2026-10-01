@@ -58,7 +58,7 @@ var CPULatchScenarioV2 = ScenarioV2{
 	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and shows the bar on re-firing (v2)",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(cpuPressureBase, cpuPressureMachine(cpuLatchFiring))
+		box := newTickingBox(fsmv2cpu.CgroupBase, cpuPressureMachine(cpuLatchFiring))
 		m := cpuMachineDeps(box)
 
 		box.StartPerRead(cpuMachineReadAdvance)

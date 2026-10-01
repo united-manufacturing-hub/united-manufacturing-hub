@@ -46,7 +46,7 @@ var CPUStallScenarioV2 = ScenarioV2{
 	Description: "Hangs the cpu.stat read mid-poll, and watches the reading go stale and then recover (v2)",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(cpuBlindBase, cpuBlindMachine())
+		box := newTickingBox(fsmv2cpu.CgroupBase, cpuBlindMachine())
 		m := cpuMachineDeps(box)
 
 		// The box advances once per read, when the sampler opens

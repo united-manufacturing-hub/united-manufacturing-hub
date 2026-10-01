@@ -51,9 +51,9 @@ const (
 	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
 	FilesystemDepsKey = WorkerType + ".filesystem"
 
-	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
+	// CgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
 	// the directory that holds the controller mounts.
-	cgroupBase = "/sys/fs/cgroup"
+	CgroupBase = "/sys/fs/cgroup"
 
 	// PollInterval is how often the worker samples the cgroup. simple.Register
 	// also publishes it as this worker's observation interval, and
@@ -220,7 +220,7 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies, dependencies map[string
 		clk = clock.New()
 	}
 
-	sampler := cpuhealth.NewLinuxSamplerWithClock(fs, cgroupBase, clk)
+	sampler := cpuhealth.NewLinuxSamplerWithClock(fs, CgroupBase, clk)
 
 	d := &CPUDeps{
 		BaseDependencies: bd,
