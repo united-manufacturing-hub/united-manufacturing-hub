@@ -682,11 +682,6 @@ func buildFSMv2Supervisor(
 		channelAdapter.Start(ctx)
 	}
 
-	// Set the global channel providers before creating the supervisor. No
-	// worker's dependency map holds a provider here, so the communicator and
-	// transport constructors use these globals and panic if they are unset.
-	communicator.SetChannelProvider(channelAdapter)
-
 	var certHandler *certificatehandler.CertHandler
 
 	// Gatekeeper setup (behind feature flag)
@@ -770,8 +765,9 @@ children:
 
 	fsmv2Deps := map[string]any{}
 
-	// The supervisor merges this map into every child, so the transport worker
-	// finds the provider however deep it sits.
+	// The supervisor merges this map into every child, so each provider reaches
+	// its worker however deep it sits.
+	fsmv2config.SetDependency(fsmv2Deps, communicator.ChannelProviderKey, communicator.ChannelProvider(channelAdapter))
 	fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
 
 	if configData.Agent.UseFSMv2MemoryCleanup {
