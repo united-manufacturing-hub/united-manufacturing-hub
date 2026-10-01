@@ -52,7 +52,6 @@ type CertFetcherWorker struct {
 // NewCertFetcherWorker creates a new cert fetcher worker.
 // The dependency map must hold a certificatehandler.Handler under
 // CertHandlerKey; otherwise it returns an error naming the key.
-// Returns an error if logger is nil.
 func NewCertFetcherWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
