@@ -27,14 +27,7 @@ import (
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
-// CommunicatorScenarioV2 runs one communicator child against a mock relay
-// server, with a test channel provider in the dependency map.
-//
-// The communicator spawns a transport child, which authenticates. Until that
-// child is healthy the communicator counts zero healthy children, so it moves
-// Syncing -> Recovering with "healthy=0, unhealthy=0" right after it starts.
-// It returns to Syncing about a second later, once the transport child has
-// authenticated.
+// CommunicatorScenarioV2 runs one communicator child against a mock relay server.
 var CommunicatorScenarioV2 = ScenarioV2{
 	Name:        "communicator",
 	Description: "Communicator worker: reaches Syncing once its transport child authenticates against a mock relay server",
@@ -68,7 +61,7 @@ var CommunicatorScenarioV2 = ScenarioV2{
 
 		ref := dynamicchildren.Ref{WorkerType: "communicator", Name: "communicator-1"}
 
-		env.Step("create communicator against the mock relay server; it passes through Recovering until its transport child authenticates")
+		env.Step("create communicator-1 against the mock relay server; it reports Recovering with healthy=0 until its transport child authenticates")
 
 		if err := env.Client.Upsert(ref, map[string]any{
 			"state":        "running",

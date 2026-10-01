@@ -129,7 +129,7 @@ type ScenarioRunner func(ctx context.Context, cfg RunConfig) (*RunResult, error)
 // When you set CustomRunner, Run() delegates to your function. CustomRunner
 // can still use ApplicationSupervisor internally (preferred), or implement
 // custom execution when necessary. Use this for scenarios that need:
-//   - Embedded mock servers with dynamic URLs (CommunicatorScenario)
+//   - Embedded mock servers with dynamic URLs
 //   - Test fixtures that must exist before workers start
 //   - External resource lifecycle management
 //
