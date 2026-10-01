@@ -81,7 +81,6 @@ func logContainsEvent(logOutput, msg string) bool {
 // scenarioDepsKey is the key the dependency-delivery spec sets and the probe worker reads.
 var scenarioDepsKey = config.NewDependencyKey[string]("examples.test.scenario_deps")
 
-// scenarioDepsProbeType is the worker type the dependency-delivery spec upserts.
 const scenarioDepsProbeType = "scenariov2-deps-probe"
 
 type scenarioDepsProbeConfig struct{}
@@ -94,7 +93,6 @@ type scenarioDepsProbeStatus struct {
 	ReceivedLabel string `json:"receivedLabel"`
 }
 
-// scenarioDepsProbeRecord is what the probe's constructor found under scenarioDepsKey.
 type scenarioDepsProbeRecord struct {
 	label   string
 	present bool
@@ -105,18 +103,14 @@ type scenarioDepsProbeRecord struct {
 // goroutine.
 var scenarioDepsProbeSeen atomic.Pointer[scenarioDepsProbeRecord]
 
-// scenarioEnvMock is the mock the Env.Dependencies spec stores in the map by
-// pointer, so the spec sees the change Run makes.
 type scenarioEnvMock struct {
 	touched bool
 }
 
-// scenarioEnvMockKey names the mock in the map Dependencies returns.
 var scenarioEnvMockKey = config.NewDependencyKey[*scenarioEnvMock]("examples.test.env_deps_mock")
 
-// The probe registers in init, once per test binary. register.Worker panics
-// on a duplicate worker type, so registering per spec would panic on the
-// second run under go test -count=2.
+// register.Worker panics on a duplicate worker type, so registering inside a
+// spec would panic on the second run under go test -count=2.
 func init() {
 	simple.Register(simple.MonitorSpec[scenarioDepsProbeConfig, scenarioDepsProbeStatus, scenarioDepsProbeDeps]{
 		WorkerType: scenarioDepsProbeType,
@@ -742,8 +736,6 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// Run runs on the caller's goroutine, so the spec reads recordedDeps
-		// without synchronization.
 		var recordedDeps map[string]any
 
 		envNone := examples.ScenarioV2{

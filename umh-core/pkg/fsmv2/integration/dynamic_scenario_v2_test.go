@@ -62,9 +62,8 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 
 		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
-		// Run the real dynamic scenario against a live kernel-only supervisor. The
-		// runner builds an fsmv2client over this same store, so Run reads
-		// observed state through the same store this battery inspects afterward.
+		// The runner builds an fsmv2client over this same store, so Run reads
+		// observed state from the store verifyStateFieldsAreValid inspects afterward.
 		result, err := examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   dynamic,
 			Duration:     2 * time.Second,

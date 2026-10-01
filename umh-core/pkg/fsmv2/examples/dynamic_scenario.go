@@ -33,8 +33,7 @@ import (
 
 const (
 	// dynamicHelloChildName is the helloworld child the dynamic scenario drives
-	// through create -> update -> delete. The dynamic_scenario_v2 battery reads
-	// the child back under this same name.
+	// through create -> update -> delete.
 	dynamicHelloChildName = "dynamic-hello"
 
 	// dynamicHelloInitialMood is the mood the CREATE leg's moodFilePath points
@@ -56,19 +55,16 @@ const (
 // DynamicScenarioV2 drives one helloworld child through the migration-API
 // client: create it to Running, Upsert an observable config change (a new
 // moodFilePath whose file contents land in observed status), then Delete it.
-// Run fails when the config worker is not readable after the Delete, so a
-// child's lifecycle that takes down the config worker fails the scenario.
+// After the Delete, Run also checks that the config worker is still readable.
 var DynamicScenarioV2 = ScenarioV2{
 	Name:        "dynamic",
 	Description: "Drives a helloworld child through create/update/delete via the migration-API client (v2)",
 	Run:         runDynamicHello,
 }
 
-// runDynamicHello runs the create -> update -> delete lifecycle against the
-// running kernel-only supervisor through env.Client. The UPDATE leg changes a
-// real helloworld config field (moodFilePath) to a different file, so the
-// observed mood change is driven by a config Upsert through the API, not by an
-// out-of-band mutation of a fixed file.
+// runDynamicHello is DynamicScenarioV2's Run. The UPDATE leg points
+// moodFilePath at a different file, so the observed mood changes only when
+// the Upsert reached the child.
 func runDynamicHello(ctx context.Context, env Env) error {
 	ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: dynamicHelloChildName}
 

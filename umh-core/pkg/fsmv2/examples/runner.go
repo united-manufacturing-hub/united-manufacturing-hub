@@ -77,7 +77,7 @@ type RunResult struct {
 // Run executes a scenario with the given configuration.
 //
 // For a v1 Scenario, creates an ApplicationSupervisor with the scenario's
-// YAML config, or delegates to CustomRunner if set. For a ScenarioV2 (Run
+// YAML config, or delegates to CustomRunner if set. For a ScenarioV2 (ScenarioV2.Run
 // set), takes the kernel-only v2 path (see runV2). Exactly one of Scenario
 // and ScenarioV2 may be populated; setting both is an error.
 //
@@ -232,14 +232,14 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // runV2 keeps the process-global configworker deps key published for exactly
 // the supervisor's lifetime: the dynamicchildren registry is published under
 // the key before the supervisor starts (the application worker reads it every
-// tick), and the key is cleared on EVERY exit path, including a Run panic,
-// strictly after the supervisor has stopped. Clearing the key earlier flips
+// tick), and the key is cleared on EVERY exit path, including a
+// ScenarioV2.Run panic, strictly after the supervisor has stopped. Clearing the key earlier flips
 // the application worker's RegistryConfigured observation mid-shutdown; a key
 // that is never cleared makes every later runV2 in the same process fail its
 // already-published check below.
 //
 // The supervisor runs on a context detached from the caller's ctx. The
-// caller's ctx drives Run, the Duration wait, and the teardown
+// caller's ctx drives ScenarioV2.Run, the Duration wait, and the teardown
 // trigger, but never the tick loop: if the tick loop shared the caller's
 // ctx, cancelling it would stop ticking before Shutdown runs, and the
 // graceful drain would wait out its full timeout against a stopped loop.
@@ -261,7 +261,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			deps.String("impact", "no_store_dump_printed"))
 	}
 
-	// Acquire the scenario's dependency map before anything is published.
+	// Call Dependencies before publishing the deps key, so a Dependencies error has nothing to clear.
 	var (
 		scenarioDeps    map[string]any
 		scenarioCleanup func()
@@ -332,7 +332,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		}
 	}
 
-	// Run is user-authored code, so it may return an error or panic.
+	// ScenarioV2.Run is user-authored code, so it may return an error or panic.
 	// Either way the supervisor must stop and the deps key must be cleared
 	// before runV2's frame unwinds, otherwise every later runV2 in this
 	// process fails its already-published check. The flag stays false until

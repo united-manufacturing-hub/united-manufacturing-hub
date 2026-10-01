@@ -25,8 +25,7 @@ import (
 // supervisor handle, so a check reads only what a user of the client could read.
 type Env struct {
 	// Client is the migration-API client wired to the run's dynamicchildren
-	// Writer and store, so Run can Upsert/Delete child specs and read
-	// observed state.
+	// Writer and store.
 	Client *fsmv2client.FSMv2Client
 
 	// Logger is the run's logger (the same logger RunConfig.Logger carries),
@@ -41,15 +40,12 @@ type Env struct {
 }
 
 // ScenarioV2 is a scenario that drives the kernel-only supervisor.
-// Dependencies builds its mocks. Run creates workers through env.Client,
-// changes the mocks, and checks the result through env.Client. When a
-// check fails, Run returns an error that names the check.
 type ScenarioV2 struct {
-	// Run runs against the started supervisor. After a nil return, the
-	// runner waits RunConfig.Duration (or until ctx is cancelled; 0 means
-	// ctx-only), then shuts the supervisor down. Run must honor ctx
-	// cancellation: a cancelled ctx is the only stop signal a Run
-	// receives, and teardown cannot start until Run returns.
+	// Run creates workers through env.Client, changes the mocks, and checks the
+	// result. When a check fails, Run returns an error that names the check.
+	// After a nil return, the runner waits RunConfig.Duration, then shuts the
+	// supervisor down. Run must honor ctx cancellation: teardown cannot start
+	// until Run returns.
 	Run func(ctx context.Context, env Env) error
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
@@ -58,15 +54,13 @@ type ScenarioV2 struct {
 	// Description explains what this scenario tests (shown in CLI output).
 	Description string
 
-	// Dependencies optionally builds the scenario's mocks. The runner passes
-	// the returned map to the supervisor before it starts. Every worker Run
-	// upserts through env.Client receives the map in its constructor.
-	// config.DependencyKey has the typed read and write helpers.
+	// Dependencies optionally builds the scenario's mocks. Every worker Run
+	// upserts through env.Client receives the map in its constructor. Write and
+	// read it with config.SetDependency and config.LookupDependency.
 	//
-	// On error, Dependencies must release what it built. The runner ignores
-	// the other return values and starts nothing. On success, the runner calls
-	// cleanup once if it is non-nil: after the supervisor stops, or at once if
-	// the supervisor fails to build.
+	// On error, Dependencies must release what it built, and the runner starts
+	// nothing. On success, the runner calls cleanup once if it is non-nil: after
+	// the supervisor stops, or at once if the supervisor fails to build.
 	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 
