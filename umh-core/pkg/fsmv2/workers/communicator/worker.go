@@ -88,7 +88,7 @@ func NewCommunicatorWorker(
 
 	provider, ok := fsmv2types.LookupDependency(dependencies, ChannelProviderKey)
 	if !ok {
-		return nil, fmt.Errorf("communicator: no channel provider under %q in the dependency map", channelProviderKeyName)
+		return nil, fmt.Errorf("communicator: no channel provider under %q in the dependency map", ChannelProviderKey.Name())
 	}
 
 	w := &CommunicatorWorker{}
