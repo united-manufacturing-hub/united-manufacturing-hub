@@ -24,15 +24,16 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	hello_state "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
 const (
-	// dynamicHelloChildName is the helloworld child the dynamic driver drives
-	// through create -> update -> delete. The dynamic_scenario_v2 battery reads
-	// the child back under this same name.
+	// dynamicHelloChildName is the helloworld child the dynamic scenario drives
+	// through create -> update -> delete.
 	dynamicHelloChildName = "dynamic-hello"
 
 	// dynamicHelloInitialMood is the mood the CREATE leg's moodFilePath points
@@ -45,26 +46,26 @@ const (
 	// points at. Observing this exact value in the child's persisted status is
 	// the load-bearing proof that a runtime Upsert reached a live child.
 	dynamicHelloUpdatedMood = "cheerful"
+
+	// configWorkerName is the application worker's kernel child's name, from
+	// workers/application/state/children.go.
+	configWorkerName = "config-worker"
 )
 
 // DynamicScenarioV2 drives one helloworld child through the migration-API
 // client: create it to Running, Upsert an observable config change (a new
 // moodFilePath whose file contents land in observed status), then Delete it.
-// The kernel-only supervisor and its config worker run the whole time;
-// correctness is judged after the run by the dynamic_scenario_v2 battery
-// reading the same store.
+// After the Delete, Run also checks that the config worker is still readable.
 var DynamicScenarioV2 = ScenarioV2{
 	Name:        "dynamic",
 	Description: "Drives a helloworld child through create/update/delete via the migration-API client (v2)",
-	Driver:      driveDynamicHello,
+	Run:         runDynamicHello,
 }
 
-// driveDynamicHello runs the create -> update -> delete lifecycle against the
-// running kernel-only supervisor through env.Client. The UPDATE leg changes a
-// real helloworld config field (moodFilePath) to a different file, so the
-// observed mood change is driven by a config Upsert through the API, not by an
-// out-of-band mutation of a fixed file.
-func driveDynamicHello(ctx context.Context, env Env) error {
+// runDynamicHello is DynamicScenarioV2's Run. The UPDATE leg points
+// moodFilePath at a different file, so the observed mood changes only when
+// the Upsert reached the child.
+func runDynamicHello(ctx context.Context, env Env) error {
 	ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: dynamicHelloChildName}
 
 	dir, err := os.MkdirTemp("", "dynamic-hello-mood")
@@ -115,10 +116,17 @@ func driveDynamicHello(ctx context.Context, env Env) error {
 		return fmt.Errorf("wait for update->observed mood: %w", err)
 	}
 
-	// DELETE: remove the child, exercising the despawn path. The driver only
+	// DELETE: remove the child, exercising the despawn path. Run only
 	// calls Delete; proving the store-side reap (the worker gone from the store)
 	// is deferred to ENG-5107, which builds the despawn-tombstone subsystem.
 	env.Client.Delete(ref)
+
+	if _, err := fsmv2client.Get[snapshot.ConfigworkerStatus](ctx, env.Client, dynamicchildren.Ref{
+		WorkerType: configworker.WorkerTypeName,
+		Name:       configWorkerName,
+	}); err != nil {
+		return fmt.Errorf("check config worker survived the child's lifecycle: %w", err)
+	}
 
 	return nil
 }

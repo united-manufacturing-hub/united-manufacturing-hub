@@ -128,8 +128,8 @@ func main() {
 
 	// One signal owner: the CLI creates the cancellable ctx and is the only
 	// signal.Notify site, installed BEFORE examples.Run so a SIGINT during a
-	// running driver cannot kill the process without teardown. The first
-	// SIGINT cancels the ctx (a v2 driver sees it, the runner tears down
+	// running scenario cannot kill the process without teardown. The first
+	// SIGINT cancels the ctx (a v2 scenario sees it, the runner tears down
 	// gracefully); a second SIGINT force-exits.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -236,9 +236,10 @@ func shutdownExitCode(result *examples.RunResult) int {
 }
 
 // routeDuration decides how a --duration flag binds to a run. A v2 scenario
-// treats the duration as a post-driver settle window, so it flows into
-// RunConfig.Duration and never bounds the run with a ctx timeout. A v1 scenario
-// has no settle window, so the duration bounds the whole run via a ctx timeout.
+// treats the duration as a settle window after ScenarioV2.Run returns, so it
+// flows into RunConfig.Duration and never bounds the run with a ctx timeout. A
+// v1 scenario has no settle window, so the duration bounds the whole run via a
+// ctx timeout.
 // A zero duration stays endless on both paths.
 func routeDuration(isV2 bool, duration time.Duration) (runDuration time.Duration, applyCtxTimeout bool) {
 	if duration <= 0 {
