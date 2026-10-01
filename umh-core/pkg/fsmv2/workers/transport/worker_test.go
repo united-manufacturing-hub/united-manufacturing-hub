@@ -444,8 +444,7 @@ var _ = Describe("TransportWorker channel provider dependency", func() {
 		DeferCleanup(transport.ClearChannelProvider)
 
 		dependencyMap := map[string]any{}
-		var mapProviderAsProvider transport.ChannelProvider = mapProvider
-		fsmv2types.SetDependency(dependencyMap, transport.ChannelProviderKey, mapProviderAsProvider)
+		fsmv2types.SetDependency[transport.ChannelProvider](dependencyMap, transport.ChannelProviderKey, mapProvider)
 
 		identity := deps.Identity{ID: "map-provider-worker", WorkerType: "transport"}
 		built, err := factory.NewWorkerByType("transport", identity, deps.NewNopFSMLogger(), nil, dependencyMap)
