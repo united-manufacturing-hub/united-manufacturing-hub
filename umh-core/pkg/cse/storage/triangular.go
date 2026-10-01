@@ -115,11 +115,14 @@ type TriangularStore struct {
 	knownWorkerTypesMu sync.RWMutex
 
 	// documentWriteMu runs saves, MarkDeleted and ClearDeleted one at a time.
-	// A save reads a record and writes it back in two calls, so a tombstone
-	// change between them would be lost. The locks taken on the way (the
-	// store's own mutex, cacheMutex) take no further locks. The supervisor
-	// holds its own lock while calling MarkDeleted, so never wait for a
-	// supervisor lock while holding this one.
+	// A save reads a role record and writes it back in two calls, so a tombstone
+	// change between them would be lost. Saves take only the store's own mutex
+	// and cacheMutex while it is held, and neither takes further locks. The
+	// tombstone operations additionally take the in-memory transaction's mutex,
+	// which takes the store mutex in Get and Commit (persistence/memory). The
+	// supervisor holds its own lock while calling MarkDeleted
+	// (reconciliation.go markWorkerDeleted), so never wait for a supervisor
+	// lock while holding this one.
 	documentWriteMu sync.Mutex
 }
 
