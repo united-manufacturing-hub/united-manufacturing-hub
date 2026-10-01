@@ -67,16 +67,11 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
 
-	// loggedErrorRun runs a v2 scenario whose Run logs msg as an error, then
-	// waits on a check that is done at once when waitFor is true. It returns
-	// the run's result, the error from examples.Run and the wait's error.
-	loggedErrorRun := func(scenario examples.ScenarioV2, msg string, waitFor bool) (*examples.RunResult, error, error) {
+	// loggedErrorRun runs scenario with a Run that logs msg as an error and,
+	// when waitFor is set, waits on a check that is done at once.
+	loggedErrorRun := func(scenario examples.ScenarioV2, msg string, waitFor bool) (result *examples.RunResult, runErr, waitErr error) {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
-
-		// examples.Run calls Run on the caller's goroutine, so the spec reads
-		// waitErr without a lock.
-		var waitErr error
 
 		scenario.Run = func(ctx context.Context, env examples.Env) error {
 			env.Step("change the mood file to grumpy")
@@ -103,7 +98,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		result, runErr := examples.Run(ctx, examples.RunConfig{
+		result, runErr = examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   scenario,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
