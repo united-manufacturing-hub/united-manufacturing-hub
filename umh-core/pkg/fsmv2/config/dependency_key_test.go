@@ -43,6 +43,10 @@ var _ = Describe("DependencyKey", func() {
 		Expect(got.Sample()).To(Equal(7))
 	})
 
+	It("returns the name it was declared with", func() {
+		Expect(samplerKey.Name()).To(Equal("test.sampler"))
+	})
+
 	It("reports absent when nothing was put under the key", func() {
 		got, ok := config.LookupDependency(map[string]any{}, samplerKey)
 		Expect(ok).To(BeFalse())
