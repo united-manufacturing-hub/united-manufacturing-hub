@@ -52,7 +52,7 @@ var CPUStallScenarioV2 = ScenarioV2{
 		// The box advances once per read, when the sampler opens
 		// cpu.pressure. While the cpu.stat read hangs no new read starts, so
 		// machine time stops.
-		box.StartPerRead(cpuMachineSecond)
+		box.StartPerRead(fsmv2cpu.PollInterval)
 
 		return m, box.Stop, nil
 	},
@@ -80,7 +80,7 @@ var CPUStallScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("hang reads of cpu.stat; the worker stays running, so wait for GetFresh to call the reading stale (3 seconds)")
+		env.Step(fmt.Sprintf("hang reads of cpu.stat; the worker stays running, so wait for GetFresh to call the reading stale (%s)", fsmv2cpu.MaxObservationAge))
 
 		// The deferred release is the backstop that lets teardown finish if a
 		// wait fails with the read still hung; the release step below is the
