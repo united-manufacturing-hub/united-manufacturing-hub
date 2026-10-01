@@ -20,14 +20,12 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// moodFilePath is the path inside the scenario's mockFilesystem that the
-// helloworld child's mood file lives at.
-const moodFilePath = "mood"
+const mockMoodPath = "mood"
 
 // HelloworldScenarioV2 runs one helloworld child against a mock filesystem
 // held in the dependency map. It creates the child with a happy mood file,
@@ -43,7 +41,7 @@ var HelloworldScenarioV2 = ScenarioV2{
 
 	Dependencies: func() (map[string]any, func(), error) {
 		moodFS := &mockFilesystem{files: map[string][]byte{}}
-		moodFS.SetFile(moodFilePath, "happy")
+		moodFS.SetFile(mockMoodPath, "happy")
 
 		deps := map[string]any{}
 
@@ -73,7 +71,7 @@ var HelloworldScenarioV2 = ScenarioV2{
 
 		if err := env.Client.Upsert(ref, map[string]any{
 			"state":        "running",
-			"moodFilePath": moodFilePath,
+			"moodFilePath": mockMoodPath,
 		}); err != nil {
 			return err
 		}
@@ -99,14 +97,14 @@ var HelloworldScenarioV2 = ScenarioV2{
 		}
 
 		env.Step("change the mood file to grumpy; wait for mood=grumpy in the observation")
-		moodFS.SetFile(moodFilePath, "grumpy")
+		moodFS.SetFile(mockMoodPath, "grumpy")
 
 		if err := waitForMood("grumpy"); err != nil {
 			return err
 		}
 
 		env.Step("delete the mood file; wait for an empty mood in the observation")
-		moodFS.RemoveFile(moodFilePath)
+		moodFS.RemoveFile(mockMoodPath)
 
 		return waitForMood("")
 	},
