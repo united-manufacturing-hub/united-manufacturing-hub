@@ -24,88 +24,71 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// tombstoneRoles are the role records MarkDeleted tombstones and
-// ClearDeleted clears.
-var tombstoneRoles = []string{RoleIdentity, RoleDesired, RoleObserved}
+var allRoles = []string{RoleIdentity, RoleDesired, RoleObserved}
 
 type roleWrite struct {
 	role   string
 	syncID int64
+	diff   *Diff
 }
 
 func hasTombstone(doc persistence.Document) bool {
 	return doc[FieldDeletedAt] != nil
 }
 
-// tombstoneChange holds the per-operation parts of a tombstone write, so one
-// function can serve both MarkDeleted and ClearDeleted.
-type tombstoneChange struct {
-	appliesTo   func(doc persistence.Document) bool
-	edit        func(doc persistence.Document, at time.Time, deletedBy string)
-	diff        func(at time.Time, deletedBy string) *Diff
-	updateError func(role string, workerType string, id string, err error) error
-}
+// MarkDeleted implements TriangularStoreInterface.MarkDeleted.
+func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
+	err := ts.editRoleDocuments(ctx, workerType, id, func(doc persistence.Document, at time.Time) *Diff {
+		if hasTombstone(doc) {
+			return nil
+		}
 
-var markDeletedChange = tombstoneChange{
-	appliesTo: func(doc persistence.Document) bool {
-		return !hasTombstone(doc)
-	},
-	edit: func(doc persistence.Document, at time.Time, deletedBy string) {
 		doc[FieldDeletedAt] = at
 		doc[FieldDeletedBy] = deletedBy
-	},
-	diff: func(at time.Time, deletedBy string) *Diff {
+
 		return &Diff{
-			Added: map[string]interface{}{
-				FieldDeletedAt: at,
-				FieldDeletedBy: deletedBy,
-			},
+			Added:    map[string]interface{}{FieldDeletedAt: at, FieldDeletedBy: deletedBy},
 			Modified: make(map[string]ModifiedField),
 			Removed:  []string{},
 		}
-	},
-	updateError: func(role string, workerType string, id string, err error) error {
-		return fmt.Errorf("failed to mark %s deleted for %s/%s: %w", role, workerType, id, err)
-	},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to mark %s/%s deleted: %w", workerType, id, err)
+	}
+
+	return nil
 }
 
-var clearDeletedChange = tombstoneChange{
-	appliesTo: hasTombstone,
-	edit: func(doc persistence.Document, _ time.Time, _ string) {
+// ClearDeleted implements TriangularStoreInterface.ClearDeleted.
+func (ts *TriangularStore) ClearDeleted(ctx context.Context, workerType string, id string) error {
+	err := ts.editRoleDocuments(ctx, workerType, id, func(doc persistence.Document, _ time.Time) *Diff {
+		if !hasTombstone(doc) {
+			return nil
+		}
+
 		delete(doc, FieldDeletedAt)
 		delete(doc, FieldDeletedBy)
-	},
-	diff: func(time.Time, string) *Diff {
+
 		return &Diff{
 			Added:    map[string]interface{}{},
 			Modified: make(map[string]ModifiedField),
 			Removed:  []string{FieldDeletedAt, FieldDeletedBy},
 		}
-	},
-	updateError: func(role string, workerType string, id string, err error) error {
-		return fmt.Errorf("failed to clear %s tombstone for %s/%s: %w", role, workerType, id, err)
-	},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to clear tombstone of %s/%s: %w", workerType, id, err)
+	}
+
+	return nil
 }
 
-// MarkDeleted implements TriangularStoreInterface.MarkDeleted.
-func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
-	return ts.applyTombstoneChange(ctx, workerType, id, deletedBy, markDeletedChange)
-}
-
-// ClearDeleted implements TriangularStoreInterface.ClearDeleted.
-func (ts *TriangularStore) ClearDeleted(ctx context.Context, workerType string, id string) error {
-	return ts.applyTombstoneChange(ctx, workerType, id, "", clearDeletedChange)
-}
-
-// applyTombstoneChange edits every role record the change applies to in one
-// transaction, bumps each edited record's sync id, and appends one change
-// record per edited role.
-func (ts *TriangularStore) applyTombstoneChange(
+// editRoleDocuments calls edit on each stored role document in one
+// transaction. edit changes doc and returns its delta, or returns nil to
+// leave doc unwritten.
+func (ts *TriangularStore) editRoleDocuments(
 	ctx context.Context,
-	workerType string,
-	id string,
-	deletedBy string,
-	change tombstoneChange,
+	workerType, id string,
+	edit func(doc persistence.Document, at time.Time) *Diff,
 ) error {
 	ts.documentWriteMu.Lock()
 	defer ts.documentWriteMu.Unlock()
@@ -121,7 +104,7 @@ func (ts *TriangularStore) applyTombstoneChange(
 
 	var written []roleWrite
 
-	for _, role := range tombstoneRoles {
+	for _, role := range allRoles {
 		collection := workerType + "_" + role
 
 		doc, err := tx.Get(ctx, collection, id)
@@ -133,20 +116,19 @@ func (ts *TriangularStore) applyTombstoneChange(
 			return fmt.Errorf("failed to load %s for %s/%s: %w", role, workerType, id, err)
 		}
 
-		if !change.appliesTo(doc) {
+		diff := edit(doc, at)
+		if diff == nil {
 			continue
 		}
 
 		syncID := ts.syncID.Add(1)
-
-		change.edit(doc, at, deletedBy)
 		doc[FieldSyncID] = syncID
 
 		if err := tx.Update(ctx, collection, id, doc); err != nil {
-			return change.updateError(role, workerType, id, err)
+			return fmt.Errorf("failed to update %s: %w", role, err)
 		}
 
-		written = append(written, roleWrite{role: role, syncID: syncID})
+		written = append(written, roleWrite{role: role, syncID: syncID, diff: diff})
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -160,7 +142,7 @@ func (ts *TriangularStore) applyTombstoneChange(
 				WorkerType: workerType,
 				ID:         id,
 				Role:       w.role,
-				Changes:    change.diff(at, deletedBy),
+				Changes:    w.diff,
 				Timestamp:  at,
 			})
 		}
