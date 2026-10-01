@@ -54,6 +54,11 @@ func NewDependencyKey[T any](name string) DependencyKey[T] {
 	return DependencyKey[T]{name: name}
 }
 
+// Name returns the name the key stores its value under.
+func (k DependencyKey[T]) Name() string {
+	return k.name
+}
+
 // SetDependency stores value under key. A nil value panics: a nil pointer or map
 // would read as present through LookupDependency, and the worker would call it
 // instead of falling back to its real implementation.
