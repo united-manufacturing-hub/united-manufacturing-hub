@@ -52,8 +52,6 @@ var _ = Describe("ScenarioV2 Dependencies failure", func() {
 			},
 		}
 
-		// The configworker deps key is process-global; a regression that
-		// publishes it on this path would leak it into every later spec.
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
 		result, err := examples.Run(context.Background(), examples.RunConfig{
@@ -107,7 +105,6 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Run has returned, but the supervisor keeps running for Duration.
 		Expect(cleanupCalls.Load()).To(Equal(int32(0)),
 			"the cleanup must not run while the run's Duration is still elapsing")
 

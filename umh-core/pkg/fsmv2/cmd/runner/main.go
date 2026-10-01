@@ -236,9 +236,10 @@ func shutdownExitCode(result *examples.RunResult) int {
 }
 
 // routeDuration decides how a --duration flag binds to a run. A v2 scenario
-// treats the duration as a settle window after Run returns, so it flows into
-// RunConfig.Duration and never bounds the run with a ctx timeout. A v1 scenario
-// has no settle window, so the duration bounds the whole run via a ctx timeout.
+// treats the duration as a settle window after ScenarioV2.Run returns, so it
+// flows into RunConfig.Duration and never bounds the run with a ctx timeout. A
+// v1 scenario has no settle window, so the duration bounds the whole run via a
+// ctx timeout.
 // A zero duration stays endless on both paths.
 func routeDuration(isV2 bool, duration time.Duration) (runDuration time.Duration, applyCtxTimeout bool) {
 	if duration <= 0 {
