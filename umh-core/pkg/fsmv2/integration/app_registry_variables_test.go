@@ -77,11 +77,7 @@ var _ = Describe("Application supervisor passes the registry's variable bundle t
 		sup, store, _ := newAppSupervisorWithStore(deps.NewNopFSMLogger())
 		sup.TestMarkAsStarted()
 
-		// seenBy returns the variables of the originalUserSpec the worker of
-		// (workerType, id) last received from DeriveDesiredState, or nil while
-		// the store holds no such document. LoadDesired returns a
-		// persistence.Document, so a plain map assertion would panic.
-		seenBy := func(workerType, id string) map[string]any {
+		storedSpecVariables := func(workerType, id string) map[string]any {
 			docAny, err := store.LoadDesired(ctx, workerType, id) //nolint:staticcheck // the spec reads the raw document, so the typed loader does not fit
 			if err != nil {
 				return nil
@@ -111,16 +107,13 @@ var _ = Describe("Application supervisor passes the registry's variable bundle t
 			_ = sup.TestTick(ctx)
 
 			for _, c := range children {
-				vars := seenBy(c.workerType, c.id)
+				vars := storedSpecVariables(c.workerType, c.id)
 				g.Expect(vars).To(HaveKeyWithValue("user", HaveKeyWithValue("IP", "10.0.0.1")), "%s", c.id)
 				g.Expect(vars).To(HaveKeyWithValue("global", HaveKeyWithValue("cluster_id", "c1")), "%s", c.id)
 			}
 		}, "5s", "100ms").Should(Succeed(),
 			"every child the application renders must receive the registry's variable bundle, user and global")
 
-		// SetVariables replaces the variable bundle, so the new values must
-		// also reach children that already render, not only children created
-		// after the call.
 		w.SetVariables(config.VariableBundle{
 			User:   map[string]any{"IP": "10.0.0.2"},
 			Global: map[string]any{"cluster_id": "c2"},
@@ -130,12 +123,12 @@ var _ = Describe("Application supervisor passes the registry's variable bundle t
 			_ = sup.TestTick(ctx)
 
 			for _, c := range children {
-				vars := seenBy(c.workerType, c.id)
+				vars := storedSpecVariables(c.workerType, c.id)
 				g.Expect(vars).To(HaveKeyWithValue("user", HaveKeyWithValue("IP", "10.0.0.2")), "%s", c.id)
 				g.Expect(vars).To(HaveKeyWithValue("global", HaveKeyWithValue("cluster_id", "c2")), "%s", c.id)
 			}
 		}, "5s", "100ms").Should(Succeed(),
-			"every child the application renders must receive the registry's variable bundle after it is replaced, user and global")
+			"after SetVariables replaces the bundle, children that already run must receive the new values, user and global")
 	})
 
 	It("keeps the registry's value over an own child's, and warns once", func() {
@@ -180,26 +173,22 @@ var _ = Describe("Application supervisor passes the registry's variable bundle t
 			g.Expect(vars).To(HaveKeyWithValue("user", HaveKeyWithValue("IP", "10.0.0.1")))
 		}, "5s", "100ms").Should(Succeed())
 		Eventually(conflictLines, "5s", "100ms").Should(HaveLen(1))
-		// The check that the warning appears once means something only if
-		// the collector ran at least twice during the Consistently window
-		// below. Each poll records the stored observation's CollectedAt, and
-		// each distinct timestamp counts as one collection.
-		collects := map[time.Time]struct{}{}
-		sampleCollect := func() {
+		distinctCollectedAt := map[time.Time]struct{}{}
+		recordCollectedAt := func() {
 			obs, err := storage.LoadObservedTyped[fsmv2.Observation[snapshot.ApplicationStatus]](store, ctx, appID)
 			if err != nil {
 				return
 			}
 
-			collects[obs.CollectedAt] = struct{}{}
+			distinctCollectedAt[obs.CollectedAt] = struct{}{}
 		}
 
 		Consistently(func(g Gomega) {
 			g.Expect(conflictLines()).To(HaveLen(1))
 
-			sampleCollect()
+			recordCollectedAt()
 		}, "3s", "200ms").Should(Succeed())
-		Expect(len(collects)).To(BeNumerically(">=", 2),
+		Expect(len(distinctCollectedAt)).To(BeNumerically(">=", 2),
 			"the collector must run at least twice inside the window, or the check that the warning appears once means nothing")
 		Expect(conflictLines()[0]).To(And(ContainSubstring(`"child_name":"own-hello"`), ContainSubstring(`"namespace":"User"`), ContainSubstring(`"key":"IP"`)))
 		Expect(logs.String()).NotTo(ContainSubstring("ip-from-yaml"), "the warning names the key, never a value")
