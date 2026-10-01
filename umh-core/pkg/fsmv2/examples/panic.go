@@ -66,9 +66,8 @@ var PanicScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// A poll can read the same observation twice, so each failed
-		// connect is counted once, by its timestamp.
-		failedConnects := make(map[time.Time]bool)
+		// A poll can read the same observation twice.
+		failedConnectTimestamps := make(map[time.Time]bool)
 
 		return env.WaitFor(ctx, "the panic worker fails its connect three times without reaching Connected",
 			func(ctx context.Context) (bool, string, error) {
@@ -87,11 +86,11 @@ var PanicScenarioV2 = ScenarioV2{
 
 				for _, result := range obs.LastActionResults {
 					if result.ActionType == "connect" && !result.Success {
-						failedConnects[result.Timestamp] = true
+						failedConnectTimestamps[result.Timestamp] = true
 					}
 				}
 
-				return len(failedConnects) >= 3, fmt.Sprintf("state=%s failed_connects=%d", obs.State, len(failedConnects)), nil
+				return len(failedConnectTimestamps) >= 3, fmt.Sprintf("state=%s failed_connects=%d", obs.State, len(failedConnectTimestamps)), nil
 			})
 	},
 }
