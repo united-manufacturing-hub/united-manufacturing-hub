@@ -770,9 +770,8 @@ children:
 
 	fsmv2Deps := map[string]any{}
 
-	// The transport worker reads its channel provider from this map. The
-	// supervisor merges the map into every child, so the provider reaches the
-	// transport worker however deep it sits.
+	// The supervisor merges this map into every child, so the transport worker
+	// finds the provider however deep it sits.
 	fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
 
 	if configData.Agent.UseFSMv2MemoryCleanup {

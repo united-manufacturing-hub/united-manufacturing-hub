@@ -56,9 +56,6 @@ var AuthFailureRateConfig = failurerate.Config{
 	MinSamples: 5,
 }
 
-// The ChannelProvider interface and its dependency key are defined in
-// channel_provider.go.
-
 // TransportDependencies provides transport and channel access for transport worker actions.
 type TransportDependencies struct {
 	authSession       types.AuthSession
@@ -91,9 +88,7 @@ type TransportDependencies struct {
 }
 
 // NewTransportDependencies creates dependencies for the transport worker from
-// the given channel provider. It panics when the provider is nil, with a
-// message naming the worker. Without the check, the GetChannels call below
-// would fail with a bare nil dereference.
+// the given channel provider. It panics when the provider is nil.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 // The supervisor writes framework metrics into this instance after construction;
 // constructing a second instance inside the factory would leave those metrics unreachable.

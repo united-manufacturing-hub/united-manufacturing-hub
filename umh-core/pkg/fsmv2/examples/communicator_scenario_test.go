@@ -38,8 +38,6 @@ var _ = Describe("Communicator Scenario", func() {
 
 	AfterEach(func() {
 		cancel()
-		// Clean up the communicator's global channel provider to prevent
-		// test pollution.
 		communicator.ClearChannelProvider()
 	})
 

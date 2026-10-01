@@ -47,8 +47,6 @@ func (m *mockActionChannelProvider) GetInboundStats(_ string) (capacity int, len
 	return 100, 0
 }
 
-// newActionChannelProvider builds a channel provider for action tests.
-// Pass it to NewTransportDependencies.
 func newActionChannelProvider() transportpkg.ChannelProvider {
 	inboundBi := make(chan *types.UMHMessage, 100)
 	outboundBi := make(chan *types.UMHMessage, 100)
