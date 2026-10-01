@@ -27,14 +27,8 @@ import (
 
 const failureLimitNeverReached = 999999
 
-// FailingScenarioV2 runs three examplefailing workers. The recovery worker
-// fails three connects, connects, stays Connected for 5 s
-// (healthyDurationMsBeforeNextCycle in examplefailing/state), disconnects once
-// and reconnects. Only that disconnect sets AllCyclesComplete, so its wait
-// takes about 7 s. The permanent worker never connects. The restart worker is
-// restarted after every five failures and keeps restarting until the run
-// ends. Every failed connect logs a warning and an action_failed error, and
-// the scenario expects both.
+// FailingScenarioV2 runs three examplefailing workers whose connect fails in
+// different ways. Each Step line says what its worker is configured to do.
 var FailingScenarioV2 = ScenarioV2{
 	Name:        "failing",
 	Description: "Three workers whose connect fails: one connects after three failures, one never connects, one is restarted after every five failures",
