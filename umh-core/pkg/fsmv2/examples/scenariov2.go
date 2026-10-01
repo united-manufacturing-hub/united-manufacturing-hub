@@ -46,37 +46,22 @@ type Env struct {
 	recorder *runRecorder
 }
 
-// runRecorder holds the per-run state that Step and WaitFor share across the
-// value copies of Env. The runner sets scenario, expectedErrors and
-// expectedWarnings before the supervisor starts, and nothing changes them
-// afterwards.
+// runRecorder is the per-run state that Step and WaitFor share across copies
+// of Env. The fields above mu are set before the supervisor starts and never change.
 type runRecorder struct {
 	// scenario is the name of the run's scenario, so a step line can be
 	// attributed when several scenarios run in one process.
 	scenario string
 
-	// lastStep is the description of the last change Step announced. A
-	// scenario may call Step from a goroutine it starts, so loggedMu guards it.
-	lastStep string
-
-	// expectedErrors lists the message substrings the run's scenario
-	// declared through ScenarioV2.ExpectedErrors.
-	expectedErrors []string
-
-	// expectedWarnings lists the message substrings the run's scenario
-	// declared through ScenarioV2.ExpectedWarnings.
+	expectedErrors   []string
 	expectedWarnings []string
 
-	// loggedMu guards lastStep, loggedErr and loggedWarn. Any goroutine that
-	// logs, including the supervisor's, writes loggedErr and loggedWarn. Run's
-	// goroutine and the teardown goroutine read them.
-	loggedMu sync.Mutex
-
-	// loggedErr is the first unexpected error the run logged, or nil.
-	loggedErr error
-
-	// loggedWarn is the first unexpected warning the run logged, or nil.
-	loggedWarn error
+	// mu guards the fields below. Step may run on a goroutine the scenario
+	// starts, and any goroutine that logs writes the first unexpected values.
+	mu                  sync.Mutex
+	lastStep            string
+	firstUnexpectedErr  error
+	firstUnexpectedWarn error
 }
 
 // alwaysAllowedMessages lists the message substrings every run may log at
@@ -95,11 +80,11 @@ func (r *runRecorder) recordLoggedError(err error, msg string) {
 		return
 	}
 
-	r.loggedMu.Lock()
-	defer r.loggedMu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	if r.loggedErr == nil {
-		r.loggedErr = fmt.Errorf("the scenario does not expect this error: %s (%w)", msg, err)
+	if r.firstUnexpectedErr == nil {
+		r.firstUnexpectedErr = fmt.Errorf("the scenario does not expect this error: %s (%w)", msg, err)
 	}
 }
 
@@ -130,42 +115,42 @@ func (r *runRecorder) recordLoggedWarning(msg string) {
 		return
 	}
 
-	r.loggedMu.Lock()
-	defer r.loggedMu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	if r.loggedWarn == nil {
-		r.loggedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
+	if r.firstUnexpectedWarn == nil {
+		r.firstUnexpectedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
 	}
 }
 
 // loggedWarning returns the first unexpected logged warning, or nil.
 func (r *runRecorder) loggedWarning() error {
-	r.loggedMu.Lock()
-	defer r.loggedMu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	return r.loggedWarn
+	return r.firstUnexpectedWarn
 }
 
 // loggedError returns the first unexpected logged error, or nil.
 func (r *runRecorder) loggedError() error {
-	r.loggedMu.Lock()
-	defer r.loggedMu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	return r.loggedErr
+	return r.firstUnexpectedErr
 }
 
 // setLastStep remembers description as the last change Step announced.
 func (r *runRecorder) setLastStep(description string) {
-	r.loggedMu.Lock()
-	defer r.loggedMu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	r.lastStep = description
 }
 
 // lastStepDescription returns the last change Step announced.
 func (r *runRecorder) lastStepDescription() string {
-	r.loggedMu.Lock()
-	defer r.loggedMu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	return r.lastStep
 }
