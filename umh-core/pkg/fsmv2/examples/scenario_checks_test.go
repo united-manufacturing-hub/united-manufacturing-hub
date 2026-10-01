@@ -516,9 +516,9 @@ var _ = Describe("ScenarioV2 expected error causes", func() {
 	It("allows nothing when the expected cause entry is nil", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
-		_, err := causeRun("nil-cause", fmt.Errorf("wrap: %w", errProbe), []error{nil})
+		_, err := causeRun("nil-cause", nil, []error{nil})
 		Expect(err).To(HaveOccurred(),
-			"a nil expected cause must match nothing, the same as an empty expected message")
+			"a nil expected cause must match nothing, not even a nil error, the same as an empty expected message")
 		Expect(err.Error()).To(ContainSubstring("action_failed"),
 			"the failure must name the generic message the error was logged under")
 	})
