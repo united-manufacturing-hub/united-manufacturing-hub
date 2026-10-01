@@ -169,8 +169,7 @@ func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.R
 		})
 }
 
-// CertFetcherHealthyScenarioV2 runs one certfetcher worker whose handler has
-// a subscriber and whose fetch succeeds.
+// CertFetcherHealthyScenarioV2 runs a certfetcher that has a subscriber and fetches successfully.
 var CertFetcherHealthyScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-healthy",
 	Description: "Cert fetcher with a subscriber: reaches Running and fetches",
@@ -192,9 +191,6 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		// A successful fetch sets LastFetchAt (RecordFetchSuccess in the
-		// worker's dependencies), so a non-zero value shows the worker
-		// fetched through the handler.
 		return env.WaitFor(ctx, "store shows a successful fetch (last_fetch_at is set)",
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
@@ -212,11 +208,7 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 	},
 }
 
-// CertFetcherDegradedScenarioV2 runs one certfetcher worker whose handler
-// has a subscriber but fails every fetch. Each failure logs an action_failed
-// error, which ExpectedErrorCauses allows. After DegradedThreshold
-// (certfetcher/state/state_running.go) failed fetches in a row, the worker
-// moves Running -> Degraded.
+// CertFetcherDegradedScenarioV2 runs a certfetcher whose every fetch fails, so it ends in Degraded.
 var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-degraded",
 	Description: "Cert fetcher whose fetches fail: enters Degraded after DegradedThreshold (certfetcher/state) failed fetches in a row",
@@ -240,12 +232,9 @@ var CertFetcherDegradedScenarioV2 = ScenarioV2{
 	},
 }
 
-// CertFetcherNoSubscribersScenarioV2 runs one certfetcher worker whose cert
-// handler has no subscriber handler (the SubHandler that lists active
-// subscribers). StoppedState starts the worker only once a subscriber handler
-// exists (certfetcher/state/state_stopped.go). So the worker stays Stopped, and
-// the log shows no state_transition line for it. The scenario passes when the
-// worker is still Stopped after 20 polls.
+// CertFetcherNoSubscribersScenarioV2 runs a certfetcher whose cert handler has no
+// subscriber handler (the SubHandler that lists active subscribers). StoppedState
+// starts the worker only once one exists (certfetcher/state/state_stopped.go).
 var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 	Name:        "certfetcher-no-subscribers",
 	Description: "Cert fetcher with no subscriber handler: stays in Stopped",
