@@ -40,13 +40,15 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 		identity, err := store.LoadIdentity(ctx, workerType, id)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		desired, err := store.LoadDesired(ctx, workerType, id)
+		desired, err := store.LoadDesired(ctx, workerType, id) //nolint:staticcheck // the helper is polymorphic over worker types, so LoadDesiredTyped[T] cannot apply
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
 		desiredDoc, ok := desired.(persistence.Document)
 		ExpectWithOffset(1, ok).To(BeTrue(), "desired must load as a document, got %T", desired)
 
-		observed, err := store.LoadObserved(ctx, workerType, id)
+		observed, err := store.LoadObserved(ctx, workerType, id) //nolint:staticcheck // the helper is polymorphic over worker types, so LoadObservedTyped[T] cannot apply
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
 		observedDoc, ok := observed.(persistence.Document)
 		ExpectWithOffset(1, ok).To(BeTrue(), "observed must load as a document, got %T", observed)
 

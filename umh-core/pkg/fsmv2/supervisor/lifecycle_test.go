@@ -491,6 +491,7 @@ type markDeletedHookStore struct {
 func (h *markDeletedHookStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
 	if hook := h.beforeMarkDeleted; hook != nil {
 		h.beforeMarkDeleted = nil
+
 		hook()
 	}
 
@@ -513,6 +514,7 @@ func (r *sentryWarnRecorder) Info(_ string, _ ...deps.Field)  {}
 func (r *sentryWarnRecorder) SentryWarn(_ deps.Feature, _ string, msg string, fields ...deps.Field) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.warnings = append(r.warnings, sentryWarn{Msg: msg, Fields: fields})
 }
 
@@ -524,5 +526,6 @@ func (r *sentryWarnRecorder) With(_ ...deps.Field) deps.FSMLogger { return r }
 func (r *sentryWarnRecorder) Warns() []sentryWarn {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	return append([]sentryWarn{}, r.warnings...)
 }

@@ -98,6 +98,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 
 	It("carries a stored tombstone through every save and never writes one of its own", func() {
 		By("keeping the tombstone when a deleted worker's document is saved with changes")
+
 		const deletedID = "worker-1"
 		saveInitialDocuments(ctx, ts, workerType, deletedID)
 
@@ -121,6 +122,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 						"id":     deletedID,
 						"config": "staging",
 					})
+
 					return err
 				},
 				collection: workerType + "_" + storage.RoleDesired,
@@ -135,6 +137,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 						"status":       "running",
 						"collected_at": t0.Add(2 * time.Hour),
 					})
+
 					return err
 				},
 				collection:      workerType + "_" + storage.RoleObserved,
@@ -167,6 +170,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		}
 
 		By("keeping the tombstone and appending no delta for an unchanged save")
+
 		const unchangedID = "worker-2"
 		saveInitialDocuments(ctx, ts, workerType, unchangedID)
 
@@ -195,6 +199,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		Expect(changed).To(BeFalse())
 
 		By("keeping the stored tombstone when an unchanged save carries a tombstone of its own")
+
 		changed, err = ts.SaveDesired(ctx, workerType, unchangedID, persistence.Document{
 			"id":                   unchangedID,
 			"config":               "production",
@@ -222,6 +227,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		}
 
 		By("dropping an incoming tombstone when the stored document has none")
+
 		const liveID = "worker-3"
 		saveInitialDocuments(ctx, ts, workerType, liveID)
 
@@ -280,6 +286,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		}
 
 		By("keeping the stored tombstone over one a save tries to bring in")
+
 		const lateID = "worker-4"
 		saveInitialDocuments(ctx, ts, workerType, lateID)
 

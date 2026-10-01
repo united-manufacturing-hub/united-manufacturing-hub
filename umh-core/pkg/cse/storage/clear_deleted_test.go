@@ -96,9 +96,11 @@ var _ = Describe("ClearDeleted", func() {
 
 	readRaw := func(id string) map[string]persistence.Document {
 		raw := make(map[string]persistence.Document)
+
 		for role, collection := range collections {
 			doc, err := backend.Get(ctx, collection, id)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
 			raw[role] = doc
 		}
 
@@ -111,6 +113,7 @@ var _ = Describe("ClearDeleted", func() {
 		ExpectWithOffset(1, resp.RequiresBootstrap).To(BeFalse())
 
 		byRole := make(map[string]storage.Delta)
+
 		for _, delta := range resp.Deltas {
 			ExpectWithOffset(1, delta.WorkerType).To(Equal(workerType))
 			ExpectWithOffset(1, delta.WorkerID).To(Equal(workerID))
@@ -155,6 +158,7 @@ var _ = Describe("ClearDeleted", func() {
 		Expect(deltas).To(HaveLen(3))
 
 		cleared := readRaw(workerID)
+
 		for role := range collections {
 			Expect(deltas).To(HaveKey(role))
 			expectClearedDocument(tombstoned[role], cleared[role], deltas[role].SyncID)
