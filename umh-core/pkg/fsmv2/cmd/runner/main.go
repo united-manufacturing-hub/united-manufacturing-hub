@@ -139,9 +139,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	effectiveDuration, defaulted := defaultDuration(durationSet, *duration)
-
-	settleWindow := routeDuration(effectiveDuration)
+	settleWindow, defaulted := defaultDuration(durationSet, *duration)
 
 	// runDone closes once main returns, i.e. once the run has fully torn down.
 	// The signal owner waits on it so a second SIGINT can still force-exit
@@ -175,8 +173,8 @@ func main() {
 	switch {
 	case defaulted:
 		durationStr = fmt.Sprintf("%s after the scenario ends", defaultSettle)
-	case effectiveDuration > 0:
-		durationStr = effectiveDuration.String()
+	case settleWindow > 0:
+		durationStr = settleWindow.String()
 	}
 
 	logger.Info("Starting scenario",
@@ -258,17 +256,6 @@ func shutdownExitCode(result *examples.RunResult) int {
 	}
 
 	return 0
-}
-
-// routeDuration decides how a duration binds to a run: the time the run
-// keeps going after the scenario's Run returns, flowing into
-// RunConfig.Duration. A zero duration stays endless.
-func routeDuration(duration time.Duration) (runDuration time.Duration) {
-	if duration <= 0 {
-		return 0
-	}
-
-	return duration
 }
 
 // defaultSettle is how long a run without --duration keeps going after the
