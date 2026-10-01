@@ -30,10 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// expectClearedDocument checks that after holds the fields before had, minus
-// the tombstone keys, with the _sync_id of the write that cleared it. The
-// whole-map compare makes a dropped or added field fail.
-func expectClearedDocument(before, after persistence.Document, syncID int64) {
+func expectClearedDocument(before, after persistence.Document, clearingSyncID int64) {
 	ExpectWithOffset(1, after).NotTo(HaveKey(storage.FieldDeletedAt))
 	ExpectWithOffset(1, after).NotTo(HaveKey(storage.FieldDeletedBy))
 
@@ -46,14 +43,12 @@ func expectClearedDocument(before, after persistence.Document, syncID int64) {
 		expected[key] = value
 	}
 
-	expected[storage.FieldSyncID] = syncID
+	expected[storage.FieldSyncID] = clearingSyncID
 
 	ExpectWithOffset(1, after).To(Equal(expected),
 		"every field but the tombstone keys must survive ClearDeleted")
 }
 
-// expectDeltaDescribesClearing checks that a delta entry reports a tombstone
-// removal: the tombstone keys under Removed, nothing added or modified.
 func expectDeltaDescribesClearing(delta storage.Delta) {
 	ExpectWithOffset(1, delta.Changes).NotTo(BeNil())
 	ExpectWithOffset(1, delta.Changes.Added).To(BeEmpty())
@@ -61,20 +56,19 @@ func expectDeltaDescribesClearing(delta storage.Delta) {
 	ExpectWithOffset(1, delta.Changes.Removed).To(ConsistOf(storage.FieldDeletedAt, storage.FieldDeletedBy))
 }
 
-// deltaRecordingStore records every delta entry written through it. A test
-// store built over a failing backend has its own sync id counter, so reading
-// deltas back by sync id cannot show what it wrote; this record can.
+// deltaRecordingStore exists because a TriangularStore built over a failing
+// backend has its own sync id counter, so GetDeltas cannot show what it wrote.
 type deltaRecordingStore struct {
 	persistence.Store
 
-	mu       sync.Mutex
-	inserted []persistence.Document
+	mu     sync.Mutex
+	deltas []persistence.Document
 }
 
 func (s *deltaRecordingStore) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
 	if collection == storage.DeltaCollectionName {
 		s.mu.Lock()
-		s.inserted = append(s.inserted, doc)
+		s.deltas = append(s.deltas, doc)
 		s.mu.Unlock()
 	}
 
@@ -85,7 +79,7 @@ func (s *deltaRecordingStore) deltaCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return len(s.inserted)
+	return len(s.deltas)
 }
 
 var _ = Describe("ClearDeleted", func() {
@@ -111,10 +105,8 @@ var _ = Describe("ClearDeleted", func() {
 		return raw
 	}
 
-	// clearingDeltas returns the delta entries appended after syncID, keyed
-	// by role, and fails if a role appears twice.
-	clearingDeltas := func(syncID int64, workerID string) map[string]storage.Delta {
-		resp, err := ts.GetDeltas(ctx, storage.Subscription{LastSyncID: syncID})
+	clearingDeltasByRole := func(afterSyncID int64, workerID string) map[string]storage.Delta {
+		resp, err := ts.GetDeltas(ctx, storage.Subscription{LastSyncID: afterSyncID})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 		ExpectWithOffset(1, resp.RequiresBootstrap).To(BeFalse())
 
@@ -159,7 +151,7 @@ var _ = Describe("ClearDeleted", func() {
 
 		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
 
-		deltas := clearingDeltas(syncBefore, workerID)
+		deltas := clearingDeltasByRole(syncBefore, workerID)
 		Expect(deltas).To(HaveLen(3))
 
 		cleared := readRaw(workerID)
@@ -237,7 +229,7 @@ var _ = Describe("ClearDeleted", func() {
 
 		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
 
-		deltas := clearingDeltas(syncBefore, workerID)
+		deltas := clearingDeltasByRole(syncBefore, workerID)
 		Expect(deltas).To(HaveLen(2))
 		Expect(deltas).To(HaveKey(storage.RoleIdentity))
 		Expect(deltas).To(HaveKey(storage.RoleDesired))
@@ -261,7 +253,7 @@ var _ = Describe("ClearDeleted", func() {
 		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		recorder := &deltaRecordingStore{
-			Store: &updateFailingStore{mockStore: backend, failOn: workerType + "_" + storage.RoleObserved},
+			Store: &updateFailingStore{mockStore: backend, failingCollection: workerType + "_" + storage.RoleObserved},
 		}
 		failingTs := storage.NewTriangularStoreWithClock(recorder, deps.NewNopFSMLogger(), mockClock)
 

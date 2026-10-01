@@ -28,8 +28,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// expectDeltaReportsNoTombstone checks that a save's delta entry reports no
-// tombstone field in any change category.
 func expectDeltaReportsNoTombstone(changes *storage.Diff) {
 	ExpectWithOffset(1, changes).NotTo(BeNil())
 
@@ -41,9 +39,7 @@ func expectDeltaReportsNoTombstone(changes *storage.Diff) {
 	ExpectWithOffset(1, changes.Removed).NotTo(ContainElement(storage.FieldDeletedBy))
 }
 
-// deltaAfter returns the one delta entry the store appended after the given
-// sync id.
-func deltaAfter(ctx context.Context, ts *storage.TriangularStore, syncID int64) storage.Delta {
+func onlyDeltaAfter(ctx context.Context, ts *storage.TriangularStore, syncID int64) storage.Delta {
 	resp, err := ts.GetDeltas(ctx, storage.Subscription{LastSyncID: syncID})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	ExpectWithOffset(1, resp.RequiresBootstrap).To(BeFalse())
@@ -52,8 +48,6 @@ func deltaAfter(ctx context.Context, ts *storage.TriangularStore, syncID int64) 
 	return resp.Deltas[0]
 }
 
-// expectNoDeltaAfter checks that the store appended no delta entry after the
-// given sync id.
 func expectNoDeltaAfter(ctx context.Context, ts *storage.TriangularStore, syncID int64) {
 	resp, err := ts.GetDeltas(ctx, storage.Subscription{LastSyncID: syncID})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -61,7 +55,6 @@ func expectNoDeltaAfter(ctx context.Context, ts *storage.TriangularStore, syncID
 	ExpectWithOffset(1, resp.Deltas).To(BeEmpty())
 }
 
-// saveInitialDocuments writes the initial documents for one worker.
 func saveInitialDocuments(ctx context.Context, ts *storage.TriangularStore, workerType, workerID string) {
 	ExpectWithOffset(1, ts.SaveIdentity(ctx, workerType, workerID, persistence.Document{
 		"id":   workerID,
@@ -111,6 +104,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		Expect(ts.MarkDeleted(ctx, workerType, deletedID, "removed")).To(Succeed())
 
 		mockClock.Add(time.Hour)
+		laterMarkTime := mockClock.Now()
 
 		changedSaves := []struct {
 			role            string
@@ -161,7 +155,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 			expectTombstone(stored, t0, "removed")
 			Expect(stored[s.field]).To(Equal(s.value))
 
-			delta := deltaAfter(ctx, ts, syncBefore)
+			delta := onlyDeltaAfter(ctx, ts, syncBefore)
 			Expect(delta.Role).To(Equal(s.role))
 			expectDeltaReportsNoTombstone(delta.Changes)
 
@@ -224,9 +218,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		for _, role := range []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved} {
 			stored, err := backend.Get(ctx, workerType+"_"+role, unchangedID)
 			Expect(err).NotTo(HaveOccurred())
-			// The changed-save phase advanced the clock by an hour before
-			// this MarkDeleted ran, so the tombstone carries that time.
-			expectTombstone(stored, t0.Add(time.Hour), "removed")
+			expectTombstone(stored, laterMarkTime, "removed")
 		}
 
 		By("dropping an incoming tombstone when the stored document has none")
@@ -251,7 +243,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		Expect(liveStored).NotTo(HaveKey(storage.FieldDeletedBy))
 		Expect(liveStored["collected_at"]).To(Equal(t0.Add(4 * time.Hour)))
 
-		liveDelta := deltaAfter(ctx, ts, syncBeforeLive)
+		liveDelta := onlyDeltaAfter(ctx, ts, syncBeforeLive)
 		Expect(liveDelta.Role).To(Equal(storage.RoleObserved))
 		expectDeltaReportsNoTombstone(liveDelta.Changes)
 		Expect(liveDelta.Changes.Added).To(HaveKey("collected_at"))
@@ -308,12 +300,10 @@ var _ = Describe("Save keeps a tombstone", func() {
 
 		lateStored, err := backend.Get(ctx, workerType+"_"+storage.RoleObserved, lateID)
 		Expect(err).NotTo(HaveOccurred())
-		// This MarkDeleted also ran at t0 plus one hour, before the
-		// two-hour advance above.
-		expectTombstone(lateStored, t0.Add(time.Hour), "removed")
+		expectTombstone(lateStored, laterMarkTime, "removed")
 		Expect(lateStored["collected_at"]).To(Equal(t0.Add(6 * time.Hour)))
 
-		lateDelta := deltaAfter(ctx, ts, syncBeforeLate)
+		lateDelta := onlyDeltaAfter(ctx, ts, syncBeforeLate)
 		Expect(lateDelta.Role).To(Equal(storage.RoleObserved))
 		expectDeltaReportsNoTombstone(lateDelta.Changes)
 		Expect(lateDelta.Changes.Added).To(HaveKey("collected_at"))
@@ -340,7 +330,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		Expect(freshStored).NotTo(HaveKey(storage.FieldDeletedBy))
 		Expect(freshStored["collected_at"]).To(Equal(t0.Add(7 * time.Hour)))
 
-		freshDelta := deltaAfter(ctx, ts, syncBefore)
+		freshDelta := onlyDeltaAfter(ctx, ts, syncBefore)
 		Expect(freshDelta.Role).To(Equal(storage.RoleObserved))
 		expectDeltaReportsNoTombstone(freshDelta.Changes)
 		Expect(freshDelta.Changes.Added).To(HaveKey("status"))

@@ -161,19 +161,15 @@ func (ts *TriangularStore) saveWithDelta(
 		}
 	}
 
-	// A save never adds, changes or removes a tombstone (see FieldDeletedAt).
-	// A worker's collector can still be running when the worker is removed,
-	// and its late save must not make the worker look alive again. So the
-	// stored tombstone is kept, and any tombstone the incoming document
-	// carries is dropped.
+	// A save keeps the stored tombstone (see FieldDeletedAt) and drops any
+	// the caller sends. A removed worker's collector can still save, and that
+	// save must not make the worker look alive again.
 	delete(doc, FieldDeletedAt)
 	delete(doc, FieldDeletedBy)
 
-	if !isNew && existing != nil {
-		if deletedAt, ok := existing[FieldDeletedAt]; ok && deletedAt != nil {
-			doc[FieldDeletedAt] = deletedAt
-			doc[FieldDeletedBy] = existing[FieldDeletedBy]
-		}
+	if !isNew && hasTombstone(existing) {
+		doc[FieldDeletedAt] = existing[FieldDeletedAt]
+		doc[FieldDeletedBy] = existing[FieldDeletedBy]
 	}
 
 	// Preserve version for roles that don't increment (observed state)

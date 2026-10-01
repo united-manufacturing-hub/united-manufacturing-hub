@@ -195,9 +195,8 @@ var _ = Describe("Observation", func() {
 		It("decodes the _deleted_at a stored document carries after its worker was removed", func() {
 			deletedAt := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 
-			// A typed load marshals the stored document to JSON and decodes
-			// that, so this map stands in for a tombstoned stored document.
-			stored := map[string]interface{}{
+			// A typed load JSON-encodes the stored document, then decodes it.
+			tombstonedDoc := map[string]interface{}{
 				"collected_at": time.Date(2026, 9, 30, 11, 59, 0, 0, time.UTC),
 				"state":        "running",
 				"reachable":    true,
@@ -205,7 +204,7 @@ var _ = Describe("Observation", func() {
 				"_deleted_by":  "removed",
 			}
 
-			data, err := json.Marshal(stored)
+			data, err := json.Marshal(tombstonedDoc)
 			Expect(err).NotTo(HaveOccurred())
 
 			var restored fsmv2.Observation[TestStatus]

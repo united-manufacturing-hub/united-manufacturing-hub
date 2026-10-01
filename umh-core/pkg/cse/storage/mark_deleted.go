@@ -24,15 +24,19 @@ import (
 )
 
 // tombstoneRoles are the role documents MarkDeleted tombstones and
-// ClearDeleted clears. Both use this one list, so they always cover the same documents.
+// ClearDeleted clears.
 var tombstoneRoles = []string{RoleIdentity, RoleDesired, RoleObserved}
 
-// MarkDeleted tombstones the worker's stored role documents; the
-// TriangularStoreInterface method documents the contract.
-//
-// Parameters:
-//   - workerType: e.g., "container"
-//   - deletedBy: Actor responsible for the removal (audit trail)
+type roleWrite struct {
+	role   string
+	syncID int64
+}
+
+func hasTombstone(doc persistence.Document) bool {
+	return doc[FieldDeletedAt] != nil
+}
+
+// MarkDeleted implements TriangularStoreInterface.MarkDeleted.
 func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
 	ts.documentWriteMu.Lock()
 	defer ts.documentWriteMu.Unlock()
@@ -46,19 +50,12 @@ func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, i
 
 	defer func() { _ = tx.Rollback() }()
 
-	// tombstonedRole pairs a document's role with the sync id its tombstone
-	// write allocated.
-	type tombstonedRole struct {
-		role   string
-		syncID int64
-	}
-
-	// tombstoned holds one entry per document that received a tombstone in
-	// this call.
-	var tombstoned []tombstonedRole
+	var tombstoned []roleWrite
 
 	for _, role := range tombstoneRoles {
-		doc, err := tx.Get(ctx, workerType+"_"+role, id)
+		collection := workerType + "_" + role
+
+		doc, err := tx.Get(ctx, collection, id)
 		if err != nil {
 			if errors.Is(err, persistence.ErrNotFound) {
 				continue
@@ -67,8 +64,7 @@ func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, i
 			return fmt.Errorf("failed to load %s for %s/%s: %w", role, workerType, id, err)
 		}
 
-		// A document that already carries a tombstone keeps the first one.
-		if existing, ok := doc[FieldDeletedAt]; ok && existing != nil {
+		if hasTombstone(doc) {
 			continue
 		}
 
@@ -77,58 +73,62 @@ func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, i
 		doc[FieldDeletedBy] = deletedBy
 		doc[FieldSyncID] = syncID
 
-		if err := tx.Update(ctx, workerType+"_"+role, id, doc); err != nil {
+		if err := tx.Update(ctx, collection, id, doc); err != nil {
 			return fmt.Errorf("failed to mark %s deleted for %s/%s: %w", role, workerType, id, err)
 		}
 
-		tombstoned = append(tombstoned, tombstonedRole{role: role, syncID: syncID})
+		tombstoned = append(tombstoned, roleWrite{role: role, syncID: syncID})
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Each delta entry carries the sync id its document was allocated.
-	for _, s := range tombstoned {
-		if ts.deltaStore == nil {
-			continue
-		}
-
-		entry := DeltaEntry{
-			SyncID:     s.syncID,
-			WorkerType: workerType,
-			ID:         id,
-			Role:       s.role,
-			Changes: &Diff{
-				Added: map[string]interface{}{
-					FieldDeletedAt: deletedAt,
-					FieldDeletedBy: deletedBy,
+	if ts.deltaStore != nil {
+		for _, w := range tombstoned {
+			ts.appendDeltaOrWarn(ctx, DeltaEntry{
+				SyncID:     w.syncID,
+				WorkerType: workerType,
+				ID:         id,
+				Role:       w.role,
+				Changes: &Diff{
+					Added: map[string]interface{}{
+						FieldDeletedAt: deletedAt,
+						FieldDeletedBy: deletedBy,
+					},
+					Modified: make(map[string]ModifiedField),
+					Removed:  []string{},
 				},
-				Modified: make(map[string]ModifiedField),
-				Removed:  []string{},
-			},
-			Timestamp: deletedAt,
-		}
-
-		if appendErr := ts.deltaStore.Append(ctx, entry); appendErr != nil {
-			var hierarchyPath string
-			if identity, loadErr := ts.LoadIdentity(ctx, workerType, id); loadErr == nil {
-				if hp, ok := identity["hierarchy_path"].(string); ok {
-					hierarchyPath = hp
-				}
-			}
-
-			ts.logger.SentryWarn(deps.FeatureCSE, hierarchyPath, "delta_append_failed",
-				deps.Err(appendErr),
-				deps.String("role", s.role))
+				Timestamp: deletedAt,
+			})
 		}
 	}
 
-	cacheKey := workerType + "_" + id
-
-	ts.cacheMutex.Lock()
-	delete(ts.snapshotCache, cacheKey)
-	ts.cacheMutex.Unlock()
+	ts.invalidateSnapshot(workerType, id)
 
 	return nil
+}
+
+func (ts *TriangularStore) appendDeltaOrWarn(ctx context.Context, entry DeltaEntry) {
+	appendErr := ts.deltaStore.Append(ctx, entry)
+	if appendErr == nil {
+		return
+	}
+
+	var hierarchyPath string
+	if identity, loadErr := ts.LoadIdentity(ctx, entry.WorkerType, entry.ID); loadErr == nil {
+		if hp, ok := identity["hierarchy_path"].(string); ok {
+			hierarchyPath = hp
+		}
+	}
+
+	ts.logger.SentryWarn(deps.FeatureCSE, hierarchyPath, "delta_append_failed",
+		deps.Err(appendErr),
+		deps.String("role", entry.Role))
+}
+
+func (ts *TriangularStore) invalidateSnapshot(workerType string, id string) {
+	ts.cacheMutex.Lock()
+	delete(ts.snapshotCache, workerType+"_"+id)
+	ts.cacheMutex.Unlock()
 }

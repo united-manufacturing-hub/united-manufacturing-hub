@@ -114,12 +114,11 @@ type TriangularStore struct {
 
 	knownWorkerTypesMu sync.RWMutex
 
-	// documentWriteMu makes a save, MarkDeleted and ClearDeleted run one at a
-	// time. A save reads the stored document and writes it back in two
-	// separate calls. A tombstone written or removed between those calls
-	// would be undone. The supervisor holds its own lock while it calls
-	// MarkDeleted, so code holding documentWriteMu must never wait for a
-	// supervisor lock.
+	// documentWriteMu runs saves, MarkDeleted and ClearDeleted one at a time.
+	// A save reads a document and writes it back in two calls, so a tombstone
+	// change between them would be undone. The supervisor holds its own lock
+	// while calling MarkDeleted, so never wait for a supervisor lock while
+	// holding this one.
 	documentWriteMu sync.Mutex
 }
 
@@ -597,9 +596,7 @@ func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields [
 }
 
 // performDeltaCheck compares two documents and returns change information.
-// Both documents are stripped of every non-business field before comparison
-// (see filterCSEFields and the deletes below): the diff this check
-// produces describes only business changes.
+// Filters out CSE fields, ID, version and the tombstone before comparison.
 //
 // Returns:
 //   - hasChanges: true if business data changed (new document or fields modified)

@@ -177,9 +177,8 @@ type Observation[TStatus any] struct {
 	ChildrenUnhealthy int `json:"children_unhealthy"`
 	// ShutdownRequested mirrors the desired state's shutdown flag.
 	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle // Match existing API field name
-	// DeletedAt is when the supervisor removed this worker, read from the
-	// stored document's _deleted_at. It is nil for a worker that was not
-	// removed. The collector never sets it.
+	// DeletedAt is the stored _deleted_at (see storage.FieldDeletedAt). Only
+	// the store sets it; a save drops any value a collector puts here.
 	DeletedAt *time.Time `json:"_deleted_at,omitempty"` //nolint:tagliatelle // CSE metadata field name
 }
 

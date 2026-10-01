@@ -513,13 +513,11 @@ func createTestTriangularStore() *storage.TriangularStore {
 }
 
 type markDeletedCall struct {
-	WorkerType string
-	ID         string
-	By         string
-	CtxErr     error
-	// HasDeadline reports whether the context MarkDeleted received had a
-	// deadline.
-	HasDeadline bool
+	WorkerType     string
+	ID             string
+	By             string
+	CtxErr         error
+	CtxHasDeadline bool
 }
 
 type clearDeletedCall struct {
@@ -544,10 +542,7 @@ type mockTriangularStore struct {
 	ClearDeletedErr   error
 	ClearDeletedCalls []clearDeletedCall
 
-	// StoreCalls records, in call order, each successful Save* call and each
-	// ClearDeleted call, named after the store method. MarkDeleted calls go
-	// to MarkDeletedCalls instead.
-	StoreCalls []string
+	SaveAndClearCalls []string
 
 	identity map[string]map[string]persistence.Document
 	desired  map[string]map[string]persistence.Document
@@ -575,7 +570,7 @@ func (m *mockTriangularStore) SaveIdentity(ctx context.Context, workerType strin
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.StoreCalls = append(m.StoreCalls, "save_identity")
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "save_identity")
 
 	if m.identity[workerType] == nil {
 		m.identity[workerType] = make(map[string]persistence.Document)
@@ -615,7 +610,7 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 	defer m.mu.Unlock()
 
 	m.SaveDesiredCalled++
-	m.StoreCalls = append(m.StoreCalls, "save_desired")
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "save_desired")
 
 	if m.desired[workerType] == nil {
 		m.desired[workerType] = make(map[string]persistence.Document)
@@ -688,7 +683,7 @@ func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType strin
 	defer m.mu.Unlock()
 
 	m.SaveObservedCalled++
-	m.StoreCalls = append(m.StoreCalls, "save_observed")
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "save_observed")
 
 	if m.Observed[workerType] == nil {
 		m.Observed[workerType] = make(map[string]interface{})
@@ -830,7 +825,7 @@ func (m *mockTriangularStore) MarkDeleted(ctx context.Context, workerType string
 		ID:         id,
 		By:         by,
 		CtxErr:     ctx.Err(),
-		HasDeadline: func() bool {
+		CtxHasDeadline: func() bool {
 			_, ok := ctx.Deadline()
 
 			return ok
@@ -847,14 +842,10 @@ func (m *mockTriangularStore) ClearDeleted(_ context.Context, workerType string,
 		WorkerType: workerType,
 		ID:         id,
 	})
-	m.StoreCalls = append(m.StoreCalls, "clear_deleted")
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "clear_deleted")
 	m.mu.Unlock()
 
-	if m.ClearDeletedErr != nil {
-		return m.ClearDeletedErr
-	}
-
-	return nil
+	return m.ClearDeletedErr
 }
 
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)
