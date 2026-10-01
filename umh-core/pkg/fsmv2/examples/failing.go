@@ -49,9 +49,10 @@ var FailingScenarioV2 = ScenarioV2{
 		env.Step("create the recovery worker: it fails three times, connects, stays connected 5 s, disconnects once, and reconnects")
 
 		if err := env.Client.Upsert(recoveryRef, map[string]any{
-			"state":        "running",
-			"should_fail":  true,
-			"max_failures": 3,
+			"state":          "running",
+			"should_fail":    true,
+			"max_failures":   3,
+			"failure_cycles": 1,
 		}); err != nil {
 			return fmt.Errorf("upsert recovery worker: %w", err)
 		}
