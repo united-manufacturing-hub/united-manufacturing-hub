@@ -55,9 +55,7 @@ var FilesystemKey = config.NewDependencyKey[filesystem.Service]("helloworld.file
 type HelloworldWorker struct {
 	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]
 
-	// fs reads the mood file. The factory replaces the default with the
-	// Service under FilesystemKey when the dependency map holds one.
-	fs filesystem.Service
+	moodFS filesystem.Service
 }
 
 // NewHelloworldWorker creates a new helloworld worker.
@@ -70,7 +68,7 @@ func NewHelloworldWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	w := &HelloworldWorker{fs: filesystem.NewDefaultService()}
+	w := &HelloworldWorker{moodFS: filesystem.NewDefaultService()}
 	bd := w.InitBase(identity, logger, stateReader)
 	workerDeps := NewHelloworldDependencies(bd)
 	w.BindDeps(workerDeps)
@@ -120,14 +118,14 @@ func (w *HelloworldWorker) Actions() map[string]fsmv2.Action[any] {
 	}
 }
 
-// readMoodFile reads the mood from a file path through w.fs. Returns empty
+// readMoodFile reads the mood from a file path through w.moodFS. Returns empty
 // string on error or empty path.
 func (w *HelloworldWorker) readMoodFile(ctx context.Context, path string) string {
 	if path == "" {
 		return ""
 	}
 
-	data, err := w.fs.ReadFile(ctx, path)
+	data, err := w.moodFS.ReadFile(ctx, path)
 	if err != nil {
 		return ""
 	}
@@ -143,8 +141,8 @@ func init() {
 				return nil, err
 			}
 
-			if fs, ok := config.LookupDependency(m, FilesystemKey); ok {
-				w.fs = fs
+			if moodFS, ok := config.LookupDependency(m, FilesystemKey); ok {
+				w.moodFS = moodFS
 			}
 
 			return w, nil
