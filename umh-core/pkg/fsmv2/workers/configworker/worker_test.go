@@ -36,20 +36,13 @@ import (
 // workerType is the canonical name registered in init() and used as the folder name.
 const workerType = "configworker"
 
-// TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy verifies the three
-// behaviors of the kernel config worker:
-//
-//  1. The worker type registers (the blank-import side-effect installs a factory
-//     that factory.NewWorkerByType can resolve).
-//  2. Its healthy state derives the state name "Running" (not "Connected").
-//  3. A constructed worker holds the non-nil shared registry published via the
-//     typed-deps wiring (register.SetGlobalDeps -> register.GlobalDeps).
-func TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy(t *testing.T) {
-	// Behavior 2: the healthy state's derived name is "Running".
+func TestConfigWorkerHealthyStateIsNamedRunning(t *testing.T) {
 	if got := helpers.DeriveStateName(&state.RunningState{}); got != "Running" {
 		t.Fatalf("healthy state DeriveStateName = %q, want %q", got, "Running")
 	}
+}
 
+func TestConfigWorkerFactoryBuildsWorkerHoldingStoredRegistry(t *testing.T) {
 	shared := dynamicchildren.NewWriter().Registry()
 	register.SetGlobalDeps[*dynamicchildren.Registry](workerType, shared)
 	t.Cleanup(func() { register.ClearGlobalDeps(workerType) })
@@ -57,7 +50,6 @@ func TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy(t *testing.T) {
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
 	logger := deps.NewNopFSMLogger()
 
-	// Behavior 1: the registered factory resolves and constructs a worker.
 	w, err := factory.NewWorkerByType(workerType, identity, logger, nil, nil)
 	if err != nil {
 		t.Fatalf("factory.NewWorkerByType(%q): %v", workerType, err)
@@ -67,8 +59,6 @@ func TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy(t *testing.T) {
 		t.Fatalf("factory.NewWorkerByType(%q) returned nil worker", workerType)
 	}
 
-	// Behavior 3: the constructed worker holds the non-nil shared registry handle,
-	// and it is the same instance that was published.
 	cw, ok := w.(*worker.ConfigworkerWorker)
 	if !ok {
 		t.Fatalf("worker is %T, want *configworker.ConfigworkerWorker", w)
