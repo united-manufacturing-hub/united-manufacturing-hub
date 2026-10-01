@@ -744,8 +744,7 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	return nil
 }
 
-// IsResourceLimited admits every bridge: it always returns false and an empty
-// reason.
-func (m *MockProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
+// BridgeMustWait admits every bridge.
+func (m *MockProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
 	return false, ""
 }

@@ -32,7 +32,7 @@ import (
 // state is degraded. Every combination of container state and resource health
 // is checked: a bridge is refused when the container is degraded or any
 // resource is, and the reason names the first degraded resource.
-var _ = Describe("IsResourceLimited refusal reasons", func() {
+var _ = Describe("BridgeMustWait refusal reasons", func() {
 	health := func(degraded bool) models.HealthCategory {
 		if degraded {
 			return models.Degraded
@@ -49,11 +49,9 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 		return &models.Health{Message: message, Category: models.Degraded}
 	}
 
-	// oldRefused is the admission decision of the order before this change,
-	// written out rather than derived from the code: a degraded container state
-	// refused first, and any degraded resource refused after it. No bridges are
-	// staged, so the bridge-count ceiling never refuses here.
-	oldRefused := func(stateDegraded, cpu, mem, disk bool) bool {
+	// refusedWhenDegradedOrAnyResource is written out rather than derived from
+	// the code. No bridges are staged, so the bridge-count ceiling never refuses here.
+	refusedWhenDegradedOrAnyResource := func(stateDegraded, cpu, mem, disk bool) bool {
 		return stateDegraded || cpu || mem || disk
 	}
 
@@ -95,10 +93,10 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 							CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 						}
 
-						limited, reason := protocolconverter.NewDefaultProtocolConverterService("test").IsResourceLimited(snapshot, "new-bridge")
+						mustWait, reason := protocolconverter.NewDefaultProtocolConverterService("test").BridgeMustWait(snapshot, "new-bridge")
 
-						Expect(limited).To(Equal(oldRefused(stateDegraded, cpu, mem, disk)),
-							"admission must be what the old order decided")
+						Expect(mustWait).To(Equal(refusedWhenDegradedOrAnyResource(stateDegraded, cpu, mem, disk)),
+							"a bridge must be refused when the container or any resource is degraded")
 
 						switch {
 						case cpu:
@@ -120,9 +118,8 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 	}
 
 	// A degraded resource with no message still names itself, with the generic
-	// reason. Each entry also sets the container's own state to degraded,
-	// which alone would refuse as not proven, so the resource must win.
-	DescribeTable("names the cause below the resource checks, with the container's state degraded",
+	// reason. Each entry also sets the container's own state to degraded.
+	DescribeTable("names a degraded resource without a message while the container is degraded",
 		func(info container_monitor.ServiceInfo, reason string) {
 			snapshot := pkgfsm.SystemSnapshot{
 				Managers: map[string]pkgfsm.ManagerSnapshot{
@@ -140,9 +137,9 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 				CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 			}
 
-			limited, got := protocolconverter.NewDefaultProtocolConverterService("test").IsResourceLimited(snapshot, "new-bridge")
+			mustWait, got := protocolconverter.NewDefaultProtocolConverterService("test").BridgeMustWait(snapshot, "new-bridge")
 
-			Expect(limited).To(BeTrue(), "a degraded container state refused before the change, so it must still refuse")
+			Expect(mustWait).To(BeTrue(), "a degraded container state must refuse")
 			Expect(got).To(HavePrefix(reason))
 		},
 		Entry("CPU degraded with an empty message",

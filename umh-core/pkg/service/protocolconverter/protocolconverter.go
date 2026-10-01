@@ -112,12 +112,12 @@ type IProtocolConverterService interface {
 	// This is used internally for both initial startup and config change re-evaluation.
 	EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string, currentFSMState string, readDFCDesiredState string, writeDFCDesiredState string) error
 
-	// IsResourceLimited decides whether the bridge named bridgeName may be created.
+	// BridgeMustWait decides whether the bridge named bridgeName may be created.
 	//
 	// It returns:
-	//    limited – true when the bridge must wait, false otherwise.
-	//    reason  – empty when limited is false; otherwise the refusal reason and how to start bridges anyway.
-	IsResourceLimited(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string)
+	//    mustWait – true when the bridge must wait, false otherwise.
+	//    reason   – empty when mustWait is false; otherwise the refusal reason and how to start bridges anyway.
+	BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string)
 }
 
 // ServiceInfo holds information about the ProtocolConverters underlying health states.
@@ -1169,65 +1169,53 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 	return nil
 }
 
-// IsResourceLimited decides whether the bridge named bridgeName may be created.
-// It reads the container's resource health, the other bridges' states and the
-// CPU core count from the snapshot, and passes them to bridgeadmission.Decide,
-// whose package doc holds the rules. IProtocolConverterService documents the
-// return values.
-func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
+// BridgeMustWait decides whether the bridge named bridgeName may be created.
+func (p *ProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
 	in := bridgeadmission.Input{
-		BlockingEnabled: snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking,
-		HostCores:       runtime.NumCPU(),
+		EnableResourceLimitBlocking: snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking,
+		HostCores:                   runtime.NumCPU(),
 	}
 	in.CPU, in.Memory, in.Disk, in.CapacityCores = admissionResources(snapshot)
 	in.Created, in.WaitingBefore = p.countBridges(snapshot, bridgeName)
 
 	d := bridgeadmission.Decide(in)
 	if d.MaxBridges != nil {
-		p.logger.Debugf("IsResourceLimited: max bridges=%d (1 core reserved for Redpanda), created=%d, waiting before=%d, bridge %s admit=%v",
+		p.logger.Debugf("BridgeMustWait: max bridges=%d (1 core reserved for Redpanda), created=%d, waiting before=%d, bridge %s admit=%v",
 			*d.MaxBridges, in.Created, in.WaitingBefore, bridgeName, d.Admit)
 	}
 
 	return !d.Admit, d.Message()
 }
 
-// admissionResources reads the health of CPU, memory and disk, and the CPU
-// limit in cores, from the container instance in the snapshot. All three
-// resources are Unknown when the snapshot has no container monitor, no core
-// instance or no observation of it yet. capacityCores is nil when the CPU
-// limit is not known.
 func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgeadmission.Resource, capacityCores *float64) {
-	unknown := func(message string) bridgeadmission.Resource {
-		return bridgeadmission.Resource{Health: bridgeadmission.Unknown, Message: message}
+	unproven := func(message string) bridgeadmission.Resource {
+		return bridgeadmission.Resource{Health: bridgeadmission.Unproven, Message: message}
 	}
 
 	containerManager, managerExists := fsm.FindManager(snapshot, constants.ContainerManagerName)
 	if !managerExists {
-		r := unknown("container monitor not available")
+		r := unproven("container monitor not available")
 
 		return r, r, r, nil
 	}
 
 	instance, instanceExists := containerManager.GetInstances()[constants.CoreInstanceName]
 	if !instanceExists {
-		r := unknown("container health status unavailable")
+		r := unproven("container health status unavailable")
 
 		return r, r, r, nil
 	}
 
 	observed, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot)
 	if !ok || observed == nil {
-		r := unknown("no health reading yet")
+		r := unproven("no health reading yet")
 
 		return r, r, r, nil
 	}
 
 	serviceInfo := observed.ServiceInfoSnapshot
 
-	// An Active reading makes a resource Healthy only while the container's own
-	// state is active. In any other container state, such as
-	// monitoring_starting or degraded, the resource stays Unknown. Neutral, the
-	// zero value before the first reading, is Unknown too.
+	containerActive := instance.CurrentState == container.OperationalStateActive
 	classify := func(category models.HealthCategory, health *models.Health) bridgeadmission.Resource {
 		switch category {
 		case models.Degraded:
@@ -1238,13 +1226,13 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 
 			return bridgeadmission.Resource{Health: bridgeadmission.Degraded, Message: message}
 		case models.Active:
-			if instance.CurrentState == "active" {
+			if containerActive {
 				return bridgeadmission.Resource{Health: bridgeadmission.Healthy}
 			}
 
-			return unknown(fmt.Sprintf("instance not active yet (state %s)", instance.CurrentState))
+			return unproven(fmt.Sprintf("instance not active yet (state %s)", instance.CurrentState))
 		default:
-			return unknown("no health reading yet")
+			return unproven("no health reading yet")
 		}
 	}
 
@@ -1265,27 +1253,29 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 	memory = classify(serviceInfo.MemoryHealth, memoryHealth)
 	disk = classify(serviceInfo.DiskHealth, diskHealth)
 
-	// The CPU record carries either the fsmv2 CPU worker's reporting or the
-	// legacy reporting, never both, so the CPU limit is read from whichever is
-	// present. CapacityCores is the quota when one applies and the usable core
-	// count otherwise. CgroupCores is the quota, and 0 when none is set.
-	if serviceInfo.CPU != nil {
-		switch {
-		case serviceInfo.CPU.CPUHealth != nil:
-			capacity := serviceInfo.CPU.CPUHealth.CapacityCores
-			capacityCores = &capacity
-		case serviceInfo.CPU.CgroupCores > 0:
-			capacity := serviceInfo.CPU.CgroupCores
-			capacityCores = &capacity
-		}
-	}
-
-	return cpu, memory, disk, capacityCores
+	return cpu, memory, disk, cpuLimitCores(serviceInfo.CPU)
 }
 
-// countBridges counts, for bridgeName, the other bridges already created and
-// the bridges still in to_be_created that config.yaml lists before it. Bridges
-// being removed count in neither.
+// cpuLimitCores reads the CPU limit from whichever CPU path filled the record: the fsmv2 worker fills CPUHealth, the legacy reader fills CgroupCores.
+func cpuLimitCores(cpu *models.CPU) *float64 {
+	if cpu == nil {
+		return nil
+	}
+
+	switch {
+	case cpu.CPUHealth != nil:
+		capacity := cpu.CPUHealth.CapacityCores
+
+		return &capacity
+	case cpu.CgroupCores > 0:
+		capacity := cpu.CgroupCores
+
+		return &capacity
+	default:
+		return nil
+	}
+}
+
 func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bridgeName string) (created, waitingBefore int) {
 	protocolConverterManager, exists := snapshot.Managers[constants.ProtocolConverterManagerName]
 	if !exists {
@@ -1293,16 +1283,16 @@ func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bri
 	}
 
 	protocolConverterInstances := protocolConverterManager.GetInstances()
-	p.logger.Debugf("IsResourceLimited: Total protocol converter instances: %d", len(protocolConverterInstances))
+	p.logger.Debugf("BridgeMustWait: Total protocol converter instances: %d", len(protocolConverterInstances))
 
-	// A bridgeName missing from config.yaml sorts after every bridge in it.
-	candidateIndex := len(snapshot.CurrentConfig.ProtocolConverter)
-	indexByName := make(map[string]int, candidateIndex)
+	notInConfig := len(snapshot.CurrentConfig.ProtocolConverter)
+	bridgeIndex := notInConfig
+	indexByName := make(map[string]int, notInConfig)
 
 	for i, pcConfig := range snapshot.CurrentConfig.ProtocolConverter {
 		indexByName[pcConfig.Name] = i
 		if pcConfig.Name == bridgeName {
-			candidateIndex = i
+			bridgeIndex = i
 		}
 	}
 
@@ -1312,20 +1302,20 @@ func (p *ProtocolConverterService) countBridges(snapshot fsm.SystemSnapshot, bri
 		}
 
 		if instance.CurrentState == internalfsm.LifecycleStateRemoving || instance.CurrentState == internalfsm.LifecycleStateRemoved {
-			p.logger.Debugf("IsResourceLimited: Instance %s in state %s - NOT counting", name, instance.CurrentState)
+			p.logger.Debugf("BridgeMustWait: Instance %s in state %s - NOT counting", name, instance.CurrentState)
 
 			continue
 		}
 
 		if instance.CurrentState == internalfsm.LifecycleStateToBeCreated {
-			if index, ok := indexByName[name]; ok && index < candidateIndex {
+			if index, ok := indexByName[name]; ok && index < bridgeIndex {
 				waitingBefore++
 			}
 
 			continue
 		}
 
-		p.logger.Debugf("IsResourceLimited: Instance %s in state %s - counting towards limit", name, instance.CurrentState)
+		p.logger.Debugf("BridgeMustWait: Instance %s in state %s - counting towards limit", name, instance.CurrentState)
 
 		created++
 	}

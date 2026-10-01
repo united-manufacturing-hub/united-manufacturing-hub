@@ -31,33 +31,26 @@ const BridgesPerCore = 5
 // Redpanda.
 const redpandaReservedCores = 1
 
-// emergencyHint says how to start bridges anyway while a resource problem is unfixed.
 const emergencyHint = "In an emergency, you can start bridges anyway by setting agent.enableResourceLimitBlocking: false in the instance's Config File. It takes effect without a restart. Set it back to true once the resource problem is fixed."
 
 // Health is what the caller knows about one resource.
 type Health int
 
 const (
-	// Unknown means nobody has shown the resource to be healthy: no monitor,
-	// no observation yet, or the instance is not active yet.
-	Unknown Health = iota
-	// Healthy means an observation showed the resource to be healthy.
+	Unproven Health = iota
 	Healthy
-	// Degraded means an observation showed the resource to be degraded.
 	Degraded
 )
 
 // Resource is the health of one resource and the message explaining it.
-// Message may be empty. For Unknown it says why the health is not known.
+// Message may be empty. For Unproven it says why the health is not known.
 type Resource struct {
 	Health  Health
 	Message string
 }
 
-// Input is everything Decide reads.
 type Input struct {
-	// BlockingEnabled is the config setting agent.enableResourceLimitBlocking.
-	BlockingEnabled bool
+	EnableResourceLimitBlocking bool
 
 	CPU    Resource
 	Memory Resource
@@ -67,32 +60,24 @@ type Input struct {
 	// or stopped, and is not removing.
 	Created int
 	// WaitingBefore counts the bridges not created yet that config.yaml lists
-	// before this one. They are created first, so they count like Created.
+	// before this one.
 	WaitingBefore int
 
 	// CapacityCores is the container's CPU limit in cores, or nil when it is
 	// not known. Decide treats a value of zero or less as not known.
 	CapacityCores *float64
-	// HostCores is the number of cores on the host. Decide uses it when
-	// CapacityCores is not known.
-	HostCores int
+	HostCores     int
 }
 
 // Cause names why a bridge was refused.
 type Cause int
 
 const (
-	// None means the bridge is admitted.
 	None Cause = iota
-	// NotProven means at least one resource is Unknown.
 	NotProven
-	// CPU means the CPU is Degraded.
 	CPU
-	// Memory means memory is Degraded.
 	Memory
-	// Disk means the disk is Degraded.
 	Disk
-	// BridgeLimit means admitting the bridge would exceed the bridge limit.
 	BridgeLimit
 )
 
@@ -102,12 +87,10 @@ type Decision struct {
 	Cause  Cause
 	Reason string
 	// MaxBridges is how many bridges this instance may have, or nil when
-	// Decide refused before computing it.
+	// Decide returned before computing it.
 	MaxBridges *int
 }
 
-// Message returns the text shown for a refused bridge: Reason followed by how
-// to start bridges anyway. It returns "" for an admitted bridge.
 func (d Decision) Message() string {
 	if d.Admit {
 		return ""
@@ -118,19 +101,19 @@ func (d Decision) Message() string {
 
 // Decide returns whether a bridge may be created.
 func Decide(in Input) Decision {
-	if !in.BlockingEnabled {
+	if !in.EnableResourceLimitBlocking {
 		return Decision{Admit: true}
 	}
 
-	for _, res := range in.resources() {
+	for _, res := range in.resourcesInRefusalOrder() {
 		if res.Health == Degraded {
 			return refuse(res.cause, res.degradedReason())
 		}
 	}
 
-	for _, res := range in.resources() {
-		if res.Health == Unknown {
-			return refuse(NotProven, res.unknownReason())
+	for _, res := range in.resourcesInRefusalOrder() {
+		if res.Health == Unproven {
+			return refuse(NotProven, res.unprovenReason())
 		}
 	}
 
@@ -145,8 +128,6 @@ func Decide(in Input) Decision {
 	return Decision{Admit: true, MaxBridges: &maxBridges}
 }
 
-// maxBridgesFor returns how many bridges the instance may have, (cores - 1) * 5,
-// and the cores it used: the CPU limit when known, else the host's cores.
 func maxBridgesFor(in Input) (maxBridges int, cores float64) {
 	cores = float64(in.HostCores)
 	if in.CapacityCores != nil && *in.CapacityCores > 0 {
@@ -167,8 +148,7 @@ type namedResource struct {
 	cause Cause
 }
 
-// resources lists CPU, memory and disk in the order a refusal names them.
-func (in Input) resources() []namedResource {
+func (in Input) resourcesInRefusalOrder() []namedResource {
 	return []namedResource{
 		{Resource: in.CPU, name: "CPU", cause: CPU},
 		{Resource: in.Memory, name: "Memory", cause: Memory},
@@ -184,7 +164,7 @@ func (r namedResource) degradedReason() string {
 	return r.name + " degraded: " + r.Message
 }
 
-func (r namedResource) unknownReason() string {
+func (r namedResource) unprovenReason() string {
 	if r.Message == "" {
 		return "Resource health not proven yet"
 	}

@@ -9,12 +9,12 @@
 
 ### Improvements
 
-- Bridges now start only once CPU, memory and disk are confirmed healthy, also after a restart. A refused bridge says which resource stopped it and how to start bridges anyway in an emergency
+- Bridges now start only once CPU, memory and disk are confirmed healthy, also after a restart. A refused bridge says why it was refused and how to start bridges anyway in an emergency
 
 ### Fixes
 
 - An instance now runs up to its full bridge limit. Before, it stopped one bridge short
-- With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets 5 bridges, not 155
+- With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets a limit of 5 bridges, not 155
 - Log messages for stopped flows in bridges are now more consistent
 - CPU usage, limit and throttling now read on hosts using the older cgroup v1 hierarchy, such as RHEL 8, where the CPU panel previously showed N/A. Pressure stays unavailable there, since that kernel publishes no per-container pressure figure
 

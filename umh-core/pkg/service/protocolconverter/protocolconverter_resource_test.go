@@ -54,7 +54,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 		}
 	})
 
-	Context("IsResourceLimited - Resource Blocking Decision Tree", func() {
+	Context("BridgeMustWait - Resource Blocking Decision Tree", func() {
 		Describe("1. Theoretical Limits (Bridge Count)", func() {
 			var maxBridges int
 
@@ -101,9 +101,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 				Expect(reason).To(ContainSubstring("1 core reserved for Redpanda"))
@@ -124,9 +124,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 
@@ -170,9 +170,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 				Expect(reason).To(ContainSubstring("5 bridges maximum"))
 				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
@@ -214,15 +214,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			}
 
 			It("should fetch the bridge ceiling from the fsmv2 CPU worker's capacity when the record carries it", func() {
-				// A quota-limited container read as the host's cores would admit
-				// far too many bridges: roughly 31x on a 32-core host.
 				stageContainerWithCPU(&models.CPU{
 					CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{CapacityCores: 2.0}},
 				})
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("5 bridges maximum"))
 				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
 			})
@@ -245,9 +243,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring(fmt.Sprintf("%d bridges maximum", hostCeiling)))
 			})
 
@@ -280,9 +278,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 		})
@@ -313,9 +311,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
+					Expect(mustWait).To(BeTrue())
 					Expect(reason).To(HavePrefix("CPU degraded: CPU usage at 85%"))
 				})
 
@@ -348,9 +346,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
+					Expect(mustWait).To(BeTrue())
 					Expect(reason).To(HavePrefix("CPU degraded: CPU throttled (15.0% periods throttled)"))
 				})
 			})
@@ -380,9 +378,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
+					Expect(mustWait).To(BeTrue())
 					Expect(reason).To(HavePrefix("Memory degraded: Memory usage at 92%"))
 				})
 
@@ -406,9 +404,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
+					Expect(mustWait).To(BeTrue())
 					Expect(reason).To(HavePrefix("Memory resources degraded"))
 				})
 			})
@@ -438,9 +436,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
+					Expect(mustWait).To(BeTrue())
 					Expect(reason).To(HavePrefix("Disk degraded: Disk usage at 95%"))
 				})
 			})
@@ -481,9 +479,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
+					Expect(mustWait).To(BeTrue())
 					Expect(reason).To(HavePrefix("CPU degraded: CPU overloaded"))
 				})
 			})
@@ -502,17 +500,17 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					},
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(HavePrefix("Resource health not proven yet"))
 			})
 
 			It("should block when container manager not present", func() {
 				// No container manager at all
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(HavePrefix("Resource health not proven yet"))
 			})
 
@@ -521,9 +519,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: make(map[string]*pkgfsm.FSMInstanceSnapshot),
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(HavePrefix("Resource health not proven yet"))
 			})
 		})
@@ -532,7 +530,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			It("should document that removal is allowed even when resources are limited", func() {
 				// This test documents the expected behavior that bridges stuck in to_be_created
 				// due to resource limits can still be removed. The actual removal logic is handled
-				// in the FSM reconciliation, not in IsResourceLimited.
+				// in the FSM reconciliation, not in BridgeMustWait.
 
 				// Setup: System at resource limits
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
@@ -559,14 +557,14 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					},
 				}
 
-				// IsResourceLimited should still return true (resources are limited)
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				// BridgeMustWait should still return true (resources are limited)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("CPU throttled"))
 
 				// Note: The FSM reconciliation logic (not tested here) should allow
-				// transition from to_be_created -> to_be_removed even when IsResourceLimited returns true
+				// transition from to_be_created -> to_be_removed even when BridgeMustWait returns true
 			})
 		})
 
@@ -612,9 +610,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 		})
@@ -643,9 +641,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 
 			It("should block creation when feature flag is enabled and resources are degraded", func() {
 				// Feature flag is already enabled in BeforeEach
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("CPU resources degraded"))
 			})
 
@@ -653,9 +651,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				// Disable feature flag
 				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 
@@ -702,9 +700,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				}
 
 				// Feature flag enabled
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 			})
 
@@ -752,9 +750,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				// Disable feature flag
 				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
 
-				limited, reason := service.IsResourceLimited(snapshot, "new-bridge")
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 		})
