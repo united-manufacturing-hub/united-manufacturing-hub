@@ -457,9 +457,13 @@ unchecked.
 ### Running it
 
 ```bash
-go run ./pkg/fsmv2/cmd/runner --scenario=helloworld --duration=5s
+go run ./pkg/fsmv2/cmd/runner --scenario=helloworld
 go test -tags=test -count=1 -v ./pkg/fsmv2/examples/ -ginkgo.focus="helloworld"
 ```
+
+A v2 scenario's runner stops one second after the scenario ends;
+`--duration=0` keeps it running until Ctrl+C. A v1 scenario runs until
+Ctrl+C unless `--duration` is given, which sets a hard total-run timeout.
 
 ### Rules
 
