@@ -52,16 +52,9 @@ var CommunicatorScenarioV2 = ScenarioV2{
 
 		deps := map[string]any{}
 
-		// Declared as each key's interface: a *TransportTestChannelProvider
-		// argument does not match the key's type, so SetDependency would not
-		// compile. The transport child the communicator spawns reads
-		// transport.ChannelProviderKey, because a child's map includes its parent's.
-		var cp communicator.ChannelProvider = provider
-		config.SetDependency(deps, communicator.ChannelProviderKey, cp)
-
-		var tp transportWorker.ChannelProvider = provider
-		config.SetDependency(deps, transportWorker.ChannelProviderKey, tp)
-
+		// The communicator's transport child inherits this map and reads transport.ChannelProviderKey.
+		config.SetDependency(deps, communicator.ChannelProviderKey, communicator.ChannelProvider(provider))
+		config.SetDependency(deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(provider))
 		config.SetDependency(deps, relayServerKey, server)
 
 		return deps, func() { server.Close() }, nil
