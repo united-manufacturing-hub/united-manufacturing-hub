@@ -159,15 +159,7 @@ func (ts *TriangularStore) appendDeltaOrWarn(ctx context.Context, entry DeltaEnt
 		return
 	}
 
-	var hierarchyPath string
-
-	if identity, loadErr := ts.LoadIdentity(ctx, entry.WorkerType, entry.ID); loadErr == nil {
-		if hp, ok := identity["hierarchy_path"].(string); ok {
-			hierarchyPath = hp
-		}
-	}
-
-	ts.logger.SentryWarn(deps.FeatureCSE, hierarchyPath, "delta_append_failed",
+	ts.logger.SentryWarn(deps.FeatureCSE, ts.hierarchyPath(ctx, entry.WorkerType, entry.ID), "delta_append_failed",
 		deps.Err(appendErr),
 		deps.String("role", entry.Role))
 }
