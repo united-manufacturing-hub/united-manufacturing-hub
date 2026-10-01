@@ -22,14 +22,21 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
 
 // WorkerTypeName is the canonical worker-type identifier for the certfetcher worker.
 const WorkerTypeName = "certfetcher"
 
 const workerType = WorkerTypeName
+
+// CertHandlerKey names the certificatehandler.Handler a CertFetcherWorker is
+// built from. When the dependency map holds nothing under it, the worker falls
+// back to the seed published via register.SetGlobalDeps.
+var CertHandlerKey = config.NewDependencyKey[certificatehandler.Handler]("certfetcher.cert_handler")
 
 var _ fsmv2.Worker = (*CertFetcherWorker)(nil)
 
@@ -128,8 +135,12 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 
 func init() {
 	register.Worker[CertFetcherConfig, CertFetcherStatus, *CertFetcherDependencies](WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
 			d := register.GlobalDeps[*CertFetcherDependencies](WorkerTypeName)
+
+			if handler, ok := config.LookupDependency(m, CertHandlerKey); ok {
+				d = NewCertHandlerSeedDependencies(handler)
+			}
 
 			return NewCertFetcherWorker(id, logger, sr, d)
 		})
