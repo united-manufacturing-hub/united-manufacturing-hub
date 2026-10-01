@@ -18,16 +18,17 @@ import (
 	"context"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	certfetcher "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
 
@@ -101,7 +102,7 @@ func (m *MockCertHandler) FetchAllCerts(_ context.Context) error {
 	return m.fetchError
 }
 
-// Subscribers returns mock subscriber emails via the sub handler.
+// Subscribers returns mock subscriber emails via the subscriber handler.
 func (m *MockCertHandler) Subscribers() []string {
 	m.mu.RLock()
 	sh := m.subHandler
@@ -112,15 +113,15 @@ func (m *MockCertHandler) Subscribers() []string {
 	return sh.Subscribers()
 }
 
-// HasSubHandler returns true when the mock sub handler is set.
+// HasSubHandler returns true when the mock subscriber handler is set.
 func (m *MockCertHandler) HasSubHandler() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.subHandler != nil
 }
 
-// SetSubHandler satisfies certificatehandler.Handler; the mock seeds its sub
-// handler at construction, so this is a no-op.
+// SetSubHandler satisfies certificatehandler.Handler; the mock seeds its
+// subscriber handler at construction, so this is a no-op.
 func (m *MockCertHandler) SetSubHandler(_ certificatehandler.SubHandler) {}
 
 // FetchCallCount returns how many times FetchAllCerts was called.
@@ -128,118 +129,132 @@ func (m *MockCertHandler) FetchCallCount() int {
 	return int(m.fetchCount.Load())
 }
 
-// CertFetcherRunConfig configures a cert fetcher scenario run.
-type CertFetcherRunConfig struct {
-	SubscriberEmails []string      // Emails the mock sub handler returns; nil means no sub handler
-	FetchError       error         // If set, FetchAllCerts returns this error
-	Duration         time.Duration // How long to run the scenario
-	TickInterval     time.Duration // Defaults to 100ms
-	Logger           deps.FSMLogger
+var errCertFetchSimulated = errors.New("simulated cert fetch failure")
+
+func certFetcherDependencies(emails []string, fetchErr error) (map[string]any, func(), error) {
+	deps := map[string]any{}
+	config.SetDependency[certificatehandler.Handler](deps, certfetcher.CertHandlerKey, NewMockCertHandler(emails, fetchErr))
+
+	return deps, nil, nil
 }
 
-// CertFetcherRunResult contains observable results after scenario completion.
-type CertFetcherRunResult struct {
-	Error          error
-	Done           <-chan struct{}
-	Shutdown       func()
-	FetchCallCount int
+var certFetcherRef = dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
+
+func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.Ref, want string) error {
+	return env.WaitFor(ctx, "store shows state "+want,
+		func(ctx context.Context) (bool, string, error) {
+			obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
+			if err != nil {
+				if errors.Is(err, fsmv2client.ErrNotObserved) {
+					return false, "the worker has not published an observation yet", nil
+				}
+
+				return false, "", err
+			}
+
+			return obs.State == want, "state=" + obs.State, nil
+		})
 }
 
-// RunCertFetcherScenario runs the FSMv2 certfetcher worker via ApplicationSupervisor with a mock cert handler.
-func RunCertFetcherScenario(ctx context.Context, cfg CertFetcherRunConfig) *CertFetcherRunResult {
-	done := make(chan struct{})
+// CertFetcherHealthyScenarioV2 runs a certfetcher that has a subscriber and fetches successfully.
+var CertFetcherHealthyScenarioV2 = ScenarioV2{
+	Name:        "certfetcher-healthy",
+	Description: "Cert fetcher with a subscriber: reaches Running and fetches",
 
-	if cfg.Duration < 0 {
-		close(done)
+	Dependencies: func() (map[string]any, func(), error) {
+		return certFetcherDependencies([]string{"alice@example.com"}, nil)
+	},
 
-		return &CertFetcherRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("invalid duration %v: must be non-negative", cfg.Duration),
-		}
-	}
+	Run: func(ctx context.Context, env Env) error {
+		env.Step("create certfetcher; its mock handler lists one subscriber, alice@example.com")
 
-	if ctx.Err() != nil {
-		close(done)
-
-		return &CertFetcherRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("context already cancelled: %w", ctx.Err()),
-		}
-	}
-
-	logger := cfg.Logger
-	if logger == nil {
-		logger = deps.NewNopFSMLogger()
-	}
-
-	tickInterval := cfg.TickInterval
-	if tickInterval == 0 {
-		tickInterval = 100 * time.Millisecond
-	}
-
-	mockHandler := NewMockCertHandler(cfg.SubscriberEmails, cfg.FetchError)
-
-	register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
-		certfetcher.NewCertHandlerSeedDependencies(mockHandler))
-
-	store := SetupStore(logger)
-
-	yamlConfig := `
-children:
-  - name: "certfetcher"
-    workerType: "certfetcher"
-`
-
-	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:           "scenario-certfetcher",
-		Name:         "certfetcher",
-		Store:        store,
-		Logger:       logger,
-		TickInterval: tickInterval,
-		YAMLConfig:   yamlConfig,
-	})
-	if err != nil {
-		close(done)
-
-		return &CertFetcherRunResult{
-			Done:     done,
-			Shutdown: func() {},
-			Error:    fmt.Errorf("failed to create supervisor: %w", err),
-		}
-	}
-
-	supDone := appSup.Start(ctx)
-
-	result := &CertFetcherRunResult{
-		Done:     done,
-		Shutdown: appSup.Shutdown,
-	}
-
-	go func() {
-		if cfg.Duration > 0 {
-			select {
-			case <-time.After(cfg.Duration):
-				appSup.Shutdown()
-			case <-ctx.Done():
-				appSup.Shutdown()
-			case <-supDone:
-			}
-		} else {
-			select {
-			case <-ctx.Done():
-				appSup.Shutdown()
-			case <-supDone:
-			}
+		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {
+			return err
 		}
 
-		<-supDone
+		if err := waitForCertFetcherState(ctx, env, certFetcherRef, "Running"); err != nil {
+			return err
+		}
 
-		result.FetchCallCount = mockHandler.FetchCallCount()
+		return env.WaitFor(ctx, "store shows a successful fetch (last_fetch_at is set)",
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, certFetcherRef)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the worker has not published an observation yet", nil
+					}
 
-		close(done)
-	}()
+					return false, "", err
+				}
 
-	return result
+				return !obs.Status.LastFetchAt.IsZero(),
+					"last_fetch_at=" + obs.Status.LastFetchAt.Format(time.RFC3339), nil
+			})
+	},
+}
+
+// CertFetcherDegradedScenarioV2 runs a certfetcher whose every fetch fails, so it ends in Degraded.
+var CertFetcherDegradedScenarioV2 = ScenarioV2{
+	Name:        "certfetcher-degraded",
+	Description: "Cert fetcher whose fetches fail: enters Degraded after DegradedThreshold (certfetcher/state) failed fetches in a row",
+
+	ExpectedErrorCauses: []error{errCertFetchSimulated},
+
+	Dependencies: func() (map[string]any, func(), error) {
+		return certFetcherDependencies([]string{"alice@example.com"}, errCertFetchSimulated)
+	},
+
+	Run: func(ctx context.Context, env Env) error {
+		env.Step("create certfetcher whose every fetch fails; each failure logs an expected action_failed error")
+
+		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {
+			return err
+		}
+
+		return waitForCertFetcherState(ctx, env, certFetcherRef, "Degraded")
+	},
+}
+
+const pollsStoppedBeforePass = 20
+
+// CertFetcherNoSubscribersScenarioV2 runs a certfetcher whose cert handler has no
+// subscriber handler (the SubHandler that lists active subscribers). StoppedState
+// starts the worker only once one exists (certfetcher/state/state_stopped.go).
+var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
+	Name:        "certfetcher-no-subscribers",
+	Description: "Cert fetcher with no subscriber handler: stays in Stopped",
+
+	Dependencies: func() (map[string]any, func(), error) {
+		return certFetcherDependencies(nil, nil)
+	},
+
+	Run: func(ctx context.Context, env Env) error {
+		env.Step("create certfetcher with no subscriber handler; it stays Stopped, so no state change appears for it")
+
+		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {
+			return err
+		}
+
+		polls := 0
+
+		return env.WaitFor(ctx, fmt.Sprintf("the certfetcher is still Stopped after %d polls", pollsStoppedBeforePass),
+			func(ctx context.Context) (bool, string, error) {
+				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, certFetcherRef)
+				if err != nil {
+					if errors.Is(err, fsmv2client.ErrNotObserved) {
+						return false, "the worker has not published an observation yet", nil
+					}
+
+					return false, "", err
+				}
+
+				if obs.State != "Stopped" {
+					return false, "", fmt.Errorf("the worker reached %s, so it left Stopped without a subscriber handler", obs.State)
+				}
+
+				polls++
+
+				return polls >= pollsStoppedBeforePass, fmt.Sprintf("state=%s polls=%d", obs.State, polls), nil
+			})
+	},
 }
