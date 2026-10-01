@@ -38,13 +38,12 @@ const (
 	// Updated on every modification.
 	FieldUpdatedAt = "_updated_at"
 
-	// FieldDeletedAt is when the document's worker was removed. A tombstone
-	// is a non-nil _deleted_at with its _deleted_by: it marks a removed
-	// worker's document while keeping the document. NULL if not removed.
+	// FieldDeletedAt is when the document's worker was removed, or nil. A
+	// tombstone is a non-nil _deleted_at with its _deleted_by. It marks the
+	// document of a removed worker, and the document is kept.
 	FieldDeletedAt = "_deleted_at"
 
-	// FieldDeletedBy is the actor responsible for the removal (audit trail).
-	// NULL if not removed.
+	// FieldDeletedBy is who removed the worker (audit trail), or nil.
 	FieldDeletedBy = "_deleted_by"
 )
 

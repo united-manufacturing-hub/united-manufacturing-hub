@@ -29,9 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// pausingStore holds the result of the first Get of one document until the
-// test releases it, so a test can run another call while a save sits
-// between its read and its write.
+// pausingStore blocks the next Get of one document until release is closed.
 type pausingStore struct {
 	*mockStore
 
@@ -72,10 +70,8 @@ func (p *pausingStore) Get(ctx context.Context, collection string, id string) (p
 	return doc, err
 }
 
-// giveTimeToFinish waits up to 200 ms for done, then puts back what it
-// received. If the call under test can finish while the save is paused, this
-// gives it the time to do so. If it waits for the save, this times out. The
-// test's assertions must hold in both cases.
+// giveTimeToFinish waits up to 200 ms for done and puts back what it
+// received. A call that does not wait for the paused save finishes here.
 func giveTimeToFinish(done chan error) {
 	select {
 	case err := <-done:

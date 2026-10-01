@@ -1088,30 +1088,10 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				deps.Any("children", childNames))
 		}
 
-		// Record the removal in the worker's stored documents (see
-		// TriangularStoreInterface.MarkDeleted) before the worker leaves
-		// s.workers, while s.mu is held. AddWorker takes s.mu and refuses an
-		// id that is still in s.workers. So a worker added again with the same
-		// id saves and clears its documents only after this tombstone is
-		// written, and the tombstone cannot land on the new worker. The old
-		// worker's collector may still save after this point; a save keeps the
-		// tombstone.
-		//
-		// Removal also runs during Shutdown, when ctx can already be
-		// cancelled, and the store rejects a cancelled context. So MarkDeleted
-		// gets a context without the cancellation and with its own deadline.
-		// If MarkDeleted fails, nothing retries it, and the documents stay as
-		// if the worker still ran (ENG-6348).
-		markCtx, cancelMark := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		markErr := s.store.MarkDeleted(markCtx, s.workerType, workerID, "supervisor")
-
-		cancelMark()
-
-		if markErr != nil {
-			s.logger.SentryWarn(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, "worker_tombstone_failed",
-				deps.Err(markErr),
-				deps.String("target_worker_id", workerID))
-		}
+		// Tombstone while s.mu is held and the id is still in s.workers.
+		// AddWorker refuses an id in s.workers, so a worker added again with
+		// this id clears the tombstone only after this write.
+		s.markWorkerDeleted(ctx, workerID, workerCtx.identity.HierarchyPath)
 
 		delete(s.workers, workerID)
 		s.mu.Unlock()
@@ -1180,6 +1160,24 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 			deps.Int("signal", int(signal)))
 
 		return unknownSignalErr
+	}
+}
+
+// markDeletedTimeout bounds MarkDeleted, which runs under s.mu.
+const markDeletedTimeout = 5 * time.Second
+
+// markWorkerDeleted tombstones a removed worker's documents. Removal also runs
+// during Shutdown, when ctx may already be cancelled, and the store rejects a
+// cancelled context. Nothing retries a failed MarkDeleted, so the documents
+// then stay as if the worker still ran (ENG-6348).
+func (s *Supervisor[TObserved, TDesired]) markWorkerDeleted(ctx context.Context, workerID string, hierarchyPath string) {
+	markCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), markDeletedTimeout)
+	defer cancel()
+
+	if err := s.store.MarkDeleted(markCtx, s.workerType, workerID, "supervisor"); err != nil {
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_tombstone_failed",
+			deps.Err(err),
+			deps.String("target_worker_id", workerID))
 	}
 }
 

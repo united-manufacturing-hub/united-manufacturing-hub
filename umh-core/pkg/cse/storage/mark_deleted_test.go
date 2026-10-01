@@ -29,26 +29,20 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// markDeletedOwnedFields are the fields MarkDeleted may set on a stored
-// document. The sync id is among them because MarkDeleted re-allocates it on
-// every written document (see MarkDeleted).
-var markDeletedOwnedFields = map[string]bool{
+var fieldsMarkDeletedWrites = map[string]bool{
 	storage.FieldDeletedAt: true,
 	storage.FieldDeletedBy: true,
 	storage.FieldSyncID:    true,
 }
 
-// expectOnlyMarkDeletedFieldsChanged checks that after holds every before
-// field with the same value, except the fields MarkDeleted owns, and has no
-// other new field.
 func expectOnlyMarkDeletedFieldsChanged(before, after persistence.Document) {
 	for key := range after {
 		_, existed := before[key]
-		ExpectWithOffset(1, existed || markDeletedOwnedFields[key]).To(BeTrue(), "MarkDeleted must not add field %s", key)
+		ExpectWithOffset(1, existed || fieldsMarkDeletedWrites[key]).To(BeTrue(), "MarkDeleted must not add field %s", key)
 	}
 
 	for key, beforeVal := range before {
-		if markDeletedOwnedFields[key] {
+		if fieldsMarkDeletedWrites[key] {
 			continue
 		}
 
@@ -57,10 +51,6 @@ func expectOnlyMarkDeletedFieldsChanged(before, after persistence.Document) {
 	}
 }
 
-// expectTombstone checks that a raw stored document carries the tombstone
-// MarkDeleted writes: _deleted_at as a time.Time at the given time, in the
-// representation saveWithDelta uses for _updated_at, and _deleted_by as the
-// given actor.
 func expectTombstone(doc persistence.Document, at time.Time, by string) {
 	deletedAt, ok := doc[storage.FieldDeletedAt].(time.Time)
 	ExpectWithOffset(1, ok).To(BeTrue(), "%s must be a time.Time", storage.FieldDeletedAt)
@@ -69,13 +59,11 @@ func expectTombstone(doc persistence.Document, at time.Time, by string) {
 	ExpectWithOffset(1, doc[storage.FieldDeletedBy]).To(Equal(by))
 }
 
-// expectDeltaDescribesTombstone checks that one delta entry reports the
-// tombstone MarkDeleted writes: _deleted_at and _deleted_by with the given
-// values. The delta store persists Changes as JSON, so _deleted_at arrives
-// as the RFC 3339 encoding of the time.Time.
 func expectDeltaDescribesTombstone(delta storage.Delta, at time.Time, by string) {
 	ExpectWithOffset(1, delta.Changes).NotTo(BeNil())
 
+	// The delta store persists Changes as JSON, so _deleted_at arrives as an
+	// RFC 3339 string.
 	deletedAtJSON, ok := delta.Changes.Added[storage.FieldDeletedAt].(string)
 	ExpectWithOffset(1, ok).To(BeTrue(),
 		"delta for role %s must report %s as its JSON encoding", delta.Role, storage.FieldDeletedAt)
@@ -90,103 +78,92 @@ func expectDeltaDescribesTombstone(delta storage.Delta, at time.Time, by string)
 		"delta for role %s must report %s", delta.Role, storage.FieldDeletedBy)
 }
 
-// errCommitFailedByTest is returned by every transaction of
-// commitFailingStore.
 var errCommitFailedByTest = errors.New("commit failed (injected)")
 
-// commitFailingStore wraps the in-memory backend so that every transaction
-// fails to commit. Its transactions stage writes in memory only, so a failed
-// commit leaves the backend untouched.
 type commitFailingStore struct {
 	*mockStore
 }
 
 func (s *commitFailingStore) BeginTx(_ context.Context) (persistence.Tx, error) {
-	return &stagedTx{parent: s.mockStore}, nil
+	return &commitFailingTx{parent: s.mockStore}, nil
 }
 
-// stagedTx reads through to the backend and swallows writes without applying
-// them.
-type stagedTx struct {
+// commitFailingTx reads through to the backend, discards every write, and
+// fails Commit.
+type commitFailingTx struct {
 	parent *mockStore
 }
 
-func (tx *stagedTx) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
+func (tx *commitFailingTx) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
 	return tx.parent.CreateCollection(ctx, name, schema)
 }
 
-func (tx *stagedTx) DropCollection(ctx context.Context, name string) error {
+func (tx *commitFailingTx) DropCollection(ctx context.Context, name string) error {
 	return tx.parent.DropCollection(ctx, name)
 }
 
-func (tx *stagedTx) Insert(_ context.Context, _ string, doc persistence.Document) (string, error) {
+func (tx *commitFailingTx) Insert(_ context.Context, _ string, doc persistence.Document) (string, error) {
 	return doc["id"].(string), nil
 }
 
-func (tx *stagedTx) Get(ctx context.Context, collection, id string) (persistence.Document, error) {
+func (tx *commitFailingTx) Get(ctx context.Context, collection, id string) (persistence.Document, error) {
 	return tx.parent.Get(ctx, collection, id)
 }
 
-func (tx *stagedTx) Update(_ context.Context, _ string, _ string, _ persistence.Document) error {
+func (tx *commitFailingTx) Update(_ context.Context, _ string, _ string, _ persistence.Document) error {
 	return nil
 }
 
-func (tx *stagedTx) Delete(_ context.Context, _ string, _ string) error {
+func (tx *commitFailingTx) Delete(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
-func (tx *stagedTx) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
+func (tx *commitFailingTx) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
 	return tx.parent.Find(ctx, collection, query)
 }
 
-func (tx *stagedTx) BeginTx(_ context.Context) (persistence.Tx, error) {
-	return &stagedTx{parent: tx.parent}, nil
+func (tx *commitFailingTx) BeginTx(_ context.Context) (persistence.Tx, error) {
+	return &commitFailingTx{parent: tx.parent}, nil
 }
 
-func (tx *stagedTx) Close(_ context.Context) error {
+func (tx *commitFailingTx) Close(_ context.Context) error {
 	return nil
 }
 
-func (tx *stagedTx) Maintenance(_ context.Context) error {
+func (tx *commitFailingTx) Maintenance(_ context.Context) error {
 	return nil
 }
 
-func (tx *stagedTx) Commit() error {
+func (tx *commitFailingTx) Commit() error {
 	return errCommitFailedByTest
 }
 
-func (tx *stagedTx) Rollback() error {
+func (tx *commitFailingTx) Rollback() error {
 	return nil
 }
 
-// errUpdateFailedByTest is returned by an updateFailingStore transaction
-// whose Update touches the failing collection.
 var errUpdateFailedByTest = errors.New("update failed (injected)")
 
-// updateFailingStore wraps the in-memory backend so that every transaction
-// fails Update on the given collection.
 type updateFailingStore struct {
 	*mockStore
-	failOn string
+	failingCollection string
 }
 
 func (s *updateFailingStore) BeginTx(_ context.Context) (persistence.Tx, error) {
-	return &updateFailingTx{stagedTx: &stagedTx{parent: s.mockStore}, failOn: s.failOn}, nil
+	return &updateFailingTx{commitFailingTx: &commitFailingTx{parent: s.mockStore}, failingCollection: s.failingCollection}, nil
 }
 
-// updateFailingTx stages writes like stagedTx and fails Update for one
-// collection, so a transaction dies mid-way through MarkDeleted's role loop.
 type updateFailingTx struct {
-	*stagedTx
-	failOn string
+	*commitFailingTx
+	failingCollection string
 }
 
 func (tx *updateFailingTx) Update(ctx context.Context, collection, id string, doc persistence.Document) error {
-	if collection == tx.failOn {
+	if collection == tx.failingCollection {
 		return errUpdateFailedByTest
 	}
 
-	return tx.stagedTx.Update(ctx, collection, id, doc)
+	return tx.commitFailingTx.Update(ctx, collection, id, doc)
 }
 
 var _ = Describe("MarkDeleted", func() {
@@ -280,11 +257,9 @@ var _ = Describe("MarkDeleted", func() {
 	})
 
 	It("invalidates the snapshot cache", func() {
-		// Fill the snapshot cache, so a fresh read after MarkDeleted proves
-		// the invalidation.
-		snapBefore, err := ts.LoadSnapshot(ctx, workerType, workerID)
+		cachedSnap, err := ts.LoadSnapshot(ctx, workerType, workerID)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(snapBefore.Identity).NotTo(HaveKey(storage.FieldDeletedAt))
+		Expect(cachedSnap.Identity).NotTo(HaveKey(storage.FieldDeletedAt))
 
 		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
 
@@ -385,7 +360,7 @@ var _ = Describe("MarkDeleted", func() {
 
 	It("a write failure mid-transaction tombstones no document", func() {
 		failingTs := storage.NewTriangularStoreWithClock(
-			&updateFailingStore{mockStore: backend, failOn: workerType + "_" + storage.RoleDesired},
+			&updateFailingStore{mockStore: backend, failingCollection: workerType + "_" + storage.RoleDesired},
 			deps.NewNopFSMLogger(),
 			mockClock,
 		)

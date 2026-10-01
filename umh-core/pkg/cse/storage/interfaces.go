@@ -107,30 +107,23 @@ type TriangularStoreInterface interface {
 
 	// MarkDeleted tombstones a worker's stored role documents (see
 	// FieldDeletedAt). The documents stay, so clients that sync by _sync_id
-	// see the removal as a change. Each tombstoned document keeps every field
-	// it had and gains _deleted_at (the store clock time), _deleted_by, and a
-	// new _sync_id, as with any other write. A document that already carries a tombstone is left untouched,
-	// so calling MarkDeleted twice keeps the first tombstone and writes
-	// nothing. A role the worker has no document for is skipped, not an
-	// error.
+	// see the removal as a change. Each document keeps its fields and gains
+	// _deleted_at (the store clock time), _deleted_by and a new _sync_id.
+	// A document that already has a tombstone keeps it and is not written.
+	// A missing document is skipped.
 	//
-	// The tombstone writes happen in one transaction: on a returned error no
-	// document is tombstoned. Delta entries are appended after the commit; a
-	// failed append is logged, not returned.
+	// All writes share one transaction, so on a returned error no document
+	// is tombstoned. Delta entries are appended after the commit. A failed
+	// append is logged, not returned.
 	MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error
 
-	// ClearDeleted removes the tombstone MarkDeleted wrote from a worker's
-	// stored role documents, so a worker added again starts without one.
-	// Each cleared document loses _deleted_at and _deleted_by and keeps
-	// every other field. It gets a new _sync_id, as with any other write.
-	// One delta entry per cleared document lists the tombstone keys under
-	// Removed. A missing document and a document without a tombstone are
-	// skipped. So ClearDeleted writes nothing for a live worker and never
-	// creates a document.
-	//
-	// The clearing writes happen in one transaction: on a returned error no
-	// document is cleared. Delta entries are appended after the commit; a
-	// failed append is logged, not returned.
+	// ClearDeleted removes the tombstone from a worker's stored role
+	// documents, so a worker added again starts without one. Each cleared
+	// document keeps its other fields and gets a new _sync_id. Its delta
+	// entry lists _deleted_at and _deleted_by under Removed. A missing
+	// document and one without a tombstone are skipped, so ClearDeleted
+	// never creates a document. Transaction and delta handling are as for
+	// MarkDeleted.
 	ClearDeleted(ctx context.Context, workerType string, id string) error
 
 	// GetLatestSyncID returns the current sync_id for clients to establish initial sync position.

@@ -53,7 +53,7 @@ var _ = Describe("AddWorker clears the worker's tombstone", func() {
 		Expect(store.ClearDeletedCalls[0].WorkerType).To(Equal("test"))
 		Expect(store.ClearDeletedCalls[0].ID).To(Equal(identity.ID))
 
-		Expect(store.StoreCalls).To(Equal([]string{
+		Expect(store.SaveAndClearCalls).To(Equal([]string{
 			"save_identity", "save_observed", "save_desired", "clear_deleted",
 		}), "the tombstone must be cleared after the identity, observed and desired saves")
 

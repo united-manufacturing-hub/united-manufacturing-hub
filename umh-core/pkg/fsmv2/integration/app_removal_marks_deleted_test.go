@@ -36,9 +36,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 		register.ClearDeps(configWorkerKey)
 	})
 
-	// storedDocuments reads the identity, desired and observed documents the
-	// store holds for one worker.
-	storedDocuments := func(ctx context.Context, store *storage.TriangularStore, workerType, id string) map[string]persistence.Document {
+	storedRoleDocuments := func(ctx context.Context, store *storage.TriangularStore, workerType, id string) map[string]persistence.Document {
 		identity, err := store.LoadIdentity(ctx, workerType, id)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
@@ -85,7 +83,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 		Eventually(childRunning, "5s", "100ms").Should(BeTrue(),
 			"the helloworld child must first spawn and reach Running")
 
-		for role, doc := range storedDocuments(ctx, store, ref.WorkerType, childID) {
+		for role, doc := range storedRoleDocuments(ctx, store, ref.WorkerType, childID) {
 			Expect(doc).NotTo(HaveKey(storage.FieldDeletedAt), "a running worker's %s document must not carry a tombstone", role)
 		}
 
@@ -102,7 +100,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 
 		var deletedAt time.Time
 
-		for role, doc := range storedDocuments(ctx, store, ref.WorkerType, childID) {
+		for role, doc := range storedRoleDocuments(ctx, store, ref.WorkerType, childID) {
 			Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the removed worker's %s document must carry a tombstone", role)
 			Expect(doc[storage.FieldDeletedBy]).To(Equal("supervisor"))
 
@@ -121,7 +119,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 		Eventually(func() bool {
 			_ = sup.TestTick(ctx)
 
-			docs := storedDocuments(ctx, store, ref.WorkerType, childID)
+			docs := storedRoleDocuments(ctx, store, ref.WorkerType, childID)
 			for _, doc := range docs {
 				if _, marked := doc[storage.FieldDeletedAt]; marked {
 					return false

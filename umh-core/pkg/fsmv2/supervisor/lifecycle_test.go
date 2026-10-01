@@ -260,7 +260,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			Expect(s.ListWorkers()).To(BeEmpty())
 			Expect(store.MarkDeletedCalls).To(HaveLen(1))
 			Expect(store.MarkDeletedCalls[0].CtxErr).ToNot(HaveOccurred())
-			Expect(store.MarkDeletedCalls[0].HasDeadline).To(BeTrue(),
+			Expect(store.MarkDeletedCalls[0].CtxHasDeadline).To(BeTrue(),
 				"MarkDeleted must not be able to block removal forever")
 		})
 
@@ -302,10 +302,9 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 			addDone := make(chan error, 1)
 
-			// Just before the removal tombstones the old worker's documents,
-			// add a worker with the same id. If AddWorker can finish first,
-			// give it the time to do so. If it has to wait for the removal,
-			// this times out. The assertions below must hold in both cases.
+			// Add a worker with the same id just before the old one is
+			// tombstoned. An AddWorker that does not wait for the removal
+			// finishes within 300 ms.
 			store.beforeMarkDeleted = func() {
 				go func() { addDone <- s.AddWorker(identity, &mockWorker{}) }()
 
@@ -483,8 +482,6 @@ var _ = Describe("Supervisor Lifecycle", func() {
 	})
 })
 
-// markDeletedHookStore runs beforeMarkDeleted once, just before it passes a
-// MarkDeleted call on to the store it wraps.
 type markDeletedHookStore struct {
 	storage.TriangularStoreInterface
 
@@ -500,7 +497,6 @@ func (h *markDeletedHookStore) MarkDeleted(ctx context.Context, workerType strin
 	return h.TriangularStoreInterface.MarkDeleted(ctx, workerType, id, deletedBy)
 }
 
-// sentryWarnRecorder is an FSMLogger that records SentryWarn calls.
 type sentryWarnRecorder struct {
 	mu       sync.Mutex
 	warnings []sentryWarn
