@@ -21,10 +21,10 @@
 // TransportWorker handles authentication, push, pull, backoff, and transport reset.
 // CommunicatorWorker monitors child health and manages lifecycle transitions.
 //
-// Channel sharing: Both communicator and transport packages use a ChannelProvider
-// singleton to supply inbound and outbound message channels. Call
-// communicator.SetChannelProvider() and transport.SetChannelProvider() before
-// starting the supervisor.
+// Channel sharing: The communicator package reads its ChannelProvider from a
+// global set with communicator.SetChannelProvider() before starting the
+// supervisor. The transport package reads its provider from the dependency
+// map, under transport.ChannelProviderKey.
 //
 // # FSM v2 Pattern
 //

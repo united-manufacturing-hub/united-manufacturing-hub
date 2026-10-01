@@ -80,9 +80,8 @@ type TransportWorker struct {
 }
 
 // NewTransportWorker creates a new Transport worker in Stopped state.
-// It takes its channel provider from dependencies under ChannelProviderKey,
-// or from SetChannelProvider when the key is absent.
-// Returns an error if logger is nil. Panics if neither source holds a provider.
+// It reads its ChannelProvider from dependencies under ChannelProviderKey.
+// It returns an error when the provider or the logger is missing.
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
@@ -98,17 +97,15 @@ func NewTransportWorker(
 		identity.WorkerType = WorkerTypeName
 	}
 
+	provider, ok := config.LookupDependency(dependencies, ChannelProviderKey)
+	if !ok {
+		return nil, fmt.Errorf("transport: no channel provider under %q in the dependency map; set one with config.SetDependency(m, transport.ChannelProviderKey, p)", ChannelProviderKey.Name())
+	}
+
 	w := &TransportWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	var workerDeps *TransportDependencies
-	if provider, ok := config.LookupDependency(dependencies, ChannelProviderKey); ok {
-		workerDeps = newTransportDependenciesWithProvider(nil, bd, provider)
-	} else {
-		workerDeps = NewTransportDependencies(nil, bd)
-	}
-
-	w.BindDeps(workerDeps)
+	w.BindDeps(NewTransportDependencies(nil, bd, provider))
 
 	return w, nil
 }

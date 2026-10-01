@@ -77,16 +77,16 @@ import (
 // registered historian type is "historian-timescale", not "historian".
 const registeredFloor = 16
 
-// panicOnConstruction names the five types that panic rather than error when
+// panicOnConstruction names the types that panic rather than error when
 // built via factory.NewWorkerByType in this isolated test process, because
 // register.Worker wraps constructor failure in a panic. Each constructor's
-// dependency is published by a parent or the transport channel singleton that
+// dependency is published by a parent or comes from a channel provider that
 // this test does not wire up. They are skipped below with the stated reason, and
 // the recovered panic is asserted to match that reason, so a skip cannot hide a
 // constructor regression inside one of them.
 var panicOnConstruction = map[string]string{
 	"communicator": "ChannelProvider must be set",
-	"transport":    "ChannelProvider must be set",
+	"transport":    `no channel provider under "transport.channel_provider"`,
 	"persistence":  "requires a store",
 	"pull":         "deps builder returned",
 	"push":         "deps builder returned",
