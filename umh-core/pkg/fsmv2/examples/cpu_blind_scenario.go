@@ -49,7 +49,7 @@ const (
 	cpuBlindNotMeasured = "CPU not measured"
 )
 
-// CPUBlindScenarioV2 drives the real CPU monitor over a fake machine and then
+// CPUBlindScenario drives the real CPU monitor over a fake machine and then
 // takes away, one at a time, the two files it reads its numbers from.
 //
 // The story is that each outage turns the worker degraded, because a machine
@@ -58,9 +58,9 @@ const (
 //
 // The second outage keeps the first, so the story tests the two failures
 // rather than a recovery.
-var CPUBlindScenarioV2 = ScenarioV2{
+var CPUBlindScenario = Scenario{
 	Name:        "cpu-blind",
-	Description: "Takes away the two files the CPU monitor reads, one at a time (v2)",
+	Description: "Takes away the two files the CPU monitor reads, one at a time",
 
 	ExpectedWarnings: []string{"cpu::read_failed::error"},
 

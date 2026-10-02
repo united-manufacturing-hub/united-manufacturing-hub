@@ -31,7 +31,7 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
-var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func() {
+var _ = Describe("Dynamic Scenario: migration-API lifecycle real proof", func() {
 	const configWorkerKey = "configworker"
 
 	AfterEach(func() {
@@ -46,11 +46,11 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		// the first thing this rung adds.
 		listing := examples.ListScenarios()
 		Expect(listing).To(HaveKey("dynamic"),
-			"merged ListScenarios must contain the v2 dynamic scenario")
+			"merged ListScenarios must contain the dynamic scenario")
 
-		dynamic, ok := examples.RegistryV2["dynamic"]
+		dynamic, ok := examples.Registry["dynamic"]
 		Expect(ok).To(BeTrue(),
-			"RegistryV2 must register the dynamic scenario beside noop")
+			"Registry must register the dynamic scenario beside noop")
 		Expect(dynamic.Run).NotTo(BeNil(),
 			"the dynamic scenario must carry a Run that exercises the migration-API client")
 
@@ -65,7 +65,7 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		// The runner builds an fsmv2client over this same store, so Run reads
 		// observed state from the store verifyStateFieldsAreValid inspects afterward.
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   dynamic,
+			Scenario:     dynamic,
 			Duration:     2 * time.Second,
 			TickInterval: 100 * time.Millisecond,
 			Logger:       testLogger.FSMLogger,
@@ -77,7 +77,7 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		Expect(err).NotTo(HaveOccurred(),
 			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, Delete the child, and still read the config worker")
 		Eventually(result.Done, "55s").Should(BeClosed(),
-			"the v2 runner must wait out the run and then tear down on its own")
+			"the runner must wait out the run and then tear down on its own")
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"the dynamic scenario must end with a clean RunResult")
 	})
