@@ -49,7 +49,7 @@ var _ = Describe("Supervisor API Boundary", func() {
 		It("should export worker registry methods", func() {
 			publicMethods := []string{
 				"AddWorker",
-				"RemoveWorker",
+				"RemoveWorkerForRestart",
 				"GetWorker",
 				"ListWorkers",
 				"GetWorkers",

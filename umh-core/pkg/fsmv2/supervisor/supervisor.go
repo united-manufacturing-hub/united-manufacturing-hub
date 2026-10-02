@@ -147,7 +147,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
 	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
-	// worker registry state (e.g., AddWorker, RemoveWorker).
+	// worker registry state (e.g., AddWorker, RemoveWorkerForRestart).
 	//
 	// Lock Order: Must be acquired BEFORE WorkerContext.mu when both are needed.
 	// See package-level LOCK ORDER section for details.

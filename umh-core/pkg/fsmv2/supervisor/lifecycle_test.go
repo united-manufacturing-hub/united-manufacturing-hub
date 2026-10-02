@@ -224,12 +224,12 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			Expect(store.TombstoneCalls).To(BeEmpty())
 		})
 
-		It("does not tombstone the documents on RemoveWorker", func() {
+		It("does not tombstone the documents on RemoveWorkerForRestart", func() {
 			identity := mockIdentity()
 			store := newMockTriangularStore()
 			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
 
-			Expect(s.RemoveWorker(context.Background(), identity.ID)).To(Succeed())
+			Expect(s.RemoveWorkerForRestart(context.Background(), identity.ID)).To(Succeed())
 			Expect(s.ListWorkers()).To(BeEmpty())
 			Expect(store.TombstoneCalls).To(BeEmpty())
 		})

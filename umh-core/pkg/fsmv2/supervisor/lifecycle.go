@@ -16,7 +16,6 @@ package supervisor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -98,12 +97,24 @@ func (s *Supervisor[TObserved, TDesired]) startWorkerRunners(ctx context.Context
 	defer s.mu.RUnlock()
 
 	for _, workerCtx := range s.workers {
-		if err := workerCtx.collector.Start(ctx); err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "collector_start_failed")
-		}
-
-		workerCtx.executor.Start(ctx)
+		s.startWorker(ctx, workerCtx.identity.HierarchyPath, workerCtx.collector, workerCtx.executor, "collector_start_failed")
 	}
+}
+
+// startWorker starts a worker's collector and executor; a failed collector
+// start goes to Sentry as collectorStartFailedEvent.
+func (s *Supervisor[TObserved, TDesired]) startWorker(
+	ctx context.Context,
+	hierarchyPath string,
+	collector *collection.Collector[TObserved],
+	executor *execution.ActionExecutor,
+	collectorStartFailedEvent string,
+) {
+	if err := collector.Start(ctx); err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, collectorStartFailedEvent)
+	}
+
+	executor.Start(ctx)
 }
 
 // Run starts the supervisor and blocks until ctx is canceled or Shutdown is
@@ -662,18 +673,13 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
-	desiredJSON, err := json.Marshal(desired)
+	desiredDoc, err := s.toDocument(desired, workerID, "", documentConversion{
+		marshalErrPrefix:   "failed to marshal desired state",
+		unmarshalErrPrefix: "failed to unmarshal to document",
+	})
 	if err != nil {
-		return fmt.Errorf("failed to marshal desired state: %w", err)
+		return err
 	}
-
-	desiredDoc := make(persistence.Document)
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal to document: %w", err)
-	}
-
-	// Add 'id' field required by TriangularStore validation.
-	desiredDoc[FieldID] = workerID
 
 	// Save updated desired state back to database
 	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
@@ -718,7 +724,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 // including any attempt counters, connection pools, or cached data in dependencies.
 //
 // Flow:
-//  1. RemoveWorker - stops collector, executor, removes from registry
+//  1. Remove the old worker (stopWorker; no tombstone)
 //  2. Clear ShutdownRequested in storage (so new worker starts fresh)
 //  3. factory.NewWorkerByType - creates completely new worker instance
 //  4. AddWorker - registers new worker
@@ -758,7 +764,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		deps.String("action", "full_recreation"))
 
 	// 1. Remove old worker completely (stops collector, executor, removes from registry)
-	if err := s.RemoveWorker(ctx, workerID); err != nil {
+	if err := s.RemoveWorkerForRestart(ctx, workerID); err != nil {
 		return fmt.Errorf("failed to remove worker for restart: %w", err)
 	}
 
@@ -814,14 +820,10 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		s.mu.RUnlock()
 
-		if collector != nil {
-			if err := collector.Start(supervisorCtx); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "restart_collector_start_failed")
-			}
-		}
-
-		if executor != nil {
-			executor.Start(supervisorCtx)
+		// The worker can vanish between AddWorker and this read; without it,
+		// startWorker would dereference a nil collector.
+		if collector != nil && executor != nil {
+			s.startWorker(supervisorCtx, identity.HierarchyPath, collector, executor, "restart_collector_start_failed")
 		}
 	}
 
@@ -890,17 +892,13 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 		return fmt.Errorf("desired state type %T does not implement Disableable", desired)
 	}
 
-	desiredJSON, err := json.Marshal(desired)
+	desiredDoc, err := s.toDocument(desired, workerID, "", documentConversion{
+		marshalErrPrefix:   "failed to marshal desired state",
+		unmarshalErrPrefix: "failed to unmarshal to document",
+	})
 	if err != nil {
-		return fmt.Errorf("failed to marshal desired state: %w", err)
+		return err
 	}
-
-	desiredDoc := make(persistence.Document)
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal to document: %w", err)
-	}
-
-	desiredDoc[FieldID] = workerID
 
 	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
 		return fmt.Errorf("failed to save desired state with disabled flag: %w", err)
@@ -955,19 +953,13 @@ func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Con
 		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
-	// Save back - need to convert to Document
-	desiredDoc := make(persistence.Document)
-
-	desiredJSON, err := json.Marshal(desired)
+	desiredDoc, err := s.toDocument(desired, workerID, "", documentConversion{
+		marshalErrPrefix:   "marshal desired",
+		unmarshalErrPrefix: "unmarshal desired to doc",
+	})
 	if err != nil {
-		return fmt.Errorf("marshal desired: %w", err)
+		return err
 	}
-
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		return fmt.Errorf("unmarshal desired to doc: %w", err)
-	}
-
-	desiredDoc["id"] = workerID
 
 	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
 		return fmt.Errorf("save desired: %w", err)

@@ -102,7 +102,7 @@ var _ = Describe("Multi-Worker Integration", func() {
 
 			Expect(s.ListWorkers()).To(HaveLen(3))
 
-			Expect(s.RemoveWorker(ctx, "worker2")).To(Succeed())
+			Expect(s.RemoveWorkerForRestart(ctx, "worker2")).To(Succeed())
 
 			workers := s.ListWorkers()
 			Expect(workers).To(HaveLen(2))
@@ -140,7 +140,8 @@ var _ = Describe("Multi-Worker Integration", func() {
 					}
 					_ = s.AddWorker(identity, worker)
 					time.Sleep(5 * time.Millisecond)
-					_ = s.RemoveWorker(context.Background(), "concurrent1")
+
+					_ = s.RemoveWorkerForRestart(context.Background(), "concurrent1")
 				}
 				done <- true
 			}()
@@ -154,7 +155,8 @@ var _ = Describe("Multi-Worker Integration", func() {
 					}
 					_ = s.AddWorker(identity, worker)
 					time.Sleep(5 * time.Millisecond)
-					_ = s.RemoveWorker(context.Background(), "concurrent2")
+
+					_ = s.RemoveWorkerForRestart(context.Background(), "concurrent2")
 				}
 				done <- true
 			}()

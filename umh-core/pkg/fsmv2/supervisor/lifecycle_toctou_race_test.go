@@ -48,13 +48,13 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 		// 3. Uses newWorkerCtx.collector and newWorkerCtx.executor (lines 493-499)
 		//
 		// Between step 2 and 3, another goroutine could modify s.workers[workerID]
-		// via RemoveWorker or AddWorker.
+		// via RemoveWorkerForRestart or AddWorker.
 
-		Context("when handleWorkerRestart races with RemoveWorker", func() {
+		Context("when handleWorkerRestart races with RemoveWorkerForRestart", func() {
 			It("should not have data races when accessing worker context after lock release", func() {
 				// This test exposes the race by concurrently:
 				// 1. Triggering handleWorkerRestart (via SignalNeedsRemoval with pendingRestart)
-				// 2. Calling RemoveWorker on the same worker
+				// 2. Calling RemoveWorkerForRestart on the same worker
 
 				const numIterations = 50
 				var wg sync.WaitGroup
@@ -120,7 +120,7 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 
 						// Multiple removal attempts to increase chance of hitting race window
 						for range 10 {
-							_ = localSupervisor.RemoveWorker(ctx, workerID)
+							_ = localSupervisor.RemoveWorkerForRestart(ctx, workerID)
 							time.Sleep(100 * time.Microsecond)
 						}
 					}()
@@ -143,7 +143,7 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 				// This tests the scenario where:
 				// 1. handleWorkerRestart reads workerCtx from s.workers[workerID]
 				// 2. Lock is released
-				// 3. Another goroutine calls RemoveWorker then AddWorker (replacing the worker)
+				// 3. Another goroutine calls RemoveWorkerForRestart then AddWorker (replacing the worker)
 				// 4. handleWorkerRestart uses the old workerCtx
 
 				const numIterations = 50
@@ -203,7 +203,7 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 
 						for range 10 {
 							// Remove existing worker
-							_ = localSupervisor.RemoveWorker(ctx, workerID)
+							_ = localSupervisor.RemoveWorkerForRestart(ctx, workerID)
 
 							// Add a new worker with the same ID
 							newWorker := &mockWorker{

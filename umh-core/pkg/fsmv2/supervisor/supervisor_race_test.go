@@ -46,7 +46,7 @@ var _ = Describe("Supervisor Race Conditions", func() {
 
 	Describe("Worker Registry Concurrent Access", func() {
 		Context("when multiple goroutines access the worker registry simultaneously", func() {
-			It("should detect race conditions with AddWorker, RemoveWorker, and GetWorker", func() {
+			It("should detect race conditions with AddWorker, RemoveWorkerForRestart, and GetWorker", func() {
 				const numWorkers = 10
 				const numGoroutinesPerOperation = 10
 
@@ -83,9 +83,10 @@ var _ = Describe("Supervisor Race Conditions", func() {
 
 					for i := range numWorkers {
 						workerID := fmt.Sprintf("worker-%d", i)
-						err := s.RemoveWorker(ctx, workerID)
+
+						err := s.RemoveWorkerForRestart(ctx, workerID)
 						if err != nil {
-							By(fmt.Sprintf("RemoveWorker failed for %s: %v", workerID, err))
+							By(fmt.Sprintf("RemoveWorkerForRestart failed for %s: %v", workerID, err))
 						}
 
 						time.Sleep(1 * time.Millisecond)

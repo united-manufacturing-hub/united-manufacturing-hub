@@ -105,7 +105,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 		})
 	})
 
-	Describe("RemoveWorker", func() {
+	Describe("RemoveWorkerForRestart", func() {
 		It("should remove worker from registry and stop collector", func() {
 			identity := deps.Identity{ID: "worker-1", Name: "Worker 1"}
 			worker := &mockWorker{observed: createMockObservedStateWithID("worker-1")}
@@ -116,7 +116,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 			Expect(s.ListWorkers()).To(ContainElement("worker-1"))
 
 			ctx := context.Background()
-			err = s.RemoveWorker(ctx, "worker-1")
+			err = s.RemoveWorkerForRestart(ctx, "worker-1")
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(s.ListWorkers()).ToNot(ContainElement("worker-1"))
@@ -124,7 +124,7 @@ var _ = Describe("Multi-Worker Supervisor", func() {
 
 		It("should return error for non-existent worker", func() {
 			ctx := context.Background()
-			err := s.RemoveWorker(ctx, "non-existent")
+			err := s.RemoveWorkerForRestart(ctx, "non-existent")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
