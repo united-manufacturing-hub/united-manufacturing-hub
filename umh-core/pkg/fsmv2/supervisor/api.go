@@ -131,10 +131,9 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 }
 
 // collectInitialObservation collects the observed state a worker is added
-// with. If CollectObservedState returned a NewObservation (zero CollectedAt),
-// set it now: AddWorker bypasses the collector, so without a timestamp here
-// the tick loop's checkDataFreshness would treat the first observation as
-// timed out.
+// with and stamps a zero CollectedAt with now. AddWorker bypasses the
+// collector, so without a timestamp here checkDataFreshness would treat the
+// first observation as timed out.
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, initialDesired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	observed, err := worker.CollectObservedState(ctx, initialDesired)
@@ -159,7 +158,6 @@ func (s *Supervisor[TObserved, TDesired]) collectInitialObservation(ctx context.
 	return observed, nil
 }
 
-// saveIdentity writes a worker's identity document.
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) saveIdentity(ctx context.Context, identity deps.Identity) error {
 	identityDoc := persistence.Document{
@@ -179,12 +177,8 @@ func (s *Supervisor[TObserved, TDesired]) saveIdentity(ctx context.Context, iden
 	return nil
 }
 
-// nextStartupCount returns the worker's next StartupCount, advanced by one
-// from the previous observation when it recorded one. It runs before the
-// SaveObserved in saveInitialState, which would otherwise overwrite the
-// count; the ordering is pinned by "StartupCount persistence advances across
-// a worker respawn instead of resetting to 1". A load error other than
-// "not yet present" is logged, and the count restarts at 1.
+// nextStartupCount returns the previous observation's StartupCount plus one,
+// or 1 when there is none or it cannot be loaded.
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) nextStartupCount(identity deps.Identity) int64 {
 	var startupCount int64 = 1
@@ -209,34 +203,39 @@ func (s *Supervisor[TObserved, TDesired]) nextStartupCount(identity deps.Identit
 	return startupCount
 }
 
-// toDocument converts a state value into its store document. The value is
-// JSON-encoded, re-read into a persistence.Document, and tagged with the
-// worker id. A failure wraps with the caller's prefix for the stage that
-// failed, and when that stage's Sentry event is non-empty reports it on the
-// given hierarchy path.
+// documentConversion names, for a toDocument conversion, what is converted
+// and the Sentry event for each stage. An empty event skips Sentry.
+type documentConversion struct {
+	what           string
+	marshalEvent   string
+	unmarshalEvent string
+}
+
+// toDocument converts a state value into its store document, with the id
+// set. A failed stage reports that stage's Sentry event on hierarchyPath
+// when the event is non-empty.
 func (s *Supervisor[TObserved, TDesired]) toDocument(
 	v any,
 	id string,
 	hierarchyPath string,
-	marshalEvent, unmarshalEvent string,
-	marshalErrPrefix, unmarshalErrPrefix string,
+	conv documentConversion,
 ) (persistence.Document, error) {
 	encoded, err := json.Marshal(v)
 	if err != nil {
-		if marshalEvent != "" {
-			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, marshalEvent)
+		if conv.marshalEvent != "" {
+			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, conv.marshalEvent)
 		}
 
-		return nil, fmt.Errorf("%s: %w", marshalErrPrefix, err)
+		return nil, fmt.Errorf("failed to marshal %s: %w", conv.what, err)
 	}
 
 	doc := make(persistence.Document)
 	if err := json.Unmarshal(encoded, &doc); err != nil {
-		if unmarshalEvent != "" {
-			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, unmarshalEvent)
+		if conv.unmarshalEvent != "" {
+			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, conv.unmarshalEvent)
 		}
 
-		return nil, fmt.Errorf("%s: %w", unmarshalErrPrefix, err)
+		return nil, fmt.Errorf("failed to unmarshal %s to document: %w", conv.what, err)
 	}
 
 	// TriangularStore validation rejects a document without the id.
@@ -258,21 +257,17 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 		observed = setter.SetFrameworkMetrics(deps.FrameworkMetrics{StartupCount: startupCount})
 	}
 
-	observedDoc, err := s.toDocument(observed, identity.ID, identity.HierarchyPath,
-		"worker_add_marshal_observed_failed", "worker_add_unmarshal_observed_failed",
-		"failed to marshal observed state", "failed to unmarshal observed state to document")
+	observedDoc, err := s.toDocument(observed, identity.ID, identity.HierarchyPath, documentConversion{
+		what:           "observed state",
+		marshalEvent:   "worker_add_marshal_observed_failed",
+		unmarshalEvent: "worker_add_unmarshal_observed_failed",
+	})
 	if err != nil {
 		return err
 	}
 
-	// Inject the initial FSM state name so the store never contains state="".
-	// CollectObservedState runs before the collector's StateProvider closure is
-	// wired up, so the Observation struct leaves State="" at this point. The
-	// StateProvider fires on every subsequent collection tick, but if the
-	// scenario ends before the first tick fires (e.g., during the last cycle's
-	// shutdown), the store would retain state="" and fail the
-	// verifyObservedStateHasState check. Injecting the registered initial state
-	// here closes that window.
+	// The collector writes the state from its first tick; until then the
+	// store would hold state="".
 	if initialStateForDoc := worker.GetInitialState(); initialStateForDoc != nil {
 		observedDoc["state"] = initialStateForDoc.String()
 	}
@@ -286,9 +281,11 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 
 	s.logger.Debug("initial_observation_saved")
 
-	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath,
-		"worker_add_marshal_desired_failed", "worker_add_unmarshal_desired_failed",
-		"failed to marshal desired state", "failed to unmarshal desired state to document")
+	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath, documentConversion{
+		what:           "desired state",
+		marshalEvent:   "worker_add_marshal_desired_failed",
+		unmarshalEvent: "worker_add_unmarshal_desired_failed",
+	})
 	if err != nil {
 		return err
 	}
@@ -313,7 +310,6 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 	return nil
 }
 
-// newCollector builds the collector for a newly added worker.
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, workerCtx *WorkerContext[TObserved, TDesired]) *collection.Collector[TObserved] {
 	// A worker type may register a custom collection cadence (simple.MonitorSpec.Interval);
@@ -409,16 +405,9 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 			}
 		},
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
-			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
-			// This write feeds a worker that reads deps.GetFrameworkState() during
-			// CollectObservedState, so it reaches only a bound deps that implements
-			// SetFrameworkState (a deps embedding *deps.BaseDependencies). It is
-			// separate from the Observation injection, which the collector performs
-			// from its own local in wrapNewObservation regardless of the deps shape —
-			// a struct{}-deps worker (nmap) still carries framework metrics on its
-			// Observation. Application and configworker bind no deps and so simply
-			// get no pre-COS write; returning nil or struct{}{} from
-			// GetDependenciesAny is equivalent and neither is overridden.
+			// GetDependenciesAny, not GetDependencies: D is not known here. The
+			// write reaches only a deps that implements SetFrameworkState; a
+			// deps without it gets no pre-COS write.
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
@@ -474,7 +463,7 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 }
 
 // newWorkerContext builds the executor, the action history and the worker
-// context around them.
+// context around them. Its collector is nil until the caller sets it.
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, startupCount int64) *WorkerContext[TObserved, TDesired] {
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
@@ -511,7 +500,6 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 	executor.SetOnActionComplete(func(result deps.ActionResult) {
 		actionHistoryBuffer.Record(result)
 
-		// This eliminates the delay between action and FSM progression.
 		if workerCtx.collector.IsRunning() {
 			workerCtx.collector.TriggerNow()
 		}
@@ -520,7 +508,6 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 	return workerCtx
 }
 
-// registerWorker puts a built worker context into the supervisor's registry.
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContext[TObserved, TDesired], identity deps.Identity, workerLogger deps.FSMLogger) {
 	s.workers[identity.ID] = workerCtx
