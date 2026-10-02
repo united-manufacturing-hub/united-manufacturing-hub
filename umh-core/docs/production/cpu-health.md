@@ -139,6 +139,20 @@ agent:
 
 This is separate from the capacity ceiling, the number of bridges a given core count can hold, which the [Sizing Guide](./sizing-guide.md) covers. That number is a ceiling rather than a guarantee: because real CPU use varies per bridge, UMH can refuse a bridge on CPU health before you reach it.
 
+## What UMH reads, and what happens when a file cannot be read
+
+With `USE_FSMV2_CPU=true`, UMH judges the CPU from the files below. A value with a fallback is replaced by another reading. A value without one makes the CPU health degraded, because UMH counts what it could not measure as not healthy. The message then names the file, for example `CPU not measured: open /sys/fs/cgroup/cpu.stat: no such file or directory`, and new bridges wait.
+
+| Value | File (cgroup v2) | File (cgroup v1) | If the file cannot be read |
+|-------|------------------|------------------|----------------------------|
+| CPU limit | `cpu.max` | `cpu.cfs_quota_us`, `cpu.cfs_period_us` | Treated as no CPU limit. |
+| The instance's CPU usage, judged when a CPU limit is set | `cpu.stat` | `cpuacct.usage` | Degraded. |
+| Cores the instance may use, when no CPU limit is set | `cpuset.cpus.effective` | `cpuset.effective_cpus` | Degraded. |
+| The machine's CPU usage, judged when no CPU limit is set | `/proc/stat` | `/proc/stat` | Degraded. |
+| CPU pressure | `cpu.pressure` | — | The pressure rule is skipped. Without a CPU limit, the status shows **limited visibility**. |
+
+Every failed read is also reported to UMH through Sentry. To check whether UMH can read a file, run `docker exec <container> cat <file>`, for example `docker exec umh-core cat /sys/fs/cgroup/cpu.stat`.
+
 ## Known limitation
 
 A container pinned to a subset of the machine's CPUs (`cpuset`) with no CPU limit set can print a

@@ -137,6 +137,10 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
 
+	if err := cpuhealth.UnmeasuredBecause(sample, details); err != nil {
+		return CPUStatus{}, err
+	}
+
 	recordMetrics(d.MetricsRecorder(), sample.Timestamp, details)
 
 	return CPUStatus{
