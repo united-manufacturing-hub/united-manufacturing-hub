@@ -29,25 +29,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-var fieldsMarkDeletedWrites = map[string]bool{
+var fieldsTombstoneWrites = map[string]bool{
 	storage.FieldDeletedAt: true,
 	storage.FieldDeletedBy: true,
 	storage.FieldSyncID:    true,
 }
 
-func expectOnlyMarkDeletedFieldsChanged(before, after persistence.Document) {
+func expectOnlyTombstoneFieldsChanged(before, after persistence.Document) {
 	for key := range after {
 		_, existed := before[key]
-		ExpectWithOffset(1, existed || fieldsMarkDeletedWrites[key]).To(BeTrue(), "MarkDeleted must not add field %s", key)
+		ExpectWithOffset(1, existed || fieldsTombstoneWrites[key]).To(BeTrue(), "Tombstone must not add field %s", key)
 	}
 
 	for key, beforeVal := range before {
-		if fieldsMarkDeletedWrites[key] {
+		if fieldsTombstoneWrites[key] {
 			continue
 		}
 
-		ExpectWithOffset(1, after).To(HaveKey(key), "field %s must survive MarkDeleted", key)
-		ExpectWithOffset(1, after[key]).To(Equal(beforeVal), "field %s must keep its value across MarkDeleted", key)
+		ExpectWithOffset(1, after).To(HaveKey(key), "field %s must survive Tombstone", key)
+		ExpectWithOffset(1, after[key]).To(Equal(beforeVal), "field %s must keep its value across Tombstone", key)
 	}
 }
 
@@ -166,7 +166,7 @@ func (tx *updateFailingTx) Update(ctx context.Context, collection, id string, do
 	return tx.commitFailingTx.Update(ctx, collection, id, doc)
 }
 
-var _ = Describe("MarkDeleted", func() {
+var _ = Describe("Tombstone", func() {
 	const workerType = "container"
 
 	const workerID = "worker-1"
@@ -227,14 +227,14 @@ var _ = Describe("MarkDeleted", func() {
 	})
 
 	It("tombstones every stored role document and appends one delta entry per role", func() {
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		for role, collection := range collections {
 			after, err := backend.Get(ctx, collection, workerID)
 			Expect(err).NotTo(HaveOccurred())
 
 			expectTombstone(after, t0, "removed")
-			expectOnlyMarkDeletedFieldsChanged(before[role], after)
+			expectOnlyTombstoneFieldsChanged(before[role], after)
 		}
 
 		resp, err := ts.GetDeltas(ctx, storage.Subscription{LastSyncID: syncBefore})
@@ -265,7 +265,7 @@ var _ = Describe("MarkDeleted", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cachedSnap.Identity).NotTo(HaveKey(storage.FieldDeletedAt))
 
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		snapAfter, err := ts.LoadSnapshot(ctx, workerType, workerID)
 		Expect(err).NotTo(HaveOccurred())
@@ -277,22 +277,22 @@ var _ = Describe("MarkDeleted", func() {
 		Expect(observedAfter).To(HaveKey(storage.FieldDeletedAt))
 	})
 
-	It("a second MarkDeleted keeps the first tombstone and writes nothing", func() {
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+	It("a second Tombstone keeps the first tombstone and writes nothing", func() {
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		syncAfterFirst, err := ts.GetLatestSyncID(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
 		mockClock.Add(2 * time.Hour)
 
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		for role, collection := range collections {
 			after, err := backend.Get(ctx, collection, workerID)
 			Expect(err).NotTo(HaveOccurred())
 
 			expectTombstone(after, t0, "removed")
-			expectOnlyMarkDeletedFieldsChanged(before[role], after)
+			expectOnlyTombstoneFieldsChanged(before[role], after)
 		}
 
 		syncAfterSecond, err := ts.GetLatestSyncID(ctx)
@@ -318,7 +318,7 @@ var _ = Describe("MarkDeleted", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(ts.MarkDeleted(ctx, workerType, missingDesiredID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, missingDesiredID, "removed")).To(Succeed())
 
 		otherIdentity, err := backend.Get(ctx, workerType+"_identity", missingDesiredID)
 		Expect(err).NotTo(HaveOccurred())
@@ -352,7 +352,7 @@ var _ = Describe("MarkDeleted", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		err = failingTs.MarkDeleted(ctx, workerType, workerID, "removed")
+		err = failingTs.Tombstone(ctx, workerType, workerID, "removed")
 		Expect(err).To(MatchError(errCommitFailedByTest))
 
 		for _, collection := range collections {
@@ -369,7 +369,7 @@ var _ = Describe("MarkDeleted", func() {
 			mockClock,
 		)
 
-		err := failingTs.MarkDeleted(ctx, workerType, workerID, "removed")
+		err := failingTs.Tombstone(ctx, workerType, workerID, "removed")
 		Expect(err).To(MatchError(errUpdateFailedByTest))
 
 		for _, collection := range collections {

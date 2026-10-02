@@ -206,10 +206,10 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 			Expect(s.TestTick(context.Background())).To(Succeed())
 			Expect(s.ListWorkers()).To(BeEmpty())
-			Expect(store.MarkDeletedCalls).To(HaveLen(1))
-			Expect(store.MarkDeletedCalls[0].WorkerType).To(Equal("test"))
-			Expect(store.MarkDeletedCalls[0].ID).To(Equal(identity.ID))
-			Expect(store.MarkDeletedCalls[0].By).To(Equal("supervisor"))
+			Expect(store.TombstoneCalls).To(HaveLen(1))
+			Expect(store.TombstoneCalls[0].WorkerType).To(Equal("test"))
+			Expect(store.TombstoneCalls[0].ID).To(Equal(identity.ID))
+			Expect(store.TombstoneCalls[0].By).To(Equal("supervisor"))
 		})
 
 		It("does not tombstone the documents on restart", func() {
@@ -221,7 +221,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 			Expect(s.TestTick(context.Background())).To(Succeed())
 			Expect(s.ListWorkers()).To(HaveLen(1))
-			Expect(store.MarkDeletedCalls).To(BeEmpty())
+			Expect(store.TombstoneCalls).To(BeEmpty())
 		})
 
 		It("does not tombstone the documents on RemoveWorker", func() {
@@ -231,18 +231,18 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 			Expect(s.RemoveWorker(context.Background(), identity.ID)).To(Succeed())
 			Expect(s.ListWorkers()).To(BeEmpty())
-			Expect(store.MarkDeletedCalls).To(BeEmpty())
+			Expect(store.TombstoneCalls).To(BeEmpty())
 		})
 
-		It("still removes the worker and warns when MarkDeleted fails", func() {
+		It("still removes the worker and warns when Tombstone fails", func() {
 			store := newMockTriangularStore()
-			store.MarkDeletedErr = errors.New("mark deleted failed")
+			store.TombstoneErr = errors.New("tombstone failed")
 			logger := &sentryWarnRecorder{}
 			s := newRemovalSupervisor(store, logger)
 
 			Expect(s.TestTick(context.Background())).To(Succeed())
 			Expect(s.ListWorkers()).To(BeEmpty())
-			Expect(store.MarkDeletedCalls).To(HaveLen(1))
+			Expect(store.TombstoneCalls).To(HaveLen(1))
 
 			warnings := logger.Warns()
 			Expect(warnings).To(HaveLen(1))
@@ -260,7 +260,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			}
 
 			// The store rejects writes on a cancelled context, so only the
-			// context markWorkerDeleted derives itself can carry the
+			// context tombstoneWorker derives itself can carry the
 			// tombstone write.
 			realStore := storage.NewTriangularStore(&cancelledWriteStore{inner: basicStore}, deps.NewNopFSMLogger())
 			s := newRemovalSupervisor(realStore, deps.NewNopFSMLogger())
@@ -312,7 +312,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				Expect(basicStore.CreateCollection(context.Background(), "test_"+role, nil)).To(Succeed())
 			}
 
-			store := &markDeletedHookStore{TriangularStoreInterface: storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())}
+			store := &tombstoneHookStore{TriangularStoreInterface: storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())}
 			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
 
 			addDone := make(chan error, 1)
@@ -320,7 +320,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 			// Add a worker with the same id just before the old one is
 			// tombstoned. An AddWorker that does not wait for the removal
 			// finishes within 300 ms.
-			store.beforeMarkDeleted = func() {
+			store.beforeTombstone = func() {
 				go func() { addDone <- s.AddWorker(identity, &mockWorker{}) }()
 
 				select {
@@ -497,25 +497,25 @@ var _ = Describe("Supervisor Lifecycle", func() {
 	})
 })
 
-type markDeletedHookStore struct {
+type tombstoneHookStore struct {
 	storage.TriangularStoreInterface
 
-	beforeMarkDeleted func()
+	beforeTombstone func()
 }
 
-func (h *markDeletedHookStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
-	if hook := h.beforeMarkDeleted; hook != nil {
-		h.beforeMarkDeleted = nil
+func (h *tombstoneHookStore) Tombstone(ctx context.Context, workerType string, id string, deletedBy string) error {
+	if hook := h.beforeTombstone; hook != nil {
+		h.beforeTombstone = nil
 
 		hook()
 	}
 
-	return h.TriangularStoreInterface.MarkDeleted(ctx, workerType, id, deletedBy)
+	return h.TriangularStoreInterface.Tombstone(ctx, workerType, id, deletedBy)
 }
 
 // cancelledWriteStore rejects every write whose context is cancelled, then
 // delegates to inner. It models the store contract that a write may honour
-// cancellation, so only the context markWorkerDeleted derives can write the
+// cancellation, so only the context tombstoneWorker derives can write the
 // tombstone.
 type cancelledWriteStore struct {
 	inner persistence.Store

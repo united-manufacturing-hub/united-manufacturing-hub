@@ -79,7 +79,7 @@ var _ = Describe("A committed write whose delta append fails", func() {
 		workerID   = "worker-1"
 	)
 
-	It("still succeeds and warns, for saves, MarkDeleted and ClearDeleted", func() {
+	It("still succeeds and warns, for saves, Tombstone and ClearTombstone", func() {
 		ctx := context.Background()
 
 		backend := &deltaFailingStore{mockStore: newMockStore()}
@@ -89,15 +89,15 @@ var _ = Describe("A committed write whose delta append fails", func() {
 		saveInitialDocuments(ctx, ts, workerType, workerID)
 		Expect(rec.sentryWarns()).To(HaveLen(3), "saves warn")
 
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
-		Expect(rec.sentryWarns()).To(HaveLen(6), "MarkDeleted warns")
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(rec.sentryWarns()).To(HaveLen(6), "Tombstone warns")
 
 		tombstoned, err := backend.Get(ctx, workerType+"_observed", workerID)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(tombstoned).To(HaveKey(storage.FieldDeletedAt))
 
-		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
-		Expect(rec.sentryWarns()).To(HaveLen(9), "ClearDeleted warns")
+		Expect(ts.ClearTombstone(ctx, workerType, workerID)).To(Succeed())
+		Expect(rec.sentryWarns()).To(HaveLen(9), "ClearTombstone warns")
 
 		cleared, err := backend.Get(ctx, workerType+"_observed", workerID)
 		Expect(err).NotTo(HaveOccurred())

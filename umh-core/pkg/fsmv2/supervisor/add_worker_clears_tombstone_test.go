@@ -48,10 +48,10 @@ var _ = Describe("AddWorker clears the worker's tombstone", func() {
 		Expect(s.AddWorker(identity, &mockWorker{})).To(Succeed())
 		Expect(s.ListWorkers()).To(ContainElement(identity.ID))
 
-		Expect(store.ClearDeletedCalls).To(HaveLen(1),
+		Expect(store.ClearTombstoneCalls).To(HaveLen(1),
 			"AddWorker must clear the worker's tombstone exactly once")
-		Expect(store.ClearDeletedCalls[0].WorkerType).To(Equal("test"))
-		Expect(store.ClearDeletedCalls[0].ID).To(Equal(identity.ID))
+		Expect(store.ClearTombstoneCalls[0].WorkerType).To(Equal("test"))
+		Expect(store.ClearTombstoneCalls[0].ID).To(Equal(identity.ID))
 
 		Expect(store.SaveAndClearCalls).To(Equal([]string{
 			"save_identity", "save_observed", "save_desired", "clear_deleted",
@@ -59,7 +59,7 @@ var _ = Describe("AddWorker clears the worker's tombstone", func() {
 
 		clearErr := errors.New("clear deleted failed")
 		failingStore := newMockTriangularStore()
-		failingStore.ClearDeletedErr = clearErr
+		failingStore.ClearTombstoneErr = clearErr
 		failingS := newSupervisorOverStore(failingStore)
 
 		addErr := failingS.AddWorker(identity, &mockWorker{})
@@ -74,7 +74,7 @@ var _ = Describe("AddWorker clears the worker's tombstone", func() {
 		failingSaveS := newSupervisorOverStore(failingSaveStore)
 
 		Expect(failingSaveS.AddWorker(identity, &mockWorker{})).To(HaveOccurred())
-		Expect(failingSaveStore.ClearDeletedCalls).To(BeEmpty(),
+		Expect(failingSaveStore.ClearTombstoneCalls).To(BeEmpty(),
 			"the tombstone must not be cleared when a save failed")
 
 		roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
@@ -92,7 +92,7 @@ var _ = Describe("AddWorker clears the worker's tombstone", func() {
 		_, err = realStore.SaveObserved(ctx, "test", identity.ID, persistence.Document{"id": identity.ID, "collectedAt": time.Now()})
 		Expect(err).ToNot(HaveOccurred())
 
-		Expect(realStore.MarkDeleted(ctx, "test", identity.ID, "removed")).To(Succeed())
+		Expect(realStore.Tombstone(ctx, "test", identity.ID, "removed")).To(Succeed())
 
 		for _, role := range roles {
 			doc, getErr := basicStore.Get(ctx, "test_"+role, identity.ID)
