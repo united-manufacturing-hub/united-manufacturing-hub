@@ -84,7 +84,7 @@ var fixtureEpoch = time.Date(2020, time.March, 14, 15, 9, 26, 0, time.UTC)
 // errUnreadable is what a file a Box does not serve reads as. It is not
 // fs.ErrNotExist, so cpuhealth's classifyRead records such a read as ReadError,
 // not ReadMissing.
-var errUnreadable = errors.New("no such file or directory")
+var errUnreadable = errors.New("file not readable")
 
 func unreadable(path string) error {
 	return fmt.Errorf("fakebox: %s: %w", path, errUnreadable)
