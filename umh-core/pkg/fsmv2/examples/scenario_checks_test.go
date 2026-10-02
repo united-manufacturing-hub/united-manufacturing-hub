@@ -418,6 +418,20 @@ var _ = Describe("ScenarioV2 empty expected entries", func() {
 	})
 })
 
+// ctxHonouringStore fails GetDeltas once ctx is done, as a store behind a
+// network or disk would. The in-memory store ignores ctx.
+type ctxHonouringStore struct {
+	storage.TriangularStoreInterface
+}
+
+func (s ctxHonouringStore) GetDeltas(ctx context.Context, sub storage.Subscription) (storage.DeltasResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return storage.DeltasResponse{}, err
+	}
+
+	return s.TriangularStoreInterface.GetDeltas(ctx, sub)
+}
+
 var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
@@ -425,7 +439,7 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 
 	It("ends with no stored-state failure when the caller cancels after Run returned", func() {
 		logger := deps.NewNopFSMLogger()
-		store := examples.SetupStore(logger)
+		store := ctxHonouringStore{examples.SetupStore(logger)}
 
 		returning := examples.ScenarioV2{
 			Name:        "cancel-after-return",
