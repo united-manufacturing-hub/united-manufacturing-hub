@@ -261,15 +261,19 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 			// The store rejects writes on a cancelled context, so only the
 			// context tombstoneWorker derives itself can carry the
-			// tombstone write.
+			// tombstone write. The hook store records whether that context
+			// carries the deadline that bounds the write.
 			realStore := storage.NewTriangularStore(&cancelledWriteStore{inner: basicStore}, deps.NewNopFSMLogger())
-			s := newRemovalSupervisor(realStore, deps.NewNopFSMLogger())
+			store := &tombstoneHookStore{TriangularStoreInterface: realStore}
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
 
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
 			Expect(s.TestTick(ctx)).To(Succeed())
 			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.tombstoneCtxHasDeadline).To(BeTrue(),
+				"the tombstone write runs under s.mu, so without a deadline it could hold the supervisor forever")
 
 			for _, role := range roles {
 				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
@@ -497,10 +501,16 @@ var _ = Describe("Supervisor Lifecycle", func() {
 	})
 })
 
+// tombstoneHookStore records facts about the Tombstone call and can run a
+// hook from inside it.
 type tombstoneHookStore struct {
 	storage.TriangularStoreInterface
 
 	beforeTombstone func()
+
+	// tombstoneCtxHasDeadline records whether the context of the Tombstone
+	// call carries a deadline.
+	tombstoneCtxHasDeadline bool
 }
 
 func (h *tombstoneHookStore) Tombstone(ctx context.Context, workerType string, id string, deletedBy string) error {
@@ -509,6 +519,8 @@ func (h *tombstoneHookStore) Tombstone(ctx context.Context, workerType string, i
 
 		hook()
 	}
+
+	_, h.tombstoneCtxHasDeadline = ctx.Deadline()
 
 	return h.TriangularStoreInterface.Tombstone(ctx, workerType, id, deletedBy)
 }
