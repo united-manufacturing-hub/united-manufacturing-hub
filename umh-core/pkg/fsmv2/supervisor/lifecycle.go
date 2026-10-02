@@ -16,7 +16,6 @@ package supervisor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -674,18 +673,11 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
-	desiredJSON, err := json.Marshal(desired)
+	desiredDoc, err := s.toDocument(desired, workerID, "", "", "",
+		"failed to marshal desired state", "failed to unmarshal to document")
 	if err != nil {
-		return fmt.Errorf("failed to marshal desired state: %w", err)
+		return err
 	}
-
-	desiredDoc := make(persistence.Document)
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal to document: %w", err)
-	}
-
-	// Add 'id' field required by TriangularStore validation.
-	desiredDoc[FieldID] = workerID
 
 	// Save updated desired state back to database
 	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
@@ -898,17 +890,11 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 		return fmt.Errorf("desired state type %T does not implement Disableable", desired)
 	}
 
-	desiredJSON, err := json.Marshal(desired)
+	desiredDoc, err := s.toDocument(desired, workerID, "", "", "",
+		"failed to marshal desired state", "failed to unmarshal to document")
 	if err != nil {
-		return fmt.Errorf("failed to marshal desired state: %w", err)
+		return err
 	}
-
-	desiredDoc := make(persistence.Document)
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal to document: %w", err)
-	}
-
-	desiredDoc[FieldID] = workerID
 
 	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
 		return fmt.Errorf("failed to save desired state with disabled flag: %w", err)
@@ -963,19 +949,11 @@ func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Con
 		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
-	// Save back - need to convert to Document
-	desiredDoc := make(persistence.Document)
-
-	desiredJSON, err := json.Marshal(desired)
+	desiredDoc, err := s.toDocument(desired, workerID, "", "", "",
+		"marshal desired", "unmarshal desired to doc")
 	if err != nil {
-		return fmt.Errorf("marshal desired: %w", err)
+		return err
 	}
-
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		return fmt.Errorf("unmarshal desired to doc: %w", err)
-	}
-
-	desiredDoc["id"] = workerID
 
 	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
 		return fmt.Errorf("save desired: %w", err)
