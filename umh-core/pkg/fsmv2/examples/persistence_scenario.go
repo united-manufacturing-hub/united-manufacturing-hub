@@ -29,9 +29,9 @@ import (
 	persistencesnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
-// PersistenceScenarioV2 runs one persistence worker against an in-memory
+// PersistenceScenario runs one persistence worker against an in-memory
 // store held in the dependency map.
-var PersistenceScenarioV2 = ScenarioV2{
+var PersistenceScenario = Scenario{
 	Name:        "persistence",
 	Description: "Compacts and maintains an in-memory store through the dependency map",
 

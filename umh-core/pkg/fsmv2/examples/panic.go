@@ -25,10 +25,10 @@ import (
 	example_panic "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 )
 
-// PanicScenarioV2 runs a worker whose connect action panics on every attempt.
+// PanicScenario runs a worker whose connect action panics on every attempt.
 // ActionExecutor (supervisor/internal/execution) recovers each panic and logs
 // it as action_panic.
-var PanicScenarioV2 = ScenarioV2{
+var PanicScenario = Scenario{
 	Name:        "panic",
 	Description: "A worker whose connect panics every time: the supervisor recovers each panic, and the worker stays in TryingToConnect",
 

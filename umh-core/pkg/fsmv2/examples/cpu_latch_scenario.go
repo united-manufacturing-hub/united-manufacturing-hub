@@ -43,7 +43,7 @@ const (
 	cpuLatchWindow = 60 * time.Second
 )
 
-// CPULatchScenarioV2 drives the real CPU monitor over a fake machine whose PSI
+// CPULatchScenario drives the real CPU monitor over a fake machine whose PSI
 // pressure crosses its fire mark, falls into the band between the two marks,
 // drops under the clear mark, and rises again.
 //
@@ -53,9 +53,9 @@ const (
 // comes back, the report is late: a released signal cannot fire again for 60
 // machine seconds, so the machine sits over its fire mark while reported
 // healthy.
-var CPULatchScenarioV2 = ScenarioV2{
+var CPULatchScenario = Scenario{
 	Name:        "cpu-latch",
-	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and shows the bar on re-firing (v2)",
+	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and shows the bar on re-firing",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		box := newTickingBox(fsmv2cpu.CgroupBase, cpuPressureMachine(cpuLatchFiring))

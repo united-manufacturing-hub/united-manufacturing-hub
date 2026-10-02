@@ -26,10 +26,10 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// InheritanceScenarioV2 sets IP and PORT through env.Client.SetVariables and
+// InheritanceScenario sets IP and PORT through env.Client.SetVariables and
 // checks that they reach both children of an exampleparent, together with the
 // DEVICE_ID the parent gives each child.
-var InheritanceScenarioV2 = ScenarioV2{
+var InheritanceScenario = Scenario{
 	Name:        "inheritance",
 	Description: "The application's variables reach an exampleparent and its two children; the parent gives each child its own DEVICE_ID",
 

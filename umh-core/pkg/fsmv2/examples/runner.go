@@ -70,7 +70,7 @@ type RunResult struct {
 	Err error
 }
 
-// ErrScenarioFailed marks an error from Run for a v2 scenario that started and
+// ErrScenarioFailed marks an error from Run for a scenario that started and
 // then failed. An error that kept the scenario from starting does not wrap it.
 var ErrScenarioFailed = errors.New("failed")
 
@@ -78,50 +78,50 @@ func scenarioFailed(name string, err error) error {
 	return fmt.Errorf("scenario %q %w: %w", name, ErrScenarioFailed, err)
 }
 
-// Run executes a v2 scenario (see runV2). With DumpStore set, the store dump
+// Run executes a scenario (see runScenario). With DumpStore set, the store dump
 // prints after teardown: before Done closes, or, when the scenario's Run
 // fails, before Run returns the error.
 func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-	if cfg.ScenarioV2.Run == nil {
-		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Run is nil",
-			cfg.ScenarioV2.Name)
+	if cfg.Scenario.Run == nil {
+		return nil, fmt.Errorf("scenario %q is not properly configured: Run is nil",
+			cfg.Scenario.Name)
 	}
 
-	if cfg.ScenarioV2.Name == "" {
-		return nil, errors.New("v2 scenario is not properly configured: " +
+	if cfg.Scenario.Name == "" {
+		return nil, errors.New("scenario is not properly configured: " +
 			"Run is set but Name is empty, so logs and the supervisor ID could not name the scenario")
 	}
 
-	return runV2(ctx, cfg)
+	return runScenario(ctx, cfg)
 }
 
-// runV2 executes a v2 scenario on the kernel-only application supervisor (no
+// runScenario executes a scenario on the kernel-only application supervisor (no
 // YAML children, so the config worker kernel is the only child).
 //
-// runV2 keeps the process-global configworker deps key published for exactly
+// runScenario keeps the process-global configworker deps key published for exactly
 // the supervisor's lifetime: the dynamicchildren registry is published under
 // the key before the supervisor starts (the application worker reads it every
 // tick), and the key is cleared on EVERY exit path, including a
-// ScenarioV2.Run panic, strictly after the supervisor has stopped. Clearing the key earlier flips
+// Scenario.Run panic, strictly after the supervisor has stopped. Clearing the key earlier flips
 // the application worker's RegistryConfigured observation mid-shutdown; a key
-// that is never cleared makes every later runV2 in the same process fail its
+// that is never cleared makes every later runScenario in the same process fail its
 // already-published check below.
 //
 // The supervisor runs on a context detached from the caller's ctx. The
-// caller's ctx drives ScenarioV2.Run, the Duration wait, and the teardown
+// caller's ctx drives Scenario.Run, the Duration wait, and the teardown
 // trigger, but never the tick loop: if the tick loop shared the caller's
 // ctx, cancelling it would stop ticking before Shutdown runs, and the
 // graceful drain would wait out its full timeout against a stopped loop.
 //
-// Because the deps key is process-global, v2 runs must not overlap within a
+// Because the deps key is process-global, runs must not overlap within a
 // process. The already-published check below catches sequential overlap (a
 // previous run whose teardown has not finished); it does not catch truly
-// concurrent runV2 calls, because the check and the publish are two separate
-// lock acquisitions. Concurrent runV2 calls are not supported.
-func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
+// concurrent runScenario calls, because the check and the publish are two separate
+// lock acquisitions. Concurrent runScenario calls are not supported.
+func runScenario(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	if register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName) != nil {
-		return nil, fmt.Errorf("v2 scenario %q cannot start: the configworker deps key is already published, "+
-			"so another v2 run is still active in this process", cfg.ScenarioV2.Name)
+		return nil, fmt.Errorf("scenario %q cannot start: the configworker deps key is already published, "+
+			"so another run is still active in this process", cfg.Scenario.Name)
 	}
 
 	var startSyncID int64
@@ -142,10 +142,10 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 	releaseScenarioDeps := func() {}
 
-	if cfg.ScenarioV2.Dependencies != nil {
-		depsMap, cleanup, err := cfg.ScenarioV2.Dependencies()
+	if cfg.Scenario.Dependencies != nil {
+		depsMap, cleanup, err := cfg.Scenario.Dependencies()
 		if err != nil {
-			return nil, fmt.Errorf("scenario %q dependencies: %w", cfg.ScenarioV2.Name, err)
+			return nil, fmt.Errorf("scenario %q dependencies: %w", cfg.Scenario.Name, err)
 		}
 
 		scenarioDeps = depsMap
@@ -161,16 +161,16 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// Built before the supervisor, so an error a worker logs on its first
 	// tick also fails the run.
 	recorder := &runRecorder{
-		scenario:            cfg.ScenarioV2.Name,
-		expectedErrors:      cfg.ScenarioV2.ExpectedErrors,
-		expectedErrorCauses: cfg.ScenarioV2.ExpectedErrorCauses,
-		expectedWarnings:    cfg.ScenarioV2.ExpectedWarnings,
+		scenario:            cfg.Scenario.Name,
+		expectedErrors:      cfg.Scenario.ExpectedErrors,
+		expectedErrorCauses: cfg.Scenario.ExpectedErrorCauses,
+		expectedWarnings:    cfg.Scenario.ExpectedWarnings,
 	}
 	runLogger := &recordingLogger{FSMLogger: cfg.Logger, recorder: recorder}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:                      "scenariov2-" + cfg.ScenarioV2.Name,
-		Name:                    cfg.ScenarioV2.Name,
+		ID:                      "scenario-" + cfg.Scenario.Name,
+		Name:                    cfg.Scenario.Name,
 		Store:                   cfg.Store,
 		Logger:                  runLogger,
 		TickInterval:            cfg.TickInterval,
@@ -242,17 +242,17 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}()
 
 	client := fsmv2client.NewFSMv2Client(writer, cfg.Store)
-	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: runLogger, Dependencies: scenarioDeps, recorder: recorder}); err != nil {
-		return nil, scenarioFailed(cfg.ScenarioV2.Name, err)
+	if err := cfg.Scenario.Run(ctx, Env{Client: client, Logger: runLogger, Dependencies: scenarioDeps, recorder: recorder}); err != nil {
+		return nil, scenarioFailed(cfg.Scenario.Name, err)
 	}
 
 	// Checked again: a Run that swallows a failed wait must still fail.
 	if logged := recorder.loggedError(); logged != nil {
-		return nil, scenarioFailed(cfg.ScenarioV2.Name, logged)
+		return nil, scenarioFailed(cfg.Scenario.Name, logged)
 	}
 
 	cfg.Logger.Info("scenario_run_finished",
-		deps.String("scenario", cfg.ScenarioV2.Name))
+		deps.String("scenario", cfg.Scenario.Name))
 
 	teardownOwnedByGoroutine = true
 
@@ -286,7 +286,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		}
 
 		cfg.Logger.Info("v2_run_teardown_starting",
-			deps.String("scenario", cfg.ScenarioV2.Name),
+			deps.String("scenario", cfg.Scenario.Name),
 			deps.String("wake_reason", wakeReason))
 
 		teardown()
@@ -299,7 +299,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}()
 
 	// Shutdown waits for Done: returning earlier would let this run's late
-	// ClearGlobalDeps delete the key the next v2 run has just stored.
+	// ClearGlobalDeps delete the key the next run has just stored.
 	result.Shutdown = func() {
 		appSup.Shutdown()
 		<-done

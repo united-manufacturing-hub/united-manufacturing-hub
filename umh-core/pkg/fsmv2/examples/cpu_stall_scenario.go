@@ -25,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
-// CPUStallScenarioV2 drives the real CPU monitor over a fake machine whose
+// CPUStallScenario drives the real CPU monitor over a fake machine whose
 // cpu.stat read hangs mid-poll, and watches the reading go stale and then
 // recover, through the same GetFresh call the container monitor reads with.
 //
@@ -41,9 +41,9 @@ import (
 // data_stale, which every run allows; at 20 seconds it logs the timeout and
 // restart warnings this scenario does not expect. The stale wait ends at about
 // three seconds and the release step follows it at once.
-var CPUStallScenarioV2 = ScenarioV2{
+var CPUStallScenario = Scenario{
 	Name:        "cpu-stall",
-	Description: "Hangs the cpu.stat read mid-poll, and watches the reading go stale and then recover (v2)",
+	Description: "Hangs the cpu.stat read mid-poll, and watches the reading go stale and then recover",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		box := newTickingBox(fsmv2cpu.CgroupBase, cpuBlindMachine())

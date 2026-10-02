@@ -419,9 +419,9 @@ The shutdown flow:
 ## Writing a scenario
 
 A scenario runs the real supervisor and real workers against mocks, and checks
-what the store shows. It is a `ScenarioV2` registered in `RegistryV2`
-(`examples/scenariov2.go`), and `examples/registry_run_test.go` runs every
-registered one. The example to copy is `HelloworldScenarioV2` in
+what the store shows. It is a `Scenario` registered in `Registry`
+(`examples/env.go`), and `examples/registry_run_test.go` runs every
+registered one. The example to copy is `HelloworldScenario` in
 `examples/helloworld.go`.
 
 ### Mocks
@@ -464,14 +464,14 @@ Before each change, call `env.Step` with a short description of the change.
 After the change, call `env.WaitFor` with a check that reads the store through
 the client and returns what it saw. A check that has not seen the worker yet
 reports that it is not done. Each wait fails after `waitForTimeout`
-(`examples/scenariov2.go`). A check that ignores its context can hold the wait
+(`examples/env.go`). A check that ignores its context can hold the wait
 past that timeout.
 
 ### What fails a run
 
 A logged error is unexpected unless its message contains an entry of
 `ExpectedErrors` or of `alwaysAllowedMessages`, or its value carries a cause
-listed in `ExpectedErrorCauses` (`examples/scenariov2.go`). A
+listed in `ExpectedErrorCauses` (`examples/env.go`). A
 logged warning is checked the same way against `ExpectedWarnings`.
 
 `examples.Run` returns an error when `Run` returns one. It also returns an
@@ -497,7 +497,7 @@ go run ./pkg/fsmv2/cmd/runner --scenario=helloworld
 go test -tags=test -count=1 -v ./pkg/fsmv2/examples/ -ginkgo.focus="helloworld"
 ```
 
-A v2 scenario's runner stops one second after the scenario ends;
+A scenario's runner stops one second after the scenario ends;
 `--duration=0` keeps it running until Ctrl+C.
 
 ### Rules

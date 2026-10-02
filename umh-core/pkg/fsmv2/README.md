@@ -507,7 +507,7 @@ go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=10s
 go run pkg/fsmv2/cmd/runner/main.go --scenario=communicator --log-level=debug
 ```
 
-`--list` prints every scenario. Every scenario is a v2 scenario registered in `RegistryV2` or `LiveRegistryV2`.
+`--list` prints every scenario. Every scenario is registered in `Registry` or `LiveRegistry`.
 
 ### Unit tests
 
