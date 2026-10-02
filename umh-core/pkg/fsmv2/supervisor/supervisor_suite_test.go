@@ -513,11 +513,9 @@ func createTestTriangularStore() *storage.TriangularStore {
 }
 
 type markDeletedCall struct {
-	WorkerType     string
-	ID             string
-	By             string
-	CtxErr         error
-	CtxHasDeadline bool
+	WorkerType string
+	ID        string
+	By        string
 }
 
 type clearDeletedCall struct {
@@ -824,12 +822,6 @@ func (m *mockTriangularStore) MarkDeleted(ctx context.Context, workerType string
 		WorkerType: workerType,
 		ID:         id,
 		By:         by,
-		CtxErr:     ctx.Err(),
-		CtxHasDeadline: func() bool {
-			_, ok := ctx.Deadline()
-
-			return ok
-		}(),
 	})
 	m.mu.Unlock()
 

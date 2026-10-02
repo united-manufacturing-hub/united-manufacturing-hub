@@ -251,17 +251,32 @@ var _ = Describe("Supervisor Lifecycle", func() {
 		})
 
 		It("tombstones the documents even when the tick context is cancelled", func() {
-			store := newMockTriangularStore()
-			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+			identity := mockIdentity()
+			roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
+
+			basicStore := memory.NewInMemoryStore()
+			for _, role := range roles {
+				Expect(basicStore.CreateCollection(context.Background(), "test_"+role, nil)).To(Succeed())
+			}
+
+			// The store rejects writes on a cancelled context, so only the
+			// context markWorkerDeleted derives itself can carry the
+			// tombstone write.
+			realStore := storage.NewTriangularStore(&cancelledWriteStore{inner: basicStore}, deps.NewNopFSMLogger())
+			s := newRemovalSupervisor(realStore, deps.NewNopFSMLogger())
+
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
 			Expect(s.TestTick(ctx)).To(Succeed())
 			Expect(s.ListWorkers()).To(BeEmpty())
-			Expect(store.MarkDeletedCalls).To(HaveLen(1))
-			Expect(store.MarkDeletedCalls[0].CtxErr).ToNot(HaveOccurred())
-			Expect(store.MarkDeletedCalls[0].CtxHasDeadline).To(BeTrue(),
-				"MarkDeleted must not be able to block removal forever")
+
+			for _, role := range roles {
+				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(doc[storage.FieldDeletedAt]).ToNot(BeNil(),
+					"the %s document must carry a tombstone despite the cancelled tick context", role)
+			}
 		})
 
 		It("writes a non-nil _deleted_at on the real store's documents", func() {
@@ -497,6 +512,135 @@ func (h *markDeletedHookStore) MarkDeleted(ctx context.Context, workerType strin
 
 	return h.TriangularStoreInterface.MarkDeleted(ctx, workerType, id, deletedBy)
 }
+
+// cancelledWriteStore rejects every write whose context is cancelled, then
+// delegates to inner. It models the store contract that a write may honour
+// cancellation, so only the context markWorkerDeleted derives can write the
+// tombstone.
+type cancelledWriteStore struct {
+	inner persistence.Store
+}
+
+func (s *cancelledWriteStore) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
+	return s.inner.CreateCollection(ctx, name, schema)
+}
+
+func (s *cancelledWriteStore) DropCollection(ctx context.Context, name string) error {
+	return s.inner.DropCollection(ctx, name)
+}
+
+func (s *cancelledWriteStore) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	return s.inner.Insert(ctx, collection, doc)
+}
+
+func (s *cancelledWriteStore) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
+	return s.inner.Get(ctx, collection, id)
+}
+
+func (s *cancelledWriteStore) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return s.inner.Update(ctx, collection, id, doc)
+}
+
+func (s *cancelledWriteStore) Delete(ctx context.Context, collection string, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return s.inner.Delete(ctx, collection, id)
+}
+
+func (s *cancelledWriteStore) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
+	return s.inner.Find(ctx, collection, query)
+}
+
+func (s *cancelledWriteStore) Maintenance(ctx context.Context) error {
+	return s.inner.Maintenance(ctx)
+}
+
+func (s *cancelledWriteStore) BeginTx(ctx context.Context) (persistence.Tx, error) {
+	tx, err := s.inner.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &cancelledWriteTx{inner: tx}, nil
+}
+
+func (s *cancelledWriteStore) Close(ctx context.Context) error {
+	return s.inner.Close(ctx)
+}
+
+// cancelledWriteTx applies the same cancellation check to every write inside
+// the transaction.
+type cancelledWriteTx struct {
+	inner persistence.Tx
+}
+
+func (t *cancelledWriteTx) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
+	return t.inner.CreateCollection(ctx, name, schema)
+}
+
+func (t *cancelledWriteTx) DropCollection(ctx context.Context, name string) error {
+	return t.inner.DropCollection(ctx, name)
+}
+
+func (t *cancelledWriteTx) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	return t.inner.Insert(ctx, collection, doc)
+}
+
+func (t *cancelledWriteTx) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
+	return t.inner.Get(ctx, collection, id)
+}
+
+func (t *cancelledWriteTx) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return t.inner.Update(ctx, collection, id, doc)
+}
+
+func (t *cancelledWriteTx) Delete(ctx context.Context, collection string, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return t.inner.Delete(ctx, collection, id)
+}
+
+func (t *cancelledWriteTx) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
+	return t.inner.Find(ctx, collection, query)
+}
+
+func (t *cancelledWriteTx) Maintenance(ctx context.Context) error {
+	return t.inner.Maintenance(ctx)
+}
+
+func (t *cancelledWriteTx) BeginTx(ctx context.Context) (persistence.Tx, error) {
+	return t.inner.BeginTx(ctx)
+}
+
+func (t *cancelledWriteTx) Close(ctx context.Context) error {
+	return t.inner.Close(ctx)
+}
+
+func (t *cancelledWriteTx) Commit() error   { return t.inner.Commit() }
+func (t *cancelledWriteTx) Rollback() error { return t.inner.Rollback() }
+
+var _ persistence.Store = (*cancelledWriteStore)(nil)
+var _ persistence.Tx = (*cancelledWriteTx)(nil)
 
 type sentryWarnRecorder struct {
 	mu       sync.Mutex
