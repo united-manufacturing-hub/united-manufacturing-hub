@@ -246,7 +246,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 			warnings := logger.Warns()
 			Expect(warnings).To(HaveLen(1))
-			Expect(warnings[0].Msg).To(Equal("worker_tombstone_failed"))
+			Expect(warnings[0].Msg).To(Equal("worker_removal_tombstone_failed"))
 			Expect(warnings[0].Fields).To(ContainElement(deps.Field{Key: "target_worker_id", Value: mockIdentity().ID}))
 		})
 

@@ -113,7 +113,7 @@ func (ts *TriangularStore) editRoleDocuments(
 				continue
 			}
 
-			return fmt.Errorf("failed to load %s for %s/%s: %w", role, workerType, id, err)
+			return fmt.Errorf("failed to load %s: %w", role, err)
 		}
 
 		diff := edit(doc, at)

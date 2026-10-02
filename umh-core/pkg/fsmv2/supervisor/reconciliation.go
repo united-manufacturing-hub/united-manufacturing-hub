@@ -1177,7 +1177,7 @@ func (s *Supervisor[TObserved, TDesired]) tombstoneWorker(ctx context.Context, w
 	defer cancel()
 
 	if err := s.store.Tombstone(markCtx, s.workerType, workerID, "supervisor"); err != nil {
-		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_tombstone_failed",
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_removal_tombstone_failed",
 			deps.Err(err),
 			deps.String("target_worker_id", workerID))
 	}
