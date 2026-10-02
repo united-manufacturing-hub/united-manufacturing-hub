@@ -177,18 +177,19 @@ type Scenario struct {
 // Registry contains all available scenarios.
 // Add new scenarios here to make them available in both tests and CLI.
 var Registry = map[string]Scenario{
-	"helloworld":   HelloworldScenario,
-	"simple":       SimpleScenario,
-	"failing":      FailingScenario,
-	"panic":        PanicScenario,
-	"slow":         SlowScenario,
-	"cascade":      CascadeScenario,
-	"timeout":      TimeoutScenario,
-	"configerror":  ConfigErrorScenario,
-	"inheritance":  InheritanceScenario,
-	"communicator": CommunicatorScenarioEntry,
-	"concurrent":   ConcurrentScenario,
-	"persistence":  PersistenceScenarioEntry,
+	"helloworld":     HelloworldScenario,
+	"simple":         SimpleScenario,
+	"failing":        FailingScenario,
+	"panic":          PanicScenario,
+	"slow":           SlowScenario,
+	"cascade":        CascadeScenario,
+	"timeout":        TimeoutScenario,
+	"configerror":    ConfigErrorScenario,
+	"inheritance":    InheritanceScenario,
+	"communicator":   CommunicatorScenarioEntry,
+	"concurrent":     ConcurrentScenario,
+	"persistence":    PersistenceScenarioEntry,
+	"transport-load": TransportLoadScenarioEntry,
 }
 
 // CommunicatorScenarioEntry registers the communicator scenario for CLI access.
@@ -302,12 +303,16 @@ var PersistenceScenarioEntry = Scenario{
 
 // RunConfig configures how a scenario is executed.
 type RunConfig struct {
-	Store        storage.TriangularStoreInterface
-	Logger       deps.FSMLogger
-	Scenario     Scenario
-	ScenarioV2   ScenarioV2    // When Driver is set, Run takes the v2 kernel-only path
-	Duration     time.Duration // 0 means run forever (until context cancelled)
-	TickInterval time.Duration
+	Store      storage.TriangularStoreInterface
+	Logger     deps.FSMLogger
+	Scenario   Scenario
+	ScenarioV2 ScenarioV2 // When Driver is set, Run takes the v2 kernel-only path
+	// TransportLoad configures the offered load and the uplink rate for the
+	// transport-load scenario. Other scenarios ignore it. The zero value is a
+	// valid load; see TransportLoadConfig for what each field defaults to.
+	TransportLoad TransportLoadConfig
+	Duration      time.Duration // 0 means run forever (until context cancelled)
+	TickInterval  time.Duration
 	// GracefulShutdownTimeout is the per-level drain base propagated to the
 	// supervisor subtree. Zero falls back to the supervisor default (5s). A
 	// tiny value forces a degraded drain, which is how tests exercise the
