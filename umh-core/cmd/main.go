@@ -775,11 +775,7 @@ children:
 		fsmv2config.SetDependency(fsmv2Deps, certfetcher.CertHandlerKey, communicationState.Gatekeeper.CertificateHandler())
 	}
 
-	// The store is set only when memory cleanup is enabled, the only case that
-	// adds the persistence child to yamlConfig above.
-	if configData.Agent.UseFSMv2MemoryCleanup {
-		fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
-	}
+	fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
 
 	// Publish the dynamicchildren registry under the configworker deps key and
 	// the process-scoped fsmv2client before constructing the supervisor, so the
