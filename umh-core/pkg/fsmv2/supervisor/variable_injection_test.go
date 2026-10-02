@@ -15,7 +15,10 @@
 package supervisor_test
 
 import (
+	"bytes"
 	"context"
+	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
@@ -154,42 +158,14 @@ var _ = Describe("Variable Injection", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Describe("SetGlobalVariables", func() {
-		It("should store global variables correctly", func() {
-			globalVars := map[string]any{
-				"api_endpoint": "https://api.example.com",
-				"cluster_id":   "cluster-123",
-				"region":       "us-east-1",
-			}
-
-			s.SetGlobalVariables(globalVars)
-
-			// Note: We can't directly access s.globalVars as it's private,
-			// but we can verify it works by checking the injection during Tick()
-			// This test will fail until implementation is complete
-		})
-
-		It("should handle nil global variables", func() {
-			s.SetGlobalVariables(nil)
-
-			// Should not panic or error
-		})
-
-		It("should handle empty global variables map", func() {
-			s.SetGlobalVariables(map[string]any{})
-
-			// Should not panic or error
-		})
-	})
-
-	Describe("Global Variables Injection in Tick", func() {
-		It("should inject Global variables into userSpec.Variables.Global", func() {
+	Describe("Global variables in the spec", func() {
+		It("passes the Global variables in the supervisor's spec to DeriveDesiredState", func() {
 			globalVars := map[string]any{
 				"api_endpoint": "https://api.example.com",
 				"cluster_id":   "cluster-123",
 			}
 
-			s.SetGlobalVariables(globalVars)
+			s.TestUpdateUserSpec(config.UserSpec{Variables: config.VariableBundle{Global: globalVars}})
 
 			// Capture the userSpec passed to DeriveDesiredState
 			var capturedSpec config.UserSpec
@@ -202,12 +178,11 @@ var _ = Describe("Variable Injection", func() {
 			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify Global variables were injected
 			Expect(capturedSpec.Variables.Global).To(Equal(globalVars))
 		})
 
-		It("should inject empty Global map when no global variables set", func() {
-			// Don't call SetGlobalVariables, so globalVars should be nil or empty
+		It("passes no Global variables when the spec has none", func() {
+			s.TestUpdateUserSpec(config.UserSpec{})
 
 			var capturedSpec config.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
@@ -219,10 +194,7 @@ var _ = Describe("Variable Injection", func() {
 			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify Global variables are either nil or empty
-			if capturedSpec.Variables.Global != nil {
-				Expect(capturedSpec.Variables.Global).To(BeEmpty())
-			}
+			Expect(capturedSpec.Variables.Global).To(BeNil())
 		})
 	})
 
@@ -250,7 +222,7 @@ var _ = Describe("Variable Injection", func() {
 	})
 
 	Describe("Variable Inheritance from Parent to Child", func() {
-		It("should inherit parent User variables to child, with child vars overriding parent", func() {
+		It("should inherit parent User variables to child, and add the child's own", func() {
 			// Setup parent supervisor with User variables
 			parentUserVars := map[string]any{
 				"IP":   "192.168.1.100",
@@ -316,7 +288,7 @@ var _ = Describe("Variable Injection", func() {
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
 		})
 
-		It("should allow child User variables to override parent User variables", func() {
+		It("keeps the parent's User value when the child's spec sets the same key", func() {
 			// Setup parent supervisor with User variables
 			parentUserVars := map[string]any{
 				"IP":   "192.168.1.100",
@@ -331,11 +303,10 @@ var _ = Describe("Variable Injection", func() {
 
 			s.TestUpdateUserSpec(parentUserSpec)
 
-			// Create a child spec that overrides PORT
 			childUserSpec := config.UserSpec{
 				Variables: config.VariableBundle{
 					User: map[string]any{
-						"PORT":      503, // Override parent's PORT
+						"PORT":      503,
 						"DEVICE_ID": "child-device",
 					},
 				},
@@ -346,7 +317,7 @@ var _ = Describe("Variable Injection", func() {
 					BaseDesiredState: config.BaseDesiredState{},
 					ChildrenSpecs: []config.ChildSpec{
 						{
-							Name:       "override-child",
+							Name:       "same-key-child",
 							WorkerType: "test",
 							UserSpec:   childUserSpec,
 						},
@@ -358,15 +329,244 @@ var _ = Describe("Variable Injection", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			children := s.GetChildren()
-			Expect(children).To(HaveKey("override-child"))
+			Expect(children).To(HaveKey("same-key-child"))
 
-			child := children["override-child"]
+			child := children["same-key-child"]
 			capturedChildSpec := child.TestGetUserSpec()
 
-			// Verify: IP inherited, PORT overridden by child, DEVICE_ID from child
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
-			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("PORT", 503)) // Child's value
+			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("PORT", 502))
 			Expect(capturedChildSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
+		})
+	})
+
+	Describe("Variable conflicts", func() {
+		var logs *bytes.Buffer
+
+		BeforeEach(func() {
+			logs = &bytes.Buffer{}
+			s = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:   "test",
+				Store:        store,
+				Logger:       deps.NewJSONFSMLogger(logs, deps.LevelWarn),
+				TickInterval: 100 * time.Millisecond,
+			})
+			Expect(s.AddWorker(identity, testWorker)).To(Succeed())
+		})
+
+		conflictLines := func() []string {
+			var lines []string
+			for _, line := range strings.Split(logs.String(), "\n") {
+				if strings.Contains(line, `"msg":"child_variable_conflict"`) {
+					lines = append(lines, line)
+				}
+			}
+			return lines
+		}
+
+		// Each value is matched JSON-quoted, so a log line's timestamp
+		// cannot match a numeric value.
+		noValueInWarnings := func(values ...string) {
+			all := strings.Join(conflictLines(), "\n")
+			for _, value := range values {
+				Expect(all).NotTo(ContainSubstring(strconv.Quote(value)))
+			}
+		}
+
+		// tick re-derives only when the user-spec hash changes
+		// ("Result cached based on UserSpec hash" in supervisor/doc.go).
+		rederiveWithParentVars := func(user map[string]any) {
+			s.TestUpdateUserSpec(config.UserSpec{Variables: config.VariableBundle{User: user}})
+		}
+
+		emitChild := func(vars config.VariableBundle) {
+			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
+				return &config.DesiredState{
+					BaseDesiredState: config.BaseDesiredState{},
+					ChildrenSpecs: []config.ChildSpec{
+						{Name: "conflict-child", WorkerType: "test", UserSpec: config.UserSpec{Variables: vars}},
+					},
+				}, nil
+			}
+		}
+
+		It("warns once per child, namespace and key, not on every tick", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{
+					User:   map[string]any{"IP": "192.168.1.100", "PORT": 502},
+					Global: map[string]any{"cluster_id": "cluster-a"},
+				},
+			})
+			emitChild(config.VariableBundle{
+				User:   map[string]any{"PORT": 503, "DEVICE_ID": "child-device"},
+				Global: map[string]any{"cluster_id": "cluster-b"},
+			})
+
+			// Tick 1 adds the child; ticks 2 and 3 update it.
+			for range 3 {
+				Expect(s.TestTick(ctx)).To(Succeed())
+			}
+
+			lines := conflictLines()
+			Expect(lines).To(HaveLen(2), "one warning per (child, namespace, key), got:\n%s", logs.String())
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"child_name":"conflict-child"`),
+				ContainSubstring(`"namespace":"User"`),
+				ContainSubstring(`"key":"PORT"`),
+			)))
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"child_name":"conflict-child"`),
+				ContainSubstring(`"namespace":"Global"`),
+				ContainSubstring(`"key":"cluster_id"`),
+			)))
+			Expect(logs.String()).NotTo(ContainSubstring("cluster-b"), "the warning names the key, never a value")
+			Expect(logs.String()).NotTo(ContainSubstring("cluster-a"), "the warning names the key, never a value")
+			Expect(logs.String()).NotTo(ContainSubstring("192.168.1.100"), "the warning names the key, never a value")
+			noValueInWarnings("502", "503")
+
+			childSpec := s.GetChildren()["conflict-child"].TestGetUserSpec()
+			Expect(childSpec.Variables.User).To(HaveKeyWithValue("PORT", 502))
+			Expect(childSpec.Variables.Global).To(HaveKeyWithValue("cluster_id", "cluster-a"))
+		})
+
+		It("does not warn when the child only adds keys", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"IP": "192.168.1.100"}},
+			})
+			emitChild(config.VariableBundle{User: map[string]any{"DEVICE_ID": "child-device"}})
+
+			for range 3 {
+				Expect(s.TestTick(ctx)).To(Succeed())
+			}
+
+			childSpec := s.GetChildren()["conflict-child"].TestGetUserSpec()
+			Expect(childSpec.Variables.User).To(HaveKeyWithValue("IP", "192.168.1.100"),
+				"the child must exist, or an empty conflictLines() proves nothing")
+			Expect(childSpec.Variables.User).To(HaveKeyWithValue("DEVICE_ID", "child-device"))
+
+			Expect(conflictLines()).To(BeEmpty())
+			Expect(logs.String()).NotTo(ContainSubstring("child-device"))
+			Expect(logs.String()).NotTo(ContainSubstring("192.168.1.100"))
+		})
+
+		It("warns for each child that sets the key", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502}},
+			})
+			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
+				return &config.DesiredState{
+					BaseDesiredState: config.BaseDesiredState{},
+					ChildrenSpecs: []config.ChildSpec{
+						{Name: "child-a", WorkerType: "test", UserSpec: config.UserSpec{Variables: config.VariableBundle{User: map[string]any{"PORT": 503}}}},
+						{Name: "child-b", WorkerType: "test", UserSpec: config.UserSpec{Variables: config.VariableBundle{User: map[string]any{"PORT": 504}}}},
+					},
+				}, nil
+			}
+
+			for range 3 {
+				Expect(s.TestTick(ctx)).To(Succeed())
+			}
+
+			lines := conflictLines()
+			Expect(lines).To(HaveLen(2))
+			Expect(lines).To(ContainElement(ContainSubstring(`"child_name":"child-a"`)))
+			Expect(lines).To(ContainElement(ContainSubstring(`"child_name":"child-b"`)))
+			noValueInWarnings("502", "503", "504")
+		})
+
+		It("warns when a child's spec first sets the key on a later tick", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502}},
+			})
+			emitChild(config.VariableBundle{User: map[string]any{"DEVICE_ID": "d"}})
+			Expect(s.TestTick(ctx)).To(Succeed())
+			Expect(conflictLines()).To(BeEmpty())
+
+			emitChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
+			rederiveWithParentVars(map[string]any{"PORT": 502, "IP": "10.0.0.1"})
+			Expect(s.TestTick(ctx)).To(Succeed())
+			Expect(s.TestTick(ctx)).To(Succeed())
+
+			Expect(conflictLines()).To(HaveLen(1))
+			noValueInWarnings("502", "503", "10.0.0.1")
+		})
+
+		It("warns once per namespace for the same key", func() {
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{
+					User:   map[string]any{"PORT": 502},
+					Global: map[string]any{"PORT": 502},
+				},
+			})
+			emitChild(config.VariableBundle{
+				User:   map[string]any{"PORT": 503},
+				Global: map[string]any{"PORT": 503},
+			})
+
+			Expect(s.TestTick(ctx)).To(Succeed())
+
+			lines := conflictLines()
+			Expect(lines).To(HaveLen(2), "one warning per (child, namespace, key), got:\n%s", logs.String())
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"namespace":"User"`),
+				ContainSubstring(`"key":"PORT"`),
+			)))
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"namespace":"Global"`),
+				ContainSubstring(`"key":"PORT"`),
+			)))
+			noValueInWarnings("502", "503")
+		})
+
+		It("does not warn again when a removed child is re-added with the same conflict", func() {
+			const removableType = "variable_conflict_child"
+			_ = factory.RegisterFactoryByType(removableType, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				return &supervisor.TestWorkerWithType{
+					Worker:     supervisor.TestWorker{InitialState: shutdownHonoringState{}},
+					WorkerType: removableType,
+				}
+			})
+			_ = factory.RegisterSupervisorFactoryByType(removableType, func(cfg interface{}) interface{} {
+				return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg.(supervisor.Config))
+			})
+
+			deriveChild := func(vars config.VariableBundle) {
+				testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
+					return &config.DesiredState{
+						BaseDesiredState: config.BaseDesiredState{},
+						ChildrenSpecs: []config.ChildSpec{
+							{Name: "conflict-child", WorkerType: removableType, UserSpec: config.UserSpec{Variables: vars}},
+						},
+					}, nil
+				}
+			}
+			deriveNoChild := func() {
+				testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
+					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
+				}
+			}
+
+			s.TestUpdateUserSpec(config.UserSpec{
+				Variables: config.VariableBundle{User: map[string]any{"PORT": 502}},
+			})
+			deriveChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
+			Expect(s.TestTick(ctx)).To(Succeed())
+			Expect(conflictLines()).To(HaveLen(1))
+
+			deriveNoChild()
+			rederiveWithParentVars(map[string]any{"PORT": 502, "IP": "10.0.0.1"})
+			Eventually(func() bool {
+				Expect(s.TestTick(ctx)).To(Succeed())
+				_, exists := s.GetChildren()["conflict-child"]
+				return !exists
+			}, 10*time.Second).Should(BeTrue())
+
+			deriveChild(config.VariableBundle{User: map[string]any{"PORT": 503}})
+			rederiveWithParentVars(map[string]any{"PORT": 502, "IP": "10.0.0.2"})
+			Expect(s.TestTick(ctx)).To(Succeed())
+
+			Expect(conflictLines()).To(HaveLen(1))
+			noValueInWarnings("502", "503")
 		})
 	})
 
@@ -379,18 +579,18 @@ var _ = Describe("Variable Injection", func() {
 				"PORT": float64(502),
 			}
 
+			globalVars := map[string]any{
+				"api_endpoint": "https://api.example.com",
+			}
+
 			userSpec := config.UserSpec{
 				Variables: config.VariableBundle{
-					User: existingUserVars,
+					User:   existingUserVars,
+					Global: globalVars,
 				},
 			}
 
 			s.TestUpdateUserSpec(userSpec)
-
-			globalVars := map[string]any{
-				"api_endpoint": "https://api.example.com",
-			}
-			s.SetGlobalVariables(globalVars)
 
 			var capturedSpec config.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
@@ -405,7 +605,6 @@ var _ = Describe("Variable Injection", func() {
 			// Verify User variables were preserved
 			Expect(capturedSpec.Variables.User).To(Equal(existingUserVars))
 
-			// Verify Global variables were added
 			Expect(capturedSpec.Variables.Global).To(Equal(globalVars))
 
 			// Verify Internal variables were added
@@ -416,11 +615,6 @@ var _ = Describe("Variable Injection", func() {
 			// userSpec with no Variables set
 			userSpec := config.UserSpec{}
 			s.TestUpdateUserSpec(userSpec)
-
-			globalVars := map[string]any{
-				"api_endpoint": "https://api.example.com",
-			}
-			s.SetGlobalVariables(globalVars)
 
 			var capturedSpec config.UserSpec
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
@@ -433,7 +627,8 @@ var _ = Describe("Variable Injection", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Should not panic, variables should be initialized
-			Expect(capturedSpec.Variables.Global).To(Equal(globalVars))
+			Expect(capturedSpec.Variables.User).ToNot(BeNil())
+			Expect(capturedSpec.Variables.Global).To(BeNil())
 			Expect(capturedSpec.Variables.Internal).ToNot(BeNil())
 		})
 	})

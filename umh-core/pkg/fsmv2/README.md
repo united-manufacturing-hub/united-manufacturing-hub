@@ -429,7 +429,7 @@ Developers implement business logic; the supervisor handles:
 
 Three namespaces, flattened for templates:
 - **User**: `{{ .IP }}`, `{{ .PORT }}` (from connection config)
-- **Global**: `{{ .global.api_endpoint }}` (fleet-wide settings)
+- **Global**: `{{ .global.api_endpoint }}` (settings a spec passes to every worker below it)
 - **Internal**: `{{ .internal.id }}` (runtime-only, not persisted)
 - **Location**: `{{ .location_path }}` (computed from ISA-95 hierarchy)
 

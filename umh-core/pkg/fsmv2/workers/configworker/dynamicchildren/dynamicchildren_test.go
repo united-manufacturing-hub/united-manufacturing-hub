@@ -317,3 +317,51 @@ func TestUpsertRejectsNameReuseAcrossWorkerTypes(t *testing.T) {
 		t.Fatalf("idempotent re-Upsert of held ref returned error: %v", err)
 	}
 }
+
+func TestSetVariablesStoresAndReturnsCopies(t *testing.T) {
+	w := NewWriter()
+
+	if got := w.Registry().Variables(); len(got.User) > 0 || len(got.Global) > 0 {
+		t.Fatalf("new writer's Variables() = %+v, want no User and no Global keys", got)
+	}
+
+	vars := config.VariableBundle{
+		User:   map[string]any{"IP": "10.0.0.1"},
+		Global: map[string]any{"cluster_id": "c1"},
+	}
+	w.SetVariables(vars)
+	vars.User["IP"] = "changed-by-caller"
+
+	got := w.Registry().Variables()
+	if got.User["IP"] != "10.0.0.1" {
+		t.Errorf("User[IP] = %v, want 10.0.0.1 after the caller mutated its own map", got.User["IP"])
+	}
+	if got.Global["cluster_id"] != "c1" {
+		t.Errorf("Global[cluster_id] = %v, want c1", got.Global["cluster_id"])
+	}
+
+	got.User["IP"] = "changed-by-reader"
+	if again := w.Registry().Variables(); again.User["IP"] != "10.0.0.1" {
+		t.Errorf("User[IP] = %v on second read, want 10.0.0.1: Variables() must return a copy", again.User["IP"])
+	}
+}
+
+func TestSetVariablesReplacesTheBundle(t *testing.T) {
+	w := NewWriter()
+	w.SetVariables(config.VariableBundle{
+		User:   map[string]any{"IP": "10.0.0.1"},
+		Global: map[string]any{"cluster_id": "c1"},
+	})
+
+	w.SetVariables(config.VariableBundle{User: map[string]any{"PORT": "502"}})
+	replaced := w.Registry().Variables()
+	if _, ok := replaced.User["IP"]; ok {
+		t.Errorf("User still holds IP after the second SetVariables, want the bundle replaced")
+	}
+	if replaced.User["PORT"] != "502" {
+		t.Errorf("User[PORT] = %v, want 502", replaced.User["PORT"])
+	}
+	if len(replaced.Global) > 0 {
+		t.Errorf("Global = %v after the second SetVariables, want empty", replaced.Global)
+	}
+}

@@ -507,7 +507,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 //   - Non-blocking: health check completes in <1ms
 //
 // PHASE 0.5: Variable Injection (from Phase 0.5)
-//   - Global variables from management system (configuration)
+//   - Global variables: see "Phase 0.5: Variable injection" in doc.go
 //   - Internal variables (supervisorID, createdAt, bridgedBy)
 //   - User variables from UserSpec (preserved, not overwritten)
 //   - Variables available for template expansion in DeriveDesiredState
@@ -722,21 +722,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		userSpecWithVars.Variables.User = make(map[string]any)
 	}
 
-	// Deep copy globalVars to prevent race with SetGlobalVariables().
-	// The map reference could be replaced while we use it for template expansion.
-	s.mu.RLock()
-
-	globalVarsCopy := make(map[string]any, len(s.globalVars))
-	for k, v := range s.globalVars {
-		globalVarsCopy[k] = v
-	}
-
-	globalVarCount := len(globalVarsCopy)
-
-	s.mu.RUnlock()
-
-	userSpecWithVars.Variables.Global = globalVarsCopy
-
 	userSpecWithVars.Variables.Internal = map[string]any{
 		FieldID:                firstWorkerID,
 		storage.FieldCreatedAt: s.createdAt,
@@ -747,7 +732,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// Per-tick log moved to TRACE for scalability
 	s.logTrace("variables_propagated",
 		deps.Int("user_vars", userVarCount),
-		deps.Int("global_vars", globalVarCount))
+		deps.Int("global_vars", len(userSpecWithVars.Variables.Global)))
 	metrics.RecordVariablePropagation(s.GetHierarchyPathUnlocked())
 
 	// PHASE 0: Hierarchical Composition
@@ -1442,6 +1427,30 @@ func (s *Supervisor[TObserved, TDesired]) getEscalationSteps(childName string) s
 	return "1) Check component logs 2) Verify network connectivity 3) Restart component manually"
 }
 
+// mergeChildVariables merges the supervisor's variables into childVars and
+// warns once about each key whose value it drops. The warning never names a
+// value: variables can hold credentials. The caller holds s.mu.
+func (s *Supervisor[TObserved, TDesired]) mergeChildVariables(childName string, childVars config.VariableBundle) config.VariableBundle {
+	result := config.MergeWithConflicts(s.userSpec.Variables, childVars)
+
+	for _, c := range result.Conflicts {
+		id := config.ChildVariableConflict{Child: childName, Namespace: c.Namespace, Key: c.Key}
+		if _, done := s.warnedConflicts[id]; done {
+			continue
+		}
+
+		s.warnedConflicts[id] = struct{}{}
+		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_variable_conflict",
+			deps.String("child_name", childName),
+			deps.String("namespace", c.Namespace),
+			deps.String("key", c.Key),
+			deps.String("resolution", "parent"),
+			deps.String("remedy", "the parent's value wins; remove the key from the child's spec or the parent's spec"))
+	}
+
+	return result.Bundle
+}
+
 func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.ChildSpec) error {
 	startTime := time.Now()
 
@@ -1469,10 +1478,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				delete(s.pendingRemoval, spec.Name)
 			}
 
-			// Merge parent User variables with child's (child overrides parent)
-			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec
-			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
+			childUserSpec.Variables = s.mergeChildVariables(spec.Name, spec.UserSpec.Variables)
 			child.updateUserSpec(childUserSpec)
 
 			updatedCount++
@@ -1532,10 +1539,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				continue
 			}
 
-			// Merge parent User variables with child's (child overrides parent)
-			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
 			childUserSpec := spec.UserSpec
-			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
+			childUserSpec.Variables = s.mergeChildVariables(spec.Name, spec.UserSpec.Variables)
 			childSupervisor.updateUserSpec(childUserSpec)
 			childSupervisor.setParent(s, s.workerType)
 

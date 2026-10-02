@@ -143,7 +143,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	logger              deps.FSMLogger
 	baseLogger          deps.FSMLogger // Un-enriched logger for child supervisors
 	workers             map[string]*WorkerContext[TObserved, TDesired]
-	// mu Protects access to workers map, children, and globalVars.
+	// mu Protects the fields listed under "Supervisor-level locking" in doc.go,
+	// including the workers map and the children map.
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
 	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
@@ -158,7 +159,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	pendingRemoval     map[string]bool
 	pendingRestart     map[string]bool
 	restartRequestedAt map[string]time.Time
-	globalVars         map[string]any
+	warnedConflicts    map[config.ChildVariableConflict]struct{}
 	healthChecker      *InfrastructureHealthChecker
 	panicTracker       *panicRecovery
 	actionExecutor     *execution.ActionExecutor
@@ -300,6 +301,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		pendingRemoval:     make(map[string]bool),
 		pendingRestart:     make(map[string]bool),
 		restartRequestedAt: make(map[string]time.Time),
+		warnedConflicts:    make(map[config.ChildVariableConflict]struct{}),
 		createdAt:          time.Now(),
 		parentID:           "",
 		healthChecker:      NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),

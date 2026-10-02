@@ -20,28 +20,7 @@ Custom dependencies (e.g., `Transport`, `ConnectionPool`, channels) can be added
 
 ## Global Variables Flow
 
-```text
-SetGlobalVariables(vars)
-        │
-        ▼
-   Supervisor
-        │
-        ├── stores in s.globalVars
-        │
-        ▼
-  DeriveDesiredState(spec)
-        │
-        ├── spec.Variables.Global = s.globalVars
-        │
-        ▼
-     Worker
-        │
-        └── RenderConfigTemplate(config, variables)
-                │
-                └── {{ .global.cluster_id }} → "abc-123"
-```
-
-Global variables are fleet-wide settings injected by the supervisor before `DeriveDesiredState()` is called. Workers access them via template expansion in their config.
+Global variables arrive on a spec's `VariableBundle` (`config/variables.go`). Two places can set them, and no production code uses either today. One is a `children:` entry in the application's YAML, through `userSpec.variables.global`. The other is the dynamic-children registry, through `Writer.SetVariables`. The application worker merges the registry's bundle into every child it renders (`renderUnion`). Each supervisor then merges its own bundle into its children's specs (`mergeChildVariables`). The supervisor's tick passes the values to its worker unchanged, and the worker reads them as `{{ .global.<key> }}`.
 
 ## StateReader Examples
 

@@ -15,7 +15,10 @@
 package application
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -26,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
 
 // Compile-time interface verification.
@@ -59,7 +63,7 @@ var _ = Describe("ApplicationWorker", func() {
 		It("reports the registry as unconfigured when nothing is published under the config worker's key", func() {
 			// Negative wiring test: when no registry is published under
 			// configworker.WorkerTypeName, the collector must not panic and must
-			// report dynamic spawning as off, leaving declared children untouched.
+			// report dynamic spawning as off, leaving own children untouched.
 			register.ClearGlobalDeps(configworker.WorkerTypeName)
 			DeferCleanup(func() { register.ClearGlobalDeps(configworker.WorkerTypeName) })
 
@@ -84,6 +88,171 @@ children:
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.ChildrenSpecs).To(HaveLen(1))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("declared-1"))
+		})
+	})
+
+	Describe("CollectObservedState with the registry's variable bundle", func() {
+		var w *dynamicchildren.Writer
+
+		BeforeEach(func() {
+			w = dynamicchildren.NewWriter()
+			register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, w.Registry())
+			DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+		})
+
+		collectStatus := func() snapshot.ApplicationStatus {
+			obs, err := worker.CollectObservedState(context.Background(), nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			return obs.(fsmv2.Observation[snapshot.ApplicationStatus]).Status
+		}
+
+		It("reports the variable bundle the registry holds", func() {
+			vars := config.VariableBundle{
+				User:   map[string]any{"IP": "10.0.0.1"},
+				Global: map[string]any{"cluster_id": "c1"},
+			}
+			w.SetVariables(vars)
+
+			status := collectStatus()
+			Expect(status.Variables).NotTo(BeNil())
+			Expect(*status.Variables).To(Equal(vars))
+		})
+
+		It("leaves Variables out of the observation when the registry holds none", func() {
+			status := collectStatus()
+			Expect(status.RegistryConfigured).To(BeTrue())
+			Expect(status.Variables).To(BeNil())
+
+			// A dynamic child's spec also serialises a "variables" key, so the
+			// check must look at the observation's own top-level keys.
+			raw, err := json.Marshal(status)
+			Expect(err).ToNot(HaveOccurred())
+
+			var m map[string]any
+			Expect(json.Unmarshal(raw, &m)).To(Succeed())
+			Expect(m).NotTo(HaveKey("variables"))
+		})
+	})
+
+	Describe("Registry variables that an own child also sets", func() {
+		var logs *bytes.Buffer
+
+		var w *dynamicchildren.Writer
+
+		BeforeEach(func() {
+			logs = &bytes.Buffer{}
+			worker = NewApplicationWorker(deps.Identity{
+				ID:         "root-1",
+				Name:       "test-root",
+				WorkerType: workerType,
+			}, deps.NewJSONFSMLogger(logs, deps.LevelWarn), nil)
+
+			w = dynamicchildren.NewWriter()
+			register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, w.Registry())
+			DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+		})
+
+		conflictLines := func() []string {
+			var lines []string
+
+			for _, line := range strings.Split(logs.String(), "\n") {
+				if strings.Contains(line, `"msg":"registry_variable_overrides_child"`) {
+					lines = append(lines, line)
+				}
+			}
+
+			return lines
+		}
+
+		ownChild := func(name string, vars config.VariableBundle) config.ChildSpec {
+			return config.ChildSpec{
+				Name:       name,
+				WorkerType: "communicator",
+				Enabled:    true,
+				UserSpec:   config.UserSpec{Variables: vars},
+			}
+		}
+
+		collectWith := func(children ...config.ChildSpec) {
+			desired := &fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]{ChildrenSpecs: children}
+
+			for range 3 {
+				_, err := worker.CollectObservedState(context.Background(), desired)
+				Expect(err).ToNot(HaveOccurred())
+			}
+		}
+
+		It("warns once per own child, namespace and key", func() {
+			w.SetVariables(config.VariableBundle{
+				User:   map[string]any{"IP": "10.0.0.1"},
+				Global: map[string]any{"cluster_id": "cluster-from-registry"},
+			})
+			collectWith(ownChild("own-child", config.VariableBundle{
+				User:   map[string]any{"IP": "ip-from-yaml", "SLOT": "3"},
+				Global: map[string]any{"cluster_id": "cluster-from-yaml"},
+			}))
+
+			lines := conflictLines()
+			Expect(lines).To(HaveLen(2), "one warning per (child, namespace, key), got:\n%s", logs.String())
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"child_name":"own-child"`),
+				ContainSubstring(`"namespace":"User"`),
+				ContainSubstring(`"key":"IP"`),
+			)))
+			Expect(lines).To(ContainElement(And(
+				ContainSubstring(`"child_name":"own-child"`),
+				ContainSubstring(`"namespace":"Global"`),
+				ContainSubstring(`"key":"cluster_id"`),
+			)))
+			Expect(logs.String()).NotTo(ContainSubstring("from-yaml"), "the warning names the key, never a value")
+			Expect(logs.String()).NotTo(ContainSubstring("from-registry"), "the warning names the key, never a value")
+		})
+
+		It("does not warn when an own child only adds keys", func() {
+			w.SetVariables(config.VariableBundle{User: map[string]any{"IP": "10.0.0.1"}})
+			collectWith(ownChild("own-child", config.VariableBundle{User: map[string]any{"SLOT": "3"}}))
+
+			Expect(conflictLines()).To(BeEmpty())
+		})
+
+		It("warns for each own child that sets the key", func() {
+			w.SetVariables(config.VariableBundle{User: map[string]any{"IP": "10.0.0.1"}})
+			collectWith(
+				ownChild("child-a", config.VariableBundle{User: map[string]any{"IP": "a"}}),
+				ownChild("child-b", config.VariableBundle{User: map[string]any{"IP": "b"}}),
+			)
+
+			lines := conflictLines()
+			Expect(lines).To(HaveLen(2), "one warning per (child, namespace, key), got:\n%s", logs.String())
+			Expect(lines).To(ContainElement(ContainSubstring(`"child_name":"child-a"`)))
+			Expect(lines).To(ContainElement(ContainSubstring(`"child_name":"child-b"`)))
+		})
+
+		It("warns separately for the same key in User and in Global", func() {
+			w.SetVariables(config.VariableBundle{User: map[string]any{"IP": "u"}, Global: map[string]any{"IP": "g"}})
+			collectWith(ownChild("own-child", config.VariableBundle{User: map[string]any{"IP": "a"}, Global: map[string]any{"IP": "b"}}))
+
+			Expect(conflictLines()).To(HaveLen(2), "got:\n%s", logs.String())
+		})
+
+		It("warns about a conflict that appears after an earlier one", func() {
+			w.SetVariables(config.VariableBundle{User: map[string]any{"IP": "10.0.0.1"}})
+			a := ownChild("child-a", config.VariableBundle{User: map[string]any{"IP": "a"}})
+			collectWith(a)
+			collectWith(a, ownChild("child-b", config.VariableBundle{User: map[string]any{"IP": "b"}}))
+
+			Expect(conflictLines()).To(HaveLen(2), "got:\n%s", logs.String())
+		})
+
+		It("does not warn again for a child that is removed and added back", func() {
+			w.SetVariables(config.VariableBundle{User: map[string]any{"IP": "10.0.0.1"}})
+			a := ownChild("child-a", config.VariableBundle{User: map[string]any{"IP": "a"}})
+			collectWith(a)
+			collectWith()
+			collectWith(a)
+
+			Expect(conflictLines()).To(HaveLen(1), "got:\n%s", logs.String())
 		})
 	})
 

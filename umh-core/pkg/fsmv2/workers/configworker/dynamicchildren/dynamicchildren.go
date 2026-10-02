@@ -37,12 +37,22 @@ type Ref struct {
 	Name       string `json:"name"`
 }
 
-// Registry holds the child specs recorded by Upsert, keyed by Ref. Upsert and
-// Delete are the only writers; readers go through Lookup or Snapshot, which
-// return copies so no caller can mutate the stored specs.
+// Registry holds the child specs recorded by Upsert, keyed by Ref, and the
+// variable bundle recorded by SetVariables. Upsert and Delete are the only
+// spec writers; every read accessor returns a copy, so no caller can mutate
+// the stored state.
 type Registry struct {
 	specs map[Ref]config.ChildSpec
+	vars  config.VariableBundle
 	mu    sync.RWMutex
+}
+
+// Variables returns a copy of the variable bundle recorded by SetVariables.
+func (r *Registry) Variables() config.VariableBundle {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return r.vars.Clone()
 }
 
 // Lookup returns a copy of the spec recorded for ref, and whether it exists.
@@ -180,6 +190,15 @@ func (w *Writer) Upsert(ref Ref, cfg map[string]any) error {
 
 	w.registry.specs[ref] = spec
 	return nil
+}
+
+// SetVariables replaces the variable bundle every child of the application
+// receives, and stores a copy.
+func (w *Writer) SetVariables(vars config.VariableBundle) {
+	w.registry.mu.Lock()
+	defer w.registry.mu.Unlock()
+
+	w.registry.vars = vars.Clone()
 }
 
 // Delete removes the child spec recorded for ref from the shared registry.

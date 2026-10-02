@@ -378,7 +378,7 @@ global:
 			Expect(result.User).To(HaveKeyWithValue("TIMEOUT", 5000))
 		})
 
-		It("should override parent User variables when child has same keys", func() {
+		It("keeps the parent's User value when the child's spec sets the same key", func() {
 			parent := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "10.0.0.1",
@@ -387,16 +387,35 @@ global:
 			}
 			child := config.VariableBundle{
 				User: map[string]any{
-					"PORT":      503, // Override parent PORT
+					"PORT":      503,
 					"DEVICE_ID": "plc-01",
 				},
 			}
 
 			result := config.Merge(parent, child)
 
-			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))      // From parent
-			Expect(result.User).To(HaveKeyWithValue("PORT", 503))           // Child overrides parent
-			Expect(result.User).To(HaveKeyWithValue("DEVICE_ID", "plc-01")) // From child
+			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))
+			Expect(result.User).To(HaveKeyWithValue("PORT", 502))
+			Expect(result.User).To(HaveKeyWithValue("DEVICE_ID", "plc-01"))
+		})
+
+		It("keeps the parent's Global value when the child's spec sets the same key", func() {
+			parent := config.VariableBundle{
+				Global: map[string]any{
+					"api_endpoint": "https://api.example.com",
+				},
+			}
+			child := config.VariableBundle{
+				Global: map[string]any{
+					"api_endpoint": "https://api.other.com",
+					"cluster_id":   "prod-cluster",
+				},
+			}
+
+			result := config.Merge(parent, child)
+
+			Expect(result.Global).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
+			Expect(result.Global).To(HaveKeyWithValue("cluster_id", "prod-cluster"))
 		})
 
 		It("should handle nil parent User map gracefully", func() {
@@ -473,12 +492,9 @@ global:
 
 			result := config.Merge(parent, child)
 
-			// User variables should be merged (child overrides parent)
 			Expect(result.User).To(HaveKeyWithValue("IP", "10.0.0.1"))
 			Expect(result.User).To(HaveKeyWithValue("PORT", 502))
 
-			// Global variables should be merged (child overrides parent)
-			// Fleet-wide settings should propagate from parent to child
 			Expect(result.Global).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
 			Expect(result.Global).To(HaveKeyWithValue("cluster_id", "prod-cluster"))
 
@@ -488,8 +504,8 @@ global:
 		})
 	})
 
-	Describe("MergeWithOverrides", func() {
-		It("should detect when child User variables override parent User variables", func() {
+	Describe("MergeWithConflicts", func() {
+		It("reports a User key the child's spec sets and the parent holds", func() {
 			parent := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "10.0.0.1",
@@ -498,44 +514,45 @@ global:
 			}
 			child := config.VariableBundle{
 				User: map[string]any{
-					"PORT": 503, // Override
+					"PORT": 503,
 				},
 			}
 
-			result := config.MergeWithOverrides(parent, child)
+			result := config.MergeWithConflicts(parent, child)
 
-			// Should have one override
-			Expect(result.Overrides).To(HaveLen(1))
-			Expect(result.Overrides[0].Namespace).To(Equal("User"))
-			Expect(result.Overrides[0].Key).To(Equal("PORT"))
-			Expect(result.Overrides[0].OldValue).To(Equal(502))
-			Expect(result.Overrides[0].NewValue).To(Equal(503))
+			Expect(result.Conflicts).To(ConsistOf(config.VariableConflict{
+				Namespace:   "User",
+				Key:         "PORT",
+				ParentValue: 502,
+				ChildValue:  503,
+			}))
+			Expect(result.Bundle.User).To(HaveKeyWithValue("PORT", 502))
 		})
 
-		It("should detect when child Global variables override parent Global variables", func() {
+		It("reports a Global key the child's spec sets and the parent holds", func() {
 			parent := config.VariableBundle{
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
-					"cluster_id":   "prod-cluster",
 				},
 			}
 			child := config.VariableBundle{
 				Global: map[string]any{
-					"api_endpoint": "https://api.other.com", // Override
+					"api_endpoint": "https://api.other.com",
 				},
 			}
 
-			result := config.MergeWithOverrides(parent, child)
+			result := config.MergeWithConflicts(parent, child)
 
-			// Should have one override
-			Expect(result.Overrides).To(HaveLen(1))
-			Expect(result.Overrides[0].Namespace).To(Equal("Global"))
-			Expect(result.Overrides[0].Key).To(Equal("api_endpoint"))
-			Expect(result.Overrides[0].OldValue).To(Equal("https://api.example.com"))
-			Expect(result.Overrides[0].NewValue).To(Equal("https://api.other.com"))
+			Expect(result.Conflicts).To(ConsistOf(config.VariableConflict{
+				Namespace:   "Global",
+				Key:         "api_endpoint",
+				ParentValue: "https://api.example.com",
+				ChildValue:  "https://api.other.com",
+			}))
+			Expect(result.Bundle.Global).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
 		})
 
-		It("should return empty overrides when no conflicts exist", func() {
+		It("reports no conflicts when the child only adds keys", func() {
 			parent := config.VariableBundle{
 				User: map[string]any{"IP": "10.0.0.1"},
 			}
@@ -543,9 +560,31 @@ global:
 				User: map[string]any{"PORT": 502},
 			}
 
-			result := config.MergeWithOverrides(parent, child)
+			result := config.MergeWithConflicts(parent, child)
 
-			Expect(result.Overrides).To(BeEmpty())
+			Expect(result.Conflicts).To(BeEmpty())
+		})
+
+		It("reports a key both hold even when the values are equal", func() {
+			parent := config.VariableBundle{
+				User: map[string]any{
+					"PORT": 502,
+				},
+			}
+			child := config.VariableBundle{
+				User: map[string]any{
+					"PORT": 502,
+				},
+			}
+
+			result := config.MergeWithConflicts(parent, child)
+
+			Expect(result.Conflicts).To(ConsistOf(config.VariableConflict{
+				Namespace:   "User",
+				Key:         "PORT",
+				ParentValue: 502,
+				ChildValue:  502,
+			}))
 		})
 	})
 

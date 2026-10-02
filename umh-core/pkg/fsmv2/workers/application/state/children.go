@@ -29,7 +29,7 @@ const kernelWorkerType = "configworker"
 
 // renderUnion builds the additive union of the config-worker kernel (only when
 // the registry is configured), the registry's dynamic children, and the worker's
-// own declared children. Specs are deduped by Name with the FIRST occurrence
+// own children. Specs are deduped by Name with the FIRST occurrence
 // winning, so the emit order encodes the Name-collision precedence
 // kernel > registry > own: a kernel or registry child can never be shadowed by a
 // same-named own child.
@@ -43,6 +43,9 @@ const kernelWorkerType = "configworker"
 // stored Enabled=false. If disabled-but-resident dynamic children ever become a
 // real need, honor snap.Status.DynamicChildren's Enabled here instead of
 // overwriting it.
+//
+// Every emitted child also gets the registry's variable bundle, and the
+// registry's value wins over a key an own child sets.
 func renderUnion(snap fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]) []config.ChildSpec {
 	union := make([]config.ChildSpec, 0, 1+len(snap.Status.DynamicChildren)+len(snap.ChildrenSpecs))
 
@@ -68,6 +71,11 @@ func renderUnion(snap fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.
 		}
 		seen[spec.Name] = struct{}{}
 		spec.Enabled = true
+
+		if snap.Status.Variables != nil {
+			spec.UserSpec.Variables = config.Merge(*snap.Status.Variables, spec.UserSpec.Variables)
+		}
+
 		deduped = append(deduped, spec)
 	}
 
