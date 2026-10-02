@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
@@ -53,7 +54,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 		}
 	})
 
-	Context("IsResourceLimited - Resource Blocking Decision Tree", func() {
+	Context("BridgeMustWait - Resource Blocking Decision Tree", func() {
 		Describe("1. Theoretical Limits (Bridge Count)", func() {
 			var maxBridges int
 
@@ -63,7 +64,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				if availableCores < 0 {
 					availableCores = 0
 				}
-				maxBridges = availableCores * constants.MaxBridgesPerCPUCore
+				maxBridges = availableCores * bridgeadmission.BridgesPerCore
 
 				// Add healthy container for these tests
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
@@ -74,6 +75,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									CPU:           legacyCPUWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -100,9 +102,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 				Expect(reason).To(ContainSubstring("1 core reserved for Redpanda"))
@@ -123,9 +125,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 
@@ -153,7 +155,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				}
 
 				// Max bridges should be (2-1) * 5 = 5 (1 core reserved for Redpanda)
-				cgroupMaxBridges := (2 - 1) * constants.MaxBridgesPerCPUCore
+				cgroupMaxBridges := (2 - 1) * bridgeadmission.BridgesPerCore
 
 				// Add exactly at cgroup limit
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
@@ -169,33 +171,14 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 				Expect(reason).To(ContainSubstring("5 bridges maximum"))
 				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
 				Expect(reason).To(ContainSubstring("1 core reserved for Redpanda"))
 			})
-
-			// The pair below is what proves USE_FSMV2_CPU selects WHERE the
-			// capacity is fetched from, rather than one source winning by
-			// preference. Both stage the identical record — the fsmv2 evidence
-			// says 2 usable cores, the legacy field says 8 — and only the flag
-			// differs. Five bridges reaches the fsmv2 ceiling of (2-1)x5, which
-			// IsResourceLimited blocks on with bridgeCount >= maxBridges, and stays
-			// under the legacy one of (8-1)x5, so the outcome names the source.
-			//
-			// Getting this wrong is expensive in one direction: a build that
-			// ignored the fsmv2 figure on a quota-limited container would fall
-			// through to runtime.NumCPU() and admit roughly 31x too many bridges
-			// on a 32-core host.
-			cpuRecordForBothSources := &models.CPU{
-				CgroupCores: 8.0,
-				CPUHealth: &models.CPUHealth{
-					Details: cpuhealth.Details{CapacityCores: 2.0},
-				},
-			}
 
 			stageContainerWithCPU := func(cpu *models.CPU) {
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
@@ -218,7 +201,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				}
 
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				for i := range (2 - 1) * constants.MaxBridgesPerCPUCore {
+				for i := range (2 - 1) * bridgeadmission.BridgesPerCore {
 					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
 						ID:           string(rune('a' + i)),
 						CurrentState: "active",
@@ -231,38 +214,22 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				}
 			}
 
-			It("should fetch the bridge ceiling from the fsmv2 evidence when USE_FSMV2_CPU is on", func() {
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
-				stageContainerWithCPU(cpuRecordForBothSources)
+			It("should fetch the bridge ceiling from the fsmv2 CPU worker's capacity when the record carries it", func() {
+				stageContainerWithCPU(&models.CPU{
+					CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{CapacityCores: 2.0}},
+				})
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("5 bridges maximum"))
 				Expect(reason).To(ContainSubstring("2.0 CPU cores"))
 			})
 
-			It("should fetch the bridge ceiling from the legacy cgroup field when USE_FSMV2_CPU is off", func() {
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = false
-				stageContainerWithCPU(cpuRecordForBothSources)
+			It("should use the host's cores the legacy monitor reports when no CPU limit is set", func() {
+				hostCeiling := (runtime.NumCPU() - 1) * bridgeadmission.BridgesPerCore
 
-				// The legacy figure of 8 cores allows (8-1)x5, so the same five
-				// bridges are permitted where the flag-on twin blocked them.
-				limited, reason := service.IsResourceLimited(snapshot)
-
-				Expect(limited).To(BeFalse())
-				Expect(reason).To(BeEmpty())
-			})
-
-			It("should fall back to the host core count when the flag is on and the worker has not measured", func() {
-				// Under the flag the legacy field is never filled, so a tick with
-				// no evidence leaves admission with no reading at all. It takes
-				// the same runtime.NumCPU() fallback the legacy branch takes when
-				// cgroup data is unreadable.
-				hostCeiling := (runtime.NumCPU() - 1) * constants.MaxBridgesPerCPUCore
-
-				snapshot.CurrentConfig.Agent.UseFSMv2CPU = true
-				stageContainerWithCPU(&models.CPU{})
+				stageContainerWithCPU(legacyCPUWithHostCores())
 
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
 				for i := range hostCeiling {
@@ -277,9 +244,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring(fmt.Sprintf("%d bridges maximum", hostCeiling)))
 			})
 
@@ -312,9 +279,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 		})
@@ -345,10 +312,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot)
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(Equal("CPU degraded: CPU usage at 85%"))
+					Expect(mustWait).To(BeTrue())
+					Expect(reason).To(HavePrefix("CPU degraded: CPU usage at 85%"))
 				})
 
 				It("should block a throttled box through its degraded CPU health, not through a throttle check of its own", func() {
@@ -380,10 +347,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot)
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(Equal("CPU degraded: CPU throttled (15.0% periods throttled)"))
+					Expect(mustWait).To(BeTrue())
+					Expect(reason).To(HavePrefix("CPU degraded: CPU throttled (15.0% periods throttled)"))
 				})
 			})
 
@@ -412,10 +379,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot)
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(Equal("Memory degraded: Memory usage at 92%"))
+					Expect(mustWait).To(BeTrue())
+					Expect(reason).To(HavePrefix("Memory degraded: Memory usage at 92%"))
 				})
 
 				It("should use generic message when health message unavailable", func() {
@@ -438,10 +405,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot)
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(Equal("Memory resources degraded"))
+					Expect(mustWait).To(BeTrue())
+					Expect(reason).To(HavePrefix("Memory resources degraded"))
 				})
 			})
 
@@ -470,10 +437,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot)
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(Equal("Disk degraded: Disk usage at 95%"))
+					Expect(mustWait).To(BeTrue())
+					Expect(reason).To(HavePrefix("Disk degraded: Disk usage at 95%"))
 				})
 			})
 
@@ -513,37 +480,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					}
 
-					limited, reason := service.IsResourceLimited(snapshot)
+					mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(Equal("CPU degraded: CPU overloaded"))
-				})
-			})
-
-			Context("Overall Health Degradation", func() {
-				It("should use overall health as fallback when individual resources show active", func() {
-					snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
-						Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
-							constants.CoreInstanceName: {
-								ID:           constants.CoreInstanceName,
-								CurrentState: "active",
-								DesiredState: "active",
-								LastObservedState: &container.ContainerObservedStateSnapshot{
-									ServiceInfoSnapshot: container_monitor.ServiceInfo{
-										OverallHealth: models.Degraded, // Overall degraded
-										CPUHealth:     models.Active,   // But individuals show active
-										MemoryHealth:  models.Active,
-										DiskHealth:    models.Active,
-									},
-								},
-							},
-						},
-					}
-
-					limited, reason := service.IsResourceLimited(snapshot)
-
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(Equal("Overall system resources degraded"))
+					Expect(mustWait).To(BeTrue())
+					Expect(reason).To(HavePrefix("CPU degraded: CPU overloaded"))
 				})
 			})
 		})
@@ -561,18 +501,18 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					},
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
-				Expect(reason).To(Equal("System in degraded state"))
+				Expect(mustWait).To(BeTrue())
+				Expect(reason).To(HavePrefix("Resource health not proven yet"))
 			})
 
 			It("should block when container manager not present", func() {
 				// No container manager at all
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
-				Expect(reason).To(Equal("Container monitor not available"))
+				Expect(mustWait).To(BeTrue())
+				Expect(reason).To(HavePrefix("Resource health not proven yet"))
 			})
 
 			It("should block when Core instance not present", func() {
@@ -580,10 +520,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: make(map[string]*pkgfsm.FSMInstanceSnapshot),
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
-				Expect(reason).To(Equal("Container health status unavailable"))
+				Expect(mustWait).To(BeTrue())
+				Expect(reason).To(HavePrefix("Resource health not proven yet"))
 			})
 		})
 
@@ -591,7 +531,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			It("should document that removal is allowed even when resources are limited", func() {
 				// This test documents the expected behavior that bridges stuck in to_be_created
 				// due to resource limits can still be removed. The actual removal logic is handled
-				// in the FSM reconciliation, not in IsResourceLimited.
+				// in the FSM reconciliation, not in BridgeMustWait.
 
 				// Setup: System at resource limits
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
@@ -618,14 +558,14 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					},
 				}
 
-				// IsResourceLimited should still return true (resources are limited)
-				limited, reason := service.IsResourceLimited(snapshot)
+				// BridgeMustWait should still return true (resources are limited)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("CPU throttled"))
 
 				// Note: The FSM reconciliation logic (not tested here) should allow
-				// transition from to_be_created -> to_be_removed even when IsResourceLimited returns true
+				// transition from to_be_created -> to_be_removed even when BridgeMustWait returns true
 			})
 		})
 
@@ -644,10 +584,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
-									CPU: &models.CPU{
-										IsThrottled:   false,
-										ThrottleRatio: 0.0,
-									},
+									CPU:           legacyCPUWithHostCores(),
 								},
 							},
 						},
@@ -671,9 +608,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Instances: instances,
 				}
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 		})
@@ -689,6 +626,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									CPU:           legacyCPUWithHostCores(),
 									OverallHealth: models.Degraded,
 									CPUHealth:     models.Degraded,
 									MemoryHealth:  models.Active,
@@ -702,9 +640,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 
 			It("should block creation when feature flag is enabled and resources are degraded", func() {
 				// Feature flag is already enabled in BeforeEach
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("CPU resources degraded"))
 			})
 
@@ -712,9 +650,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				// Disable feature flag
 				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 
@@ -728,6 +666,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									CPU:           legacyCPUWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -743,7 +682,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				if availableCores < 0 {
 					availableCores = 0
 				}
-				maxBridges := availableCores * constants.MaxBridgesPerCPUCore
+				maxBridges := availableCores * bridgeadmission.BridgesPerCore
 
 				// Add bridges exceeding limit to trigger blocking
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
@@ -761,9 +700,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				}
 
 				// Feature flag enabled
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeTrue())
+				Expect(mustWait).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 			})
 
@@ -777,6 +716,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									CPU:           legacyCPUWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -792,7 +732,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				if availableCores < 0 {
 					availableCores = 0
 				}
-				maxBridges := availableCores * constants.MaxBridgesPerCPUCore
+				maxBridges := availableCores * bridgeadmission.BridgesPerCore
 
 				// Add bridges over limit
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
@@ -811,9 +751,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				// Disable feature flag
 				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
 
-				limited, reason := service.IsResourceLimited(snapshot)
+				mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 
-				Expect(limited).To(BeFalse())
+				Expect(mustWait).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
 		})
@@ -850,4 +790,12 @@ func (m *MockManagerSnapshot) GetSnapshotTime() time.Time {
 
 func (m *MockManagerSnapshot) GetManagerTick() uint64 {
 	return m.Tick
+}
+
+// legacyCPUWithHostCores is the CPU record the legacy monitor reports for a
+// container without a CPU limit.
+func legacyCPUWithHostCores() *models.CPU {
+	hostCores := runtime.NumCPU()
+
+	return &models.CPU{CoreCount: &hostCores}
 }

@@ -28,12 +28,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
-// A refusal names the resource that caused it. A degraded resource also
-// degrades the container's own state, so the resource checks have to come
-// before the state check or every refusal reads "System in degraded state".
-// Moving them must not change admission, so every combination of container
-// state and resource health is checked against the decision the old order made.
-var _ = Describe("IsResourceLimited refusal reasons", func() {
+// A refusal names the resource that caused it, even while the container's own
+// state is degraded. Every combination of container state and resource health
+// is checked: a bridge is refused when the container is degraded or any
+// resource is, and the reason names the first degraded resource.
+var _ = Describe("BridgeMustWait refusal reasons", func() {
+	hostCores := 8
+
 	health := func(degraded bool) models.HealthCategory {
 		if degraded {
 			return models.Degraded
@@ -50,11 +51,9 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 		return &models.Health{Message: message, Category: models.Degraded}
 	}
 
-	// oldRefused is the admission decision of the order before this change,
-	// written out rather than derived from the code: a degraded container state
-	// refused first, and any degraded resource refused after it. No bridges are
-	// staged, so the bridge-count ceiling never refuses here.
-	oldRefused := func(stateDegraded, cpu, mem, disk bool) bool {
+	// refusedWhenDegradedOrAnyResource is written out rather than derived from
+	// the code. No bridges are staged, so the bridge-count ceiling never refuses here.
+	refusedWhenDegradedOrAnyResource := func(stateDegraded, cpu, mem, disk bool) bool {
 		return stateDegraded || cpu || mem || disk
 	}
 
@@ -84,7 +83,7 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 													CPUHealth:     health(cpu),
 													MemoryHealth:  health(mem),
 													DiskHealth:    health(disk),
-													CPU:           &models.CPU{Health: withMessage(cpu, "cpu is full")},
+													CPU:           &models.CPU{Health: withMessage(cpu, "cpu is full"), CoreCount: &hostCores},
 													Memory:        &models.Memory{Health: withMessage(mem, "memory is full")},
 													Disk:          &models.Disk{Health: withMessage(disk, "disk is full")},
 												},
@@ -96,21 +95,21 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 							CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 						}
 
-						limited, reason := protocolconverter.NewDefaultProtocolConverterService("test").IsResourceLimited(snapshot)
+						mustWait, reason := protocolconverter.NewDefaultProtocolConverterService("test").BridgeMustWait(snapshot, "new-bridge")
 
-						Expect(limited).To(Equal(oldRefused(stateDegraded, cpu, mem, disk)),
-							"admission must be what the old order decided")
+						Expect(mustWait).To(Equal(refusedWhenDegradedOrAnyResource(stateDegraded, cpu, mem, disk)),
+							"a bridge must be refused when the container or any resource is degraded")
 
 						switch {
 						case cpu:
-							Expect(reason).To(Equal("CPU degraded: cpu is full"))
+							Expect(reason).To(HavePrefix("CPU degraded: cpu is full"))
 						case mem:
-							Expect(reason).To(Equal("Memory degraded: memory is full"))
+							Expect(reason).To(HavePrefix("Memory degraded: memory is full"))
 						case disk:
-							Expect(reason).To(Equal("Disk degraded: disk is full"))
+							Expect(reason).To(HavePrefix("Disk degraded: disk is full"))
 						case stateDegraded:
-							Expect(reason).To(Equal("System in degraded state"),
-								"with no resource degraded the container's own state is the only cause left to name")
+							Expect(reason).To(HavePrefix("Resource health not proven yet"),
+								"with no resource degraded the unproven health is the only cause left to name")
 						default:
 							Expect(reason).To(BeEmpty())
 						}
@@ -120,11 +119,9 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 		}
 	}
 
-	// The branches below the three resource checks: throttling, the overall
-	// health, and a degraded resource that carries no message. Each is staged
-	// with the container's own state degraded, the case where the state check
-	// used to answer first, and each must still name its own cause.
-	DescribeTable("names the cause below the resource checks, with the container's state degraded",
+	// A degraded resource with no message still names itself, with the generic
+	// reason. Each entry also sets the container's own state to degraded.
+	DescribeTable("names a degraded resource without a message while the container is degraded",
 		func(info container_monitor.ServiceInfo, reason string) {
 			snapshot := pkgfsm.SystemSnapshot{
 				Managers: map[string]pkgfsm.ManagerSnapshot{
@@ -142,22 +139,11 @@ var _ = Describe("IsResourceLimited refusal reasons", func() {
 				CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 			}
 
-			limited, got := protocolconverter.NewDefaultProtocolConverterService("test").IsResourceLimited(snapshot)
+			mustWait, got := protocolconverter.NewDefaultProtocolConverterService("test").BridgeMustWait(snapshot, "new-bridge")
 
-			Expect(limited).To(BeTrue(), "a degraded container state refused before the change, so it must still refuse")
+			Expect(mustWait).To(BeTrue(), "a degraded container state must refuse")
 			Expect(got).To(HavePrefix(reason))
 		},
-		Entry("CPU throttled",
-			container_monitor.ServiceInfo{
-				OverallHealth: models.Active, CPUHealth: models.Active, MemoryHealth: models.Active, DiskHealth: models.Active,
-				CPU: &models.CPU{IsThrottled: true, ThrottleRatio: 0.3, CgroupCores: 2},
-			},
-			"CPU throttled (30% of time)"),
-		Entry("only the overall health degraded",
-			container_monitor.ServiceInfo{
-				OverallHealth: models.Degraded, CPUHealth: models.Active, MemoryHealth: models.Active, DiskHealth: models.Active,
-			},
-			"Overall system resources degraded"),
 		Entry("CPU degraded with an empty message",
 			container_monitor.ServiceInfo{
 				OverallHealth: models.Degraded, CPUHealth: models.Degraded, MemoryHealth: models.Active, DiskHealth: models.Active,

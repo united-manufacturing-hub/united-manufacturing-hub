@@ -65,13 +65,16 @@ UMH Core runs Redpanda with the `--overprovisioned` flag, which optimizes CPU us
 **Automatic Enforcement:**
 The system will prevent you from deploying new bridges if:
 1. You've reached the theoretical limit for your CPU allocation, OR
-2. The system detects resource degradation (high CPU, throttling, memory, or disk pressure)
+2. The system detects resource degradation (high CPU, throttling, memory, or disk pressure), OR
+3. The instance's resource health is not proven yet, for example right after a restart
 
 This resource-based blocking is controlled by a feature flag and can be configured in your `config.yaml`:
 ```yaml
 agent:
-  enableResourceLimitBlocking: false  # Disable resource-based bridge blocking (default: true)
+  enableResourceLimitBlocking: false  # Disable resource-based bridge blocking
 ```
+
+`true` is the default for new installs. A missing key in an existing `config.yaml` reads as `false`, so set the key explicitly to turn the blocking on. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.
 
 When enabled, this ensures system stability and prevents one bridge from impacting others. If you need more bridges, either:
 - Increase CPU allocation (for containerized deployments)
@@ -83,10 +86,10 @@ When enabled, this ensures system stability and prevents one bridge from impacti
 When the system blocks bridge creation, you'll see clear messages explaining why:
 
 - **Bridge limit**: `Cannot create bridge - limit exceeded (5 bridges maximum with 2.0 CPU cores, 1 core reserved for Redpanda)`
-- **CPU throttling**: `CPU throttled (15% of time). Container limited to 2.0 cores, needs more during peaks (host has 8 cores available)`
 - **High CPU**: `CPU degraded: CPU utilization critical`
 - **High Memory**: `Memory degraded: Memory usage at 85%`
 - **High Disk**: `Disk degraded: Disk usage at 90%`
+- **Health not measured yet**: `Resource health not proven yet`
 
 #### Easy vertical scaling
 

@@ -41,11 +41,6 @@ const (
 
 // Resource scaling limits.
 const (
-	// MaxBridgesPerCPUCore defines the maximum number of protocol converter bridges per CPU core.
-	// This limit ensures stable performance and prevents resource exhaustion.
-	// See docs/production/sizing-guide.md for more details on resource planning.
-	MaxBridgesPerCPUCore = 5
-
 	// CPUThrottleRatioThreshold defines when CPU throttling is considered significant.
 	// If more than 5% of periods are throttled, the CPU is considered throttled.
 	CPUThrottleRatioThreshold = 0.05

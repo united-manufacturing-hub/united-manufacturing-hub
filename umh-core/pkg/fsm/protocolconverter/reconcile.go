@@ -247,7 +247,7 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 			// This is acceptable as it requires deliberate action and the resource limits
 			// will still protect against accidental overload. The system will degrade
 			// appropriately if actually overloaded.
-		} else if limited, reason := p.service.IsResourceLimited(snapshot); limited {
+		} else if mustWait, reason := p.service.BridgeMustWait(snapshot, p.baseFSMInstance.GetID()); mustWait {
 			// Block creation due to resource limits
 			p.baseFSMInstance.GetLogger().Warnf("Bridge %s blocked: %s", p.baseFSMInstance.GetID(), reason)
 			// Set the status reason so it appears in the snapshot logger and frontend

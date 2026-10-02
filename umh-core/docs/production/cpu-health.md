@@ -127,8 +127,8 @@ instead. UMH then judges the container against its limit. Pressure stays unavail
 
 While CPU is degraded, UMH will not start an additional bridge on the instance, because it would
 compete for CPU that is already short. The bridge stays pending, and its status reason names the
-resource gate that stopped it, usually "System in degraded state". For the cause and the fix, read
-the instance's CPU status. Bridges already running are left alone.
+resource that stopped it, here the CPU. For every refusal reason and the full procedure, see
+[Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md). Bridges already running are left alone.
 
 To turn this off, so that a degraded CPU no longer stops a new bridge:
 

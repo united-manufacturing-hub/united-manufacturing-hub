@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Improvements
+
+- Bridges now start only once CPU, memory and disk are confirmed healthy, also after a restart. A refused bridge says why it was refused and how to start bridges anyway in an emergency
+
+### Fixes
+
+- An instance now runs up to its full bridge limit. Before, it stopped one bridge short
+- With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets a limit of 5 bridges, not 155
+
 ## [0.44.42]
 
 ### New Features
