@@ -673,8 +673,9 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
-	desiredDoc, err := s.toDocument(desired, workerID, "", "", "",
-		"failed to marshal desired state", "failed to unmarshal to document")
+	desiredDoc, err := s.toDocument(desired, workerID, "", documentConversion{
+		what: "desired state",
+	})
 	if err != nil {
 		return err
 	}
@@ -890,8 +891,9 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 		return fmt.Errorf("desired state type %T does not implement Disableable", desired)
 	}
 
-	desiredDoc, err := s.toDocument(desired, workerID, "", "", "",
-		"failed to marshal desired state", "failed to unmarshal to document")
+	desiredDoc, err := s.toDocument(desired, workerID, "", documentConversion{
+		what: "desired state",
+	})
 	if err != nil {
 		return err
 	}
@@ -949,8 +951,9 @@ func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Con
 		return fmt.Errorf("desired state type %T does not implement ShutdownRequestable", desired)
 	}
 
-	desiredDoc, err := s.toDocument(desired, workerID, "", "", "",
-		"marshal desired", "unmarshal desired to doc")
+	desiredDoc, err := s.toDocument(desired, workerID, "", documentConversion{
+		what: "desired state",
+	})
 	if err != nil {
 		return err
 	}
