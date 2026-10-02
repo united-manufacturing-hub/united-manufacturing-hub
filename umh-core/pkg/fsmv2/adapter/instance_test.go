@@ -83,7 +83,7 @@ type probeObserved struct {
 func (probeObserved) IsObservedState() {}
 
 // stubReader is a deps.StateReader the specs drive to return either a populated
-// Observation[probeStatus], persistence.ErrNotFound (NeverObserved), or a
+// Observation[probeStatus], persistence.ErrNotFound (NotFound), or a
 // generic error (Unknown). Mirrors fsmv2client's stubStateReader harness.
 type stubReader struct {
 	obs *fsmv2.Observation[probeStatus]
@@ -128,12 +128,9 @@ var _ = Describe("AdaptedInstance", func() {
 	}
 
 	// stageClient publishes a global client whose store returns the given
-	// observation/error for ref. upsert controls Unregistered vs NeverObserved.
-	stageClient := func(upsert bool, obs *fsmv2.Observation[probeStatus], err error) *stubReader {
+	// observation/error for ref.
+	stageClient := func(obs *fsmv2.Observation[probeStatus], err error) *stubReader {
 		writer := dynamicchildren.NewWriter()
-		if upsert {
-			Expect(writer.Upsert(ref, map[string]any{})).To(Succeed())
-		}
 
 		sr := &stubReader{obs: obs, err: err}
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, sr))
@@ -157,7 +154,7 @@ var _ = Describe("AdaptedInstance", func() {
 
 	It("rung 1: isDisabled returns desiredState verbatim without reading the client", func() {
 		// Even a degraded observation staged in the client must be ignored.
-		stageClient(true, freshObs(probeStatus{PortState: "open", Degraded: true, Reason: "boom"}), nil)
+		stageClient(freshObs(probeStatus{PortState: "open", Degraded: true, Reason: "boom"}), nil)
 
 		inst := newInstance("stopped", true)
 
@@ -173,23 +170,26 @@ var _ = Describe("AdaptedInstance", func() {
 	})
 
 	It("rung 3: a degraded verdict on a Fresh observation returns degraded", func() {
-		stageClient(true, freshObs(probeStatus{PortState: "open", Degraded: true, Reason: "boom"}), nil)
+		stageClient(freshObs(probeStatus{PortState: "open", Degraded: true, Reason: "boom"}), nil)
 
 		inst := newInstance("running", false)
 
 		Expect(inst.GetCurrentFSMState()).To(Equal("degraded"))
 	})
 
-	It("rung 4: Unregistered (ref never upserted) returns starting (bootstrap)", func() {
-		stageClient(false, nil, nil)
+	It("rung 4: Deleted (the worker was removed) returns starting", func() {
+		deletedAt := time.Now().Add(-time.Second)
+		removed := freshObs(probeStatus{PortState: "open"})
+		removed.DeletedAt = &deletedAt
+		stageClient(removed, nil)
 
 		inst := newInstance("running", false)
 
 		Expect(inst.GetCurrentFSMState()).To(Equal("starting"))
 	})
 
-	It("rung 4: NeverObserved (upserted but store ErrNotFound) returns starting", func() {
-		stageClient(true, nil, persistence.ErrNotFound)
+	It("rung 4: NotFound (store ErrNotFound) returns starting", func() {
+		stageClient(nil, persistence.ErrNotFound)
 
 		inst := newInstance("running", false)
 
@@ -201,7 +201,7 @@ var _ = Describe("AdaptedInstance", func() {
 			CollectedAt: time.Now().Add(-5 * time.Second), // > 1s fallback staleAfter
 			Status:      probeStatus{PortState: "open"},
 		}
-		stageClient(true, stale, nil)
+		stageClient(stale, nil)
 
 		inst := newInstance("running", false)
 
@@ -209,7 +209,7 @@ var _ = Describe("AdaptedInstance", func() {
 	})
 
 	It("rung 6: a Fresh healthy observation returns the mapFresh output", func() {
-		stageClient(true, freshObs(probeStatus{PortState: "open"}), nil)
+		stageClient(freshObs(probeStatus{PortState: "open"}), nil)
 
 		inst := newInstance("running", false)
 
@@ -217,7 +217,7 @@ var _ = Describe("AdaptedInstance", func() {
 	})
 
 	It("Unknown-hold-last: a read hiccup returns the last mapped state, not a flap", func() {
-		sr := stageClient(true, freshObs(probeStatus{PortState: "open"}), nil)
+		sr := stageClient(freshObs(probeStatus{PortState: "open"}), nil)
 
 		inst := newInstance("running", false)
 
@@ -233,7 +233,7 @@ var _ = Describe("AdaptedInstance", func() {
 	// --- GetLastObservedState ---
 
 	It("GetLastObservedState maps a Fresh observation to the developer's type", func() {
-		stageClient(true, freshObs(probeStatus{PortState: "open"}), nil)
+		stageClient(freshObs(probeStatus{PortState: "open"}), nil)
 
 		inst := newInstance("running", false)
 
@@ -241,7 +241,7 @@ var _ = Describe("AdaptedInstance", func() {
 	})
 
 	It("GetLastObservedState returns the same developer type (empty) when non-Fresh", func() {
-		stageClient(false, nil, nil) // Unregistered → zero observation
+		stageClient(nil, persistence.ErrNotFound) // NotFound → zero observation
 
 		inst := newInstance("running", false)
 

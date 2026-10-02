@@ -28,12 +28,12 @@
 // mapping cannot fall through to a false-healthy state. GetCurrentFSMState
 // resolves in this precedence; the developer only ever touches the last case:
 //
-//  1. disabled (desired state stopped)          -> the desired state, no store read
-//  2. Unknown (nil client / read hiccup)        -> hold the last known state ("starting" if none)
-//  3. degraded verdict (poll error or Health)   -> "degraded"
-//  4. Unregistered / NeverObserved (bootstrap)  -> "starting"
-//  5. Stale (~3 missed polls)                    -> "degraded"
-//  6. Fresh and healthy                          -> the developer's MapFresh
+//  1. disabled (desired state stopped)        -> the desired state, no store read
+//  2. Unknown (nil client / read hiccup)      -> hold the last known state ("starting" if none)
+//  3. degraded verdict (poll error or Health) -> "degraded"
+//  4. NotFound / Deleted (nothing to read)    -> "starting"
+//  5. Stale (~3 missed polls)                 -> "degraded"
+//  6. Fresh and healthy                       -> the developer's MapFresh
 //
 // The non-Fresh literals ("starting"/"degraded") are the fleet-wide fsmv1
 // lifecycle states every consuming FSM understands; they are the adapter's
