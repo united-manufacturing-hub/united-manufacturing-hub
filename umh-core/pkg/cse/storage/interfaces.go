@@ -121,9 +121,8 @@ type TriangularStoreInterface interface {
 	// documents, so a worker added again starts without one. Each cleared
 	// document keeps its other fields and gets a new _sync_id. Its delta
 	// entry lists _deleted_at and _deleted_by under Removed. A missing
-	// document and one without a tombstone are skipped, so ClearTombstone
-	// never creates a document. Transaction and delta handling are as for
-	// Tombstone.
+	// document and one without a tombstone are skipped. Transaction and
+	// delta handling are as for Tombstone.
 	ClearTombstone(ctx context.Context, workerType string, id string) error
 
 	// GetLatestSyncID returns the current sync_id for clients to establish initial sync position.
