@@ -1166,11 +1166,13 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 // markDeletedTimeout bounds MarkDeleted, which runs under s.mu.
 const markDeletedTimeout = 5 * time.Second
 
-// markWorkerDeleted tombstones a removed worker's documents. Removal also runs
-// during Shutdown, when ctx may already be cancelled, and the store rejects a
-// cancelled context. Nothing retries a failed MarkDeleted, so the documents
-// then stay as if the worker still ran (ENG-6348).
+// markWorkerDeleted tombstones a removed worker's documents. Nothing retries a
+// failed MarkDeleted, so the documents then stay as if the worker still ran
+// (ENG-6348).
 func (s *Supervisor[TObserved, TDesired]) markWorkerDeleted(ctx context.Context, workerID string, hierarchyPath string) {
+	// Shutdown may already have cancelled ctx, and the tombstone must still be
+	// written. A store may honour cancellation, so the write runs on a context
+	// detached from ctx, bounded by markDeletedTimeout.
 	markCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), markDeletedTimeout)
 	defer cancel()
 
