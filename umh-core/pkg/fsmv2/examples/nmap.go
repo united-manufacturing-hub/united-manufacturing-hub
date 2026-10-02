@@ -45,12 +45,12 @@ func (m *mockDialer) DialContext(_ context.Context, _, _ string) (net.Conn, erro
 	return local, nil
 }
 
-// NmapScenarioV2 opens and then closes the port one nmap worker dials. Like the
+// NmapScenario opens and then closes the port one nmap worker dials. Like the
 // fsmv1 nmap worker it replaces, nmap stays running when the port closes. The
 // fsmv1 connection worker decides that means down
 // (ConnectionInstance.IsConnectionNmapDown in pkg/fsm/connection). So the
 // scenario waits for port_state, not for degraded.
-var NmapScenarioV2 = ScenarioV2{
+var NmapScenario = Scenario{
 	Name:        "nmap",
 	Description: "Port monitor: dials a target through a mock dialer, reports the port open then closed",
 

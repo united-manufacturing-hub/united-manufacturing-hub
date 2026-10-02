@@ -27,8 +27,8 @@ import (
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
-// CommunicatorScenarioV2 runs one communicator child against a mock relay server.
-var CommunicatorScenarioV2 = ScenarioV2{
+// CommunicatorScenario runs one communicator child against a mock relay server.
+var CommunicatorScenario = Scenario{
 	Name:        "communicator",
 	Description: "Communicator worker: reaches Syncing once its transport child authenticates against a mock relay server",
 

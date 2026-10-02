@@ -34,7 +34,7 @@ var _ = Describe("Scenario warnings and late errors", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
 
-	runScenario := func(scenario examples.ScenarioV2, settle time.Duration) *examples.RunResult {
+	runScenario := func(scenario examples.Scenario, settle time.Duration) *examples.RunResult {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -42,7 +42,7 @@ var _ = Describe("Scenario warnings and late errors", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
+			Scenario:     scenario,
 			Duration:     settle,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -58,7 +58,7 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	}
 
 	It("sets RunResult.Err on an unexpected warning, and the exit code follows Err", func() {
-		warning := examples.ScenarioV2{
+		warning := examples.Scenario{
 			Name:        "unexpected-warning",
 			Description: "test-local Run for the unexpected-warning check",
 			Run: func(_ context.Context, env examples.Env) error {
@@ -80,7 +80,7 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("does not set RunResult.Err on a warning the scenario expects", func() {
-		expected := examples.ScenarioV2{
+		expected := examples.Scenario{
 			Name:             "expected-warning",
 			Description:      "test-local Run for the ExpectedWarnings check",
 			ExpectedWarnings: []string{"probe_unexpected"},
@@ -99,7 +99,7 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("does not set RunResult.Err on a warning every run allows", func() {
-		allowed := examples.ScenarioV2{
+		allowed := examples.Scenario{
 			Name:        "allowed-warning",
 			Description: "test-local Run for the always-allowed warning check",
 			Run: func(_ context.Context, env examples.Env) error {
@@ -117,7 +117,7 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("sets RunResult.Err on an error logged after Run returned, and the exit code follows Err", func() {
-		lateError := examples.ScenarioV2{
+		lateError := examples.Scenario{
 			Name:        "late-error",
 			Description: "test-local Run for the late-error check",
 			Run: func(_ context.Context, env examples.Env) error {

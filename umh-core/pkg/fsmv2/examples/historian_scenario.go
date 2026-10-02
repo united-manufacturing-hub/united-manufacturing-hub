@@ -52,8 +52,8 @@ var historianScenarioDatabase = timescalemetrics.FakeContents{
 
 type historianObservation = fsmv2.Observation[simple.Status[fsmv2timescale.TimescaleStatus]]
 
-// HistorianScenarioV2 runs the historian monitor against a FakeDatabase stored under DatabaseKey.
-var HistorianScenarioV2 = ScenarioV2{
+// HistorianScenario runs the historian monitor against a FakeDatabase stored under DatabaseKey.
+var HistorianScenario = Scenario{
 	Name:        "historian",
 	Description: "Timescale monitor against a fake database: running, then unreachable, then password rejected, then running again",
 

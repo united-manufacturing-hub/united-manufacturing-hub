@@ -26,8 +26,8 @@ import (
 	parentstate "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
-// SimpleScenarioV2 runs one exampleparent with two examplechild children through start and stop.
-var SimpleScenarioV2 = ScenarioV2{
+// SimpleScenario runs one exampleparent with two examplechild children through start and stop.
+var SimpleScenario = Scenario{
 	Name:        "simple",
 	Description: "One exampleparent starts two examplechild workers, reports both healthy, then stops them and reaches Stopped",
 

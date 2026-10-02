@@ -89,8 +89,8 @@ drainLoop:
 // relayServerKey carries the mock relay server to Run; no worker reads it.
 var relayServerKey = config.NewDependencyKey[*testutil.MockRelayServer]("examples.relay_server")
 
-// TransportScenarioV2 runs a transport child against a mock relay server.
-var TransportScenarioV2 = ScenarioV2{
+// TransportScenario runs a transport child against a mock relay server.
+var TransportScenario = Scenario{
 	Name:        "transport",
 	Description: "Transport worker: authenticates against a mock relay server and pushes queued messages",
 

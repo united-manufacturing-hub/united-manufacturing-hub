@@ -29,9 +29,9 @@ const (
 	minTryingToConnectMs    = slowConnectDelaySeconds*1000 - 100
 )
 
-// SlowScenarioV2 checks that a slow worker spends its connect delay in
+// SlowScenario checks that a slow worker spends its connect delay in
 // TryingToConnect.
-var SlowScenarioV2 = ScenarioV2{
+var SlowScenario = Scenario{
 	Name:        "slow",
 	Description: "A worker whose connect takes two seconds; checks that it spent them in TryingToConnect",
 

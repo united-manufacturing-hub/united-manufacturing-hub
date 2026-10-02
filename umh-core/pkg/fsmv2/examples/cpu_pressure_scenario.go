@@ -43,16 +43,16 @@ const (
 	cpuPressureUsageCores = 0.5
 )
 
-// CPUPressureScenarioV2 drives the real CPU monitor over a fake machine that is
+// CPUPressureScenario drives the real CPU monitor over a fake machine that is
 // busy but not full, and steps its PSI pressure across the mark at which the
 // pressure signal fires.
 //
 // The story is that pressure alone degrades the machine: tasks are queueing
 // for a free core. The scenario does not check the capacity signal, which
 // reports 0.6 cores of headroom throughout.
-var CPUPressureScenarioV2 = ScenarioV2{
+var CPUPressureScenario = Scenario{
 	Name:        "cpu-pressure",
-	Description: "Raises a fake machine's CPU pressure from 19% to 25%, over the 20% at which the monitor degrades (v2)",
+	Description: "Raises a fake machine's CPU pressure from 19% to 25%, over the 20% at which the monitor degrades",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		box := newTickingBox(fsmv2cpu.CgroupBase, cpuPressureMachine(cpuPressureCalm))

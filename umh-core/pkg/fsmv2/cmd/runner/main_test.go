@@ -79,10 +79,10 @@ func TestFatalMessage(t *testing.T) {
 	}
 
 	_, notStarted := examples.Run(context.Background(), examples.RunConfig{
-		ScenarioV2: examples.ScenarioV2{Name: "probe"},
+		Scenario: examples.Scenario{Name: "probe"},
 	})
 	if notStarted == nil {
-		t.Fatal("examples.Run must reject a v2 scenario whose Run is nil")
+		t.Fatal("examples.Run must reject a scenario whose Run is nil")
 	}
 
 	if got := fatalMessage(notStarted); got != "Failed to start scenario" {
@@ -163,7 +163,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 
 	t.Run("genuine startup failure is not a clean exit", func(t *testing.T) {
 		ctx := context.Background()
-		runErr := errors.New("v2 scenario \"probe\" is not properly configured: Run is nil")
+		runErr := errors.New("scenario \"probe\" is not properly configured: Run is nil")
 
 		if isCleanInterruptExit(runErr, ctx.Err()) {
 			t.Error("a genuine startup failure with no ctx cancellation must remain fatal exit-1")
@@ -259,7 +259,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 
 func TestExpectedFields(t *testing.T) {
 	t.Run("a scenario declaring all three kinds gets one field per kind", func(t *testing.T) {
-		full := examples.ScenarioV2{
+		full := examples.Scenario{
 			ExpectedErrors:      []string{"action_failed"},
 			ExpectedErrorCauses: []error{errors.New("boom")},
 			ExpectedWarnings:    []string{"slow"},
@@ -298,7 +298,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario declaring only warnings gets only the warnings field", func(t *testing.T) {
-		fields := expectedFields(examples.ScenarioV2{ExpectedWarnings: []string{"slow"}})
+		fields := expectedFields(examples.Scenario{ExpectedWarnings: []string{"slow"}})
 
 		if len(fields) != 1 || fields[0].Key != "expected_warnings" {
 			t.Fatalf("expectedFields must return only expected_warnings, got %v", fields)
@@ -306,7 +306,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a nil expected cause matches nothing and yields no entry", func(t *testing.T) {
-		fields := expectedFields(examples.ScenarioV2{
+		fields := expectedFields(examples.Scenario{
 			ExpectedErrorCauses: []error{errors.New("boom"), nil},
 		})
 
@@ -321,7 +321,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario whose expected causes are all nil gets no causes field", func(t *testing.T) {
-		fields := expectedFields(examples.ScenarioV2{ExpectedErrorCauses: []error{nil}})
+		fields := expectedFields(examples.Scenario{ExpectedErrorCauses: []error{nil}})
 
 		if len(fields) != 0 {
 			t.Errorf("expectedFields must return no field when every expected cause is nil, got %v", fields)
@@ -329,7 +329,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario declaring nothing gets no field", func(t *testing.T) {
-		if got := expectedFields(examples.ScenarioV2{}); len(got) != 0 {
+		if got := expectedFields(examples.Scenario{}); len(got) != 0 {
 			t.Errorf("expectedFields must return no field for a scenario declaring nothing, got %d", len(got))
 		}
 	})
@@ -339,7 +339,7 @@ func TestStartingScenarioFields(t *testing.T) {
 	obsCore, logs := observer.New(zapcore.InfoLevel)
 	logger := zap.New(obsCore)
 
-	full := examples.ScenarioV2{
+	full := examples.Scenario{
 		ExpectedErrors:      []string{"action_failed"},
 		ExpectedErrorCauses: []error{errors.New("boom"), nil},
 		ExpectedWarnings:    []string{"slow"},
@@ -378,7 +378,7 @@ func TestStartingScenarioFields(t *testing.T) {
 
 	logger.Info("Starting scenario",
 		startingScenarioFields("probe", "a probe", "endless (until Ctrl+C)", time.Second,
-			examples.ScenarioV2{ExpectedWarnings: []string{"slow"}})...)
+			examples.Scenario{ExpectedWarnings: []string{"slow"}})...)
 
 	entries = logs.TakeAll()
 	if len(entries) != 1 {

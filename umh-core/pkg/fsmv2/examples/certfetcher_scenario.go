@@ -156,8 +156,8 @@ func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.R
 		})
 }
 
-// CertFetcherHealthyScenarioV2 runs a certfetcher that has a subscriber and fetches successfully.
-var CertFetcherHealthyScenarioV2 = ScenarioV2{
+// CertFetcherHealthyScenario runs a certfetcher that has a subscriber and fetches successfully.
+var CertFetcherHealthyScenario = Scenario{
 	Name:        "certfetcher-healthy",
 	Description: "Cert fetcher with a subscriber: reaches Running and fetches",
 
@@ -193,8 +193,8 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 	},
 }
 
-// CertFetcherDegradedScenarioV2 runs a certfetcher whose every fetch fails, so it ends in Degraded.
-var CertFetcherDegradedScenarioV2 = ScenarioV2{
+// CertFetcherDegradedScenario runs a certfetcher whose every fetch fails, so it ends in Degraded.
+var CertFetcherDegradedScenario = Scenario{
 	Name:        "certfetcher-degraded",
 	Description: "Cert fetcher whose fetches fail: enters Degraded after DegradedThreshold (certfetcher/state) failed fetches in a row",
 
@@ -217,10 +217,10 @@ var CertFetcherDegradedScenarioV2 = ScenarioV2{
 
 const pollsStoppedBeforePass = 20
 
-// CertFetcherNoSubscribersScenarioV2 runs a certfetcher whose cert handler has no
+// CertFetcherNoSubscribersScenario runs a certfetcher whose cert handler has no
 // subscriber handler (the SubHandler that lists active subscribers). StoppedState
 // starts the worker only once one exists (certfetcher/state/state_stopped.go).
-var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
+var CertFetcherNoSubscribersScenario = Scenario{
 	Name:        "certfetcher-no-subscribers",
 	Description: "Cert fetcher with no subscriber handler: stays in Stopped",
 

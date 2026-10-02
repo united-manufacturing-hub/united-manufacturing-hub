@@ -27,9 +27,9 @@ import (
 
 const failureLimitNeverReached = 999999
 
-// FailingScenarioV2 runs three examplefailing workers whose connect fails in
+// FailingScenario runs three examplefailing workers whose connect fails in
 // different ways. Each Step line says what its worker is configured to do.
-var FailingScenarioV2 = ScenarioV2{
+var FailingScenario = Scenario{
 	Name:        "failing",
 	Description: "Three workers whose connect fails: one connects after three failures, one never connects, one is restarted after every five failures",
 

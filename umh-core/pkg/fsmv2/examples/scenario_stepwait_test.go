@@ -42,7 +42,7 @@ func logLinesNaming(logOutput, s string) int {
 	return count
 }
 
-var _ = Describe("ScenarioV2 steps and waits", func() {
+var _ = Describe("Scenario steps and waits", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
@@ -55,7 +55,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		var waitErr error
 		var firstWaitPolls atomic.Int32
 
-		stepping := examples.ScenarioV2{
+		stepping := examples.Scenario{
 			Name:        "step-and-wait",
 			Description: "test-local Run for Step logging and WaitFor polling",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -90,7 +90,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   stepping,
+			Scenario:     stepping,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -145,7 +145,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 
 		var firstPolls atomic.Int32
 
-		waiting := examples.ScenarioV2{
+		waiting := examples.Scenario{
 			Name:        "wait-passed-logging",
 			Description: "test-local Run for the wait-passed log line",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -179,7 +179,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		defer cancel()
 
 		_, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   waiting,
+			Scenario:     waiting,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -219,7 +219,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 
 		pollErr := errors.New("store read broke")
 
-		erroring := examples.ScenarioV2{
+		erroring := examples.Scenario{
 			Name:        "wait-poll-error",
 			Description: "test-local Run for the poll-error wait",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -236,7 +236,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   erroring,
+			Scenario:     erroring,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -262,7 +262,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 
 		var polls atomic.Int32
 
-		concurrent := examples.ScenarioV2{
+		concurrent := examples.Scenario{
 			Name:        "step-from-goroutine",
 			Description: "test-local Run that calls Step from a second goroutine",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -305,7 +305,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		defer cancel()
 
 		_, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   concurrent,
+			Scenario:     concurrent,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -321,7 +321,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 
 		var polls atomic.Int32
 
-		counting := examples.ScenarioV2{
+		counting := examples.Scenario{
 			Name:        "wait-third-poll",
 			Description: "test-local Run for the done-on-third-poll wait",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -341,7 +341,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   counting,
+			Scenario:     counting,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -363,7 +363,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		neverDone := examples.ScenarioV2{
+		neverDone := examples.Scenario{
 			Name:        "wait-never-done",
 			Description: "test-local Run for the wait timeout",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -386,7 +386,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 		// In a goroutine, so a hung wait fails the spec through Eventually.
 		go func() {
 			result, err := examples.Run(context.Background(), examples.RunConfig{
-				ScenarioV2:   neverDone,
+				Scenario:     neverDone,
 				TickInterval: 50 * time.Millisecond,
 				Logger:       logger,
 				Store:        store,
@@ -407,7 +407,7 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 	})
 })
 
-var _ = Describe("ScenarioV2 wait context", func() {
+var _ = Describe("Scenario wait context", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
@@ -418,7 +418,7 @@ var _ = Describe("ScenarioV2 wait context", func() {
 
 		var waitErr error
 
-		cancelled := examples.ScenarioV2{
+		cancelled := examples.Scenario{
 			Name:        "wait-ctx-cancelled",
 			Description: "test-local Run for the ctx-cancelled wait",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -441,7 +441,7 @@ var _ = Describe("ScenarioV2 wait context", func() {
 		}()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   cancelled,
+			Scenario:     cancelled,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
