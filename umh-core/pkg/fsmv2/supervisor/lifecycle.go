@@ -98,12 +98,24 @@ func (s *Supervisor[TObserved, TDesired]) startWorkerRunners(ctx context.Context
 	defer s.mu.RUnlock()
 
 	for _, workerCtx := range s.workers {
-		if err := workerCtx.collector.Start(ctx); err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "collector_start_failed")
-		}
-
-		workerCtx.executor.Start(ctx)
+		s.startWorker(ctx, workerCtx.identity.HierarchyPath, workerCtx.collector, workerCtx.executor, "collector_start_failed")
 	}
+}
+
+// startWorker starts a worker's collector and executor; a failed collector
+// start goes to Sentry as collectorStartFailedEvent.
+func (s *Supervisor[TObserved, TDesired]) startWorker(
+	ctx context.Context,
+	hierarchyPath string,
+	collector *collection.Collector[TObserved],
+	executor *execution.ActionExecutor,
+	collectorStartFailedEvent string,
+) {
+	if err := collector.Start(ctx); err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, collectorStartFailedEvent)
+	}
+
+	executor.Start(ctx)
 }
 
 // Run starts the supervisor and blocks until ctx is canceled or Shutdown is
@@ -814,14 +826,10 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		s.mu.RUnlock()
 
-		if collector != nil {
-			if err := collector.Start(supervisorCtx); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "restart_collector_start_failed")
-			}
-		}
-
-		if executor != nil {
-			executor.Start(supervisorCtx)
+		// The worker can vanish between AddWorker and this read; without it,
+		// startWorker would dereference a nil collector.
+		if collector != nil && executor != nil {
+			s.startWorker(supervisorCtx, identity.HierarchyPath, collector, executor, "restart_collector_start_failed")
 		}
 	}
 
