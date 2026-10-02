@@ -1073,7 +1073,6 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				deps.Any("children", childNames))
 		}
 
-		delete(s.workers, workerID)
 		s.mu.Unlock()
 
 		// Clean up children outside parent lock to avoid deadlock with GetChildren/calculateHierarchySize.
@@ -1107,6 +1106,13 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		workerCtx.collector.Stop(ctx)
 		workerCtx.executor.Shutdown()
+
+		// Shutdown's drain ends when no workers remain and then cancels the
+		// context the collector runs on. The worker therefore leaves s.workers
+		// only after its final observation, so that cancel cannot skip it.
+		s.mu.Lock()
+		delete(s.workers, workerID)
+		s.mu.Unlock()
 
 		s.logger.Debug("worker_removed_successfully",
 			deps.Int("children_cleaned", childCount))
