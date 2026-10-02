@@ -15,6 +15,7 @@
 package examples
 
 import (
+	"bytes"
 	"context"
 	"io/fs"
 	"os"
@@ -23,40 +24,41 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// mockFilesystem is an in-memory filesystem.Service. Only ReadFile is
-// implemented; any other method panics on the nil embedded Service.
-type mockFilesystem struct {
-	filesystem.Service
+// newMockFilesystem returns a filesystem mock whose ReadFile, WriteFile and
+// Remove work on an in-memory map of files. Reading a missing file returns
+// the error os.ReadFile returns. Every other method is the mock's default.
+func newMockFilesystem() *filesystem.MockFileSystem {
+	var (
+		mu    sync.Mutex
+		files = map[string][]byte{}
+	)
 
-	mu    sync.Mutex
-	files map[string][]byte
-}
+	return filesystem.NewMockFileSystem().
+		WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			mu.Lock()
+			defer mu.Unlock()
 
-func (m *mockFilesystem) SetFile(path, contents string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+			contents, ok := files[path]
+			if !ok {
+				return nil, &fs.PathError{Op: "read", Path: path, Err: os.ErrNotExist}
+			}
 
-	m.files[path] = []byte(contents)
-}
+			return bytes.Clone(contents), nil
+		}).
+		WithWriteFileFunc(func(_ context.Context, path string, data []byte, _ os.FileMode) error {
+			mu.Lock()
+			defer mu.Unlock()
 
-func (m *mockFilesystem) RemoveFile(path string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+			files[path] = bytes.Clone(data)
 
-	delete(m.files, path)
-}
+			return nil
+		}).
+		WithRemoveFunc(func(_ context.Context, path string) error {
+			mu.Lock()
+			defer mu.Unlock()
 
-func (m *mockFilesystem) ReadFile(_ context.Context, path string) ([]byte, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+			delete(files, path)
 
-	contents, ok := m.files[path]
-	if !ok {
-		return nil, &fs.PathError{Op: "read", Path: path, Err: os.ErrNotExist}
-	}
-
-	out := make([]byte, len(contents))
-	copy(out, contents)
-
-	return out, nil
+			return nil
+		})
 }

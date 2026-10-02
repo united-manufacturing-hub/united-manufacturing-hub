@@ -27,7 +27,7 @@ import (
 
 const mockMoodPath = "mood"
 
-// HelloworldScenarioV2 runs one helloworld child against a mockFilesystem in
+// HelloworldScenarioV2 runs one helloworld child against a mock filesystem in
 // the dependency map. It waits for the mood in the observation, not for a
 // state: only the mood "sad" moves the child out of Running.
 var HelloworldScenarioV2 = ScenarioV2{
@@ -35,8 +35,10 @@ var HelloworldScenarioV2 = ScenarioV2{
 	Description: "A helloworld child reads its mood from a file. The scenario changes the file twice and checks that the observed mood follows each time",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		moodFS := &mockFilesystem{files: map[string][]byte{}}
-		moodFS.SetFile(mockMoodPath, "happy")
+		moodFS := newMockFilesystem()
+		if err := moodFS.WriteFile(context.Background(), mockMoodPath, []byte("happy"), 0o644); err != nil {
+			return nil, nil, err
+		}
 
 		deps := map[string]any{}
 
@@ -48,14 +50,9 @@ var HelloworldScenarioV2 = ScenarioV2{
 	},
 
 	Run: func(ctx context.Context, env Env) error {
-		service, ok := config.LookupDependency(env.Dependencies, hello_world.FilesystemKey)
+		moodFS, ok := config.LookupDependency(env.Dependencies, hello_world.FilesystemKey)
 		if !ok {
 			return errors.New("the helloworld scenario's dependency map holds no filesystem under hello_world.FilesystemKey")
-		}
-
-		moodFS, ok := service.(*mockFilesystem)
-		if !ok {
-			return errors.New("the filesystem under hello_world.FilesystemKey is not the scenario's mockFilesystem")
 		}
 
 		ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
@@ -90,14 +87,18 @@ var HelloworldScenarioV2 = ScenarioV2{
 		}
 
 		env.Step("change the mood file to grumpy; wait for mood=grumpy in the observation")
-		moodFS.SetFile(mockMoodPath, "grumpy")
+		if err := moodFS.WriteFile(ctx, mockMoodPath, []byte("grumpy"), 0o644); err != nil {
+			return err
+		}
 
 		if err := waitForMood("grumpy"); err != nil {
 			return err
 		}
 
 		env.Step("delete the mood file; wait for an empty mood in the observation")
-		moodFS.RemoveFile(mockMoodPath)
+		if err := moodFS.Remove(ctx, mockMoodPath); err != nil {
+			return err
+		}
 
 		return waitForMood("")
 	},
