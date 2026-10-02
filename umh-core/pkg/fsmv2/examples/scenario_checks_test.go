@@ -57,14 +57,14 @@ func init() {
 	})
 }
 
-var _ = Describe("ScenarioV2 error checks", func() {
+var _ = Describe("Scenario error checks", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
 
 	// loggedErrorRun runs scenario with a Run that logs msg as an error and,
 	// when waitFor is set, waits on a check that is done at once.
-	loggedErrorRun := func(scenario examples.ScenarioV2, msg string, waitFor bool) (result *examples.RunResult, runErr, waitErr error) {
+	loggedErrorRun := func(scenario examples.Scenario, msg string, waitFor bool) (result *examples.RunResult, runErr, waitErr error) {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
@@ -92,7 +92,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		defer cancel()
 
 		result, runErr = examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
+			Scenario:     scenario,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -102,7 +102,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	}
 
 	It("fails the next wait and the run when Run logs an error the scenario does not expect", func() {
-		_, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
+		_, runErr, waitErr := loggedErrorRun(examples.Scenario{
 			Name:        "unexpected-error",
 			Description: "test-local Run for the unexpected-error check",
 		}, "probe_unexpected_error", true)
@@ -126,7 +126,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	})
 
 	It("fails the run when Run logs an unexpected error and returns without waiting", func() {
-		_, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
+		_, runErr, waitErr := loggedErrorRun(examples.Scenario{
 			Name:        "unexpected-error-no-wait",
 			Description: "test-local Run for the post-Run error check",
 		}, "probe_unexpected_error", false)
@@ -145,7 +145,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	})
 
 	It("does not fail the run when the logged error matches ExpectedErrors", func() {
-		result, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
+		result, runErr, waitErr := loggedErrorRun(examples.Scenario{
 			Name:           "expected-error",
 			Description:    "test-local Run for the ExpectedErrors check",
 			ExpectedErrors: []string{"probe_unexpected"},
@@ -162,7 +162,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	})
 
 	It("does not fail the run when the logged error is one every run allows", func() {
-		result, runErr, waitErr := loggedErrorRun(examples.ScenarioV2{
+		result, runErr, waitErr := loggedErrorRun(examples.Scenario{
 			Name:        "allowed-error",
 			Description: "test-local Run for the always-allowed error check",
 		}, "probe_data_stale", true)
@@ -181,7 +181,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		workerError := examples.ScenarioV2{
+		workerError := examples.Scenario{
 			Name:        "worker-error",
 			Description: "test-local Run for the worker-logged error check",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -203,7 +203,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   workerError,
+			Scenario:     workerError,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -216,7 +216,7 @@ var _ = Describe("ScenarioV2 error checks", func() {
 	})
 })
 
-var _ = Describe("ScenarioV2 stored-state check", func() {
+var _ = Describe("Scenario stored-state check", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
@@ -228,7 +228,7 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 		const badStateName = "NotAValidState"
 		const probeWorkerID = "bad-state-probe"
 
-		storingBadState := examples.ScenarioV2{
+		storingBadState := examples.Scenario{
 			Name:        "invalid-stored-state",
 			Description: "test-local Run for the stored-state check",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -260,7 +260,7 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 					"id":             probeWorkerID,
 					"name":           probeWorkerID,
 					"worker_type":    configworker.WorkerTypeName,
-					"hierarchy_path": "scenariov2-invalid-stored-state/" + probeWorkerID,
+					"hierarchy_path": "scenario-invalid-stored-state/" + probeWorkerID,
 				}
 				if err := store.SaveIdentity(ctx, configworker.WorkerTypeName, probeWorkerID, identityDoc); err != nil {
 					return err
@@ -278,7 +278,7 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   storingBadState,
+			Scenario:     storingBadState,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -302,7 +302,7 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		noop := examples.ScenarioV2{
+		noop := examples.Scenario{
 			Name:        "valid-stored-state",
 			Description: "test-local Run for the clean stored-state check",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -314,7 +314,7 @@ var _ = Describe("ScenarioV2 stored-state check", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   noop,
+			Scenario:     noop,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -339,7 +339,7 @@ func (failingDeltasStore) GetDeltas(_ context.Context, _ storage.Subscription) (
 	return storage.DeltasResponse{}, errors.New("the deltas are unreadable")
 }
 
-var _ = Describe("ScenarioV2 store-read failure", func() {
+var _ = Describe("Scenario store-read failure", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
@@ -349,7 +349,7 @@ var _ = Describe("ScenarioV2 store-read failure", func() {
 		inner := examples.SetupStore(logger)
 		store := failingDeltasStore{TriangularStoreInterface: inner}
 
-		noop := examples.ScenarioV2{
+		noop := examples.Scenario{
 			Name:        "store-read-fails",
 			Description: "test-local Run for the store-read failure check",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -361,7 +361,7 @@ var _ = Describe("ScenarioV2 store-read failure", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   noop,
+			Scenario:     noop,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -380,7 +380,7 @@ var _ = Describe("ScenarioV2 store-read failure", func() {
 	})
 })
 
-var _ = Describe("ScenarioV2 empty expected entries", func() {
+var _ = Describe("Scenario empty expected entries", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
@@ -389,7 +389,7 @@ var _ = Describe("ScenarioV2 empty expected entries", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		emptyExpectation := examples.ScenarioV2{
+		emptyExpectation := examples.Scenario{
 			Name:           "empty-expected",
 			Description:    "test-local Run for the empty expected entry check",
 			ExpectedErrors: []string{""},
@@ -405,7 +405,7 @@ var _ = Describe("ScenarioV2 empty expected entries", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   emptyExpectation,
+			Scenario:     emptyExpectation,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -433,7 +433,7 @@ func (s ctxHonouringStore) GetDeltas(ctx context.Context, sub storage.Subscripti
 	return s.TriangularStoreInterface.GetDeltas(ctx, sub)
 }
 
-var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
+var _ = Describe("Scenario cancelled after Run returned", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
@@ -442,7 +442,7 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 		logger := deps.NewNopFSMLogger()
 		store := ctxHonouringStore{examples.SetupStore(logger)}
 
-		returning := examples.ScenarioV2{
+		returning := examples.Scenario{
 			Name:        "cancel-after-return",
 			Description: "test-local Run for the post-return cancellation",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -454,7 +454,7 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 
 		// No Duration: the run ends only when the caller cancels.
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   returning,
+			Scenario:     returning,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -472,13 +472,13 @@ var _ = Describe("ScenarioV2 cancelled after Run returned", func() {
 	})
 })
 
-var _ = Describe("ScenarioV2 expected error causes", func() {
+var _ = Describe("Scenario expected error causes", func() {
 	// causeRun returns a nil result when the logged error fails the run.
 	causeRun := func(name string, errValue error, causes []error) (*examples.RunResult, error) {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		scenario := examples.ScenarioV2{
+		scenario := examples.Scenario{
 			Name:                name,
 			Description:         "test-local Run for the expected-error-cause check",
 			ExpectedErrorCauses: causes,
@@ -493,7 +493,7 @@ var _ = Describe("ScenarioV2 expected error causes", func() {
 		defer cancel()
 
 		return examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
+			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
