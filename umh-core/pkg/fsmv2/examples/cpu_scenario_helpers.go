@@ -162,21 +162,30 @@ func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.S
 // taken per file, not per sampler read. clock.Mock synchronises itself.
 type tickingBox struct {
 	box *fakebox.Box
-	// base is the cgroup mount this box serves, so fs can recognise the file
-	// the sampler opens once per read.
-	base string
+	// perReadFile is the file the sampler opens once per read, after it stamps
+	// the read and before any other counter file: cpu.pressure on v2, and
+	// cpuacct.usage on v1, whose reader opens no pressure file.
+	perReadFile string
 	// perRead is how much machine time one sampler read advances the box, and
 	// zero before StartPerRead and after Stop.
 	perRead time.Duration
-	mu      sync.Mutex
+	// reads counts the sampler's reads per path.
+	reads map[string]int
+	mu    sync.Mutex
 }
 
 // newTickingBox returns a box serving base in the condition initial describes.
 // It does not advance until StartPerRead is called.
 func newTickingBox(base string, initial fakebox.Condition) *tickingBox {
+	perReadFile := base + "/cpu.pressure"
+	if initial.CgroupV1 {
+		perReadFile = base + "/cpu,cpuacct/cpuacct.usage"
+	}
+
 	return &tickingBox{
-		box:  fakebox.NewBox(base, initial),
-		base: base,
+		box:         fakebox.NewBox(base, initial),
+		perReadFile: perReadFile,
+		reads:       map[string]int{},
 	}
 }
 
@@ -190,16 +199,17 @@ func (t *tickingBox) fs() filesystem.Service {
 		t.mu.Lock()
 		defer t.mu.Unlock()
 
-		// The read-driven advance. The sampler opens cpu.pressure once per
-		// read, after it stamps the read and before any other counter file,
-		// so each read covers exactly one tick. It ticks even when the
-		// condition makes cpu.pressure unreadable.
-		if t.perRead > 0 && path == t.base+"/cpu.pressure" {
+		t.reads[path]++
+
+		// The read-driven advance, so each read covers exactly one tick. It
+		// ticks even when the condition makes perReadFile unreadable.
+		if t.perRead > 0 && path == t.perReadFile {
 			t.box.Tick(t.perRead)
 		}
 
 		return inner.ReadFile(ctx, path)
 	}
+	guarded.FileExistsFunc = inner.FileExists
 
 	return guarded
 }
@@ -208,6 +218,14 @@ func (t *tickingBox) fs() filesystem.Service {
 // from. It is safe to call while the box ticks.
 func (t *tickingBox) MachineNow() time.Time {
 	return t.box.Clock().Now()
+}
+
+// Reads returns how many times the sampler has read path.
+func (t *tickingBox) Reads(path string) int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return t.reads[path]
 }
 
 // Set changes the condition later ticks accrue at.
