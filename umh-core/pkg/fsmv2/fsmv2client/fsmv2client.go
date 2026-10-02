@@ -81,6 +81,11 @@ func (e *WorkerDeletedError) Is(target error) bool {
 type FSMv2Client struct {
 	w  *dynamicchildren.Writer
 	sr deps.StateReader
+
+	deletedMu sync.Mutex
+	// deletedAt remembers when Delete removed a ref, until a successful
+	// Upsert re-adds it.
+	deletedAt map[dynamicchildren.Ref]time.Time
 }
 
 // NewFSMv2Client returns an FSMv2Client that writes through w and reads
@@ -89,21 +94,60 @@ type FSMv2Client struct {
 // torn down and recreated, so a held instance would go stale after the first
 // restart.
 func NewFSMv2Client(w *dynamicchildren.Writer, sr deps.StateReader) *FSMv2Client {
-	return &FSMv2Client{w: w, sr: sr}
+	return &FSMv2Client{w: w, sr: sr, deletedAt: make(map[dynamicchildren.Ref]time.Time)}
+}
+
+// recordDeleted remembers ref as deleted now.
+func (c *FSMv2Client) recordDeleted(ref dynamicchildren.Ref) {
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+
+	if c.deletedAt == nil {
+		c.deletedAt = make(map[dynamicchildren.Ref]time.Time)
+	}
+
+	c.deletedAt[ref] = time.Now()
+}
+
+// clearDeleted forgets ref's delete record.
+func (c *FSMv2Client) clearDeleted(ref dynamicchildren.Ref) {
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+
+	delete(c.deletedAt, ref)
+}
+
+// deletedTime returns when Delete removed ref, and whether it did.
+func (c *FSMv2Client) deletedTime(ref dynamicchildren.Ref) (time.Time, bool) {
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+
+	deletedAt, ok := c.deletedAt[ref]
+
+	return deletedAt, ok
 }
 
 // Upsert records cfg for ref in the wrapped Writer. Validation errors return
 // synchronously from this call; callers rely on rejecting a bad spec at the
-// call site. When spec writes move into the config worker's tick (ENG-4400),
-// this client is the layer that absorbs the change, preserving or
-// renegotiating the synchronous error contract.
+// call site. A successful Upsert ends a Delete's hold on the ref. When spec
+// writes move into the config worker's tick (ENG-4400), this client is the
+// layer that absorbs the change, preserving or renegotiating the synchronous
+// error contract.
 func (c *FSMv2Client) Upsert(ref dynamicchildren.Ref, cfg map[string]any) error {
-	return c.w.Upsert(ref, cfg)
+	err := c.w.Upsert(ref, cfg)
+	if err == nil {
+		c.clearDeleted(ref)
+	}
+
+	return err
 }
 
-// Delete removes ref from the wrapped Writer.
+// Delete removes ref from the wrapped Writer. From this call on, Get reads
+// the ref as deleted, until a successful Upsert re-adds it.
 func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
 	c.w.Delete(ref)
+
+	c.recordDeleted(ref)
 }
 
 // Get reads the observation the collector stored for ref's worker, dynamic or
@@ -111,7 +155,8 @@ func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
 // config.ChildID(ref.Name). It returns an error matching ErrNotFound when
 // nothing is stored, a *WorkerDeletedError when the worker was removed, and
 // any other reader error verbatim. On every error the observation is the zero
-// value.
+// value. A ref deleted through this client reads as deleted from the Delete
+// call on.
 //
 // Get does not verify that TStatus matches ref.WorkerType. Pairing a TStatus
 // that does not match the worker type decodes whatever fields overlap and is
@@ -125,6 +170,10 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 	// diagnosable failure instead of a panic.
 	if c == nil || c.sr == nil {
 		return obs, fmt.Errorf("fsmv2client: Get requires a client with a StateReader (ref %s/%s)", ref.WorkerType, config.ChildID(ref.Name))
+	}
+
+	if deletedAt, deleted := c.deletedTime(ref); deleted {
+		return fsmv2.Observation[TStatus]{}, &WorkerDeletedError{Ref: ref, DeletedAt: deletedAt}
 	}
 
 	if err := c.sr.LoadObservedTyped(ctx, ref.WorkerType, config.ChildID(ref.Name), &obs); err != nil {
@@ -181,10 +230,6 @@ func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge 
 
 // GetFresh is Get plus a freshness check. It returns the observation only for
 // Fresh and Stale, and a non-nil error only with Unknown.
-//
-// Between Delete and the supervisor removing the worker, the worker still
-// runs for a few ticks. In that window GetFresh classifies its latest
-// observation by age, usually as Fresh.
 //
 // The store read is bounded by ctx; callers SHOULD pass a deadline-bounded
 // ctx (see the StateReader non-blocking contract).
