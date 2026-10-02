@@ -136,6 +136,13 @@ type Condition struct {
 	// smaller number is a pinned container and reads back as affinity scope.
 	Affinity int
 
+	// CgroupV1 true serves the cgroup v1 layout instead of v2: the cpu and
+	// cpuacct controllers in one cpu,cpuacct directory under the base, the way
+	// systemd mounts them, and the cpuset controller in a cpuset directory. v1
+	// has no per-cgroup cpu.pressure, so PsiPresent must be false. A v1 box and a
+	// v2 box stating the same Condition otherwise describe the same machine.
+	CgroupV1 bool
+
 	// Unreadable lists absolute paths this machine cannot read, whatever the
 	// rest of the condition says. Each entry is matched whole against the path
 	// the sampler asks for: "/sys/fs/cgroup/cpu.stat", not "cpu.stat". An entry
@@ -196,10 +203,18 @@ func NewBox(base string, initial Condition) *Box {
 // FS returns a filesystem service serving this box's files. It reads the box's
 // state at each call rather than a snapshot, so one service stays correct
 // across later Set and Tick calls.
+//
+// A file exists when the box serves it, readable or not. cpuhealth tells v1
+// from v2 by which files exist.
 func (b *Box) FS() filesystem.Service {
 	fs := filesystem.NewMockFileSystem()
 	fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
 		return b.readFile(path)
+	}
+	fs.FileExistsFunc = func(ctx context.Context, path string) (bool, error) {
+		_, served := b.servers[path]
+
+		return served, nil
 	}
 
 	return fs
@@ -225,6 +240,12 @@ func (b *Box) Clock() clock.Clock { return shieldedClock{b.clk} }
 func (b *Box) Set(c Condition) {
 	validate(c)
 	b.checkUnreadable(c)
+
+	if c.CgroupV1 != b.cond.CgroupV1 {
+		panic(fmt.Sprintf(
+			"fakebox: Set CgroupV1 %t on a box built with CgroupV1 %t: a machine does not change its cgroup hierarchy mid-run; construct a new Box instead",
+			c.CgroupV1, b.cond.CgroupV1))
+	}
 
 	if c.Cores != b.cond.Cores {
 		panic(fmt.Sprintf(
@@ -301,15 +322,28 @@ func (b *Box) readFile(path string) ([]byte, error) {
 // x86 cpuinfo a Box serves settles virtualisation without it, and
 // read_virtualized_test.go covers the ARM64 route.
 func (b *Box) newServers() map[string]func() string {
-	return map[string]func() string{
-		b.base + "/cpu.stat":              b.cpuStat,
-		b.base + "/cpu.max":               b.cpuMax,
-		b.base + "/cpu.pressure":          b.cpuPressure,
-		b.base + "/cpuset.cpus.effective": b.cpusetEffective,
-		"/proc/stat":                      b.procStat,
-		"/proc/cpuinfo":                   b.procCpuinfo,
-		"/sys/class/dmi/id/product_name":  b.dmiProductName,
+	servers := map[string]func() string{
+		"/proc/stat":                     b.procStat,
+		"/proc/cpuinfo":                  b.procCpuinfo,
+		"/sys/class/dmi/id/product_name": b.dmiProductName,
 	}
+
+	if b.cond.CgroupV1 {
+		servers[b.base+"/cpu,cpuacct/cpu.cfs_quota_us"] = b.cfsQuotaUs
+		servers[b.base+"/cpu,cpuacct/cpu.cfs_period_us"] = b.cfsPeriodUs
+		servers[b.base+"/cpu,cpuacct/cpu.stat"] = b.v1CPUStat
+		servers[b.base+"/cpu,cpuacct/cpuacct.usage"] = b.cpuacctUsage
+		servers[b.base+"/cpuset/cpuset.effective_cpus"] = b.cpusetEffective
+
+		return servers
+	}
+
+	servers[b.base+"/cpu.stat"] = b.cpuStat
+	servers[b.base+"/cpu.max"] = b.cpuMax
+	servers[b.base+"/cpu.pressure"] = b.cpuPressure
+	servers[b.base+"/cpuset.cpus.effective"] = b.cpusetEffective
+
+	return servers
 }
 
 // ServablePaths returns every path this box serves, sorted.
@@ -361,6 +395,30 @@ func (b *Box) cpuMax() string {
 
 	return fmt.Sprintf("%d %d\n", quota, b.periodUs)
 }
+
+// cfsQuotaUs writes the v1 CPU limit's quota half, -1 for no limit.
+func (b *Box) cfsQuotaUs() string {
+	if b.cond.QuotaCores <= 0 {
+		return "-1\n"
+	}
+
+	return fmt.Sprintf("%d\n", whole("cpu.cfs_quota_us", b.cond.QuotaCores*float64(b.periodUs)))
+}
+
+// cfsPeriodUs writes the v1 CPU limit's period half.
+func (b *Box) cfsPeriodUs() string { return fmt.Sprintf("%d\n", b.periodUs) }
+
+// v1CPUStat writes the v1 throttle counters. Unlike v2's cpu.stat it carries no
+// usage, and it states the throttled time in nanoseconds.
+func (b *Box) v1CPUStat() string {
+	return fmt.Sprintf(
+		"nr_periods %d\nnr_throttled %d\nthrottled_time %d\n",
+		b.nrPeriods, b.nrThrottled, b.nrThrottled*b.periodUs*1000)
+}
+
+// cpuacctUsage writes the cgroup's CPU time in nanoseconds, the same counter v2
+// writes as usage_usec.
+func (b *Box) cpuacctUsage() string { return fmt.Sprintf("%d\n", b.usageUsec*1000) }
 
 // cpuPressure writes the PSI averages at the two decimals the kernel writes.
 // validate rejects a Pressure that needs more, so nothing is rounded away here.
@@ -477,6 +535,10 @@ func validate(c Condition) {
 		panic(fmt.Sprintf(
 			"fakebox: Throttle %v with QuotaCores %v: a cgroup with no quota has no CFS bandwidth control and is never throttled",
 			c.Throttle, c.QuotaCores))
+	}
+
+	if c.CgroupV1 && c.PsiPresent {
+		panic("fakebox: PsiPresent with CgroupV1: a cgroup v1 hierarchy has no per-cgroup cpu.pressure")
 	}
 
 	if c.Affinity < 0 || c.Affinity > c.Cores {
