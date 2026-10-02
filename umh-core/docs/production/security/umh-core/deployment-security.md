@@ -91,7 +91,7 @@ Deploy umh-core in a DMZ with firewalls on both OT and IT boundaries. See IEC 62
 
 **Implementation**: All connections to management.umh.app use TLS 1.2 or higher with modern cipher suites including AES-GCM and ChaCha20-Poly1305. Certificate validation is enabled by default using Go's standard library crypto packages, and all cryptographic operations follow current industry standards for secure communications. This is the secure default configuration.
 
-**Deployment Considerations**: An ALLOW_INSECURE_TLS configuration option is available for corporate environments with TLS inspection, which disables certificate validation when enabled. This option should only be used behind trusted corporate firewalls where inspection is performed, as it makes the system vulnerable to man-in-the-middle attacks. When ALLOW_INSECURE_TLS is enabled, the minimum TLS version is reduced to TLS 1.0 to maximize compatibility with corporate TLS inspection proxies (note: TLS 1.0 is only available with this flag and does not meet the SSLabs Grade B standard). This setting should only be used behind trusted corporate firewalls.
+**Deployment Considerations**: Certificate validation is always enforced; there is no configuration option to disable it, and the minimum TLS version cannot be lowered. Corporate environments with TLS inspection should add their corporate CA certificate to the container's trusted certificates instead. See [Network Configuration](./network-configuration.md) for details.
 
 ---
 
@@ -247,24 +247,6 @@ Because all bridges run as the same user, they share access within the container
 The container boundary remains enforced despite shared user access. Bridges cannot access the host filesystem except through explicitly mounted paths, cannot see host processes, and network isolation applies unless explicitly disabled with host networking mode.
 
 Non-root execution provides security benefits that justify this trade-off. The container cannot escalate to root privileges even if a bridge is compromised. This follows the standard Docker security model with defense in depth. The design is compatible with restricted Kubernetes environments that do not permit privileged containers or special permissions.
-
----
-
-### TLS Certificate Validation Can Be Disabled
-
-**Category**: Accepted Risk (corporate firewall compatibility)
-
-**Issue**: `ALLOW_INSECURE_TLS=true` option disables certificate validation for:
-- **Connection to management.umh.app** (configuration sync and status reporting)
-- **Bridge connections** to data sources (HTTPS APIs, MQTTS brokers, etc.)
-
-**Why this option exists**: Corporate firewalls often perform TLS inspection (MITM), and adding corporate CA certificates is complex.
-
-**Risk**: MITM attacks possible if misused:
-- **Management connection**: Attacker could intercept AUTH_TOKEN during transmission
-- **Bridge connections**: Attacker could intercept or modify industrial data in transit
-
-**Usage guidance**: Only use behind trusted corporate firewall where TLS inspection is performed. See [Network Configuration](./network-configuration.md) for details on adding corporate CA certificates (preferred) vs using `ALLOW_INSECURE_TLS=true`.
 
 ---
 

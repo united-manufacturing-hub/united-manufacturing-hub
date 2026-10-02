@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -41,8 +40,7 @@ type Handler struct {
 	dog                        watchdog.Iface
 	configManager              config.ConfigManager
 	subscriberRegistry         *subscribers.Registry
-	pusher                     *push.Pusher
-	fsmOutboundChannel         chan<- *types.UMHMessage        // FSMv2 without gatekeeper (nil for legacy mode)
+	fsmOutboundChannel         chan<- *types.UMHMessage        // FSMv2 without gatekeeper (nil when gatekeeper enabled)
 	gatekeeperOutboundChannel  chan<- *types.MessageWithSender // FSMv2 with gatekeeper (nil when gatekeeper disabled)
 	fsmLogger                  deps.FSMLogger                  // Sentry-routed logger for the FSMv2 drop site
 	StatusCollector            *generator.StatusCollectorType
@@ -58,7 +56,6 @@ type Handler struct {
 // and coordinates status collection with the management console.
 func NewHandler(
 	dog watchdog.Iface,
-	pusher *push.Pusher,
 	instanceUUID uuid.UUID,
 	ttl time.Duration,
 	cull time.Duration,
@@ -68,15 +65,18 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 without gatekeeper (nil for legacy mode)
+	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 without gatekeeper (nil when gatekeeper enabled)
 	gatekeeperOutboundChannel chan<- *types.MessageWithSender, // FSMv2 with gatekeeper (nil when gatekeeper disabled)
 	featureUsage *models.FeatureUsage,
 	fsmLogger deps.FSMLogger, // Sentry-routed logger for the FSMv2 drop warning
 ) *Handler {
+	if fsmOutboundChannel == nil && gatekeeperOutboundChannel == nil {
+		panic("subscriber.NewHandler: fsmOutboundChannel or gatekeeperOutboundChannel must be non-nil (FSMv2 is the only status delivery path)")
+	}
+
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
-	s.pusher = pusher
 	s.fsmOutboundChannel = fsmOutboundChannel
 	s.gatekeeperOutboundChannel = gatekeeperOutboundChannel
 	s.fsmLogger = fsmLogger
@@ -231,33 +231,24 @@ func (s *Handler) notify() {
 			}
 
 			// FSMv2 mode without gatekeeper: write encoded types.UMHMessage
-			if s.fsmOutboundChannel != nil {
-				msg := &types.UMHMessage{
-					InstanceUUID: s.GetInstanceUUID().String(),
-					Content:      message,
-					Email:        email,
-				}
-				select {
-				case s.fsmOutboundChannel <- msg:
-					// Successfully sent to FSMv2 transport
-				default:
-					s.fsmLogger.SentryWarn(
-						deps.FeatureFSMv1Communicator,
-						"fsmv1.Communicator",
-						"fsmv2_outbound_channel_full",
-						deps.Int("channel_len", len(s.fsmOutboundChannel)),
-						deps.Int("channel_cap", cap(s.fsmOutboundChannel)),
-					)
+			msg := &types.UMHMessage{
+				InstanceUUID: s.GetInstanceUUID().String(),
+				Content:      message,
+				Email:        email,
+			}
+			select {
+			case s.fsmOutboundChannel <- msg:
+				// Successfully sent to FSMv2 transport
+			default:
+				s.fsmLogger.SentryWarn(
+					deps.FeatureFSMv1Communicator,
+					"fsmv1.Communicator",
+					"fsmv2_outbound_channel_full",
+					deps.Int("channel_len", len(s.fsmOutboundChannel)),
+					deps.Int("channel_cap", cap(s.fsmOutboundChannel)),
+				)
 
-					return
-				}
-			} else {
-				// Legacy mode: use Pusher
-				s.pusher.Push(models.UMHMessage{
-					Content:      message,
-					Email:        email,
-					InstanceUUID: s.GetInstanceUUID(),
-				})
+				return
 			}
 		}
 

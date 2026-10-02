@@ -16,32 +16,7 @@ No inbound connections are required from the internet.
 
 ### TLS Inspection (MITM)
 
-If your corporate firewall performs TLS inspection, you may see certificate errors. Solutions:
-
-**Option 1: Add Corporate CA Certificate (Recommended)**
-
-Add your corporate CA certificate to the container's trusted certificates.
-
-**Option 2: Disable Certificate Validation (Last Resort)**
-
-```yaml
-# config.yaml
-agent:
-  communicator:
-    allowInsecureTLS: true  # WARNING: Only use if corporate firewall blocks secure connections
-```
-
-Or via environment variable:
-
-```bash
-docker run -e ALLOW_INSECURE_TLS=true management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION>
-```
-
-**Security Warning:** The `allowInsecureTLS` option disables certificate validation. Only use this if:
-
-- You're behind a corporate firewall that you trust
-- You cannot add your corporate CA certificate
-- You understand the security implications
+If your corporate firewall performs TLS inspection, you may see certificate errors. Add your corporate CA certificate to the container's trusted certificates to resolve this.
 
 ## Proxy Configuration
 

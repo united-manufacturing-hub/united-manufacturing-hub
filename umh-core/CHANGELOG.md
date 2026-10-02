@@ -2,11 +2,6 @@
 
 ## Unreleased
 
-### New Features
-
-- With the historian feature flag enabled in the Management Console, the instance reports the state of its historian database: versions, disk usage and growth, and background job counts with every status update, and compression savings, per-table details and the job list on request
-- The communicator now reports its own health, queue usage, and queue peak usage
-
 ### Improvements
 
 - Bridges now start only once CPU, memory and disk are confirmed healthy, also after a restart. A refused bridge says why it was refused and how to start bridges anyway in an emergency
@@ -15,6 +10,23 @@
 
 - An instance now runs up to its full bridge limit. Before, it stopped one bridge short
 - With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets a limit of 5 bridges, not 155
+
+## [0.44.42]
+
+### New Features
+
+- With the historian feature flag enabled in the Management Console, the instance reports the state of its historian database: versions, disk usage and growth, and background job counts with every status update, and compression savings, per-table details and the job list on request
+- The communicator now reports its own health, queue usage, and queue peak usage
+
+### Improvements
+
+- A bridge refused because the instance is short of resources now says which resource and why, such as the CPU health message, instead of "System in degraded state". Which bridges are refused is unchanged
+- `USE_FSMV2_TRANSPORT` and `USE_FSMV2_MEMORY_CLEANUP` are now always on and can be removed from your configuration
+- `ALLOW_INSECURE_TLS` no longer has any effect. To trust a proxy that intercepts TLS, add your corporate CA certificate instead (see the network configuration guide)
+
+### Fixes
+
+- umh-core runs without the Management Console again. It is designed to work without `AUTH_TOKEN` and `API_URL`, but FSMv2 features such as `USE_FSMV2_CPU` accidentally depended on them
 - Log messages for stopped flows in bridges are now more consistent
 - CPU usage, limit and throttling now read on hosts using the older cgroup v1 hierarchy, such as RHEL 8, where the CPU panel previously showed N/A. Pressure stays unavailable there, since that kernel publishes no per-container pressure figure
 

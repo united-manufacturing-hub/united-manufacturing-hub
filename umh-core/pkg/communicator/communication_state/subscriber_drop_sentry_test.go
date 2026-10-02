@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -158,9 +157,7 @@ var _ = Describe("Subscriber drop reaches Sentry through the production wiring",
 			config.ReleaseChannelStable,
 			snapshotManager,
 			configManager,
-			"https://example.invalid",
 			logger,
-			false,
 			nil,
 			nil,
 		)
@@ -169,17 +166,6 @@ var _ = Describe("Subscriber drop reaches Sentry through the production wiring",
 			JWT:  "test-jwt",
 			Name: "subscriber-drop-sentry-test",
 		}
-		state.Pusher = push.NewPusher(
-			state.LoginResponse.UUID,
-			state.LoginResponse.JWT,
-			dog,
-			state.OutboundChannel,
-			push.DefaultDeadLetterChanBuffer(),
-			push.DefaultBackoffPolicy(),
-			false,
-			"https://example.invalid",
-			logger,
-		)
 
 		// A capacity-1 channel that is already full, so every notify tick drops.
 		fsmOutboundChannel := make(chan *types.UMHMessage, 1)

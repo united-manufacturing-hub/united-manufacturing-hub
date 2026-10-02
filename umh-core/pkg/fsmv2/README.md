@@ -333,28 +333,20 @@ FSMv2 features are controlled via environment variables:
 docker run -d \
   -e AUTH_TOKEN=your-auth-token \
   -e API_URL=https://management.umh.app \
-  -e USE_FSMV2_TRANSPORT=true \
-  -e USE_FSMV2_MEMORY_CLEANUP=true \
-  -e USE_FSMV2_PROTOCOL_CONVERTER=true \
   umh-core:latest
 ```
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `AUTH_TOKEN` | Yes | Authentication token from Management Console |
-| `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
-| `USE_FSMV2_TRANSPORT` | No | FSMv2 communicator; defaults to `true` (enabled). Set to `false` to revert to legacy. |
-| `USE_FSMV2_MEMORY_CLEANUP` | No | FSMv2 memory cleanup (persistence worker); defaults to `true` (enabled). Set to `false` to revert. |
-| `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter |
+| `AUTH_TOKEN` | No | Authentication token from the Management Console. Without it and `API_URL`, umh-core runs without a Management Console connection |
+| `API_URL` | No | Backend relay server URL, needed together with `AUTH_TOKEN` to connect to the Management Console (e.g., `https://management.umh.app`) |
 | `USE_FSMV2_CPU` | No | FSMv2 container CPU monitoring; defaults to `false` (legacy operating-system metrics). Read once at startup, so changing it requires a restart. Temporary migration flag |
 
 ### Disabling FSMv2 Features
 
-To revert to the legacy behavior, set the corresponding flag to `false`:
-
-```bash
--e USE_FSMV2_TRANSPORT=false
-```
+There is no legacy runtime to revert to: FSMv2 is the only bring-up path. The
+persistence worker's memory cleanup now runs unconditionally, and the
+`USE_FSMV2_MEMORY_CLEANUP` flag that used to gate it no longer exists.
 
 ### Verifying FSMv2 Communicator
 
