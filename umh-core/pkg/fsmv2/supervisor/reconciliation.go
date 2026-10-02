@@ -1345,10 +1345,6 @@ func (s *Supervisor[TObserved, TDesired]) restartCollector(ctx context.Context, 
 }
 
 func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(snapshot *fsmv2.Snapshot) bool {
-	if snapshot.Observed == nil {
-		return true
-	}
-
 	age := time.Since(snapshot.Observed.GetTimestamp())
 
 	// During shutdown, log at DEBUG instead of WARN to avoid noisy logs
