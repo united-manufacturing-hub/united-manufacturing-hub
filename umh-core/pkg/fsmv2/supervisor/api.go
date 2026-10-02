@@ -550,10 +550,10 @@ func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContex
 	s.logger.Info("worker_added")
 }
 
-// RemoveWorker removes a worker from the registry for a restart, which adds
-// it again, so its documents are not tombstoned. To remove a worker for good,
-// use fsmv2.SignalNeedsRemoval.
-func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, workerID string) error {
+// RemoveWorkerForRestart removes a worker from the registry without
+// tombstoning its documents. To remove a worker for good, use
+// fsmv2.SignalNeedsRemoval.
+func (s *Supervisor[TObserved, TDesired]) RemoveWorkerForRestart(ctx context.Context, workerID string) error {
 	s.mu.Lock()
 
 	// Cache hierarchy path while holding the lock to avoid data race

@@ -724,7 +724,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 // including any attempt counters, connection pools, or cached data in dependencies.
 //
 // Flow:
-//  1. RemoveWorker - stops collector, executor, removes from registry
+//  1. Remove the old worker (stopWorker; no tombstone)
 //  2. Clear ShutdownRequested in storage (so new worker starts fresh)
 //  3. factory.NewWorkerByType - creates completely new worker instance
 //  4. AddWorker - registers new worker
@@ -764,7 +764,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		deps.String("action", "full_recreation"))
 
 	// 1. Remove old worker completely (stops collector, executor, removes from registry)
-	if err := s.RemoveWorker(ctx, workerID); err != nil {
+	if err := s.RemoveWorkerForRestart(ctx, workerID); err != nil {
 		return fmt.Errorf("failed to remove worker for restart: %w", err)
 	}
 
