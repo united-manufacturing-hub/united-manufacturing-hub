@@ -63,11 +63,15 @@ func (r *sentryErrorRecorder) Events() []string {
 var _ = Describe("saveInitialState marshal failure reporting", func() {
 	It("reports worker_add_marshal_observed_failed and wraps with the saveInitialState error text", func() {
 		rec := &sentryErrorRecorder{}
-		s := &Supervisor[*TestObservedState, *TestDesiredState]{logger: rec}
+		s := &Supervisor[*TestObservedState, *TestDesiredState]{
+			logger:     rec,
+			workerType: "test",
+			store:      CreateTestTriangularStoreForWorkerType("test"),
+		}
 
 		observed := unmarshalableObservedState{Channel: make(chan int)}
 
-		err := s.saveInitialState(context.Background(), nil, deps.Identity{ID: "w1"}, observed, nil, 1)
+		err := s.saveInitialState(context.Background(), nil, deps.Identity{ID: "w1", WorkerType: "test"}, observed, &TestDesiredState{}, 1)
 
 		Expect(err).To(MatchError(ContainSubstring(
 			"failed to marshal observed state: json: unsupported type: chan int")))

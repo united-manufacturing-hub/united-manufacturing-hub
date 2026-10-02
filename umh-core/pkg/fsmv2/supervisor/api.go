@@ -266,6 +266,25 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 		observed = setter.SetFrameworkMetrics(deps.FrameworkMetrics{StartupCount: startupCount})
 	}
 
+	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath, documentConversion{
+		marshalEvent:       "worker_add_marshal_desired_failed",
+		unmarshalEvent:     "worker_add_unmarshal_desired_failed",
+		marshalErrPrefix:   "failed to marshal desired state",
+		unmarshalErrPrefix: "failed to unmarshal desired state to document",
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
+
+		return fmt.Errorf("failed to save initial desired state: %w", err)
+	}
+
+	s.logger.Debug("initial_desired_state_saved")
+
 	observedDoc, err := s.toDocument(observed, identity.ID, identity.HierarchyPath, documentConversion{
 		marshalEvent:       "worker_add_marshal_observed_failed",
 		unmarshalEvent:     "worker_add_unmarshal_observed_failed",
@@ -296,25 +315,6 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 	}
 
 	s.logger.Debug("initial_observation_saved")
-
-	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath, documentConversion{
-		marshalEvent:       "worker_add_marshal_desired_failed",
-		unmarshalEvent:     "worker_add_unmarshal_desired_failed",
-		marshalErrPrefix:   "failed to marshal desired state",
-		unmarshalErrPrefix: "failed to unmarshal desired state to document",
-	})
-	if err != nil {
-		return err
-	}
-
-	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
-	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
-
-		return fmt.Errorf("failed to save initial desired state: %w", err)
-	}
-
-	s.logger.Debug("initial_desired_state_saved")
 
 	// This ID may belong to a removed worker; its tombstone must not apply to the new one.
 	if err := s.store.ClearTombstone(ctx, s.workerType, identity.ID); err != nil {
