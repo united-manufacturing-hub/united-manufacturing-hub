@@ -108,7 +108,7 @@ var _ = Describe("Tick with Data Freshness", func() {
 			})
 
 			s.TestSetStarted(true)
-			err := s.RemoveWorker(context.Background(), mockIdentity().ID)
+			err := s.RemoveWorkerForRestart(context.Background(), mockIdentity().ID)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = s.TestTick(context.Background())
@@ -122,7 +122,7 @@ var _ = Describe("Tick with Data Freshness", func() {
 				StaleThreshold: 10 * time.Second,
 			})
 
-			err := s.RemoveWorker(context.Background(), mockIdentity().ID)
+			err := s.RemoveWorkerForRestart(context.Background(), mockIdentity().ID)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = s.TestTick(context.Background())

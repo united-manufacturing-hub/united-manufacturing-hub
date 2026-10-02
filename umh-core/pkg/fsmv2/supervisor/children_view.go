@@ -21,7 +21,7 @@ import (
 // childInfoSlice snapshots every child supervisor as a slice of config.ChildInfo.
 //
 // The RLock covers the children map snapshot only; per-child accessors run
-// without holding the supervisor lock so AddWorker and RemoveWorker stay
+// without holding the supervisor lock so AddWorker and RemoveWorkerForRestart stay
 // responsive. The map values are pointer interfaces, so the copied slice
 // observes each child consistently for the duration of one tick.
 func (s *Supervisor[TObserved, TDesired]) childInfoSlice() []config.ChildInfo {
