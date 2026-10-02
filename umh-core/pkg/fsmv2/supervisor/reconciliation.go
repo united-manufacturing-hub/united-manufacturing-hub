@@ -1088,6 +1088,11 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				deps.Any("children", childNames))
 		}
 
+		// Tombstone while s.mu is held and the id is still in s.workers.
+		// AddWorker refuses an id in s.workers, so a worker added again with
+		// this id clears the tombstone only after this write.
+		s.tombstoneWorker(ctx, workerID, workerCtx.identity.HierarchyPath)
+
 		delete(s.workers, workerID)
 		s.mu.Unlock()
 
@@ -1155,6 +1160,26 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 			deps.Int("signal", int(signal)))
 
 		return unknownSignalErr
+	}
+}
+
+// tombstoneTimeout bounds Tombstone, which runs under s.mu.
+const tombstoneTimeout = 5 * time.Second
+
+// tombstoneWorker tombstones a removed worker's documents. Nothing retries a
+// failed Tombstone, so the documents then stay as if the worker still ran
+// (ENG-6348).
+func (s *Supervisor[TObserved, TDesired]) tombstoneWorker(ctx context.Context, workerID string, hierarchyPath string) {
+	// Shutdown may already have cancelled ctx, and the tombstone must still be
+	// written. A store may honour cancellation, so the write runs on a context
+	// detached from ctx, bounded by tombstoneTimeout.
+	markCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tombstoneTimeout)
+	defer cancel()
+
+	if err := s.store.Tombstone(markCtx, s.workerType, workerID, "supervisor"); err != nil {
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_removal_tombstone_failed",
+			deps.Err(err),
+			deps.String("target_worker_id", workerID))
 	}
 }
 

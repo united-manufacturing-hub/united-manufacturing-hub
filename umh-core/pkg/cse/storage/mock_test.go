@@ -221,6 +221,14 @@ func (m *mockTriangularStore) LoadSnapshot(ctx context.Context, workerType strin
 	return snapshot, nil
 }
 
+func (m *mockTriangularStore) Tombstone(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
+
+func (m *mockTriangularStore) ClearTombstone(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
 func (m *mockTriangularStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 	return 0, nil
 }

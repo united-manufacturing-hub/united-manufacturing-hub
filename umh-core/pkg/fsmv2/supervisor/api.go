@@ -228,6 +228,14 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.logger.Debug("initial_desired_state_saved")
 
+	// This ID may belong to a removed worker; its tombstone must not apply to the new one.
+	if err := s.store.ClearTombstone(ctx, s.workerType, identity.ID); err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_clear_tombstone_failed")
+
+		// The store error already names the operation and the worker.
+		return err
+	}
+
 	// Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
 	workerLogger := s.baseLogger.With(deps.String("worker", identity.String()))
 	workerLogger.Info("identity_created")
@@ -463,7 +471,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	return nil
 }
 
-// RemoveWorker removes a worker from the registry.
+// RemoveWorker removes a worker from the registry for a restart, which adds
+// it again, so its documents are not tombstoned. To remove a worker for good,
+// use fsmv2.SignalNeedsRemoval.
 func (s *Supervisor[TObserved, TDesired]) RemoveWorker(ctx context.Context, workerID string) error {
 	s.mu.Lock()
 

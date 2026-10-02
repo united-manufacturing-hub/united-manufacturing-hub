@@ -17,14 +17,17 @@ package supervisor_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 var _ = Describe("Supervisor Lifecycle", func() {
@@ -186,6 +189,165 @@ var _ = Describe("Supervisor Lifecycle", func() {
 		})
 	})
 
+	Describe("removal tombstones the worker's documents", func() {
+		newRemovalSupervisor := func(store storage.TriangularStoreInterface, logger deps.FSMLogger) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+			removalState := &mockState{
+				signal: fsmv2.SignalNeedsRemoval,
+			}
+			removalState.nextState = removalState
+
+			return newSupervisorWithWorkerAndLogger(&mockWorker{initialState: removalState}, store, supervisor.CollectorHealthConfig{}, logger)
+		}
+
+		It("tombstones the documents on plain removal", func() {
+			identity := mockIdentity()
+			store := newMockTriangularStore()
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.TombstoneCalls).To(HaveLen(1))
+			Expect(store.TombstoneCalls[0].WorkerType).To(Equal("test"))
+			Expect(store.TombstoneCalls[0].ID).To(Equal(identity.ID))
+			Expect(store.TombstoneCalls[0].By).To(Equal("supervisor"))
+		})
+
+		It("does not tombstone the documents on restart", func() {
+			identity := mockIdentity()
+			store := newMockTriangularStore()
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+			s.TestSetPendingRestart(identity.ID)
+			s.TestMarkAsStarted()
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(s.ListWorkers()).To(HaveLen(1))
+			Expect(store.TombstoneCalls).To(BeEmpty())
+		})
+
+		It("does not tombstone the documents on RemoveWorker", func() {
+			identity := mockIdentity()
+			store := newMockTriangularStore()
+			s := newSupervisorWithWorker(&mockWorker{}, store, supervisor.CollectorHealthConfig{})
+
+			Expect(s.RemoveWorker(context.Background(), identity.ID)).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.TombstoneCalls).To(BeEmpty())
+		})
+
+		It("still removes the worker and warns when Tombstone fails", func() {
+			store := newMockTriangularStore()
+			store.TombstoneErr = errors.New("tombstone failed")
+			logger := &sentryWarnRecorder{}
+			s := newRemovalSupervisor(store, logger)
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.TombstoneCalls).To(HaveLen(1))
+
+			warnings := logger.Warns()
+			Expect(warnings).To(HaveLen(1))
+			Expect(warnings[0].Msg).To(Equal("worker_removal_tombstone_failed"))
+			Expect(warnings[0].Fields).To(ContainElement(deps.Field{Key: "target_worker_id", Value: mockIdentity().ID}))
+		})
+
+		It("tombstones the documents even when the tick context is cancelled", func() {
+			identity := mockIdentity()
+			roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
+
+			basicStore := memory.NewInMemoryStore()
+			for _, role := range roles {
+				Expect(basicStore.CreateCollection(context.Background(), "test_"+role, nil)).To(Succeed())
+			}
+
+			// The store rejects writes on a cancelled context, so only the
+			// context tombstoneWorker derives itself can carry the
+			// tombstone write. The hook store records whether that context
+			// carries the deadline that bounds the write.
+			realStore := storage.NewTriangularStore(&cancelledWriteStore{inner: basicStore}, deps.NewNopFSMLogger())
+			store := &tombstoneHookStore{TriangularStoreInterface: realStore}
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			Expect(s.TestTick(ctx)).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+			Expect(store.tombstoneCtxHasDeadline).To(BeTrue(),
+				"the tombstone write runs under s.mu, so without a deadline it could hold the supervisor forever")
+
+			for _, role := range roles {
+				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(doc[storage.FieldDeletedAt]).ToNot(BeNil(),
+					"the %s document must carry a tombstone despite the cancelled tick context", role)
+			}
+		})
+
+		It("writes a non-nil _deleted_at on the real store's documents", func() {
+			identity := mockIdentity()
+			roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
+
+			basicStore := memory.NewInMemoryStore()
+			for _, role := range roles {
+				Expect(basicStore.CreateCollection(context.Background(), "test_"+role, nil)).To(Succeed())
+			}
+
+			realStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+			s := newRemovalSupervisor(realStore, deps.NewNopFSMLogger())
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(s.ListWorkers()).To(BeEmpty())
+
+			for _, role := range roles {
+				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(doc).To(HaveKey(storage.FieldDeletedAt), "the %s document must carry a tombstone", role)
+				Expect(doc[storage.FieldDeletedAt]).ToNot(BeNil(), "the %s document's _deleted_at must be non-nil, or it carries no tombstone", role)
+				Expect(doc[storage.FieldDeletedBy]).To(Equal("supervisor"))
+			}
+		})
+
+		It("does not tombstone a worker added again while the old one is being removed", func() {
+			identity := mockIdentity()
+			roles := []string{storage.RoleIdentity, storage.RoleDesired, storage.RoleObserved}
+
+			basicStore := memory.NewInMemoryStore()
+			for _, role := range roles {
+				Expect(basicStore.CreateCollection(context.Background(), "test_"+role, nil)).To(Succeed())
+			}
+
+			store := &tombstoneHookStore{TriangularStoreInterface: storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())}
+			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
+
+			addDone := make(chan error, 1)
+
+			// Add a worker with the same id just before the old one is
+			// tombstoned. An AddWorker that does not wait for the removal
+			// finishes within 300 ms.
+			store.beforeTombstone = func() {
+				go func() { addDone <- s.AddWorker(identity, &mockWorker{}) }()
+
+				select {
+				case err := <-addDone:
+					addDone <- err
+				case <-time.After(300 * time.Millisecond):
+				}
+			}
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Eventually(addDone).Should(Receive(BeNil()))
+
+			Expect(s.ListWorkers()).To(ContainElement(identity.ID))
+
+			for _, role := range roles {
+				doc, getErr := basicStore.Get(context.Background(), "test_"+role, identity.ID)
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(doc).ToNot(HaveKey(storage.FieldDeletedAt),
+					"the %s document of the worker added again must not carry a tombstone", role)
+			}
+		})
+	})
+
 	Describe("SignalNeedsRestart full worker restart", func() {
 		Context("when SignalNeedsRestart is received", func() {
 			It("should mark worker for restart and request graceful shutdown", func() {
@@ -338,3 +500,188 @@ var _ = Describe("Supervisor Lifecycle", func() {
 		})
 	})
 })
+
+// tombstoneHookStore records facts about the Tombstone call and can run a
+// hook from inside it.
+type tombstoneHookStore struct {
+	storage.TriangularStoreInterface
+
+	beforeTombstone func()
+
+	// tombstoneCtxHasDeadline records whether the context of the Tombstone
+	// call carries a deadline.
+	tombstoneCtxHasDeadline bool
+}
+
+func (h *tombstoneHookStore) Tombstone(ctx context.Context, workerType string, id string, deletedBy string) error {
+	if hook := h.beforeTombstone; hook != nil {
+		h.beforeTombstone = nil
+
+		hook()
+	}
+
+	_, h.tombstoneCtxHasDeadline = ctx.Deadline()
+
+	return h.TriangularStoreInterface.Tombstone(ctx, workerType, id, deletedBy)
+}
+
+// cancelledWriteStore rejects every write whose context is cancelled, then
+// delegates to inner. It models the store contract that a write may honour
+// cancellation, so only the context tombstoneWorker derives can write the
+// tombstone.
+type cancelledWriteStore struct {
+	inner persistence.Store
+}
+
+func (s *cancelledWriteStore) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
+	return s.inner.CreateCollection(ctx, name, schema)
+}
+
+func (s *cancelledWriteStore) DropCollection(ctx context.Context, name string) error {
+	return s.inner.DropCollection(ctx, name)
+}
+
+func (s *cancelledWriteStore) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	return s.inner.Insert(ctx, collection, doc)
+}
+
+func (s *cancelledWriteStore) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
+	return s.inner.Get(ctx, collection, id)
+}
+
+func (s *cancelledWriteStore) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return s.inner.Update(ctx, collection, id, doc)
+}
+
+func (s *cancelledWriteStore) Delete(ctx context.Context, collection string, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return s.inner.Delete(ctx, collection, id)
+}
+
+func (s *cancelledWriteStore) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
+	return s.inner.Find(ctx, collection, query)
+}
+
+func (s *cancelledWriteStore) Maintenance(ctx context.Context) error {
+	return s.inner.Maintenance(ctx)
+}
+
+func (s *cancelledWriteStore) BeginTx(ctx context.Context) (persistence.Tx, error) {
+	tx, err := s.inner.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &cancelledWriteTx{inner: tx}, nil
+}
+
+func (s *cancelledWriteStore) Close(ctx context.Context) error {
+	return s.inner.Close(ctx)
+}
+
+// cancelledWriteTx applies the same cancellation check to every write inside
+// the transaction.
+type cancelledWriteTx struct {
+	inner persistence.Tx
+}
+
+func (t *cancelledWriteTx) CreateCollection(ctx context.Context, name string, schema *persistence.Schema) error {
+	return t.inner.CreateCollection(ctx, name, schema)
+}
+
+func (t *cancelledWriteTx) DropCollection(ctx context.Context, name string) error {
+	return t.inner.DropCollection(ctx, name)
+}
+
+func (t *cancelledWriteTx) Insert(ctx context.Context, collection string, doc persistence.Document) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	return t.inner.Insert(ctx, collection, doc)
+}
+
+func (t *cancelledWriteTx) Get(ctx context.Context, collection string, id string) (persistence.Document, error) {
+	return t.inner.Get(ctx, collection, id)
+}
+
+func (t *cancelledWriteTx) Update(ctx context.Context, collection string, id string, doc persistence.Document) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return t.inner.Update(ctx, collection, id, doc)
+}
+
+func (t *cancelledWriteTx) Delete(ctx context.Context, collection string, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return t.inner.Delete(ctx, collection, id)
+}
+
+func (t *cancelledWriteTx) Find(ctx context.Context, collection string, query persistence.Query) ([]persistence.Document, error) {
+	return t.inner.Find(ctx, collection, query)
+}
+
+func (t *cancelledWriteTx) Maintenance(ctx context.Context) error {
+	return t.inner.Maintenance(ctx)
+}
+
+func (t *cancelledWriteTx) BeginTx(ctx context.Context) (persistence.Tx, error) {
+	return t.inner.BeginTx(ctx)
+}
+
+func (t *cancelledWriteTx) Close(ctx context.Context) error {
+	return t.inner.Close(ctx)
+}
+
+func (t *cancelledWriteTx) Commit() error   { return t.inner.Commit() }
+func (t *cancelledWriteTx) Rollback() error { return t.inner.Rollback() }
+
+var _ persistence.Store = (*cancelledWriteStore)(nil)
+var _ persistence.Tx = (*cancelledWriteTx)(nil)
+
+type sentryWarnRecorder struct {
+	mu       sync.Mutex
+	warnings []sentryWarn
+}
+
+type sentryWarn struct {
+	Msg    string
+	Fields []deps.Field
+}
+
+func (r *sentryWarnRecorder) Debug(_ string, _ ...deps.Field) {}
+func (r *sentryWarnRecorder) Info(_ string, _ ...deps.Field)  {}
+
+func (r *sentryWarnRecorder) SentryWarn(_ deps.Feature, _ string, msg string, fields ...deps.Field) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.warnings = append(r.warnings, sentryWarn{Msg: msg, Fields: fields})
+}
+
+func (r *sentryWarnRecorder) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
+}
+
+func (r *sentryWarnRecorder) With(_ ...deps.Field) deps.FSMLogger { return r }
+
+func (r *sentryWarnRecorder) Warns() []sentryWarn {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return append([]sentryWarn{}, r.warnings...)
+}
