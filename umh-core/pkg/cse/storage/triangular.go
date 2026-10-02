@@ -596,7 +596,7 @@ func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields [
 }
 
 // performDeltaCheck compares two documents and returns change information.
-// Filters out CSE fields, ID, version and the tombstone before comparison.
+// Filters out CSE fields, ID and version before comparison.
 //
 // Returns:
 //   - hasChanges: true if business data changed (new document or fields modified)
@@ -615,14 +615,10 @@ func (ts *TriangularStore) performDeltaCheck(
 	currentFiltered := ts.filterCSEFields(currentDoc, cseFields)
 	delete(currentFiltered, "id")
 	delete(currentFiltered, FieldVersion)
-	delete(currentFiltered, FieldDeletedAt)
-	delete(currentFiltered, FieldDeletedBy)
 
 	newFiltered := ts.filterCSEFields(newDoc, cseFields)
 	delete(newFiltered, "id")
 	delete(newFiltered, FieldVersion)
-	delete(newFiltered, FieldDeletedAt)
-	delete(newFiltered, FieldDeletedBy)
 
 	changes = ts.getChangedFieldsWithValues(currentFiltered, newFiltered)
 	hasChanges = len(changes) > 0
