@@ -113,28 +113,28 @@ func main() {
 
 	defer func() { _ = logger.Sync() }()
 
-	v2Scenario, isV2 := examples.RegistryV2[*scenarioName]
+	scenario, found := examples.Registry[*scenarioName]
 
-	if !isV2 {
-		liveScenario, isLive := examples.LiveRegistryV2[*scenarioName]
+	if !found {
+		liveScenario, isLive := examples.LiveRegistry[*scenarioName]
 		if isLive {
-			v2Scenario, isV2 = liveScenario, true
+			scenario, found = liveScenario, true
 		}
 	}
 
-	if !isV2 {
+	if !found {
 		logger.Fatal("Scenario not found",
 			zap.String("scenario", *scenarioName),
 			zap.String("hint", "Use --list to see available scenarios"),
 		)
 	}
 
-	description := v2Scenario.Description
+	description := scenario.Description
 
 	// One signal owner: the CLI creates the cancellable ctx and is the only
 	// signal.Notify site, installed BEFORE examples.Run so a SIGINT during a
 	// running scenario cannot kill the process without teardown. The first
-	// SIGINT cancels the ctx (a v2 scenario sees it, the runner tears down
+	// SIGINT cancels the ctx (a scenario sees it, the runner tears down
 	// gracefully); a second SIGINT force-exits.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -178,11 +178,11 @@ func main() {
 	}
 
 	logger.Info("Starting scenario",
-		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, v2Scenario)...,
+		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, scenario)...,
 	)
 
 	result, err := examples.Run(ctx, examples.RunConfig{
-		ScenarioV2:         v2Scenario,
+		Scenario:           scenario,
 		Duration:           settleWindow,
 		TickInterval:       *tickInterval,
 		Logger:             newRunLogger(logger),
@@ -310,7 +310,7 @@ func newRunLogger(logger *zap.Logger) deps.FSMLogger {
 	return deps.NewUnsampledFSMLogger(logger.Sugar())
 }
 
-func startingScenarioFields(name, description, duration string, tick time.Duration, s examples.ScenarioV2) []zap.Field {
+func startingScenarioFields(name, description, duration string, tick time.Duration, s examples.Scenario) []zap.Field {
 	return append([]zap.Field{
 		zap.String("name", name),
 		zap.String("description", description),
@@ -320,7 +320,7 @@ func startingScenarioFields(name, description, duration string, tick time.Durati
 }
 
 // expectedFields returns one field per expectation list the scenario fills.
-func expectedFields(s examples.ScenarioV2) []zap.Field {
+func expectedFields(s examples.Scenario) []zap.Field {
 	var fields []zap.Field
 
 	if len(s.ExpectedErrors) > 0 {

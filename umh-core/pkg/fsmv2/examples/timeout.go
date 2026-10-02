@@ -25,10 +25,10 @@ import (
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
 
-// TimeoutScenarioV2 runs four workers that connect at different speeds. Its
+// TimeoutScenario runs four workers that connect at different speeds. Its
 // longest action, the two-second delay, stays far below the 30 s action
 // timeout (defaultActionTimeout in supervisor/internal/execution).
-var TimeoutScenarioV2 = ScenarioV2{
+var TimeoutScenario = Scenario{
 	Name:        "timeout",
 	Description: "Four workers that connect at different speeds; the longest action takes 2 s, far below the 30 s action timeout",
 

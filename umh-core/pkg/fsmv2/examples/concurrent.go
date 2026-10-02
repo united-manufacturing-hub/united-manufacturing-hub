@@ -26,8 +26,8 @@ import (
 
 const concurrentWorkerCount = 5
 
-// ConcurrentScenarioV2 creates several helloworld workers without waiting between them; each must reach Running.
-var ConcurrentScenarioV2 = ScenarioV2{
+// ConcurrentScenario creates several helloworld workers without waiting between them; each must reach Running.
+var ConcurrentScenario = Scenario{
 	Name:        "concurrent",
 	Description: "Helloworld workers created without waiting between them; each one reaches Running",
 

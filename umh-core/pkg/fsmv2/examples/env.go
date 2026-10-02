@@ -254,8 +254,8 @@ func timesEntered[TStatus any](obs fsmv2.Observation[TStatus], state string) int
 	return obs.Metrics.Framework.TransitionsByState[state]
 }
 
-// ScenarioV2 is a scenario that drives the kernel-only supervisor.
-type ScenarioV2 struct {
+// Scenario is a scenario that drives the kernel-only supervisor.
+type Scenario struct {
 	// Run creates workers through env.Client, changes the mocks, and checks the
 	// result. When a check fails, Run returns an error that names the check.
 	// After a nil return, the runner waits RunConfig.Duration, then shuts the
@@ -296,52 +296,52 @@ type ScenarioV2 struct {
 	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 
-// NoopScenarioV2 changes nothing, so the application worker spawns only its
+// NoopScenario changes nothing, so the application worker spawns only its
 // config worker kernel child.
-var NoopScenarioV2 = ScenarioV2{
+var NoopScenario = Scenario{
 	Name:        "noop",
-	Description: "Runs the kernel-only supervisor and changes nothing (v2)",
+	Description: "Runs the kernel-only supervisor and changes nothing",
 	Run: func(_ context.Context, _ Env) error {
 		return nil
 	},
 }
 
-// RegistryV2 contains all available v2 scenarios, merged into ListScenarios
-// alongside LiveRegistryV2. A name may be in only one of the two; the spec
-// "keeps the v2 registries' names disjoint" in scenariov2_test.go says why.
-var RegistryV2 = map[string]ScenarioV2{
-	"noop":         NoopScenarioV2,
-	"helloworld":   HelloworldScenarioV2,
-	"failing":      FailingScenarioV2,
-	"slow":         SlowScenarioV2,
-	"timeout":      TimeoutScenarioV2,
-	"panic":        PanicScenarioV2,
-	"dynamic":      DynamicScenarioV2,
-	"nmap":         NmapScenarioV2,
-	"transport":    TransportScenarioV2,
-	"concurrent":   ConcurrentScenarioV2,
-	"simple":       SimpleScenarioV2,
-	"cascade":      CascadeScenarioV2,
-	"configerror":  ConfigErrorScenarioV2,
-	"inheritance":  InheritanceScenarioV2,
-	"communicator": CommunicatorScenarioV2,
-	"persistence":  PersistenceScenarioV2,
+// Registry contains all available scenarios, merged into ListScenarios
+// alongside LiveRegistry. A name may be in only one of the two; the spec
+// "keeps the registries' names disjoint" in scenario_test.go says why.
+var Registry = map[string]Scenario{
+	"noop":         NoopScenario,
+	"helloworld":   HelloworldScenario,
+	"failing":      FailingScenario,
+	"slow":         SlowScenario,
+	"timeout":      TimeoutScenario,
+	"panic":        PanicScenario,
+	"dynamic":      DynamicScenario,
+	"nmap":         NmapScenario,
+	"transport":    TransportScenario,
+	"concurrent":   ConcurrentScenario,
+	"simple":       SimpleScenario,
+	"cascade":      CascadeScenario,
+	"configerror":  ConfigErrorScenario,
+	"inheritance":  InheritanceScenario,
+	"communicator": CommunicatorScenario,
+	"persistence":  PersistenceScenario,
 
-	"certfetcher-healthy":        CertFetcherHealthyScenarioV2,
-	"certfetcher-degraded":       CertFetcherDegradedScenarioV2,
-	"certfetcher-no-subscribers": CertFetcherNoSubscribersScenarioV2,
-	"historian":                  HistorianScenarioV2,
+	"certfetcher-healthy":        CertFetcherHealthyScenario,
+	"certfetcher-degraded":       CertFetcherDegradedScenario,
+	"certfetcher-no-subscribers": CertFetcherNoSubscribersScenario,
+	"historian":                  HistorianScenario,
 
-	"cpu-pressure": CPUPressureScenarioV2,
-	"cpu-blind":    CPUBlindScenarioV2,
-	"cpu-stall":    CPUStallScenarioV2,
-	"cpu-filling":  CPUFillingScenarioV2,
-	"cpu-latch":    CPULatchScenarioV2,
+	"cpu-pressure": CPUPressureScenario,
+	"cpu-blind":    CPUBlindScenario,
+	"cpu-stall":    CPUStallScenario,
+	"cpu-filling":  CPUFillingScenario,
+	"cpu-latch":    CPULatchScenario,
 }
 
-// LiveRegistryV2 holds scenarios that read the real machine the runner runs
+// LiveRegistry holds scenarios that read the real machine the runner runs
 // on, so their result depends on that machine's CPU load and cgroup files. The
 // CLI runs them. The registry spec does not, because CI does not control those.
-var LiveRegistryV2 = map[string]ScenarioV2{
-	"cpu-host": CPUHostScenarioV2,
+var LiveRegistry = map[string]Scenario{
+	"cpu-host": CPUHostScenario,
 }

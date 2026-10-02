@@ -27,10 +27,10 @@ import (
 
 const mockMoodPath = "mood"
 
-// HelloworldScenarioV2 runs one helloworld child against a mock filesystem in
+// HelloworldScenario runs one helloworld child against a mock filesystem in
 // the dependency map. It waits for the mood in the observation, not for a
 // state: only the mood "sad" moves the child out of Running.
-var HelloworldScenarioV2 = ScenarioV2{
+var HelloworldScenario = Scenario{
 	Name:        "helloworld",
 	Description: "A helloworld child reads its mood from a file. The scenario changes the file twice and checks that the observed mood follows each time",
 
