@@ -19,6 +19,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,11 +32,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
 // v2LogBuffer is a goroutine-safe buffer for capturing JSON log output in
@@ -76,6 +80,41 @@ func logContainsEvent(logOutput, msg string) bool {
 	}
 
 	return false
+}
+
+// captureStdout sends os.Stdout into a pipe until stop is called, and stop
+// returns what was written. A goroutine reads the pipe while the run writes:
+// a dump larger than the pipe buffer would otherwise block the teardown
+// goroutine's print, and Done would never close.
+func captureStdout() (stop func() string) {
+	origStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	Expect(err).NotTo(HaveOccurred())
+
+	var out bytes.Buffer
+
+	drainDone := make(chan struct{})
+	go func() {
+		defer close(drainDone)
+
+		_, _ = io.Copy(&out, reader)
+	}()
+
+	DeferCleanup(func() {
+		os.Stdout = origStdout
+		_ = writer.Close()
+		_ = reader.Close()
+	})
+
+	os.Stdout = writer
+
+	return func() string {
+		os.Stdout = origStdout
+		Expect(writer.Close()).To(Succeed())
+		Eventually(drainDone, "5s").Should(BeClosed())
+
+		return out.String()
+	}
 }
 
 var scenarioDepsProbeLabelKey = config.NewDependencyKey[string]("examples.test.scenario_deps")
@@ -134,38 +173,14 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 	})
 
-	It("keeps v1 and v2 registry names disjoint", func() {
-		// On a name collision, ListScenarios and the CLI --list silently
-		// prefer the v2 entry, and --scenario resolves both forms so Run
-		// rejects them with its conflicting-configuration error, making
-		// both scenarios unrunnable.
-		for name := range examples.RegistryV2 {
-			Expect(examples.Registry).NotTo(HaveKey(name),
-				"scenario name %q is registered in both Registry and RegistryV2", name)
-		}
-
-		// LiveRegistryV2 joins the same listing, so the same collision rules
-		// hold against both other registries.
+	It("keeps the v2 registries' names disjoint", func() {
+		// On a name collision, --list shows the LiveRegistryV2 description
+		// while --scenario runs the RegistryV2 scenario. The LiveRegistryV2
+		// scenario can then not be run from the CLI.
 		for name := range examples.LiveRegistryV2 {
-			Expect(examples.Registry).NotTo(HaveKey(name),
-				"scenario name %q is registered in both Registry and LiveRegistryV2", name)
 			Expect(examples.RegistryV2).NotTo(HaveKey(name),
 				"scenario name %q is registered in both RegistryV2 and LiveRegistryV2", name)
 		}
-	})
-
-	It("rejects a RunConfig with both a v1 and a v2 scenario set", func() {
-		logger := deps.NewNopFSMLogger()
-		store := examples.SetupStore(logger)
-
-		result, err := examples.Run(context.Background(), examples.RunConfig{
-			Scenario:   examples.Scenario{Name: "v1", YAMLConfig: "children: []"},
-			ScenarioV2: examples.ScenarioV2{Name: "v2", Run: func(_ context.Context, _ examples.Env) error { return nil }},
-			Logger:     logger,
-			Store:      store,
-		})
-		Expect(err).To(MatchError(ContainSubstring("conflicting configuration")))
-		Expect(result).To(BeNil())
 	})
 
 	It("rejects a ScenarioV2 with a Name but no Run, naming the scenario", func() {
@@ -256,21 +271,101 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the failed run must not replace or clear the already-published registry")
 	})
 
-	It("warns and ignores DumpStore for a v2 scenario", func() {
+	It("prints the store dump when a v2 scenario's Run fails", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		dumpRequested := examples.ScenarioV2{
-			Name:        "dump-requested",
-			Description: "test-local Run for the DumpStore warning path",
-			Run: func(_ context.Context, _ examples.Env) error {
-				return nil
+		failing := examples.ScenarioV2{
+			Name:        "dump-after-failure",
+			Description: "test-local Run that creates a worker and then fails",
+			Run: func(ctx context.Context, env examples.Env) error {
+				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "dump-failed-hello"}
+
+				env.Step("create a helloworld child")
+
+				if err := env.Client.Upsert(ref, map[string]any{"state": "running"}); err != nil {
+					return err
+				}
+
+				if err := env.WaitFor(ctx, "the helloworld child reaches Running",
+					func(ctx context.Context) (bool, string, error) {
+						obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
+						if err != nil {
+							if errors.Is(err, fsmv2client.ErrNotObserved) {
+								return false, "the child has not published an observation yet", nil
+							}
+
+							return false, "", err
+						}
+
+						return obs.State == "Running", "state=" + obs.State, nil
+					}); err != nil {
+					return err
+				}
+
+				return errors.New("scenario gave up")
 			},
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
+
+		stop := captureStdout()
+
+		_, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   failing,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+			DumpStore:    true,
+		})
+		Expect(err).To(MatchError(ContainSubstring("scenario gave up")))
+
+		out := stop()
+
+		Expect(out).To(ContainSubstring("CSE SCENARIO DUMP"),
+			"a failed run must still print the store dump, because that is when it is most needed")
+		Expect(out).To(ContainSubstring("dump-failed-hello"),
+			"the dump must list the worker the scenario created before it failed")
+	})
+
+	It("prints the store dump after a v2 scenario run", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		dumpRequested := examples.ScenarioV2{
+			Name:        "dump-requested",
+			Description: "test-local Run for the DumpStore print path",
+			Run: func(ctx context.Context, env examples.Env) error {
+				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "dump-hello"}
+
+				env.Step("create a helloworld child")
+
+				if err := env.Client.Upsert(ref, map[string]any{"state": "running"}); err != nil {
+					return err
+				}
+
+				return env.WaitFor(ctx, "the helloworld child reaches Running",
+					func(ctx context.Context) (bool, string, error) {
+						obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
+						if err != nil {
+							if errors.Is(err, fsmv2client.ErrNotObserved) {
+								return false, "the child has not published an observation yet", nil
+							}
+
+							return false, "", err
+						}
+
+						return obs.State == "Running", "state=" + obs.State, nil
+					})
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		stop := captureStdout()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
 			ScenarioV2:   dumpRequested,
@@ -281,13 +376,17 @@ var _ = Describe("ScenarioV2 framework", func() {
 			DumpStore:    true,
 		})
 		Expect(err).NotTo(HaveOccurred(),
-			"DumpStore must not break a v2 run, only warn")
+			"DumpStore must not break a v2 run")
 		Eventually(result.Done, "55s").Should(BeClosed())
 
-		// A silently ignored DumpStore lets a developer misread "no dump
-		// printed" as "no store changes", so the gap must be logged.
-		Expect(logContainsEvent(logBuf.String(), "dump_store_not_supported_for_v2")).To(BeTrue(),
-			"runV2 must warn that DumpStore is ignored for v2 scenarios")
+		out := stop()
+
+		Expect(out).To(ContainSubstring("CSE SCENARIO DUMP"),
+			"runV2 must print the store dump when DumpStore is set")
+		Expect(out).To(ContainSubstring("dump-hello"),
+			"the dump must list the worker the scenario created")
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"a clean dump run must not report a failure")
 	})
 
 	It("tears down gracefully on a live tick loop when the caller ctx is cancelled mid-run", func() {
@@ -349,15 +448,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 	})
 
 	It("lists noop in the merged registry and runs a v2 scenario end-to-end on the kernel-only supervisor", func() {
-		// The v2 scenarios must appear in the same listing the CLI reads, so
-		// --list and --scenario find v1 and v2 scenarios alike.
 		listing := examples.ListScenarios()
 		Expect(listing).To(HaveKey("noop"),
 			"merged ListScenarios must contain the v2 noop scenario")
 		Expect(listing).To(HaveKey("helloworld"),
 			"merged ListScenarios must contain the v2 helloworld scenario")
-		Expect(examples.Registry).NotTo(HaveKey("helloworld"),
-			"helloworld must be a v2 scenario only")
 
 		// The sentinel bool proves the runner invoked Run; noop's own Run
 		// returns nil at once, so it cannot.
@@ -458,6 +553,64 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"a clean v2 run must report ShutdownClean=true, proving the field is wired to the supervisor's drain outcome")
 	})
 
+	It("reports ShutdownClean=false when a v2 run's drain budget is exhausted", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		degradedDrain := examples.ScenarioV2{
+			Name:        "degraded-drain",
+			Description: "test-local Run that leaves a helloworld worker running, so the drain has a worker to stop",
+			// The 1ns GracefulShutdownTimeout below makes the drain log these.
+			ExpectedWarnings: []string{
+				"graceful_shutdown_timeout",
+				"graceful_shutdown_budget_exhausted",
+			},
+			Run: func(ctx context.Context, env examples.Env) error {
+				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
+
+				env.Step("create a helloworld child")
+
+				if err := env.Client.Upsert(ref, map[string]any{"state": "running"}); err != nil {
+					return err
+				}
+
+				return env.WaitFor(ctx, "the helloworld child reaches Running",
+					func(ctx context.Context) (bool, string, error) {
+						obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
+						if err != nil {
+							if errors.Is(err, fsmv2client.ErrNotObserved) {
+								return false, "the child has not published an observation yet", nil
+							}
+
+							return false, "", err
+						}
+
+						return obs.State == "Running", "state=" + obs.State, nil
+					})
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   degradedDrain,
+			Duration:     time.Second,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+
+			GracefulShutdownTimeout: time.Nanosecond,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(result.Done, "55s").Should(BeClosed())
+
+		Expect(result.ShutdownClean).To(BeFalse(),
+			"a v2 run whose graceful drain budget is exhausted must report ShutdownClean=false")
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"the drain warnings are in ExpectedWarnings, so they must not fail the run")
+	})
+
 	It("tears down and clears the deps key when Run fails", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
@@ -515,6 +668,9 @@ var _ = Describe("ScenarioV2 framework", func() {
 			Store:        store,
 		})
 		Expect(err).NotTo(HaveOccurred())
+
+		Consistently(result.Done, "1s").ShouldNot(BeClosed(),
+			"a Duration=0 run must keep going until the context is cancelled")
 
 		// Caller-ctx cancellation is the only teardown path for a Duration=0
 		// run; a regression here leaves such a run hanging forever.

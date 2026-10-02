@@ -19,9 +19,13 @@ import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pk
 // ExamplechildConfig is the typed configuration for the child worker.
 type ExamplechildConfig struct {
 	config.BaseUserSpec
+	Address string `json:"address" yaml:"address"`
+	Device  string `json:"device"  yaml:"device"`
 }
 
 // ExamplechildStatus is the observed status for the child worker.
 type ExamplechildStatus struct {
 	ConnectionHealth string `json:"connection_health"`
+	Address          string `json:"address"`
+	Device           string `json:"device"`
 }

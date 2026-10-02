@@ -24,9 +24,9 @@ import (
 // Each child receives cfg.ChildConfig verbatim as UserSpec.Config and a
 // per-child DEVICE_ID variable (device-0, device-1, ...).
 //
-// When cfg.ChildConfig is empty, the child's Config is also empty.
-// No fallback template is injected — ExamplechildConfig has no address or
-// device fields that would consume one.
+// When cfg.ChildConfig is empty, the child's Config is also empty. Templates
+// render in strict mode, so a fallback template that used {{ .IP }} would fail
+// to render wherever no IP variable is set.
 //
 // enabled=false here is unused: exampleparent's stop-states pass empty
 // slices directly because the children are stateless. See workers/transport

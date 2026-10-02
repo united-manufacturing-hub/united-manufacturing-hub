@@ -81,7 +81,7 @@ func (w *ChildWorker) GetDependencies() *ExamplechildDependencies {
 }
 
 // CollectObservedState returns the current observed state of the child worker.
-func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+func (w *ChildWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -103,8 +103,18 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredS
 		connectionHealth = "healthy"
 	}
 
+	var address, device string
+
+	if desired != nil {
+		cfg := fsmv2.ExtractConfig[ExamplechildConfig](desired)
+		address = cfg.Address
+		device = cfg.Device
+	}
+
 	status := ExamplechildStatus{
 		ConnectionHealth: connectionHealth,
+		Address:          address,
+		Device:           device,
 	}
 
 	return fsmv2.NewObservation(status), nil

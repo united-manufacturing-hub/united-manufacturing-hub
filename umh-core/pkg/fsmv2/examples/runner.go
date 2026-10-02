@@ -54,27 +54,19 @@ import (
 )
 
 // RunResult contains the result of running a scenario.
-//
-// The two fields carry different guarantees per scenario form. Done closes
-// when teardown is complete: for a v1 scenario that is when the supervisor
-// has stopped and its cleanup ran (plus the dump when DumpStore is set); for
-// a v2 scenario it additionally includes clearing the published configworker
-// deps key, which is what makes back-to-back v2 runs safe. Shutdown initiates
-// teardown: the v1 Shutdown does not wait for Done (the DumpStore summary may
-// still be printing when it returns), while the v2 Shutdown blocks until Done
-// so the deps key is already cleared when it returns.
 type RunResult struct {
-	Done     <-chan struct{}
+	// Done closes when teardown is complete: the supervisor has stopped, its
+	// cleanup ran, the published configworker deps key is cleared, and the
+	// store dump printed when DumpStore is set.
+	Done <-chan struct{}
+	// Shutdown starts teardown and blocks until Done closes.
 	Shutdown func()
-	// ShutdownClean reports whether the run's supervisor drained cleanly on
-	// both the v1 and v2 paths: true if the graceful shutdown reaped every
-	// worker within its budget. It is false only when a drain phase warned
-	// graceful_shutdown_timeout or graceful_shutdown_budget_exhausted. Read it
-	// after Done closes.
+	// ShutdownClean is the root supervisor's DrainOutcomeClean. Read it after
+	// Done closes.
 	ShutdownClean bool
 
 	// Err is nil, or the first failure postRunFailure found once teardown
-	// finished. Only the v2 path sets it; read it after Done closes.
+	// finished. Read it after Done closes.
 	Err error
 }
 
@@ -86,157 +78,21 @@ func scenarioFailed(name string, err error) error {
 	return fmt.Errorf("scenario %q %w: %w", name, ErrScenarioFailed, err)
 }
 
-// Run executes a scenario with the given configuration.
-//
-// For a v1 Scenario, creates an ApplicationSupervisor with the scenario's
-// YAML config, or delegates to CustomRunner if set. For a ScenarioV2 (ScenarioV2.Run
-// set), takes the kernel-only v2 path (see runV2). Exactly one of Scenario
-// and ScenarioV2 may be populated; setting both is an error.
-//
-// On both the YAML and v2 paths the supervisor's tick loop runs on a context
-// detached from ctx: cancelling ctx triggers a graceful teardown against the
-// live tick loop instead of killing the loop and forcing the drain to wait
-// out its timeouts. CustomRunner scenarios own their supervisor lifecycle.
-//
-// If DumpStore is enabled, the YAML path prints a store changes summary
-// after the run. The v2 path does not support DumpStore yet: runV2 logs a
-// warning and ignores it. CustomRunner scenarios receive cfg.DumpStore and
-// are responsible for their own dump handling; Run does not dump for them.
+// Run executes a v2 scenario (see runV2). With DumpStore set, the store dump
+// prints after teardown: before Done closes, or, when the scenario's Run
+// fails, before Run returns the error.
 func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-	hasYAML := cfg.Scenario.YAMLConfig != ""
-	hasCustom := cfg.Scenario.CustomRunner != nil
-	hasV1 := hasYAML || hasCustom
-	hasV2 := cfg.ScenarioV2.Run != nil || cfg.ScenarioV2.Name != ""
-
-	if hasV1 && hasV2 {
-		return nil, fmt.Errorf("conflicting configuration: both Scenario %q and ScenarioV2 %q are set (only one allowed)",
-			cfg.Scenario.Name, cfg.ScenarioV2.Name)
-	}
-
-	if hasV2 && cfg.ScenarioV2.Run == nil {
-		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Name is set but Run is nil",
+	if cfg.ScenarioV2.Run == nil {
+		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Run is nil",
 			cfg.ScenarioV2.Name)
 	}
 
-	if cfg.ScenarioV2.Run != nil && cfg.ScenarioV2.Name == "" {
+	if cfg.ScenarioV2.Name == "" {
 		return nil, errors.New("v2 scenario is not properly configured: " +
 			"Run is set but Name is empty, so logs and the supervisor ID could not name the scenario")
 	}
 
-	if cfg.ScenarioV2.Run != nil {
-		return runV2(ctx, cfg)
-	}
-
-	if !hasYAML && !hasCustom {
-		return nil, fmt.Errorf("scenario %q is not properly configured: "+
-			"neither YAMLConfig nor CustomRunner is set", cfg.Scenario.Name)
-	}
-
-	if hasYAML && hasCustom {
-		return nil, fmt.Errorf("scenario %q has conflicting configuration: "+
-			"both YAMLConfig and CustomRunner are set (only one allowed)", cfg.Scenario.Name)
-	}
-
-	if hasCustom {
-		return cfg.Scenario.CustomRunner(ctx, cfg)
-	}
-
-	var startSyncID int64
-
-	if cfg.DumpStore {
-		var err error
-
-		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
-		if err != nil {
-			cfg.Logger.SentryWarn(deps.FeatureExamples, "", "sync_id_fetch_failed",
-				deps.Err(err),
-				deps.String("impact", "dump_shows_all_changes"))
-		}
-	}
-
-	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:                      "scenario-" + cfg.Scenario.Name,
-		Name:                    cfg.Scenario.Name,
-		Store:                   cfg.Store,
-		Logger:                  cfg.Logger,
-		TickInterval:            cfg.TickInterval,
-		YAMLConfig:              cfg.Scenario.YAMLConfig,
-		Dependencies:            cfg.Dependencies,
-		EnableTraceLogging:      cfg.EnableTraceLogging,
-		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Detached from the caller's ctx so cancelling the caller's ctx triggers
-	// teardown (via the watcher below) instead of killing the tick loop;
-	// Shutdown cancels the supervisor's own derived context in its final phase.
-	supDone := appSup.Start(context.WithoutCancel(ctx))
-
-	done := make(chan struct{})
-
-	shutdownFn := func() {
-		appSup.Shutdown()
-	}
-
-	// result is updated by the watcher goroutine before it closes done, so a
-	// caller that reads result.ShutdownClean after <-result.Done observes the
-	// supervisor's drain outcome. The close(done) at the end of the goroutine
-	// establishes the happens-before edge: the field write precedes the close,
-	// and the caller's receive synchronizes-with it.
-	result := &RunResult{Shutdown: shutdownFn}
-
-	// Watcher: turns caller-ctx cancellation into a graceful teardown against
-	// the LIVE tick loop. Shutdown runs unconditionally on both arms because
-	// it is idempotent, and a supervisor that stopped on its own still needs
-	// its executor and collectors stopped.
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-supDone:
-		}
-
-		appSup.Shutdown()
-		<-supDone
-		// DrainOutcomeClean is valid only after supDone: the drain budget is
-		// spent during Shutdown's synchronous phases, which complete before
-		// the tick loop signals supDone.
-		result.ShutdownClean = appSup.DrainOutcomeClean()
-
-		close(done)
-	}()
-
-	if cfg.DumpStore {
-		wrappedDone := make(chan struct{})
-
-		// wrappedDone waits on done, so the watcher's ShutdownClean write and
-		// close(done) happen-before this goroutine runs; a caller reading
-		// result.ShutdownClean after <-wrappedDone observes the drain outcome.
-		go func() {
-			<-done
-
-			dumpCtx := context.Background()
-
-			dump, err := DumpScenario(dumpCtx, cfg.Store, startSyncID)
-			if err != nil {
-				cfg.Logger.SentryWarn(deps.FeatureExamples, "", "scenario_dump_failed",
-					deps.Err(err))
-			} else {
-				fmt.Print(dump.FormatHuman())
-			}
-
-			close(wrappedDone)
-		}()
-
-		result.Done = wrappedDone
-
-		return result, nil
-	}
-
-	result.Done = done
-
-	return result, nil
+	return runV2(ctx, cfg)
 }
 
 // runV2 executes a v2 scenario on the kernel-only application supervisor (no
@@ -268,10 +124,17 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			"so another v2 run is still active in this process", cfg.ScenarioV2.Name)
 	}
 
+	var startSyncID int64
+
 	if cfg.DumpStore {
-		cfg.Logger.SentryWarn(deps.FeatureExamples, "", "dump_store_not_supported_for_v2",
-			deps.String("scenario", cfg.ScenarioV2.Name),
-			deps.String("impact", "no_store_dump_printed"))
+		var err error
+
+		startSyncID, err = cfg.Store.GetLatestSyncID(ctx)
+		if err != nil {
+			cfg.Logger.SentryWarn(deps.FeatureExamples, "", "sync_id_fetch_failed",
+				deps.Err(err),
+				deps.String("impact", "dump_shows_all_changes"))
+		}
 	}
 
 	// Call Dependencies before publishing the deps key, so a Dependencies error has nothing to clear.
@@ -350,16 +213,31 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		releaseScenarioDeps()
 	}
 
-	// ScenarioV2.Run is user-authored code, so it may return an error or panic.
-	// Either way the supervisor must stop and the deps key must be cleared
-	// before runV2's frame unwinds, otherwise every later runV2 in this
-	// process fails its already-published check. The flag stays false until
-	// the teardown goroutine takes ownership of cleanup.
+	printStoreDump := func() {
+		if !cfg.DumpStore {
+			return
+		}
+
+		// A cancelled caller ctx must not cut the dump short.
+		dump, err := DumpScenario(context.Background(), cfg.Store, startSyncID)
+		if err != nil {
+			cfg.Logger.SentryWarn(deps.FeatureExamples, "", "scenario_dump_failed",
+				deps.Err(err))
+
+			return
+		}
+
+		fmt.Print(dump.FormatHuman())
+	}
+
+	// Until the teardown goroutine owns cleanup, every return below and a panic
+	// in the scenario's Run tear down and print the dump here.
 	teardownOwnedByGoroutine := false
 
 	defer func() {
 		if !teardownOwnedByGoroutine {
 			teardown()
+			printStoreDump()
 		}
 	}()
 
@@ -414,6 +292,8 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		teardown()
 
 		result.Err = postRunFailure(ctx, recorder, cfg.Store, cfg.Logger)
+
+		printStoreDump()
 
 		close(done)
 	}()
