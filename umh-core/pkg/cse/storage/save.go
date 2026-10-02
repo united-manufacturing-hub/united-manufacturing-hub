@@ -33,8 +33,8 @@ type SaveOptions struct {
 	// True for desired (optimistic locking), false for observed (ephemeral state).
 	IncrementVersion bool
 
-	// SkipDeltaCheck disables change detection.
-	// True for identity (write-once, no delta checking needed).
+	// SkipDeltaCheck disables change detection. No role sets it; identity
+	// keeps it false so its first save still emits a created delta.
 	SkipDeltaCheck bool
 
 	// UpdateTimestampOnNoChange updates _updated_at even when data hasn't changed.
@@ -104,11 +104,6 @@ func (ts *TriangularStore) saveWithDelta(
 
 	if !opts.SkipDeltaCheck {
 		switch {
-		case result.isNew && opts.Role == RoleIdentity:
-			hp, _ := doc["hierarchy_path"].(string)
-
-			ts.logger.Debug(opts.Role+"_created",
-				deps.String("worker", hp))
 		case result.isNew:
 			ts.logger.Debug(opts.Role+"_created",
 				deps.String("worker", ts.hierarchyPath(ctx, workerType, id)))
@@ -172,7 +167,7 @@ func (ts *TriangularStore) writeDocument(
 				ts.invalidateSnapshot(workerType, id)
 			}
 
-			return saveResult{isNew: isNew}, nil
+			return saveResult{}, nil
 		}
 	}
 

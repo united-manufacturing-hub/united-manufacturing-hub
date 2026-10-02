@@ -277,7 +277,7 @@ var _ = Describe("Tombstone", func() {
 		Expect(observedAfter).To(HaveKey(storage.FieldDeletedAt))
 	})
 
-	It("a second Tombstone keeps the first tombstone and writes nothing", func() {
+	It("keeps the first tombstone and writes nothing when called twice", func() {
 		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		syncAfterFirst, err := ts.GetLatestSyncID(ctx)
@@ -329,7 +329,7 @@ var _ = Describe("Tombstone", func() {
 		expectTombstone(otherObserved, t0, "removed")
 	})
 
-	It("a commit failure tombstones no document", func() {
+	It("tombstones no document when the commit fails", func() {
 		failingBackend := newMockStore()
 		failingTs := storage.NewTriangularStoreWithClock(
 			&commitFailingStore{mockStore: failingBackend},
@@ -362,7 +362,7 @@ var _ = Describe("Tombstone", func() {
 		}
 	})
 
-	It("a write failure mid-transaction tombstones no document", func() {
+	It("tombstones no document when a write in the transaction fails", func() {
 		failingTs := storage.NewTriangularStoreWithClock(
 			&updateFailingStore{mockStore: backend, failingCollection: workerType + "_" + storage.RoleDesired},
 			deps.NewNopFSMLogger(),
