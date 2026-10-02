@@ -33,16 +33,16 @@ var _ = Describe("CPU host ScenarioV2", func() {
 
 	// Label("live") keeps this spec out of CI, because make unit-test filters
 	// live specs out. Which branch this spec takes depends on whether the machine
-	// publishes cgroup v2 CPU files, and CI does not control that. Plain go test
+	// publishes Linux CPU files, and CI does not control that. Plain go test
 	// applies no filter, so the spec still runs on every developer machine.
-	It("refuses only where the host publishes no cgroup v2 CPU files, naming the tool that provides them", Label("live"), func() {
+	It("refuses only where the host publishes no Linux CPU files, naming the tool that provides them", Label("live"), func() {
 		scenario, ok := examples.LiveRegistryV2["cpu-host"]
 		Expect(ok).To(BeTrue())
 
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		_, statErr := os.Stat("/sys/fs/cgroup/cpu.stat")
+		_, statErr := os.Stat("/proc/stat")
 
 		// The budget is for the proceed arm: a handful of one-second polls,
 		// then teardown. The refusal returns before anything is upserted.
