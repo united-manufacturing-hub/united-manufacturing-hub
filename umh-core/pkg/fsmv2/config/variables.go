@@ -122,7 +122,8 @@ type VariableConflict struct {
 
 // ChildVariableConflict is a VariableConflict in one named child's spec.
 type ChildVariableConflict struct {
-	Child, Namespace, Key string
+	Child string
+	VariableConflict
 }
 
 // MergeResult holds the merged bundle and each key both bundles set.
