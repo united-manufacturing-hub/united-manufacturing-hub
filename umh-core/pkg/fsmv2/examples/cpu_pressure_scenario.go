@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
@@ -42,22 +41,6 @@ const (
 
 	// Nothing in the story turns on this instance's own share of the busy cores.
 	cpuPressureUsageCores = 0.5
-
-	// cpuPressureMachineTick is how much machine time one tick of the ticker
-	// advances. Its ratio to the worker's one-second poll is a correctness
-	// bound, and a tenth keeps this machine's capacity signal quiet.
-	//
-	// tickingBox locks per file, so a tick can land between the sampler's
-	// stamp and its counter reads. It adds counters the stamp does not cover,
-	// and that one reading overstates its rate by tick over poll. At a tenth,
-	// host busy reads 2.64 against a stated 2.4 and headroom bottoms out at
-	// 0.36, still clear of the mark at 0, and a 60-second mean damps even
-	// that. At a tick equal to the poll it reads 4.80, headroom is -1.80, and
-	// the machine is reported full.
-	//
-	// So a scenario parking a signal near its mark has to check this ratio
-	// against its own margin rather than inherit the number.
-	cpuPressureMachineTick = 100 * time.Millisecond
 )
 
 // CPUPressureScenarioV2 drives the real CPU monitor over a fake machine that is
@@ -65,9 +48,8 @@ const (
 // pressure signal fires.
 //
 // The story is that pressure alone degrades the machine: tasks are queueing
-// for a free core. The scenario does not check the capacity signal. It
-// averages over 60 seconds and the run is a few seconds long, so its line
-// reads "Machine headroom not available (measuring)" throughout.
+// for a free core. The scenario does not check the capacity signal, which
+// reports 0.6 cores of headroom throughout.
 var CPUPressureScenarioV2 = ScenarioV2{
 	Name:        "cpu-pressure",
 	Description: "Raises a fake machine's CPU pressure from 19% to 25%, over the 20% at which the monitor degrades (v2)",
@@ -76,7 +58,7 @@ var CPUPressureScenarioV2 = ScenarioV2{
 		box := newTickingBox(fsmv2cpu.CgroupBase, cpuPressureMachine(cpuPressureCalm))
 		m := cpuMachineDeps(box)
 
-		box.Start(cpuPressureMachineTick)
+		box.StartPerRead(fsmv2cpu.PollInterval)
 
 		return m, box.Stop, nil
 	},
@@ -93,10 +75,8 @@ var CPUPressureScenarioV2 = ScenarioV2{
 			return fmt.Errorf("upsert cpu monitor: %w", err)
 		}
 
-		// The pressure figure is a level the kernel reports directly, so the
-		// wall ticker cannot move it and this text holds while the machine
-		// stays at 0.19. The usage-headroom line beside it is a rate, which the
-		// ticker does move, so the wait pins the level and not the rate.
+		// The pressure figure is a level the kernel reports directly, so this
+		// text holds while the machine stays at 0.19.
 		if err := waitCPUFirstReading(ctx, env, "first reading healthy with pressure at 19%", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Verdict.State == cpuhealth.StateHealthy
 			done := healthy && strings.Contains(st.Result.Message, "Pressure 19% (degrades above 20%)")

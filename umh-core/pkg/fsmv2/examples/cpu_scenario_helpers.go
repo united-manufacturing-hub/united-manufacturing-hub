@@ -154,36 +154,29 @@ func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.S
 	})
 }
 
-// tickingBox is a fakebox.Box that advances on its own and can be read while
-// it does. A plain Box moves only when someone calls Tick, and is not safe for
-// the collector's goroutine to read.
+// tickingBox is a fakebox.Box that advances once per sampler read and can be
+// read while it does. A plain Box moves only when someone calls Tick, and is
+// not safe for the collector's goroutine to read.
 //
 // mu covers every touch of the Box's counters: reads, ticks and Set. It is
 // taken per file, not per sampler read. clock.Mock synchronises itself.
 type tickingBox struct {
-	box  *fakebox.Box
-	stop chan struct{}
-	done chan struct{}
-	// base is the cgroup mount this box serves, so the read-driven mode below
-	// can recognise the file the sampler opens once per read.
+	box *fakebox.Box
+	// base is the cgroup mount this box serves, so fs can recognise the file
+	// the sampler opens once per read.
 	base string
 	// perRead is how much machine time one sampler read advances the box, and
-	// zero when the box is driven by a wall-clock ticker instead.
+	// zero before StartPerRead and after Stop.
 	perRead time.Duration
-	// ticking records that a wall-clock ticker was started, so Stop knows
-	// whether there is a goroutine to join.
-	ticking bool
 	mu      sync.Mutex
 }
 
 // newTickingBox returns a box serving base in the condition initial describes.
-// It does not advance until Start is called.
+// It does not advance until StartPerRead is called.
 func newTickingBox(base string, initial fakebox.Condition) *tickingBox {
 	return &tickingBox{
 		box:  fakebox.NewBox(base, initial),
 		base: base,
-		stop: make(chan struct{}),
-		done: make(chan struct{}),
 	}
 }
 
@@ -225,20 +218,8 @@ func (t *tickingBox) Set(c fakebox.Condition) {
 	t.box.Set(c)
 }
 
-// Start uses every as both the ticker's wall-clock interval and the machine
-// time each tick advances, so machine time keeps pace with the wall clock.
-// Call it once.
-//
-// A ticker drops ticks under load. A drop withholds a tick's counters and a
-// tick's clock together, so no rate is wrong; the run just has less machine
-// time per wall-clock second. If drops span a whole poll, machine time does
-// not advance between two reads, and that reading has no rate.
-func (t *tickingBox) Start(every time.Duration) {
-	t.startTicker(every, every)
-}
-
-// StartPerRead advances the box by advance once per sampler read, rather than
-// on a wall-clock ticker. Call it once, and not beside Start.
+// StartPerRead advances the box by advance once per sampler read. Call it
+// once.
 //
 // Every reading then covers one tick of counters over one tick of clock, so
 // the rate is exactly the one the condition states. Machine time advances
@@ -251,41 +232,13 @@ func (t *tickingBox) StartPerRead(advance time.Duration) {
 	t.perRead = advance
 }
 
-// startTicker advances the box by advance, every interval of wall time.
-func (t *tickingBox) startTicker(interval, advance time.Duration) {
-	t.ticking = true
-
-	go func() {
-		defer close(t.done)
-
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-t.stop:
-				return
-			case <-ticker.C:
-				t.mu.Lock()
-				t.box.Tick(advance)
-				t.mu.Unlock()
-			}
-		}
-	}()
-}
-
-// Stop halts the advancing in either mode, joining the ticker goroutine when
-// there is one, so no tick lands after Stop returns. It runs in the scenario's
-// Dependencies cleanup, after the supervisor has stopped (the
+// Stop halts the advancing, so no tick lands after Stop returns. It runs in
+// the scenario's Dependencies cleanup, after the supervisor has stopped (the
 // ScenarioV2.Dependencies doc), so the box has advanced for every read the
 // worker made.
 func (t *tickingBox) Stop() {
 	t.mu.Lock()
-	t.perRead = 0
-	t.mu.Unlock()
+	defer t.mu.Unlock()
 
-	if t.ticking {
-		close(t.stop)
-		<-t.done
-	}
+	t.perRead = 0
 }
