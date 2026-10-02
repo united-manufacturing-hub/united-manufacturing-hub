@@ -114,10 +114,10 @@ type TriangularStore struct {
 
 	knownWorkerTypesMu sync.RWMutex
 
-	// documentWriteMu runs saves, MarkDeleted and ClearDeleted one at a time,
+	// documentWriteMu runs saves, Tombstone and ClearTombstone one at a time,
 	// so a tombstone written between a save's read and its write is not lost.
-	// The supervisor holds its mutex while calling MarkDeleted
-	// (markWorkerDeleted), so code holding documentWriteMu must never take a
+	// The supervisor holds its mutex while calling Tombstone
+	// (tombstoneWorker), so code holding documentWriteMu must never take a
 	// supervisor lock.
 	documentWriteMu sync.Mutex
 }

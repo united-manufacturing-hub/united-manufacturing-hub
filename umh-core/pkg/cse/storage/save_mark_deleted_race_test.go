@@ -81,7 +81,7 @@ func giveTimeToFinish(done chan error) {
 }
 
 var _ = Describe("A save running while the tombstone changes", func() {
-	It("does not lose the tombstone MarkDeleted writes", func() {
+	It("does not lose the tombstone Tombstone writes", func() {
 		const (
 			workerType = "container"
 			workerID   = "worker-1"
@@ -117,7 +117,7 @@ var _ = Describe("A save running while the tombstone changes", func() {
 		markDone := make(chan error, 1)
 
 		go func() {
-			markDone <- ts.MarkDeleted(ctx, workerType, workerID, "removed")
+			markDone <- ts.Tombstone(ctx, workerType, workerID, "removed")
 		}()
 
 		giveTimeToFinish(markDone)
@@ -133,7 +133,7 @@ var _ = Describe("A save running while the tombstone changes", func() {
 		Expect(stored["collected_at"]).To(Equal(t0.Add(time.Hour)))
 	})
 
-	It("does not bring back a tombstone ClearDeleted removes", func() {
+	It("does not bring back a tombstone ClearTombstone removes", func() {
 		const (
 			workerType = "container"
 			workerID   = "worker-1"
@@ -148,7 +148,7 @@ var _ = Describe("A save running while the tombstone changes", func() {
 		ts := storage.NewTriangularStoreWithClock(backend, deps.NewNopFSMLogger(), mockClock)
 
 		saveInitialDocuments(ctx, ts, workerType, workerID)
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		observedCollection := workerType + "_" + storage.RoleObserved
 		backend.pauseNextGet(observedCollection, workerID)
@@ -170,7 +170,7 @@ var _ = Describe("A save running while the tombstone changes", func() {
 		clearDone := make(chan error, 1)
 
 		go func() {
-			clearDone <- ts.ClearDeleted(ctx, workerType, workerID)
+			clearDone <- ts.ClearTombstone(ctx, workerType, workerID)
 		}()
 
 		giveTimeToFinish(clearDone)

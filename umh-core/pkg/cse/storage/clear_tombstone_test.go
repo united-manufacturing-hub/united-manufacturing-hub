@@ -46,7 +46,7 @@ func expectClearedDocument(before, after persistence.Document, clearingSyncID in
 	expected[storage.FieldSyncID] = clearingSyncID
 
 	ExpectWithOffset(1, after).To(Equal(expected),
-		"every field but the tombstone keys must survive ClearDeleted")
+		"every field but the tombstone keys must survive ClearTombstone")
 }
 
 func expectDeltaDescribesClearing(delta storage.Delta) {
@@ -82,7 +82,7 @@ func (s *deltaRecordingStore) deltaCount() int {
 	return len(s.deltas)
 }
 
-var _ = Describe("ClearDeleted", func() {
+var _ = Describe("ClearTombstone", func() {
 	const workerType = "container"
 
 	var (
@@ -145,14 +145,14 @@ var _ = Describe("ClearDeleted", func() {
 	It("removes the tombstone from every role document and keeps every other field", func() {
 		const workerID = "worker-1"
 		saveInitialDocuments(ctx, ts, workerType, workerID)
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		tombstoned := readRaw(workerID)
 
 		syncBefore, err := ts.GetLatestSyncID(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
+		Expect(ts.ClearTombstone(ctx, workerType, workerID)).To(Succeed())
 
 		deltas := clearingDeltasByRole(syncBefore, workerID)
 		Expect(deltas).To(HaveLen(3))
@@ -172,9 +172,9 @@ var _ = Describe("ClearDeleted", func() {
 	It("serves the cleared documents through the snapshot read", func() {
 		const workerID = "worker-1"
 		saveInitialDocuments(ctx, ts, workerType, workerID)
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
-		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
+		Expect(ts.ClearTombstone(ctx, workerType, workerID)).To(Succeed())
 
 		snap, err := ts.LoadSnapshot(ctx, workerType, workerID)
 		Expect(err).NotTo(HaveOccurred())
@@ -195,7 +195,7 @@ var _ = Describe("ClearDeleted", func() {
 		syncBefore, err := ts.GetLatestSyncID(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
+		Expect(ts.ClearTombstone(ctx, workerType, workerID)).To(Succeed())
 
 		after := readRaw(workerID)
 		for role := range collections {
@@ -221,7 +221,7 @@ var _ = Describe("ClearDeleted", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		identityBefore, err := backend.Get(ctx, collections[storage.RoleIdentity], workerID)
 		Expect(err).NotTo(HaveOccurred())
@@ -231,7 +231,7 @@ var _ = Describe("ClearDeleted", func() {
 		syncBefore, err := ts.GetLatestSyncID(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
+		Expect(ts.ClearTombstone(ctx, workerType, workerID)).To(Succeed())
 
 		deltas := clearingDeltasByRole(syncBefore, workerID)
 		Expect(deltas).To(HaveLen(2))
@@ -248,20 +248,20 @@ var _ = Describe("ClearDeleted", func() {
 
 		_, err = backend.Get(ctx, collections[storage.RoleObserved], workerID)
 		Expect(errors.Is(err, persistence.ErrNotFound)).To(BeTrue(),
-			"ClearDeleted must not create a document the worker never had")
+			"ClearTombstone must not create a document the worker never had")
 	})
 
 	It("writes nothing and appends no delta when a write in the transaction fails", func() {
 		const workerID = "worker-4"
 		saveInitialDocuments(ctx, ts, workerType, workerID)
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		recorder := &deltaRecordingStore{
 			Store: &updateFailingStore{mockStore: backend, failingCollection: workerType + "_" + storage.RoleObserved},
 		}
 		failingTs := storage.NewTriangularStoreWithClock(recorder, deps.NewNopFSMLogger(), mockClock)
 
-		Expect(failingTs.ClearDeleted(ctx, workerType, workerID)).To(MatchError(errUpdateFailedByTest))
+		Expect(failingTs.ClearTombstone(ctx, workerType, workerID)).To(MatchError(errUpdateFailedByTest))
 
 		for role, collection := range collections {
 			doc, err := backend.Get(ctx, collection, workerID)
@@ -275,12 +275,12 @@ var _ = Describe("ClearDeleted", func() {
 	It("returns the commit error and appends no delta when the commit fails", func() {
 		const workerID = "worker-5"
 		saveInitialDocuments(ctx, ts, workerType, workerID)
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		recorder := &deltaRecordingStore{Store: &commitFailingStore{mockStore: backend}}
 		failingTs := storage.NewTriangularStoreWithClock(recorder, deps.NewNopFSMLogger(), mockClock)
 
-		Expect(failingTs.ClearDeleted(ctx, workerType, workerID)).To(MatchError(errCommitFailedByTest))
+		Expect(failingTs.ClearTombstone(ctx, workerType, workerID)).To(MatchError(errCommitFailedByTest))
 
 		for role, collection := range collections {
 			doc, err := backend.Get(ctx, collection, workerID)
@@ -291,21 +291,21 @@ var _ = Describe("ClearDeleted", func() {
 		Expect(recorder.deltaCount()).To(BeZero())
 	})
 
-	It("lets MarkDeleted stamp a new tombstone after ClearDeleted", func() {
+	It("lets Tombstone write a new tombstone after ClearTombstone", func() {
 		const workerID = "worker-1"
 		saveInitialDocuments(ctx, ts, workerType, workerID)
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
-		Expect(ts.ClearDeleted(ctx, workerType, workerID)).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.ClearTombstone(ctx, workerType, workerID)).To(Succeed())
 
 		mockClock.Add(2 * time.Hour)
-		reStamp := mockClock.Now()
+		secondTombstoneAt := mockClock.Now()
 
-		Expect(ts.MarkDeleted(ctx, workerType, workerID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, workerID, "removed")).To(Succeed())
 
 		for _, collection := range collections {
 			doc, err := backend.Get(ctx, collection, workerID)
 			Expect(err).NotTo(HaveOccurred())
-			expectTombstone(doc, reStamp, "removed")
+			expectTombstone(doc, secondTombstoneAt, "removed")
 		}
 	})
 })

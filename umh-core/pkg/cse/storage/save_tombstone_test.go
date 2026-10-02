@@ -102,7 +102,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		const deletedID = "worker-1"
 		saveInitialDocuments(ctx, ts, workerType, deletedID)
 
-		Expect(ts.MarkDeleted(ctx, workerType, deletedID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, deletedID, "removed")).To(Succeed())
 
 		mockClock.Add(time.Hour)
 		laterMarkTime := mockClock.Now()
@@ -174,7 +174,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		const unchangedID = "worker-2"
 		saveInitialDocuments(ctx, ts, workerType, unchangedID)
 
-		Expect(ts.MarkDeleted(ctx, workerType, unchangedID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, unchangedID, "removed")).To(Succeed())
 
 		syncAfterDelete, err := ts.GetLatestSyncID(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -290,7 +290,7 @@ var _ = Describe("Save keeps a tombstone", func() {
 		const lateID = "worker-4"
 		saveInitialDocuments(ctx, ts, workerType, lateID)
 
-		Expect(ts.MarkDeleted(ctx, workerType, lateID, "removed")).To(Succeed())
+		Expect(ts.Tombstone(ctx, workerType, lateID, "removed")).To(Succeed())
 
 		syncBeforeLate, err := ts.GetLatestSyncID(ctx)
 		Expect(err).NotTo(HaveOccurred())

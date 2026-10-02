@@ -382,11 +382,11 @@ func (m *mockStore) GetChangesSince(ctx context.Context, sinceSyncID int64, limi
 	return []storage.Event{}, nil
 }
 
-func (m *mockStore) MarkDeleted(_ context.Context, _ string, _ string, _ string) error {
+func (m *mockStore) Tombstone(_ context.Context, _ string, _ string, _ string) error {
 	return nil
 }
 
-func (m *mockStore) ClearDeleted(_ context.Context, _ string, _ string) error {
+func (m *mockStore) ClearTombstone(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
@@ -512,13 +512,13 @@ func createTestTriangularStore() *storage.TriangularStore {
 	return storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 }
 
-type markDeletedCall struct {
+type tombstoneCall struct {
 	WorkerType string
-	ID        string
-	By        string
+	ID         string
+	By         string
 }
 
-type clearDeletedCall struct {
+type clearTombstoneCall struct {
 	WorkerType string
 	ID         string
 }
@@ -534,11 +534,11 @@ type mockTriangularStore struct {
 	LoadObservedErr error
 	LoadSnapshotErr error
 
-	MarkDeletedErr   error
-	MarkDeletedCalls []markDeletedCall
+	TombstoneErr   error
+	TombstoneCalls []tombstoneCall
 
-	ClearDeletedErr   error
-	ClearDeletedCalls []clearDeletedCall
+	ClearTombstoneErr   error
+	ClearTombstoneCalls []clearTombstoneCall
 
 	SaveAndClearCalls []string
 
@@ -816,28 +816,28 @@ func (m *mockTriangularStore) Maintenance(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockTriangularStore) MarkDeleted(ctx context.Context, workerType string, id string, by string) error {
+func (m *mockTriangularStore) Tombstone(ctx context.Context, workerType string, id string, by string) error {
 	m.mu.Lock()
-	m.MarkDeletedCalls = append(m.MarkDeletedCalls, markDeletedCall{
+	m.TombstoneCalls = append(m.TombstoneCalls, tombstoneCall{
 		WorkerType: workerType,
 		ID:         id,
 		By:         by,
 	})
 	m.mu.Unlock()
 
-	return m.MarkDeletedErr
+	return m.TombstoneErr
 }
 
-func (m *mockTriangularStore) ClearDeleted(_ context.Context, workerType string, id string) error {
+func (m *mockTriangularStore) ClearTombstone(_ context.Context, workerType string, id string) error {
 	m.mu.Lock()
-	m.ClearDeletedCalls = append(m.ClearDeletedCalls, clearDeletedCall{
+	m.ClearTombstoneCalls = append(m.ClearTombstoneCalls, clearTombstoneCall{
 		WorkerType: workerType,
 		ID:         id,
 	})
 	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "clear_deleted")
 	m.mu.Unlock()
 
-	return m.ClearDeletedErr
+	return m.ClearTombstoneErr
 }
 
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)

@@ -36,8 +36,8 @@ func hasTombstone(doc persistence.Document) bool {
 	return doc[FieldDeletedAt] != nil
 }
 
-// MarkDeleted implements TriangularStoreInterface.MarkDeleted.
-func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, id string, deletedBy string) error {
+// Tombstone implements TriangularStoreInterface.Tombstone.
+func (ts *TriangularStore) Tombstone(ctx context.Context, workerType string, id string, deletedBy string) error {
 	err := ts.editRoleDocuments(ctx, workerType, id, func(doc persistence.Document, at time.Time) *Diff {
 		if hasTombstone(doc) {
 			return nil
@@ -53,14 +53,14 @@ func (ts *TriangularStore) MarkDeleted(ctx context.Context, workerType string, i
 		}
 	})
 	if err != nil {
-		return fmt.Errorf("failed to mark %s/%s deleted: %w", workerType, id, err)
+		return fmt.Errorf("failed to tombstone %s/%s: %w", workerType, id, err)
 	}
 
 	return nil
 }
 
-// ClearDeleted implements TriangularStoreInterface.ClearDeleted.
-func (ts *TriangularStore) ClearDeleted(ctx context.Context, workerType string, id string) error {
+// ClearTombstone implements TriangularStoreInterface.ClearTombstone.
+func (ts *TriangularStore) ClearTombstone(ctx context.Context, workerType string, id string) error {
 	err := ts.editRoleDocuments(ctx, workerType, id, func(doc persistence.Document, _ time.Time) *Diff {
 		if !hasTombstone(doc) {
 			return nil

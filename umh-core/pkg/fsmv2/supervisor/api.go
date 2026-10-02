@@ -229,7 +229,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	s.logger.Debug("initial_desired_state_saved")
 
 	// This ID may belong to a removed worker; its tombstone must not apply to the new one.
-	if err := s.store.ClearDeleted(ctx, s.workerType, identity.ID); err != nil {
+	if err := s.store.ClearTombstone(ctx, s.workerType, identity.ID); err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_tombstone_clear_failed")
 
 		return fmt.Errorf("failed to clear tombstone: %w", err)
