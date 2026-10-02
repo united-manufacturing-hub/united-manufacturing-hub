@@ -209,34 +209,41 @@ func (s *Supervisor[TObserved, TDesired]) nextStartupCount(identity deps.Identit
 	return startupCount
 }
 
-// toDocument converts a state value into its store document. The value is
-// JSON-encoded, re-read into a persistence.Document, and tagged with the
-// worker id. A failure wraps with the caller's prefix for the stage that
-// failed, and when that stage's Sentry event is non-empty reports it on the
-// given hierarchy path.
+// documentConversion names the error prefix and the Sentry event for each
+// stage of a toDocument conversion. Set both prefixes; an empty event skips
+// Sentry.
+type documentConversion struct {
+	marshalEvent       string
+	unmarshalEvent     string
+	marshalErrPrefix   string
+	unmarshalErrPrefix string
+}
+
+// toDocument converts a state value into its store document, with the id
+// set. A failed stage wraps its error with that stage's prefix and reports
+// that stage's Sentry event on hierarchyPath when the event is non-empty.
 func (s *Supervisor[TObserved, TDesired]) toDocument(
 	v any,
 	id string,
 	hierarchyPath string,
-	marshalEvent, unmarshalEvent string,
-	marshalErrPrefix, unmarshalErrPrefix string,
+	conv documentConversion,
 ) (persistence.Document, error) {
 	encoded, err := json.Marshal(v)
 	if err != nil {
-		if marshalEvent != "" {
-			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, marshalEvent)
+		if conv.marshalEvent != "" {
+			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, conv.marshalEvent)
 		}
 
-		return nil, fmt.Errorf("%s: %w", marshalErrPrefix, err)
+		return nil, fmt.Errorf("%s: %w", conv.marshalErrPrefix, err)
 	}
 
 	doc := make(persistence.Document)
 	if err := json.Unmarshal(encoded, &doc); err != nil {
-		if unmarshalEvent != "" {
-			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, unmarshalEvent)
+		if conv.unmarshalEvent != "" {
+			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, conv.unmarshalEvent)
 		}
 
-		return nil, fmt.Errorf("%s: %w", unmarshalErrPrefix, err)
+		return nil, fmt.Errorf("%s: %w", conv.unmarshalErrPrefix, err)
 	}
 
 	// TriangularStore validation rejects a document without the id.
@@ -258,9 +265,12 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 		observed = setter.SetFrameworkMetrics(deps.FrameworkMetrics{StartupCount: startupCount})
 	}
 
-	observedDoc, err := s.toDocument(observed, identity.ID, identity.HierarchyPath,
-		"worker_add_marshal_observed_failed", "worker_add_unmarshal_observed_failed",
-		"failed to marshal observed state", "failed to unmarshal observed state to document")
+	observedDoc, err := s.toDocument(observed, identity.ID, identity.HierarchyPath, documentConversion{
+		marshalEvent:       "worker_add_marshal_observed_failed",
+		unmarshalEvent:     "worker_add_unmarshal_observed_failed",
+		marshalErrPrefix:   "failed to marshal observed state",
+		unmarshalErrPrefix: "failed to unmarshal observed state to document",
+	})
 	if err != nil {
 		return err
 	}
@@ -286,9 +296,12 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 
 	s.logger.Debug("initial_observation_saved")
 
-	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath,
-		"worker_add_marshal_desired_failed", "worker_add_unmarshal_desired_failed",
-		"failed to marshal desired state", "failed to unmarshal desired state to document")
+	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath, documentConversion{
+		marshalEvent:       "worker_add_marshal_desired_failed",
+		unmarshalEvent:     "worker_add_unmarshal_desired_failed",
+		marshalErrPrefix:   "failed to marshal desired state",
+		unmarshalErrPrefix: "failed to unmarshal desired state to document",
+	})
 	if err != nil {
 		return err
 	}

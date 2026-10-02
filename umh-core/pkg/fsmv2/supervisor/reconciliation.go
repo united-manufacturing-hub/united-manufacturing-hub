@@ -801,8 +801,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	// Save before tickWorker, which loads the freshest desired state from snapshot
-	desiredDoc, err := s.toDocument(desired, firstWorkerID, "", "", "",
-		"failed to marshal derived desired state", "failed to unmarshal derived desired state to document")
+	desiredDoc, err := s.toDocument(desired, firstWorkerID, "", documentConversion{
+		marshalErrPrefix:   "failed to marshal derived desired state",
+		unmarshalErrPrefix: "failed to unmarshal derived desired state to document",
+	})
 	if err != nil {
 		return err
 	}
