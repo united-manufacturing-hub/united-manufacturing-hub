@@ -723,7 +723,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 // including any attempt counters, connection pools, or cached data in dependencies.
 //
 // Flow:
-//  1. RemoveWorker - stops collector, executor, removes from registry
+//  1. RemoveWorkerForRestart
 //  2. Clear ShutdownRequested in storage (so new worker starts fresh)
 //  3. factory.NewWorkerByType - creates completely new worker instance
 //  4. AddWorker - registers new worker
@@ -762,8 +762,8 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		deps.String("from_state", fromState),
 		deps.String("action", "full_recreation"))
 
-	// 1. Remove old worker completely (stops collector, executor, removes from registry)
-	if err := s.RemoveWorker(ctx, workerID); err != nil {
+	// 1. Remove the old worker for the restart; no tombstone.
+	if err := s.RemoveWorkerForRestart(ctx, workerID); err != nil {
 		return fmt.Errorf("failed to remove worker for restart: %w", err)
 	}
 
@@ -808,21 +808,10 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		newWorkerCtx, exists := s.workers[workerID]
 
-		var collector *collection.Collector[TObserved]
-
-		var executor *execution.ActionExecutor
-
-		if exists && newWorkerCtx != nil {
-			collector = newWorkerCtx.collector
-			executor = newWorkerCtx.executor
-		}
-
 		s.mu.RUnlock()
 
-		// The worker can vanish between AddWorker and this read; without it,
-		// startWorker would dereference a nil collector.
-		if collector != nil && executor != nil {
-			s.startWorker(supervisorCtx, identity.HierarchyPath, collector, executor, "restart_collector_start_failed")
+		if exists && newWorkerCtx != nil {
+			s.startWorker(supervisorCtx, identity.HierarchyPath, newWorkerCtx.collector, newWorkerCtx.executor, "restart_collector_start_failed")
 		}
 	}
 
