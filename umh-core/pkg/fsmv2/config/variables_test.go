@@ -521,10 +521,8 @@ global:
 			result := config.MergeWithConflicts(parent, child)
 
 			Expect(result.Conflicts).To(ConsistOf(config.VariableConflict{
-				Namespace:   "User",
-				Key:         "PORT",
-				ParentValue: 502,
-				ChildValue:  503,
+				Namespace: "User",
+				Key:       "PORT",
 			}))
 			Expect(result.Bundle.User).To(HaveKeyWithValue("PORT", 502))
 		})
@@ -544,10 +542,8 @@ global:
 			result := config.MergeWithConflicts(parent, child)
 
 			Expect(result.Conflicts).To(ConsistOf(config.VariableConflict{
-				Namespace:   "Global",
-				Key:         "api_endpoint",
-				ParentValue: "https://api.example.com",
-				ChildValue:  "https://api.other.com",
+				Namespace: "Global",
+				Key:       "api_endpoint",
 			}))
 			Expect(result.Bundle.Global).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
 		})
@@ -580,10 +576,8 @@ global:
 			result := config.MergeWithConflicts(parent, child)
 
 			Expect(result.Conflicts).To(ConsistOf(config.VariableConflict{
-				Namespace:   "User",
-				Key:         "PORT",
-				ParentValue: 502,
-				ChildValue:  502,
+				Namespace: "User",
+				Key:       "PORT",
 			}))
 		})
 	})

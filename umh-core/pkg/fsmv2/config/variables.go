@@ -116,10 +116,8 @@ func (v VariableBundle) Flatten() map[string]any {
 
 // VariableConflict names a key that both bundles set.
 type VariableConflict struct {
-	ParentValue any    // the value the merge kept
-	ChildValue  any    // the value the merge dropped
-	Namespace   string // "User" or "Global"
-	Key         string
+	Namespace string // "User" or "Global"
+	Key       string
 }
 
 // ChildVariableConflict is a VariableConflict in one named child's spec.
@@ -182,13 +180,8 @@ func mergeNamespace(namespace string, parent, child map[string]any) (map[string]
 	}
 
 	for k, v := range child {
-		if parentVal, exists := merged[k]; exists {
-			conflicts = append(conflicts, VariableConflict{
-				Namespace:   namespace,
-				Key:         k,
-				ParentValue: parentVal,
-				ChildValue:  deepCloneValue(v),
-			})
+		if _, exists := merged[k]; exists {
+			conflicts = append(conflicts, VariableConflict{Namespace: namespace, Key: k})
 
 			continue
 		}
