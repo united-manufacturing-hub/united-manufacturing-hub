@@ -1121,8 +1121,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 			cancel()
 		}
 
-		workerCtx.collector.Stop(ctx)
-		workerCtx.executor.Shutdown()
+		s.stopWorker(ctx, workerCtx)
 
 		s.logger.Debug("worker_removed_successfully",
 			deps.Int("children_cleaned", childCount))
