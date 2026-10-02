@@ -244,11 +244,27 @@ func (s *Supervisor[TObserved, TDesired]) toDocument(
 	return doc, nil
 }
 
-// saveInitialState saves the desired document, then the observation with its
-// StartupCount, then clears the tombstone. A failed attempt stores no new
-// count, so a retried AddWorker does not count it; a failed ClearTombstone
-// does count. Caller must hold s.mu.
+// saveInitialState saves the desired document before the observation, so an
+// AddWorker that fails on SaveDesired stores no StartupCount.
+// Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, observed fsmv2.ObservedState, initialDesired fsmv2.DesiredState, startupCount int64) error {
+	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath, documentConversion{
+		what:           "desired state",
+		marshalEvent:   "worker_add_marshal_desired_failed",
+		unmarshalEvent: "worker_add_unmarshal_desired_failed",
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
+
+		return fmt.Errorf("failed to save initial desired state: %w", err)
+	}
+
+	s.logger.Debug("initial_desired_state_saved")
 
 	// Persist the computed StartupCount on the initial observation so a crash
 	// between this save and the first collector tick does not reset it. The
@@ -282,24 +298,6 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 	}
 
 	s.logger.Debug("initial_observation_saved")
-
-	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath, documentConversion{
-		what:           "desired state",
-		marshalEvent:   "worker_add_marshal_desired_failed",
-		unmarshalEvent: "worker_add_unmarshal_desired_failed",
-	})
-	if err != nil {
-		return err
-	}
-
-	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
-	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
-
-		return fmt.Errorf("failed to save initial desired state: %w", err)
-	}
-
-	s.logger.Debug("initial_desired_state_saved")
 
 	// This ID may belong to a removed worker; its tombstone must not apply to the new one.
 	if err := s.store.ClearTombstone(ctx, s.workerType, identity.ID); err != nil {
