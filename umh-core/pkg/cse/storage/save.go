@@ -280,7 +280,7 @@ func (ts *TriangularStore) computeCreatedDiff(doc persistence.Document, role str
 	added := make(map[string]interface{})
 
 	for key, val := range doc {
-		if !cseFieldSet[key] && key != "id" && key != FieldDeletedAt && key != FieldDeletedBy {
+		if !cseFieldSet[key] && key != "id" {
 			added[key] = val
 		}
 	}
