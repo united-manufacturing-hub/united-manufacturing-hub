@@ -15,7 +15,6 @@
 package communicator
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -33,14 +32,9 @@ type CommunicatorDependencies struct {
 }
 
 // NewCommunicatorDependencies creates dependencies for the communicator worker
-// from provider. A nil provider panics with the worker's ID in the message.
+// from provider.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *CommunicatorDependencies {
-	if provider == nil {
-		panic(fmt.Sprintf("ChannelProvider must not be nil when creating communicator dependencies (worker=%s).",
-			bd.GetWorkerID()))
-	}
-
 	inbound, outbound := provider.GetChannels(bd.GetWorkerID())
 
 	return &CommunicatorDependencies{
