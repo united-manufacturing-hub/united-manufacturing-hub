@@ -209,6 +209,42 @@ func (s *Supervisor[TObserved, TDesired]) nextStartupCount(identity deps.Identit
 	return startupCount
 }
 
+// toDocument converts a state value into its store document. The value is
+// JSON-encoded, re-read into a persistence.Document, and tagged with the
+// worker id. A failure wraps with the caller's prefix for the stage that
+// failed, and when that stage's Sentry event is non-empty reports it on the
+// given hierarchy path.
+func (s *Supervisor[TObserved, TDesired]) toDocument(
+	v any,
+	id string,
+	hierarchyPath string,
+	marshalEvent, unmarshalEvent string,
+	marshalErrPrefix, unmarshalErrPrefix string,
+) (persistence.Document, error) {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		if marshalEvent != "" {
+			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, marshalEvent)
+		}
+
+		return nil, fmt.Errorf("%s: %w", marshalErrPrefix, err)
+	}
+
+	doc := make(persistence.Document)
+	if err := json.Unmarshal(encoded, &doc); err != nil {
+		if unmarshalEvent != "" {
+			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, unmarshalEvent)
+		}
+
+		return nil, fmt.Errorf("%s: %w", unmarshalErrPrefix, err)
+	}
+
+	// TriangularStore validation rejects a document without the id.
+	doc[FieldID] = id
+
+	return doc, nil
+}
+
 // saveInitialState writes a worker's observed and desired documents and
 // clears its tombstone.
 // Caller must hold s.mu.
@@ -222,21 +258,12 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 		observed = setter.SetFrameworkMetrics(deps.FrameworkMetrics{StartupCount: startupCount})
 	}
 
-	observedJSON, err := json.Marshal(observed)
+	observedDoc, err := s.toDocument(observed, identity.ID, identity.HierarchyPath,
+		"worker_add_marshal_observed_failed", "worker_add_unmarshal_observed_failed",
+		"failed to marshal observed state", "failed to unmarshal observed state to document")
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_observed_failed")
-
-		return fmt.Errorf("failed to marshal observed state: %w", err)
+		return err
 	}
-
-	observedDoc := make(persistence.Document)
-	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_observed_failed")
-
-		return fmt.Errorf("failed to unmarshal observed state to document: %w", err)
-	}
-
-	observedDoc["id"] = identity.ID
 
 	// Inject the initial FSM state name so the store never contains state="".
 	// CollectObservedState runs before the collector's StateProvider closure is
@@ -259,21 +286,12 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 
 	s.logger.Debug("initial_observation_saved")
 
-	desiredJSON, err := json.Marshal(initialDesired)
+	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath,
+		"worker_add_marshal_desired_failed", "worker_add_unmarshal_desired_failed",
+		"failed to marshal desired state", "failed to unmarshal desired state to document")
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_desired_failed")
-
-		return fmt.Errorf("failed to marshal desired state: %w", err)
+		return err
 	}
-
-	desiredDoc := make(persistence.Document)
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_unmarshal_desired_failed")
-
-		return fmt.Errorf("failed to unmarshal desired state to document: %w", err)
-	}
-
-	desiredDoc["id"] = identity.ID
 
 	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
 	if err != nil {
