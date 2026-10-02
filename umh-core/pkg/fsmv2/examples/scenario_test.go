@@ -42,7 +42,7 @@ import (
 )
 
 // v2LogBuffer is a goroutine-safe buffer for capturing JSON log output in
-// the ScenarioV2 specs.
+// the Scenario specs.
 type v2LogBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -119,7 +119,7 @@ func captureStdout() (stop func() string) {
 
 var scenarioDepsProbeLabelKey = config.NewDependencyKey[string]("examples.test.scenario_deps")
 
-const scenarioDepsProbeType = "scenariov2-deps-probe"
+const scenarioDepsProbeType = "scenario-deps-probe"
 
 type scenarioDepsProbeConfig struct{}
 
@@ -164,7 +164,7 @@ func init() {
 	})
 }
 
-var _ = Describe("ScenarioV2 framework", func() {
+var _ = Describe("Scenario framework", func() {
 	// The configworker deps key is process-global; a spec that fails mid-run
 	// would otherwise leak it into every later spec in this process.
 	BeforeEach(func() {
@@ -173,39 +173,39 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 	})
 
-	It("keeps the v2 registries' names disjoint", func() {
-		// On a name collision, --list shows the LiveRegistryV2 description
-		// while --scenario runs the RegistryV2 scenario. The LiveRegistryV2
+	It("keeps the registries' names disjoint", func() {
+		// On a name collision, --list shows the LiveRegistry description
+		// while --scenario runs the Registry scenario. The LiveRegistry
 		// scenario can then not be run from the CLI.
-		for name := range examples.LiveRegistryV2 {
-			Expect(examples.RegistryV2).NotTo(HaveKey(name),
-				"scenario name %q is registered in both RegistryV2 and LiveRegistryV2", name)
+		for name := range examples.LiveRegistry {
+			Expect(examples.Registry).NotTo(HaveKey(name),
+				"scenario name %q is registered in both Registry and LiveRegistry", name)
 		}
 	})
 
-	It("rejects a ScenarioV2 with a Name but no Run, naming the scenario", func() {
+	It("rejects a Scenario with a Name but no Run, naming the scenario", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
 		result, err := examples.Run(context.Background(), examples.RunConfig{
-			ScenarioV2: examples.ScenarioV2{Name: "no-run"},
-			Logger:     logger,
-			Store:      store,
+			Scenario: examples.Scenario{Name: "no-run"},
+			Logger:   logger,
+			Store:    store,
 		})
 		Expect(err).To(MatchError(ContainSubstring("no-run")))
 		Expect(result).To(BeNil())
 	})
 
-	It("rejects a ScenarioV2 with a Run but no Name", func() {
+	It("rejects a Scenario with a Run but no Name", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// An anonymous run would produce the supervisor ID "scenariov2-" and
+		// An anonymous run would produce the supervisor ID "scenario-" and
 		// log lines naming an empty scenario, which post-run log checks
 		// cannot attribute.
 		runRan := false
 		result, err := examples.Run(context.Background(), examples.RunConfig{
-			ScenarioV2: examples.ScenarioV2{
+			Scenario: examples.Scenario{
 				Run: func(_ context.Context, _ examples.Env) error {
 					runRan = true
 
@@ -218,14 +218,14 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(err).To(MatchError(ContainSubstring("Run is set but Name is empty")))
 		Expect(result).To(BeNil())
 		Expect(runRan).To(BeFalse(),
-			"a nameless v2 scenario must be rejected before its Run runs")
+			"a nameless scenario must be rejected before its Run runs")
 	})
 
 	It("fails loudly when the configworker deps key is already published by an overlapping run", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		// Simulate a first v2 run that has not finished teardown: its
+		// Simulate a first run that has not finished teardown: its
 		// registry is still published under the process-global key. The
 		// BeforeEach DeferCleanup clears the key after this spec.
 		firstRunWriter := dynamicchildren.NewWriter()
@@ -233,7 +233,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		var depsCalled atomic.Bool
 		runRan := false
-		overlapping := examples.ScenarioV2{
+		overlapping := examples.Scenario{
 			Name:        "overlapping",
 			Description: "test-local Run that must never run",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -249,7 +249,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		}
 
 		result, err := examples.Run(context.Background(), examples.RunConfig{
-			ScenarioV2:   overlapping,
+			Scenario:     overlapping,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -271,12 +271,12 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the failed run must not replace or clear the already-published registry")
 	})
 
-	It("prints the store dump when a v2 scenario's Run fails", func() {
+	It("prints the store dump when a scenario's Run fails", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		failing := examples.ScenarioV2{
+		failing := examples.Scenario{
 			Name:        "dump-after-failure",
 			Description: "test-local Run that creates a worker and then fails",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -314,7 +314,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		stop := captureStdout()
 
 		_, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   failing,
+			Scenario:     failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -330,11 +330,11 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the dump must list the worker the scenario created before it failed")
 	})
 
-	It("prints the store dump after a v2 scenario run", func() {
+	It("prints the store dump after a scenario run", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		dumpRequested := examples.ScenarioV2{
+		dumpRequested := examples.Scenario{
 			Name:        "dump-requested",
 			Description: "test-local Run for the DumpStore print path",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -368,7 +368,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		stop := captureStdout()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   dumpRequested,
+			Scenario:     dumpRequested,
 			Duration:     time.Second,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -376,13 +376,13 @@ var _ = Describe("ScenarioV2 framework", func() {
 			DumpStore:    true,
 		})
 		Expect(err).NotTo(HaveOccurred(),
-			"DumpStore must not break a v2 run")
+			"DumpStore must not break a run")
 		Eventually(result.Done, "55s").Should(BeClosed())
 
 		out := stop()
 
 		Expect(out).To(ContainSubstring("CSE SCENARIO DUMP"),
-			"runV2 must print the store dump when DumpStore is set")
+			"runScenario must print the store dump when DumpStore is set")
 		Expect(out).To(ContainSubstring("dump-hello"),
 			"the dump must list the worker the scenario created")
 		Expect(result.Err).NotTo(HaveOccurred(),
@@ -394,7 +394,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		cancelMidRun := examples.ScenarioV2{
+		cancelMidRun := examples.Scenario{
 			Name:        "cancel-mid-run",
 			Description: "test-local Run for the caller-ctx cancellation path",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -406,7 +406,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   cancelMidRun,
+			Scenario:     cancelMidRun,
 			Duration:     5 * time.Minute,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -447,12 +447,12 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the supervisor must drain via a live tick loop, not time out against a dead one")
 	})
 
-	It("lists noop in the merged registry and runs a v2 scenario end-to-end on the kernel-only supervisor", func() {
+	It("lists noop in the merged registry and runs a scenario end-to-end on the kernel-only supervisor", func() {
 		listing := examples.ListScenarios()
 		Expect(listing).To(HaveKey("noop"),
-			"merged ListScenarios must contain the v2 noop scenario")
+			"merged ListScenarios must contain the noop scenario")
 		Expect(listing).To(HaveKey("helloworld"),
-			"merged ListScenarios must contain the v2 helloworld scenario")
+			"merged ListScenarios must contain the helloworld scenario")
 
 		// The sentinel bool proves the runner invoked Run; noop's own Run
 		// returns nil at once, so it cannot.
@@ -462,7 +462,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		runRan := false
 		clientWasSet := false
 		loggerWasSet := false
-		sentinel := examples.ScenarioV2{
+		sentinel := examples.Scenario{
 			Name:        "sentinel",
 			Description: "test-local Run that records execution",
 			Run: func(_ context.Context, env examples.Env) error {
@@ -480,7 +480,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   sentinel,
+			Scenario:     sentinel,
 			Duration:     2 * time.Second,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -488,10 +488,10 @@ var _ = Describe("ScenarioV2 framework", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(result.Done, "55s").Should(BeClosed(),
-			"the v2 runner must wait RunConfig.Duration and then tear down on its own")
+			"the runner must wait RunConfig.Duration and then tear down on its own")
 
 		Expect(runRan).To(BeTrue(),
-			"the v2 runner must execute the scenario Run")
+			"the runner must execute the scenario Run")
 		Expect(clientWasSet).To(BeTrue(),
 			"Env must carry a non-nil fsmv2client for Run")
 		Expect(loggerWasSet).To(BeTrue(),
@@ -517,10 +517,10 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// under the configworker deps key, so after the run it must clear it,
 		// otherwise the next scenario inherits a stale registry.
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearGlobalDeps the configworker key during teardown")
+			"the runner must ClearGlobalDeps the configworker key during teardown")
 	})
 
-	It("reports ShutdownClean=true after a clean v2 run", func() {
+	It("reports ShutdownClean=true after a clean run", func() {
 		// The runner exposes the supervisor's drain outcome so the CLI can
 		// exit non-zero on a degraded shutdown. A clean run must surface
 		// true and never the zero-value false, which would prove the field
@@ -528,7 +528,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		cleanRun := examples.ScenarioV2{
+		cleanRun := examples.Scenario{
 			Name:        "clean-shutdown",
 			Description: "test-local Run for the ShutdownClean plumbing",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -540,7 +540,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   cleanRun,
+			Scenario:     cleanRun,
 			Duration:     2 * time.Second,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -550,14 +550,14 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Eventually(result.Done, "55s").Should(BeClosed())
 
 		Expect(result.ShutdownClean).To(BeTrue(),
-			"a clean v2 run must report ShutdownClean=true, proving the field is wired to the supervisor's drain outcome")
+			"a clean run must report ShutdownClean=true, proving the field is wired to the supervisor's drain outcome")
 	})
 
-	It("reports ShutdownClean=false when a v2 run's drain budget is exhausted", func() {
+	It("reports ShutdownClean=false when a run's drain budget is exhausted", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		degradedDrain := examples.ScenarioV2{
+		degradedDrain := examples.Scenario{
 			Name:        "degraded-drain",
 			Description: "test-local Run that leaves a helloworld worker running, so the drain has a worker to stop",
 			// The 1ns GracefulShutdownTimeout below makes the drain log these.
@@ -594,7 +594,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   degradedDrain,
+			Scenario:     degradedDrain,
 			Duration:     time.Second,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -606,7 +606,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Eventually(result.Done, "55s").Should(BeClosed())
 
 		Expect(result.ShutdownClean).To(BeFalse(),
-			"a v2 run whose graceful drain budget is exhausted must report ShutdownClean=false")
+			"a run whose graceful drain budget is exhausted must report ShutdownClean=false")
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"the drain warnings are in ExpectedWarnings, so they must not fail the run")
 	})
@@ -616,7 +616,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		store := examples.SetupStore(logger)
 
 		runErr := errors.New("boom")
-		failing := examples.ScenarioV2{
+		failing := examples.Scenario{
 			Name:        "failing-run",
 			Description: "test-local Run that returns an error",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -628,7 +628,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   failing,
+			Scenario:     failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -640,16 +640,16 @@ var _ = Describe("ScenarioV2 framework", func() {
 		Expect(result).To(BeNil())
 
 		// The error path is a full teardown path: a leaked key would
-		// cross-wire every later v2 run in this process.
+		// cross-wire every later run in this process.
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearGlobalDeps the configworker key on Run failure")
+			"the runner must ClearGlobalDeps the configworker key on Run failure")
 	})
 
 	It("runs forever with Duration=0 and tears down on context cancellation", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		runForever := examples.ScenarioV2{
+		runForever := examples.Scenario{
 			Name:        "run-forever",
 			Description: "test-local Run for the Duration=0 ctx-cancel path",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -661,7 +661,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   runForever,
+			Scenario:     runForever,
 			Duration:     0,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -676,20 +676,20 @@ var _ = Describe("ScenarioV2 framework", func() {
 		// run; a regression here leaves such a run hanging forever.
 		cancel()
 		Eventually(result.Done, "55s").Should(BeClosed(),
-			"the v2 runner must tear down when the context is cancelled")
+			"the runner must tear down when the context is cancelled")
 
 		// Shutdown waits on Done, so after Done is closed it must return
 		// promptly with the deps key already cleared.
 		result.Shutdown()
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearGlobalDeps the configworker key after ctx cancellation")
+			"the runner must ClearGlobalDeps the configworker key after ctx cancellation")
 	})
 
 	It("tears down and clears the deps key when Run panics", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		panicking := examples.ScenarioV2{
+		panicking := examples.Scenario{
 			Name:        "panicking-run",
 			Description: "test-local Run that panics",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -702,7 +702,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		Expect(func() {
 			_, _ = examples.Run(ctx, examples.RunConfig{
-				ScenarioV2:   panicking,
+				Scenario:     panicking,
 				TickInterval: 50 * time.Millisecond,
 				Logger:       logger,
 				Store:        store,
@@ -711,16 +711,16 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the runner must not swallow a Run panic")
 
 		// A panic is a full teardown path too: a leaked key would
-		// cross-wire every later v2 run in this process.
+		// cross-wire every later run in this process.
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
-			"the v2 runner must ClearGlobalDeps the configworker key on Run panic")
+			"the runner must ClearGlobalDeps the configworker key on Run panic")
 	})
 
 	It("blocks a mid-Duration Shutdown until the deps key is cleared", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		longRun := examples.ScenarioV2{
+		longRun := examples.Scenario{
 			Name:        "long-run",
 			Description: "test-local Run for the mid-Duration Shutdown path",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -732,7 +732,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   longRun,
+			Scenario:     longRun,
 			Duration:     5 * time.Minute,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -750,13 +750,13 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the deps key must already be cleared when Shutdown returns")
 	})
 
-	It("supports back-to-back sequential v2 runs in one process", func() {
+	It("supports back-to-back sequential runs in one process", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		scenario := examples.ScenarioV2{
+		scenario := examples.Scenario{
 			Name:        "back-to-back",
-			Description: "test-local Run for sequential v2 runs",
+			Description: "test-local Run for sequential runs",
 			Run: func(_ context.Context, _ examples.Env) error {
 				return nil
 			},
@@ -769,7 +769,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel1()
 
 		result1, err := examples.Run(ctx1, examples.RunConfig{
-			ScenarioV2:   scenario,
+			Scenario:     scenario,
 			Duration:     5 * time.Minute,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -787,7 +787,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel2()
 
 		result2, err := examples.Run(ctx2, examples.RunConfig{
-			ScenarioV2:   scenario,
+			Scenario:     scenario,
 			Duration:     time.Second,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -808,7 +808,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		delivering := examples.ScenarioV2{
+		delivering := examples.Scenario{
 			Name:        "deps-delivery",
 			Description: "test-local Run for the dependency-delivery path",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -827,7 +827,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   delivering,
+			Scenario:     delivering,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -843,7 +843,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		record := scenarioDepsProbeSeen.Load()
 		Expect(record.present).To(BeTrue(),
-			"the value ScenarioV2.Dependencies returned must reach the constructor of a worker the Run upserts")
+			"the value Scenario.Dependencies returned must reach the constructor of a worker the Run upserts")
 		Expect(record.label).To(Equal("from-the-scenario"))
 	})
 
@@ -856,7 +856,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		returnedDeps := map[string]any{}
 		mock := &scenarioEnvMock{}
 
-		reaching := examples.ScenarioV2{
+		reaching := examples.Scenario{
 			Name:        "env-deps-reach",
 			Description: "test-local Run for the Env.Dependencies handoff",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -884,7 +884,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   reaching,
+			Scenario:     reaching,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -904,7 +904,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 
 		var recordedDeps map[string]any
 
-		envNone := examples.ScenarioV2{
+		envNone := examples.Scenario{
 			Name:        "env-deps-none",
 			Description: "test-local Run for the nil-Dependencies handoff",
 			Run: func(_ context.Context, env examples.Env) error {
@@ -918,7 +918,7 @@ var _ = Describe("ScenarioV2 framework", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   envNone,
+			Scenario:     envNone,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,

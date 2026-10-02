@@ -36,7 +36,7 @@ const (
 	cpuFillingQuotaCores = 3
 )
 
-// CPUFillingScenarioV2 drives the real CPU monitor over a fake machine that
+// CPUFillingScenario drives the real CPU monitor over a fake machine that
 // fills up from outside, and then over the same machine filled by this
 // instance's own load.
 //
@@ -46,9 +46,9 @@ const (
 // advice is to reduce this instance's load. The machine is 80% busy in both,
 // its pressure is the same, and this instance stays under its own limit in
 // both. The one difference is how much of the busy time is ours.
-var CPUFillingScenarioV2 = ScenarioV2{
+var CPUFillingScenario = Scenario{
 	Name:        "cpu-filling",
-	Description: "Fills a fake machine from outside, then from this instance, and shows the remedy change (v2)",
+	Description: "Fills a fake machine from outside, then from this instance, and shows the remedy change",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		box := newTickingBox(fsmv2cpu.CgroupBase, cpuFillingQuiet())

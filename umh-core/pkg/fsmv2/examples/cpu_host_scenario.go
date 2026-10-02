@@ -23,15 +23,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
-// CPUHostScenarioV2 runs the CPU monitor against the machine it is running
+// CPUHostScenario runs the CPU monitor against the machine it is running
 // on. It publishes no fake machine, so the CPU worker reads the host's own
 // cgroup and /proc/stat files. The worker picks cgroup v1 or v2 itself. The
 // wait asserts only that a fresh reading arrived, nothing about the verdict.
 // On a host without /proc/stat, such as a developer Mac, Run refuses with an
 // error that names tools/cpu-host.
-var CPUHostScenarioV2 = ScenarioV2{
+var CPUHostScenario = Scenario{
 	Name:        "cpu-host",
-	Description: "Runs the CPU monitor against the machine it is running on, unmodified (v2)",
+	Description: "Runs the CPU monitor against the machine it is running on, unmodified",
 	Run: func(ctx context.Context, env Env) error {
 		if _, err := os.Stat("/proc/stat"); err != nil {
 			return fmt.Errorf("this host publishes no Linux CPU files, so no reading can describe the machine: %w; run it under tools/cpu-host, which puts it in a Linux container", err)

@@ -50,17 +50,17 @@ const (
 	configWorkerName = "config-worker"
 )
 
-// DynamicScenarioV2 drives one helloworld child through the migration-API
+// DynamicScenario drives one helloworld child through the migration-API
 // client: create it to Running, Upsert an observable config change (a new
 // moodFilePath whose file contents land in observed status), then Delete it.
 // Run does not wait for the child to stop after the delete.
-var DynamicScenarioV2 = ScenarioV2{
+var DynamicScenario = Scenario{
 	Name:        "dynamic",
 	Description: "Creates a helloworld child, points it at a second mood file, then deletes it, all through the fsmv2 client",
 	Run:         runDynamicHello,
 }
 
-// runDynamicHello is DynamicScenarioV2's Run. The UPDATE leg points
+// runDynamicHello is DynamicScenario's Run. The UPDATE leg points
 // moodFilePath at a different file, so the observed mood changes only when
 // the Upsert reached the child.
 func runDynamicHello(ctx context.Context, env Env) error {

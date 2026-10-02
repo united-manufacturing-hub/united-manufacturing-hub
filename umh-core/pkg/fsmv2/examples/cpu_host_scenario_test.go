@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
 
-var _ = Describe("CPU host ScenarioV2", func() {
+var _ = Describe("CPU host scenario", func() {
 	It("registers cpu-host in the merged listing the CLI reads", func() {
 		Expect(examples.ListScenarios()).To(HaveKey("cpu-host"))
 	})
@@ -36,7 +36,7 @@ var _ = Describe("CPU host ScenarioV2", func() {
 	// publishes Linux CPU files, and CI does not control that. Plain go test
 	// applies no filter, so the spec still runs on every developer machine.
 	It("refuses only where the host publishes no Linux CPU files, naming the tool that provides them", Label("live"), func() {
-		scenario, ok := examples.LiveRegistryV2["cpu-host"]
+		scenario, ok := examples.LiveRegistry["cpu-host"]
 		Expect(ok).To(BeTrue())
 
 		logger := deps.NewNopFSMLogger()
@@ -50,7 +50,7 @@ var _ = Describe("CPU host ScenarioV2", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
+			Scenario:     scenario,
 			Duration:     time.Second,
 			TickInterval: 100 * time.Millisecond,
 			Logger:       logger,

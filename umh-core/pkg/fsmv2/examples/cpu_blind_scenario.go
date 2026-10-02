@@ -50,7 +50,7 @@ const (
 	cpuBlindUnavailableMessage = "CPU monitoring unavailable: cgroup read failed. Defaulting to healthy."
 )
 
-// CPUBlindScenarioV2 drives the real CPU monitor over a fake machine and then
+// CPUBlindScenario drives the real CPU monitor over a fake machine and then
 // takes away, one at a time, the two files it reads its numbers from.
 //
 // The story is that neither outage changes the worker's state. It stays
@@ -62,9 +62,9 @@ const (
 //
 // The second outage keeps the first, so the story tests the two failures
 // rather than a recovery.
-var CPUBlindScenarioV2 = ScenarioV2{
+var CPUBlindScenario = Scenario{
 	Name:        "cpu-blind",
-	Description: "Takes away the two files the CPU monitor reads, one at a time (v2)",
+	Description: "Takes away the two files the CPU monitor reads, one at a time",
 
 	ExpectedWarnings: []string{"cpu::read_failed::error"},
 

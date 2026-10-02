@@ -234,7 +234,7 @@ func (t *tickingBox) StartPerRead(advance time.Duration) {
 
 // Stop halts the advancing, so no tick lands after Stop returns. It runs in
 // the scenario's Dependencies cleanup, after the supervisor has stopped (the
-// ScenarioV2.Dependencies doc), so the box has advanced for every read the
+// Scenario.Dependencies doc), so the box has advanced for every read the
 // worker made.
 func (t *tickingBox) Stop() {
 	t.mu.Lock()

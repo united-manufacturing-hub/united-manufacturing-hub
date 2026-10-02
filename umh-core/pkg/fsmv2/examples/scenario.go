@@ -26,7 +26,7 @@
 // Tests use scenarios via the Run function:
 //
 //	result, err := examples.Run(ctx, examples.RunConfig{
-//	    ScenarioV2:   examples.RegistryV2["helloworld"],
+//	    Scenario:   examples.Registry["helloworld"],
 //	    Duration:     10 * time.Second,
 //	    TickInterval: 100 * time.Millisecond,
 //	    Logger:       testLogger,
@@ -47,7 +47,7 @@ import (
 type RunConfig struct {
 	Store        storage.TriangularStoreInterface
 	Logger       deps.FSMLogger
-	ScenarioV2   ScenarioV2    // Required: examples.Run rejects a ScenarioV2 with no Run func or no Name
+	Scenario     Scenario      // Required: examples.Run rejects a Scenario with no Run func or no Name
 	Duration     time.Duration // 0 means run forever (until context cancelled)
 	TickInterval time.Duration
 	// GracefulShutdownTimeout is the per-level drain base propagated to the
@@ -63,13 +63,13 @@ type RunConfig struct {
 // ListScenarios returns all registered scenario names and descriptions,
 // merging every registry into one listing.
 func ListScenarios() map[string]string {
-	result := make(map[string]string, len(RegistryV2)+len(LiveRegistryV2))
+	result := make(map[string]string, len(Registry)+len(LiveRegistry))
 
-	for name, scenario := range RegistryV2 {
+	for name, scenario := range Registry {
 		result[name] = scenario.Description
 	}
 
-	for name, scenario := range LiveRegistryV2 {
+	for name, scenario := range LiveRegistry {
 		result[name] = scenario.Description
 	}
 

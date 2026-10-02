@@ -30,14 +30,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
 
-var _ = Describe("ScenarioV2 Dependencies failure", func() {
+var _ = Describe("Scenario Dependencies failure", func() {
 	It("fails the run before the supervisor starts when Dependencies returns an error, naming the scenario", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
 		depsErr := errors.New("dependency setup failed")
 		runRan := false
-		failing := examples.ScenarioV2{
+		failing := examples.Scenario{
 			Name:        "deps-error",
 			Description: "test-local Run for the Dependencies error path",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -55,7 +55,7 @@ var _ = Describe("ScenarioV2 Dependencies failure", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
 		result, err := examples.Run(context.Background(), examples.RunConfig{
-			ScenarioV2:   failing,
+			Scenario:     failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -73,14 +73,14 @@ var _ = Describe("ScenarioV2 Dependencies failure", func() {
 	})
 })
 
-var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
+var _ = Describe("Scenario Dependencies cleanup", func() {
 	It("calls the cleanup exactly once after the supervisor stopped following a normal run", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
 		var cleanupCalls atomic.Int32
 
-		normal := examples.ScenarioV2{
+		normal := examples.Scenario{
 			Name:        "cleanup-normal",
 			Description: "test-local Run for the cleanup path after a normal run",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -97,7 +97,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   normal,
+			Scenario:     normal,
 			Duration:     10 * time.Second,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -123,7 +123,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 
 		var cleanupCalls atomic.Int32
 
-		failing := examples.ScenarioV2{
+		failing := examples.Scenario{
 			Name:        "cleanup-error",
 			Description: "test-local Run for the cleanup path after a failing Run",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -140,7 +140,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		defer cancel()
 
 		_, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   failing,
+			Scenario:     failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
 			Store:        store,
@@ -158,7 +158,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 
 		var cleanupCalls atomic.Int32
 
-		panicking := examples.ScenarioV2{
+		panicking := examples.Scenario{
 			Name:        "cleanup-panic",
 			Description: "test-local Run for the cleanup path after a panicking Run",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -176,7 +176,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 
 		Expect(func() {
 			_, _ = examples.Run(ctx, examples.RunConfig{
-				ScenarioV2:   panicking,
+				Scenario:     panicking,
 				TickInterval: 50 * time.Millisecond,
 				Logger:       logger,
 				Store:        store,
@@ -192,7 +192,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
 
-		cleanupFree := examples.ScenarioV2{
+		cleanupFree := examples.Scenario{
 			Name:        "nil-cleanup",
 			Description: "test-local Run for the nil-cleanup path",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -207,7 +207,7 @@ var _ = Describe("ScenarioV2 Dependencies cleanup", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   cleanupFree,
+			Scenario:     cleanupFree,
 			Duration:     time.Second,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
