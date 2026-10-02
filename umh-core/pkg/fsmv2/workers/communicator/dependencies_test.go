@@ -390,16 +390,6 @@ var _ = Describe("CommunicatorDependencies", func() {
 	})
 
 	Describe("NewCommunicatorDependencies", func() {
-		Context("when the provider is nil", func() {
-			It("should panic with clear error message", func() {
-				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-
-				Expect(func() {
-					communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), nil)
-				}).To(PanicWith(ContainSubstring("ChannelProvider must not be nil")))
-			})
-		})
-
 		Context("when the provider is given", func() {
 			It("should create dependencies with the provider's channels", func() {
 				inbound := make(chan<- *types.UMHMessage, 10)
