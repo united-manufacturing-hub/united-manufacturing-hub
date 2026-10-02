@@ -337,6 +337,7 @@ var Registry = map[string]Scenario{
 	"cpu-stall":    CPUStallScenario,
 	"cpu-filling":  CPUFillingScenario,
 	"cpu-latch":    CPULatchScenario,
+	"cpu-v1":       CPUV1Scenario,
 }
 
 // LiveRegistry holds scenarios that read the real machine the runner runs
