@@ -18,7 +18,9 @@ package supervisor_test
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -350,6 +352,69 @@ var _ = Describe("Shutdown drain regression", func() {
 			// Assertion 3: the timeout path must NOT have fired (forceExit wins).
 			Expect(containsLogEvent(logOutput, "graceful_shutdown_timeout")).To(BeFalse(),
 				"graceful_shutdown_timeout fired; ForceExit should have won the race")
+		})
+	})
+
+	Describe("Removal takes the final observation before the worker leaves the supervisor", func() {
+		It("collects every observation, the final one included, while the worker is still registered", func() {
+			triangularStore := newStore()
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:              workerType,
+				Store:                   triangularStore,
+				Logger:                  logger,
+				TickInterval:            50 * time.Millisecond,
+				GracefulShutdownTimeout: 1 * time.Second,
+			})
+
+			// The Phase 3 drain ends when the supervisor has no workers left, and
+			// Phase 4 then cancels the context the collector runs on. A collection
+			// that runs after the worker left the supervisor can therefore be cut
+			// short or skipped.
+			var collectionsAfterRemoval atomic.Int32
+
+			// AddWorker collects once while it holds the supervisor lock, so the
+			// check below, which takes that lock, starts only with Shutdown.
+			var shuttingDown atomic.Bool
+
+			worker := &supervisor.TestWorker{
+				InitialState: shutdownHonoringState{},
+				CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
+					if shuttingDown.Load() && !slices.Contains(s.ListWorkers(), workerID) {
+						collectionsAfterRemoval.Add(1)
+					}
+
+					return &supervisor.TestObservedState{
+						ID:          workerID,
+						CollectedAt: time.Now(),
+						Desired:     &supervisor.TestDesiredState{},
+					}, nil
+				},
+			}
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Final Observation Test Worker",
+				WorkerType: workerType,
+			}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			shuttingDown.Store(true)
+			s.Shutdown()
+
+			Expect(s.TestWorkerCount()).To(Equal(0), "expected the worker to be removed during the drain")
+			Expect(collectionsAfterRemoval.Load()).To(BeZero(),
+				"CollectObservedState ran after the worker was removed from the supervisor")
+			Expect(findLogEvents(buf.String(), "collector_final_observation_completed")).To(HaveLen(1),
+				"expected exactly one final observation for the removed worker")
 		})
 	})
 })
