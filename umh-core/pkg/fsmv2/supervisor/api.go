@@ -230,9 +230,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	// This ID may belong to a removed worker; its tombstone must not apply to the new one.
 	if err := s.store.ClearTombstone(ctx, s.workerType, identity.ID); err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_tombstone_clear_failed")
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_clear_tombstone_failed")
 
-		return fmt.Errorf("failed to clear tombstone: %w", err)
+		// The store error already names the operation and the worker.
+		return err
 	}
 
 	// Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
