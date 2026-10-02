@@ -396,6 +396,73 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 			"the shielded clock must still advance by exactly the tick")
 	})
 
+	It("reads back the same machine from a cgroup v1 layout as from v2", func() {
+		v2 := fakebox.Condition{
+			Cores:       4,
+			QuotaCores:  2,
+			UsageCores:  1.2,
+			HostBusy:    0.60,
+			Steal:       0.05,
+			Throttle:    0.08,
+			Virtualized: true,
+			Affinity:    2,
+		}
+		v1 := v2
+		v1.CgroupV1 = true
+
+		v1Box := fakebox.NewBox(base, v1)
+		Expect(v1Box.ServablePaths()).NotTo(ContainElement(base+"/cpu.stat"),
+			"a v1 box must not serve the file cpuhealth detects v2 by")
+
+		v1First, v1Second := readTwice(v1Box, time.Second)
+		v2First, v2Second := readTwice(fakebox.NewBox(base, v2), time.Second)
+
+		Expect(v1Second.Troubleshooting.CgroupVersion).To(Equal("v1"),
+			"the sampler must detect the v1 layout, or every number below came from the v2 reader")
+		Expect(v2Second.Troubleshooting.CgroupVersion).To(Equal("v2"))
+
+		Expect(known(v1Second.UsageCores, "UsageCores")).To(BeNumerically("~", known(v2Second.UsageCores, "UsageCores"), tol),
+			"cpuacct.usage must read back the usage v2's usage_usec does")
+		Expect(known(v1Second.Quota, "Quota")).To(BeNumerically("~", known(v2Second.Quota, "Quota"), tol),
+			"cpu.cfs_quota_us over cpu.cfs_period_us must read back the limit cpu.max does")
+
+		throttleRatio := func(first, second cpuhealth.Sample) float64 {
+			dPeriods := known(second.NrPeriods, "NrPeriods") - known(first.NrPeriods, "NrPeriods")
+			ExpectWithOffset(1, dPeriods).To(BeNumerically(">", 0), "the tick must advance nr_periods")
+
+			return (known(second.NrThrottled, "NrThrottled") - known(first.NrThrottled, "NrThrottled")) / dPeriods
+		}
+		Expect(throttleRatio(v1First, v1Second)).To(BeNumerically("~", 0.08, tol),
+			"v1's cpu.stat must read back the throttle ratio v2's does")
+		Expect(throttleRatio(v2First, v2Second)).To(BeNumerically("~", 0.08, tol))
+
+		Expect(known(v1Second.LogicalCpus, "LogicalCpus")).To(BeNumerically("~", 2, tol),
+			"cpuset.effective_cpus must read back the pinned CPUs cpuset.cpus.effective does")
+		Expect(v1Second.CpuScope).To(Equal(v2Second.CpuScope))
+		Expect(known(v1Second.HostBusy, "HostBusy")).To(BeNumerically("~", known(v2Second.HostBusy, "HostBusy"), tol))
+		Expect(known(v1Second.Steal, "Steal")).To(BeNumerically("~", known(v2Second.Steal, "Steal"), tol))
+		Expect(v1Second.Virtualized).To(Equal(v2Second.Virtualized))
+
+		_, ok := v1Second.Pressure.Get()
+		Expect(ok).To(BeFalse(), "v1 has no cpu.pressure, so Pressure must stay absent")
+		Expect(v1Second.PsiAvailable).To(BeFalse())
+		Expect(v1Second.Troubleshooting.Reads).To(ContainElement(cpuhealth.ReadResult{
+			Operation: cpuhealth.OperationCPUPressure, Outcome: cpuhealth.ReadMissing,
+		}), "v1's absent cpu.pressure must read as missing, the outcome the CPU worker does not report")
+	})
+
+	It("serves a v1 cgroup with no quota as a present no-limit", func() {
+		box := fakebox.NewBox(base, fakebox.Condition{Cores: 4, UsageCores: 1.2, HostBusy: 0.60, CgroupV1: true})
+
+		s1, s2 := readTwice(box, time.Second)
+
+		Expect(s2.Troubleshooting.CgroupVersion).To(Equal("v1"))
+		Expect(known(s2.Quota, "Quota")).To(Equal(0.0),
+			"cpu.cfs_quota_us -1 is a present no-limit, not an absent reading")
+		Expect(known(s2.NrPeriods, "NrPeriods")).To(Equal(known(s1.NrPeriods, "NrPeriods")),
+			"nr_periods must not advance without a quota")
+	})
+
 	It("panics on a machine it cannot serve, naming what it could not serve", func() {
 		ok := fakebox.Condition{Cores: 4, QuotaCores: 2, UsageCores: 1.2, PsiPresent: true}
 
@@ -435,6 +502,16 @@ var _ = Describe("a machine condition served as cgroup and proc files", func() {
 			fakebox.NewBox(base, ok).Set(with(func(c *fakebox.Condition) { c.Cores = 2 }))
 		}).To(PanicWith(ContainSubstring("does not gain or lose CPUs mid-run")),
 			"dropping Cores mid-run would cut HostCpus while the jiffy totals kept rising")
+
+		Expect(func() {
+			fakebox.NewBox(base, with(func(c *fakebox.Condition) { c.CgroupV1 = true }))
+		}).To(PanicWith(ContainSubstring("has no per-cgroup cpu.pressure")),
+			"a v1 hierarchy cannot serve the PSI a condition asks for")
+
+		Expect(func() {
+			fakebox.NewBox(base, ok).Set(with(func(c *fakebox.Condition) { c.CgroupV1, c.PsiPresent = true, false }))
+		}).To(PanicWith(ContainSubstring("does not change its cgroup hierarchy mid-run")),
+			"the files a box serves are fixed when it is built")
 
 		Expect(func() {
 			fakebox.NewBox(base, ok).Tick(0)
