@@ -1434,7 +1434,7 @@ func (s *Supervisor[TObserved, TDesired]) mergeChildVariables(childName string, 
 	result := config.MergeWithConflicts(s.userSpec.Variables, childVars)
 
 	for _, c := range result.Conflicts {
-		id := config.ChildVariableConflict{Child: childName, Namespace: c.Namespace, Key: c.Key}
+		id := config.ChildVariableConflict{Child: childName, VariableConflict: c}
 		if _, done := s.warnedConflicts[id]; done {
 			continue
 		}

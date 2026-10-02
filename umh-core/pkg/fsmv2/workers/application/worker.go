@@ -129,7 +129,7 @@ func (w *ApplicationWorker) warnVariableConflicts(bundle config.VariableBundle, 
 
 	for _, child := range provider.GetChildrenSpecs() {
 		for _, c := range config.MergeWithConflicts(bundle, child.UserSpec.Variables).Conflicts {
-			id := config.ChildVariableConflict{Child: child.Name, Namespace: c.Namespace, Key: c.Key}
+			id := config.ChildVariableConflict{Child: child.Name, VariableConflict: c}
 			if _, done := w.warnedConflicts[id]; done {
 				continue
 			}
