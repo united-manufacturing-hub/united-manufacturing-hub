@@ -54,7 +54,7 @@ var _ = Describe("AddWorker clears the worker's tombstone", func() {
 		Expect(store.ClearTombstoneCalls[0].ID).To(Equal(identity.ID))
 
 		Expect(store.SaveAndClearCalls).To(Equal([]string{
-			"save_identity", "save_observed", "save_desired", "clear_deleted",
+			"save_identity", "save_observed", "save_desired", "clear_tombstone",
 		}), "the tombstone must be cleared after the identity, observed and desired saves")
 
 		clearErr := errors.New("clear deleted failed")

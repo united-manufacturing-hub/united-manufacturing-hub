@@ -834,7 +834,7 @@ func (m *mockTriangularStore) ClearTombstone(_ context.Context, workerType strin
 		WorkerType: workerType,
 		ID:         id,
 	})
-	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "clear_deleted")
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "clear_tombstone")
 	m.mu.Unlock()
 
 	return m.ClearTombstoneErr
