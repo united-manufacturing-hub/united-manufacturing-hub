@@ -116,6 +116,13 @@ func main() {
 	v1Scenario, isV1 := examples.Registry[*scenarioName]
 	v2Scenario, isV2 := examples.RegistryV2[*scenarioName]
 
+	if !isV2 {
+		liveScenario, isLive := examples.LiveRegistryV2[*scenarioName]
+		if isLive {
+			v2Scenario, isV2 = liveScenario, true
+		}
+	}
+
 	if !isV1 && !isV2 {
 		logger.Fatal("Scenario not found",
 			zap.String("scenario", *scenarioName),

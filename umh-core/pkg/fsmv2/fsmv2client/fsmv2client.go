@@ -123,6 +123,22 @@ const (
 	Stale
 )
 
+// String names f, so a log or error line reads "stale" rather than 4.
+func (f Freshness) String() string {
+	switch f {
+	case Fresh:
+		return "fresh"
+	case Unregistered:
+		return "unregistered"
+	case NeverObserved:
+		return "never-observed"
+	case Stale:
+		return "stale"
+	default:
+		return "unknown"
+	}
+}
+
 // GetFresh reads the observed state for ref's spawned child and maps it to a
 // Freshness reason. A ref that was never Upserted is Unregistered; a registered
 // ref with no persisted observation is NeverObserved; an observation older than

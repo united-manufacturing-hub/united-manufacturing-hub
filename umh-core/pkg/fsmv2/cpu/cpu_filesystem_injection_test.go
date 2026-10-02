@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -64,7 +65,7 @@ type markedStatFilesystem struct {
 }
 
 func (markedStatFilesystem) ReadFile(_ context.Context, path string) ([]byte, error) {
-	if path == cgroupBase+"/cpu.stat" {
+	if path == CgroupBase+"/cpu.stat" {
 		return []byte("usage_usec " + stubStatMarker + "\n"), nil
 	}
 
@@ -76,7 +77,7 @@ func (markedStatFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, err
 }
 
 func (markedStatFilesystem) FileExists(_ context.Context, path string) (bool, error) {
-	return path == cgroupBase+"/cpu.stat", nil
+	return path == CgroupBase+"/cpu.stat", nil
 }
 
 var _ = Describe("the filesystem the CPU worker reads", func() {
@@ -86,12 +87,51 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		return id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
 	}
 
+	It("samples through the filesystem in its dependency map over the global one", func() {
+		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
+		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
+
+		m := map[string]any{}
+		var marked filesystem.Service = markedStatFilesystem{}
+		config.SetDependency(m, FilesystemKey, marked)
+		Expect(m).To(HaveKey("cpu.filesystem"),
+			"the dependency-map slot must be named cpu.filesystem; rename "+
+				"FilesystemKey and this literal is the line that fails")
+
+		id, bd := newBaseDeps()
+		_, err := Poll(context.Background(), monitorSpec.NewDeps(id, bd, m), CPUConfig{})
+		Expect(err).To(HaveOccurred(),
+			"the map's filesystem serves a cpu.stat that cannot parse, so the sample must fail")
+		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
+			"only the map's filesystem serves this counter value; the global stub refuses every read")
+	})
+
+	It("falls back to the published global when the map holds nothing under the key", func() {
+		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
+		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
+
+		m := map[string]any{"unrelated.key": struct{}{}}
+		id, bd := newBaseDeps()
+		_, err := Poll(context.Background(), monitorSpec.NewDeps(id, bd, m), CPUConfig{})
+		Expect(err).To(HaveOccurred(),
+			"with nothing under the key the published global serves a cpu.stat that cannot parse")
+		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
+			"only the published global serves this counter value")
+
+		wrongTyped := map[string]any{"cpu.filesystem": "not a filesystem"}
+		_, err = Poll(context.Background(), monitorSpec.NewDeps(id, bd, wrongTyped), CPUConfig{})
+		Expect(err).To(HaveOccurred(),
+			"a wrong-typed value under the key reads as absent, so the published global still serves")
+		Expect(err.Error()).To(ContainSubstring(stubStatMarker),
+			"only the published global serves this counter value")
+	})
+
 	It("samples through a published filesystem rather than the real one", func() {
 		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, markedStatFilesystem{})
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
-		d := NewDeps(id, bd, nil)
+		d := monitorSpec.NewDeps(id, bd, nil)
 
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).To(HaveOccurred(),
@@ -108,7 +148,7 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
-		status, err := Poll(context.Background(), NewDeps(id, bd, nil), CPUConfig{})
+		status, err := Poll(context.Background(), monitorSpec.NewDeps(id, bd, nil), CPUConfig{})
 		Expect(err).NotTo(HaveOccurred(), "an unreadable cgroup must not degrade the instance")
 		Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy))
 	})
@@ -118,14 +158,21 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 			"precondition: no earlier spec may have left a filesystem in the registry")
 
 		id, bd := newBaseDeps()
-		d := NewDeps(id, bd, nil)
+		d := monitorSpec.NewDeps(id, bd, nil)
 
 		Expect(d.sampler).NotTo(BeNil(), "an unpublished filesystem still yields a sampler")
 		Expect(d.engineErr).NotTo(HaveOccurred(), "the table builds either way")
 
+		// Only the concrete type tells the real filesystem from a
+		// refuse-everything stub: on a host without cgroup files both fail
+		// every read.
+		_, isDefault := d.fs.(*filesystem.DefaultService)
+		Expect(isDefault).To(BeTrue(),
+			"with nothing published the resolved filesystem must be the real one, not a stub")
+
 		// errors.Is rather than NotTo(MatchError): MatchError rejects a nil actual
-		// even under NotTo, and Poll returns nil with a cgroup v2 mount and an
-		// error without one, so this must hold for both. It has teeth only
+		// even under NotTo, and whether Poll returns nil or an error depends on
+		// which cgroup files the host has, so this must hold for both. It has teeth only
 		// against a fallback still serving a previously published filesystem.
 		_, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(errors.Is(err, errRefusedByStub)).To(BeFalse(),

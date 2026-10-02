@@ -1623,10 +1623,6 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 // reachable through GetStatus too, but only with a published fsmv2 client and a
 // staged store.
 var _ = Describe("the CPU seam's judgement, called without a client", func() {
-	// The window the stale message quotes, derived the way production derives
-	// it, so a change to the worker's poll interval moves both together.
-	maxAge := 3 * fsmv2cpu.PollInterval
-
 	It("keeps the store's own error in the message of a failed read", func() {
 		health, cpuHealth := container_monitor.JudgeWorkerCPUReadError(errors.New("boltdb: bucket not found"))
 
@@ -1651,7 +1647,7 @@ var _ = Describe("the CPU seam's judgement, called without a client", func() {
 			Expect(cpuHealth).To(BeNil(), "no arm here judged a measurement")
 		},
 		Entry("stale", fsmv2client.Stale,
-			"CPU worker observation is stale (older than "+maxAge.String()+"); cannot trust the verdict it carries"),
+			"CPU worker observation is stale (older than "+fsmv2cpu.MaxObservationAge.String()+"); cannot trust the verdict it carries"),
 		Entry("never observed", fsmv2client.NeverObserved,
 			"CPU worker has never observed; no measurement to judge"),
 		Entry("not registered", fsmv2client.Unregistered,

@@ -187,3 +187,20 @@ func TestSetClientGetClient_ProcessScopedAccessor(t *testing.T) {
 		t.Fatalf("GetClient after SetClient(nil) = %v, want nil", got)
 	}
 }
+
+func TestFreshnessString_NamesEachReason(t *testing.T) {
+	cases := map[fsmv2client.Freshness]string{
+		fsmv2client.Unknown:       "unknown",
+		fsmv2client.Fresh:         "fresh",
+		fsmv2client.Unregistered:  "unregistered",
+		fsmv2client.NeverObserved: "never-observed",
+		fsmv2client.Stale:         "stale",
+		fsmv2client.Freshness(99): "unknown",
+	}
+
+	for f, want := range cases {
+		if got := f.String(); got != want {
+			t.Errorf("Freshness(%d).String() = %q, want %q", int(f), got, want)
+		}
+	}
+}
