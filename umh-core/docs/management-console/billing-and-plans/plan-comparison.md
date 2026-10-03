@@ -11,9 +11,9 @@ To learn more about how plans work at UMH, see [Billing and Plans](README.md). I
 | 70+ bridge templates | ✓ | ✓ |
 | Versioning for Data Models | ✓ | ✓ |
 | Users per company | 1 | ∞ |
-| Unlimited Instances | — | ✓ |
+| Instances per company | 1 | ∞ |
 | Enterprise Release Channel | — | ✓ |
 | Roles and location permissions | — | [Admin, Editor and Viewer roles](../users-and-permissions/roles-reference.md) |
 | Review changes before a deploy with a visual diff view | — | ✓ |
-| Instance audit logs | — | ✓ |
+| Instance audit logs | — | Paid add-on |
 | Single sign-on with your own identity provider | — | [Paid add-on](../authentication/enterprise-sso.md) |
