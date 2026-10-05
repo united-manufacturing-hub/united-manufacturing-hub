@@ -212,7 +212,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 			dataModels, dataContracts, payloadShapes := emptyIntegrationTestConfig()
 
 			Eventually(func() bool {
-				err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+				err := registry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes)
 				if err != nil {
 					return false
 				}
@@ -230,7 +230,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 			dataModels, dataContracts, payloadShapes := emptyIntegrationTestConfig()
 
 			Eventually(func() bool {
-				err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+				err := registry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes)
 				if err != nil {
 					return false
 				}
@@ -247,7 +247,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 			dataModels, dataContracts, payloadShapes := emptyIntegrationTestConfig()
 
 			Eventually(func() bool {
-				err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+				err := registry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes)
 				if err != nil {
 					return false
 				}
@@ -264,7 +264,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 			dataModels, dataContracts, payloadShapes := emptyIntegrationTestConfig()
 
 			Eventually(func() bool {
-				err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+				err := registry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes)
 				if err != nil {
 					return false
 				}
@@ -434,7 +434,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 
 			dataModels, dataContracts, payloadShapes := emptyIntegrationTestConfig()
 
-			err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+			err := registry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("context deadline"))
 		})

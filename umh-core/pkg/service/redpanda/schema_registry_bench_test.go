@@ -62,7 +62,7 @@ func BenchmarkSchemaRegistry(b *testing.B) {
 	// Wait for registry to be ready
 	for range 30 {
 		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
-		if err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes); err == nil {
+		if err := registry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes); err == nil {
 			break
 		}
 
@@ -139,7 +139,7 @@ func performWarmup(b *testing.B, registry *SchemaRegistry) {
 	for range 10 {
 		warmupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
-		_ = registry.Reconcile(warmupCtx, dataModels, dataContracts, payloadShapes)
+		_ = registry.Reconcile(warmupCtx, dataModels, dataContracts, nil, payloadShapes)
 
 		cancel()
 	}
@@ -748,7 +748,7 @@ func reconcileUntilComplete(ctx context.Context, registry *SchemaRegistry, schem
 		// This is a temporary compatibility layer for benchmarks
 		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
 
-		err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+		err := registry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes)
 		if err != nil {
 			return err
 		}

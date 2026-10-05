@@ -940,9 +940,10 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 		// This replaces the previous approach of using yaml:"-" tags in RedpandaConfig
 		dataModels := snapshot.CurrentConfig.DataModels
 		dataContracts := snapshot.CurrentConfig.DataContracts
+		dataContractsV2 := snapshot.CurrentConfig.DataContractsV2
 		payloadShapes := snapshot.CurrentConfig.PayloadShapes
 
-		schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+		schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, dataContractsV2, payloadShapes)
 		if schemaRegistryErr != nil {
 			// Only log them, don't return an error. Deduplicate so a persistent
 			// failure does not flood the log every tick.

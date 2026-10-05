@@ -34,6 +34,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // getTmpDir returns the temporary directory for a container.
@@ -697,7 +700,7 @@ var _ = Describe("SchemaRegistry translation", func() {
 				{Name: "_typevalidation_v1", Model: &config.ModelRef{Name: "typevalidation", Version: "v1"}},
 			}
 
-			schemas, skipPrefixes, err := registry.translateToSchemas(context.Background(), dataModels, dataContracts, map[string]config.PayloadShape{})
+			schemas, skipPrefixes, err := registry.translateToSchemas(context.Background(), dataModels, dataContracts, nil, map[string]config.PayloadShape{})
 
 			Expect(schemas).To(HaveKey(SubjectName("_typevalidation_v1-timeseries-number")))
 			Expect(schemas).To(HaveKey(SubjectName("_typevalidation_v1-timeseries-string")))
@@ -707,6 +710,81 @@ var _ = Describe("SchemaRegistry translation", func() {
 			Expect(err.Error()).To(ContainSubstring("_work_order_v1"))
 			Expect(err.Error()).To(ContainSubstring("unknown model 'work_order'"))
 			Expect(skipPrefixes).To(ContainElement("_work_order_v1-"))
+		})
+	})
+
+	Context("when the config holds dataContractsV2 entries", func() {
+		It("publishes every version under _<name>_<version>", func() {
+			dataContractsV2 := []config.DataContractV2Config{
+				{
+					Name: "pump",
+					Versions: map[string]config.DataModelVersion{
+						"v1": {Structure: map[string]config.Field{"count": {PayloadShape: "timeseries-number"}}},
+						"v2": {Structure: map[string]config.Field{"name": {PayloadShape: "timeseries-string"}}},
+					},
+				},
+			}
+
+			schemas, skipPrefixes, err := registry.translateToSchemas(context.Background(), nil, nil, dataContractsV2, map[string]config.PayloadShape{})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(skipPrefixes).To(BeEmpty())
+			Expect(schemas).To(HaveKey(SubjectName("_pump_v1-timeseries-number")))
+			Expect(schemas).To(HaveKey(SubjectName("_pump_v2-timeseries-string")))
+		})
+
+		It("keeps the legacy sections' subjects alongside the v2 ones", func() {
+			dataModels := []config.DataModelsConfig{
+				{
+					Name: "typevalidation",
+					Versions: map[string]config.DataModelVersion{
+						"v1": {Structure: map[string]config.Field{"count": {PayloadShape: "timeseries-number"}}},
+					},
+				},
+			}
+			dataContracts := []config.DataContractsConfig{
+				{Name: "_typevalidation_v1", Model: &config.ModelRef{Name: "typevalidation", Version: "v1"}},
+			}
+			dataContractsV2 := []config.DataContractV2Config{
+				{
+					Name: "pump",
+					Versions: map[string]config.DataModelVersion{
+						"v1": {Structure: map[string]config.Field{"count": {PayloadShape: "timeseries-number"}}},
+					},
+				},
+			}
+
+			schemas, _, err := registry.translateToSchemas(context.Background(), dataModels, dataContracts, dataContractsV2, map[string]config.PayloadShape{})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveKey(SubjectName("_typevalidation_v1-timeseries-number")))
+			Expect(schemas).To(HaveKey(SubjectName("_pump_v1-timeseries-number")))
+		})
+
+		It("does not resolve a v2 _refModel against the dataModels section", func() {
+			dataModels := []config.DataModelsConfig{
+				{
+					Name: "motor",
+					Versions: map[string]config.DataModelVersion{
+						"v1": {Structure: map[string]config.Field{"rpm": {PayloadShape: "timeseries-number"}}},
+					},
+				},
+			}
+			dataContractsV2 := []config.DataContractV2Config{
+				{
+					Name: "pump",
+					Versions: map[string]config.DataModelVersion{
+						"v1": {Structure: map[string]config.Field{"motor": {ModelRef: &config.ModelRef{Name: "motor", Version: "v1"}}}},
+					},
+				},
+			}
+
+			schemas, skipPrefixes, err := registry.translateToSchemas(context.Background(), dataModels, nil, dataContractsV2, map[string]config.PayloadShape{})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("_pump_v1"))
+			Expect(skipPrefixes).To(ContainElement("_pump_v1-"))
+			Expect(schemas).ToNot(HaveKey(SubjectName("_pump_v1-timeseries-number")))
 		})
 	})
 
@@ -725,5 +803,45 @@ var _ = Describe("SchemaRegistry translation", func() {
 			Expect(registry.inRegistryButUnknownLocally).ToNot(HaveKey(SubjectName("_work_order_v1-timeseries-number")))
 			Expect(registry.inRegistryButUnknownLocally).To(HaveKey(SubjectName("_orphan_v1-timeseries-number")))
 		})
+	})
+})
+
+var _ = Describe("SchemaRegistry contract name clash warning", func() {
+	var (
+		registry *SchemaRegistry
+		logs     *observer.ObservedLogs
+	)
+
+	dataModels := []config.DataModelsConfig{{Name: "pump"}}
+	clashing := []config.DataContractV2Config{{Name: "pump"}}
+
+	BeforeEach(func() {
+		var core zapcore.Core
+		core, logs = observer.New(zapcore.InfoLevel)
+
+		registry = NewSchemaRegistry()
+		registry.logger = zap.New(core).Sugar()
+	})
+
+	It("warns once per clash, not on every reconcile", func() {
+		registry.warnOnContractNameClashes(dataModels, nil, clashing)
+		registry.warnOnContractNameClashes(dataModels, nil, clashing)
+
+		warnings := logs.FilterLevelExact(zapcore.WarnLevel).All()
+		Expect(warnings).To(HaveLen(1))
+		Expect(warnings[0].Message).To(ContainSubstring(`data contract "pump"`))
+	})
+
+	It("reports when the last clash is resolved", func() {
+		registry.warnOnContractNameClashes(dataModels, nil, clashing)
+		registry.warnOnContractNameClashes(dataModels, nil, nil)
+
+		Expect(logs.FilterMessageSnippet("anymore").All()).To(HaveLen(1))
+	})
+
+	It("stays quiet for a config without clashes", func() {
+		registry.warnOnContractNameClashes(dataModels, nil, []config.DataContractV2Config{{Name: "valve"}})
+
+		Expect(logs.All()).To(BeEmpty())
 	})
 })

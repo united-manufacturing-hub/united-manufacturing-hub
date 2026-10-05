@@ -39,6 +39,11 @@ type Core struct {
 	Redpanda      Redpanda       `json:"redpanda"`
 	DataModels    []DataModel    `json:"dataModels"`
 	DataContracts []DataContract `json:"dataContracts"`
+	// DataContractsV2 merges DataModels and DataContracts into the single
+	// user-facing concept the Console calls a data contract. Omitted by
+	// instances that predate it, so read it only when Release.SupportedFeatures
+	// carries "data-contracts-v2".
+	DataContractsV2 []DataContractV2 `json:"dataContractsV2,omitempty"`
 }
 
 // Historian is the status of the historian endpoint monitor.
@@ -141,6 +146,28 @@ type DataContract struct {
 type DataContractRef struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
+}
+
+// DataContractV2 is one data model together with every contract address it is
+// published under. It carries everything the Console's data contract index
+// needs, so that view never has to join DataModels against DataContracts.
+//
+// An orphaned contract — one whose data model is gone — is reported with an
+// empty LatestVersion and Hash, because it still enforces a schema in Redpanda
+// and an operator has to be able to see it.
+type DataContractV2 struct {
+	Name          string                  `json:"name"`
+	Description   string                  `json:"description"`
+	LatestVersion string                  `json:"latestVersion"`
+	Hash          string                  `json:"hash"`
+	Versions      []DataContractV2Version `json:"versions"`
+}
+
+// DataContractV2Version ties one version of a data model to the contract that
+// publishes it. Contract is empty when the version has no contract yet.
+type DataContractV2Version struct {
+	Version  string `json:"version"`  // "v1"
+	Contract string `json:"contract"` // "_pump_v1"
 }
 
 type Latency struct {

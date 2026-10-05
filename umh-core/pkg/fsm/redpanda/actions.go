@@ -456,7 +456,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		if len(dataModels) > 0 || len(dataContracts) > 0 {
 			r.baseFSMInstance.GetLogger().Debugf("Reconciling schema registry with %d data models and %d data contracts", len(dataModels), len(dataContracts))
 
-			err := r.schemaRegistry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+			err := r.schemaRegistry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes)
 			if err != nil {
 				return fmt.Errorf("failed to reconcile schema registry: %w", err)
 			}

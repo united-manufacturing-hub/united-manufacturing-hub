@@ -556,7 +556,7 @@ func (m *MockSchemaRegistry) GetVersionsForSubject(subject string) []int {
 	return versions
 }
 
-func (n *NoOpSchemaRegistry) Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) error {
+func (n *NoOpSchemaRegistry) Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, dataContractsV2 []config.DataContractV2Config, payloadShapes map[string]config.PayloadShape) error {
 	return nil
 }
 
