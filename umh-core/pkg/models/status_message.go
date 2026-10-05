@@ -164,10 +164,13 @@ type DataContractV2 struct {
 }
 
 // DataContractV2Version ties one version of a data model to the contract that
-// publishes it. Contract is empty when the version has no contract yet.
+// publishes it. Contract is empty when the version has no contract yet. Health
+// says whether the Schema Registry enforces the version; it is nil when the
+// data contract monitor is off or has not reported yet.
 type DataContractV2Version struct {
-	Version  string `json:"version"`  // "v1"
-	Contract string `json:"contract"` // "_pump_v1"
+	Version  string  `json:"version"`  // "v1"
+	Contract string  `json:"contract"` // "_pump_v1"
+	Health   *Health `json:"health,omitempty"`
 }
 
 type Latency struct {

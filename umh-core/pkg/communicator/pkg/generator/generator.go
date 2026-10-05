@@ -207,6 +207,8 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		return &models.StatusMessage{} // Return empty status message on error
 	}
 
+	AddDataContractHealth(ctx, dataContractV2Data, s.logger)
+
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
 

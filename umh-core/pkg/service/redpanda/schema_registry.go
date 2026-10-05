@@ -464,6 +464,15 @@ func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[S
 	return err
 }
 
+// ExpectedSubjects returns what Reconcile registers for cfg: the subjects with their schemas,
+// and the subject prefixes of the contracts that could not be translated. It does not touch
+// the registry.
+func (s *SchemaRegistry) ExpectedSubjects(ctx context.Context, cfg config.FullConfig) (map[SubjectName]JSONSchemaDefinition, []string) {
+	expected, untranslated, _ := s.translateToSchemas(ctx, cfg.DataModels, cfg.DataContracts, cfg.DataContractsV2, cfg.PayloadShapes)
+
+	return expected, untranslated
+}
+
 // translateToSchemas converts data models and contracts to Schema Registry subject format.
 // This method handles the translation from UMH data model configurations to JSON schemas
 // that can be registered in the Schema Registry for benthos-umh UNS output validation.
