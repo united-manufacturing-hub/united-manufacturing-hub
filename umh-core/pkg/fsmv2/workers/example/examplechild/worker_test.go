@@ -66,48 +66,6 @@ var _ = Describe("ChildWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 		})
-
-		It("reports the address and device rendered from its config", func() {
-			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
-			Expect(err).NotTo(HaveOccurred())
-
-			spec := config.UserSpec{
-				Config: "address: \"{{ .IP }}:{{ .PORT }}\"\ndevice: \"{{ .DEVICE_ID }}\"",
-				Variables: config.VariableBundle{
-					User: map[string]interface{}{
-						"IP":        "192.168.1.100",
-						"PORT":      502,
-						"DEVICE_ID": "device-0",
-					},
-				},
-			}
-
-			desired, err := worker.DeriveDesiredState(spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			obs, err := worker.CollectObservedState(context.Background(), desired)
-			Expect(err).NotTo(HaveOccurred())
-
-			typedObs, ok := obs.(fsmv2.Observation[example_child.ExamplechildStatus])
-			Expect(ok).To(BeTrue())
-
-			Expect(typedObs.Status.Address).To(Equal("192.168.1.100:502"))
-			Expect(typedObs.Status.Device).To(Equal("device-0"))
-		})
-
-		It("returns an empty address and device when the desired state is nil", func() {
-			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
-			Expect(err).NotTo(HaveOccurred())
-
-			obs, err := worker.CollectObservedState(context.Background(), nil)
-			Expect(err).NotTo(HaveOccurred())
-
-			typedObs, ok := obs.(fsmv2.Observation[example_child.ExamplechildStatus])
-			Expect(ok).To(BeTrue())
-
-			Expect(typedObs.Status.Address).To(Equal(""))
-			Expect(typedObs.Status.Device).To(Equal(""))
-		})
 	})
 
 	Describe("DeriveDesiredState", func() {
@@ -126,6 +84,31 @@ var _ = Describe("ChildWorker", func() {
 
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[example_child.ExamplechildConfig])
 			Expect(desired).NotTo(BeNil())
+		})
+
+		It("renders the address and device into its desired config", func() {
+			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec := config.UserSpec{
+				Config: "address: \"{{ .IP }}:{{ .PORT }}\"\ndevice: \"{{ .DEVICE_ID }}\"",
+				Variables: config.VariableBundle{
+					User: map[string]interface{}{
+						"IP":        "192.168.1.100",
+						"PORT":      502,
+						"DEVICE_ID": "device-0",
+					},
+				},
+			}
+
+			desiredIface, err := worker.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[example_child.ExamplechildConfig])
+			Expect(ok).To(BeTrue())
+
+			Expect(desired.Config.Address).To(Equal("192.168.1.100:502"))
+			Expect(desired.Config.Device).To(Equal("device-0"))
 		})
 	})
 })
