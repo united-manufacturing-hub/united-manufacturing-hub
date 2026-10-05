@@ -560,7 +560,11 @@ var _ = Describe("Scenario framework", func() {
 		degradedDrain := examples.Scenario{
 			Name:        "degraded-drain",
 			Description: "test-local Run that leaves a helloworld worker running, so the drain has a worker to stop",
-			// The 1ns GracefulShutdownTimeout below makes the drain log these.
+			// The 10ms GracefulShutdownTimeout below makes the drain log both warnings on every run.
+			// Each child supervisor logs graceful_shutdown_timeout.
+			// Its 10ms timer fires before the drain first checks for stopped workers, which happens after 100ms.
+			// The parent's budget is twice the timeout, 20ms, and its two children use all of it.
+			// So the parent logs graceful_shutdown_budget_exhausted.
 			ExpectedWarnings: []string{
 				"graceful_shutdown_timeout",
 				"graceful_shutdown_budget_exhausted",
@@ -600,7 +604,7 @@ var _ = Describe("Scenario framework", func() {
 			Logger:       logger,
 			Store:        store,
 
-			GracefulShutdownTimeout: time.Nanosecond,
+			GracefulShutdownTimeout: 10 * time.Millisecond,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(result.Done, "55s").Should(BeClosed())
