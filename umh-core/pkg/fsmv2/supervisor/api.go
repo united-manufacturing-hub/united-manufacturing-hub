@@ -536,7 +536,7 @@ func (s *Supervisor[TObserved, TDesired]) stopWorker(
 	workerCtx.mu.RLock()
 
 	if workerCtx.currentState != nil {
-		metrics.CleanupStateDuration(s.GetHierarchyPathUnlocked(), workerCtx.currentState.String())
+		metrics.CleanupStateDuration(workerCtx.identity.HierarchyPath, workerCtx.currentState.String())
 	}
 
 	workerCtx.mu.RUnlock()

@@ -454,7 +454,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps.String("mutex_name", "workerCtx.mu"))
 
 		// Record Prometheus metric AFTER lock release
-		metrics.RecordStateTransition(s.GetHierarchyPathUnlocked(), fromState, toState)
+		metrics.RecordStateTransition(workerCtx.identity.HierarchyPath, fromState, toState)
 	} else {
 		workerCtx.mu.Lock()
 		workerCtx.currentStateReason = result.Reason
@@ -468,7 +468,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	if workerCtx.currentState != nil && !workerCtx.stateEnteredAt.IsZero() {
 		metrics.RecordStateDuration(
-			s.GetHierarchyPathUnlocked(),
+			workerCtx.identity.HierarchyPath,
 			workerCtx.currentState.String(),
 			time.Since(workerCtx.stateEnteredAt),
 		)

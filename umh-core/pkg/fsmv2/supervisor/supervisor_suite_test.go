@@ -413,9 +413,10 @@ func (m *mockStore) Maintenance(ctx context.Context) error {
 
 func mockIdentity() deps.Identity {
 	return deps.Identity{
-		ID:         "test-worker",
-		Name:       "Test Worker",
-		WorkerType: "test",
+		ID:            "test-worker",
+		Name:          "Test Worker",
+		WorkerType:    "test",
+		HierarchyPath: "test-worker(test)",
 	}
 }
 
