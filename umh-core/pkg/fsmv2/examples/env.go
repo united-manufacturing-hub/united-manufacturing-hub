@@ -69,6 +69,11 @@ type runRecorder struct {
 	// matchedWarnings holds the expectedWarnings entries a logged warning
 	// has matched, so postRunFailure can name an entry that never appeared.
 	matchedWarnings map[string]bool
+
+	// matchedErrors holds the expectedErrors entries a logged error
+	// message has matched, so postRunFailure can name an entry that never
+	// appeared.
+	matchedErrors map[string]bool
 }
 
 // alwaysAllowedMessages are logged by the collector in normal operation, so
@@ -81,6 +86,11 @@ var alwaysAllowedMessages = []string{
 
 // recordLoggedError keeps the first error the scenario does not expect.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.markMatchedEntries(r.expectedErrors, msg, r.matchedErrors)
+
 	if r.messageAllowed(msg, r.expectedErrors) {
 		return
 	}
@@ -88,9 +98,6 @@ func (r *runRecorder) recordLoggedError(err error, msg string) {
 	if r.errorCauseAllowed(err) {
 		return
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	if r.firstUnexpectedErr == nil {
 		r.firstUnexpectedErr = fmt.Errorf("the scenario does not expect this error: %s (%w)", msg, err)
@@ -126,15 +133,39 @@ func (r *runRecorder) errorCauseAllowed(err error) bool {
 	return false
 }
 
+// markMatchedEntries marks the entries of expected that msg contains in
+// matched, so postRunFailure can name an entry that never appeared.
+func (r *runRecorder) markMatchedEntries(expected []string, msg string, matched map[string]bool) {
+	for _, entry := range expected {
+		if entry != "" && strings.Contains(msg, entry) {
+			matched[entry] = true
+		}
+	}
+}
+
+// unmatchedEntries returns the entries of expected that no logged message
+// matched, in expected's order.
+func (r *runRecorder) unmatchedEntries(expected []string, matched map[string]bool) []string {
+	var missing []string
+
+	for _, want := range expected {
+		if want == "" {
+			continue
+		}
+
+		if !matched[want] {
+			missing = append(missing, want)
+		}
+	}
+
+	return missing
+}
+
 func (r *runRecorder) recordLoggedWarning(msg string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for _, entry := range r.expectedWarnings {
-		if entry != "" && strings.Contains(msg, entry) {
-			r.matchedWarnings[entry] = true
-		}
-	}
+	r.markMatchedEntries(r.expectedWarnings, msg, r.matchedWarnings)
 
 	if r.messageAllowed(msg, r.expectedWarnings) {
 		return
@@ -158,14 +189,21 @@ func (r *runRecorder) missingExpectedWarning() (string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for _, want := range r.expectedWarnings {
-		if want == "" {
-			continue
-		}
+	if missing := r.unmatchedEntries(r.expectedWarnings, r.matchedWarnings); len(missing) > 0 {
+		return missing[0], true
+	}
 
-		if !r.matchedWarnings[want] {
-			return want, true
-		}
+	return "", false
+}
+
+// missingExpectedError returns the first entry of expectedErrors that no
+// logged error message contained. An empty entry is never required.
+func (r *runRecorder) missingExpectedError() (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if missing := r.unmatchedEntries(r.expectedErrors, r.matchedErrors); len(missing) > 0 {
+		return missing[0], true
 	}
 
 	return "", false
@@ -293,8 +331,10 @@ type Scenario struct {
 	Run func(ctx context.Context, env Env) error
 
 	// ExpectedErrors lists substrings of error log messages this scenario
-	// expects. Any other error logged during the run fails it, or sets
-	// RunResult.Err when it is logged after Run returned.
+	// expects. Every listed entry must appear in an error the run logs,
+	// or RunResult.Err names the entry. Any other error logged during
+	// the run fails it, or sets RunResult.Err when it is logged after Run
+	// returned.
 	ExpectedErrors []string
 
 	// ExpectedErrorCauses lists error values this scenario expects, matched
