@@ -338,7 +338,7 @@ func expectedFields(s examples.Scenario) []zap.Field {
 	return fields
 }
 
-// nonNilCauseMessages skips nil causes: runRecorder.errorCauseAllowed never matches one.
+// nonNilCauseMessages skips nil causes: errorMatchesCause never matches one.
 func nonNilCauseMessages(causes []error) []string {
 	messages := make([]string, 0, len(causes))
 
