@@ -25,7 +25,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -37,20 +36,31 @@ import (
 // real read error.
 var ErrNotObserved = errors.New("fsmv2client: ref not observed")
 
+// ErrNoDesiredState reports that no desired state is saved for the ref yet.
+var ErrNoDesiredState = errors.New("fsmv2client: ref has no desired state")
+
+// stateReader reads both the observed and the desired state. It is separate
+// from deps.StateReader, because workers receive deps.StateReader and must
+// not read desired state.
+type stateReader interface {
+	LoadObservedTyped(ctx context.Context, workerType string, id string, result interface{}) error
+	LoadDesiredTyped(ctx context.Context, workerType string, id string, dest interface{}) error
+}
+
 // FSMv2Client delegates child-spec writes to the Writer it wraps and
-// reads child observed state through the read-only StateReader it holds (see
-// the Get function).
+// reads child observed and desired state through the read-only stateReader it
+// holds (see the Get and GetDesired functions).
 type FSMv2Client struct {
 	w  *dynamicchildren.Writer
-	sr deps.StateReader
+	sr stateReader
 }
 
 // NewFSMv2Client returns an FSMv2Client that writes through w and reads
-// observed state through sr. The client deliberately holds the plain Writer,
+// observed and desired state through sr. The client deliberately holds the plain Writer,
 // never the supervisor-managed config worker instance: worker instances can be
 // torn down and recreated, so a held instance would go stale after the first
 // restart.
-func NewFSMv2Client(w *dynamicchildren.Writer, sr deps.StateReader) *FSMv2Client {
+func NewFSMv2Client(w *dynamicchildren.Writer, sr stateReader) *FSMv2Client {
 	return &FSMv2Client{w: w, sr: sr}
 }
 
@@ -104,6 +114,28 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 	}
 
 	return obs, nil
+}
+
+// GetDesired reads the desired state the supervisor saved for ref's spawned
+// child and returns its config. The collection and child id are the same as
+// for Get. When no desired state is saved for the ref it returns
+// ErrNoDesiredState. Any other reader error is returned verbatim.
+func GetDesired[TConfig any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref) (TConfig, error) {
+	var desired fsmv2.WrappedDesiredState[TConfig]
+
+	if c == nil || c.sr == nil {
+		return desired.Config, fmt.Errorf("fsmv2client: GetDesired requires a client with a StateReader (ref %s/%s)", ref.WorkerType, config.ChildID(ref.Name))
+	}
+
+	if err := c.sr.LoadDesiredTyped(ctx, ref.WorkerType, config.ChildID(ref.Name), &desired); err != nil {
+		if errors.Is(err, persistence.ErrNotFound) {
+			return desired.Config, fmt.Errorf("%w: %s/%s", ErrNoDesiredState, ref.WorkerType, config.ChildID(ref.Name))
+		}
+
+		return desired.Config, err
+	}
+
+	return desired.Config, nil
 }
 
 // Freshness is the read-side reason GetFresh assigns to a child observation.
