@@ -114,11 +114,11 @@ type CPUDeps struct {
 	reportedReads sync.Map // map[cpuhealth.ReadResult]struct{}
 }
 
-// Poll samples the cgroup once and reports the verdict Decide judged. On a
-// NewEngine construction error or a non-nil Read error it stores no verdict,
-// publishes no gauges, and reports it could not measure, never a healthy zero.
-// One absent field (e.g. Pressure) on a nil error is not a failure: it reports
-// what Decide produced.
+// Poll samples the cgroup once and reports the verdict Decide judged. It returns
+// an error, stores no verdict and publishes no gauges in three cases: NewEngine
+// failed, Read returned an error, or a file needed for the CPU capacity or usage
+// could not be read. A missing optional reading, such as pressure, is not an
+// error: Poll then reports what Decide produced.
 func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	if d.engineErr != nil {
 		return CPUStatus{}, d.engineErr
@@ -136,6 +136,10 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, details := cpuhealth.Decide(d.engine, sample, env)
+
+	if err := cpuhealth.CPUNotMeasuredError(sample, details); err != nil {
+		return CPUStatus{}, err
+	}
 
 	recordMetrics(d.MetricsRecorder(), sample.Timestamp, details)
 
