@@ -65,6 +65,10 @@ type runRecorder struct {
 	lastStep            string
 	firstUnexpectedErr  error
 	firstUnexpectedWarn error
+
+	// matchedWarnings holds the expectedWarnings entries a logged warning
+	// has matched, so postRunFailure can name an entry that never appeared.
+	matchedWarnings map[string]bool
 }
 
 // alwaysAllowedMessages are logged by the collector in normal operation, so
@@ -123,12 +127,18 @@ func (r *runRecorder) errorCauseAllowed(err error) bool {
 }
 
 func (r *runRecorder) recordLoggedWarning(msg string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, entry := range r.expectedWarnings {
+		if entry != "" && strings.Contains(msg, entry) {
+			r.matchedWarnings[entry] = true
+		}
+	}
+
 	if r.messageAllowed(msg, r.expectedWarnings) {
 		return
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	if r.firstUnexpectedWarn == nil {
 		r.firstUnexpectedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
@@ -140,6 +150,25 @@ func (r *runRecorder) loggedWarning() error {
 	defer r.mu.Unlock()
 
 	return r.firstUnexpectedWarn
+}
+
+// missingExpectedWarning returns the first entry of expectedWarnings that no
+// logged warning message contained. An empty entry is never required.
+func (r *runRecorder) missingExpectedWarning() (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, want := range r.expectedWarnings {
+		if want == "" {
+			continue
+		}
+
+		if !r.matchedWarnings[want] {
+			return want, true
+		}
+	}
+
+	return "", false
 }
 
 func (r *runRecorder) loggedError() error {
@@ -276,8 +305,11 @@ type Scenario struct {
 	ExpectedErrorCauses []error
 
 	// ExpectedWarnings lists substrings of warning log messages this
-	// scenario expects. Any other warning logged during the run sets
-	// RunResult.Err once the run has ended.
+	// scenario expects. Every listed entry must appear in a warning the
+	// run logs, or RunResult.Err names the entry. A warning no entry
+	// lists also sets RunResult.Err. Only warnings logged by the
+	// scenario's workers or its Run count; the runner's own warnings and
+	// the store's warnings do not.
 	ExpectedWarnings []string
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
