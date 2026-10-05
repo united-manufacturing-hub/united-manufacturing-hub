@@ -109,6 +109,11 @@ func (s *stubReader) LoadObservedTyped(_ context.Context, _, _ string, result an
 	return nil
 }
 
+// LoadDesiredTyped reports that no desired state is saved.
+func (*stubReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 var _ = Describe("AdaptedInstance", func() {
 	// Unregistered worker type → staleAfter falls back to 1s.
 	ref := dynamicchildren.Ref{WorkerType: "adapter-probe", Name: "probe-1"}

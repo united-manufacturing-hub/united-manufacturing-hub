@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // stubManagerReader is a deps.StateReader that returns a fixed
@@ -58,6 +59,11 @@ func (s *stubManagerReader) LoadObservedTyped(_ context.Context, _, _ string, re
 	*out = *s.obs
 
 	return nil
+}
+
+// LoadDesiredTyped reports that no desired state is saved.
+func (*stubManagerReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
 }
 
 var _ = Describe("NewFsmv2NmapManager", func() {

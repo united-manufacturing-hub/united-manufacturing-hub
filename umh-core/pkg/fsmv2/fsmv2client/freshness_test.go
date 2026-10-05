@@ -63,6 +63,11 @@ func (s *stubStateReader) LoadObservedTyped(_ context.Context, _, _ string, resu
 	return nil
 }
 
+// LoadDesiredTyped reports that no desired state is saved.
+func (*stubStateReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 // TestGetFresh_MapsChildObservationToReason asserts GetFresh maps a child
 // observation to the correct Freshness reason for each read-side case and that
 // the returned status is the staged observation for Fresh/Stale and the zero

@@ -128,6 +128,11 @@ func (s *cpuStubStateReader) LoadObservedTyped(_ context.Context, _, _ string, r
 	return nil
 }
 
+// LoadDesiredTyped reports that no desired state is saved.
+func (*cpuStubStateReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 	var (
 		service      *container_monitor.ContainerMonitorService
