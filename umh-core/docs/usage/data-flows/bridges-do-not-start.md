@@ -27,7 +27,7 @@ agent:
   enableResourceLimitBlocking: false
 ```
 
-The setting takes effect without a restart. It is an emergency fallback, not a permanent configuration: with it off, nothing stops a new bridge from loading an instance that is already short on resources. Set it back to `true` once the resource problem is fixed.
+The setting takes effect without a restart. While it is set, the instance shows as degraded with the reason "Bridge admission is off", so it is not left in place by accident. It is an emergency fallback, not a permanent configuration: with it off, nothing stops a new bridge from loading an instance that is already short on resources. Set it back to `true` once the resource problem is fixed.
 
 ## After a restart
 

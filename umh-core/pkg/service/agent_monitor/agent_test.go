@@ -22,9 +22,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -148,6 +150,21 @@ var _ = Describe("Agent Monitor Service", func() {
 				// Note: We can't check actual version values as they come from the version package
 			})
 		})
+
+		DescribeTable("is degraded while bridge admission is off",
+			func(enableResourceLimitBlocking bool, wantHealth models.HealthCategory, wantMessage string) {
+				snapshot := mockSnapshot
+				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = enableResourceLimitBlocking
+
+				status, err := service.Status(ctx, snapshot)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status.OverallHealth).To(Equal(wantHealth))
+				Expect(status.HealthMessage).To(Equal(wantMessage))
+			},
+			Entry("enableResourceLimitBlocking: false", false, models.Degraded, bridgeadmission.AdmissionOffReason),
+			Entry("enableResourceLimitBlocking: true", true, models.Active, ""),
+		)
 
 		Context("when config has empty location", func() {
 			It("should return agent status with empty location map", func() {

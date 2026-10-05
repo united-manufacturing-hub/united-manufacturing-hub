@@ -674,6 +674,10 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (FullConfig, error) {
 	var rawConfig FullConfig
 
+	// Decoding keeps a field whose key is absent, so this default survives a
+	// config.yaml without the setting. Go would otherwise read it as false.
+	rawConfig.Agent.EnableResourceLimitBlocking = constants.DefaultEnableResourceLimitBlocking
+
 	// First decode the YAML into the raw config structure using standard YAML functions
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false

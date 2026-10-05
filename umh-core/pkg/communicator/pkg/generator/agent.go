@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	agentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"go.uber.org/zap"
 )
 
@@ -64,7 +65,7 @@ func buildAgent(
 	agent := models.Agent{
 		Location: snap.ServiceInfoSnapshot.Location,
 		Health: &models.Health{
-			Message:       getAgentHealthMessage(snap.ServiceInfoSnapshot.OverallHealth),
+			Message:       agentHealthMessage(snap.ServiceInfoSnapshot),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      snap.ServiceInfoSnapshot.OverallHealth,
@@ -101,6 +102,14 @@ func defaultAgent() models.Agent {
 			Category:      models.Neutral,
 		},
 	}
+}
+
+func agentHealthMessage(info agentservice.ServiceInfo) string {
+	if info.HealthMessage != "" {
+		return info.HealthMessage
+	}
+
+	return getAgentHealthMessage(info.OverallHealth)
 }
 
 // getHealthMessage is agent-specific. Extend as needed.

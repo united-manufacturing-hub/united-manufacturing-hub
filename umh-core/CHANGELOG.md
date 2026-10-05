@@ -8,6 +8,8 @@
 
 ### Fixes
 
+- An instance now shows as degraded while bridge admission is turned off (`agent.enableResourceLimitBlocking: false`), and the message says how to turn it back on. Instances installed before 0.43.12 usually have it turned off and show as degraded after this update
+- A config.yaml written without `agent.enableResourceLimitBlocking` now has bridge admission turned on
 - An instance now runs up to its full bridge limit. Before, it stopped one bridge short
 - With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets a limit of 5 bridges, not 155
 
