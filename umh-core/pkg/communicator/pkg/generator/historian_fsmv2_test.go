@@ -67,6 +67,11 @@ func (s *historianStore) LoadObservedTyped(_ context.Context, workerType, id str
 	return nil
 }
 
+// LoadDesiredTyped reports that no desired state is saved.
+func (*historianStore) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 var _ = Describe("HistorianFromFSMv2", func() {
 	var (
 		log  *zap.SugaredLogger

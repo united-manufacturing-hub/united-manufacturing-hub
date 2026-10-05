@@ -16,10 +16,15 @@ package fsmv2client
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 // TestUpsertAndDeletePassThroughToWriter verifies the FSMv2Client delegates
@@ -71,5 +76,51 @@ func TestSetVariablesPassesThroughToWriter(t *testing.T) {
 
 	if got := w.Registry().Variables().User["IP"]; got != "10.0.0.1" {
 		t.Fatalf("registry User[IP] = %v, want 10.0.0.1", got)
+	}
+}
+
+type desiredTestConfig struct {
+	Address string `json:"address"`
+}
+
+func newDesiredTestStore(t *testing.T, workerType string) *storage.TriangularStore {
+	t.Helper()
+
+	basic := memory.NewInMemoryStore()
+	if err := basic.CreateCollection(context.Background(), workerType+"_desired", nil); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	return storage.NewTriangularStore(basic, deps.NewNopFSMLogger())
+}
+
+func TestGetDesiredReturnsTheSavedConfig(t *testing.T) {
+	ctx := context.Background()
+	ref := dynamicchildren.Ref{WorkerType: "examplechild", Name: "child-0"}
+	store := newDesiredTestStore(t, ref.WorkerType)
+
+	if _, err := store.SaveDesired(ctx, ref.WorkerType, config.ChildID(ref.Name), persistence.Document{
+		"id":     config.ChildID(ref.Name),
+		"config": map[string]any{"address": "192.168.1.100:502"},
+	}); err != nil {
+		t.Fatalf("SaveDesired: %v", err)
+	}
+
+	got, err := GetDesired[desiredTestConfig](ctx, NewFSMv2Client(dynamicchildren.NewWriter(), store), ref)
+	if err != nil {
+		t.Fatalf("GetDesired returned error: %v", err)
+	}
+
+	if got.Address != "192.168.1.100:502" {
+		t.Fatalf("GetDesired Address = %q, want 192.168.1.100:502", got.Address)
+	}
+}
+
+func TestGetDesiredReturnsErrNoDesiredStateWhenNothingIsSaved(t *testing.T) {
+	ref := dynamicchildren.Ref{WorkerType: "examplechild", Name: "child-0"}
+	client := NewFSMv2Client(dynamicchildren.NewWriter(), newDesiredTestStore(t, ref.WorkerType))
+
+	if _, err := GetDesired[desiredTestConfig](context.Background(), client, ref); !errors.Is(err, ErrNoDesiredState) {
+		t.Fatalf("GetDesired with nothing saved returned %v, want a wrapped ErrNoDesiredState", err)
 	}
 }
