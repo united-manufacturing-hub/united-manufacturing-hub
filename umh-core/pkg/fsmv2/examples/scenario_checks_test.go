@@ -1005,6 +1005,43 @@ var _ = Describe("Scenario cancelled after Run returned", func() {
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"cancelling after Run returned must not turn into a failed store read; a Ctrl+C is not a failed run")
 	})
+
+	It("still names a missing entry when the caller cancels after Run returned", func() {
+		logger := deps.NewNopFSMLogger()
+		store := ctxHonouringStore{examples.SetupStore(logger)}
+
+		silent := examples.Scenario{
+			Name:             "cancel-names-missing-entry",
+			Description:      "test-local Run for the missing-entry check after cancellation",
+			ExpectedWarnings: []string{"probe_never_logged"},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// Duration 0: the run ends only when the caller cancels.
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     0,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned must succeed")
+
+		cancel()
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its ctx is cancelled")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a listed warning the run never logged must still set RunResult.Err after a cancellation")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this warning, but the run never logged it: probe_never_logged"),
+			"the set Err must name the listed warning the run never logged")
+	})
 })
 
 var _ = Describe("Scenario expected error causes", func() {
@@ -1310,6 +1347,124 @@ var _ = Describe("Scenario run-check edge cases", func() {
 			"a later check must not add its failure while the earlier one applies")
 	})
 
+	It("names a listed warning an error log cannot satisfy", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		scenario := examples.Scenario{
+			Name:             "edge-kind-error-only",
+			Description:      "test-local Run for an error log not satisfying a listed warning",
+			ExpectedErrors:   []string{"probe_kind"},
+			ExpectedWarnings: []string{"probe_kind"},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "",
+					errors.New("probe kind failed"), "probe_kind")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"an error its scenario lists must not fail the run")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a listed warning only a SentryWarn can satisfy must set RunResult.Err")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this warning, but the run never logged it: probe_kind"),
+			"the set Err must name the listed warning the error log never satisfies")
+		Expect(result.Err.Error()).NotTo(ContainSubstring("the scenario expects this error"),
+			"the listed error entry was satisfied by the error log")
+	})
+
+	It("names a listed error a warning log cannot satisfy", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		scenario := examples.Scenario{
+			Name:             "edge-kind-warning-only",
+			Description:      "test-local Run for a warning log not satisfying a listed error",
+			ExpectedErrors:   []string{"probe_kind"},
+			ExpectedWarnings: []string{"probe_kind"},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_kind")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a warning its scenario lists must not fail the run")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a listed error only a SentryError can satisfy must set RunResult.Err")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this error, but the run never logged it: probe_kind"),
+			"the set Err must name the listed error the warning log never satisfies")
+		Expect(result.Err.Error()).NotTo(ContainSubstring("the scenario expects this warning"),
+			"the listed warning entry was satisfied by the warning log")
+	})
+
+	It("names two listed causes with the same text separately", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		causeA := errors.New("probe same text cause")
+		causeB := errors.New("probe same text cause")
+
+		silent := examples.Scenario{
+			Name:                "edge-same-text-causes",
+			Description:         "test-local Run for two different causes with the same text",
+			ExpectedErrorCauses: []error{causeA, causeB},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		causeLine := "the scenario expects this error cause, but the run never logged it: probe same text cause"
+		Expect(strings.Count(result.Err.Error(), causeLine)).To(Equal(2),
+			"two cause values with the same text are two entries, so both are named")
+	})
+
 	It("returns Run's error before any missing entry", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
@@ -1326,7 +1481,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		_, err := examples.Run(ctx, examples.RunConfig{
+		result, err := examples.Run(ctx, examples.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1335,7 +1490,11 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		})
 		Expect(err).To(HaveOccurred(),
 			"a run whose Run returns an error must return that error")
+		Expect(result).To(BeNil(),
+			"a failed Run returns no result")
 		Expect(err.Error()).To(ContainSubstring("the run's own check failed"),
 			"the returned error is Run's own, not a missing-entry failure")
+		Expect(err.Error()).NotTo(ContainSubstring("never logged it"),
+			"a missing entry adds nothing while Run's own error is the result")
 	})
 })
