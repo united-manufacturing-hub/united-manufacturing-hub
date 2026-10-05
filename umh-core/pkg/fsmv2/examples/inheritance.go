@@ -67,7 +67,7 @@ var InheritanceScenario = Scenario{
 			childRef := dynamicchildren.Ref{WorkerType: "examplechild", Name: name}
 
 			if err := env.WaitFor(ctx,
-				fmt.Sprintf("the child %s is Connected and reports the address %s and the device %s it rendered", name, wantAddress, wantDevice),
+				fmt.Sprintf("the child %s is Connected, and its desired config holds the address %s and the device %s", name, wantAddress, wantDevice),
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_child.ExamplechildStatus](ctx, env.Client, childRef)
 					if err != nil {
@@ -78,11 +78,20 @@ var InheritanceScenario = Scenario{
 						return false, "", err
 					}
 
-					done := obs.State == "Connected" &&
-						obs.Status.Address == wantAddress &&
-						obs.Status.Device == wantDevice
+					cfg, err := fsmv2client.GetDesired[example_child.ExamplechildConfig](ctx, env.Client, childRef)
+					if err != nil {
+						if errors.Is(err, fsmv2client.ErrNoDesiredState) {
+							return false, "the child has no desired state yet", nil
+						}
 
-					return done, fmt.Sprintf("state=%s address=%s device=%s", obs.State, obs.Status.Address, obs.Status.Device), nil
+						return false, "", err
+					}
+
+					done := obs.State == "Connected" &&
+						cfg.Address == wantAddress &&
+						cfg.Device == wantDevice
+
+					return done, fmt.Sprintf("state=%s address=%s device=%s", obs.State, cfg.Address, cfg.Device), nil
 				}); err != nil {
 				return err
 			}

@@ -26,6 +26,4 @@ type ExamplechildConfig struct {
 // ExamplechildStatus is the observed status for the child worker.
 type ExamplechildStatus struct {
 	ConnectionHealth string `json:"connection_health"`
-	Address          string `json:"address"`
-	Device           string `json:"device"`
 }
