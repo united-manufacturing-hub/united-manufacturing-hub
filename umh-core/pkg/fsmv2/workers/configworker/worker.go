@@ -42,6 +42,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	fsmv2datacontract "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/datacontract"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
@@ -146,6 +147,7 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
 	w.reconcileHistorian(ctx)
 	w.reconcileCPU(ctx)
+	w.reconcileDataContract()
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil
 }
@@ -178,6 +180,20 @@ func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
 	}
 
 	return client.Upsert(fsmv2cpu.Ref, nil)
+}
+
+// reconcileDataContract upserts the data contract monitor child. It logs
+// rather than returns the upsert error, like reconcileCPU.
+func (w *ConfigworkerWorker) reconcileDataContract() {
+	client := fsmv2client.GetClient()
+	if client == nil {
+		return
+	}
+
+	if err := client.Upsert(fsmv2datacontract.Ref, nil); err != nil {
+		w.Logger().SentryWarn(deps.FeatureForWorker(fsmv2datacontract.WorkerType), w.Identity().HierarchyPath,
+			"data contract watch: upsert failed", deps.Err(err))
+	}
 }
 
 // reconcileHistorian reads the live config and syncs the historian monitor

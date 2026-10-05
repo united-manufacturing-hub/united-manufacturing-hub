@@ -50,6 +50,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2datacontract "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/datacontract"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -697,6 +698,9 @@ func buildFSMv2Supervisor(
 	// config worker reads this key when it is constructed.
 	register.SetDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
 
+	// The data contract monitor reads the config through this key.
+	register.SetDeps[config.ConfigManager](fsmv2datacontract.ConfigManagerDepsKey, communicationState.ConfigManager)
+
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
@@ -722,6 +726,7 @@ func buildFSMv2Supervisor(
 		register.ClearDeps(configworker.WorkerTypeName)
 		register.ClearDeps(configworker.ConfigManagerDepsKey)
 		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		register.ClearDeps(fsmv2datacontract.ConfigManagerDepsKey)
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -737,6 +742,7 @@ func buildFSMv2Supervisor(
 		register.ClearDeps(configworker.WorkerTypeName)
 		register.ClearDeps(configworker.ConfigManagerDepsKey)
 		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		register.ClearDeps(fsmv2datacontract.ConfigManagerDepsKey)
 		fsmv2Hook.Stop()
 	}
 

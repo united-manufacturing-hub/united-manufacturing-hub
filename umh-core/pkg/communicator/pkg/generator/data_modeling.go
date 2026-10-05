@@ -20,10 +20,15 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"hash"
+	"slices"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	fsmv2datacontract "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/datacontract"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -118,6 +123,60 @@ func DataContractsV2FromConfig(ctx context.Context, configManager config.ConfigM
 	})
 
 	return contracts, nil
+}
+
+// AddDataContractHealth sets each version's health from the data contract
+// monitor. It leaves health nil, so the Console falls back to the instance
+// health, when the monitor is off or has not reported yet.
+func AddDataContractHealth(ctx context.Context, contracts []models.DataContractV2, logger *zap.SugaredLogger) {
+	client := fsmv2client.GetClient()
+	if client == nil || len(contracts) == 0 {
+		return
+	}
+
+	obs, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2datacontract.Status]](ctx, client, fsmv2datacontract.Ref, 3*fsmv2datacontract.PollInterval)
+	if err != nil {
+		logger.Warnw("data contract status: failed to read observed state", "error", err)
+
+		return
+	}
+
+	if freshness != fsmv2client.Fresh && freshness != fsmv2client.Stale {
+		return
+	}
+
+	for i := range contracts {
+		for j := range contracts[i].Versions {
+			version := &contracts[i].Versions[j]
+			if version.Contract != "" {
+				version.Health = versionHealth(obs.Status, freshness == fsmv2client.Stale, version.Contract+"-")
+			}
+		}
+	}
+}
+
+// versionHealth judges the version whose subjects start with prefix. A degraded
+// status that lists nothing is a failed poll, which leaves every version unknown.
+func versionHealth(status simple.Status[fsmv2datacontract.Status], stale bool, prefix string) *models.Health {
+	missing := status.Result.Missing
+	i := slices.IndexFunc(missing, func(subject string) bool { return strings.HasPrefix(subject, prefix) })
+
+	switch {
+	case stale:
+		return degradedHealth("The data contract monitor stopped reporting, so whether this version is enforced is unknown.")
+	case slices.Contains(status.Result.Untranslated, prefix):
+		return degradedHealth("This version could not be translated into a schema, so it is not enforced. The instance log says why.")
+	case i >= 0:
+		return degradedHealth(missing[i] + " is not registered in the Schema Registry, so it is not enforced.")
+	case status.Degraded && len(missing) == 0 && len(status.Result.Untranslated) == 0:
+		return degradedHealth(status.Reason)
+	}
+
+	return &models.Health{Message: "Every schema of this version is registered.", ObservedState: "active", DesiredState: "active", Category: models.Active}
+}
+
+func degradedHealth(reason string) *models.Health {
+	return &models.Health{Message: reason, ObservedState: "degraded", DesiredState: "active", Category: models.Degraded}
 }
 
 // contractVersions lists a contract's versions in numeric order, each with the
