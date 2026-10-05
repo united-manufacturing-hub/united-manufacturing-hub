@@ -199,6 +199,14 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		return &models.StatusMessage{} // Return empty status message on error
 	}
 
+	// --- merged data contracts (data models joined with their contracts) -------------------------------------------------------------
+	dataContractV2Data, err := DataContractsV2FromConfig(ctx, s.configManager, s.logger)
+	if err != nil {
+		s.logger.Warnf("Failed to get merged data contracts from config: %v", err)
+
+		return &models.StatusMessage{} // Return empty status message on error
+	}
+
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
 
@@ -258,14 +266,15 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
-			Communicator:  communicatorData,
-			Container:     containerData,
-			Dfcs:          dfcData,
-			Redpanda:      redpandaData,
-			TopicBrowser:  *topicBrowserData,
-			DataModels:    dataModelData,
-			DataContracts: dataContractData,
-			FeatureUsage:  featureUsage,
+			Communicator:    communicatorData,
+			Container:       containerData,
+			Dfcs:            dfcData,
+			Redpanda:        redpandaData,
+			TopicBrowser:    *topicBrowserData,
+			DataModels:      dataModelData,
+			DataContracts:   dataContractData,
+			DataContractsV2: dataContractV2Data,
+			FeatureUsage:    featureUsage,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",
@@ -299,6 +308,9 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 					"stream-processor-ignore-health-check",
 					"disable-read-flow",
 					"support-historian",
+					// Reports Core.DataContractsV2, the merged data model plus
+					// data contract view.
+					"data-contracts-v2",
 				},
 			},
 		},

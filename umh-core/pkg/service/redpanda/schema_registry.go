@@ -43,6 +43,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -132,10 +134,10 @@ func (u *urlBuilder) subjectVersionsURL(subject SubjectName) string {
 //		// Handle reconciliation error
 //	}
 type ISchemaRegistry interface {
-	// Reconcile ensures the registry contains exactly the schemas derived from data models and contracts.
-	// It translates data models to JSON schemas and adds missing schemas while removing unexpected ones.
+	// Reconcile ensures the registry contains exactly the schemas derived from data models, contracts and
+	// the dataContractsV2 section. It translates them to JSON schemas and adds missing schemas while removing unexpected ones.
 	// Returns error if reconciliation fails; use backoff for transient failures.
-	Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) error
+	Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, dataContractsV2 []config.DataContractV2Config, payloadShapes map[string]config.PayloadShape) error
 
 	// GetMetrics returns current operational metrics for monitoring and alerting.
 	// All metrics are atomic and thread-safe. Use for health checks and dashboards.
@@ -180,6 +182,9 @@ type SchemaRegistry struct {
 
 	// used for broken contracts
 	skipPrefixes []string
+
+	// Contract name clashes seen by the last Reconcile, so each change is logged once
+	contractNameClashes []string
 
 	httpClient http.Client
 
@@ -371,11 +376,13 @@ func WithSchemaRegistryAddress(address string) func(*SchemaRegistry) {
 //		},
 //	}
 //
-//	if err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes); err != nil {
+//	if err := registry.Reconcile(ctx, dataModels, dataContracts, nil, payloadShapes); err != nil {
 //		// Handle reconciliation error
 //	}
-func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) error {
-	expectedSubjects, skipPrefixes, err := s.translateToSchemas(ctx, dataModels, dataContracts, payloadShapes)
+func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, dataContractsV2 []config.DataContractV2Config, payloadShapes map[string]config.PayloadShape) error {
+	s.warnOnContractNameClashes(dataModels, dataContracts, dataContractsV2)
+
+	expectedSubjects, skipPrefixes, err := s.translateToSchemas(ctx, dataModels, dataContracts, dataContractsV2, payloadShapes)
 
 	// On cancellation, don't touch the registry.
 	if expectedSubjects == nil && err != nil {
@@ -401,6 +408,35 @@ func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.Data
 	}
 
 	return reconcileErr
+}
+
+// warnOnContractNameClashes logs a warning for every dataContractsV2 entry that shares its
+// contract address with a data model or a dataContracts entry. translateToSchemas registers the
+// dataContractsV2 schema last, so it replaces the data model's schema for every subject both
+// produce. The warning is logged only when the set of clashes changes, not on every tick.
+func (s *SchemaRegistry) warnOnContractNameClashes(dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, dataContractsV2 []config.DataContractV2Config) {
+	clashes := config.ContractNameClashes(config.FullConfig{
+		DataModels:      dataModels,
+		DataContracts:   dataContracts,
+		DataContractsV2: dataContractsV2,
+	})
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if slices.Equal(clashes, s.contractNameClashes) {
+		return
+	}
+
+	s.contractNameClashes = clashes
+
+	for _, clash := range clashes {
+		s.logger.Warnf("Contract name clash, the data contract's schema replaces the data model's: %s", clash)
+	}
+
+	if len(clashes) == 0 {
+		s.logger.Info("No data contract shares its contract address with a data model anymore")
+	}
 }
 
 func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[SubjectName]JSONSchemaDefinition) error {
@@ -442,17 +478,74 @@ func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[S
 // Per-contract failures are collected and skipped so one broken contract can't block the valid ones;
 // only context cancellation is fatal (returns a nil map so the caller aborts without touching the registry).
 //
+// The dataContractsV2 section is translated in a separate pass, so its _refModel targets resolve only
+// against other v2 contracts, never against the dataModels section.
+//
 // Returns the valid contracts' schemas, the subject-name prefixes of the failed contracts (whose existing
 // schemas must be preserved from deletion), and the joined per-contract error.
-func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) (map[SubjectName]JSONSchemaDefinition, []string, error) {
+func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, dataContractsV2 []config.DataContractV2Config, payloadShapes map[string]config.PayloadShape) (map[SubjectName]JSONSchemaDefinition, []string, error) {
+	// Pre-allocate result map based on contract count (estimate 2-3 schemas per contract)
+	expectedSubjects := make(map[SubjectName]JSONSchemaDefinition, (len(dataContracts)+len(dataContractsV2))*3)
+
+	skipPrefixes, skipErrs, err := s.translateContracts(ctx, dataModels, dataContracts, payloadShapes, expectedSubjects)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	v2Models, v2Contracts := expandDataContractsV2(dataContractsV2)
+
+	v2SkipPrefixes, v2SkipErrs, err := s.translateContracts(ctx, v2Models, v2Contracts, payloadShapes, expectedSubjects)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	skipPrefixes = append(skipPrefixes, v2SkipPrefixes...)
+	skipErrs = append(skipErrs, v2SkipErrs...)
+
+	return expectedSubjects, skipPrefixes, errors.Join(skipErrs...)
+}
+
+// expandDataContractsV2 splits each dataContractsV2 entry into the model and contract pair the
+// translator expects: one model holding every version, and one contract per version published
+// under the address _<name>_<version>.
+func expandDataContractsV2(dataContractsV2 []config.DataContractV2Config) ([]config.DataModelsConfig, []config.DataContractsConfig) {
+	models := make([]config.DataModelsConfig, 0, len(dataContractsV2))
+	contracts := make([]config.DataContractsConfig, 0, len(dataContractsV2))
+
+	for _, contract := range dataContractsV2 {
+		models = append(models, config.DataModelsConfig{
+			Name:        contract.Name,
+			Description: contract.Description,
+			Versions:    contract.Versions,
+		})
+
+		versionKeys := make([]string, 0, len(contract.Versions))
+		for versionKey := range contract.Versions {
+			versionKeys = append(versionKeys, versionKey)
+		}
+
+		sort.Strings(versionKeys)
+
+		for _, versionKey := range versionKeys {
+			contracts = append(contracts, config.DataContractsConfig{
+				Name:  "_" + contract.Name + "_" + versionKey,
+				Model: &config.ModelRef{Name: contract.Name, Version: versionKey},
+			})
+		}
+	}
+
+	return models, contracts
+}
+
+// translateContracts translates dataContracts into expectedSubjects, resolving model references
+// against dataModels only. It returns the subject-name prefixes and errors of the contracts it
+// skipped, and a non-nil error only when ctx is cancelled.
+func (s *SchemaRegistry) translateContracts(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape, expectedSubjects map[SubjectName]JSONSchemaDefinition) ([]string, []error, error) {
 	// Build map of all available data models for reference resolution
 	allDataModels := make(map[string]config.DataModelsConfig, len(dataModels))
 	for _, model := range dataModels {
 		allDataModels[model.Name] = model
 	}
-
-	// Pre-allocate result map based on contract count (estimate 2-3 schemas per contract)
-	expectedSubjects := make(map[SubjectName]JSONSchemaDefinition, len(dataContracts)*3)
 
 	// Used for: broken contracts cannot block valid ones
 	var (
@@ -530,7 +623,7 @@ func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []co
 		}
 	}
 
-	return expectedSubjects, skipPrefixes, errors.Join(skipErrs...)
+	return skipPrefixes, skipErrs, nil
 }
 
 // getNextPhase calculates the next phase based on current phase and whether to change phase.

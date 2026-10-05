@@ -17,6 +17,7 @@ package generator
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"hash"
 	"sort"
@@ -41,38 +42,13 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 	dataModelData := make([]models.DataModel, len(dataModels))
 
 	for i, dataModel := range dataModels {
-		// Extract the latest version from the versions map
-		latestVersion := ""
-
-		if len(dataModel.Versions) > 0 {
-			// Find the highest version number
-			highestVersion := 0
-
-			for versionKey := range dataModel.Versions {
-				if len(versionKey) > 1 && versionKey[0] == 'v' {
-					if versionNum := parseVersionNumber(versionKey); versionNum > highestVersion {
-						highestVersion = versionNum
-						latestVersion = versionKey
-					}
-				}
-			}
-			// If no versioned keys found, use the first available key
-			if latestVersion == "" {
-				for versionKey := range dataModel.Versions {
-					latestVersion = versionKey
-
-					break
-				}
-			}
-		}
-
 		// Generate a simple hash from the structure
 		hash := generateDataModelHash(dataModel)
 
 		dataModelData[i] = models.DataModel{
 			Name:          dataModel.Name,
 			Description:   dataModel.Description,
-			LatestVersion: latestVersion,
+			LatestVersion: latestVersionKey(dataModel.Versions),
 			Hash:          hash,
 		}
 	}
@@ -111,8 +87,69 @@ func DataContractsFromConfig(ctx context.Context, configManager config.ConfigMan
 	return dataContractData, nil
 }
 
+// DataContractsV2FromConfig reports the data contracts section, the merged
+// concept that folds a data model and the contract enforcing it into one entry.
+//
+// It reads only fullConfig.DataContractsV2. The dataModels and dataContracts
+// sections are a separate, older concept and never appear here, so retiring
+// them leaves this untouched.
+func DataContractsV2FromConfig(ctx context.Context, configManager config.ConfigManager, logger *zap.SugaredLogger) ([]models.DataContractV2, error) {
+	fullConfig, err := configManager.GetConfig(ctx, 0)
+	if err != nil {
+		logger.Warnf("Failed to get config for data contracts: %v", err)
+
+		return []models.DataContractV2{}, err
+	}
+
+	contracts := make([]models.DataContractV2, 0, len(fullConfig.DataContractsV2))
+
+	for _, dataContract := range fullConfig.DataContractsV2 {
+		contracts = append(contracts, models.DataContractV2{
+			Name:          dataContract.Name,
+			Description:   dataContract.Description,
+			LatestVersion: latestVersionKey(dataContract.Versions),
+			Hash:          generateVersionsHash(dataContract.Name, dataContract.Versions),
+			Versions:      contractVersions(dataContract.Name, dataContract.Versions),
+		})
+	}
+
+	sort.Slice(contracts, func(i, j int) bool {
+		return contracts[i].Name < contracts[j].Name
+	})
+
+	return contracts, nil
+}
+
+// contractVersions lists a contract's versions in numeric order, each with the
+// address it is published under. The address follows the platform convention
+// _<name>_<version>, which is what the historian and the topic paths expect.
+func contractVersions(name string, versions map[string]config.DataModelVersion) []models.DataContractV2Version {
+	versionKeys := make([]string, 0, len(versions))
+	for versionKey := range versions {
+		versionKeys = append(versionKeys, versionKey)
+	}
+
+	sort.Slice(versionKeys, func(i, j int) bool {
+		return parseVersionNumber(versionKeys[i]) < parseVersionNumber(versionKeys[j])
+	})
+
+	contractVersions := make([]models.DataContractV2Version, 0, len(versionKeys))
+	for _, versionKey := range versionKeys {
+		contractVersions = append(contractVersions, models.DataContractV2Version{
+			Version:  versionKey,
+			Contract: "_" + name + "_" + versionKey,
+		})
+	}
+
+	return contractVersions
+}
+
 // parseVersionNumber parses a version string (e.g., "v1", "v2") to an integer.
 func parseVersionNumber(versionStr string) int {
+	if len(versionStr) < 2 {
+		return 0
+	}
+
 	versionNum, err := strconv.Atoi(versionStr[1:])
 	if err != nil {
 		return 0
@@ -121,63 +158,127 @@ func parseVersionNumber(versionStr string) int {
 	return versionNum
 }
 
+// latestVersionKey returns the highest "vN" key in a version map, falling back
+// to an arbitrary key when none are versioned and to "" when there are none.
+func latestVersionKey(versions map[string]config.DataModelVersion) string {
+	latestVersion := ""
+	highestVersion := 0
+
+	for versionKey := range versions {
+		if len(versionKey) > 1 && versionKey[0] == 'v' {
+			if versionNum := parseVersionNumber(versionKey); versionNum > highestVersion {
+				highestVersion = versionNum
+				latestVersion = versionKey
+			}
+		}
+	}
+
+	// If no versioned keys found, use the first available key
+	if latestVersion == "" {
+		for versionKey := range versions {
+			latestVersion = versionKey
+
+			break
+		}
+	}
+
+	return latestVersion
+}
+
 // generateDataModelHash generates a simple hash from the data model structure.
 func generateDataModelHash(dataModel config.DataModelsConfig) string {
-	if len(dataModel.Versions) == 0 {
+	return generateVersionsHash(dataModel.Name, dataModel.Versions)
+}
+
+// generateVersionsHash hashes a name together with every version key and the
+// structure behind it, so two instances holding the same definition under the
+// same name produce the same value and a drifted one does not.
+//
+// Every string is written with its length and every map with its entry count,
+// so two different definitions can't produce the same byte stream: without
+// them, a folder "a" holding field "b" and a field "ab" would both hash as
+// "ab" plus the payload shape.
+func generateVersionsHash(name string, versions map[string]config.DataModelVersion) string {
+	if len(versions) == 0 {
 		return ""
 	}
 
-	// Create a hash from the data model name and version content
 	h := sha256.New()
-	h.Write([]byte(dataModel.Name))
+	writeHashString(h, name)
+	writeHashCount(h, len(versions))
 
-	// Sort version keys for deterministic hashing
-	versionKeys := make([]string, 0, len(dataModel.Versions))
-	for versionKey := range dataModel.Versions {
-		versionKeys = append(versionKeys, versionKey)
-	}
-
-	sort.Strings(versionKeys)
-
-	// Add each version and its content to the hash
-	for _, versionKey := range versionKeys {
-		version := dataModel.Versions[versionKey]
-		h.Write([]byte(versionKey))
-
-		// Hash the structure content
-		hashStructure(h, version.Structure)
+	for _, versionKey := range sortedKeys(versions) {
+		writeHashString(h, versionKey)
+		hashStructure(h, versions[versionKey].Structure)
 	}
 
 	return hex.EncodeToString(h.Sum(nil))[:16] // Return first 16 characters
 }
 
-// hashStructure recursively hashes the structure map.
+// hashStructure recursively hashes the structure map, fields in key order.
 func hashStructure(h hash.Hash, structure map[string]config.Field) {
-	if len(structure) == 0 {
-		return
-	}
+	writeHashCount(h, len(structure))
 
-	// Sort field keys for deterministic hashing
-	fieldKeys := make([]string, 0, len(structure))
-	for fieldKey := range structure {
-		fieldKeys = append(fieldKeys, fieldKey)
-	}
-
-	sort.Strings(fieldKeys)
-
-	// Hash each field and its content
-	for _, fieldKey := range fieldKeys {
+	for _, fieldKey := range sortedKeys(structure) {
 		field := structure[fieldKey]
-		h.Write([]byte(fieldKey))
-		h.Write([]byte(field.PayloadShape))
+		writeHashString(h, fieldKey)
+		writeHashString(h, field.PayloadShape)
 
-		// Handle ModelRef which is now a struct pointer
+		writeHashPresent(h, field.ModelRef != nil)
+
 		if field.ModelRef != nil {
-			h.Write([]byte(field.ModelRef.Name))
-			h.Write([]byte(field.ModelRef.Version))
+			writeHashString(h, field.ModelRef.Name)
+			writeHashString(h, field.ModelRef.Version)
 		}
 
-		// Recursively hash subfields
+		// The description is left out, as it is for the contract itself: it
+		// does not change what messages are validated against.
+		writeHashPresent(h, field.Relational != nil)
+
+		if field.Relational != nil {
+			hashPayloadFields(h, field.Relational.Fields)
+		}
+
 		hashStructure(h, field.Subfields)
 	}
+}
+
+// hashPayloadFields recursively hashes the fields of an inline relational
+// definition, in key order.
+func hashPayloadFields(h hash.Hash, fields map[string]config.PayloadField) {
+	writeHashCount(h, len(fields))
+
+	for _, fieldKey := range sortedKeys(fields) {
+		writeHashString(h, fieldKey)
+		writeHashString(h, fields[fieldKey].Type)
+		hashPayloadFields(h, fields[fieldKey].Subfields)
+	}
+}
+
+func writeHashString(h hash.Hash, value string) {
+	writeHashCount(h, len(value))
+	h.Write([]byte(value))
+}
+
+func writeHashCount(h hash.Hash, count int) {
+	h.Write(binary.BigEndian.AppendUint64(nil, uint64(count)))
+}
+
+func writeHashPresent(h hash.Hash, present bool) {
+	if present {
+		h.Write([]byte{1})
+	} else {
+		h.Write([]byte{0})
+	}
+}
+
+func sortedKeys[V any](entries map[string]V) []string {
+	keys := make([]string, 0, len(entries))
+	for key := range entries {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }
