@@ -171,6 +171,7 @@ func runScenario(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		expectedErrors:      cfg.Scenario.ExpectedErrors,
 		expectedErrorCauses: cfg.Scenario.ExpectedErrorCauses,
 		expectedWarnings:    cfg.Scenario.ExpectedWarnings,
+		matchedWarnings:     map[string]bool{},
 	}
 	runLogger := &recordingLogger{FSMLogger: cfg.Logger, recorder: recorder}
 
@@ -323,6 +324,10 @@ func postRunFailure(ctx context.Context, recorder *runRecorder, store storage.Tr
 
 	if warn := recorder.loggedWarning(); warn != nil {
 		return warn
+	}
+
+	if missing, ok := recorder.missingExpectedWarning(); ok {
+		return fmt.Errorf("the scenario expects this warning, but the run never logged it: %s", missing)
 	}
 
 	// WithoutCancel: a Ctrl+C after Run returned is not a failed store read.

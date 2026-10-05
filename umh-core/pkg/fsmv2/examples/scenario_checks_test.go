@@ -380,6 +380,82 @@ var _ = Describe("Scenario store-read failure", func() {
 	})
 })
 
+var _ = Describe("Scenario missing expected warnings", func() {
+	BeforeEach(func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
+
+	It("sets RunResult.Err when a warning the scenario expects is never logged", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		silent := examples.Scenario{
+			Name:             "missing-expected-warning",
+			Description:      "test-local Run for the missing expected warning check",
+			ExpectedWarnings: []string{"probe_never_logged"},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a warning listed in ExpectedWarnings must set RunResult.Err when the run never logs it")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this warning, but the run never logged it: probe_never_logged"),
+			"the set Err must name the listed warning the run never logged")
+	})
+
+	It("keeps RunResult.Err nil when the run logs a listed warning", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		talking := examples.Scenario{
+			Name:             "matched-expected-warning",
+			Description:      "test-local Run for the matched expected warning check",
+			ExpectedWarnings: []string{"probe_logged"},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_logged")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     talking,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run that logs a listed warning must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"a listed warning the run logs must not set RunResult.Err")
+	})
+})
+
 var _ = Describe("Scenario empty expected entries", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
