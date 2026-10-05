@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -91,23 +90,26 @@ var alwaysAllowedMessages = []string{
 	"collector_stop_skipped",
 }
 
-// recordLoggedError keeps the first error the scenario does not expect.
+// recordLoggedError keeps the first error the scenario does not expect. The
+// matchers run before the lock, because errors.Is calls user code that may
+// log again.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
+	matched := matchedEntries(r.expectedErrors, msg)
+	caused := matchedCauseIndices(err, r.expectedErrorCauses)
+	unexpected := !r.messageAllowed(msg, r.expectedErrors) && !r.errorCauseAllowed(err)
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.markMatchedEntries(r.expectedErrors, msg, r.matchedErrors)
-	r.markMatchedCauses(err)
-
-	if r.messageAllowed(msg, r.expectedErrors) {
-		return
+	for _, entry := range matched {
+		r.matchedErrors[entry] = true
 	}
 
-	if r.errorCauseAllowed(err) {
-		return
+	for _, i := range caused {
+		r.matchedCauses[i] = true
 	}
 
-	if r.firstUnexpectedErr == nil {
+	if unexpected && r.firstUnexpectedErr == nil {
 		r.firstUnexpectedErr = fmt.Errorf("the scenario does not expect this error: %s (%w)", msg, err)
 	}
 }
@@ -153,20 +155,47 @@ func (r *runRecorder) errorCauseAllowed(err error) bool {
 	return false
 }
 
-func (r *runRecorder) markMatchedCauses(err error) {
-	for i, cause := range r.expectedErrorCauses {
-		if errorMatchesCause(err, cause) {
-			r.matchedCauses[i] = true
-		}
+func (r *runRecorder) recordLoggedWarning(msg string) {
+	matched := matchedEntries(r.expectedWarnings, msg)
+	unexpected := !r.messageAllowed(msg, r.expectedWarnings)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, entry := range matched {
+		r.matchedWarnings[entry] = true
+	}
+
+	if unexpected && r.firstUnexpectedWarn == nil {
+		r.firstUnexpectedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
 	}
 }
 
-func (r *runRecorder) markMatchedEntries(expected []string, msg string, matched map[string]bool) {
+// matchedEntries returns the entries of expected that msg contains, in
+// expected's order.
+func matchedEntries(expected []string, msg string) []string {
+	var matched []string
+
 	for _, entry := range expected {
 		if messageMatchesEntry(msg, entry) {
-			matched[entry] = true
+			matched = append(matched, entry)
 		}
 	}
+
+	return matched
+}
+
+// matchedCauseIndices returns the indices of causes that err is or wraps.
+func matchedCauseIndices(err error, causes []error) []int {
+	var matched []int
+
+	for i, cause := range causes {
+		if errorMatchesCause(err, cause) {
+			matched = append(matched, i)
+		}
+	}
+
+	return matched
 }
 
 // unmatchedEntries returns the entries of expected that no logged message
@@ -190,21 +219,6 @@ func (r *runRecorder) unmatchedEntries(expected []string, matched map[string]boo
 	return missing
 }
 
-func (r *runRecorder) recordLoggedWarning(msg string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.markMatchedEntries(r.expectedWarnings, msg, r.matchedWarnings)
-
-	if r.messageAllowed(msg, r.expectedWarnings) {
-		return
-	}
-
-	if r.firstUnexpectedWarn == nil {
-		r.firstUnexpectedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
-	}
-}
-
 func (r *runRecorder) loggedWarning() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -215,7 +229,9 @@ func (r *runRecorder) loggedWarning() error {
 // missingExpectedEntries returns one error per entry of ExpectedErrors,
 // ExpectedErrorCauses and ExpectedWarnings that the run never logged: the
 // errors first, then the causes, then the warnings, each group in the order
-// the scenario listed it. An entry the scenario lists twice is named once.
+// the scenario listed it. An entry the scenario lists twice is named once,
+// except a cause whose type cannot be compared, which is named each time
+// it is listed.
 func (r *runRecorder) missingExpectedEntries() []error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -252,20 +268,28 @@ func (r *runRecorder) missingExpectedEntries() []error {
 }
 
 // containsSameCause reports whether earlier holds the same cause value. A
-// cause whose type is not comparable is never the same entry, because
-// comparing two causes of that type with == panics at run time.
+// cause whose type cannot be compared is never the same entry.
 func containsSameCause(earlier []error, cause error) bool {
-	if !reflect.TypeOf(cause).Comparable() {
-		return false
-	}
-
 	for _, seen := range earlier {
-		if cause == seen { //nolint:errorlint // the sameness of two listed cause entries is their values' ==, not errors.Is
+		if sameCause(seen, cause) {
 			return true
 		}
 	}
 
 	return false
+}
+
+// sameCause reports whether a and b hold the same error value. Comparing
+// two causes whose values cannot be compared panics, so a panic counts as
+// different entries.
+func sameCause(a, b error) (same bool) {
+	defer func() {
+		if recover() != nil {
+			same = false
+		}
+	}()
+
+	return a == b //nolint:errorlint // the sameness of two listed cause entries is their values' ==, not errors.Is
 }
 
 func (r *runRecorder) loggedError() error {
@@ -395,7 +419,8 @@ type Scenario struct {
 	// is matched, so an error's value counts only through
 	// ExpectedErrorCauses. Any other error logged during the run fails
 	// it, or sets RunResult.Err when it is logged after Run returned.
-	// Only errors logged by the scenario's workers or its Run count; the
+	// An error logged through the run's logger counts, whether it comes
+	// from the scenario's workers, their supervisors or its Run; the
 	// runner's own errors and the store's errors do not.
 	ExpectedErrors []string
 
@@ -411,9 +436,10 @@ type Scenario struct {
 	// ExpectedWarnings lists substrings of warning log messages this
 	// scenario expects. Every listed entry must appear in a warning the
 	// run logs, or RunResult.Err names the entry. A warning no entry
-	// lists also sets RunResult.Err. Only warnings logged by the
-	// scenario's workers or its Run count; the runner's own warnings and
-	// the store's warnings do not.
+	// lists also sets RunResult.Err. A warning logged through the run's
+	// logger counts, whether it comes from the scenario's workers, their
+	// supervisors or its Run; the runner's own warnings and the store's
+	// warnings do not.
 	ExpectedWarnings []string
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).

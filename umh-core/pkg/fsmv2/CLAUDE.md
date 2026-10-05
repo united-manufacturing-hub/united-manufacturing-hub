@@ -477,8 +477,9 @@ logged warning is checked the same way against `ExpectedWarnings`.
 An entry of `ExpectedErrors`, `ExpectedErrorCauses` or `ExpectedWarnings`
 both allows that message and requires it: every listed entry must appear
 in a logged error or warning of its kind, or `RunResult.Err` names it.
-Only messages logged by the scenario's workers or its `Run` count; the
-runner's own messages and the store's messages do not.
+Everything logged through the run's logger counts, which covers the
+scenario's workers, their supervisors and its `Run`. The runner's own
+messages and the store's messages do not count.
 
 `examples.Run` returns an error when `Run` returns one. It also returns an
 error when the run logs an unexpected error before `Run` returns.

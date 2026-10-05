@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -162,9 +163,9 @@ func runScenario(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// tick also fails the run.
 	recorder := &runRecorder{
 		scenario:            cfg.Scenario.Name,
-		expectedErrors:      cfg.Scenario.ExpectedErrors,
-		expectedErrorCauses: cfg.Scenario.ExpectedErrorCauses,
-		expectedWarnings:    cfg.Scenario.ExpectedWarnings,
+		expectedErrors:      slices.Clone(cfg.Scenario.ExpectedErrors),
+		expectedErrorCauses: slices.Clone(cfg.Scenario.ExpectedErrorCauses),
+		expectedWarnings:    slices.Clone(cfg.Scenario.ExpectedWarnings),
 		matchedWarnings:     map[string]bool{},
 		matchedErrors:       map[string]bool{},
 		matchedCauses:       map[int]bool{},

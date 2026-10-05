@@ -701,6 +701,17 @@ func (c probeNonComparableCause) Error() string {
 	return strings.Join(c.words, " ")
 }
 
+// structCause looks comparable to the reflect package, because its only
+// field is an interface, but comparing two of its values panics when
+// inner holds a value that cannot be compared, such as a slice.
+type structCause struct {
+	inner any
+}
+
+func (c structCause) Error() string {
+	return "probe comparable looking cause"
+}
+
 var _ = Describe("Scenario missing several expected entries", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
@@ -864,6 +875,43 @@ var _ = Describe("Scenario missing several expected entries", func() {
 		causeLine := "the scenario expects this error cause, but the run never logged it: probe non comparable cause"
 		Expect(strings.Count(result.Err.Error(), causeLine)).To(Equal(2),
 			"a cause whose type is not comparable is never the same entry as another, so each listed entry is named")
+	})
+
+	It("ends the run without panicking when a listed cause only looks comparable", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		cause := structCause{inner: []int{1}}
+
+		silent := examples.Scenario{
+			Name:                "comparable-looking-cause",
+			Description:         "test-local Run for a listed cause whose comparison panics",
+			ExpectedErrorCauses: []error{cause, cause},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a run that never logs a listed cause must set RunResult.Err, not panic")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this error cause, but the run never logged it: probe comparable looking cause"),
+			"the set Err must name the listed cause the run never logged")
 	})
 })
 
