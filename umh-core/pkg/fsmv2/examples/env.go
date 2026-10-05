@@ -389,11 +389,14 @@ type Scenario struct {
 	// until Run returns.
 	Run func(ctx context.Context, env Env) error
 
-	// ExpectedErrors lists substrings of error log messages this scenario
-	// expects. Every listed entry must appear in an error the run logs,
-	// or RunResult.Err names the entry. Any other error logged during
-	// the run fails it, or sets RunResult.Err when it is logged after Run
-	// returned.
+	// ExpectedErrors lists substrings of error messages this scenario
+	// expects. Every listed entry must appear in an error message the
+	// run logs, or RunResult.Err names the entry; only the message text
+	// is matched, so an error's value counts only through
+	// ExpectedErrorCauses. Any other error logged during the run fails
+	// it, or sets RunResult.Err when it is logged after Run returned.
+	// Only errors logged by the scenario's workers or its Run count; the
+	// runner's own errors and the store's errors do not.
 	ExpectedErrors []string
 
 	// ExpectedErrorCauses lists error values this scenario expects, matched
