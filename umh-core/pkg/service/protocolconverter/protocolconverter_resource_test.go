@@ -60,10 +60,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 
 			BeforeEach(func() {
 				// Reserve 1 CPU core for Redpanda as per sizing guidelines
-				availableCores := runtime.NumCPU() - 1
-				if availableCores < 0 {
-					availableCores = 0
-				}
+				availableCores := max(runtime.NumCPU()-1, 0)
 				maxBridges = availableCores * bridgeadmission.BridgesPerCore
 
 				// Add healthy container for these tests
@@ -678,10 +675,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				}
 
 				// Calculate max bridges
-				availableCores := runtime.NumCPU() - 1
-				if availableCores < 0 {
-					availableCores = 0
-				}
+				availableCores := max(runtime.NumCPU()-1, 0)
 				maxBridges := availableCores * bridgeadmission.BridgesPerCore
 
 				// Add bridges exceeding limit to trigger blocking
@@ -728,10 +722,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				}
 
 				// Calculate max bridges
-				availableCores := runtime.NumCPU() - 1
-				if availableCores < 0 {
-					availableCores = 0
-				}
+				availableCores := max(runtime.NumCPU()-1, 0)
 				maxBridges := availableCores * bridgeadmission.BridgesPerCore
 
 				// Add bridges over limit

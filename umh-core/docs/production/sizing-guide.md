@@ -71,7 +71,7 @@ The system will prevent you from deploying new bridges if:
 This resource-based blocking is controlled by a feature flag and can be configured in your `config.yaml`:
 ```yaml
 agent:
-  enableResourceLimitBlocking: false  # Disable resource-based bridge blocking
+  enableResourceLimitBlocking: false  # Start bridges even when a resource is degraded or the bridge limit is reached
 ```
 
 `true` is the default for new installs. A missing key in an existing `config.yaml` reads as `false`, so set the key explicitly to turn the blocking on. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.

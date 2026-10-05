@@ -2,7 +2,7 @@
 
 A refused bridge stays pending and shows the reason in its status. This page explains what each reason means and what to do.
 
-umh-core refuses a new bridge when one of the instance's resources is degraded, when its resource health is not proven yet, or when the instance already holds as many bridges as its CPU cores allow. The reason says which of the three it is.
+umh-core refuses a new bridge when one of the instance's resources is degraded, when its resource health is not proven yet, or when the instance already holds as many bridges as its CPU cores allow. The reason says which of the three it is. umh-core refuses bridges only while `agent.enableResourceLimitBlocking` is `true`.
 
 ## What the reason says
 
@@ -10,7 +10,7 @@ umh-core refuses a new bridge when one of the instance's resources is degraded, 
 - **Memory degraded: [message]** — memory is short. Free memory on the host, or raise the container's memory limit.
 - **Disk degraded: [message]** — the disk is short. Free space on the volume, or make the volume larger.
 - **Resource health not proven yet** — umh-core has not yet shown the instance's resources to be healthy. A bridge always waits for this proof, so a fresh instance starts no bridges until its first health readings arrive. If the reason stays at "no health reading yet", the instance cannot read its own resources: use the emergency setting below and report it to UMH. The reason "instance not active yet" means the container has not reached the active state; the same advice applies.
-- **Cannot create bridge - limit exceeded (N bridges maximum with X CPU cores, 1 core reserved for Redpanda)** — the instance holds its maximum number of bridges. The [Sizing Guide](../../production/sizing-guide.md) explains the limit and what raises it.
+- **Cannot create bridge - limit exceeded (N bridges maximum with X CPU cores, 1 core reserved for Redpanda)** — the instance has reached its bridge limit. The count includes the bridges already running and the pending bridges listed before this one in config.yaml. The [Sizing Guide](../../production/sizing-guide.md) explains the limit and what raises it.
 
 ## What to do
 
@@ -20,7 +20,7 @@ umh-core refuses a new bridge when one of the instance's resources is degraded, 
 
 ## Start bridges anyway in an emergency
 
-Only if the bridge is needed now, turn the refusals off. Edit the instance's [Config File](../instances/config-file.md):
+Only if the bridge is needed now, turn the refusals off. This turns off all three, including the bridge limit. Edit the instance's [Config File](../instances/config-file.md):
 
 ```yaml
 agent:

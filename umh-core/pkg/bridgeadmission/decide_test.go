@@ -37,6 +37,14 @@ func allHealthy() ba.Input {
 	}
 }
 
+// allHealthyExcept is allHealthy with one change applied.
+func allHealthyExcept(change func(in *ba.Input)) ba.Input {
+	in := allHealthy()
+	change(&in)
+
+	return in
+}
+
 var _ = Describe("Decide", func() {
 	Describe("with enableResourceLimitBlocking false", func() {
 		It("admits without checking anything", func() {
@@ -138,6 +146,7 @@ var _ = Describe("Decide", func() {
 				Expect(d.Admit).To(Equal(admit))
 				Expect(d.MaxBridges).NotTo(BeNil())
 				Expect(*d.MaxBridges).To(Equal(15))
+
 				if admit {
 					Expect(d.Cause).To(Equal(ba.None))
 				} else {
@@ -205,9 +214,9 @@ var _ = Describe("Decide", func() {
 				Expect(d.Message()).To(ContainSubstring(hint))
 			},
 			Entry("not proven", ba.Input{EnableResourceLimitBlocking: true}),
-			Entry("memory", func() ba.Input { in := allHealthy(); in.Memory.Health = ba.Degraded; return in }()),
-			Entry("disk", func() ba.Input { in := allHealthy(); in.Disk.Health = ba.Degraded; return in }()),
-			Entry("bridge limit", func() ba.Input { in := allHealthy(); in.Created = 15; return in }()),
+			Entry("memory", allHealthyExcept(func(in *ba.Input) { in.Memory.Health = ba.Degraded })),
+			Entry("disk", allHealthyExcept(func(in *ba.Input) { in.Disk.Health = ba.Degraded })),
+			Entry("bridge limit", allHealthyExcept(func(in *ba.Input) { in.Created = 15 })),
 		)
 
 		It("is empty for an admitted bridge", func() {
