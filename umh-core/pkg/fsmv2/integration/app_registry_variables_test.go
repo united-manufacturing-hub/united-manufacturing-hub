@@ -55,6 +55,8 @@ func (b *lockedBuffer) String() string {
 	return b.buf.String()
 }
 
+// These specs fail if the registry has no place for variables. SetVariables
+// on the registry sets one bundle that every application child receives.
 var _ = Describe("Application supervisor passes the registry's variable bundle to its children", func() {
 	const configWorkerKey = "configworker"
 
