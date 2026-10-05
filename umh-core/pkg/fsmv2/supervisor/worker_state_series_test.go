@@ -21,9 +21,29 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
 )
+
+// namedState stays in itself until next is set.
+type namedState struct {
+	name string
+	next fsmv2.State[any, any]
+}
+
+func (n *namedState) String() string { return n.name }
+
+func (n *namedState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
+
+func (n *namedState) Next(_ any) fsmv2.NextResult[any, any] {
+	if n.next == nil {
+		return fsmv2.Result[any, any](n, fsmv2.SignalNone, nil, "stay", nil)
+	}
+
+	return fsmv2.Result[any, any](n.next, fsmv2.SignalNone, nil, "move on", nil)
+}
 
 func cleanStateDurationSeries(hierarchyPath string) {
 	for _, leftover := range stateDurationStates(hierarchyPath) {
@@ -56,5 +76,21 @@ var _ = Describe("The state-duration series", func() {
 		Expect(s.ListWorkers()).To(ConsistOf(mockIdentity().ID))
 		Expect(stateDurationStates(firstPath)).To(ConsistOf("MockState"))
 		Expect(stateDurationStates(secondIdentity.HierarchyPath)).To(BeEmpty())
+	})
+
+	It("keeps only the current state after a state change", func() {
+		running := &namedState{name: "Running"}
+		starting := &namedState{name: "Starting"}
+		s := newSupervisorWithWorkerAndLogger(&mockWorker{initialState: starting}, newMockTriangularStore(), supervisor.CollectorHealthConfig{}, deps.NewNopFSMLogger())
+		path := mockIdentity().HierarchyPath
+		cleanStateDurationSeries(path)
+
+		Expect(s.TestTick(context.Background())).To(Succeed())
+		Expect(stateDurationStates(path)).To(ConsistOf("Starting"))
+
+		starting.next = running
+
+		Expect(s.TestTick(context.Background())).To(Succeed())
+		Expect(stateDurationStates(path)).To(ConsistOf("Running"))
 	})
 })
