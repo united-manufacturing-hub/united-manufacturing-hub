@@ -456,6 +456,121 @@ var _ = Describe("Scenario missing expected warnings", func() {
 	})
 })
 
+var _ = Describe("Scenario missing expected errors", func() {
+	BeforeEach(func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
+
+	It("sets RunResult.Err when an error the scenario expects is never logged", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		silent := examples.Scenario{
+			Name:           "missing-expected-error",
+			Description:    "test-local Run for the missing expected error check",
+			ExpectedErrors: []string{"probe_never_logged"},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"an error listed in ExpectedErrors must set RunResult.Err when the run never logs it")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this error, but the run never logged it: probe_never_logged"),
+			"the set Err must name the listed error the run never logged")
+	})
+
+	It("keeps RunResult.Err nil when the run logs a listed error", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		talking := examples.Scenario{
+			Name:           "matched-expected-error",
+			Description:    "test-local Run for the matched expected error check",
+			ExpectedErrors: []string{"probe_logged"},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "",
+					errors.New("the logged probe failed"), "probe_logged")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     talking,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run that logs a listed error must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"a listed error the run logs must not set RunResult.Err")
+	})
+
+	It("sets RunResult.Err when the run logs only one of two listed errors", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		partiallyTalking := examples.Scenario{
+			Name:           "partially-matched-expected-error",
+			Description:    "test-local Run for the per-entry expected error check",
+			ExpectedErrors: []string{"probe_logged", "probe_never_logged"},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "",
+					errors.New("the logged probe failed"), "probe_logged")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     partiallyTalking,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run that logs one of its listed errors and nothing unexpected must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"an entry of ExpectedErrors the run never logs must set RunResult.Err, even when another entry was logged")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this error, but the run never logged it: probe_never_logged"),
+			"the set Err must name the listed entry the run never logged")
+	})
+})
+
 var _ = Describe("Scenario empty expected entries", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
