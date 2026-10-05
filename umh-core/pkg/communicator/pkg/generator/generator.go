@@ -311,6 +311,9 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 					// Reports Core.DataContractsV2, the merged data model plus
 					// data contract view.
 					"data-contracts-v2",
+					"action-add-datacontract",
+					"action-edit-datacontract",
+					"action-get-datacontract",
 				},
 			},
 		},

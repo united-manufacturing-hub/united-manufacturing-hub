@@ -6,6 +6,7 @@
 
 - In the config editor, saving a config that gives a data contract the same name as a data model is now refused, because both would publish under the same contract address. A config that already holds such a pair still loads
 - Data contracts in the new `dataContractsV2` config section are now enforced: messages sent to one are validated against its structure, as they already are for data models. Where a data contract and a data model share a name, the instance log warns that the data contract's structure is the one enforced
+- Data contracts can now be added from the new Data Contracts page, and new versions can be added to them while earlier versions stay unchanged. A data model can no longer take the name of an existing data contract
 
 ## [0.44.42]
 

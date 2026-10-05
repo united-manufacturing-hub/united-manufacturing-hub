@@ -210,6 +210,16 @@ const (
 	EditDataModel ActionType = "edit-datamodel"
 	// GetDataModel represents the action type for retrieving a data model.
 	GetDataModel ActionType = "get-datamodel"
+	// AddDataContract represents the action type for adding a data contract,
+	// the merged concept that supersedes data models. It writes only to the
+	// dataContractsV2 section.
+	AddDataContract ActionType = "add-datacontract"
+	// EditDataContract represents the action type for appending the next
+	// version to a data contract in the dataContractsV2 section.
+	EditDataContract ActionType = "edit-datacontract"
+	// GetDataContract represents the action type for retrieving a data
+	// contract from the dataContractsV2 section with every version.
+	GetDataContract ActionType = "get-datacontract"
 	// DeployStreamProcessor represents the action type for deploying a stream processor.
 	DeployStreamProcessor ActionType = "deploy-stream-processor"
 	// EditStreamProcessor represents the action type for editing a stream processor.
@@ -695,6 +705,37 @@ type EditDataModelPayload struct {
 	EncodedStructure string           `binding:"required"           json:"encodedStructure"` // Encoded structure of the data model
 }
 
+// AddDataContractPayload creates a data contract at v1. Structure travels as
+// base64-encoded YAML in EncodedStructure, the same wire form the data model
+// actions use, and is decoded into Structure on the instance.
+type AddDataContractPayload struct {
+	Structure        map[string]Field `json:"-"`
+	Name             string           `binding:"required" json:"name"`
+	Description      string           `json:"description,omitempty"`
+	EncodedStructure string           `binding:"required" json:"encodedStructure"`
+}
+
+// EditDataContractPayload appends the next version to an existing data
+// contract. Structure travels as base64-encoded YAML, like AddDataContractPayload.
+type EditDataContractPayload struct {
+	Structure        map[string]Field `json:"-"`
+	Name             string           `binding:"required" json:"name"`
+	EncodedStructure string           `binding:"required" json:"encodedStructure"`
+}
+
+// GetDataContractPayload names the data contract to retrieve.
+type GetDataContractPayload struct {
+	Name string `binding:"required" json:"name"`
+}
+
+// GetDataContractResponse holds a data contract with every version, in the
+// same shape as GetDataModelResponse.
+type GetDataContractResponse struct {
+	Versions    map[string]GetDataModelVersion `json:"versions"`
+	Name        string                         `json:"name"`
+	Description string                         `json:"description,omitempty"`
+}
+
 // GetDataModelPayload contains the necessary fields for executing a GetDataModel action.
 type GetDataModelPayload struct {
 	Name            string `binding:"required"               json:"name"` // Name of the data model to retrieve
@@ -790,7 +831,7 @@ const (
 	ErrDeployTimeout = "ERR_DEPLOY_TIMEOUT"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
-	ErrBridgeNotFound = "ERR_BRIDGE_NOT_FOUND"
+	ErrBridgeNotFound    = "ERR_BRIDGE_NOT_FOUND"
 	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
 	// It is retryable because the write failure might be caused by temporary filesystem issues.
 	ErrRetryConfigWriteFailed = "ERR_RETRY_CONFIG_WRITE_FAILED"

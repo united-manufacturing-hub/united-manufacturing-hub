@@ -172,6 +172,28 @@ var _ = Describe("AddDataModelAction", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("is 54 characters; use 53 or fewer"))
 		})
+
+		It("should reject a name already used by a v2 data contract", func() {
+			mockConfigMgr.WithConfig(config.FullConfig{
+				PayloadShapes: map[string]config.PayloadShape{
+					"timeseries-string": {Fields: map[string]config.PayloadField{"value": {Type: "string"}}},
+				},
+				DataContractsV2: []config.DataContractV2Config{{
+					Name:     "pump",
+					Versions: map[string]config.DataModelVersion{"v1": {}},
+				}},
+			})
+
+			err := action.Parse(structToEncodedMap(models.AddDataModelPayload{
+				Name:      "pump",
+				Structure: validStructure,
+			}))
+			Expect(err).ToNot(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(`a data contract named "pump" already exists`))
+		})
 	})
 
 	// TODO: Add validation tests

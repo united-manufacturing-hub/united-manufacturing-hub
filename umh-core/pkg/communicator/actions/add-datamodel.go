@@ -155,6 +155,10 @@ func (a *AddDataModelAction) Validate() error {
 		return fmt.Errorf("failed to get current config for validation: %w", err)
 	}
 
+	if err := config.CheckDataContractV2NameFree(currentConfig, a.payload.Name); err != nil {
+		return err
+	}
+
 	// Convert existing data models to the format expected by the validator
 	allDataModels := make(map[string]config.DataModelsConfig)
 	for _, dataModel := range currentConfig.DataModels {
