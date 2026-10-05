@@ -99,6 +99,10 @@ type ConfigManager interface {
 	AtomicDeleteDataModel(ctx context.Context, name string) error
 	// AtomicAddDataContract adds a data contract to the config atomically
 	AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error
+	// AtomicAddDataContractV2 adds a data contract to the dataContractsV2 section atomically
+	AtomicAddDataContractV2(ctx context.Context, name string, version DataModelVersion, description string) error
+	// AtomicAddDataContractV2Version appends the next version to a dataContractsV2 entry atomically and returns its key
+	AtomicAddDataContractV2Version(ctx context.Context, name string, version DataModelVersion) (string, error)
 	// GetConfigAsString returns the current config as a string
 	// This function is used in the get-config-file action to retrieve the raw config file
 	// without any yaml parsing applied. This allows to display yaml anchors and change them
@@ -442,6 +446,18 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	return currentCacheConfig, cacheError
+}
+
+// parseConfigAllowingUnknownFields parses data with strict field checking first, to detect syntax
+// errors and schema problems, and falls back to allowing unknown fields, which YAML anchors and
+// other custom fields need.
+func parseConfigAllowingUnknownFields(ctx context.Context, data []byte) (FullConfig, error) {
+	config, err := ParseConfig(data, ctx, false)
+	if err == nil {
+		return config, nil
+	}
+
+	return ParseConfig(data, ctx, true)
 }
 
 // backgroundRefresh is intended to be called from a goroutine to refresh the config cache.
@@ -1110,6 +1126,8 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 //
 // The function performs validation by parsing the config with strict field checking before
 // writing, ensuring the YAML is syntactically correct and conforms to the expected schema.
+// It also rejects the write when it adds a data contract that shares its contract address with
+// a data model (see ContractNameClashes). Clashes the current config already holds are kept.
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout control
@@ -1121,15 +1139,9 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 // configurations that may include anchors, aliases, and other YAML features that would
 // otherwise be processed through the template system.
 func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
-	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, err := ParseConfig([]byte(configStr), ctx, false)
+	updatedConfig, err := parseConfigAllowingUnknownFields(ctx, []byte(configStr))
 	if err != nil {
-		// If strict parsing fails, try again with allowUnknownFields=true
-		// This allows YAML anchors and other custom fields
-		_, err = ParseConfig([]byte(configStr), ctx, true)
-		if err != nil {
-			return fmt.Errorf("failed to parse config: %w", err)
-		}
+		return fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	// We use a write lock here because we write the config file
@@ -1155,6 +1167,23 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 				return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
 					info.ModTime().Format(time.RFC3339), expectedModTime)
 			}
+		}
+	}
+
+	if len(ContractNameClashes(updatedConfig)) > 0 {
+		// Compare against the file itself, not the cache, which can lag behind it.
+		// Clashes already in the file are kept, so a config that holds one can still
+		// be saved. When the current file can't be read, every clash counts as new.
+		var currentConfig FullConfig
+
+		currentData, readErr := m.fsService.ReadFile(ctx, m.configPath)
+		if readErr == nil {
+			currentConfig, _ = parseConfigAllowingUnknownFields(ctx, currentData)
+		}
+
+		added := newContractNameClashes(currentConfig, updatedConfig)
+		if len(added) > 0 {
+			return fmt.Errorf("a data contract and a data model can't share a name, because both publish under the same contract address – rename one of them: %s", strings.Join(added, "; "))
 		}
 	}
 

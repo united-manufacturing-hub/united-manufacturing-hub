@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- In the config editor, saving a config that gives a data contract the same name as a data model is now refused, because both would publish under the same contract address. A config that already holds such a pair still loads
+
 ## [0.44.42]
 
 ### New Features

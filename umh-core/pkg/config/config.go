@@ -36,6 +36,7 @@ type FullConfig struct {
 	Historian         *HistorianConfig          `yaml:"historian,omitempty"`         // Historian config; groups the timescale connection (and future backends) under historian:
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
+	DataContractsV2   []DataContractV2Config    `yaml:"dataContractsV2,omitempty"`   // DataContractsV2 section, the merged data model and contract concept
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
@@ -65,6 +66,18 @@ type DataContractsConfig struct {
 
 type DataModelVersion struct {
 	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
+}
+
+// DataContractV2Config defines one data contract in the merged concept, which
+// folds a data model and the contract enforcing it into a single entry.
+//
+// This section stands alone. Nothing here is read from or written to the
+// dataModels and dataContracts sections, so those can be retired without
+// touching it, and an entry in one never appears in the other.
+type DataContractV2Config struct {
+	Versions    map[string]DataModelVersion `yaml:"version"`               // version of the data contract (v1, v2, etc.)
+	Name        string                      `yaml:"name"`                  // name of the data contract
+	Description string                      `yaml:"description,omitempty"` // description of the data contract
 }
 
 // ModelRef represents a reference to another data model.
@@ -324,6 +337,7 @@ func (c FullConfig) Clone() FullConfig {
 		PayloadShapes:     make(map[string]PayloadShape),
 		DataModels:        make([]DataModelsConfig, len(c.DataModels)),
 		DataContracts:     make([]DataContractsConfig, len(c.DataContracts)),
+		DataContractsV2:   make([]DataContractV2Config, len(c.DataContractsV2)),
 		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
 		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
 		StreamProcessor:   make([]StreamProcessorConfig, len(c.StreamProcessor)),
@@ -354,6 +368,11 @@ func (c FullConfig) Clone() FullConfig {
 	}
 
 	err = deepcopy.Copy(&clone.DataContracts, &c.DataContracts)
+	if err != nil {
+		return FullConfig{}
+	}
+
+	err = deepcopy.Copy(&clone.DataContractsV2, &c.DataContractsV2)
 	if err != nil {
 		return FullConfig{}
 	}
