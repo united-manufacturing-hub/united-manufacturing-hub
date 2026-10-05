@@ -160,6 +160,7 @@ func allKnownActionTypes() []models.ActionType {
 		models.GetMetrics,
 		models.DeleteProtocolConverter,
 		models.AddDataModel,
+		models.AddDataContract,
 		models.DeleteDataModel,
 		models.EditDataModel,
 		models.GetDataModel,

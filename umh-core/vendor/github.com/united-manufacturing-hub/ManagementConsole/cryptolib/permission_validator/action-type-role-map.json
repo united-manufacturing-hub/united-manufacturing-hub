@@ -16,6 +16,7 @@
         "get-configuration": ["Admin", "Viewer", "Editor"],
         "get-stream-processor": ["Admin", "Viewer", "Editor"],
         "get-datamodel": ["Admin", "Viewer", "Editor"],
+        "get-datacontract": ["Admin", "Viewer", "Editor"],
         "get-logs": ["Admin", "Viewer", "Editor"],
         "get-metrics": ["Admin", "Viewer", "Editor"],
         "allow-app-secret-access": ["Admin"]
@@ -33,6 +34,7 @@
         "edit-data-flow-component": ["Admin", "Editor"],
         "edit-stream-processor": ["Admin", "Editor"],
         "edit-datamodel": ["Admin", "Editor"],
+        "edit-datacontract": ["Admin", "Editor"],
         "rollback-data-flow-component": ["Admin", "Editor"],
         "set-config-file": ["Admin"],
         "update-configuration": ["Admin"]
@@ -59,7 +61,8 @@
         "save-protocol-converter": ["Admin", "Editor"],
         "deploy-data-flow-component": ["Admin", "Editor"],
         "deploy-stream-processor": ["Admin", "Editor"],
-        "add-datamodel": ["Admin", "Editor"]
+        "add-datamodel": ["Admin", "Editor"],
+        "add-datacontract": ["Admin", "Editor"]
       }
     },
     "Test Actions": {

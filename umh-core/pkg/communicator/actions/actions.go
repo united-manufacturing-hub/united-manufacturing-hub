@@ -500,6 +500,12 @@ func newActionFromPayload(
 		return NewDeleteProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 	case models.AddDataModel:
 		return NewAddDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.AddDataContract:
+		return NewAddDataContractAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.EditDataContract:
+		return NewEditDataContractAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.GetDataContract:
+		return NewGetDataContractAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	case models.DeleteDataModel:
 		return NewDeleteDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	case models.EditDataModel:
