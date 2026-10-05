@@ -167,6 +167,7 @@ func runScenario(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		expectedWarnings:    cfg.Scenario.ExpectedWarnings,
 		matchedWarnings:     map[string]bool{},
 		matchedErrors:       map[string]bool{},
+		matchedCauses:       map[int]bool{},
 	}
 	runLogger := &recordingLogger{FSMLogger: cfg.Logger, recorder: recorder}
 
@@ -312,6 +313,11 @@ func runScenario(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 const storedStateCheckTimeout = 10 * time.Second
 
+// postRunFailure checks a finished run against its scenario's expectations
+// and returns the first failure it finds: an error or warning the scenario
+// did not expect, an expected entry the run never logged, or a stored
+// worker state its type may not report. The runRecorder's matched maps
+// exist so a missing-entry failure can name the entry that never appeared.
 func postRunFailure(ctx context.Context, recorder *runRecorder, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
 	if err := recorder.loggedError(); err != nil {
 		return err
@@ -327,6 +333,10 @@ func postRunFailure(ctx context.Context, recorder *runRecorder, store storage.Tr
 
 	if missing, ok := recorder.missingExpectedError(); ok {
 		return fmt.Errorf("the scenario expects this error, but the run never logged it: %s", missing)
+	}
+
+	if missing, ok := recorder.missingExpectedErrorCause(); ok {
+		return fmt.Errorf("the scenario expects this error cause, but the run never logged it: %w", missing)
 	}
 
 	// WithoutCancel: a Ctrl+C after Run returned is not a failed store read.

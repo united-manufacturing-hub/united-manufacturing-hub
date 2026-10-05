@@ -571,6 +571,125 @@ var _ = Describe("Scenario missing expected errors", func() {
 	})
 })
 
+var _ = Describe("Scenario missing expected error causes", func() {
+	BeforeEach(func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
+
+	It("sets RunResult.Err when an error cause the scenario expects is never logged", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		errUnloggedCause := errors.New("probe cause")
+
+		silent := examples.Scenario{
+			Name:                "missing-expected-error-cause",
+			Description:         "test-local Run for the missing expected error cause check",
+			ExpectedErrorCauses: []error{errUnloggedCause},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a cause listed in ExpectedErrorCauses must set RunResult.Err when the run never logs an error that wraps it")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this error cause, but the run never logged it: probe cause"),
+			"the set Err must name the listed cause the run never logged")
+		Expect(errors.Is(result.Err, errUnloggedCause)).To(BeTrue(),
+			"the set Err must wrap the listed cause, so a caller can match it with errors.Is")
+	})
+
+	It("sets RunResult.Err when the run logs an error wrapping only one of two listed causes", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		errWrappedCause := errors.New("the first probe cause")
+		errUnwrappedCause := errors.New("the second probe cause")
+
+		partiallyWrapping := examples.Scenario{
+			Name:                "partially-matched-expected-cause",
+			Description:         "test-local Run for the per-entry expected error cause check",
+			ExpectedErrorCauses: []error{errWrappedCause, errUnwrappedCause},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "",
+					fmt.Errorf("wrap: %w", errWrappedCause), "action_failed")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     partiallyWrapping,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run that logs an error wrapping one of its listed causes and nothing unexpected must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"an entry of ExpectedErrorCauses the run never logs an error wrapping must set RunResult.Err, even when another entry was wrapped")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario expects this error cause, but the run never logged it: the second probe cause"),
+			"the set Err must name the listed entry the run never logged")
+	})
+
+	It("keeps RunResult.Err nil when the only expected cause entry is nil", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		silent := examples.Scenario{
+			Name:                "nil-expected-cause",
+			Description:         "test-local Run for the nil expected error cause check",
+			ExpectedErrorCauses: []error{nil},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"a nil cause entry is never required, so a run that logs nothing must end with no failure")
+	})
+})
+
 var _ = Describe("Scenario empty expected entries", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
