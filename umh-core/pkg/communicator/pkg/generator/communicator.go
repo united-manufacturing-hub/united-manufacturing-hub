@@ -16,7 +16,6 @@ package generator
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -60,30 +59,40 @@ func CommunicatorFromFSMv2(ctx context.Context, log *zap.SugaredLogger, subscrib
 		return nil
 	}
 
-	var result *models.Communicator
+	c := communicatorStatus(ctx, log, client)
+	c.SubscriberCount = subscriberCount
 
-	transport, err := fsmv2client.Get[transportsnapshot.TransportStatus](ctx, client, transportRef)
+	return c
+}
 
-	switch {
-	case err != nil:
-		if !errors.Is(err, fsmv2client.ErrNotObserved) {
-			log.Warnw("communicator status: failed to read transport observed state", "error", err)
-		}
+func communicatorStatus(ctx context.Context, log *zap.SugaredLogger, client *fsmv2client.FSMv2Client) *models.Communicator {
+	transport, freshness, err := fsmv2client.GetFresh[transportsnapshot.TransportStatus](ctx, client, transportRef, transportMaxAge)
+	if err != nil {
+		log.Warnw("communicator status: failed to read transport observed state", "error", err)
 
-		result = &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
-	case time.Since(transport.CollectedAt) > transportMaxAge:
-		result = &models.Communicator{Health: communicatorHealthOf(models.Degraded, "Communicator status is stale")}
-	default:
-		result = CommunicatorFromObservations(
+		return unknownCommunicator()
+	}
+
+	switch freshness {
+	case fsmv2client.Fresh:
+		return CommunicatorFromObservations(
 			transport,
 			observationOrZero[pushsnapshot.PushStatus](ctx, client, pushRef),
 			observationOrZero[pullsnapshot.PullStatus](ctx, client, pullRef),
 		)
+	case fsmv2client.Stale:
+		return &models.Communicator{Health: communicatorHealthOf(models.Degraded, "Communicator status is stale")}
+	case fsmv2client.Deleted, fsmv2client.NotFound:
+		return unknownCommunicator()
+	default:
+		log.Warnw("communicator status: unexpected transport freshness", "freshness", freshness)
+
+		return unknownCommunicator()
 	}
+}
 
-	result.SubscriberCount = subscriberCount
-
-	return result
+func unknownCommunicator() *models.Communicator {
+	return &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
 }
 
 // CommunicatorFromObservations maps the transport worker's observation and its

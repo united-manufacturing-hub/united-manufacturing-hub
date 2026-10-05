@@ -33,26 +33,26 @@ const historianMaxAge = 10 * time.Second
 // HistorianFromFSMv2 reads the historian monitor child's observed state from the
 // fsmv2 store and maps it to models.Historian. It returns nil (omitting the
 // section) when no historian is configured, the client is unavailable, no
-// observation exists yet, or the read fails.
+// observation exists yet, the monitor was removed, or the read fails.
 func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.Historian {
 	client := fsmv2client.GetClient()
 	if client == nil {
 		return nil
 	}
 
-	status, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2historian.TimescaleStatus]](ctx, client, fsmv2historian.Ref, historianMaxAge)
+	obs, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2historian.TimescaleStatus]](ctx, client, fsmv2historian.Ref, historianMaxAge)
 	if err != nil {
 		log.Warnw("historian status: failed to read observed state", "error", err)
 
 		return nil
 	}
 
-	// Unregistered (no historian configured) and NeverObserved (registered but
-	// not yet polled) both mean "nothing to report" — omit the section.
-	if freshness != fsmv2client.Fresh && freshness != fsmv2client.Stale {
+	hasObservation := freshness == fsmv2client.Fresh || freshness == fsmv2client.Stale
+	if !hasObservation {
 		return nil
 	}
 
+	status := obs.Status
 	result := status.Result
 
 	// A stale observation is degraded regardless of its last-seen verdict: the

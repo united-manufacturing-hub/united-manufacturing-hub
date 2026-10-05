@@ -31,7 +31,7 @@
 //  1. disabled (desired state stopped)          -> the desired state, no store read
 //  2. Unknown (nil client / read hiccup)        -> hold the last known state (the declared Starting word if none)
 //  3. degraded verdict (poll error or Health)   -> the declared Degraded word
-//  4. Unregistered / NeverObserved (bootstrap)  -> the declared Starting word
+//  4. NotFound / Deleted (nothing to read)      -> the declared Starting word
 //  5. Stale (~3 missed polls)                    -> the declared Degraded word
 //  6. Fresh and healthy                          -> the developer's MapFresh
 //
