@@ -1024,3 +1024,270 @@ var _ = Describe("Scenario expected error causes", func() {
 			"the failure must name the generic message the error was logged under")
 	})
 })
+
+var _ = Describe("Scenario run-check edge cases", func() {
+	BeforeEach(func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
+
+	It("keeps RunResult.Err nil when one error matches both a listed entry and a listed cause", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		errProbe := errors.New("probe cause")
+
+		scenario := examples.Scenario{
+			Name:                "edge-entry-and-cause",
+			Description:         "test-local Run for one error matching an entry and a cause",
+			ExpectedErrors:      []string{"probe_logged"},
+			ExpectedErrorCauses: []error{errProbe},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "",
+					fmt.Errorf("probe failed: %w", errProbe), "probe_logged")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"an error that matches a listed entry and wraps a listed cause must not fail the run")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"one error that matches a listed entry and a listed cause must satisfy both")
+	})
+
+	It("keeps RunResult.Err nil when one warning matches two overlapping listed entries", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		scenario := examples.Scenario{
+			Name:             "edge-overlapping-entries",
+			Description:      "test-local Run for one warning matching two overlapping entries",
+			ExpectedWarnings: []string{"probe_overlap", "probe_overlap_long"},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_overlap_long")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a warning that matches two overlapping listed entries must not fail the run")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"one warning that contains two overlapping listed entries must satisfy both")
+	})
+
+	It("keeps RunResult.Err nil when one error wraps two listed causes", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		causeA := errors.New("probe cause a")
+		causeB := errors.New("probe cause b")
+
+		scenario := examples.Scenario{
+			Name:                "edge-two-causes",
+			Description:         "test-local Run for one error wrapping two listed causes",
+			ExpectedErrorCauses: []error{causeA, causeB},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "",
+					errors.Join(causeA, causeB), "probe both causes")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"an error that wraps two listed causes must not fail the run")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"one error that wraps two listed causes must satisfy both")
+	})
+
+	It("keeps RunResult.Err nil when the only listed entry is empty", func() {
+		logger := deps.NewNopFSMLogger()
+
+		scenarios := []examples.Scenario{
+			{
+				Name:             "edge-empty-warning-entry",
+				Description:      "test-local Run for an empty expected warning entry",
+				ExpectedWarnings: []string{""},
+				Run: func(_ context.Context, _ examples.Env) error {
+					return nil
+				},
+			},
+			{
+				Name:           "edge-empty-error-entry",
+				Description:    "test-local Run for an empty expected error entry",
+				ExpectedErrors: []string{""},
+				Run: func(_ context.Context, _ examples.Env) error {
+					return nil
+				},
+			},
+		}
+
+		for _, scenario := range scenarios {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+			result, err := examples.Run(ctx, examples.RunConfig{
+				Scenario:     scenario,
+				Duration:     300 * time.Millisecond,
+				TickInterval: 50 * time.Millisecond,
+				Logger:       logger,
+				Store:        examples.SetupStore(logger),
+			})
+			Expect(err).NotTo(HaveOccurred(),
+				"a run whose Run returned nil and logged nothing must succeed")
+
+			Eventually(result.Done, "55s").Should(BeClosed(),
+				"the run must tear down once its settle window ends")
+
+			Expect(result.Err).NotTo(HaveOccurred(),
+				"an empty listed entry is never required")
+
+			cancel()
+		}
+	})
+
+	It("keeps RunResult.Err nil when only an always-allowed message matches a listed warning", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		scenario := examples.Scenario{
+			Name:             "edge-allowed-message-match",
+			Description:      "test-local Run for a listed warning matched by an always-allowed message",
+			ExpectedWarnings: []string{"data_stale"},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryWarn(deps.FeatureExamples, "", "data_stale")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"an always-allowed message that matches a listed entry must not fail the run")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"a listed entry an always-allowed message contains counts as matched")
+	})
+
+	It("names an unexpected warning before a missing entry", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		scenario := examples.Scenario{
+			Name:             "edge-unexpected-before-missing",
+			Description:      "test-local Run for an unexpected warning and a missing entry",
+			ExpectedWarnings: []string{"probe_missing"},
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_unlisted")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a warning no entry lists must not fail the run while Run still returns nil")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a warning no entry lists must set RunResult.Err")
+		Expect(result.Err.Error()).To(ContainSubstring("the scenario does not expect this warning: probe_unlisted"),
+			"the unexpected-warning check runs first, so the failure names the unlisted warning")
+		Expect(result.Err.Error()).NotTo(ContainSubstring("the scenario expects this warning"),
+			"a later check must not add its failure while the earlier one applies")
+	})
+
+	It("returns Run's error before any missing entry", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		scenario := examples.Scenario{
+			Name:             "edge-run-error-before-missing",
+			Description:      "test-local Run for Run's error with a missing entry",
+			ExpectedWarnings: []string{"probe_never_logged"},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return errors.New("the run's own check failed")
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		_, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     scenario,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).To(HaveOccurred(),
+			"a run whose Run returns an error must return that error")
+		Expect(err.Error()).To(ContainSubstring("the run's own check failed"),
+			"the returned error is Run's own, not a missing-entry failure")
+	})
+})
