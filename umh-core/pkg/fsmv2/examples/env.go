@@ -112,10 +112,16 @@ func (r *runRecorder) recordLoggedError(err error, msg string) {
 	}
 }
 
-// An empty expected entry matches nothing: strings.Contains would match every message.
+// messageMatchesEntry reports whether msg contains entry. An empty entry
+// is never required and matches nothing, because strings.Contains would
+// match every message.
+func messageMatchesEntry(msg, entry string) bool {
+	return entry != "" && strings.Contains(msg, entry)
+}
+
 func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	for _, substr := range expected {
-		if substr != "" && strings.Contains(msg, substr) {
+		if messageMatchesEntry(msg, substr) {
 			return true
 		}
 	}
@@ -129,11 +135,17 @@ func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	return false
 }
 
+// errorMatchesCause reports whether err is or wraps cause. A nil cause is
+// never required and matches nothing.
+func errorMatchesCause(err, cause error) bool {
+	return cause != nil && errors.Is(err, cause)
+}
+
 // errorCauseAllowed reports whether err is or wraps one of the scenario's
-// expected causes. A nil entry matches nothing.
+// expected causes.
 func (r *runRecorder) errorCauseAllowed(err error) bool {
 	for _, cause := range r.expectedErrorCauses {
-		if cause != nil && errors.Is(err, cause) {
+		if errorMatchesCause(err, cause) {
 			return true
 		}
 	}
@@ -141,19 +153,17 @@ func (r *runRecorder) errorCauseAllowed(err error) bool {
 	return false
 }
 
-// A nil entry in expectedErrorCauses is never marked.
 func (r *runRecorder) markMatchedCauses(err error) {
 	for i, cause := range r.expectedErrorCauses {
-		if cause != nil && errors.Is(err, cause) {
+		if errorMatchesCause(err, cause) {
 			r.matchedCauses[i] = true
 		}
 	}
 }
 
-// An empty entry in expected is never marked.
 func (r *runRecorder) markMatchedEntries(expected []string, msg string, matched map[string]bool) {
 	for _, entry := range expected {
-		if entry != "" && strings.Contains(msg, entry) {
+		if messageMatchesEntry(msg, entry) {
 			matched[entry] = true
 		}
 	}
