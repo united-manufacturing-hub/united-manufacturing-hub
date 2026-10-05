@@ -21,8 +21,9 @@ import (
 )
 
 // RenderChildren returns the ChildSpec set for the exampleparent worker.
-// Each child receives cfg.ChildConfig verbatim as UserSpec.Config and a
-// per-child DEVICE_ID variable (device-0, device-1, ...).
+// Each child receives cfg.ChildConfig verbatim as UserSpec.Config, a
+// per-child DEVICE_ID variable (device-0, device-1, ...) and the
+// cfg.ChildVariables entries as User variables.
 //
 // When cfg.ChildConfig is empty, the child's Config is also empty. Templates
 // render in strict mode, so a fallback template that used {{ .IP }} would fail
@@ -38,11 +39,14 @@ func RenderChildren(cfg ExampleparentConfig, enabled bool) ([]config.ChildSpec, 
 	specs := make([]config.ChildSpec, 0, count)
 
 	for i := range count {
-		childVariables := config.VariableBundle{
-			User: map[string]any{
-				"DEVICE_ID": fmt.Sprintf("device-%d", i),
-			},
+		user := map[string]any{
+			"DEVICE_ID": fmt.Sprintf("device-%d", i),
 		}
+		for k, v := range cfg.ChildVariables {
+			user[k] = v
+		}
+
+		childVariables := config.VariableBundle{User: user}
 
 		specs = append(specs, config.ChildSpec{
 			Name:       fmt.Sprintf("child-%d", i),

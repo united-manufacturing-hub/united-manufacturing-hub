@@ -17,6 +17,7 @@ package exampleparent
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -98,9 +99,21 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		return &fsmv2.WrappedDesiredState[ExampleparentConfig]{}, nil
 	}
 
-	parentSpec, err := config.ParseUserSpec[ExampleparentConfig](spec)
+	userSpec, ok := spec.(config.UserSpec)
+	if !ok {
+		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
+	}
+
+	parentSpec, err := config.ParseUserSpec[ExampleparentConfig](userSpec)
 	if err != nil {
 		return nil, err
+	}
+
+	// Only the label is rendered here. ChildConfig can use variables that
+	// only a child holds, such as DEVICE_ID, so it is rendered at the child.
+	label, err := config.RenderConfigTemplate(parentSpec.Label, userSpec.Variables)
+	if err != nil {
+		return nil, fmt.Errorf("render label: %w", err)
 	}
 
 	return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
@@ -108,6 +121,8 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 			BaseUserSpec:    parentSpec.BaseUserSpec,
 			ChildWorkerType: parentSpec.ChildWorkerType,
 			ChildConfig:     parentSpec.ChildConfig,
+			ChildVariables:  parentSpec.ChildVariables,
+			Label:           label,
 			ChildrenCount:   parentSpec.ChildrenCount,
 		},
 	}, nil
