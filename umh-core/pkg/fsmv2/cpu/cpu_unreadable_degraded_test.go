@@ -28,8 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// fileMap is a filesystem holding exactly the files in it. A file that is not
-// in the map is missing, the way the kernel reports it.
+// fileMap is a filesystem that holds only the files in its map. Reading any
+// other file fails with fs.ErrNotExist.
 type fileMap struct {
 	filesystem.Service
 
@@ -55,9 +55,7 @@ func (fileMap) ReadDir(context.Context, string) ([]os.DirEntry, error) {
 	return nil, nil
 }
 
-// cgroupV2WithLimit is a cgroup v2 container limited to 2 cores, with every
-// file the CPU worker reads.
-func cgroupV2WithLimit() map[string]string {
+func cgroupV2LimitedTo2Cores() map[string]string {
 	return map[string]string{
 		cgroupBase + "/cgroup.controllers":    "cpuset cpu io memory pids\n",
 		"/proc/self/cgroup":                   "0::/\n",
@@ -70,8 +68,8 @@ func cgroupV2WithLimit() map[string]string {
 	}
 }
 
-func cgroupV2WithoutLimit() map[string]string {
-	files := cgroupV2WithLimit()
+func cgroupV2UnlimitedOn4Cores() map[string]string {
+	files := cgroupV2LimitedTo2Cores()
 	files[cgroupBase+"/cpu.max"] = "max 100000\n"
 
 	return files
@@ -95,19 +93,19 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 		return Poll(context.Background(), NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)), CPUConfig{})
 	}
 
-	It("reads the fixtures as a container limited to 2 cores and one without a limit on 4", func() {
-		limited, err := poll(cgroupV2WithLimit())
+	It("reads the fixtures as a container limited to 2 cores and one without a limit on 4 cores", func() {
+		limited, err := poll(cgroupV2LimitedTo2Cores())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(limited.Details.LimitApplies).To(BeTrue())
 		Expect(limited.Details.CapacityCores).To(Equal(2.0))
 
-		unlimited, err := poll(cgroupV2WithoutLimit())
+		unlimited, err := poll(cgroupV2UnlimitedOn4Cores())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(unlimited.Details.LimitApplies).To(BeFalse())
 		Expect(unlimited.Details.CapacityCores).To(Equal(4.0))
 	})
 
-	DescribeTable("keeps the same answer on every tick of one worker, after the windows fill",
+	DescribeTable("returns the same result on four polls in a row",
 		func(files map[string]string, wantErr bool) {
 			register.SetDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
 			DeferCleanup(register.ClearDeps, FilesystemDepsKey)
@@ -124,8 +122,8 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 				}
 			}
 		},
-		Entry("cpu.stat missing with a CPU limit", without(cgroupV2WithLimit(), cgroupBase+"/cpu.stat"), true),
-		Entry("every file present", cgroupV2WithLimit(), false),
+		Entry("cpu.stat missing with a CPU limit", without(cgroupV2LimitedTo2Cores(), cgroupBase+"/cpu.stat"), true),
+		Entry("every file present", cgroupV2LimitedTo2Cores(), false),
 	)
 
 	DescribeTable("fails the poll and names the file, so CPU health reads degraded",
@@ -136,25 +134,25 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 			Expect(err.Error()).To(ContainSubstring(file))
 		},
 		Entry("cpu.stat missing on a container with a CPU limit",
-			without(cgroupV2WithLimit(), cgroupBase+"/cpu.stat"), cgroupBase+"/cpu.stat"),
+			without(cgroupV2LimitedTo2Cores(), cgroupBase+"/cpu.stat"), cgroupBase+"/cpu.stat"),
 		Entry("/proc/stat missing on a container without a CPU limit",
-			without(cgroupV2WithoutLimit(), "/proc/stat"), "/proc/stat"),
-		Entry("cpuset.cpus.effective missing on a container without a CPU limit: nothing else counts the cores",
-			without(cgroupV2WithoutLimit(), cgroupBase+"/cpuset.cpus.effective"), cgroupBase+"/cpuset.cpus.effective"),
-		Entry("cpuset.cpus.effective and /proc/stat missing on a container without a CPU limit",
-			without(cgroupV2WithoutLimit(), cgroupBase+"/cpuset.cpus.effective", "/proc/stat"), "/proc/stat"),
+			without(cgroupV2UnlimitedOn4Cores(), "/proc/stat"), "/proc/stat"),
+		Entry("cpuset.cpus.effective missing on a container without a CPU limit: only this file gives the core count",
+			without(cgroupV2UnlimitedOn4Cores(), cgroupBase+"/cpuset.cpus.effective"), cgroupBase+"/cpuset.cpus.effective"),
+		Entry("cpuset.cpus.effective and /proc/stat missing on a container without a CPU limit: the error names /proc/stat, the first read that failed",
+			without(cgroupV2UnlimitedOn4Cores(), cgroupBase+"/cpuset.cpus.effective", "/proc/stat"), "/proc/stat"),
 	)
 
-	DescribeTable("stays healthy when every file the verdict needs was read",
+	DescribeTable("stays healthy when every file it needs was read",
 		func(files map[string]string) {
 			status, err := poll(files)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy))
 		},
-		Entry("every file present, on the first tick while starting up", cgroupV2WithLimit()),
-		Entry("cpu.pressure missing: the pressure rule is excused", without(cgroupV2WithLimit(), cgroupBase+"/cpu.pressure")),
+		Entry("every file present, on the first poll after a start", cgroupV2LimitedTo2Cores()),
+		Entry("cpu.pressure missing: pressure is not judged", without(cgroupV2LimitedTo2Cores(), cgroupBase+"/cpu.pressure")),
 		Entry("cpu.stat missing without a CPU limit: /proc/stat measures the machine",
-			without(cgroupV2WithoutLimit(), cgroupBase+"/cpu.stat")),
+			without(cgroupV2UnlimitedOn4Cores(), cgroupBase+"/cpu.stat")),
 	)
 })

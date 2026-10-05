@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- With `USE_FSMV2_CPU=true`, an instance whose CPU files cannot be read now shows its CPU as degraded, with a message naming the file, instead of "CPU monitoring unavailable … Defaulting to healthy". New bridges wait until the file can be read. Which files have a fallback is listed on the CPU Health page
+- With `USE_FSMV2_CPU=true`, CPU health now shows degraded instead of healthy when the instance cannot read a file it needs to measure the CPU
 
 ## [0.44.42]
 

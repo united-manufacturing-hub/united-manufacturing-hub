@@ -19,11 +19,11 @@ import (
 	"slices"
 )
 
-// UnmeasuredBecause returns the failed read behind a figure the verdict needs
-// and this tick does not have, or nil. A figure that is missing only because
-// its window is still filling, with every read behind it succeeding, is not a
-// failure.
-func UnmeasuredBecause(s Sample, d Details) error {
+// CPUNotMeasuredError returns an error naming the file that could not be read,
+// when that file left the CPU capacity or the CPU usage missing. It returns nil
+// when no read failed. Right after a start, usage is missing because too few
+// polls have run; that is not an error.
+func CPUNotMeasuredError(s Sample, d Details) error {
 	if d.CapacityCores == 0 {
 		if err := firstFailedRead(s, OperationCpusetCPUs, OperationProcStat); err != nil {
 			return err
