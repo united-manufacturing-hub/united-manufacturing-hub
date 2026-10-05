@@ -67,13 +67,17 @@ type runRecorder struct {
 	firstUnexpectedWarn error
 
 	// matchedWarnings holds the expectedWarnings entries a logged warning
-	// has matched, so postRunFailure can name an entry that never appeared.
+	// has matched.
 	matchedWarnings map[string]bool
 
 	// matchedErrors holds the expectedErrors entries a logged error
-	// message has matched, so postRunFailure can name an entry that never
-	// appeared.
+	// message has matched.
 	matchedErrors map[string]bool
+
+	// matchedCauses holds, by index, the expectedErrorCauses entries a
+	// logged error has wrapped. Keyed by index because an error value is
+	// not always comparable, so it is not a safe map key.
+	matchedCauses map[int]bool
 }
 
 // alwaysAllowedMessages are logged by the collector in normal operation, so
@@ -90,6 +94,7 @@ func (r *runRecorder) recordLoggedError(err error, msg string) {
 	defer r.mu.Unlock()
 
 	r.markMatchedEntries(r.expectedErrors, msg, r.matchedErrors)
+	r.markMatchedCauses(err)
 
 	if r.messageAllowed(msg, r.expectedErrors) {
 		return
@@ -133,8 +138,16 @@ func (r *runRecorder) errorCauseAllowed(err error) bool {
 	return false
 }
 
-// markMatchedEntries marks the entries of expected that msg contains in
-// matched, so postRunFailure can name an entry that never appeared.
+// A nil entry in expectedErrorCauses is never marked.
+func (r *runRecorder) markMatchedCauses(err error) {
+	for i, cause := range r.expectedErrorCauses {
+		if cause != nil && errors.Is(err, cause) {
+			r.matchedCauses[i] = true
+		}
+	}
+}
+
+// An empty entry in expected is never marked.
 func (r *runRecorder) markMatchedEntries(expected []string, msg string, matched map[string]bool) {
 	for _, entry := range expected {
 		if entry != "" && strings.Contains(msg, entry) {
@@ -207,6 +220,25 @@ func (r *runRecorder) missingExpectedError() (string, bool) {
 	}
 
 	return "", false
+}
+
+// missingExpectedErrorCause returns the first entry of expectedErrorCauses
+// that no logged error wrapped. A nil entry is never required.
+func (r *runRecorder) missingExpectedErrorCause() (error, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i, cause := range r.expectedErrorCauses {
+		if cause == nil {
+			continue
+		}
+
+		if !r.matchedCauses[i] {
+			return cause, true
+		}
+	}
+
+	return nil, false
 }
 
 func (r *runRecorder) loggedError() error {
@@ -341,7 +373,9 @@ type Scenario struct {
 	// with errors.Is. Use it when the message is generic: ActionExecutor
 	// (supervisor/internal/execution) logs every failed action as
 	// action_failed, so expecting that message would let any failed action
-	// pass.
+	// pass. Every listed cause must appear in an error the run logs, or
+	// RunResult.Err names the cause. A nil entry matches nothing and is
+	// never required.
 	ExpectedErrorCauses []error
 
 	// ExpectedWarnings lists substrings of warning log messages this
