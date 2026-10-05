@@ -177,6 +177,9 @@ type Observation[TStatus any] struct {
 	ChildrenUnhealthy int `json:"children_unhealthy"`
 	// ShutdownRequested mirrors the desired state's shutdown flag.
 	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle // Match existing API field name
+	// DeletedAt is the stored _deleted_at (see storage.FieldDeletedAt). Only
+	// the store sets it; a save drops any value a collector puts here.
+	DeletedAt *time.Time `json:"_deleted_at,omitempty"` //nolint:tagliatelle // CSE metadata field name
 }
 
 // observationFrameworkFields is the shared alias type used by MarshalJSON and UnmarshalJSON
@@ -192,9 +195,10 @@ type observationFrameworkFields struct {
 	State             string              `json:"state"`
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 	deps.MetricsEmbedder
-	ChildrenHealthy   int  `json:"children_healthy"`
-	ChildrenUnhealthy int  `json:"children_unhealthy"`
-	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle
+	ChildrenHealthy   int        `json:"children_healthy"`
+	ChildrenUnhealthy int        `json:"children_unhealthy"`
+	ShutdownRequested bool       `json:"ShutdownRequested"`     //nolint:tagliatelle
+	DeletedAt         *time.Time `json:"_deleted_at,omitempty"` //nolint:tagliatelle
 }
 
 // MarshalJSON produces flat JSON with framework fields and TStatus fields at the same level.
@@ -209,6 +213,7 @@ func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
 		ChildrenHealthy:   o.ChildrenHealthy,
 		ChildrenUnhealthy: o.ChildrenUnhealthy,
 		MetricsEmbedder:   o.MetricsEmbedder,
+		DeletedAt:         o.DeletedAt,
 	}
 
 	fwBytes, err := json.Marshal(fw)
@@ -257,6 +262,7 @@ func (o *Observation[TStatus]) UnmarshalJSON(data []byte) error {
 	o.ChildrenHealthy = fw.ChildrenHealthy
 	o.ChildrenUnhealthy = fw.ChildrenUnhealthy
 	o.MetricsEmbedder = fw.MetricsEmbedder
+	o.DeletedAt = fw.DeletedAt
 
 	// TStatus fields coexist at the same level as framework fields;
 	// json.Unmarshal ignores unknown keys for struct targets.

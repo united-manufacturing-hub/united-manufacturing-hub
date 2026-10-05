@@ -105,6 +105,26 @@ type TriangularStoreInterface interface {
 	// Desired/Observed may be nil if not yet saved. Returns persistence.ErrNotFound if worker missing.
 	LoadSnapshot(ctx context.Context, workerType string, id string) (*Snapshot, error)
 
+	// Tombstone sets _deleted_at and _deleted_by on a worker's stored role
+	// documents (see FieldDeletedAt). The documents stay, so clients that sync by _sync_id
+	// see the removal as a change. Each document keeps its fields and gains
+	// _deleted_at (the store clock time), _deleted_by and a new _sync_id.
+	// A document that already has a tombstone keeps it and is not written.
+	// A missing document is skipped.
+	//
+	// All writes share one transaction, so on a returned error no document
+	// is tombstoned. Delta entries are appended after the commit. A failed
+	// append is logged, not returned.
+	Tombstone(ctx context.Context, workerType string, id string, deletedBy string) error
+
+	// ClearTombstone removes the tombstone from a worker's stored role
+	// documents, so a worker added again starts without one. Each cleared
+	// document keeps its other fields and gets a new _sync_id. Its delta
+	// entry lists _deleted_at and _deleted_by under Removed. A missing
+	// document and one without a tombstone are skipped. Transaction and
+	// delta handling are as for Tombstone.
+	ClearTombstone(ctx context.Context, workerType string, id string) error
+
 	// GetLatestSyncID returns the current sync_id for clients to establish initial sync position.
 	GetLatestSyncID(ctx context.Context) (int64, error)
 

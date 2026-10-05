@@ -382,6 +382,14 @@ func (m *mockStore) GetChangesSince(ctx context.Context, sinceSyncID int64, limi
 	return []storage.Event{}, nil
 }
 
+func (m *mockStore) Tombstone(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
+
+func (m *mockStore) ClearTombstone(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
 func (m *mockStore) GetLatestSyncID(ctx context.Context) (int64, error) {
 	return 0, nil
 }
@@ -407,6 +415,10 @@ func mockIdentity() deps.Identity {
 }
 
 func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularStoreInterface, cfg supervisor.CollectorHealthConfig) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+	return newSupervisorWithWorkerAndLogger(worker, customStore, cfg, deps.NewNopFSMLogger())
+}
+
+func newSupervisorWithWorkerAndLogger(worker *mockWorker, customStore storage.TriangularStoreInterface, cfg supervisor.CollectorHealthConfig, logger deps.FSMLogger) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
 	identity := mockIdentity()
 	ctx := context.Background()
 	workerType := "test"
@@ -434,7 +446,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 
 	s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 		WorkerType:              workerType,
-		Logger:                  deps.NewNopFSMLogger(),
+		Logger:                  logger,
 		CollectorHealth:         cfg,
 		Store:                   triangularStore,
 		GracefulShutdownTimeout: 100 * time.Millisecond, // Short timeout for tests
@@ -500,6 +512,17 @@ func createTestTriangularStore() *storage.TriangularStore {
 	return storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 }
 
+type tombstoneCall struct {
+	WorkerType string
+	ID         string
+	By         string
+}
+
+type clearTombstoneCall struct {
+	WorkerType string
+	ID         string
+}
+
 type mockTriangularStore struct {
 	mu sync.RWMutex
 
@@ -510,6 +533,14 @@ type mockTriangularStore struct {
 	SaveObservedErr error
 	LoadObservedErr error
 	LoadSnapshotErr error
+
+	TombstoneErr   error
+	TombstoneCalls []tombstoneCall
+
+	ClearTombstoneErr   error
+	ClearTombstoneCalls []clearTombstoneCall
+
+	SaveAndClearCalls []string
 
 	identity map[string]map[string]persistence.Document
 	desired  map[string]map[string]persistence.Document
@@ -536,6 +567,8 @@ func (m *mockTriangularStore) SaveIdentity(ctx context.Context, workerType strin
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "save_identity")
 
 	if m.identity[workerType] == nil {
 		m.identity[workerType] = make(map[string]persistence.Document)
@@ -575,6 +608,7 @@ func (m *mockTriangularStore) SaveDesired(ctx context.Context, workerType string
 	defer m.mu.Unlock()
 
 	m.SaveDesiredCalled++
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "save_desired")
 
 	if m.desired[workerType] == nil {
 		m.desired[workerType] = make(map[string]persistence.Document)
@@ -647,6 +681,7 @@ func (m *mockTriangularStore) SaveObserved(ctx context.Context, workerType strin
 	defer m.mu.Unlock()
 
 	m.SaveObservedCalled++
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "save_observed")
 
 	if m.Observed[workerType] == nil {
 		m.Observed[workerType] = make(map[string]interface{})
@@ -779,6 +814,30 @@ func (m *mockTriangularStore) CompactDeltas(ctx context.Context, retentionWindow
 
 func (m *mockTriangularStore) Maintenance(ctx context.Context) error {
 	return nil
+}
+
+func (m *mockTriangularStore) Tombstone(ctx context.Context, workerType string, id string, by string) error {
+	m.mu.Lock()
+	m.TombstoneCalls = append(m.TombstoneCalls, tombstoneCall{
+		WorkerType: workerType,
+		ID:         id,
+		By:         by,
+	})
+	m.mu.Unlock()
+
+	return m.TombstoneErr
+}
+
+func (m *mockTriangularStore) ClearTombstone(_ context.Context, workerType string, id string) error {
+	m.mu.Lock()
+	m.ClearTombstoneCalls = append(m.ClearTombstoneCalls, clearTombstoneCall{
+		WorkerType: workerType,
+		ID:         id,
+	})
+	m.SaveAndClearCalls = append(m.SaveAndClearCalls, "clear_tombstone")
+	m.mu.Unlock()
+
+	return m.ClearTombstoneErr
 }
 
 var _ storage.TriangularStoreInterface = (*mockTriangularStore)(nil)
