@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -687,6 +688,182 @@ var _ = Describe("Scenario missing expected error causes", func() {
 
 		Expect(result.Err).NotTo(HaveOccurred(),
 			"a nil cause entry is never required, so a run that logs nothing must end with no failure")
+	})
+})
+
+// probeNonComparableCause carries a slice, so comparing two of its values
+// with == panics at run time.
+type probeNonComparableCause struct {
+	words []string
+}
+
+func (c probeNonComparableCause) Error() string {
+	return strings.Join(c.words, " ")
+}
+
+var _ = Describe("Scenario missing several expected entries", func() {
+	BeforeEach(func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+	})
+
+	It("names every never-logged entry in one error, errors before warnings, and a duplicated entry once", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		silent := examples.Scenario{
+			Name:             "several-missing-entries",
+			Description:      "test-local Run for the missing entries across fields check",
+			ExpectedErrors:   []string{"probe_err_a"},
+			ExpectedWarnings: []string{"probe_warn_b", "probe_warn_c", "probe_warn_b"},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a run that never logs a listed entry must set RunResult.Err")
+
+		errText := result.Err.Error()
+
+		errALine := "the scenario expects this error, but the run never logged it: probe_err_a"
+		warnBLine := "the scenario expects this warning, but the run never logged it: probe_warn_b"
+		warnCLine := "the scenario expects this warning, but the run never logged it: probe_warn_c"
+
+		Expect(errText).To(ContainSubstring(errALine),
+			"the set Err must name the never-logged error probe_err_a")
+		Expect(errText).To(ContainSubstring(warnBLine),
+			"the set Err must name the never-logged warning probe_warn_b")
+		Expect(errText).To(ContainSubstring(warnCLine),
+			"the set Err must name the never-logged warning probe_warn_c")
+
+		errAIdx := strings.Index(errText, errALine)
+		warnBIdx := strings.Index(errText, warnBLine)
+		warnCIdx := strings.Index(errText, warnCLine)
+
+		Expect(warnBIdx).To(BeNumerically(">", errAIdx),
+			"the set Err names the never-logged error before the never-logged warnings, because a missing entry is named with the errors first")
+		Expect(warnCIdx).To(BeNumerically(">", warnBIdx),
+			"the set Err names the never-logged warnings in the order the scenario listed them")
+
+		Expect(strings.Count(errText, warnBLine)).To(Equal(1),
+			"probe_warn_b is listed twice and required once, so the set Err names it once")
+	})
+
+	It("names a never-logged cause between the errors and the warnings, and a duplicated cause value once", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		errRepeatedCause := errors.New("probe cause")
+
+		silent := examples.Scenario{
+			Name:                "several-missing-entries-with-causes",
+			Description:         "test-local Run for the missing entries with causes check",
+			ExpectedErrors:      []string{"probe_err_a"},
+			ExpectedErrorCauses: []error{errRepeatedCause, errRepeatedCause},
+			ExpectedWarnings:    []string{"probe_warn_b"},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a run that never logs a listed entry must set RunResult.Err")
+
+		errText := result.Err.Error()
+
+		errLine := "the scenario expects this error, but the run never logged it: probe_err_a"
+		causeLine := "the scenario expects this error cause, but the run never logged it: probe cause"
+		warnLine := "the scenario expects this warning, but the run never logged it: probe_warn_b"
+
+		Expect(errText).To(ContainSubstring(errLine),
+			"the set Err must name the never-logged error probe_err_a")
+		Expect(errText).To(ContainSubstring(causeLine),
+			"the set Err must name the never-logged cause probe cause")
+		Expect(errText).To(ContainSubstring(warnLine),
+			"the set Err must name the never-logged warning probe_warn_b")
+
+		errIdx := strings.Index(errText, errLine)
+		causeIdx := strings.Index(errText, causeLine)
+		warnIdx := strings.Index(errText, warnLine)
+
+		Expect(causeIdx).To(BeNumerically(">", errIdx),
+			"the set Err names the never-logged causes after the never-logged errors, because the errors are named first")
+		Expect(warnIdx).To(BeNumerically(">", causeIdx),
+			"the set Err names the never-logged warnings after the never-logged causes, because the warnings are named last")
+
+		Expect(strings.Count(errText, causeLine)).To(Equal(1),
+			"the scenario lists the same cause value twice, so the set Err names it once")
+	})
+
+	It("names a never-logged cause whose type is not comparable once per listed entry", func() {
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		notComparableCause := probeNonComparableCause{words: []string{"probe", "non", "comparable", "cause"}}
+
+		silent := examples.Scenario{
+			Name:                "repeated-not-comparable-cause",
+			Description:         "test-local Run for the not comparable expected error cause check",
+			ExpectedErrorCauses: []error{notComparableCause, notComparableCause},
+			Run: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			Scenario:     silent,
+			Duration:     300 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred(),
+			"a run whose Run returned nil and logged nothing must succeed")
+
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"the run must tear down once its settle window ends")
+
+		Expect(result.Err).To(HaveOccurred(),
+			"a run that never logs a listed cause must set RunResult.Err")
+
+		causeLine := "the scenario expects this error cause, but the run never logged it: probe non comparable cause"
+		Expect(strings.Count(result.Err.Error(), causeLine)).To(Equal(2),
+			"a cause whose type is not comparable is never the same entry as another, so each listed entry is named")
 	})
 })
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -49,7 +50,9 @@ type Env struct {
 }
 
 // runRecorder is the per-run state that Step and WaitFor share across copies
-// of Env. The fields above mu are set before the supervisor starts and never change.
+// of Env. The fields above mu are set before the supervisor starts and never
+// change. The matched maps exist so postRunFailure can name every expected
+// entry the run never logged.
 type runRecorder struct {
 	// scenario is the name of the run's scenario, so a step line can be
 	// attributed when several scenarios run in one process.
@@ -157,16 +160,19 @@ func (r *runRecorder) markMatchedEntries(expected []string, msg string, matched 
 }
 
 // unmatchedEntries returns the entries of expected that no logged message
-// matched, in expected's order.
+// matched, in expected's order. An entry the list repeats is returned once.
 func (r *runRecorder) unmatchedEntries(expected []string, matched map[string]bool) []string {
 	var missing []string
 
+	seen := make(map[string]bool, len(expected))
+
 	for _, want := range expected {
-		if want == "" {
+		if want == "" || seen[want] {
 			continue
 		}
 
 		if !matched[want] {
+			seen[want] = true
 			missing = append(missing, want)
 		}
 	}
@@ -196,49 +202,60 @@ func (r *runRecorder) loggedWarning() error {
 	return r.firstUnexpectedWarn
 }
 
-// missingExpectedWarning returns the first entry of expectedWarnings that no
-// logged warning message contained. An empty entry is never required.
-func (r *runRecorder) missingExpectedWarning() (string, bool) {
+// missingExpectedEntries returns one error per entry of ExpectedErrors,
+// ExpectedErrorCauses and ExpectedWarnings that the run never logged: the
+// errors first, then the causes, then the warnings, each group in the order
+// the scenario listed it. An entry the scenario lists twice is named once.
+func (r *runRecorder) missingExpectedEntries() []error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if missing := r.unmatchedEntries(r.expectedWarnings, r.matchedWarnings); len(missing) > 0 {
-		return missing[0], true
+	var missing []error
+
+	for _, entry := range r.unmatchedEntries(r.expectedErrors, r.matchedErrors) {
+		missing = append(missing, fmt.Errorf("the scenario expects this error, but the run never logged it: %s", entry))
 	}
 
-	return "", false
-}
-
-// missingExpectedError returns the first entry of expectedErrors that no
-// logged error message contained. An empty entry is never required.
-func (r *runRecorder) missingExpectedError() (string, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if missing := r.unmatchedEntries(r.expectedErrors, r.matchedErrors); len(missing) > 0 {
-		return missing[0], true
-	}
-
-	return "", false
-}
-
-// missingExpectedErrorCause returns the first entry of expectedErrorCauses
-// that no logged error wrapped. A nil entry is never required.
-func (r *runRecorder) missingExpectedErrorCause() (error, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	var missingCauses []error
 
 	for i, cause := range r.expectedErrorCauses {
-		if cause == nil {
+		if cause == nil || r.matchedCauses[i] {
 			continue
 		}
 
-		if !r.matchedCauses[i] {
-			return cause, true
+		if containsSameCause(missingCauses, cause) {
+			continue
+		}
+
+		missingCauses = append(missingCauses, cause)
+	}
+
+	for _, cause := range missingCauses {
+		missing = append(missing, fmt.Errorf("the scenario expects this error cause, but the run never logged it: %w", cause))
+	}
+
+	for _, entry := range r.unmatchedEntries(r.expectedWarnings, r.matchedWarnings) {
+		missing = append(missing, fmt.Errorf("the scenario expects this warning, but the run never logged it: %s", entry))
+	}
+
+	return missing
+}
+
+// containsSameCause reports whether earlier holds the same cause value. A
+// cause whose type is not comparable is never the same entry, because
+// comparing two causes of that type with == panics at run time.
+func containsSameCause(earlier []error, cause error) bool {
+	if !reflect.TypeOf(cause).Comparable() {
+		return false
+	}
+
+	for _, seen := range earlier {
+		if cause == seen { //nolint:errorlint // the sameness of two listed cause entries is their values' ==, not errors.Is
+			return true
 		}
 	}
 
-	return nil, false
+	return false
 }
 
 func (r *runRecorder) loggedError() error {
