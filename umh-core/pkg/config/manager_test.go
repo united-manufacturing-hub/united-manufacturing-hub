@@ -840,6 +840,19 @@ agent:
 			})
 		})
 
+		DescribeTable("treats a config.yaml without any setting as empty, so the control loop retries",
+			func(content string) {
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return []byte(content), nil })
+
+				_, _, err := configManager.readAndParseConfig(ctx)
+
+				Expect(err).To(MatchError(ContainSubstring("config file is empty")))
+			},
+			Entry("a document marker only", "---\n"),
+			Entry("an empty map", "{}\n"),
+			Entry("null", "null\n"),
+		)
+
 		DescribeTable("an existing config.yaml keeps admission on unless it says false",
 			func(existingYAML string, want bool, wantWritten string) {
 				var written []byte
@@ -870,7 +883,7 @@ agent:
 				Expect(config.Agent.EnableResourceLimitBlocking).To(Equal(want))
 				Expect(string(written)).To(ContainSubstring(wantWritten))
 			},
-			Entry("without the setting, as on instances installed before 0.43.12",
+			Entry("without the setting, as in a hand-written config.yaml",
 				"agent:\n  metricsPort: 8080\n", true, "enableResourceLimitBlocking: true"),
 			Entry("with the setting false",
 				"agent:\n  metricsPort: 8080\n  enableResourceLimitBlocking: false\n", false, "enableResourceLimitBlocking: false"),

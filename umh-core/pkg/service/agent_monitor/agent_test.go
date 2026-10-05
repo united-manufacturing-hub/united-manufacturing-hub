@@ -151,7 +151,7 @@ var _ = Describe("Agent Monitor Service", func() {
 			})
 		})
 
-		DescribeTable("is degraded while bridge admission is off",
+		DescribeTable("is degraded only while bridge admission is off",
 			func(enableResourceLimitBlocking bool, wantHealth models.HealthCategory, wantMessage string) {
 				snapshot := mockSnapshot
 				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = enableResourceLimitBlocking

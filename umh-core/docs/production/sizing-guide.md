@@ -74,7 +74,7 @@ agent:
   enableResourceLimitBlocking: false  # Start bridges even when a resource is degraded or the bridge limit is reached
 ```
 
-`true` is the default for new installs. A missing key in an existing `config.yaml` reads as `false`, so set the key explicitly to turn the blocking on. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.
+`true` is the default, also when `config.yaml` does not contain the key. While it is `false`, the instance shows as degraded. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.
 
 When enabled, this ensures system stability and prevents one bridge from impacting others. If you need more bridges, either:
 - Increase CPU allocation (for containerized deployments)

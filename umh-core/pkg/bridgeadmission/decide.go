@@ -33,7 +33,7 @@ const redpandaReservedCores = 1
 
 // AdmissionOffReason is why the instance shows as degraded while bridge
 // admission is off.
-const AdmissionOffReason = "Bridge admission is off (agent.enableResourceLimitBlocking: false). Bridges start even when CPU, memory or disk are short. To turn it back on, set agent.enableResourceLimitBlocking: true in the instance's Config File."
+const AdmissionOffReason = "Bridge admission is off (agent.enableResourceLimitBlocking: false). New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit. To turn it back on, set agent.enableResourceLimitBlocking: true in the instance's Config File."
 
 const emergencyHint = "In an emergency, you can start bridges anyway by setting agent.enableResourceLimitBlocking: false in the instance's Config File. It takes effect without a restart. The instance shows as degraded while it is set. Set it back to true once the resource problem is fixed."
 

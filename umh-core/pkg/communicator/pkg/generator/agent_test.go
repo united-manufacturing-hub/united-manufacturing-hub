@@ -21,24 +21,24 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	agentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
+	agentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 )
 
 var _ = Describe("AgentFromSnapshot", func() {
-	agentWith := func(info agent_monitor.ServiceInfo) models.Agent {
+	agentWith := func(info agentservice.ServiceInfo) models.Agent {
 		agent, _, _, _ := AgentFromSnapshot(&fsm.FSMInstanceSnapshot{
 			CurrentState:      "degraded",
 			DesiredState:      "active",
-			LastObservedState: &agentfsm.AgentObservedStateSnapshot{ServiceInfoSnapshot: info},
+			LastObservedState: &agent_monitor.AgentObservedStateSnapshot{ServiceInfoSnapshot: info},
 		}, zap.NewNop().Sugar())
 
 		return agent
 	}
 
 	It("shows the instance as degraded and says that bridge admission is off", func() {
-		agent := agentWith(agent_monitor.ServiceInfo{
+		agent := agentWith(agentservice.ServiceInfo{
 			OverallHealth: models.Degraded,
 			HealthMessage: bridgeadmission.AdmissionOffReason,
 		})
@@ -52,6 +52,6 @@ var _ = Describe("AgentFromSnapshot", func() {
 	})
 
 	It("keeps the general message when the agent gives no reason", func() {
-		Expect(agentWith(agent_monitor.ServiceInfo{OverallHealth: models.Degraded}).Health.Message).To(Equal("Agent degraded"))
+		Expect(agentWith(agentservice.ServiceInfo{OverallHealth: models.Degraded}).Health.Message).To(Equal("Agent degraded"))
 	})
 })

@@ -65,7 +65,7 @@ func buildAgent(
 	agent := models.Agent{
 		Location: snap.ServiceInfoSnapshot.Location,
 		Health: &models.Health{
-			Message:       agentHealthMessage(snap.ServiceInfoSnapshot),
+			Message:       getAgentHealthMessage(snap.ServiceInfoSnapshot),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      snap.ServiceInfoSnapshot.OverallHealth,
@@ -104,17 +104,13 @@ func defaultAgent() models.Agent {
 	}
 }
 
-func agentHealthMessage(info agentservice.ServiceInfo) string {
+// getAgentHealthMessage returns the agent's own reason when it gives one.
+func getAgentHealthMessage(info agentservice.ServiceInfo) string {
 	if info.HealthMessage != "" {
 		return info.HealthMessage
 	}
 
-	return getAgentHealthMessage(info.OverallHealth)
-}
-
-// getHealthMessage is agent-specific. Extend as needed.
-func getAgentHealthMessage(cat models.HealthCategory) string {
-	switch cat {
+	switch info.OverallHealth {
 	case models.Active:
 		return "Agent operating normally"
 	case models.Degraded:
