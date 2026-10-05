@@ -527,6 +527,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 // PERFORMANCE: The complete tick loop is non-blocking and completes in <10ms,
 // making it safe to call at high frequency (100Hz+) without impacting system performance.
 func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) {
+	// The panic handler below must not take s.mu: the panic may have left it
+	// held. So it uses these paths, read before anything in this tick can panic.
+	s.mu.RLock()
+	workerPaths := s.workerPathsLocked()
+	s.mu.RUnlock()
+
+	// The path of the worker this tick picks below; empty until then.
+	var firstWorkerPath string
+
 	defer func() {
 		if r := recover(); r != nil {
 			defer func() {
@@ -547,7 +556,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			err = fmt.Errorf("tick panic: %w", panicErr)
 
 			hierarchyPath := s.GetHierarchyPathUnlocked()
-			metrics.RecordPanicRecovery(hierarchyPath, panicType)
+
+			panicPaths := workerPaths
+			if firstWorkerPath != "" {
+				panicPaths = []string{firstWorkerPath}
+			}
+
+			for _, path := range panicPaths {
+				metrics.RecordPanicRecovery(path, panicType)
+			}
 
 			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "tick_panic",
 				deps.WorkerType(s.workerType),
@@ -628,7 +645,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "circuit_breaker_opened",
 					logFields...)
-				metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
+
+				s.mu.RLock()
+				openPaths := s.workerPathsLocked()
+				s.mu.RUnlock()
+
+				for _, path := range openPaths {
+					metrics.RecordCircuitOpen(path, true)
+				}
 			}
 
 			if childErr != nil {
@@ -668,8 +692,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			s.logger.Info("circuit_breaker_closed",
 				deps.Reason("infrastructure_recovered"),
 				deps.String("total_downtime", downtime.String()))
-			metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), false)
-			metrics.RecordInfrastructureRecovery(s.GetHierarchyPathUnlocked(), downtime)
+
+			s.mu.RLock()
+			recoveredPaths := s.workerPathsLocked()
+			s.mu.RUnlock()
+
+			for _, path := range recoveredPaths {
+				metrics.RecordCircuitOpen(path, false)
+				metrics.RecordInfrastructureRecovery(path, downtime)
+			}
 		}
 
 		s.circuitOpen.Store(false)
@@ -687,6 +718,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		if workerEntry != nil && workerEntry.worker != nil {
 			firstWorkerID = id
 			worker = workerEntry.worker
+			firstWorkerPath = workerEntry.identity.HierarchyPath
 
 			break
 		}
@@ -749,7 +781,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	s.logTrace("variables_propagated",
 		deps.Int("user_vars", userVarCount),
 		deps.Int("global_vars", globalVarCount))
-	metrics.RecordVariablePropagation(s.GetHierarchyPathUnlocked())
+	metrics.RecordVariablePropagation(firstWorkerPath)
 
 	// PHASE 0: Hierarchical Composition
 	// 1. DeriveDesiredState (with caching)
@@ -782,8 +814,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		if err != nil {
 			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "template_rendering_failed",
 				deps.DurationMs(templateDuration.Milliseconds()))
-			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
-			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "derivation_failed")
+			metrics.RecordTemplateRenderingDuration(firstWorkerPath, "error", templateDuration)
+			metrics.RecordTemplateRenderingError(firstWorkerPath, "derivation_failed")
 
 			// Don't cache errors - will retry next tick
 			return fmt.Errorf("failed to derive desired state: %w", err)
@@ -798,7 +830,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		s.logTrace("derive_desired_state_computed",
 			deps.String("hash", currentHash[:8]+"..."),
 			deps.DurationMs(templateDuration.Milliseconds()))
-		metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "success", templateDuration)
+		metrics.RecordTemplateRenderingDuration(firstWorkerPath, "success", templateDuration)
 	}
 
 	// Save before tickWorker, which loads the freshest desired state from snapshot
@@ -962,7 +994,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		childrenSpecs = nil
 	}
 
-	if err := s.reconcileChildren(childrenSpecs); err != nil {
+	if err := s.reconcileChildren(childrenSpecs, firstWorkerPath); err != nil {
 		return fmt.Errorf("failed to reconcile children: %w", err)
 	}
 
@@ -1462,7 +1494,9 @@ func (s *Supervisor[TObserved, TDesired]) getEscalationSteps(childName string) s
 	return "1) Check component logs 2) Verify network connectivity 3) Restart component manually"
 }
 
-func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.ChildSpec) error {
+// workerPath is the hierarchy path of the worker whose children these are:
+// the worker whose lastRenderedChildren the caller's tick used.
+func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.ChildSpec, workerPath string) error {
 	startTime := time.Now()
 
 	s.mu.Lock()
@@ -1756,7 +1790,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			deps.DurationMs(duration.Milliseconds()))
 	}
 
-	metrics.RecordReconciliation(s.GetHierarchyPathUnlocked(), "success", duration)
+	metrics.RecordReconciliation(workerPath, "success", duration)
 
 	return nil
 }

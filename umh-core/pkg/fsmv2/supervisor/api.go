@@ -781,6 +781,18 @@ func (s *Supervisor[TObserved, TDesired]) GetHierarchyPathUnlocked() string {
 	return parentPath + "/" + segment
 }
 
+// workerPathsLocked returns the hierarchy path of every worker in the
+// registry. Caller must hold s.mu.
+func (s *Supervisor[TObserved, TDesired]) workerPathsLocked() []string {
+	paths := make([]string, 0, len(s.workers))
+
+	for _, workerCtx := range s.workers {
+		paths = append(paths, workerCtx.identity.HierarchyPath)
+	}
+
+	return paths
+}
+
 // GetCurrentStateName returns the current FSM state name for this supervisor's worker.
 // Returns "unknown" if no worker or state is set.
 // Used by parent supervisors to track children's health status.
