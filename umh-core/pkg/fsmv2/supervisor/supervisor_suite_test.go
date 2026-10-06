@@ -128,6 +128,7 @@ func (m *mockDesiredState) IsDisabled() bool {
 
 type mockWorker struct {
 	collectErr         error
+	deriveErr          error
 	observed           fsmv2.ObservedState
 	initialState       fsmv2.State[any, any]
 	collectFunc        func(ctx context.Context) (fsmv2.ObservedState, error)
@@ -155,6 +156,10 @@ func (m *mockWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 }
 
 func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	if m.deriveErr != nil {
+		return nil, m.deriveErr
+	}
+
 	return &config.DesiredState{State: "running"}, nil
 }
 

@@ -801,17 +801,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	// Save before tickWorker, which loads the freshest desired state from snapshot
-	desiredJSON, err := json.Marshal(desired)
+	desiredDoc, err := s.toDocument(desired, firstWorkerID, "", documentConversion{
+		what: "derived desired state",
+	})
 	if err != nil {
-		return fmt.Errorf("failed to marshal derived desired state: %w", err)
+		return err
 	}
-
-	desiredDoc := make(persistence.Document)
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal derived desired state to document: %w", err)
-	}
-
-	desiredDoc[FieldID] = firstWorkerID
 
 	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
 	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {

@@ -28,16 +28,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
-var _ = Describe("AddWorker clears the worker's tombstone", func() {
-	newSupervisorOverStore := func(store storage.TriangularStoreInterface) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
-		return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-			WorkerType:              "test",
-			Store:                   store,
-			Logger:                  deps.NewNopFSMLogger(),
-			GracefulShutdownTimeout: 100 * time.Millisecond,
-		})
-	}
+func newSupervisorOverStore(store storage.TriangularStoreInterface) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+	return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+		WorkerType:              "test",
+		Store:                   store,
+		Logger:                  deps.NewNopFSMLogger(),
+		GracefulShutdownTimeout: 100 * time.Millisecond,
+	})
+}
 
+var _ = Describe("AddWorker clears the worker's tombstone", func() {
 	It("clears the tombstone after its three saves, and only adds the worker when the clear succeeds", func() {
 		identity := mockIdentity()
 		ctx := context.Background()
@@ -113,5 +113,55 @@ var _ = Describe("AddWorker clears the worker's tombstone", func() {
 				"the %s document must lose its tombstone when the worker is added again", role)
 			Expect(doc).ToNot(HaveKey(storage.FieldDeletedBy))
 		}
+	})
+})
+
+var _ = Describe("AddWorker error paths", func() {
+	It("returns the derive error and writes no documents", func() {
+		identity := mockIdentity()
+
+		store := newMockTriangularStore()
+		s := newSupervisorOverStore(store)
+
+		deriveErr := errors.New("derive desired failed")
+		addErr := s.AddWorker(identity, &mockWorker{deriveErr: deriveErr})
+
+		Expect(errors.Is(addErr, deriveErr)).To(BeTrue(),
+			"AddWorker must report the failing derive, not swallow it")
+		Expect(s.ListWorkers()).To(BeEmpty())
+		Expect(store.SaveAndClearCalls).To(BeEmpty())
+	})
+
+	It("returns the collect error and writes no documents", func() {
+		identity := mockIdentity()
+
+		store := newMockTriangularStore()
+		s := newSupervisorOverStore(store)
+
+		collectErr := errors.New("collect observed failed")
+		addErr := s.AddWorker(identity, &mockWorker{collectErr: collectErr})
+
+		Expect(errors.Is(addErr, collectErr)).To(BeTrue(),
+			"AddWorker must report the failing collection, not swallow it")
+		Expect(s.ListWorkers()).To(BeEmpty())
+		Expect(store.SaveAndClearCalls).To(BeEmpty())
+	})
+
+	It("returns the identity-save error and writes nothing further", func() {
+		identity := mockIdentity()
+
+		store := newMockTriangularStore()
+		store.SaveIdentityErr = errors.New("save identity failed")
+		s := newSupervisorOverStore(store)
+
+		addErr := s.AddWorker(identity, &mockWorker{})
+
+		Expect(errors.Is(addErr, store.SaveIdentityErr)).To(BeTrue(),
+			"AddWorker must report the failing identity save, not swallow it")
+		Expect(addErr).To(MatchError(ContainSubstring("failed to save identity")),
+			"AddWorker must wrap the failing identity save with its context")
+		Expect(s.ListWorkers()).To(BeEmpty())
+		Expect(store.SaveAndClearCalls).To(BeEmpty(),
+			"a failed identity save must not be followed by further writes")
 	})
 })

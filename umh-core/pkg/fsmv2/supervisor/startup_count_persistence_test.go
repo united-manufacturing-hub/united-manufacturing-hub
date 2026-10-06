@@ -81,7 +81,7 @@ var _ = Describe("StartupCount persistence", func() {
 		// injected as 1.
 		sup.TestMarkAsStarted()
 		DeferCleanup(func() {
-			_ = sup.RemoveWorker(context.Background(), workerID)
+			_ = sup.RemoveWorkerForRestart(context.Background(), workerID)
 		})
 
 		Eventually(func() int64 {
@@ -94,11 +94,11 @@ var _ = Describe("StartupCount persistence", func() {
 		}, 3*time.Second, 25*time.Millisecond).Should(Equal(int64(1)),
 			"first spawn should persist StartupCount=1")
 
-		// Despawn and respawn the same worker ID. RemoveWorker stops worker1's
+		// Despawn and respawn the same worker ID. RemoveWorkerForRestart stops worker1's
 		// collector; AddWorker reads the persisted StartupCount=1 from the store
 		// before writing its own initial observation, so workerCtx.startupCount
 		// becomes 2 (not reset to 1).
-		Expect(sup.RemoveWorker(ctx, workerID)).To(Succeed())
+		Expect(sup.RemoveWorkerForRestart(ctx, workerID)).To(Succeed())
 		Expect(sup.AddWorker(identity, &startupCountWorker{})).To(Succeed())
 
 		// The respawned worker owns a fresh collector; start it the same way.
