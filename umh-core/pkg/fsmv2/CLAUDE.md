@@ -474,16 +474,24 @@ A logged error is unexpected unless its message contains an entry of
 listed in `ExpectedErrorCauses` (`examples/env.go`). A
 logged warning is checked the same way against `ExpectedWarnings`.
 
+An entry of `ExpectedErrors`, `ExpectedErrorCauses` or `ExpectedWarnings`
+both allows that message and requires it: every listed entry must appear
+in a logged error or warning of its kind, or `RunResult.Err` names it.
+Everything logged through the run's logger counts, which covers the
+scenario's workers, their supervisors and its `Run`. The runner's own
+messages and the store's messages do not count.
+
 `examples.Run` returns an error when `Run` returns one. It also returns an
 error when the run logs an unexpected error before `Run` returns.
 
-Four other failures do not make `examples.Run` return an error. After the
+Five other failures do not make `examples.Run` return an error. After the
 run ends, `RunResult.Err` holds the first of these that applies:
 
 1. an unexpected error logged after `Run` returns;
 2. an unexpected warning;
-3. a stored state that its worker type may not report;
-4. a store read that fails during that state check.
+3. a listed entry that never appeared, named per missing entry;
+4. a stored state that its worker type may not report;
+5. a store read that fails during that state check.
 
 The CLI exits 1 on a set `Err`, and `examples/registry_run_test.go` fails on it.
 Valid states per worker type are in `validWorkerStates`
