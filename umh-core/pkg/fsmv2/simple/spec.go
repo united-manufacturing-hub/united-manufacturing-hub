@@ -88,8 +88,8 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 }
 
 // Register wires a MonitorSpec into the framework: it registers the worker
-// factory, supervisor, and CSE type (via register.Worker) and the shared initial
-// state. Call once per worker type from an init(). Panics on a missing WorkerType
+// factory, supervisor, and CSE type (via register.Worker) and the initial
+// state, which is degraded. Call once per worker type from an init(). Panics on a missing WorkerType
 // or Poll, mirroring register.Worker's fail-fast contract.
 func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TDeps]) {
 	if spec.WorkerType == "" {
@@ -112,7 +112,10 @@ func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TD
 			return newSimpleWorker(spec, id, logger, sr)
 		})
 
-	fsmv2.RegisterInitialState(spec.WorkerType, &runningState[TConfig, TStatus]{})
+	// A worker is not healthy until a poll has shown it (ENG-6320).
+	// degradedState moves to running on the first tick whose stored poll is
+	// not degraded.
+	fsmv2.RegisterInitialState(spec.WorkerType, &degradedState[TConfig, TStatus]{})
 
 	// A non-positive Interval is ignored by the registry, so the collector
 	// falls back to its DefaultObservationInterval.

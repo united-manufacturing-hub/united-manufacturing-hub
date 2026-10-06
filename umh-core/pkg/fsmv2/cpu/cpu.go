@@ -238,8 +238,13 @@ func limitsFromSample(sample cpuhealth.Sample) (cores, quota float64) {
 
 // healthFromStatus turns one poll's verdict into the worker's own health.
 // simple calls it after every good poll, and never after a failed one.
+//
+// The worker is degraded until the CPU usage is measured (ENG-6320). Until
+// then the verdict stays healthy, because no signal fired and a degraded
+// verdict needs a cause. The container monitor sends no verdict for this case
+// (judgeWorkerCPU).
 func healthFromStatus(_ CPUConfig, status CPUStatus) simple.Health {
-	if status.Verdict.State == cpuhealth.StateDegraded {
+	if status.Verdict.State == cpuhealth.StateDegraded || !cpuhealth.UsageMeasured(status.Details) {
 		return simple.Degraded(status.Message)
 	}
 

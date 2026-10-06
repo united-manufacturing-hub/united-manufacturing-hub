@@ -30,7 +30,7 @@ func CPUNotMeasuredError(s Sample, d Details) error {
 		}
 	}
 
-	if !usageMeasured(d) {
+	if !UsageMeasured(d) {
 		usageReads := []ReadOperation{OperationProcStat}
 		if d.LimitApplies {
 			usageReads = []ReadOperation{OperationCPUStat, OperationCPUAcctUsage}

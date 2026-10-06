@@ -83,8 +83,9 @@
 // Every tick the framework runs Poll first. On a Poll error the worker is
 // degraded with reason "poll error: <err>" and Health is NOT called — the error
 // is persisted as a verdict, not returned, so the worker reports degraded with a
-// reason instead of hanging in a bootstrap state. On a good poll the optional
-// Health function decides the verdict; when it is nil the worker is healthy with
+// reason instead of hanging in a bootstrap state. A worker starts degraded. On a
+// good poll the optional Health function decides the verdict. When Health is
+// nil, the good poll counts as the check, and the worker turns healthy with
 // reason "running (no health check)".
 //
 // Status[TStatus] holds the verdict (Result + Degraded + Reason); the framework

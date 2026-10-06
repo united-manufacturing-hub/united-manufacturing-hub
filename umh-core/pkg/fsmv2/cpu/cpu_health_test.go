@@ -60,27 +60,65 @@ var _ = Describe("the worker's own health", func() {
 		Expect(monitorSpec.Health).NotTo(BeNil(),
 			"the spec must wire a health check, or only a poll error can degrade this worker")
 
-		d := newDeps(fixedSampler(cpuhealth.Sample{
-			Timestamp: time.Now(),
-			Quota:     diagnosis.Known(2),
-			// Every signal present and quiet: nothing fires.
-			NrPeriods:   diagnosis.Known(1),
-			NrThrottled: diagnosis.Known(0),
-			UsageUsec:   diagnosis.Known(5000000),
-			Pressure:    diagnosis.Known(0),
-			Steal:       diagnosis.Known(0),
-			HostBusy:    diagnosis.Known(0.5),
-			Virtualized: false,
-		}), 4, 2)
+		// The first tick only starts the usage window, so the healthy verdict
+		// this spec maps is read on the second.
+		d := newDeps(newTickSampler(quietTick(0), quietTick(1)), 4, 2)
+
+		_, err := Poll(context.Background(), d, CPUConfig{})
+		Expect(err).NotTo(HaveOccurred())
 
 		status, err := Poll(context.Background(), d, CPUConfig{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy),
 			"this spec needs a healthy verdict to have anything to map")
+		Expect(status.Details.UsageRingActive).To(BeTrue(),
+			"this spec needs the usage measured, or the worker is still starting up")
 
 		health := monitorSpec.Health(CPUConfig{}, status)
 		Expect(health.Degraded).To(BeFalse())
 		Expect(health.Reason).To(Equal(status.Message),
 			"the composed customer message is the reason an operator sees")
 	})
+
+	// "Not measured yet" is not healthy (ENG-6320). The verdict stays healthy
+	// with no cause: the Management Console rejects a degraded verdict that
+	// names no cause.
+	It("degrades the worker while the CPU usage is not measured yet, and turns healthy once it is", func() {
+		d := newDeps(newTickSampler(quietTick(0), quietTick(1)), 4, 2)
+
+		starting, err := Poll(context.Background(), d, CPUConfig{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(starting.Details.UsageRingActive).To(BeFalse(),
+			"this spec needs a first tick whose usage is not measured yet")
+
+		health := monitorSpec.Health(CPUConfig{}, starting)
+		Expect(health.Degraded).To(BeTrue())
+		Expect(health.Reason).To(HavePrefix("CPU: starting up."))
+		Expect(starting.Verdict.State).NotTo(Equal(cpuhealth.StateDegraded),
+			"a degraded verdict needs a cause, and nothing has fired")
+
+		measured, err := Poll(context.Background(), d, CPUConfig{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(monitorSpec.Health(CPUConfig{}, measured).Degraded).To(BeFalse())
+	})
 })
+
+// quietTick is a sample on a container limited to 2 of 4 cores where every
+// signal is readable and none fires. The i-th tick is i seconds after
+// sampleAt, so the engine sees distinct ticks.
+func quietTick(i int) cpuhealth.Sample {
+	return cpuhealth.Sample{
+		Timestamp:    sampleAt.Add(time.Duration(i) * time.Second),
+		Quota:        diagnosis.Known(2),
+		LogicalCpus:  diagnosis.Known(4),
+		HostCpus:     diagnosis.Known(4),
+		NrPeriods:    diagnosis.Known(100 * float64(i+1)),
+		NrThrottled:  diagnosis.Known(0),
+		UsageCores:   diagnosis.Known(0.5),
+		Pressure:     diagnosis.Known(0),
+		Steal:        diagnosis.Known(0),
+		HostBusy:     diagnosis.Known(0.5),
+		PsiAvailable: true,
+		CpuScope:     cpuhealth.ScopeHost,
+	}
+}

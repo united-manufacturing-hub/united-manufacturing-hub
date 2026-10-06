@@ -51,8 +51,9 @@ func (s *runningState[TConfig, TStatus]) String() string {
 	return helpers.DeriveStateName(s)
 }
 
-// degradedState is the unhealthy-but-operational state of a simple worker,
-// entered when the verdict reports Degraded (a poll error or a Health verdict).
+// degradedState is the unhealthy-but-operational state of a simple worker. A
+// worker starts in it, and enters it when the verdict reports Degraded (a poll
+// error or a Health verdict).
 type degradedState[TConfig, TStatus any] struct {
 	helpers.RunningDegradedBase
 }

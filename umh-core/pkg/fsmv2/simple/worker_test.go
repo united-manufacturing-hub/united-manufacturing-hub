@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 )
@@ -477,6 +478,53 @@ var _ = Describe("Register", func() {
 			},
 		})
 		Expect(fsmv2.LookupInitialState("simpleworker_register")).NotTo(BeNil())
+	})
+
+	// A worker is not healthy until a poll has shown it (ENG-6320). The
+	// supervisor starts every instance in the state Register stored, so the
+	// first tick decides from the first stored poll.
+	Describe("the state a registered worker starts in", func() {
+		// firstTick registers workerType with a Poll that returns pollErr,
+		// stores that poll the way the supervisor does before the first tick,
+		// and runs the first tick from the registered initial state.
+		firstTick := func(workerType string, pollErr error) (fsmv2.State[any, any], fsmv2.State[any, any]) {
+			spec := MonitorSpec[probeConfig, probeStatus, struct{}]{
+				WorkerType: workerType,
+				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+					return probeStatus{Reachable: pollErr == nil}, pollErr
+				},
+			}
+			Register(spec)
+
+			initial := fsmv2.LookupInitialState(workerType)
+			Expect(initial).NotTo(BeNil())
+
+			w, err := newProbeWorker(spec)
+			Expect(err).NotTo(HaveOccurred())
+			obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+
+			snap := fsmv2.Snapshot{
+				Observed: obs.(fsmv2.Observation[Status[probeStatus]]),
+				Desired:  &fsmv2.WrappedDesiredState[probeConfig]{},
+			}
+
+			return initial, initial.Next(snap).State
+		}
+
+		It("starts degraded and turns healthy on the first tick after a good poll", func() {
+			initial, next := firstTick("simpleworker_start_good", nil)
+
+			Expect(initial.LifecyclePhase()).To(Equal(config.PhaseRunningDegraded))
+			Expect(next.LifecyclePhase()).To(Equal(config.PhaseRunningHealthy))
+		})
+
+		It("stays degraded on the first tick after a failed poll", func() {
+			initial, next := firstTick("simpleworker_start_failed", errors.New("dial timeout"))
+
+			Expect(initial.LifecyclePhase()).To(Equal(config.PhaseRunningDegraded))
+			Expect(next.LifecyclePhase()).To(Equal(config.PhaseRunningDegraded))
+		})
 	})
 
 	It("records MonitorSpec.Interval as the worker type's collection cadence", func() {

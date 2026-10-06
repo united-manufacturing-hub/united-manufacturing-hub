@@ -117,8 +117,9 @@ func judgeWorkerCPU(
 		return degradedCPU(message)
 	}
 
-	// Degraded without a degraded verdict means the poll failed, not that the box
-	// is degraded.
+	// Degraded without a degraded verdict means either that the poll failed or
+	// that the worker has not measured the CPU usage yet. Neither has a verdict
+	// to send: the Console rejects a degraded verdict that names no cause.
 	if status.Degraded && status.Result.Verdict.State != cpuhealth.StateDegraded {
 		return degradedCPU(status.Reason)
 	}
