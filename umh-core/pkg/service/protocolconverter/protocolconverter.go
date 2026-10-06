@@ -1180,7 +1180,7 @@ func (p *ProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, b
 
 	d := bridgeadmission.Decide(in)
 	if d.MaxBridges != nil {
-		p.logger.Debugf("BridgeMustWait: max bridges=%d (1 core reserved for Redpanda), created=%d, waiting before=%d, bridge %s admit=%v",
+		p.logger.Debugf("BridgeMustWait: bridge limit=%d (1 core reserved for Redpanda), created=%d, waiting before=%d, bridge %s admit=%v",
 			*d.MaxBridges, in.Created, in.WaitingBefore, bridgeName, d.Admit)
 	}
 

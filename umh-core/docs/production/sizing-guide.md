@@ -54,10 +54,10 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 **Dynamic Resource Protection:**
 Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
 
-- **CPU Utilization**: Blocks new bridges if CPU usage exceeds 70%. With CPU health enabled, usage alone no longer blocks: see [CPU Health](./cpu-health.md), where 70% is the fallback used only when host statistics are unreadable
-- **CPU Throttling**: Blocks if the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
-- **Memory Usage**: Blocks if memory exceeds 80%
-- **Disk Usage**: Blocks if disk exceeds 85%
+- **CPU Utilization**: A new bridge waits while CPU usage is above 70%. That is the rule without [CPU Health](./cpu-health.md). With CPU Health turned on (`USE_FSMV2_CPU=true`), usage alone no longer makes a new bridge wait. There, 70% is a last-resort fallback for machine headroom, used only when no CPU limit is set and the kernel publishes no PSI. With CPU Health turned on, if UMH cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits.
+- **CPU Throttling**: A new bridge waits while the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
+- **Memory Usage**: A new bridge waits while memory use is above 80%
+- **Disk Usage**: A new bridge waits while disk use is above 85%
 
 **Redpanda CPU Utilization:**
 UMH Core runs Redpanda with the `--overprovisioned` flag, which optimizes CPU usage for containerized environments. This disables Seastar's busy-polling reactor model, reducing idle CPU usage from 100% to near-zero when not processing messages. The trade-off is slightly higher latency (microseconds to low milliseconds), which is acceptable for manufacturing data that doesn't require sub-millisecond response times. This is required because UMH Core runs in Docker where CPU pinning doesn't work effectively, and Redpanda shares the container with other processes.
@@ -83,7 +83,7 @@ While bridge admission is on, it keeps one bridge from overloading the others. I
 
 #### Resource Limit Error Messages
 
-When the system blocks bridge creation, you'll see clear messages explaining why:
+When a new bridge waits, its status reason says why:
 
 - **Bridge limit**: `Cannot create bridge - limit exceeded (5 bridges maximum with 2.0 CPU cores, 1 core reserved for Redpanda)`
 - **High CPU**: `CPU degraded: CPU utilization critical`
