@@ -64,7 +64,7 @@ var _ = Describe("Decide", func() {
 	})
 
 	Describe("health", func() {
-		It("refuses the zero Input, because nothing is proven", func() {
+		It("makes the zero Input wait, because nothing is proven", func() {
 			d := ba.Decide(ba.Input{EnableResourceLimitBlocking: true})
 
 			Expect(d.Admit).To(BeFalse())
@@ -72,7 +72,7 @@ var _ = Describe("Decide", func() {
 			Expect(d.Reason).To(Equal("Resource health not proven yet"))
 		})
 
-		DescribeTable("refuses a degraded resource and names it",
+		DescribeTable("makes a bridge wait for a degraded resource and names it",
 			func(mutate func(*ba.Input), cause ba.Cause, reason string) {
 				in := allHealthy()
 				mutate(&in)
@@ -116,7 +116,7 @@ var _ = Describe("Decide", func() {
 				ba.Disk, "Disk degraded: disk is full"),
 		)
 
-		DescribeTable("refuses an unknown resource as not proven, carrying its message",
+		DescribeTable("makes a bridge wait for an unknown resource as not proven, carrying its message",
 			func(mutate func(*ba.Input)) {
 				in := allHealthy()
 				mutate(&in)
@@ -181,7 +181,7 @@ var _ = Describe("Decide", func() {
 			Entry("less than one core", 0.5, 0),
 		)
 
-		It("refuses as not proven while the cores are not measured yet", func() {
+		It("makes a bridge wait as not proven while the cores are not measured yet", func() {
 			in := allHealthy()
 			in.Cores = 0
 
@@ -205,7 +205,7 @@ var _ = Describe("Decide", func() {
 			Expect(d.Message()).To(ContainSubstring(hint))
 		})
 
-		DescribeTable("carries the hint on every kind of refusal",
+		DescribeTable("carries the hint for every reason a bridge waits",
 			func(in ba.Input) {
 				d := ba.Decide(in)
 

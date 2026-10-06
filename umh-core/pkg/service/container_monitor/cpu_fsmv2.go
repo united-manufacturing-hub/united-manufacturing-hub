@@ -146,7 +146,7 @@ func judgeWorkerCPU(
 
 // readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a
 // models.Health. Every outcome it can judge produces one, and the protocol
-// converter's BridgeMustWait reads that message as its bridge-block reason.
+// converter's BridgeMustWait reads that message as the reason a bridge waits.
 // A cancelled tick is the one case with nothing to judge: it returns the ctx
 // error and no health.
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, *models.CPUHealth, error) {

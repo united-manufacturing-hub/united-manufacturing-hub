@@ -68,15 +68,15 @@ The system will prevent you from deploying new bridges if:
 2. The system detects resource degradation (high CPU, throttling, memory, or disk pressure), OR
 3. The instance's resource health is not proven yet, for example right after a restart
 
-This resource-based blocking is controlled by a feature flag and can be configured in your `config.yaml`:
+This check is bridge admission. The emergency setting *Turn off bridge admission* turns it off, in your `config.yaml`:
 ```yaml
 agent:
-  enableResourceLimitBlocking: false  # Start bridges even when a resource is degraded or the bridge limit is reached
+  enableResourceLimitBlocking: false  # Start bridges even when a resource is degraded or not proven yet, or the bridge limit is reached
 ```
 
 `true` is the default for new installs. A missing key in an existing `config.yaml` reads as `false`, so set the key explicitly to turn the blocking on. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.
 
-When enabled, this ensures system stability and prevents one bridge from impacting others. If you need more bridges, either:
+While bridge admission is on, it keeps one bridge from overloading the others. If you need more bridges, either:
 - Increase CPU allocation (for containerized deployments)
 - Upgrade to a larger instance (for VM/bare-metal deployments)
 - Optimize existing bridges (reduce polling rates, tag counts, or processing complexity)
@@ -89,7 +89,7 @@ When the system blocks bridge creation, you'll see clear messages explaining why
 - **High CPU**: `CPU degraded: CPU utilization critical`
 - **High Memory**: `Memory degraded: Memory usage at 85%`
 - **High Disk**: `Disk degraded: Disk usage at 90%`
-- **Health not measured yet**: `Resource health not proven yet`
+- **Health not proven yet**: `Resource health not proven yet`
 
 #### Easy vertical scaling
 

@@ -55,7 +55,7 @@ UMH Core supports both **direct YAML editing** and **Management Console UI** for
 | `communicator.apiUrl`           | `string`           | – (console-managed) | HTTPS endpoint of the Management Console.                                                      |
 | `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `AUTH_TOKEN` env-var.                            |
 | `communicator.allowInsecureTLS` | `bool`             | `false`             | Accepted and ignored. Certificate verification is always enforced. Leaving this key in place is harmless.                            |
-| `enableResourceLimitBlocking`   | `bool`             | `true` for new installs; a missing key in an existing config.yaml reads as `false` | Whether umh-core refuses new bridges when a resource is degraded, when resource health is not proven yet, or when the bridge limit is reached. `false` turns all of these refusals off. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md). Takes effect without a restart. |
+| `enableResourceLimitBlocking`   | `bool`             | `true` for new installs; a missing key in an existing config.yaml reads as `false` | Whether bridge admission is on. While it is `true`, a new bridge waits when a resource is degraded, when resource health is not proven yet, or when the bridge limit is reached. `false` is the emergency setting *Turn off bridge admission*: new bridges start anyway. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md). Takes effect without a restart. |
 
 **Location levels**
 

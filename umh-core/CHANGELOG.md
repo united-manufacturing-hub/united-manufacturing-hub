@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- Bridges now start only once CPU, memory and disk are confirmed healthy, also after a restart. A refused bridge says why it was refused and how to start bridges anyway in an emergency. This applies while `agent.enableResourceLimitBlocking` is `true`, which is the default for instances created since v0.43.12. Instances created earlier usually have it set to `false`
+- Bridges now start only once CPU, memory and disk are proven healthy, also after a restart. A waiting bridge says why it waits and how to start bridges anyway in an emergency
 
 ### Fixes
 
