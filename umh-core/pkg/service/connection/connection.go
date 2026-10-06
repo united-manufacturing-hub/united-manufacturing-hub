@@ -38,7 +38,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
@@ -47,7 +46,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
@@ -142,10 +140,6 @@ type IConnectionService interface {
 	// Returns an error and a boolean indicating if reconciliation occurred.
 	// The boolean is false if reconciliation was skipped (e.g., due to an error).
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
-
-	// UsesFsmv2Backend reports whether the service selected the fsmv2-backed nmap
-	// manager (NMAP_BACKEND=fsmv2).
-	UsesFsmv2Backend() bool
 }
 
 // ServiceInfo holds information about the connection's health status.
@@ -167,9 +161,8 @@ type ServiceInfo struct {
 }
 
 // nmapManagerIface is the subset of nmap-manager behavior that ConnectionService
-// depends on. Both the fsmv1 *nmapfsm.NmapManager and the fsmv2-backed
-// *adapter.WorkerManager satisfy it, letting NewDefaultConnectionService swap the
-// backend behind the NMAP_BACKEND flag without touching the call sites.
+// depends on. The fsmv2-backed *adapter.WorkerManager satisfies it in production;
+// tests inject other implementations through WithNmapManager.
 type nmapManagerIface interface {
 	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
 	GetInstance(name string) (fsm.FSMInstance, bool)
@@ -177,34 +170,21 @@ type nmapManagerIface interface {
 	GetCurrentFSMState(serviceName string) (string, error)
 }
 
-// Compile-time assertions that both nmap-manager backends satisfy nmapManagerIface.
-var (
-	_ nmapManagerIface = (*nmapfsm.NmapManager)(nil)
-	_ nmapManagerIface = (*adapter.WorkerManager[config.NmapConfig, simple.Status[fsmv2nmap.NmapStatus]])(nil)
-)
+var _ nmapManagerIface = (*adapter.WorkerManager[config.NmapConfig, simple.Status[fsmv2nmap.NmapStatus]])(nil)
 
 // ConnectionService implements IConnectionService using Nmap as the underlying
 // connectivity probe mechanism. It maintains a history of recent states to detect
 // flaky connections and provides a higher-level abstraction over raw Nmap results.
 type ConnectionService struct {
-	nmapService      nmap.INmapService
 	logger           *zap.SugaredLogger
 	nmapManager      nmapManagerIface
 	recentNmapStates map[string][]string
 	nmapConfigs      []config.NmapConfig
-	// usesFsmv2Backend reports whether NewDefaultConnectionService selected the
-	// fsmv2-backed nmap manager (NMAP_BACKEND=fsmv2). When true the S6 nmapService
-	// is left nil, and the S6 call sites take their fsmv2-aware branches.
-	usesFsmv2Backend bool
 }
 
 // ConnectionServiceOption is a function that configures a ConnectionService.
 // This follows the functional options pattern for flexible configuration.
 type ConnectionServiceOption func(*ConnectionService)
-
-func WithNmapService(nmapService nmap.INmapService) ConnectionServiceOption {
-	return func(c *ConnectionService) { c.nmapService = nmapService }
-}
 
 func WithNmapManager(mgr nmapManagerIface) ConnectionServiceOption {
 	return func(c *ConnectionService) { c.nmapManager = mgr }
@@ -214,7 +194,6 @@ func WithNmapManager(mgr nmapManagerIface) ConnectionServiceOption {
 // It initializes the logger, recent scans cache, and sets default values.
 //
 // Options can be passed to customize behavior:
-// - WithNmapService: Set a custom service
 // - WithNmapmanager: Set a custom manager
 //
 // Example:
@@ -228,17 +207,7 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 		logger:           logger.For(managerName),
 		nmapConfigs:      []config.NmapConfig{},
 		recentNmapStates: make(map[string][]string),
-	}
-
-	if backend, _ := env.GetAsString("NMAP_BACKEND", false, constants.NmapBackendFSMv1); backend == constants.NmapBackendFSMv2 {
-		// fsmv2 backend: drive the fsmv2 nmap workers via the adapter manager and
-		// leave the S6 nmapService nil. The S6 call sites branch on
-		// usesFsmv2Backend so they never dereference the nil service.
-		service.nmapManager = fsmv2nmap.NewFsmv2NmapManager(managerName)
-		service.usesFsmv2Backend = true
-	} else {
-		service.nmapManager = nmapfsm.NewNmapManager(managerName)
-		service.nmapService = nmap.NewDefaultNmapService(connectionName)
+		nmapManager:      fsmv2nmap.NewFsmv2NmapManager(managerName),
 	}
 
 	// Apply options
@@ -247,13 +216,6 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 	}
 
 	return service
-}
-
-// UsesFsmv2Backend reports whether NewDefaultConnectionService selected the
-// fsmv2-backed nmap manager (NMAP_BACKEND=fsmv2). When false the service uses
-// the default S6/fsmv1 nmap path.
-func (c *ConnectionService) UsesFsmv2Backend() bool {
-	return c.usesFsmv2Backend
 }
 
 // getNmapName converts a connectionName to its Nmap service name.
@@ -283,32 +245,20 @@ func (c *ConnectionService) GetConfig(
 
 	nmapName := c.getNmapName(connectionName)
 
-	// When using fsmv2-based nmap, return the desired config from our local
-	// nmapConfigs slice. We can't read from the actor's observed state because
+	// Return the desired config from the local nmapConfigs slice. We can't read from the actor's observed state because
 	// the actor may have been created with empty config (the real config arrives
 	// later via UpdateConnectionInNmapManager after template rendering).
 	// Returning the desired config here ensures the protocol converter's
 	// UpdateObservedStateOfInstance doesn't bail out early, allowing
 	// BuildRuntimeConfig to run and populate the real target/port.
-	if c.usesFsmv2Backend {
-		for _, cfg := range c.nmapConfigs {
-			if cfg.Name == nmapName {
-				return connectionserviceconfig.FromNmapServiceConfig(cfg.NmapServiceConfig), nil
-			}
+	for _, cfg := range c.nmapConfigs {
+		if cfg.Name == nmapName {
+			return connectionserviceconfig.FromNmapServiceConfig(cfg.NmapServiceConfig), nil
 		}
-		// Instance not in our configs yet — return empty config without error
-		// so the caller doesn't treat this as a fatal failure.
-		return connectionserviceconfig.ConnectionServiceConfig{}, nil
 	}
-
-	// Get the Nmap config
-	nmapCfg, err := c.nmapService.GetConfig(ctx, filesystemService, nmapName)
-	if err != nil {
-		return connectionserviceconfig.ConnectionServiceConfig{}, fmt.Errorf("failed to get nmap config: %w", err)
-	}
-
-	// Convert Nmap config to Connection config
-	return connectionserviceconfig.FromNmapServiceConfig(nmapCfg), nil
+	// Instance not in our configs yet — return empty config without error
+	// so the caller doesn't treat this as a fatal failure.
+	return connectionserviceconfig.ConnectionServiceConfig{}, nil
 }
 
 // Status returns information about the connection health for the specified connection.
@@ -663,18 +613,11 @@ func (c *ConnectionService) ServiceExists(
 		return false
 	}
 
-	nmapName := c.getNmapName(connectionName)
+	// There is no S6 service on disk. The connection exists once the fsmv2
+	// manager holds the worker instance.
+	_, ok := c.nmapManager.GetInstance(c.getNmapName(connectionName))
 
-	if c.usesFsmv2Backend {
-		// fsmv2 backend: there is no S6 service on disk. The connection exists
-		// once the fsmv2 manager holds the worker instance.
-		_, ok := c.nmapManager.GetInstance(nmapName)
-
-		return ok
-	}
-
-	// Check if the actual service exists
-	return c.nmapService.ServiceExists(ctx, filesystemService, nmapName)
+	return ok
 }
 
 // ForceRemoveConnection removes a Connection from the Nmap manager
@@ -684,34 +627,19 @@ func (c *ConnectionService) ForceRemoveConnection(
 	filesystemService filesystem.Service,
 	connectionName string,
 ) error {
-	// CRITICAL: Always use fresh context for force removal to ensure cleanup succeeds
-	// Force removal must complete even if parent context expired or is about to expire
-	// See Linear ticket ENG-3420 for full context
-	if ctx.Err() != nil {
-		c.logger.Warnf("Parent context already expired for force removal of %s", connectionName)
-	}
-	
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
-	defer cancel()
+	// There is no S6 service on disk to force-remove. Drop the desired config so
+	// the next reconcile deletes the worker from the fsmv2 runtime; leaving it in
+	// c.nmapConfigs would keep the worker managed.
+	nmapName := c.getNmapName(connectionName)
+	for i, v := range c.nmapConfigs {
+		if v.Name == nmapName {
+			c.nmapConfigs = append(c.nmapConfigs[:i], c.nmapConfigs[i+1:]...)
 
-	if c.usesFsmv2Backend {
-		// fsmv2 backend: no S6 service on disk to force-remove. Drop the desired
-		// config so the next reconcile Deletes the worker from the fsmv2 runtime;
-		// leaving it in c.nmapConfigs would keep the worker managed.
-		nmapName := c.getNmapName(connectionName)
-		for i, v := range c.nmapConfigs {
-			if v.Name == nmapName {
-				c.nmapConfigs = append(c.nmapConfigs[:i], c.nmapConfigs[i+1:]...)
-
-				break
-			}
+			break
 		}
-
-		return nil
 	}
 
-	// force remove from Nmap manager
-	return c.nmapService.ForceRemoveNmap(ctx, filesystemService, c.getNmapName(connectionName))
+	return nil
 }
 
 // updateRecentScans adds a new scan result to the history for flakiness detection.

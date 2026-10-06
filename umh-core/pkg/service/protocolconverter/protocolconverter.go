@@ -300,7 +300,7 @@ func (p *ProtocolConverterService) GetConfig(
 	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Get the Connection config
-	connConfig, err := p.getObservedConnectionConfig(ctx, filesystemService, underlyingConnectionName)
+	connConfig, err := p.getObservedConnectionConfig(underlyingConnectionName)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get connection config: %w", err)
 	}
@@ -322,23 +322,16 @@ func (p *ProtocolConverterService) GetConfig(
 
 // getObservedConnectionConfig returns the observed connection config.
 //
-// The fsmv1 nmap backend persists the rendered config to a shared on-disk file,
-// so p.connectionService.GetConfig reads it back correctly. The fsmv2 backend
-// keeps config only in the connection FSM instance's in-memory state;
-// p.connectionService is a standalone helper whose in-memory config is never
-// populated, so its GetConfig would return an empty target/port and the protocol
-// converter would report permanent connection divergence. For fsmv2 read the
+// The nmap backend keeps config only in the connection FSM instance's in-memory
+// state; p.connectionService is a standalone helper whose in-memory config is
+// never populated, so its GetConfig would return an empty target/port and the
+// protocol converter would report permanent connection divergence. Read the
 // observed config from the connection FSM instance via the manager, which is the
-// single source of truth for both backends.
-func (p *ProtocolConverterService) getObservedConnectionConfig(ctx context.Context, filesystemService filesystem.Service, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error) {
-	if !p.connectionService.UsesFsmv2Backend() {
-		return p.connectionService.GetConfig(ctx, filesystemService, connectionName)
-	}
-
+// single source of truth.
+func (p *ProtocolConverterService) getObservedConnectionConfig(connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error) {
 	observed, err := p.connectionManager.GetLastObservedState(connectionName)
 	if err != nil {
-		// No observation yet (instance not created): treat as not-existing so the
-		// caller handles it like the fsmv1 ErrServiceNotExist path. Must return this
+		// No observation yet (instance not created): treat as not-existing. Must return this
 		// package's own ErrServiceNotExist, not connection.ErrServiceNotExist — callers
 		// match against protocolconverter.ErrServiceNotExist's message/identity.
 		return connectionserviceconfig.ConnectionServiceConfig{}, ErrServiceNotExist
@@ -1093,8 +1086,8 @@ func (p *ProtocolConverterService) ReconcileManager(
 	return nil, connReconciled || dfcReconciled
 }
 
-// ServiceExists checks if a connection and a dataflowcomponent with the given name exist.
-// If only one of the services exists, it returns false.
+// ServiceExists checks if a dataflowcomponent (read or write) for the given
+// protocol converter exists.
 func (p *ProtocolConverterService) ServiceExists(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -1104,24 +1097,15 @@ func (p *ProtocolConverterService) ServiceExists(
 		return false
 	}
 
-	connectionName := p.getUnderlyingConnectionName(protConvName)
 	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
 	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
-	// Check if the actual service exists
-	connExists := p.connectionService.ServiceExists(ctx, filesystemService, connectionName)
 	dfcReadExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcReadName)
 	dfcWriteExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcWriteName)
 
-	// Under fsmv2 the connection is an always-present in-memory worker; the
-	// adapter just reports it late (after its first reconcile), so treat it as
-	// existing and keep the standard connection+DFC invariant below.
-	if p.connectionService.UsesFsmv2Backend() {
-		connExists = true
-	}
-
-	// if one of the services doesn't exist we should return that
-	return connExists && (dfcReadExists || dfcWriteExists)
+	// The connection is an always-present in-memory fsmv2 worker; the adapter
+	// reports it late (after its first reconcile), so only the DFCs decide.
+	return dfcReadExists || dfcWriteExists
 }
 
 // ForceRemove removes a ProtocolConverter from the Connection & DFC manager

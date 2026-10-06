@@ -71,8 +71,6 @@ type MockConnectionService struct {
 
 	mu sync.RWMutex
 
-	UsesFsmv2BackendResult bool
-
 	GenerateNmapConfigForConnectionCalled bool
 	GetConfigCalled                       bool
 	StatusCalled                          bool
@@ -372,14 +370,6 @@ func (m *MockConnectionService) ServiceExists(ctx context.Context, filesystemSer
 	m.ServiceExistsCalled = true
 
 	return m.ServiceExistsResult
-}
-
-// UsesFsmv2Backend mocks the fsmv2 backend selector.
-func (m *MockConnectionService) UsesFsmv2Backend() bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	return m.UsesFsmv2BackendResult
 }
 
 // ReconcileManager mocks reconciling the DataFlowComponent manager.

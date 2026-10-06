@@ -14,26 +14,11 @@
 
 package connection
 
-// RED-phase (TDD) specs for the NMAP_BACKEND=fsmv2 wiring inside the
-// connection service. These describe NOT-YET-BUILT behavior and MUST fail to
-// compile/run until GREEN implements the assumed production symbols:
-//
-//   - constants.NmapBackendFSMv2          == "fsmv2"
-//   - (*ConnectionService).UsesFsmv2Backend() bool
-//     Reports whether NewDefaultConnectionService selected the fsmv2-backed
-//     nmap manager (env NMAP_BACKEND == constants.NmapBackendFSMv2).
-//
-// When the flag is on, NewDefaultConnectionService must:
-//   - build the fsmv2 manager via fsmv2nmap.NewFsmv2NmapManager,
-//   - set usesFsmv2Backend = true,
-//   - leave the S6 nmapService nil, and
-//   - make ServiceExists fsmv2-aware (GetInstance, NOT an S6 probe).
-//
-// When the flag is unset/"fsmv1", every path is byte-identical to today.
+// Specs for the fsmv2 nmap wiring inside the connection service: ServiceExists
+// consults the fsmv2 manager, and ForceRemoveConnection drops the desired config.
 
 import (
 	"context"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -41,7 +26,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -51,7 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-var _ = Describe("NMAP_BACKEND flag wiring", func() {
+var _ = Describe("fsmv2 nmap wiring", func() {
 	var (
 		ctx          context.Context
 		cancel       context.CancelFunc
@@ -61,61 +45,19 @@ var _ = Describe("NMAP_BACKEND flag wiring", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(60*time.Second))
 		mockServices = serviceregistry.NewMockRegistry()
-		// Ensure a clean slate: no leaked env from other specs.
-		_ = os.Unsetenv("NMAP_BACKEND")
 	})
 
 	AfterEach(func() {
 		cancel()
 
-		_ = os.Unsetenv("NMAP_BACKEND")
-
 		fsmv2client.SetClient(nil)
 	})
 
-	Describe("backend selection", func() {
-		It("selects the fsmv2 backend when NMAP_BACKEND=fsmv2", func() {
-			_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv2)
-
-			defer func() { _ = os.Unsetenv("NMAP_BACKEND") }()
-
-			svc := NewDefaultConnectionService("flag-on-conn")
-
-			Expect(svc.UsesFsmv2Backend()).To(BeTrue(),
-				"NMAP_BACKEND=fsmv2 must select the fsmv2-backed nmap manager")
-		})
-
-		It("keeps the fsmv1 backend when NMAP_BACKEND is unset (FF-off default)", func() {
-			// env intentionally unset in BeforeEach
-			svc := NewDefaultConnectionService("flag-off-conn")
-
-			Expect(svc.UsesFsmv2Backend()).To(BeFalse(),
-				"unset NMAP_BACKEND must keep the existing S6/fsmv1 nmap path")
-		})
-
-		It("keeps the fsmv1 backend for any non-fsmv2 value", func() {
-			_ = os.Setenv("NMAP_BACKEND", "fsmv1")
-
-			defer func() { _ = os.Unsetenv("NMAP_BACKEND") }()
-
-			svc := NewDefaultConnectionService("flag-explicit-off-conn")
-
-			Expect(svc.UsesFsmv2Backend()).To(BeFalse())
-		})
-	})
-
-	Describe("ServiceExists is fsmv2-aware when the flag is on", func() {
-		It("returns false for an unknown connection without probing S6 (no nil-nmapService panic)", func() {
-			_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv2)
-
-			defer func() { _ = os.Unsetenv("NMAP_BACKEND") }()
-
+	Describe("ServiceExists", func() {
+		It("returns false for an unknown connection", func() {
 			svc := NewDefaultConnectionService("flag-on-noinstance")
-			Expect(svc.UsesFsmv2Backend()).To(BeTrue())
-
-			// With the fsmv2 backend the S6 nmapService is left nil. ServiceExists
-			// must consult the fsmv2 manager (GetInstance) and NOT touch S6, so
-			// this must return false rather than panic on a nil nmapService.
+			// ServiceExists consults the fsmv2 manager (GetInstance), so an unknown
+			// connection reports false without panicking.
 			var exists bool
 
 			Expect(func() {
@@ -125,10 +67,6 @@ var _ = Describe("NMAP_BACKEND flag wiring", func() {
 		})
 
 		It("returns true once the fsmv2 manager holds the instance", func() {
-			_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv2)
-
-			defer func() { _ = os.Unsetenv("NMAP_BACKEND") }()
-
 			// Stage a global fsmv2 client so a Reconcile can materialise the worker
 			// instance (mirrors the harness in pkg/fsmv2/nmap/manager_test.go).
 			writer := dynamicchildren.NewWriter()
@@ -144,8 +82,6 @@ var _ = Describe("NMAP_BACKEND flag wiring", func() {
 
 			connName := "flag-on-live"
 			svc := NewDefaultConnectionService(connName)
-			Expect(svc.UsesFsmv2Backend()).To(BeTrue())
-
 			cfg := &connectionserviceconfig.ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "192.0.2.10",
@@ -172,12 +108,8 @@ var _ = Describe("NMAP_BACKEND flag wiring", func() {
 		})
 	})
 
-	Describe("ForceRemoveConnection drops the desired config when the flag is on", func() {
+	Describe("ForceRemoveConnection", func() {
 		It("removes the config from the reconcile set so the worker despawns", func() {
-			_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv2)
-
-			defer func() { _ = os.Unsetenv("NMAP_BACKEND") }()
-
 			connName := "flag-on-forceremove"
 			svc := NewDefaultConnectionService(connName)
 
