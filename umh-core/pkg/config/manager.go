@@ -656,9 +656,9 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 	return m
 }
 
-// configWithDefaults holds the values a config.yaml gets for settings it leaves
-// out. Decoding keeps a field whose key is absent, and Go would read a missing
-// bool as false.
+// configWithDefaults holds the value a setting gets when config.yaml leaves it
+// out. ParseConfig decodes onto it, and decoding leaves a field alone when its
+// key is absent. Without it, a missing bool would read as false.
 func configWithDefaults() FullConfig {
 	return FullConfig{Agent: AgentConfig{EnableResourceLimitBlocking: constants.DefaultEnableResourceLimitBlocking}}
 }
