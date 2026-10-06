@@ -44,6 +44,11 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 		}
 	}
 
+	err = CheckDataContractV2NameFree(config, name)
+	if err != nil {
+		return err
+	}
+
 	// add the data model to the config
 	config.DataModels = append(config.DataModels, DataModelsConfig{
 		Name:        name,
