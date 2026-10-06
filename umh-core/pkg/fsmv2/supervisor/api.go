@@ -92,8 +92,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	workerCtx := s.newWorkerContext(worker, identity, workerLogger, startupCount)
 
-	workerCtx.collector = s.newCollector(worker, identity, workerLogger, workerCtx)
-
 	s.registerWorker(workerCtx, identity, workerLogger)
 
 	return nil
@@ -462,8 +460,8 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 	})
 }
 
-// newWorkerContext builds the executor, the action history and the worker
-// context around them. Its collector is nil until the caller sets it.
+// newWorkerContext builds the executor, the action history, the collector
+// and the worker context around them.
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, identity deps.Identity, workerLogger deps.FSMLogger, startupCount int64) *WorkerContext[TObserved, TDesired] {
 	executor := execution.NewActionExecutor(10, s.workerType, identity, workerLogger)
@@ -504,6 +502,8 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 			workerCtx.collector.TriggerNow()
 		}
 	})
+
+	workerCtx.collector = s.newCollector(worker, identity, workerLogger, workerCtx)
 
 	return workerCtx
 }
