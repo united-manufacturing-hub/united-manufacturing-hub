@@ -16,6 +16,7 @@ package container_monitor
 
 import (
 	"context"
+	"sync"
 
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -62,4 +63,17 @@ func JudgeWorkerCPU(status simple.Status[fsmv2cpu.CPUStatus], freshness fsmv2cli
 	v := judgeWorkerCPU(status, freshness)
 
 	return v.health(), v.cpuHealth
+}
+
+// ResetCPUWorkerNeverStartedWarning lets the next call send the never-started
+// warning again. The guard is per process, so without a reset only the first
+// spec to reach it would see the warning.
+func ResetCPUWorkerNeverStartedWarning() {
+	cpuWorkerNeverStartedWarning = sync.Once{}
+}
+
+// ReadWorkerCPUHealth exposes the seam's read of the CPU worker to the external
+// test package, so a spec can judge one staged client state without GetStatus.
+func (c *ContainerMonitorService) ReadWorkerCPUHealth(ctx context.Context) (*models.Health, *models.CPUHealth, error) {
+	return c.readWorkerCPUHealth(ctx)
 }

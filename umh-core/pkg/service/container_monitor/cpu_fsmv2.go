@@ -17,11 +17,18 @@ package container_monitor
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -170,9 +177,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	// Fallback for a misconfiguration: USE_FSMV2_CPU is on but nothing published
 	// a client, so the fsmv2 supervisor never started (or has not yet).
 	if client == nil {
-		c.cpuWorkerWarnOnce.Do(func() {
-			c.logger.Warn(cpuSeamClientUnavailableMessage)
-		})
+		warnCPUWorkerNeverStarted()
 
 		return degradedCPU(cpuSeamClientUnavailableMessage).health(), nil, nil
 	}
@@ -196,3 +201,29 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 // Management Console credentials, so a missing client means it is still
 // starting.
 const cpuSeamClientUnavailableMessage = "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no CPU measurement is available"
+
+// cpuSeamHierarchyPath names the container monitor in the Sentry event's tags.
+const cpuSeamHierarchyPath = "fsmv1.ContainerMonitor"
+
+// cpuWorkerNeverStartedWarning guards the never-started warning. It lives at
+// package level so that the warning fires once per process, not once per
+// ContainerMonitorService.
+var cpuWorkerNeverStartedWarning sync.Once
+
+// warnCPUWorkerNeverStarted sends cpuSeamClientUnavailableMessage to Sentry the
+// first time the process calls it. The component logger has no Sentry hook,
+// so this wraps it in one that serves only this warning.
+func warnCPUWorkerNeverStarted() {
+	cpuWorkerNeverStartedWarning.Do(func() {
+		hook := fsmv2sentry.NewSentryHook(time.Minute)
+		// The hook hands the event to the Sentry client before SentryWarn
+		// returns, so stopping it loses nothing. Stopping ends the goroutine
+		// its debouncer runs.
+		defer hook.Stop()
+
+		base := logger.For(logger.ComponentContainerMonitorService)
+		hooked := base.Desugar().WithOptions(zap.WrapCore(hook.Wrap)).Sugar()
+
+		deps.NewFSMLogger(hooked).SentryWarn(deps.FeatureSupportCPU, cpuSeamHierarchyPath, cpuSeamClientUnavailableMessage)
+	})
+}

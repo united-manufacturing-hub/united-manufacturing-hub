@@ -1469,6 +1469,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			logs := noClient()
 
+			container_monitor.ResetCPUWorkerNeverStartedWarning()
+
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
 			// With the legacy path off there is nothing left to measure the box:
