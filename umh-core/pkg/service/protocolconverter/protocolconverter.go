@@ -115,7 +115,7 @@ type IProtocolConverterService interface {
 	//
 	// It returns:
 	//    mustWait – true when the bridge must wait, false otherwise.
-	//    reason   – empty when mustWait is false; otherwise the refusal reason and how to start bridges anyway.
+	//    reason   – empty when mustWait is false; otherwise why the bridge waits and how to start bridges anyway.
 	BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string)
 }
 

@@ -249,7 +249,7 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 			// appropriately if actually overloaded.
 		} else if mustWait, reason := p.service.BridgeMustWait(snapshot, p.baseFSMInstance.GetID()); mustWait {
 			// Block creation due to resource limits
-			p.baseFSMInstance.GetLogger().Warnf("Bridge %s blocked: %s", p.baseFSMInstance.GetID(), reason)
+			p.baseFSMInstance.GetLogger().Warnf("Bridge %s waits: %s", p.baseFSMInstance.GetID(), reason)
 			// Set the status reason so it appears in the snapshot logger and frontend
 			// Just use the reason directly - it's already clear and actionable
 			p.ObservedState.ServiceInfo.StatusReason = reason

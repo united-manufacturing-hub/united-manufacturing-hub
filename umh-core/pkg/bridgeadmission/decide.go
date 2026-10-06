@@ -14,9 +14,10 @@
 
 // Package bridgeadmission decides whether umh-core may create a bridge.
 //
-// A bridge is admitted only when CPU, memory and disk are proven healthy and a
-// bridge fits under the maximum number of bridges. The one exception is the emergency
-// switch agent.enableResourceLimitBlocking: false, which admits every bridge.
+// A bridge is admitted only when CPU, memory and disk are proven healthy and the
+// bridge limit is not reached. The one exception is the emergency setting Turn off
+// bridge admission (agent.enableResourceLimitBlocking: false). While it is false,
+// every bridge is admitted.
 // Decide applies the rules top to bottom.
 package bridgeadmission
 
@@ -31,7 +32,7 @@ const BridgesPerCore = 5
 // Redpanda.
 const redpandaReservedCores = 1
 
-const emergencyHint = "In an emergency, you can start bridges anyway by setting agent.enableResourceLimitBlocking: false in the instance's Config File. It takes effect without a restart. Set it back to true once the resource problem is fixed."
+const emergencyHint = "In an emergency, you can start bridges anyway with the emergency setting Turn off bridge admission: set agent.enableResourceLimitBlocking: false in the instance's Config File. It takes effect without a restart. Set it back to true once the resource problem is fixed."
 
 // Health is what the caller knows about one resource.
 type Health int
@@ -68,7 +69,7 @@ type Input struct {
 	Cores float64
 }
 
-// Cause names why a bridge was refused.
+// Cause names why a bridge must wait.
 type Cause int
 
 const (
