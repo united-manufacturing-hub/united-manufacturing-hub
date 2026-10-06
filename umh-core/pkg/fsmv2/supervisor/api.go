@@ -242,10 +242,28 @@ func (s *Supervisor[TObserved, TDesired]) toDocument(
 	return doc, nil
 }
 
-// saveInitialState writes a worker's observed and desired documents and
-// clears its tombstone.
+// saveInitialState saves the desired document before the observation, so an
+// AddWorker that fails on SaveDesired stores no StartupCount.
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, worker fsmv2.Worker, identity deps.Identity, observed fsmv2.ObservedState, initialDesired fsmv2.DesiredState, startupCount int64) error {
+	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath, documentConversion{
+		what:           "desired state",
+		marshalEvent:   "worker_add_marshal_desired_failed",
+		unmarshalEvent: "worker_add_unmarshal_desired_failed",
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
+
+		return fmt.Errorf("failed to save initial desired state: %w", err)
+	}
+
+	s.logger.Debug("initial_desired_state_saved")
+
 	// Persist the computed StartupCount on the initial observation so a crash
 	// between this save and the first collector tick does not reset it. The
 	// collector still owns the full framework metrics on every later tick.
@@ -278,24 +296,6 @@ func (s *Supervisor[TObserved, TDesired]) saveInitialState(ctx context.Context, 
 	}
 
 	s.logger.Debug("initial_observation_saved")
-
-	desiredDoc, err := s.toDocument(initialDesired, identity.ID, identity.HierarchyPath, documentConversion{
-		what:           "desired state",
-		marshalEvent:   "worker_add_marshal_desired_failed",
-		unmarshalEvent: "worker_add_unmarshal_desired_failed",
-	})
-	if err != nil {
-		return err
-	}
-
-	_, err = s.store.SaveDesired(ctx, s.workerType, identity.ID, desiredDoc)
-	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_desired_failed")
-
-		return fmt.Errorf("failed to save initial desired state: %w", err)
-	}
-
-	s.logger.Debug("initial_desired_state_saved")
 
 	// This ID may belong to a removed worker; its tombstone must not apply to the new one.
 	if err := s.store.ClearTombstone(ctx, s.workerType, identity.ID); err != nil {
@@ -524,20 +524,35 @@ func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContex
 	s.logger.Info("worker_added")
 }
 
+// stopWorker tears down a worker that just left the registry, deleting the
+// state-duration series of the worker's current state.
+func (s *Supervisor[TObserved, TDesired]) stopWorker(
+	ctx context.Context,
+	workerCtx *WorkerContext[TObserved, TDesired],
+) {
+	workerCtx.collector.Stop(ctx)
+	workerCtx.executor.Shutdown()
+
+	workerCtx.mu.RLock()
+
+	if workerCtx.currentState != nil {
+		metrics.CleanupStateDuration(s.GetHierarchyPathUnlocked(), workerCtx.currentState.String())
+	}
+
+	workerCtx.mu.RUnlock()
+}
+
 // RemoveWorkerForRestart removes a worker from the registry without
 // tombstoning its documents. To remove a worker for good, use
 // fsmv2.SignalNeedsRemoval.
 func (s *Supervisor[TObserved, TDesired]) RemoveWorkerForRestart(ctx context.Context, workerID string) error {
 	s.mu.Lock()
 
-	// Cache hierarchy path while holding the lock to avoid data race
-	hierarchyPath := s.GetHierarchyPathUnlocked()
-
 	workerCtx, exists := s.workers[workerID]
 	if !exists {
 		s.mu.Unlock()
 
-		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_remove_not_found",
+		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "worker_remove_not_found",
 			deps.String("target_worker_id", workerID))
 
 		return errors.New("worker not found")
@@ -546,16 +561,7 @@ func (s *Supervisor[TObserved, TDesired]) RemoveWorkerForRestart(ctx context.Con
 	delete(s.workers, workerID)
 	s.mu.Unlock()
 
-	workerCtx.collector.Stop(ctx)
-	workerCtx.executor.Shutdown()
-
-	workerCtx.mu.RLock()
-
-	if workerCtx.currentState != nil {
-		metrics.CleanupStateDuration(hierarchyPath, workerCtx.currentState.String())
-	}
-
-	workerCtx.mu.RUnlock()
+	s.stopWorker(ctx, workerCtx)
 
 	s.logger.Info("worker_removed")
 
@@ -755,11 +761,10 @@ func (s *Supervisor[TObserved, TDesired]) GetHierarchyPath() string {
 	return s.GetHierarchyPathUnlocked()
 }
 
-// GetHierarchyPathUnlocked computes the hierarchy path without acquiring the lock.
-// This function is safe to call without holding the lock because it uses a cached
-// worker ID (set atomically in AddWorker) instead of iterating over the workers map.
+// GetHierarchyPathUnlocked computes the hierarchy path without s.mu.
+// cachedFirstWorkerID is an atomic.Value, and setParent writes s.parent
+// once, before the child's first tick.
 func (s *Supervisor[TObserved, TDesired]) GetHierarchyPathUnlocked() string {
-	// Use cached first worker ID for lock-free access
 	workerID := "unknown"
 	if cached := s.cachedFirstWorkerID.Load(); cached != nil {
 		workerID = cached.(string)
