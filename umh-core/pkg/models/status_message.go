@@ -234,7 +234,7 @@ type CPU struct {
 	CgroupCores   float64    `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
 	ThrottleRatio float64    `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
 	IsThrottled   bool       `json:"isThrottled,omitempty"`   // True if recently throttled
-	CPUHealth     *CPUHealth `json:"cpuHealth,omitempty"`     // nil when the fsmv2 CPU worker has no verdict to send this tick, such as right after a start
+	CPUHealth     *CPUHealth `json:"cpuHealth,omitempty"`     // nil when the container monitor sends no verdict this tick, such as right after a start
 }
 
 // CPUHealth is the wire shape of one CPU health observation: the verdict beside

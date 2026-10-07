@@ -22,8 +22,8 @@ import (
 // runningState is the healthy steady state of a simple worker. It is generic
 // over the developer's config and status so Next can read the verdict off the
 // wrapped Status the worker persists each tick; the generic Register
-// instantiates one per worker type. Rung "states in sub-files" (later) may split
-// these; for now the machine flips between running and degraded on the verdict.
+// instantiates one per worker type. The machine flips between running and
+// degraded on the verdict.
 type runningState[TConfig, TStatus any] struct {
 	helpers.RunningHealthyBase
 }

@@ -480,13 +480,12 @@ var _ = Describe("Register", func() {
 		Expect(fsmv2.LookupInitialState("simpleworker_register")).NotTo(BeNil())
 	})
 
-	// A worker is not healthy until a poll has shown it (ENG-6320). The
-	// supervisor starts every instance in the state Register stored, so the
-	// first tick decides from the first stored poll.
+	// The supervisor starts each worker in the state Register stored, and runs
+	// the first tick on the first collected observation.
 	Describe("the state a registered worker starts in", func() {
 		// firstTick registers workerType with a Poll that returns pollErr,
-		// stores that poll the way the supervisor does before the first tick,
-		// and runs the first tick from the registered initial state.
+		// collects one observation from it, and runs the registered initial
+		// state's Next on that observation.
 		firstTick := func(workerType string, pollErr error) (fsmv2.State[any, any], fsmv2.State[any, any]) {
 			spec := MonitorSpec[probeConfig, probeStatus, struct{}]{
 				WorkerType: workerType,

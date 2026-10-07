@@ -36,8 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// cgroupFixture is a filesystem that holds only the files in its map, so the
-// real CPU worker reads a container limited to 2 of 4 cores.
+// cgroupFixture is a filesystem that holds only the files in its map.
 type cgroupFixture struct {
 	filesystem.Service
 
@@ -76,10 +75,7 @@ func containerLimitedTo2Of4Cores() cgroupFixture {
 	}}
 }
 
-// Right after a start the CPU worker has not measured the CPU usage yet
-// (ENG-6320). The CPU is then degraded, and no cpuHealth key is sent: the
-// Management Console rejects a degraded verdict that names no cause.
-var _ = Describe("the CPU seam while the CPU worker is starting up", func() {
+var _ = Describe("CollectCPUFromWorker while the CPU worker is starting up", func() {
 	It("reports CPU degraded with the starting-up message and sends no cpuHealth key until the usage is measured", func() {
 		register.SetDeps[filesystem.Service](fsmv2cpu.FilesystemDepsKey, containerLimitedTo2Of4Cores())
 		DeferCleanup(register.ClearDeps, fsmv2cpu.FilesystemDepsKey)
@@ -103,7 +99,8 @@ var _ = Describe("the CPU seam while the CPU worker is starting up", func() {
 			Expect(ok).To(BeTrue())
 			Expect(obs.Status.Reason).NotTo(HavePrefix("poll error"), "this spec needs every poll to read the fixture")
 
-			// The collector stamps CollectedAt; this spec stores it directly.
+			// GetFresh judges freshness by CollectedAt, which the collector
+			// normally stamps.
 			obs.CollectedAt = time.Now()
 			stub.obs = &obs
 
@@ -117,7 +114,7 @@ var _ = Describe("the CPU seam while the CPU worker is starting up", func() {
 		Expect(result.Details.UsageRingActive).To(BeFalse(), "the first poll after a start has not measured the usage")
 
 		for polls := 1; !result.Details.UsageRingActive; polls++ {
-			Expect(polls).To(BeNumerically("<=", 3), "the usage must be measured within three polls")
+			Expect(polls).To(BeNumerically("<", 3), "the usage must be measured within three polls")
 
 			Expect(result.Verdict.State == cpuhealth.StateDegraded && len(result.Verdict.Causes) == 0).To(BeFalse(),
 				"the stored verdict must not be degraded without a cause")
@@ -136,8 +133,9 @@ var _ = Describe("the CPU seam while the CPU worker is starting up", func() {
 			result, cpu = poll()
 		}
 
-		// Positive control: once the usage is measured, the same chain sends
-		// the verdict, so the absence above is the starting-up window's.
+		// Once the usage is measured, CollectCPUFromWorker sends the verdict.
+		// So the missing cpuHealth key above comes from the unmeasured usage,
+		// not from the test setup.
 		Expect(cpu.Health.Category).To(Equal(models.Active))
 		Expect(cpu.CPUHealth).NotTo(BeNil())
 	})

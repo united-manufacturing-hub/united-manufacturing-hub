@@ -60,8 +60,6 @@ var _ = Describe("the worker's own health", func() {
 		Expect(monitorSpec.Health).NotTo(BeNil(),
 			"the spec must wire a health check, or only a poll error can degrade this worker")
 
-		// The first tick only starts the usage window, so the healthy verdict
-		// this spec maps is read on the second.
 		d := newDeps(newTickSampler(quietTick(0), quietTick(1)), 4, 2)
 
 		_, err := Poll(context.Background(), d, CPUConfig{})
@@ -80,9 +78,6 @@ var _ = Describe("the worker's own health", func() {
 			"the composed customer message is the reason an operator sees")
 	})
 
-	// "Not measured yet" is not healthy (ENG-6320). The verdict stays healthy
-	// with no cause: the Management Console rejects a degraded verdict that
-	// names no cause.
 	It("degrades the worker while the CPU usage is not measured yet, and turns healthy once it is", func() {
 		d := newDeps(newTickSampler(quietTick(0), quietTick(1)), 4, 2)
 

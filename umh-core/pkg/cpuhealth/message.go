@@ -198,8 +198,9 @@ func instanceMeasured(details Details) bool {
 	return details.UsageRingActive
 }
 
-// UsageMeasured reports whether the usage window the headline reads has filled.
-// Right after a start it has not, and the message reads "CPU: starting up.".
+// UsageMeasured reports whether the usage figure the healthy headline needs has
+// a value: the usage window has reduced, and in no-limit mode /proc/stat was
+// readable. Until then composeHealthy renders "CPU: starting up.".
 // It has one floor per mode, because an outage can leave one window thin while
 // the other fills and a limit-mode headline reads only its own usage.
 func UsageMeasured(details Details) bool {
