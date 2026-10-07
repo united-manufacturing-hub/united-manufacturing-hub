@@ -97,7 +97,7 @@ var _ = Describe("Collector log severity", func() {
 	Context("Stop() on a not-running collector", func() {
 		// J1: a not-running Stop is benign on every teardown caller — the
 		// supervisor shutdown path (context.Background, Err()==nil), a cancelled
-		// teardown ctx, and the worker-reap / RemoveWorker paths (a live
+		// teardown ctx, and the worker-reap / RemoveWorkerForRestart paths (a live
 		// reconcile ctx, Err()==nil). collector_stop_skipped must be Debug for
 		// all of them. A regression re-introducing a ctx.Err() discriminator
 		// that routes any non-cancelled or live ctx back to SentryWarn must fail
@@ -135,7 +135,7 @@ var _ = Describe("Collector log severity", func() {
 			Entry("deadline-exceeded context (Err()==context.DeadlineExceeded)", func() (context.Context, context.CancelFunc) {
 				return context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 			}),
-			Entry("live uncancelled context (reap/RemoveWorker path, Err()==nil)", func() (context.Context, context.CancelFunc) {
+			Entry("live uncancelled context (reap/RemoveWorkerForRestart path, Err()==nil)", func() (context.Context, context.CancelFunc) {
 				return context.WithCancel(context.Background())
 			}),
 		)

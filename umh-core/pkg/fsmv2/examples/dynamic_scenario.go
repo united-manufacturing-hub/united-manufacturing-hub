@@ -115,18 +115,16 @@ func driveDynamicHello(ctx context.Context, env Env) error {
 		return fmt.Errorf("wait for update->observed mood: %w", err)
 	}
 
-	// DELETE: remove the child, exercising the despawn path. The driver only
-	// calls Delete; proving the store-side reap (the worker gone from the store)
-	// is deferred to ENG-5107, which builds the despawn-tombstone subsystem.
+	// DELETE: remove the child. pkg/fsmv2/integration checks what the store and
+	// Get show afterwards.
 	env.Client.Delete(ref)
 
 	return nil
 }
 
 // waitForDynamicHello polls the child's typed observation until pred is
-// satisfied or ctx is cancelled. ErrNotObserved means the child has not yet
-// published an observation this tick, so it is treated as retry-on-a-later-tick;
-// any other error is surfaced, so a real read failure is never swallowed.
+// satisfied or ctx is cancelled. Any error other than ErrNotFound is
+// returned.
 func waitForDynamicHello(ctx context.Context, client *fsmv2client.FSMv2Client, ref dynamicchildren.Ref, pred func(fsmv2.Observation[hello_world.HelloworldStatus]) bool) error {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
@@ -138,7 +136,7 @@ func waitForDynamicHello(ctx context.Context, client *fsmv2client.FSMv2Client, r
 			if pred(obs) {
 				return nil
 			}
-		case errors.Is(err, fsmv2client.ErrNotObserved):
+		case errors.Is(err, fsmv2client.ErrNotFound):
 			// Not yet observed: retry on a later tick.
 		default:
 			return fmt.Errorf("get observation: %w", err)

@@ -132,7 +132,7 @@ func TestGetReadsObservedStateWrittenByRealCollector(t *testing.T) {
 	// not-found error -- never a zero value masquerading as data.
 	undeclaredRef := dynamicchildren.Ref{WorkerType: "helloworld", Name: "never-spawned"}
 	_, err = fsmv2client.Get[hello_world.HelloworldStatus](ctx, client, undeclaredRef)
-	if !errors.Is(err, fsmv2client.ErrNotObserved) {
-		t.Fatalf("Get for undeclared ref returned %v; want a wrapped ErrNotObserved, not a zero value", err)
+	if !errors.Is(err, fsmv2client.ErrNotFound) {
+		t.Fatalf("Get for undeclared ref returned %v; want a wrapped ErrNotFound, not a zero value", err)
 	}
 }
