@@ -87,7 +87,7 @@ var _ = Describe("CollectCPUFromWorker while the CPU worker is starting up", fun
 		Expect(err).NotTo(HaveOccurred())
 
 		stub := &cpuStubStateReader{}
-		publishCPUClient(stub, true)
+		publishCPUClient(stub)
 
 		service := container_monitor.NewContainerMonitorServiceWithPath(filesystem.NewMockFileSystem(), GinkgoT().TempDir())
 
