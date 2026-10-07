@@ -34,18 +34,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// publishCPUClient publishes a real fsmv2 client whose store serves stub. With
-// registered false, the CPU worker is missing from the client's registry.
-func publishCPUClient(stub *cpuStubStateReader, registered bool) {
+// publishCPUClient publishes a real fsmv2 client whose store serves stub, with
+// the CPU worker registered, and returns it.
+func publishCPUClient(stub *cpuStubStateReader) *fsmv2client.FSMv2Client {
 	writer := dynamicchildren.NewWriter()
-	if registered {
-		Expect(writer.Upsert(fsmv2cpu.Ref, map[string]any{})).To(Succeed())
-	}
+	Expect(writer.Upsert(fsmv2cpu.Ref, map[string]any{})).To(Succeed())
 
+	client := fsmv2client.NewFSMv2Client(writer, stub)
 	previous := fsmv2client.GetClient()
 
-	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, stub))
+	fsmv2client.SetClient(client)
 	DeferCleanup(func() { fsmv2client.SetClient(previous) })
+
+	return client
 }
 
 // freshReader returns a store stub serving one observation of status,
@@ -85,36 +86,36 @@ var _ = Describe("the CPU seam without a usable reading", func() {
 			DeferCleanup(func() { fsmv2client.SetClient(previous) })
 		}, "fsmv2 supervisor is not running"),
 		Entry("no reading yet", func() {
-			publishCPUClient(&cpuStubStateReader{err: persistence.ErrNotFound}, true)
+			publishCPUClient(&cpuStubStateReader{err: persistence.ErrNotFound})
 		}, "never observed"),
 		Entry("a stale reading", func() {
 			stale := freshReader(healthyWorkerStatus())
 			stale.obs.CollectedAt = time.Now().Add(-4 * fsmv2cpu.PollInterval)
-			publishCPUClient(stale, true)
+			publishCPUClient(stale)
 		}, "stale"),
-		Entry("an unregistered worker", func() {
-			publishCPUClient(freshReader(healthyWorkerStatus()), false)
-		}, "not registered"),
+		Entry("a deleted worker", func() {
+			publishCPUClient(freshReader(healthyWorkerStatus())).Delete(fsmv2cpu.Ref)
+		}, "was removed"),
 		Entry("a read error", func() {
-			publishCPUClient(&cpuStubStateReader{err: errors.New("store read failed")}, true)
+			publishCPUClient(&cpuStubStateReader{err: errors.New("store read failed")})
 		}, "store read failed"),
 		Entry("a failed poll", func() {
 			publishCPUClient(freshReader(simple.Status[fsmv2cpu.CPUStatus]{
 				Degraded: true,
 				Reason:   "poll error: read cpu.stat: permission denied",
-			}), true)
+			}))
 		}, "permission denied"),
 		Entry("a timed-out poll that kept a healthy partial result", func() {
 			publishCPUClient(freshReader(simple.Status[fsmv2cpu.CPUStatus]{
 				Result:   healthyWorkerStatus().Result,
 				Degraded: true,
 				Reason:   "poll error: " + context.DeadlineExceeded.Error(),
-			}), true)
+			}))
 		}, "deadline exceeded"),
 		Entry("a poll without a verdict", func() {
 			publishCPUClient(freshReader(simple.Status[fsmv2cpu.CPUStatus]{
 				Result: fsmv2cpu.CPUStatus{Verdict: cpuhealth.Verdict{}},
-			}), true)
+			}))
 		}, "no verdict"),
 	)
 })
