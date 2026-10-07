@@ -645,14 +645,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "circuit_breaker_opened",
 					logFields...)
+			}
 
-				s.mu.RLock()
-				openPaths := s.workerPathsLocked()
-				s.mu.RUnlock()
+			s.mu.RLock()
+			openPaths := s.workerPathsLocked()
+			s.mu.RUnlock()
 
-				for _, path := range openPaths {
-					metrics.RecordCircuitOpen(path, true)
-				}
+			for _, path := range openPaths {
+				metrics.RecordCircuitOpen(path, true)
 			}
 
 			if childErr != nil {

@@ -127,4 +127,28 @@ var _ = Describe("Supervisor metrics", func() {
 			Expect(fsmv2SeriesFor(path)).To(HaveKeyWithValue("umh_fsmv2_circuit_open{}", 0.0), path)
 		}
 	})
+
+	It("record the open circuit breaker on a worker added while it is open", func() {
+		s := supervisorWithState(&mockState{signal: fsmv2.SignalNone})
+		s.TestSetStarted(true)
+
+		openChild := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+			WorkerType: "open-child",
+			Store:      newMockTriangularStore(),
+			Logger:     deps.NewNopFSMLogger(),
+		})
+		openChild.TestSetCircuitOpen(true)
+		s.TestLinkChild("open-child", openChild)
+
+		Expect(s.TestTick(context.Background())).To(MatchError(supervisor.ErrInfraCircuitOpen))
+		Expect(fsmv2SeriesFor(mockIdentity().HierarchyPath)).To(HaveKeyWithValue("umh_fsmv2_circuit_open{}", 1.0))
+
+		lateIdentity := deps.Identity{ID: "late-worker", Name: "Late Worker", WorkerType: "test", HierarchyPath: "late-worker(test)"}
+		lateState := &mockState{signal: fsmv2.SignalNone}
+		lateState.nextState = lateState
+		Expect(s.AddWorker(lateIdentity, &mockWorker{initialState: lateState})).To(Succeed())
+
+		Expect(s.TestTick(context.Background())).To(MatchError(supervisor.ErrInfraCircuitOpen))
+		Expect(fsmv2SeriesFor(lateIdentity.HierarchyPath)).To(HaveKeyWithValue("umh_fsmv2_circuit_open{}", 1.0))
+	})
 })
