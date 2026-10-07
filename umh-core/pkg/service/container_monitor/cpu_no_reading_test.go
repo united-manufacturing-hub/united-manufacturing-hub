@@ -48,24 +48,24 @@ func publishCPUClient(stub *cpuStubStateReader, registered bool) {
 	DeferCleanup(func() { fsmv2client.SetClient(previous) })
 }
 
-// observedNow is one observation of status, collected just now so that it
-// counts as fresh.
-func observedNow(status simple.Status[fsmv2cpu.CPUStatus]) *cpuStubStateReader {
+// freshReader returns a store stub serving one observation of status,
+// collected now so that it counts as fresh.
+func freshReader(status simple.Status[fsmv2cpu.CPUStatus]) *cpuStubStateReader {
 	return &cpuStubStateReader{obs: &fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 		CollectedAt: time.Now(),
 		Status:      status,
 	}}
 }
 
-// A healthy verdict is staged wherever a row has room for one. No row may
-// report it, so a branch that starts trusting it turns its row healthy and
-// fails the table. Each row also names its case in the message it expects, so
-// a row that reaches a different degraded branch fails too.
+// When you add a row, stage a healthy verdict next to the defect if the state
+// can carry one, and expect a message that names the case. A judgeWorkerCPU
+// branch that starts trusting the verdict then turns its row healthy, and a row
+// that reaches a different branch gets the wrong message.
 var _ = Describe("the CPU seam without a usable reading", func() {
 	DescribeTable("reports degraded, with no measurement attached",
 		func(stage func(), messageNamesCase string) {
 			stage()
-			container_monitor.ResetCPUWorkerNeverStartedWarning()
+			container_monitor.ResetFSMv2SupervisorNotRunningOnce()
 
 			service := container_monitor.NewContainerMonitorServiceWithPath(filesystem.NewMockFileSystem(), GinkgoT().TempDir())
 
@@ -83,36 +83,36 @@ var _ = Describe("the CPU seam without a usable reading", func() {
 
 			fsmv2client.SetClient(nil)
 			DeferCleanup(func() { fsmv2client.SetClient(previous) })
-		}, "no fsmv2 client is reachable"),
+		}, "fsmv2 supervisor is not running"),
 		Entry("no reading yet", func() {
 			publishCPUClient(&cpuStubStateReader{err: persistence.ErrNotFound}, true)
 		}, "never observed"),
 		Entry("a stale reading", func() {
-			stale := observedNow(healthyWorkerStatus())
+			stale := freshReader(healthyWorkerStatus())
 			stale.obs.CollectedAt = time.Now().Add(-4 * fsmv2cpu.PollInterval)
 			publishCPUClient(stale, true)
 		}, "stale"),
 		Entry("an unregistered worker", func() {
-			publishCPUClient(observedNow(healthyWorkerStatus()), false)
+			publishCPUClient(freshReader(healthyWorkerStatus()), false)
 		}, "not registered"),
 		Entry("a read error", func() {
 			publishCPUClient(&cpuStubStateReader{err: errors.New("store read failed")}, true)
 		}, "store read failed"),
 		Entry("a failed poll", func() {
-			publishCPUClient(observedNow(simple.Status[fsmv2cpu.CPUStatus]{
+			publishCPUClient(freshReader(simple.Status[fsmv2cpu.CPUStatus]{
 				Degraded: true,
 				Reason:   "poll error: read cpu.stat: permission denied",
 			}), true)
 		}, "permission denied"),
 		Entry("a timed-out poll that kept a healthy partial result", func() {
-			publishCPUClient(observedNow(simple.Status[fsmv2cpu.CPUStatus]{
+			publishCPUClient(freshReader(simple.Status[fsmv2cpu.CPUStatus]{
 				Result:   healthyWorkerStatus().Result,
 				Degraded: true,
 				Reason:   "poll error: " + context.DeadlineExceeded.Error(),
 			}), true)
 		}, "deadline exceeded"),
 		Entry("a poll without a verdict", func() {
-			publishCPUClient(observedNow(simple.Status[fsmv2cpu.CPUStatus]{
+			publishCPUClient(freshReader(simple.Status[fsmv2cpu.CPUStatus]{
 				Result: fsmv2cpu.CPUStatus{Verdict: cpuhealth.Verdict{}},
 			}), true)
 		}, "no verdict"),

@@ -86,10 +86,10 @@ var workerHealthyMessage = cpuhealth.ComposeMessage(
 	workerHealthyDetails,
 )
 
-// seamStillStartingWarning mirrors the diagnostic warning readWorkerCPUHealth
-// emits when the flag is on but the fsmv2 client is not published yet. The
-// warn-once spec asserts message content, not just a count.
-const seamStillStartingWarning = "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no CPU measurement is available"
+// supervisorNotRunningMessage mirrors the diagnostic warning readWorkerCPUHealth
+// emits when the flag is on but no fsmv2 client is published. The warn-once
+// spec asserts message content, not just a count.
+const supervisorNotRunningMessage = "USE_FSMV2_CPU is enabled but the fsmv2 supervisor is not running, so CPU is not measured"
 
 // cpuStubStateReader is the cpuStubReader harness pattern from
 // pkg/fsmv2/fsmv2client/freshness_test.go: a deps.StateReader that serves a
@@ -1457,7 +1457,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			})
 		}
 
-		It("should warn once, naming the still-starting supervisor, when USE_FSMV2_CPU is on and the client is not published yet", func() {
+		It("should warn once, naming the supervisor that is not running, when USE_FSMV2_CPU is on and no client is published", func() {
 			setFlag("true")
 			// The supervisor no longer depends on USE_FSMV2_TRANSPORT or on
 			// Management Console credentials. Both are set to the values that
@@ -1469,7 +1469,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			logs := noClient()
 
-			container_monitor.ResetCPUWorkerNeverStartedWarning()
+			container_monitor.ResetFSMv2SupervisorNotRunningOnce()
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
@@ -1481,7 +1481,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.CPU).NotTo(BeNil())
 				Expect(status.CPUHealth).To(Equal(models.Degraded))
-				Expect(status.CPU.Health.Message).To(Equal(seamStillStartingWarning))
+				Expect(status.CPU.Health.Message).To(Equal(supervisorNotRunningMessage))
 				// The state pair is asserted HERE and only here. Everywhere else
 				// it is pinned through status.CPUHealth, which is derived from
 				// Category; this is the one case where a hand-written Health could
@@ -1491,11 +1491,11 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 				Expect(status.CPU.Health.DesiredState).To(Equal("active"))
 			}
 
-			stillStartingWarns := logs.Filter(func(entry observer.LoggedEntry) bool {
+			notRunningWarns := logs.Filter(func(entry observer.LoggedEntry) bool {
 				return entry.LoggerName == logger.ComponentContainerMonitorService &&
-					entry.Message == seamStillStartingWarning
+					entry.Message == supervisorNotRunningMessage
 			}).Len()
-			Expect(stillStartingWarns).To(Equal(1))
+			Expect(notRunningWarns).To(Equal(1))
 		})
 	})
 })

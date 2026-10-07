@@ -54,16 +54,16 @@ func (t *capturingSentryTransport) SendEvent(event *sentrygo.Event) {
 	t.events = append(t.events, event)
 }
 
-// neverStartedEvents counts the captured events that carry the never-started
-// warning and the CPU feature tag.
-func (t *capturingSentryTransport) neverStartedEvents() int {
+// supervisorNotRunningEvents counts the captured events that carry the
+// supervisor-not-running warning and the CPU feature tag.
+func (t *capturingSentryTransport) supervisorNotRunningEvents() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	count := 0
 
 	for _, event := range t.events {
-		if event.Message == seamStillStartingWarning && event.Tags["feature"] == string(deps.FeatureSupportCPU) {
+		if event.Message == supervisorNotRunningMessage && event.Tags["feature"] == string(deps.FeatureSupportCPU) {
 			count++
 		}
 	}
@@ -71,8 +71,8 @@ func (t *capturingSentryTransport) neverStartedEvents() int {
 	return count
 }
 
-var _ = Describe("a CPU worker that never started", func() {
-	It("is reported to Sentry once per process, however many services tick", func() {
+var _ = Describe("an fsmv2 supervisor that is not running", func() {
+	It("is reported to Sentry once per process, however many services call GetStatus", func() {
 		previousFlag, hadFlag := os.LookupEnv(usefsmv2CPUEnv)
 		Expect(os.Setenv(usefsmv2CPUEnv, "true")).To(Succeed())
 		DeferCleanup(func() {
@@ -83,17 +83,17 @@ var _ = Describe("a CPU worker that never started", func() {
 			}
 		})
 
-		// A nil client is what the seam sees when the fsmv2 supervisor never
-		// started.
 		previousClient := fsmv2client.GetClient()
 
 		fsmv2client.SetClient(nil)
 		DeferCleanup(func() { fsmv2client.SetClient(previousClient) })
 
-		// The Sentry hook forwards only levels its inner core accepts, so the
-		// component logger must accept warnings.
+		// Run the logger's one-time setup now, so logger.For does not replace
+		// the core installed below.
 		logger.GetLogger()
 
+		// The Sentry hook forwards only levels its inner core accepts, so the
+		// component logger must accept warnings.
 		core, _ := observer.New(zapcore.WarnLevel)
 		DeferCleanup(zap.ReplaceGlobals(zap.New(core)))
 
@@ -104,7 +104,7 @@ var _ = Describe("a CPU worker that never started", func() {
 		})).To(Succeed())
 		DeferCleanup(func() { _ = sentrygo.Init(sentrygo.ClientOptions{}) })
 
-		container_monitor.ResetCPUWorkerNeverStartedWarning()
+		container_monitor.ResetFSMv2SupervisorNotRunningOnce()
 
 		testDataPath := GinkgoT().TempDir()
 
@@ -119,6 +119,6 @@ var _ = Describe("a CPU worker that never started", func() {
 		}
 
 		sentrygo.Flush(time.Second)
-		Expect(transport.neverStartedEvents()).To(Equal(1))
+		Expect(transport.supervisorNotRunningEvents()).To(Equal(1))
 	})
 })

@@ -65,11 +65,11 @@ func JudgeWorkerCPU(status simple.Status[fsmv2cpu.CPUStatus], freshness fsmv2cli
 	return v.health(), v.cpuHealth
 }
 
-// ResetCPUWorkerNeverStartedWarning lets the next call send the never-started
-// warning again. The guard is per process, so without a reset only the first
-// spec to reach it would see the warning.
-func ResetCPUWorkerNeverStartedWarning() {
-	cpuWorkerNeverStartedWarning = sync.Once{}
+// ResetFSMv2SupervisorNotRunningOnce lets warnFSMv2SupervisorNotRunning send
+// again. fsmv2SupervisorNotRunningOnce is per process, so without a reset only
+// the first spec to reach it would see the warning.
+func ResetFSMv2SupervisorNotRunningOnce() {
+	fsmv2SupervisorNotRunningOnce = sync.Once{}
 }
 
 // ReadWorkerCPUHealth exposes the seam's read of the CPU worker to the external
