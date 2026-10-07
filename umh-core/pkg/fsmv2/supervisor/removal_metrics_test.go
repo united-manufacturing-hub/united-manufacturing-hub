@@ -65,8 +65,9 @@ func supervisorWithState(state *mockState) *supervisor.Supervisor[*supervisor.Te
 
 	s := newSupervisorWithWorkerAndLogger(&mockWorker{initialState: state}, newMockTriangularStore(), supervisor.CollectorHealthConfig{}, deps.NewNopFSMLogger())
 
-	for _, leftover := range stateDurationStates(s.GetHierarchyPath()) {
-		metrics.CleanupStateDuration(s.GetHierarchyPath(), leftover)
+	workerPath := mockIdentity().HierarchyPath
+	for _, leftover := range stateDurationStates(workerPath) {
+		metrics.CleanupStateDuration(workerPath, leftover)
 	}
 
 	return s
