@@ -38,12 +38,12 @@ const (
 	// Updated on every modification.
 	FieldUpdatedAt = "_updated_at"
 
-	// FieldDeletedAt is the soft delete timestamp (NULL if not deleted).
-	// Enables soft deletes without losing data.
+	// FieldDeletedAt is when the document's worker was removed, or nil; the
+	// document itself is kept. A tombstone is a non-nil _deleted_at with its
+	// _deleted_by.
 	FieldDeletedAt = "_deleted_at"
 
-	// FieldDeletedBy is the user who deleted the record (for audit trail).
-	// NULL if not deleted.
+	// FieldDeletedBy is who removed the worker (audit trail), or nil.
 	FieldDeletedBy = "_deleted_by"
 )
 
@@ -84,6 +84,8 @@ var IdentityCSEFields = []string{
 	FieldSyncID,    // Global sync version for delta queries
 	FieldVersion,   // Always 1 for identity (never changes)
 	FieldCreatedAt, // Timestamp of identity creation
+	FieldDeletedAt,
+	FieldDeletedBy,
 }
 
 // DesiredCSEFields contains CSE fields for user intent records with optimistic locking.
@@ -92,6 +94,8 @@ var DesiredCSEFields = []string{
 	FieldVersion,   // Increments on each update (optimistic locking)
 	FieldCreatedAt, // Timestamp of first save
 	FieldUpdatedAt, // Timestamp of last save
+	FieldDeletedAt,
+	FieldDeletedBy,
 }
 
 // ObservedCSEFields contains CSE fields for system reality records.
@@ -101,6 +105,8 @@ var ObservedCSEFields = []string{
 	FieldVersion,   // Increments on each update
 	FieldCreatedAt, // Timestamp of first observation
 	FieldUpdatedAt, // Timestamp of last observation
+	FieldDeletedAt,
+	FieldDeletedBy,
 }
 
 // getCSEFields returns the CSE fields for a given role.

@@ -99,10 +99,12 @@ func judgeWorkerCPU(
 		switch freshness {
 		case fsmv2client.Stale:
 			message = fmt.Sprintf("CPU worker observation is stale (older than %s); cannot trust the verdict it carries", cpuWorkerMaxAge)
-		case fsmv2client.NeverObserved:
+		case fsmv2client.NotFound:
 			message = "CPU worker has never observed; no measurement to judge"
-		case fsmv2client.Unregistered:
-			message = "CPU worker is not registered with the fsmv2 runtime; no measurement to judge"
+		case fsmv2client.Deleted:
+			message = "CPU worker was removed; no measurement to judge"
+		case fsmv2client.Unknown:
+			// The preset message above covers it.
 		}
 
 		return degradedCPU(message)
@@ -176,7 +178,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	}
 
 	// Get the latest poll result from the worker.
-	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
+	workerObs, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
 
 	if err != nil {
 		v := judgeWorkerCPUReadError(err)
@@ -184,7 +186,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 		return v.health(), v.cpuHealth, nil
 	}
 
-	v := judgeWorkerCPU(workerStatus, freshness)
+	v := judgeWorkerCPU(workerObs.Status, freshness)
 
 	return v.health(), v.cpuHealth, nil
 }

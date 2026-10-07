@@ -113,6 +113,12 @@ type TriangularStore struct {
 	cacheMutex       sync.RWMutex
 
 	knownWorkerTypesMu sync.RWMutex
+
+	// documentWriteMu runs saves, Tombstone and ClearTombstone one at a time,
+	// so a tombstone written between a save's read and its write is not lost.
+	// Supervisor code calls the store while holding its own mutex, so code
+	// holding documentWriteMu must never take a supervisor lock.
+	documentWriteMu sync.Mutex
 }
 
 // cachedSnapshot stores a snapshot with its syncID for cache invalidation.
@@ -589,7 +595,7 @@ func (ts *TriangularStore) filterCSEFields(doc persistence.Document, cseFields [
 }
 
 // performDeltaCheck compares two documents and returns change information.
-// Filters out CSE fields, ID, and version before comparison.
+// Filters out CSE fields, ID and version before comparison.
 //
 // Returns:
 //   - hasChanges: true if business data changed (new document or fields modified)

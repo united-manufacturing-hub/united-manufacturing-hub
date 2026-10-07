@@ -81,27 +81,22 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 		// fsmv2client.Get against the live child, BOTH the create->Running state and
 		// the update's new mood. Each leg in driveDynamicHello is a poll that loops
 		// until the value is observed in the store, surfacing every error except
-		// ErrNotObserved and honoring ctx. So this nil return is the create->update
-		// migration-API proof: a runtime Upsert of a real config field (a new
-		// moodFilePath) reached a live child and its new value became observable.
+		// ErrNotFound. So this nil return is the create->update migration-API
+		// proof: a runtime Upsert of a real config field (a new moodFilePath)
+		// reached a live child and its new value became observable.
 		//
-		// We do not re-read the final persisted mood from the store here. After the
-		// driver's Delete, nothing reaps the child, so the supervisor keeps ticking
-		// it through teardown; once the driver's temp mood files are removed (the
-		// leak fix cleans them on driver return), the worker's CollectObservedState
-		// re-reads a now-missing file and overwrites the observed mood with "". That
-		// post-despawn stale observation is the ENG-5107 signal: the store-side reap
-		// (stop ticking + tombstone on Delete) is what makes a stable final-doc read
-		// possible, and ENG-5107 builds it. This rung adds no storage or supervisor
-		// code, so it proves the update at the driver's own observation point.
+		// We do not re-read the final mood from the store here: after Delete the
+		// child can store an empty mood once the driver removes its temp mood
+		// files, and once the child is removed Get returns ErrWorkerDeleted.
 		Expect(err).NotTo(HaveOccurred(),
 			"the dynamic driver must observe create->Running and update->changed-mood through the migration-API client, then Delete, without error")
 		Eventually(result.Done, "55s").Should(BeClosed(),
 			"the v2 runner must wait out the run and then tear down on its own")
 
-		// DELETE: the driver called Delete, exercising the despawn path without
-		// error. The store-side reap proof (the deleted ref returning ErrNotObserved
-		// and the worker gone from the store) is deferred to ENG-5107.
+		// DELETE: the driver called Delete without error. What a removal leaves
+		// in the store and what Get then returns are checked in
+		// app_removal_marks_deleted_test.go, app_shutdown_marks_deleted_test.go
+		// and churn_capstone_test.go.
 
 		// KERNEL SURVIVAL PROOF: the config worker and the supervisor outlived the
 		// child's lifecycle with no panic and no unexpected error/warning. The

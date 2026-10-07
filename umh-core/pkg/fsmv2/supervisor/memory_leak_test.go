@@ -160,7 +160,7 @@ var _ = Describe("Delta Compaction", Label("memory-cleanup"), func() {
 					Expect(err).ToNot(HaveOccurred())
 				}
 
-				err = s.RemoveWorker(ctx, workerID)
+				err = s.RemoveWorkerForRestart(ctx, workerID)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Advance clock so deltas are "in the past"
@@ -211,7 +211,7 @@ func generateDeltas(ctx context.Context, s *supervisor.Supervisor[*supervisor.Te
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-		err = s.RemoveWorker(ctx, workerID)
+		err = s.RemoveWorkerForRestart(ctx, workerID)
 		Expect(err).ToNot(HaveOccurred())
 	}
 }
