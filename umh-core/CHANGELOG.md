@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Enabled the new fsmv2 connection worker by default. This saves approximately 25% of average CPU usage and pressure. The `NMAP_BACKEND=fsmv2` environment variable is no longer needed and can be removed.
+
 ## [0.44.42]
 
 ### New Features

@@ -54,12 +54,11 @@ var _ = Describe("ConnectionService", func() {
 		tick = 1
 		connectionName = "test-connection"
 
-		// Set up mock nmap service
-		mockNmap = nmapservice.NewMockNmapService()
-
-		// Set up a real service with mocked dependencies
+		// Set up a real service with a mocked nmap manager
+		var manager *nmapfsm.NmapManager
+		manager, mockNmap = nmapfsm.NewNmapManagerWithMockedService("test")
 		service = NewDefaultConnectionService(connectionName,
-			WithNmapService(mockNmap))
+			WithNmapManager(manager))
 		mockServices = serviceregistry.NewMockRegistry()
 	})
 
@@ -148,7 +147,6 @@ var _ = Describe("ConnectionService", func() {
 
 			// Create service with our official mock nmap manager
 			statusService = NewDefaultConnectionService(connectionName,
-				WithNmapService(mockNmapService),
 				WithNmapManager(manager))
 
 			// Add the component to the service
@@ -465,7 +463,6 @@ var _ = Describe("ConnectionService", func() {
 
 			// Create a service with our mocked manager
 			testService := NewDefaultConnectionService("test-error-service",
-				WithNmapService(mockNmapService),
 				WithNmapManager(mockManager))
 
 			// Add a test component to have something to reconcile (just like in the other test)
