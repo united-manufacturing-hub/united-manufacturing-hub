@@ -83,6 +83,14 @@ func (m *mockTriangularStore) LoadSnapshot(_ context.Context, _ string, _ string
 	panic("not implemented")
 }
 
+func (m *mockTriangularStore) Tombstone(_ context.Context, _ string, _ string, _ string) error {
+	panic("not implemented")
+}
+
+func (m *mockTriangularStore) ClearTombstone(_ context.Context, _ string, _ string) error {
+	panic("not implemented")
+}
+
 func (m *mockTriangularStore) GetLatestSyncID(_ context.Context) (int64, error) {
 	panic("not implemented")
 }

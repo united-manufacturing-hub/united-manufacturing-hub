@@ -164,6 +164,14 @@
 // incrementing sync IDs after successful writes, managing versions per role,
 // and setting timestamps appropriately.
 //
+// # Removed workers
+//
+// When the supervisor removes a worker, Tombstone sets _deleted_at and
+// _deleted_by on the worker's documents (see FieldDeletedAt). A later save
+// keeps the tombstone.
+// ClearTombstone removes it when a worker with the same id is added again.
+// Readers that must not see a removed worker check _deleted_at.
+//
 // # Delta streaming via sync_id
 //
 // The _sync_id field enables efficient client synchronization:

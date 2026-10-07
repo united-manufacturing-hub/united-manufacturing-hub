@@ -13,7 +13,27 @@
 // limitations under the License.
 
 // Package fsmv2client exposes the migration-API seam: a thin client that wraps
-// a Writer for writes.
+// a Writer for writes and reads workers' observations from the store.
+//
+// # Dynamic and static workers
+//
+// FSMv2 runs each component as a worker, and workers form a tree. The
+// application worker is the root. A supervisor runs each worker on a tick
+// loop and starts and stops its children (see package supervisor). A
+// worker's observation is what it last reported; the store keeps it.
+//
+// Dynamic workers are direct children of the application worker. Callers add
+// and remove them at runtime through Upsert and Delete. The CPU monitor and
+// the historian monitor are dynamic workers.
+//
+// Every other worker is static. Its parent declares it in the parent's list
+// of child specs, and the parent's supervisor starts and stops it. The
+// communicator's transport worker, and the push and pull workers under it,
+// are static workers. Upsert and Delete never add or remove a static worker.
+//
+// Get and GetFresh read the store, not the specs that Upsert records, so they
+// read both kinds the same way. A Ref names a worker of either kind by its
+// WorkerType and by its Name as the parent declared it.
 package fsmv2client
 
 import (
@@ -30,12 +50,30 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// ErrNotObserved reports that no observed state exists for the ref: the child
-// was never spawned, or the collector has not yet persisted its first
-// observation. It is distinct from a decode or transient store failure, so a
-// caller can treat absence as "appears on a later tick" without swallowing a
-// real read error.
-var ErrNotObserved = errors.New("fsmv2client: ref not observed")
+// ErrNotFound reports that nothing is stored for the ref: the worker has not
+// stored its first observation yet, or the ref names no worker. A caller can
+// retry it on a later tick, unlike a decode or store failure.
+var ErrNotFound = errors.New("fsmv2client: nothing stored for ref")
+
+// ErrWorkerDeleted reports that the ref's worker was removed. The store keeps
+// the removed worker's last observation, marked with a removal time (see
+// storage.FieldDeletedAt), but Get does not return it.
+var ErrWorkerDeleted = errors.New("fsmv2client: worker was removed")
+
+// WorkerDeletedError is the error Get returns for a removed worker.
+type WorkerDeletedError struct {
+	Ref       dynamicchildren.Ref
+	DeletedAt time.Time
+}
+
+func (e *WorkerDeletedError) Error() string {
+	return fmt.Sprintf("%s: %s/%s at %s", ErrWorkerDeleted, e.Ref.WorkerType, config.ChildID(e.Ref.Name), e.DeletedAt.Format(time.RFC3339))
+}
+
+// Is makes errors.Is(err, ErrWorkerDeleted) match a *WorkerDeletedError.
+func (e *WorkerDeletedError) Is(target error) bool {
+	return target == ErrWorkerDeleted
+}
 
 // FSMv2Client delegates child-spec writes to the Writer it wraps and
 // reads child observed state through the read-only StateReader it holds (see
@@ -43,6 +81,14 @@ var ErrNotObserved = errors.New("fsmv2client: ref not observed")
 type FSMv2Client struct {
 	w  *dynamicchildren.Writer
 	sr deps.StateReader
+
+	// writeMu makes a registry write and its deletedAt update one step, so a
+	// Delete and an Upsert racing on one ref cannot leave them disagreeing.
+	writeMu   sync.Mutex
+	deletedMu sync.Mutex
+	// deletedAt remembers when Delete removed a ref, until a successful
+	// Upsert re-adds it.
+	deletedAt map[dynamicchildren.Ref]time.Time
 }
 
 // NewFSMv2Client returns an FSMv2Client that writes through w and reads
@@ -51,30 +97,77 @@ type FSMv2Client struct {
 // torn down and recreated, so a held instance would go stale after the first
 // restart.
 func NewFSMv2Client(w *dynamicchildren.Writer, sr deps.StateReader) *FSMv2Client {
-	return &FSMv2Client{w: w, sr: sr}
+	return &FSMv2Client{w: w, sr: sr, deletedAt: make(map[dynamicchildren.Ref]time.Time)}
+}
+
+// recordDeleted remembers ref as deleted now.
+func (c *FSMv2Client) recordDeleted(ref dynamicchildren.Ref) {
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+
+	if c.deletedAt == nil {
+		c.deletedAt = make(map[dynamicchildren.Ref]time.Time)
+	}
+
+	c.deletedAt[ref] = time.Now()
+}
+
+// clearDeleted forgets ref's delete record.
+func (c *FSMv2Client) clearDeleted(ref dynamicchildren.Ref) {
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+
+	delete(c.deletedAt, ref)
+}
+
+// deletedTime returns when Delete removed ref, and whether it did.
+func (c *FSMv2Client) deletedTime(ref dynamicchildren.Ref) (time.Time, bool) {
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+
+	deletedAt, ok := c.deletedAt[ref]
+
+	return deletedAt, ok
 }
 
 // Upsert records cfg for ref in the wrapped Writer. Validation errors return
 // synchronously from this call; callers rely on rejecting a bad spec at the
-// call site. When spec writes move into the config worker's tick (ENG-4400),
-// this client is the layer that absorbs the change, preserving or
-// renegotiating the synchronous error contract.
+// call site. A successful Upsert ends a Delete's hold on the ref. When spec
+// writes move into the config worker's tick (ENG-4400), this client is the
+// layer that absorbs the change, preserving or renegotiating the synchronous
+// error contract.
 func (c *FSMv2Client) Upsert(ref dynamicchildren.Ref, cfg map[string]any) error {
-	return c.w.Upsert(ref, cfg)
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	err := c.w.Upsert(ref, cfg)
+	if err == nil {
+		c.clearDeleted(ref)
+	}
+
+	return err
 }
 
-// Delete removes ref from the wrapped Writer.
+// Delete removes ref from the wrapped Writer. From this call on, Get reads
+// the ref as deleted. After a successful Upsert re-adds it, Get reads the
+// store again, which still answers deleted until the supervisor has started
+// the worker again.
 func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
 	c.w.Delete(ref)
+
+	c.recordDeleted(ref)
 }
 
-// Get reads the observed state the collector persisted for ref's spawned child
-// and returns it as an Observation[TStatus]. The collection is ref.WorkerType
-// and the child id is config.ChildID(ref.Name). When no observed state exists
-// for the ref it returns ErrNotObserved, so an unobserved ref surfaces as a
-// recognizable not-found error a caller can distinguish from a decode or
-// transient store failure, rather than as a zero-value observation. Any other
-// reader error is returned verbatim.
+// Get reads the observation the collector stored for ref's worker, dynamic or
+// static. The collection is ref.WorkerType and the child id is
+// config.ChildID(ref.Name). It returns an error matching ErrNotFound when
+// nothing is stored, a *WorkerDeletedError when the worker was removed, and
+// any other reader error verbatim. On every error the observation is the zero
+// value. A ref deleted through this client reads as deleted from the Delete
+// call on.
 //
 // Get does not verify that TStatus matches ref.WorkerType. Pairing a TStatus
 // that does not match the worker type decodes whatever fields overlap and is
@@ -90,81 +183,72 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 		return obs, fmt.Errorf("fsmv2client: Get requires a client with a StateReader (ref %s/%s)", ref.WorkerType, config.ChildID(ref.Name))
 	}
 
+	if deletedAt, deleted := c.deletedTime(ref); deleted {
+		return fsmv2.Observation[TStatus]{}, &WorkerDeletedError{Ref: ref, DeletedAt: deletedAt}
+	}
+
 	if err := c.sr.LoadObservedTyped(ctx, ref.WorkerType, config.ChildID(ref.Name), &obs); err != nil {
 		if errors.Is(err, persistence.ErrNotFound) {
-			return obs, fmt.Errorf("%w: %s/%s", ErrNotObserved, ref.WorkerType, config.ChildID(ref.Name))
+			return fsmv2.Observation[TStatus]{}, fmt.Errorf("%w: %s/%s", ErrNotFound, ref.WorkerType, config.ChildID(ref.Name))
 		}
 
-		return obs, err
+		return fsmv2.Observation[TStatus]{}, err
+	}
+
+	if obs.DeletedAt != nil {
+		return fsmv2.Observation[TStatus]{}, &WorkerDeletedError{Ref: ref, DeletedAt: *obs.DeletedAt}
 	}
 
 	return obs, nil
 }
 
-// Freshness is the read-side reason GetFresh assigns to a child observation.
-// It lets a caller map an absent or stale read to a distinct recovery policy
-// instead of collapsing every non-fresh case into a single error.
+// Freshness says what GetFresh found for a ref.
 type Freshness int
 
 const (
-	// Unknown is the zero value of Freshness. It is returned when a read error
-	// prevents GetFresh from classifying the observation, so the healthy reason
-	// Fresh is never the default. Freshness is only meaningful when the
-	// accompanying error is nil.
+	// Unknown means the read failed for a reason other than Deleted or
+	// NotFound. GetFresh returns that error with it. Unknown is the zero
+	// value, so an unclassified result never reads as healthy.
 	Unknown Freshness = iota
-	// Fresh means the child was observed within maxAge.
-	Fresh
-	// Unregistered means the ref was never Upserted into the writer.
-	Unregistered
-	// NeverObserved means the ref is registered but no observation exists yet.
-	NeverObserved
-	// Stale means the child was observed but CollectedAt is older than maxAge
-	// (the watcher is wedged or slow).
+	// Deleted means the supervisor removed the worker (see ErrWorkerDeleted).
+	Deleted
+	// NotFound means nothing is stored for the ref: the worker has not stored
+	// its first observation yet, or the ref names no worker.
+	NotFound
+	// Stale means an observation exists and is older than maxAge. An
+	// observation with a zero CollectedAt is Stale.
 	Stale
+	// Fresh means an observation exists and is at most maxAge old.
+	Fresh
 )
 
-// GetFresh reads the observed state for ref's spawned child and maps it to a
-// Freshness reason. A ref that was never Upserted is Unregistered; a registered
-// ref with no persisted observation is NeverObserved; an observation older than
-// maxAge is Stale; otherwise Fresh.
-//
-// A non-ErrNotObserved read error is returned verbatim alongside the Unknown
-// Freshness. Callers must check err before reading Freshness or the returned
-// status: both are meaningless when err is non-nil, and the returned status is
-// only meaningful when Freshness is Fresh or Stale.
-//
-// The store read is bounded by the passed ctx; callers SHOULD pass a
-// deadline-bounded ctx (see the StateReader non-blocking contract).
-//
-// GetFresh does NOT detect a stale observation left over from a previous
-// incarnation after Delete + re-Upsert: the CSE store does not clear a
-// despawned child's observation until ENG-5107 (store-side despawn tombstone)
-// lands. Until then, such a leftover within maxAge is served as Fresh. When
-// ENG-5107 lands, the store will return a typed ErrWorkerDeleted on a
-// despawned ref; Get/GetFresh must then map ErrWorkerDeleted to NeverObserved
-// (today Get only maps persistence.ErrNotFound → ErrNotObserved, so a
-// tombstone read would currently surface as Unknown+err, not NeverObserved).
-func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (TStatus, Freshness, error) {
-	var zero TStatus
-
-	if !c.w.Registry().Contains(ref) {
-		return zero, Unregistered, nil
+// freshnessAt classifies a Get result. now is a parameter so tests can hit the
+// age boundary exactly.
+func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge time.Duration, now time.Time) (Freshness, error) {
+	switch {
+	case errors.Is(err, ErrWorkerDeleted):
+		return Deleted, nil
+	case errors.Is(err, ErrNotFound):
+		return NotFound, nil
+	case err != nil:
+		return Unknown, err
+	case now.Sub(obs.CollectedAt) > maxAge:
+		return Stale, nil
+	default:
+		return Fresh, nil
 	}
+}
 
+// GetFresh is Get plus a freshness check. It returns the observation only for
+// Fresh and Stale, and a non-nil error only with Unknown.
+//
+// The store read is bounded by ctx; callers SHOULD pass a deadline-bounded
+// ctx (see the StateReader non-blocking contract).
+func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (fsmv2.Observation[TStatus], Freshness, error) {
 	obs, err := Get[TStatus](ctx, c, ref)
-	if err != nil {
-		if errors.Is(err, ErrNotObserved) {
-			return zero, NeverObserved, nil
-		}
+	freshness, err := freshnessAt(obs, err, maxAge, time.Now())
 
-		return zero, Unknown, err
-	}
-
-	if time.Since(obs.CollectedAt) > maxAge {
-		return obs.Status, Stale, nil
-	}
-
-	return obs.Status, Fresh, nil
+	return obs, freshness, err
 }
 
 // globalCli is the process-scoped FSMv2Client published once at startup so any

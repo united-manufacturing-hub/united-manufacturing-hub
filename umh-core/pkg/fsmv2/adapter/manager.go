@@ -44,8 +44,8 @@ type StateConfig interface {
 // defaults; a worker must declare all four, so it can never report a state its
 // FSM does not have.
 //
-//   - Starting is the word for the not-yet-observed exits: bootstrap
-//     (Unregistered / NeverObserved) and an Unknown read with no prior state.
+//   - Starting is the word for the exits with no usable observation (NotFound /
+//     Deleted) and an Unknown read with no prior state.
 //   - Degraded is the word for the degraded-verdict and Stale exits.
 //   - Stopped is the word this worker uses for a deliberately stopped instance.
 //     The default disable gate treats a config whose desired state equals it as

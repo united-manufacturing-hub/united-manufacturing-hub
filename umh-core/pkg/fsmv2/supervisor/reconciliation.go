@@ -454,7 +454,8 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps.String("mutex_name", "workerCtx.mu"))
 
 		// Record Prometheus metric AFTER lock release
-		metrics.RecordStateTransition(s.GetHierarchyPathUnlocked(), fromState, toState)
+		metrics.RecordStateTransition(workerCtx.identity.HierarchyPath, fromState, toState)
+		metrics.CleanupStateDuration(workerCtx.identity.HierarchyPath, fromState)
 	} else {
 		workerCtx.mu.Lock()
 		workerCtx.currentStateReason = result.Reason
@@ -468,7 +469,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	if workerCtx.currentState != nil && !workerCtx.stateEnteredAt.IsZero() {
 		metrics.RecordStateDuration(
-			s.GetHierarchyPathUnlocked(),
+			workerCtx.identity.HierarchyPath,
 			workerCtx.currentState.String(),
 			time.Since(workerCtx.stateEnteredAt),
 		)
@@ -526,6 +527,15 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 // PERFORMANCE: The complete tick loop is non-blocking and completes in <10ms,
 // making it safe to call at high frequency (100Hz+) without impacting system performance.
 func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) {
+	// The panic handler below must not take s.mu: the panic may have left it
+	// held. So it uses these paths, read before anything in this tick can panic.
+	s.mu.RLock()
+	workerPaths := s.workerPathsLocked()
+	s.mu.RUnlock()
+
+	// The path of the worker this tick picks below; empty until then.
+	var firstWorkerPath string
+
 	defer func() {
 		if r := recover(); r != nil {
 			defer func() {
@@ -546,7 +556,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			err = fmt.Errorf("tick panic: %w", panicErr)
 
 			hierarchyPath := s.GetHierarchyPathUnlocked()
-			metrics.RecordPanicRecovery(hierarchyPath, panicType)
+
+			panicPaths := workerPaths
+			if firstWorkerPath != "" {
+				panicPaths = []string{firstWorkerPath}
+			}
+
+			for _, path := range panicPaths {
+				metrics.RecordPanicRecovery(path, panicType)
+			}
 
 			s.logger.SentryError(deps.FeatureFSMv2, hierarchyPath, err, "tick_panic",
 				deps.WorkerType(s.workerType),
@@ -627,7 +645,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "circuit_breaker_opened",
 					logFields...)
-				metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
+			}
+
+			s.mu.RLock()
+			openPaths := s.workerPathsLocked()
+			s.mu.RUnlock()
+
+			for _, path := range openPaths {
+				metrics.RecordCircuitOpen(path, true)
 			}
 
 			if childErr != nil {
@@ -667,8 +692,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			s.logger.Info("circuit_breaker_closed",
 				deps.Reason("infrastructure_recovered"),
 				deps.String("total_downtime", downtime.String()))
-			metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), false)
-			metrics.RecordInfrastructureRecovery(s.GetHierarchyPathUnlocked(), downtime)
+
+			s.mu.RLock()
+			recoveredPaths := s.workerPathsLocked()
+			s.mu.RUnlock()
+
+			for _, path := range recoveredPaths {
+				metrics.RecordCircuitOpen(path, false)
+				metrics.RecordInfrastructureRecovery(path, downtime)
+			}
 		}
 
 		s.circuitOpen.Store(false)
@@ -686,6 +718,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		if workerEntry != nil && workerEntry.worker != nil {
 			firstWorkerID = id
 			worker = workerEntry.worker
+			firstWorkerPath = workerEntry.identity.HierarchyPath
 
 			break
 		}
@@ -748,7 +781,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	s.logTrace("variables_propagated",
 		deps.Int("user_vars", userVarCount),
 		deps.Int("global_vars", globalVarCount))
-	metrics.RecordVariablePropagation(s.GetHierarchyPathUnlocked())
+	metrics.RecordVariablePropagation(firstWorkerPath)
 
 	// PHASE 0: Hierarchical Composition
 	// 1. DeriveDesiredState (with caching)
@@ -781,8 +814,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		if err != nil {
 			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "template_rendering_failed",
 				deps.DurationMs(templateDuration.Milliseconds()))
-			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
-			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "derivation_failed")
+			metrics.RecordTemplateRenderingDuration(firstWorkerPath, "error", templateDuration)
+			metrics.RecordTemplateRenderingError(firstWorkerPath, "derivation_failed")
 
 			// Don't cache errors - will retry next tick
 			return fmt.Errorf("failed to derive desired state: %w", err)
@@ -797,21 +830,16 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		s.logTrace("derive_desired_state_computed",
 			deps.String("hash", currentHash[:8]+"..."),
 			deps.DurationMs(templateDuration.Milliseconds()))
-		metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "success", templateDuration)
+		metrics.RecordTemplateRenderingDuration(firstWorkerPath, "success", templateDuration)
 	}
 
 	// Save before tickWorker, which loads the freshest desired state from snapshot
-	desiredJSON, err := json.Marshal(desired)
+	desiredDoc, err := s.toDocument(desired, firstWorkerID, "", documentConversion{
+		what: "derived desired state",
+	})
 	if err != nil {
-		return fmt.Errorf("failed to marshal derived desired state: %w", err)
+		return err
 	}
-
-	desiredDoc := make(persistence.Document)
-	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal derived desired state to document: %w", err)
-	}
-
-	desiredDoc[FieldID] = firstWorkerID
 
 	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
 	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
@@ -966,7 +994,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		childrenSpecs = nil
 	}
 
-	if err := s.reconcileChildren(childrenSpecs); err != nil {
+	if err := s.reconcileChildren(childrenSpecs, firstWorkerPath); err != nil {
 		return fmt.Errorf("failed to reconcile children: %w", err)
 	}
 
@@ -1088,6 +1116,11 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				deps.Any("children", childNames))
 		}
 
+		// Tombstone while s.mu is held and the id is still in s.workers.
+		// AddWorker refuses an id in s.workers, so a worker added again with
+		// this id clears the tombstone only after this write.
+		s.tombstoneWorker(ctx, workerID, workerCtx.identity.HierarchyPath)
+
 		delete(s.workers, workerID)
 		s.mu.Unlock()
 
@@ -1120,8 +1153,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 			cancel()
 		}
 
-		workerCtx.collector.Stop(ctx)
-		workerCtx.executor.Shutdown()
+		s.stopWorker(ctx, workerCtx)
 
 		s.logger.Debug("worker_removed_successfully",
 			deps.Int("children_cleaned", childCount))
@@ -1155,6 +1187,26 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 			deps.Int("signal", int(signal)))
 
 		return unknownSignalErr
+	}
+}
+
+// tombstoneTimeout bounds Tombstone, which runs under s.mu.
+const tombstoneTimeout = 5 * time.Second
+
+// tombstoneWorker tombstones a removed worker's documents. Nothing retries a
+// failed Tombstone, so the documents then stay as if the worker still ran
+// (ENG-6348).
+func (s *Supervisor[TObserved, TDesired]) tombstoneWorker(ctx context.Context, workerID string, hierarchyPath string) {
+	// Shutdown may already have cancelled ctx, and the tombstone must still be
+	// written. A store may honour cancellation, so the write runs on a context
+	// detached from ctx, bounded by tombstoneTimeout.
+	markCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tombstoneTimeout)
+	defer cancel()
+
+	if err := s.store.Tombstone(markCtx, s.workerType, workerID, "supervisor"); err != nil {
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_removal_tombstone_failed",
+			deps.Err(err),
+			deps.String("target_worker_id", workerID))
 	}
 }
 
@@ -1442,7 +1494,9 @@ func (s *Supervisor[TObserved, TDesired]) getEscalationSteps(childName string) s
 	return "1) Check component logs 2) Verify network connectivity 3) Restart component manually"
 }
 
-func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.ChildSpec) error {
+// workerPath is the hierarchy path of the worker whose children these are:
+// the worker whose lastRenderedChildren the caller's tick used.
+func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.ChildSpec, workerPath string) error {
 	startTime := time.Now()
 
 	s.mu.Lock()
@@ -1736,7 +1790,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			deps.DurationMs(duration.Milliseconds()))
 	}
 
-	metrics.RecordReconciliation(s.GetHierarchyPathUnlocked(), "success", duration)
+	metrics.RecordReconciliation(workerPath, "success", duration)
 
 	return nil
 }
