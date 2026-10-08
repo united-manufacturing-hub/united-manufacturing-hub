@@ -16,6 +16,7 @@ package persistence_test
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -273,6 +274,44 @@ var _ = Describe("PersistenceWorker", func() {
 
 			_, err = worker.DeriveDesiredState(spec)
 			Expect(err).To(HaveOccurred())
+
+			var cfgErr *fsmv2config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *fsmv2config.ConfigError, got %T", err)
+		})
+
+		Context("placeholder and dollar-sign values", func() {
+			It("rejects a placeholder in a plain field with a ConfigError naming the field", func() {
+				w, err := persistence.NewPersistenceWorker(identity, logger, nil, storeDeps(store))
+				Expect(err).NotTo(HaveOccurred())
+
+				worker := getPersistenceWorker(w)
+				spec := fsmv2config.UserSpec{
+					Config: `state: "{{ .x }}"`,
+				}
+
+				_, err = worker.DeriveDesiredState(spec)
+				Expect(err).To(HaveOccurred())
+
+				var cfgErr *fsmv2config.ConfigError
+				Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *fsmv2config.ConfigError, got %T", err)
+				Expect(cfgErr.Field).To(Equal("state"))
+			})
+
+			It("decodes a dollar-sign value unchanged", func() {
+				w, err := persistence.NewPersistenceWorker(identity, logger, nil, storeDeps(store))
+				Expect(err).NotTo(HaveOccurred())
+
+				worker := getPersistenceWorker(w)
+				spec := fsmv2config.UserSpec{
+					Config: `state: "${DB_PASS}"`,
+				}
+
+				desired, err := worker.DeriveDesiredState(spec)
+				Expect(err).NotTo(HaveOccurred())
+
+				d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
+				Expect(d.Config.State).To(Equal("${DB_PASS}"))
+			})
 		})
 	})
 

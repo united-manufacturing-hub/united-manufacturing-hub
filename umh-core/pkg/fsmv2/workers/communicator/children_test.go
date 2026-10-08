@@ -29,7 +29,7 @@ import (
 //
 // All four auth parameters (RelayURL, InstanceUUID, AuthToken, Timeout) must
 // survive the full path: CommunicatorConfig → RenderChildren → NewChildSpec →
-// UserSpec.Config → ParseUserSpec[TransportUserSpec].
+// UserSpec.Config → LoadUserSpec[TransportUserSpec].
 //
 // A silent field-swap (e.g. AuthToken: cfg.RelayURL) compiles but produces an
 // unauthenticated transport child. This test catches the field-swap.
@@ -58,7 +58,7 @@ var _ = Describe("communicator RenderChildren 4-field round-trip", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(specs).To(HaveLen(1))
 
-		recovered, err := fsmconfig.ParseUserSpec[transport.TransportUserSpec](specs[0].UserSpec)
+		recovered, err := fsmconfig.LoadUserSpec[transport.TransportUserSpec](specs[0].UserSpec)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(recovered.RelayURL).To(Equal("https://relay.example.com:8080"),

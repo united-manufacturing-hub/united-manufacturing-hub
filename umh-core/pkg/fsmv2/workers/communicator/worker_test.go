@@ -17,6 +17,7 @@ package communicator_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -226,7 +227,41 @@ state: "running"
 
 				_, err := worker.DeriveDesiredState(spec)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("config parse failed"))
+
+				var cfgErr *fsmv2types.ConfigError
+				Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *fsmv2types.ConfigError, got %T", err)
+			})
+		})
+
+		Context("placeholder and dollar-sign values", func() {
+			It("rejects a placeholder in a plain field with a ConfigError naming the field", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `state: "{{ .x }}"`,
+				}
+
+				_, err := worker.DeriveDesiredState(spec)
+				Expect(err).To(HaveOccurred())
+
+				var cfgErr *fsmv2types.ConfigError
+				Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *fsmv2types.ConfigError, got %T", err)
+				Expect(cfgErr.Field).To(Equal("state"))
+			})
+
+			It("decodes a dollar-sign value unchanged", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `
+relayURL: "${DB_PASS}"
+instanceUUID: "test-uuid"
+authToken: "test-token"
+`,
+				}
+
+				desiredIface, err := worker.DeriveDesiredState(spec)
+				Expect(err).NotTo(HaveOccurred())
+
+				desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
+				Expect(ok).To(BeTrue(), "expected *fsmv2.WrappedDesiredState[CommunicatorConfig]")
+				Expect(desired.Config.RelayURL).To(Equal("${DB_PASS}"))
 			})
 		})
 	})

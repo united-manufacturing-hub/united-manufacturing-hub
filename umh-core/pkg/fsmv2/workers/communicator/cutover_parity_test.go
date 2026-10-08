@@ -32,7 +32,7 @@ var _ = Describe("communicator Variables-merge invariant", func() {
 			User: map[string]any{
 				"RELAY_HOST": "relay.example.com",
 				"PORT":       "8080",
-				"TMPL":       "{{ .RELAY_HOST }}/api",
+				"API_PATH":   "/api",
 			},
 		}
 
@@ -43,16 +43,16 @@ var _ = Describe("communicator Variables-merge invariant", func() {
 			"both paths must yield identical User variables after supervisor merge")
 	})
 
-	It("template syntax strings are preserved unchanged through merge", func() {
+	It("string values are preserved unchanged through merge", func() {
 		parentVars := fsmconfig.VariableBundle{
 			User: map[string]any{
-				"RELAY_URL": "https://{{ .HOST }}:{{ .PORT }}",
+				"RELAY_URL": "https://relay.example.com:8080",
 			},
 		}
 
 		result := fsmconfig.Merge(parentVars, fsmconfig.VariableBundle{})
 
-		Expect(result.User["RELAY_URL"]).To(Equal("https://{{ .HOST }}:{{ .PORT }}"),
-			"template syntax must not be evaluated or mangled by Merge")
+		Expect(result.User["RELAY_URL"]).To(Equal("https://relay.example.com:8080"),
+			"Merge must not mangle variable values")
 	})
 })

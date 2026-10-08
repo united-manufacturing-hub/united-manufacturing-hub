@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -128,16 +126,9 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		}, nil
 	}
 
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected config.UserSpec, got %T", spec)
-	}
-
-	var childrenCfg childrenConfig
-	if userSpec.Config != "" {
-		if err := yaml.Unmarshal([]byte(userSpec.Config), &childrenCfg); err != nil {
-			return nil, fmt.Errorf("failed to parse children config: %w", err)
-		}
+	childrenCfg, err := config.LoadUserSpec[childrenConfig](spec)
+	if err != nil {
+		return nil, err
 	}
 
 	// Normalize nil to non-nil empty slice so the discriminator at api.go

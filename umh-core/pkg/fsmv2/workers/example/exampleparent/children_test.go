@@ -79,7 +79,7 @@ var _ = Describe("exampleparent RenderChildren", func() {
 		specs, err := exampleparent.RenderChildren(cfg, true)
 		Expect(err).ToNot(HaveOccurred())
 		for _, spec := range specs {
-			_, parseErr := fsmconfig.ParseUserSpec[fsmconfig.BaseUserSpec](spec.UserSpec)
+			_, parseErr := fsmconfig.LoadUserSpec[fsmconfig.BaseUserSpec](spec.UserSpec)
 			Expect(parseErr).ToNot(HaveOccurred(),
 				"child %q config must be valid YAML parseable as BaseUserSpec", spec.Name)
 		}
