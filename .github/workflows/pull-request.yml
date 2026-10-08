@@ -230,7 +230,7 @@ jobs:
           echo "or add the 'skip-changelog-guard' label if not needed (CI/CD, refactoring, or test-only changes)"
           echo "and push a commit to re-trigger CI."
           echo ""
-          echo "See CLAUDE.md > Changelog for entry format and guidelines."
+          echo "See CLAUDE.md > Changelog for where entries go. For format and voice, follow the changelog-writing skill."
           exit 1
 
   validate-changelog:

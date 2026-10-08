@@ -95,7 +95,7 @@ Every process that S6 supervises writes to its own directory, `/data/logs/<servi
 #### The life-cycle in practice
 
 1. **Normal running** – all services write to their own `current` file.
-2. **Size hits the limit** – S6 atomically renames `current` to `@<timestamp>.s`, then immediately creates a fresh empty `current`. The agent's log rotates at 10 MB. Other services rotate at their configured size, or at s6-log's default of 99,999 bytes. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))
+2. **Size hits the limit** – S6 atomically renames `current` to `@<timestamp>.s`, then immediately creates a fresh empty `current`. The agent's log rotates at 10 MB. Other services rotate at a size umh-core sets per service, or at s6-log's default of 99,999 bytes. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))
 3. **Prune** – S6 deletes the oldest archives. The agent keeps the newest 5, and every other service keeps the newest 20. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))
 4.  **You read logs** – use:
 

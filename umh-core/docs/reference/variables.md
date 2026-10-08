@@ -13,7 +13,7 @@ UMH Core uses a three-tier variable system for protocol converter templates that
 ## Variable Precedence
 
 Variables follow a clear precedence hierarchy:
-1. **User Variables** - Flattened to the top level. umh-core sets `location` and `location_path` (and `historian` for bridges) itself and overwrites a user variable with that name. The names `global` and `internal` are taken by the namespaces below.
+1. **User Variables** - Flattened to the top level. Some names are reserved: see [User-Defined Variables](#user-defined-variables).
 2. **Internal Variables** - System-generated values
 3. **Global Variables** - Fleet-wide defaults (**NOT YET IMPLEMENTED**)
 

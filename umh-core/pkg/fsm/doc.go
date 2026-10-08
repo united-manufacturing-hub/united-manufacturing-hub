@@ -15,8 +15,8 @@
 // Package fsm holds what the FSMv1 state machines share: the base manager,
 // the interfaces and the system snapshot. FSMv1 is the legacy framework. New logic is built as an FSMv2 worker in pkg/fsmv2.
 //
-// Each component (benthos, redpanda, s6, ...) has a subpackage with the same
-// files:
+// Each component (benthos, redpanda, s6, ...) has a subpackage with the
+// files below. The connection subpackage has no actions.go.
 //
 //   - machine.go defines the states and transitions.
 //   - fsm_callbacks.go holds the transition callbacks. They run synchronously

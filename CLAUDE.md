@@ -5,7 +5,7 @@ This repository holds two products:
 1. **UMH Core** (`umh-core/`): the single-container edge gateway. Most work happens here.
 2. **UMH Classic** (`deployment/united-manufacturing-hub/`): the Kubernetes deployment with Helm charts.
 
-How we work is in the Engineering Handbook (links below). What umh-core does for users is in `umh-core/docs/`, published at docs.umh.app. This file holds only what neither of them says about this repository.
+How we work is in the Engineering Handbook (links below). What umh-core does for users is in `umh-core/docs/`, published at docs.umh.app. This file holds what you need to work in this repository. It also repeats the handbook rules to apply while writing code, so that agents and CodeRabbit see them without opening a link.
 
 ## Terminology
 
@@ -34,7 +34,7 @@ Run these from `umh-core/` (targets are in `umh-core/Makefile`).
 
 - `umh-core/cmd/main.go`: entry point. Reads `/data/config.yaml` and starts the control loop.
 - `umh-core/pkg/fsm/`: FSMv1 state machines (Benthos, Redpanda, S6, …). Legacy. The package doc describes the files every component has.
-- `umh-core/pkg/fsmv2/`: FSMv2 framework and workers. **New logic is built as an FSMv2 worker.** Read `umh-core/pkg/fsmv2/CLAUDE.md` before working there.
+- `umh-core/pkg/fsmv2/`: FSMv2 framework and workers. Read `umh-core/pkg/fsmv2/CLAUDE.md` before working there.
 - `umh-core/pkg/communicator/`: Management Console connection, action handlers (`actions/`), status subscribers. The package doc of `router/` describes how actions and status travel.
 - `umh-core/pkg/config/`: `config.yaml` parsing, templates and variables. `config.yaml` is the source of truth: umh-core renders every benthos config from it.
 - `umh-core/docs/`: user-facing GitBook docs (rules in `umh-core/docs/CLAUDE.md`).

@@ -17,15 +17,24 @@
 //
 // Actions travel from the Management Console to umh-core, and status travels
 // back. umh-core opens both connections itself: it polls GET /v2/instance/pull
-// for actions and sends status with POST /v2/instance/push. Every message is a
-// JSON models.UMHMessage.
+// for actions and sends status with POST /v2/instance/push. Both requests carry
+// a JSON list of types.UMHMessage, from package
+// pkg/fsmv2/workers/transport/types.
 //
 // An action takes this path:
 //
 //  1. The FSMv2 transport pull worker (pkg/fsmv2/workers/transport/pull)
 //     fetches the messages.
-//  2. fsmv2_adapter.LegacyChannelBridge converts each FSMv2 types.UMHMessage
-//     into a models.UMHMessage.
+//  2. The message is decoded into a types.MessageWithSender. The environment
+//     variable USE_GATEKEEPER, read once at startup in cmd/main.go, decides
+//     which component does this. It defaults to false.
+//     - USE_GATEKEEPER=false: fsmv2_adapter.LegacyChannelBridge converts each
+//     message into a models.UMHMessage. The Router built by NewRouter decodes
+//     it.
+//     - USE_GATEKEEPER=true: package gatekeeper decrypts and decodes each
+//     message. For every message type except subscribe, it also checks the
+//     sender's permissions and drops the message if the check fails. The
+//     Router built by NewRouterForFSMv2 reads the result.
 //  3. Router.handleAction passes the action to actions.HandleActionMessage.
 //  4. Each action type has its own handler in pkg/communicator/actions. A
 //     handler that changes something writes config.yaml through the config
@@ -34,8 +43,9 @@
 //     config and start benthos-umh under S6.
 //
 // Status takes the reverse path. The subscriber package builds the status
-// message, and the FSMv2 transport push worker
-// (pkg/fsmv2/workers/transport/push) sends it.
+// message. With USE_GATEKEEPER=false the subscriber package encodes it, and
+// with USE_GATEKEEPER=true package gatekeeper encodes it. The FSMv2 transport
+// push worker (pkg/fsmv2/workers/transport/push) sends it.
 package router
 
 import (

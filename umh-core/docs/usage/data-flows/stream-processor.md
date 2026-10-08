@@ -111,14 +111,17 @@ While the UI is the primary way to create stream processors, they're stored as Y
 ```yaml
 streamProcessor:
   - name: pump_efficiency_calc
-    model:
-      name: pump
-      version: v1
-    sources:
-      - topic: enterprise.site._raw.inlet_temp
-      - topic: enterprise.site._raw.outlet_temp
-    mapping:
-      efficiency: "(outlet_temp - inlet_temp) / inlet_temp * 100"
+    desiredState: active
+    streamProcessorServiceConfig:
+      config:
+        model:
+          name: pump
+          version: v1
+        sources:
+          inlet_temp: enterprise.site._raw.inlet_temp
+          outlet_temp: enterprise.site._raw.outlet_temp
+        mapping:
+          efficiency: "(outlet_temp - inlet_temp) / inlet_temp * 100"
 ```
 
 See the [Stream Processors configuration guide](../data-modeling/stream-processors.md) for detailed YAML structure.
