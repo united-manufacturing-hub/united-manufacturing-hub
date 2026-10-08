@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"sync"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
@@ -95,9 +93,11 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 
 // DeriveDesiredState parses spec into a *WrappedDesiredState[TConfig].
 // When spec is nil, returns a default desired state with an empty TConfig.
-// When spec is a config.UserSpec, renders template variables, unmarshals
-// YAML into TConfig, validates the lifecycle state when TConfig embeds
-// config.BaseUserSpec (or implements GetState() string), and caches the config.
+// When spec is a config.UserSpec, loads the YAML into TConfig without
+// rendering it, renders every config.Template field against the names built
+// from the config's own fields and the user variables, validates the
+// lifecycle state when TConfig embeds config.BaseUserSpec (or implements
+// GetState() string), and caches the config.
 //
 // Workers that need children specs must override this method in their own struct
 // and either call w.WorkerBase.DeriveDesiredState(spec) first (then read the
@@ -122,16 +122,26 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		return nil, fmt.Errorf("invalid spec type: expected config.UserSpec, got %T", spec)
 	}
 
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	cfg, err := config.LoadUserSpec[TConfig](spec)
 	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
+		return nil, fmt.Errorf("failed to load user spec: %w", err)
 	}
 
-	var cfg TConfig
-	if renderedConfig != "" {
-		if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
-			return nil, fmt.Errorf("config unmarshal failed: %w", err)
-		}
+	fields, err := config.EntryFields(userSpec.Config, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the config fields: %w", err)
+	}
+
+	names, err := config.BuildNames(config.Entry{
+		Fields:    fields,
+		Variables: userSpec.Variables.User,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to build the template names: %w", err)
+	}
+
+	if err := config.RenderTemplates(&cfg, names); err != nil {
+		return nil, err
 	}
 
 	// Duck-type: validate the desired lifecycle state when TConfig embeds

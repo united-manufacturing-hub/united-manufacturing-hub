@@ -19,8 +19,6 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -111,25 +109,9 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, desired fs
 }
 
 func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &fsmv2.WrappedDesiredState[ExampleslowConfig]{}, nil
-	}
-
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	parsed, err := config.LoadUserSpec[ExampleslowConfig](spec)
 	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	var parsed ExampleslowConfig
-	if renderedConfig != "" {
-		if err := yaml.Unmarshal([]byte(renderedConfig), &parsed); err != nil {
-			return nil, fmt.Errorf("failed to parse exampleslow spec: %w", err)
-		}
+		return nil, fmt.Errorf("failed to load exampleslow spec: %w", err)
 	}
 
 	return &fsmv2.WrappedDesiredState[ExampleslowConfig]{

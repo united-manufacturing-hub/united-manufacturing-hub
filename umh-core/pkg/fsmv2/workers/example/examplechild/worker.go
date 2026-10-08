@@ -112,28 +112,9 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredS
 
 // DeriveDesiredState determines what state the child worker should be in.
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &fsmv2.WrappedDesiredState[ExamplechildConfig]{}, nil
-	}
-
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	parsed, err := config.LoadUserSpec[ExamplechildConfig](spec)
 	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	renderedSpec := config.UserSpec{
-		Config:    renderedConfig,
-		Variables: userSpec.Variables,
-	}
-
-	parsed, err := config.ParseUserSpec[ExamplechildConfig](renderedSpec)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse examplechild spec: %w", err)
+		return nil, fmt.Errorf("failed to load examplechild spec: %w", err)
 	}
 
 	return &fsmv2.WrappedDesiredState[ExamplechildConfig]{

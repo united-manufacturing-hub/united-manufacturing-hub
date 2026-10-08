@@ -396,7 +396,17 @@ var _ = Describe("Template", func() {
 		err = config.RenderTemplates(&bad, map[string]any{})
 		var cfgErr *config.ConfigError
 		Expect(errors.As(err, &cfgErr)).To(BeTrue())
-		Expect(cfgErr.Field).To(Equal("items[0].read"))
+		Expect(cfgErr.Field).To(Equal("items.0.read"))
+	})
+
+	It("names a list element with a dot-joined index, the form CheckPlainValues uses", func() {
+		s := templateSliceOuter{Items: []templateInner{{Read: `{{ .a }}`}, {Read: `{{ .missing }}`}}}
+
+		err := config.RenderTemplates(&s, map[string]any{"a": "x"})
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("items.1.read"))
 	})
 
 	It("renders a Template field declared as a pointer", func() {
@@ -407,14 +417,14 @@ var _ = Describe("Template", func() {
 		Expect(*s.Read).To(Equal(config.Template("x")))
 	})
 
-	It("errors instead of skipping a Template inside a map", func() {
+	It("errors instead of skipping a Template inside a map, naming the key", func() {
 		s := templateMapOuter{Items: map[string]templateInner{"k": {Read: `{{ .a }}`}}}
 
 		err := config.RenderTemplates(&s, map[string]any{"a": "x"})
 
 		var cfgErr *config.ConfigError
 		Expect(errors.As(err, &cfgErr)).To(BeTrue())
-		Expect(cfgErr.Field).To(Equal("items.read"))
+		Expect(cfgErr.Field).To(Equal("items.k.read"))
 	})
 
 	It("names a Template behind a nested struct by the joined YAML path", func() {

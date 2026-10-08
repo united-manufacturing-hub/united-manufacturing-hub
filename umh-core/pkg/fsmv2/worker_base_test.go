@@ -20,6 +20,7 @@ package fsmv2_test
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -298,7 +299,10 @@ var _ = Describe("WorkerBase", func() {
 			spec := config.UserSpec{Config: "port: [not, an, int]"}
 			_, err := worker.DeriveDesiredState(spec)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("config unmarshal failed"))
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("cannot unmarshal"))
 		})
 
 		It("invalid desired state (e.g. 'invalid_state') returns error", func() {
@@ -468,3 +472,71 @@ func (s *wbMockState) String() string { return "wb_mock_state" }
 func (s *wbMockState) LifecyclePhase() config.LifecyclePhase {
 	return config.PhaseStopped
 }
+
+// wbTplConfig pairs a Template field with a plain field, so tests can tell the
+// rendered field from the field the loader must reject.
+type wbTplConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+	Name                string          `yaml:"name"`
+	Read                config.Template `yaml:"read"`
+}
+
+// TplTestWorker embeds WorkerBase the same way a production worker with a
+// Template field would.
+type TplTestWorker struct {
+	fsmv2.WorkerBase[wbTplConfig, wbTestStatus, *wbTestDeps]
+}
+
+// CollectObservedState satisfies the Worker interface (no-op for testing).
+func (w *TplTestWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return nil, nil
+}
+
+var _ = Describe("WorkerBase template fields", func() {
+	var (
+		id     deps.Identity
+		logger deps.FSMLogger
+		sr     deps.StateReader
+		worker *TplTestWorker
+	)
+
+	BeforeEach(func() {
+		id = wbMakeIdentity("tpl-test-worker-type")
+		logger = deps.NewNopFSMLogger()
+		sr = wbMakeStateReader()
+		worker = &TplTestWorker{}
+		worker.InitBase(id, logger, sr)
+	})
+
+	It("renders a Template field against the config's own fields", func() {
+		spec := config.UserSpec{Config: "name: b1\nread: \"{{ .name }}-x\""}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Name).To(Equal("b1"))
+		Expect(wds.Config.Read).To(Equal(config.Template("b1-x")))
+	})
+
+	It("wraps a render error in a ConfigError naming the field", func() {
+		spec := config.UserSpec{Config: "read: \"{{ .nope }}\""}
+
+		_, err := worker.DeriveDesiredState(spec)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("read"))
+	})
+
+	It("rejects a placeholder in a plain field", func() {
+		spec := config.UserSpec{Config: "name: \"{{ .x }}\""}
+
+		_, err := worker.DeriveDesiredState(spec)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("name"))
+	})
+})
