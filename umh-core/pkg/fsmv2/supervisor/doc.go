@@ -228,8 +228,10 @@
 // they actually had. A level that runs out of budget always warns and moves
 // on, so shutdown never waits forever.
 //
-// The process's SIGTERM grace period must cover base × the deepest tree
-// height. cmd/main.go sets the base for production. A second SIGTERM closes
+// The process's SIGTERM grace period must cover the whole Shutdown(). For a
+// chain that is base × height. In a wider tree, sibling subtrees drain one
+// after another, so add up their budgets, plus a short teardown per
+// supervisor. cmd/main.go sets the base for production. A second SIGTERM closes
 // Config.ForceExit for an immediate exit. A shutdown test with a parent and a
 // child supervisor needs an Eventually timeout above 2 × base.
 //

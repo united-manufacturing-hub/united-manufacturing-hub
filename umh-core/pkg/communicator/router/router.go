@@ -17,8 +17,9 @@
 //
 // Actions travel from the Management Console to umh-core, and status travels
 // back. umh-core opens both connections itself: it polls GET /v2/instance/pull
-// for actions and sends status with POST /v2/instance/push. Both requests carry
-// a JSON list of types.UMHMessage, from package
+// for actions and sends status with POST /v2/instance/push. The pull response
+// and the push request each carry a JSON object whose UMHMessages field lists
+// types.UMHMessage values. The types are PullPayload and PushPayload in package
 // pkg/fsmv2/workers/transport/types.
 //
 // An action takes this path:

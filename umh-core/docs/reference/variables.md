@@ -102,7 +102,7 @@ The following variables should be replaced in your configurations:
 
 ## User-Defined Variables
 
-You can define custom variables in the `variables:` section of your configuration. These are flattened to top-level access. Do not name a variable `location`, `location_path`, `historian`, `global` or `internal`: umh-core overwrites it.
+You can define custom variables in the `variables:` section of your configuration. These are flattened to top-level access. Do not name a variable `location`, `location_path`, `historian`, `global` or `internal`. umh-core reserves these names for its own values.
 
 **Common patterns:**
 - `{{ .SCAN_RATE }}` - Polling intervals

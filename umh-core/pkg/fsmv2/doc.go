@@ -345,9 +345,11 @@
 //
 // ## Shutdown handling
 //
-// Check snap.ShouldStop() as the first conditional in Next(). ShouldStop()
-// is true when shutdown is requested and when the parent disabled the worker.
-// The architecture test rejects a Next() that checks it later.
+// Active states check snap.ShouldStop() as the first conditional in Next().
+// ShouldStop() is true when shutdown is requested and when the parent disabled
+// the worker. Stopped states check snap.IsShutdownRequested first and return
+// SignalNeedsRemoval, then check snap.IsDisabled and stay stopped. The
+// architecture test rejects a Next() whose first conditional checks neither.
 // See workers/example/examplechild/state/ for examples.
 //
 // ## Type-safe dependencies
@@ -380,7 +382,7 @@
 //
 //   - Keep Next() pure (no side effects)
 //   - Make actions idempotent (check if work already done)
-//   - Check snap.ShouldStop() first in all states
+//   - Check snap.ShouldStop() first in active states, IsShutdownRequested first in stopped states
 //   - Use type-safe state structs, not strings
 //   - Return action or transition, not both (the supervisor panics if both are returned)
 //   - Handle context cancellation in all async operations

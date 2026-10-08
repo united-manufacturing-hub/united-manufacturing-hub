@@ -738,7 +738,7 @@ return fsmv2.Transition(s, fsmv2.SignalNone, &SomeAction{}, "reason", nil)
 
 ### Check shutdown first in every state
 
-Every state's Next() method checks snap.ShouldStop() as its first condition. ShouldStop() is true when shutdown is requested and when the parent disabled the worker. The architecture test rejects a state that checks it later.
+Every state's Next() method checks for a stop as its first condition. Active states check snap.ShouldStop(), which is true when shutdown is requested and when the parent disabled the worker. Stopped states check snap.IsShutdownRequested first and return SignalNeedsRemoval. They then check snap.IsDisabled and stay stopped. The architecture test rejects a Next() whose first condition checks neither, except in stopped and stopping state files.
 
 **Required pattern:**
 ```go
