@@ -5,7 +5,7 @@ This repository holds two products:
 1. **UMH Core** (`umh-core/`): the single-container edge gateway. Most work happens here.
 2. **UMH Classic** (`deployment/united-manufacturing-hub/`): the Kubernetes deployment with Helm charts.
 
-How we work is in the Engineering Handbook (links below). What umh-core does for users is in `umh-core/docs/`, published at docs.umh.app. This file holds what you need to work in this repository. It also repeats the handbook rules to apply while writing code, so that agents and CodeRabbit see them without opening a link.
+How we work is in the Engineering Handbook (links below). What umh-core does for users is in `umh-core/docs/`, published at docs.umh.app. This file holds what you need to work in this repository.
 
 ## Terminology
 
@@ -56,7 +56,7 @@ umh-core is one container. S6 supervises every process in it: the agent, Redpand
 
 ## Engineering Handbook
 
-Our shared standards live at https://engineering.umh.app. Start with:
+Our shared standards live at https://engineering.umh.app. Look up the pages your task needs before you write code. Each page has a Markdown version: append `.md` to its URL. https://engineering.umh.app/llms.txt lists every page. Start with:
 
 - Go: https://engineering.umh.app/engineering/development-process/how-to-build/coding-standards/go
 - Error management: https://engineering.umh.app/engineering/development-process/how-to-build/coding-standards/error-management
@@ -64,11 +64,3 @@ Our shared standards live at https://engineering.umh.app. Start with:
 - Product standards: https://engineering.umh.app/product/product-standards ([Opinionated simplicity](https://engineering.umh.app/product/product-standards/opinionated-simplicity) · [Code and UI](https://engineering.umh.app/product/product-standards/code-and-ui) · [Immediate trust](https://engineering.umh.app/product/product-standards/immediate-trust))
 - [How to build](https://engineering.umh.app/engineering/development-process/how-to-build) · [Testing](https://engineering.umh.app/engineering/development-process/how-to-build/testing) · [How to ship](https://engineering.umh.app/engineering/development-process/how-to-ship)
 - Why we exist: https://engineering.umh.app/company/why-we-exist
-
-Apply these while writing code, without opening the links:
-
-- New logic is an FSMv2 worker. A worker is not healthy until a check proves it healthy. A simple worker starts degraded.
-- For every error, ask in order: can a retry fix it (retry, the user does not see it)? Can the user fix the cause (show it, e.g. set the bridge to degraded)? Can only UMH fix it (Sentry, plus logs)? What happens to the failed data (persistent error → dead-letter queue)?
-- A user-facing error names the invalid value, says what the user changes, and never blames the user.
-- Every change in behaviour comes with a test that goes red without the change.
-- Anything that changes behaviour goes behind a feature flag.
