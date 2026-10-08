@@ -54,8 +54,6 @@ import (
 	"fmt"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -171,22 +169,9 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 		}, nil
 	}
 
-	// Type cast to UserSpec
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	// Render template variables
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	transportSpec, err := config.LoadUserSpec[TransportUserSpec](spec)
 	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	// Parse YAML config
-	var transportSpec TransportUserSpec
-	if err := yaml.Unmarshal([]byte(renderedConfig), &transportSpec); err != nil {
-		return nil, fmt.Errorf("config parse failed: %w", err)
+		return nil, err
 	}
 
 	// Validate required fields when worker should be running

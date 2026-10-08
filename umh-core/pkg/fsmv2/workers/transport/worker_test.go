@@ -16,6 +16,7 @@ package transport_test
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -375,6 +376,37 @@ authToken: "test-token"`,
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("invalid spec type"))
+			})
+		})
+
+		Context("placeholder and dollar-sign values", func() {
+			It("rejects a placeholder in a plain field with a ConfigError naming the field", func() {
+				spec := fsmv2types.UserSpec{
+					Config:    `state: "{{ .x }}"`,
+					Variables: fsmv2types.VariableBundle{},
+				}
+
+				_, err := worker.DeriveDesiredState(spec)
+				Expect(err).To(HaveOccurred())
+
+				var cfgErr *fsmv2types.ConfigError
+				Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *fsmv2types.ConfigError, got %T", err)
+				Expect(cfgErr.Field).To(Equal("state"))
+			})
+
+			It("decodes a dollar-sign value unchanged", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `state: stopped
+relayURL: "${DB_PASS}"`,
+					Variables: fsmv2types.VariableBundle{},
+				}
+
+				desired, err := worker.DeriveDesiredState(spec)
+				Expect(err).ToNot(HaveOccurred())
+
+				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
+				Expect(ok).To(BeTrue())
+				Expect(transportDesired.Config.RelayURL).To(Equal("${DB_PASS}"))
 			})
 		})
 	})

@@ -198,11 +198,11 @@
 //
 // The config package provides helpers to reduce boilerplate in DeriveDesiredState():
 //
-//	// ParseUserSpec[T] - type-safe parsing of UserSpec.Config
-//	parsed, err := config.ParseUserSpec[MyConfig](spec)
+//	// LoadUserSpec[T] - loads UserSpec.Config into T, without rendering it
+//	parsed, err := config.LoadUserSpec[MyConfig](spec)
 //	if err != nil { return config.DesiredState{}, err }
 //
-// See config/helpers.go for documentation.
+// See config/load.go for documentation.
 //
 // ## Factory registration
 //

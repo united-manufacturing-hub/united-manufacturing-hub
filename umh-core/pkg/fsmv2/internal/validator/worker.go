@@ -256,8 +256,7 @@ func checkNilSpecHandling(filename string) []Violation {
 // usesNilSafeHelper checks if the function body uses helpers that handle nil internally.
 func usesNilSafeHelper(body *ast.BlockStmt) bool {
 	nilSafeHelpers := map[string]bool{
-		"LoadUserSpec":  true,
-		"ParseUserSpec": true,
+		"LoadUserSpec": true,
 	}
 
 	found := false
