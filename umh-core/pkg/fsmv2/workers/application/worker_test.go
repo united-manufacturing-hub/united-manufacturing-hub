@@ -17,6 +17,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -223,7 +224,43 @@ children:
 
 			_, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse children config"))
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *config.ConfigError, got %T", err)
+		})
+
+		It("rejects a placeholder in a child's plain field with a ConfigError naming the field", func() {
+			userSpec := config.UserSpec{
+				Config: `
+children:
+  - name: "{{ .x }}"
+    workerType: "example-child"
+`,
+			}
+
+			_, err := worker.DeriveDesiredState(userSpec)
+			Expect(err).To(HaveOccurred())
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *config.ConfigError, got %T", err)
+			Expect(cfgErr.Field).To(Equal("children.0.name"))
+		})
+
+		It("decodes a dollar-sign value in a child's plain field unchanged", func() {
+			userSpec := config.UserSpec{
+				Config: `
+children:
+  - name: "${DB_PASS}"
+    workerType: "example-child"
+`,
+			}
+
+			desiredIface, err := worker.DeriveDesiredState(userSpec)
+			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
+
+			Expect(desired.ChildrenSpecs).To(HaveLen(1))
+			Expect(desired.ChildrenSpecs[0].Name).To(Equal("${DB_PASS}"))
 		})
 
 		It("should return error for invalid spec type", func() {

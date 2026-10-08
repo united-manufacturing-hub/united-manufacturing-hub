@@ -16,6 +16,7 @@ package pull_test
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -310,6 +311,38 @@ var _ = Describe("PullWorker", func() {
 			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
 			Expect(ok).To(BeTrue())
 			Expect(typed.Config.AuthSession.Token).To(Equal("test-token-pull"))
+		})
+
+		Context("placeholder and dollar-sign values", func() {
+			It("rejects a placeholder in a plain field with a ConfigError naming the field", func() {
+				spec := fsmv2config.UserSpec{
+					Config:    `state: "{{ .x }}"`,
+					Variables: fsmv2config.VariableBundle{},
+				}
+
+				_, err := worker.DeriveDesiredState(spec)
+				Expect(err).To(HaveOccurred())
+
+				var cfgErr *fsmv2config.ConfigError
+				Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *fsmv2config.ConfigError, got %T", err)
+				Expect(cfgErr.Field).To(Equal("state"))
+			})
+
+			It("decodes a dollar-sign value unchanged", func() {
+				spec := fsmv2config.UserSpec{
+					Config: `authSession:
+  token: "${DB_PASS}"
+`,
+					Variables: fsmv2config.VariableBundle{},
+				}
+
+				desired, err := worker.DeriveDesiredState(spec)
+				Expect(err).ToNot(HaveOccurred())
+
+				typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
+				Expect(ok).To(BeTrue())
+				Expect(typed.Config.AuthSession.Token).To(Equal("${DB_PASS}"))
+			})
 		})
 	})
 

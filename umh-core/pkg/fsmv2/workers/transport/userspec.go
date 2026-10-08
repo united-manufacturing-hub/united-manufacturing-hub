@@ -21,7 +21,7 @@ import (
 )
 
 // TransportUserSpec defines typed configuration for the transport worker.
-// Parsed from UserSpec.Config YAML string via config.ParseUserSpec.
+// Parsed from UserSpec.Config YAML string via config.LoadUserSpec.
 type TransportUserSpec struct {
 	config.BaseUserSpec `yaml:",inline"`
 	RelayURL            string        `json:"relayURL"     yaml:"relayURL"`
