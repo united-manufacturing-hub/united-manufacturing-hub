@@ -5,6 +5,7 @@
 ### Improvements
 
 - Bridges now start only once CPU, memory and disk are proven healthy, also after a restart. A waiting bridge says why it waits and how to start bridges anyway in an emergency
+- Connection checks now run on the "FSMv2 nmap" backend by default, which lowers the total average CPU usage of an UMH-Core instance by up to 25%. Should any errors occur, you can set the `NMAP_BACKEND=fsmv1` environment variable to switch back to the old backend.
 
 ### Fixes
 
