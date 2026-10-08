@@ -72,6 +72,7 @@ type recordingFSMLogger struct {
 
 func (l *recordingFSMLogger) Debug(msg string, fields ...deps.Field) {}
 func (l *recordingFSMLogger) Info(msg string, fields ...deps.Field)  {}
+func (l *recordingFSMLogger) Warn(msg string, fields ...deps.Field)  {}
 
 func (l *recordingFSMLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
 	l.record(msg, fields)
