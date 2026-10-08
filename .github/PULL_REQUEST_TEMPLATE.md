@@ -18,4 +18,11 @@ the PR._
 _What you deliberately left out — a deferred refactor, a known limitation.
 Only include if there's something to say._
 
+## Confidence
+
+_Optional. How you got confident that the change works, and how the reviewer
+can too: a test that went red first, a screenshot or recording, a Storybook
+story, or a report with numbers from before and after. Write this part
+yourself, not with an LLM._
+
 Fixes ENG-####
