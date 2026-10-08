@@ -54,6 +54,8 @@ func (r *warnRecorder) Debug(_ string, _ ...deps.Field) {}
 
 func (r *warnRecorder) Info(_ string, _ ...deps.Field) {}
 
+func (r *warnRecorder) Warn(_ string, _ ...deps.Field) {}
+
 func (r *warnRecorder) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

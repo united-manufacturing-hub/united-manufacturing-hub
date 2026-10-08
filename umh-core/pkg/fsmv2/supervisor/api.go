@@ -107,20 +107,11 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 	}
 
 	initialDesired, err := worker.DeriveDesiredState(ddsSpec)
-	if err != nil && ddsSpec != nil && errors.Is(err, config.ErrVariablesNotPropagated) {
-		// Template rendering failed because parent variables (IP/PORT, auth token, …)
-		// haven't propagated yet. Fall back to nil so the worker gets a valid default
-		// desired state; the tick loop re-derives with the full spec on the next
-		// reconciliation cycle. Hard errors (parse failures, type mismatches, YAML
-		// validation issues) are NOT wrapped with ErrVariablesNotPropagated and bubble
-		// up below so they don't get silently swallowed at startup.
-		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_derive_desired_fallback_to_nil",
-			deps.Err(err))
-		initialDesired, err = worker.DeriveDesiredState(nil)
-	}
-
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
+		var cfgErr *config.ConfigError
+		if !errors.As(err, &cfgErr) {
+			s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
+		}
 
 		return nil, fmt.Errorf("failed to derive initial desired state: %w", err)
 	}

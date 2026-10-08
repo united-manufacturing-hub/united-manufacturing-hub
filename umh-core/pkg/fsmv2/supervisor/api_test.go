@@ -39,6 +39,7 @@ type sentryErrorRecorder struct {
 
 func (r *sentryErrorRecorder) Debug(_ string, _ ...deps.Field) {}
 func (r *sentryErrorRecorder) Info(_ string, _ ...deps.Field)  {}
+func (r *sentryErrorRecorder) Warn(_ string, _ ...deps.Field)  {}
 func (r *sentryErrorRecorder) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {
 }
 
