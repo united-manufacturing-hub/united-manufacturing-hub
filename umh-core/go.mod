@@ -12,25 +12,25 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/getsentry/sentry-go v0.49.0
 	github.com/gin-gonic/gin v1.12.0
-	github.com/goccy/go-json v0.10.6
+	github.com/goccy/go-json v0.11.2
 	github.com/google/uuid v1.6.0
 	github.com/h2non/gock v1.2.0
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/klauspost/compress v1.20.0
+	github.com/klauspost/compress v1.20.1
 	github.com/looplab/fsm v1.0.4
 	github.com/onsi/ginkgo/v2 v2.33.0
-	github.com/onsi/gomega v1.43.1
+	github.com/onsi/gomega v1.44.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
-	github.com/prometheus/common v0.71.0
-	github.com/prometheus/prometheus v0.314.0
-	github.com/shirou/gopsutil/v4 v4.26.8
+	github.com/prometheus/common v0.72.0
+	github.com/prometheus/prometheus v0.315.0
+	github.com/shirou/gopsutil/v4 v4.26.9
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.44.0
 	github.com/tiendc/go-deepcopy v1.7.2
 	github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-00010101000000-000000000000
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
-	github.com/vektah/gqlparser/v2 v2.5.37
+	github.com/vektah/gqlparser/v2 v2.5.58
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/sync v0.23.0
