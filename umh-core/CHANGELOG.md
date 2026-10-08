@@ -9,6 +9,7 @@
 
 ### Fixes
 
+- With `USE_FSMV2_CPU=true`, CPU health now shows degraded instead of healthy when the instance cannot read a file it needs to measure the CPU
 - An instance now runs up to its full bridge limit. Before, it stopped one bridge short
 - With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets a limit of 5 bridges, not 155
 

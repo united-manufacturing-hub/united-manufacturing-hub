@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -102,17 +101,14 @@ var _ = Describe("the filesystem the CPU worker reads", func() {
 			"only the published stub serves this counter value; the real cgroup never does")
 	})
 
-	It("reports a filesystem that refuses every read as healthy and unmeasured, not degraded", func() {
-		// A failed poll degrades the instance and blocks every bridge on it. A
-		// host that keeps its CPU accounting outside this cgroup has none of
-		// these files, so the poll succeeds carrying no capacity instead.
+	It("fails the poll on a filesystem that refuses every read, because nothing was measured", func() {
 		register.SetDeps[filesystem.Service](FilesystemDepsKey, stubFilesystem{})
 		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
 
 		id, bd := newBaseDeps()
-		status, err := Poll(context.Background(), NewDeps(id, bd), CPUConfig{})
-		Expect(err).NotTo(HaveOccurred(), "an unreadable cgroup must not degrade the instance")
-		Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy))
+		_, err := Poll(context.Background(), NewDeps(id, bd), CPUConfig{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(errRefusedByStub.Error()))
 	})
 
 	It("falls back to the real filesystem when nothing was published", func() {
