@@ -144,7 +144,7 @@ type IConnectionService interface {
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 
 	// UsesFsmv2Backend reports whether the service selected the fsmv2-backed nmap
-	// manager (NMAP_BACKEND=fsmv2).
+	// manager. It is true unless NMAP_BACKEND=fsmv1.
 	UsesFsmv2Backend() bool
 }
 
@@ -193,8 +193,8 @@ type ConnectionService struct {
 	recentNmapStates map[string][]string
 	nmapConfigs      []config.NmapConfig
 	// usesFsmv2Backend reports whether NewDefaultConnectionService selected the
-	// fsmv2-backed nmap manager (NMAP_BACKEND=fsmv2). When true the S6 nmapService
-	// is left nil, and the S6 call sites take their fsmv2-aware branches.
+	// fsmv2-backed nmap manager (the default; NMAP_BACKEND=fsmv1 opts out). When
+	// true the S6 nmapService is left nil, and the S6 call sites take their fsmv2-aware branches.
 	usesFsmv2Backend bool
 }
 
@@ -230,7 +230,7 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 		recentNmapStates: make(map[string][]string),
 	}
 
-	if backend, _ := env.GetAsString("NMAP_BACKEND", false, constants.NmapBackendFSMv1); backend == constants.NmapBackendFSMv2 {
+	if backend, _ := env.GetAsString("NMAP_BACKEND", false, constants.NmapBackendFSMv2); backend != constants.NmapBackendFSMv1 {
 		// fsmv2 backend: drive the fsmv2 nmap workers via the adapter manager and
 		// leave the S6 nmapService nil. The S6 call sites branch on
 		// usesFsmv2Backend so they never dereference the nil service.
@@ -250,8 +250,8 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 }
 
 // UsesFsmv2Backend reports whether NewDefaultConnectionService selected the
-// fsmv2-backed nmap manager (NMAP_BACKEND=fsmv2). When false the service uses
-// the default S6/fsmv1 nmap path.
+// fsmv2-backed nmap manager, which is the default. When false (NMAP_BACKEND=fsmv1)
+// the service uses the S6/fsmv1 nmap path.
 func (c *ConnectionService) UsesFsmv2Backend() bool {
 	return c.usesFsmv2Backend
 }

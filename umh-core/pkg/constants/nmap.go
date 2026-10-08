@@ -19,12 +19,12 @@ import "time"
 // Nmap backend selectors for the NMAP_BACKEND environment variable. They pick
 // which manager the connection service drives for nmap probing.
 const (
-	// NmapBackendFSMv1 is the default backend: the S6-supervised fsmv1 nmap
-	// manager. Any value other than NmapBackendFSMv2 (including unset) selects it.
+	// NmapBackendFSMv1 selects the S6-supervised fsmv1 nmap manager. Set
+	// NMAP_BACKEND=fsmv1 to opt out of the default fsmv2 backend.
 	NmapBackendFSMv1 = "fsmv1"
 
-	// NmapBackendFSMv2 selects the fsmv2-backed nmap manager. Set
-	// NMAP_BACKEND=fsmv2 to enable it.
+	// NmapBackendFSMv2 is the default backend: the fsmv2-backed nmap manager.
+	// Any value other than NmapBackendFSMv1 (including unset) selects it.
 	NmapBackendFSMv2 = "fsmv2"
 )
 

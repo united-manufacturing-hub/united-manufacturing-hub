@@ -29,7 +29,8 @@ package connection
 //   - leave the S6 nmapService nil, and
 //   - make ServiceExists fsmv2-aware (GetInstance, NOT an S6 probe).
 //
-// When the flag is unset/"fsmv1", every path is byte-identical to today.
+// When the flag is unset or "fsmv2", the fsmv2 backend is selected. Only
+// NMAP_BACKEND=fsmv1 selects the S6 fsmv1 nmap path.
 
 import (
 	"context"
@@ -74,6 +75,14 @@ var _ = Describe("NMAP_BACKEND flag wiring", func() {
 	})
 
 	Describe("backend selection", func() {
+		It("selects the fsmv2 backend when NMAP_BACKEND is unset", func() {
+			// env intentionally unset in BeforeEach
+			svc := NewDefaultConnectionService("flag-default-conn")
+
+			Expect(svc.UsesFsmv2Backend()).To(BeTrue(),
+				"unset NMAP_BACKEND must select the fsmv2-backed nmap manager")
+		})
+
 		It("selects the fsmv2 backend when NMAP_BACKEND=fsmv2", func() {
 			_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv2)
 
@@ -81,26 +90,18 @@ var _ = Describe("NMAP_BACKEND flag wiring", func() {
 
 			svc := NewDefaultConnectionService("flag-on-conn")
 
-			Expect(svc.UsesFsmv2Backend()).To(BeTrue(),
-				"NMAP_BACKEND=fsmv2 must select the fsmv2-backed nmap manager")
+			Expect(svc.UsesFsmv2Backend()).To(BeTrue())
 		})
 
-		It("keeps the fsmv1 backend when NMAP_BACKEND is unset (FF-off default)", func() {
-			// env intentionally unset in BeforeEach
-			svc := NewDefaultConnectionService("flag-off-conn")
-
-			Expect(svc.UsesFsmv2Backend()).To(BeFalse(),
-				"unset NMAP_BACKEND must keep the existing S6/fsmv1 nmap path")
-		})
-
-		It("keeps the fsmv1 backend for any non-fsmv2 value", func() {
-			_ = os.Setenv("NMAP_BACKEND", "fsmv1")
+		It("selects the fsmv1 backend when NMAP_BACKEND=fsmv1", func() {
+			_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv1)
 
 			defer func() { _ = os.Unsetenv("NMAP_BACKEND") }()
 
-			svc := NewDefaultConnectionService("flag-explicit-off-conn")
+			svc := NewDefaultConnectionService("flag-fsmv1-conn")
 
-			Expect(svc.UsesFsmv2Backend()).To(BeFalse())
+			Expect(svc.UsesFsmv2Backend()).To(BeFalse(),
+				"NMAP_BACKEND=fsmv1 must select the S6/fsmv1 nmap path")
 		})
 	})
 
