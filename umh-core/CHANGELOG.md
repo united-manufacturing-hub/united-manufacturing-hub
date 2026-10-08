@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- Connection checks now run on the FSMv2 nmap backend by default, which lowers CPU usage by apprxomately 25%. To switch back to the previous backend, set the `NMAP_BACKEND=fsmv1` environment variable.
+- Connection checks now run on the FSMv2 nmap backend by default, which lowers the total average CPU usage of an UMH-Core instance by up to 25%. Should any errors occur, you can set the `NMAP_BACKEND=fsmv1` environment variable to switch back to the old backend.
 
 ## [0.44.42]
 
