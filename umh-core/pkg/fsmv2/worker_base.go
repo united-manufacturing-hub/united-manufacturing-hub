@@ -141,7 +141,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 	}
 
 	if err := config.RenderTemplates(&cfg, names); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to render the template fields: %w", err)
 	}
 
 	// Duck-type: validate the desired lifecycle state when TConfig embeds

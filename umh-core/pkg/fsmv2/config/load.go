@@ -56,21 +56,37 @@ func LoadUserSpec[T any](spec any) (T, error) {
 }
 
 // EntryFields decodes configYAML into the fields a template's names are built
-// from: the config's own values as a map, with the variables section and the
-// key of every Template field removed, because BuildNames supplies those
-// names itself. cfg is the struct the same YAML decodes into; its Template
-// fields are found by reflection, honouring an inline embed.
+// from: the config's own values as a map, with the variables section, the
+// key of every Template field and every field the typed plain-value walk
+// exempts removed, because BuildNames supplies those names itself and the
+// exempt fields decode their own text. cfg is the struct the same YAML
+// decodes into; its Template fields are found by reflection, honouring an
+// inline embed. The decoded map is normalized, so a Template key behind a
+// map yaml decoded with a non-string key is removed too. A value left in
+// the map that still contains a placeholder is a *ConfigError naming its
+// path: yaml.Unmarshal into the typed struct drops keys no field declares,
+// so CheckPlainValues in LoadUserSpec never runs on them.
 func EntryFields(configYAML string, cfg any) (map[string]any, error) {
 	fields := map[string]any{}
 	if configYAML != "" {
 		if err := yaml.Unmarshal([]byte(configYAML), &fields); err != nil {
 			return nil, &ConfigError{Err: err}
 		}
+
+		fields = normalize(fields).(map[string]any)
 	}
 
 	delete(fields, "variables")
 	for _, path := range templatePaths(reflect.ValueOf(cfg)) {
 		deleteField(fields, path)
+	}
+
+	for _, path := range exemptPaths(reflect.ValueOf(cfg)) {
+		deleteField(fields, path)
+	}
+
+	if err := checkPlainValue(reflect.ValueOf(fields), ""); err != nil {
+		return nil, err
 	}
 
 	return fields, nil
@@ -80,6 +96,25 @@ func EntryFields(configYAML string, cfg any) (map[string]any, error) {
 // points to, as segments in the same form the walkers use: an
 // inline-embedded struct adds no segment.
 func templatePaths(v reflect.Value) [][]string {
+	return leafPaths(v, func(t reflect.Type) bool {
+		return t == templateType
+	})
+}
+
+// exemptPaths returns the YAML path of every field of the value v points to
+// whose type the plain-value walk skips: a UserSpec, or a type that decodes
+// itself in yaml.v3 and may legitimately carry placeholder text its own
+// decoding consumes.
+func exemptPaths(v reflect.Value) [][]string {
+	return leafPaths(v, func(t reflect.Type) bool {
+		return t == userSpecType || isYAMLUnmarshaler(t)
+	})
+}
+
+// leafPaths returns the YAML path of every leaf-matching field of the value v
+// points to, as segments in the same form the walkers use: an
+// inline-embedded struct adds no segment.
+func leafPaths(v reflect.Value, leaf func(reflect.Type) bool) [][]string {
 	var paths [][]string
 
 	var walk func(sv reflect.Value, prefix []string)
@@ -96,7 +131,7 @@ func templatePaths(v reflect.Value) [][]string {
 			return
 		}
 
-		if sv.Type() == templateType {
+		if leaf(sv.Type()) {
 			if len(prefix) > 0 {
 				paths = append(paths, prefix)
 			}
@@ -150,7 +185,9 @@ func isInlineField(sf reflect.StructField) bool {
 
 // deleteField removes the value at path from a decoded config map. A path the
 // config does not carry, or one that runs through a value that is not a
-// container, deletes nothing.
+// container, deletes nothing. A slice element cannot be deleted from the
+// middle, so its slot is emptied; the plain-value walk skips the invalid
+// value left there.
 func deleteField(fields map[string]any, path []string) {
 	current := any(fields)
 	for _, segment := range path[:len(path)-1] {
@@ -160,17 +197,27 @@ func deleteField(fields map[string]any, path []string) {
 		}
 	}
 
+	last := path[len(path)-1]
+
 	if m, ok := current.(map[string]any); ok {
-		delete(m, path[len(path)-1])
+		delete(m, last)
+
+		return
+	}
+
+	if s, ok := current.([]any); ok {
+		if index, err := strconv.Atoi(last); err == nil && index >= 0 && index < len(s) {
+			s[index] = nil
+		}
 	}
 }
 
-// mapSegment descends one path segment into a decoded YAML value.
+// mapSegment descends one path segment into a decoded config map. The tree
+// EntryFields walks is normalized first, so every container is a
+// map[string]any or a []any.
 func mapSegment(v any, segment string) any {
 	switch container := v.(type) {
 	case map[string]any:
-		return container[segment]
-	case map[any]any:
 		return container[segment]
 	case []any:
 		index, err := strconv.Atoi(segment)

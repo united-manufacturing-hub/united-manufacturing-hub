@@ -32,13 +32,14 @@ var (
 )
 
 // CheckPlainValues reports the first field of v, then of variables, whose
-// value still contains a Go template action. Struct fields are visited in
-// declaration order and map keys in sorted order, so the reported field is
-// deterministic. Actions render in Template fields and, today, in the raw
-// UserSpec.Config string that RenderConfigTemplate renders whole, so an
-// action anywhere else would reach benthos unresolved; dollar interpolation
-// (${...}) is benthos syntax and stays allowed. Each field is named by its
-// YAML path, the variables map under the "variables" prefix.
+// value still contains a placeholder (a Go template action, {{ ... }}).
+// Struct fields are visited in declaration order and map keys in sorted
+// order, so the reported field is deterministic. A value outside a Template
+// field is never rendered, so a placeholder there would reach the worker
+// unresolved. Only a placeholder is rejected: benthos evaluates its own
+// ${! ...} interpolation, and any other dollar text passes through
+// unchanged. Each field is named by its YAML path, the variables map under
+// the "variables" prefix.
 func CheckPlainValues(v any, variables map[string]any) error {
 	if err := checkPlainValue(reflect.ValueOf(v), ""); err != nil {
 		return err
@@ -60,6 +61,10 @@ func checkPlainValue(sv reflect.Value, path string) error {
 		return nil
 	}
 
+	// Exempt leaves: these types carry text their own decoding consumes, so
+	// the walk must not judge it. EntryFields removes the same paths from
+	// the raw config map, so the typed walk and the map walk judge the
+	// same values.
 	if sv.Type() == templateType || sv.Type() == userSpecType || isYAMLUnmarshaler(sv.Type()) {
 		return nil
 	}
