@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.43]
+
 ### Improvements
 
 - Bridges now start only once CPU, memory and disk are proven healthy, also after a restart. A waiting bridge says why it waits and how to start bridges anyway in an emergency
