@@ -130,7 +130,7 @@ type Action[TDeps any] interface {
 }
 
 // NextResult contains the result of a State.Next() evaluation.
-// All fields except State are optional - use helpers.Result() to construct.
+// All fields except State are optional. State files construct it with Transition.
 type NextResult[TSnapshot any, TDeps any] struct {
 	// State is the next state (can be same state if no transition).
 	State State[TSnapshot, TDeps]

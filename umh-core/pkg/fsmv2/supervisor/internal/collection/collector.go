@@ -505,8 +505,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	// Post-COS framework wrapping for NewObservation-based workers.
-	// Gate: zero CollectedAt means the worker returned NewObservation. An
-	// observation whose CollectedAt the worker set itself is not wrapped.
+	// Gate: zero CollectedAt means the worker returned NewObservation.
 	if observed.GetTimestamp().IsZero() {
 		observed = c.wrapNewObservation(ctx, observed, frameworkMetrics, actionHistory)
 	}

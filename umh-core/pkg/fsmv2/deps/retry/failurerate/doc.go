@@ -41,10 +41,10 @@
 // 5 minutes, the window still sees ~99% failure and keeps the alert. One
 // brief success doesn't reset anything.
 //
-// The window size is outcome-count-based, not time-based. At the production
-// default of 1 second per tick, WindowSize=600 covers roughly 10 minutes.
-// Under backoff the effective duration stretches because fewer outcomes are
-// recorded per unit of time.
+// The window size is outcome-count-based, not time-based. Production ticks
+// every 100ms (cmd/main.go). At one outcome per tick, WindowSize=600 covers
+// about one minute. Backoff and idle ticks record fewer outcomes, so the
+// window then covers more time.
 //
 // # Transient and Persistent Errors
 //
@@ -84,6 +84,5 @@
 // workers/transport/types package. Rate tracking lives in this package.
 // Push and pull dependencies each hold a *[Tracker] and call
 // [Tracker.RecordOutcome] after every real HTTP operation (success or
-// failure). Idle ticks  -  where no HTTP request was made  -  must NOT record
-// an outcome, as this would dilute the failure rate with phantom data.
+// failure). [Tracker.RecordOutcome] says why an idle tick records nothing.
 package failurerate

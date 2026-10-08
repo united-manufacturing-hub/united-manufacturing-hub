@@ -214,11 +214,11 @@
 // # Graceful shutdown budget
 //
 // Each supervisor has a base drain timeout (Config.GracefulShutdownTimeout,
-// default DefaultGracefulShutdownTimeout). Shutdown() samples its subtree height once, at entry,
-// and arms one drain budget of base × height. It then shuts its children down
-// one after another. Each child drains synchronously on its own budget, and
-// that time is spent from the parent's budget. The parent's own workers drain
-// on what remains.
+// default DefaultGracefulShutdownTimeout). Shutdown() samples its subtree
+// height once, at entry, and arms one drain budget of base × height. It then
+// shuts its children down one after another. Each child drains synchronously
+// on its own budget, and that time is spent from the parent's budget. The
+// parent's own workers drain on what remains.
 //
 // A chain of depth N therefore drains within N × base. A wide tree can take
 // longer: sibling subtrees drain in sequence, so their budgets add up. When
@@ -230,8 +230,8 @@
 //
 // The process's SIGTERM grace period must cover base × the deepest tree
 // height. cmd/main.go sets the base for production. A second SIGTERM closes
-// Config.ForceExit for an immediate exit. A shutdown test with a parent and a child
-// supervisor needs an Eventually timeout above 2 × base.
+// Config.ForceExit for an immediate exit. A shutdown test with a parent and a
+// child supervisor needs an Eventually timeout above 2 × base.
 //
 // # Thread safety
 //

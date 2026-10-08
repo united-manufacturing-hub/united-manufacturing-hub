@@ -128,13 +128,13 @@ type Worker interface {
     DeriveDesiredState(spec interface{}) (DesiredState, error)
 
     // Return the initial state for new workers (called once at startup)
-    GetInitialState() State
+    GetInitialState() State[any, any]
 }
 ```
 
 ### States: pure functions with Next()
 
-States are concrete Go types (not strings). Each state implements `Next()`, which returns a `NextResult` via `fsmv2.Result[any, any]()`:
+States are concrete Go types (not strings). Each state implements `Next()`, which returns a `NextResult` built with `fsmv2.Transition()`:
 
 ```go
 // States embed a lifecycle base and implement Next()
@@ -142,24 +142,24 @@ type StoppedState struct{ helpers.StoppedBase }
 type TryingToStartState struct{ helpers.StartingBase }
 type RunningState struct{ helpers.RunningHealthyBase }
 
-// Next() returns a NextResult containing: state, signal, action, reason
+// Next() returns a NextResult containing: state, signal, action, reason, children
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // ALWAYS check shutdown first
     if snap.ShouldStop() {
-        return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+        return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
     }
     // Check observation - did the process start?
     if snap.Status.IsRunning {
-        return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Process is running")
+        return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "process is running", nil)
     }
     // Not running yet - emit action to start it.
-    return fsmv2.Result[any, any](s, fsmv2.SignalNone, &StartAction{}, "Starting process")
+    return fsmv2.Transition(s, fsmv2.SignalNone, &StartAction{}, "starting process", nil)
 }
 ```
 
-`fsmv2.Result[any, any]` is the canonical return shape for state `Next()` methods.
+State files return through `fsmv2.Transition()`. The architecture test rejects `fsmv2.Result[...]` and `fsmv2.WrapAction[...]` calls in state files. The fifth argument is the set of children a parent worker wants. `nil` means no opinion, and the supervisor uses the children from `DeriveDesiredState`. See `NextResult.Children` in `api.go`.
 
 ### State transitions: observation-driven
 
@@ -179,7 +179,7 @@ func (s *TryingToStartState) String() string {
 
 **Naming convention**: `DeriveStateName` produces PascalCase names (`RunningState` → `"Running"`, `TryingToStartState` → `"TryingToStart"`, `StoppedState` → `"Stopped"`).
 
-Reason strings are the 4th argument to `fsmv2.Result[any, any]()` in `Next()`, not a separate method. See the `Next()` example above.
+Reason strings are the 4th argument to `fsmv2.Transition()` in `Next()`, not a separate method. See the `Next()` example above.
 
 ### Signals
 
@@ -526,7 +526,7 @@ ginkgo run --focus="Architecture" -v ./pkg/fsmv2/
 
 1. **State transitions**: Call `Next()` with test snapshots
 2. **Action idempotency**: Verify actions are safe to call multiple times
-3. **Shutdown handling**: Test `IsShutdownRequested()` path in all states
+3. **Shutdown handling**: Test the `snap.ShouldStop()` path in all states
 
 **Example test pattern:**
 
@@ -551,7 +551,7 @@ It("should transition to Running when process is observed", func() {
 |---------|-------|------------|
 | Stuck in `TryingTo*` state | Action logs for errors | Fix action failure or external dependency |
 | Running but not working | Observation timestamps | Verify `CollectObservedState()` queries actual system |
-| Won't shut down | `IsShutdownRequested()` check | Ensure all states check shutdown first |
+| Won't shut down | `snap.ShouldStop()` check | Ensure all states check shutdown first |
 | Action runs multiple times | Action idempotency | Add "already done" check before work |
 | Data considered stale | Circuit breaker metrics | Check observation collection errors |
 

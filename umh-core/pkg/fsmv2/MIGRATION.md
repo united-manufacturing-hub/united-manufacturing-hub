@@ -48,7 +48,7 @@ models.go        # Data structures
 FSMv2 fundamentally changes the approach:
 
 - **States as Go types**: `StoppedState{}`, `RunningState{}`, `TryingToConnectState{}`
-- **Decision via `Next()` method**: Each state returns (nextState, signal, action)
+- **Decision via `Next()` method**: Each state returns the next state, a signal, an optional action and a reason, built with `fsmv2.Transition()`
 - **Single-threaded tick loop**: No channels, no goroutines for coordination
 - **Supervisor-owned lifecycle**: The supervisor handles retries, timeouts, metrics, and shutdown
 - **Separation of concerns**: States are pure (no I/O), Actions perform I/O, Worker collects observations
@@ -113,27 +113,28 @@ fsm := looplab.NewFSM(
 
 **FSMv2:**
 ```go
-// state/stopped.go
-type StoppedState struct{}
-
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
-
-    // ALWAYS check shutdown first
-    if snap.Desired.IsShutdownRequested() {
-        return s, fsmv2.SignalNeedsRemoval, nil
-    }
-
-    // Transition to TryingToStart when desired state is running
-    if snap.Observed.ShouldBeRunning() {
-        return &TryingToStartState{}, fsmv2.SignalNone, nil
-    }
-
-    return s, fsmv2.SignalNone, nil
+// state/state_stopped.go
+type StoppedState struct {
+    helpers.StoppedBase
 }
 
-func (s *StoppedState) String() string { return "stopped" }
-func (s *StoppedState) Reason() string { return "Worker is stopped" }
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+
+    // ALWAYS check shutdown first. SignalNeedsRemoval lets the supervisor remove the worker.
+    if snap.IsShutdownRequested {
+        return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested", nil)
+    }
+
+    // A disabled worker stays in Stopped until its parent enables it again
+    if snap.IsDisabled {
+        return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled, staying stopped", nil)
+    }
+
+    return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "starting", nil)
+}
+
+func (s *StoppedState) String() string { return helpers.DeriveStateName(s) }
 ```
 
 ### 3. Convert callbacks to State.Next() methods
@@ -174,7 +175,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
     return fsmv2.Transition(s, fsmv2.SignalNone, &StartProcessAction{}, "starting process", nil)
 }
 
-func (s *TryingToStartState) String() string { return "trying_to_start" }
+func (s *TryingToStartState) String() string { return helpers.DeriveStateName(s) }
 ```
 
 ### 4. Convert actions to Action interface implementations
@@ -250,21 +251,18 @@ func (m *MyFSM) Run() {
 // State.Next() is called on each tick with a fresh snapshot.
 // No channels, no goroutines for coordination.
 
+// WorkerBase supplies DeriveDesiredState and GetInitialState.
+// GetInitialState returns the state that state/ registers with fsmv2.RegisterInitialState.
 type MyWorker struct {
-    *helpers.BaseWorker[*MyDependencies]
-    logger deps.FSMLogger
+    fsmv2.WorkerBase[MyConfig, MyStatus, *MyDependencies]
 }
 
 func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-    // Runs in background goroutine managed by supervisor
-    return &MyObservedState{
-        CollectedAt:      time.Now(),
-        IsProcessRunning: w.deps.ProcessManager().IsRunning(),
-    }, nil
-}
-
-func (w *MyWorker) GetInitialState() fsmv2.State[any, any] {
-    return &StoppedState{}
+    // Runs in background goroutine managed by supervisor.
+    // GetDependencies is the worker's typed accessor over GetDependenciesAny.
+    return fsmv2.NewObservation(MyStatus{
+        IsProcessRunning: w.GetDependencies().ProcessManager().IsRunning(),
+    }), nil
 }
 ```
 
@@ -281,7 +279,7 @@ type Worker interface {
     DeriveDesiredState(spec interface{}) (DesiredState, error)
 
     // Return the initial state for new workers (called once at startup)
-    GetInitialState() State
+    GetInitialState() State[any, any]
 }
 ```
 
@@ -308,25 +306,26 @@ events := fsm.Events{
 
 **FSMv2:**
 ```go
-// state/stopped.go
-type StoppedState struct{}
-
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
-
-    if snap.Desired.IsShutdownRequested() {
-        return s, fsmv2.SignalNeedsRemoval, nil
-    }
-
-    if snap.Observed.ShouldBeRunning() {
-        return &TryingToStartState{}, fsmv2.SignalNone, nil
-    }
-
-    return s, fsmv2.SignalNone, nil
+// state/state_stopped.go
+type StoppedState struct {
+    helpers.StoppedBase
 }
 
-func (s *StoppedState) String() string { return "stopped" }
-func (s *StoppedState) Reason() string { return "Worker is stopped" }
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+
+    if snap.IsShutdownRequested {
+        return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested", nil)
+    }
+
+    if snap.IsDisabled {
+        return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled, staying stopped", nil)
+    }
+
+    return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "starting", nil)
+}
+
+func (s *StoppedState) String() string { return helpers.DeriveStateName(s) }
 ```
 
 ### FSMv1 callback to FSMv2 Next() method
@@ -356,7 +355,9 @@ func (m *MyFSM) leaveRunning(e *fsm.Event) {
 **FSMv2:**
 ```go
 // state/state_running.go
-type RunningState struct{}
+type RunningState struct {
+    helpers.RunningHealthyBase
+}
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
@@ -375,7 +376,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
     return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running healthy", nil)
 }
 
-func (s *RunningState) String() string { return "running" }
+func (s *RunningState) String() string { return helpers.DeriveStateName(s) }
 ```
 
 ### FSMv1 action to FSMv2 Action implementation
@@ -461,17 +462,23 @@ func (m *MyFSM) handleError(err error) {
 
 **FSMv2:**
 ```go
-func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+
+    if snap.ShouldStop() {
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
+    }
 
     // Check consecutive failures from observation
-    if snap.Observed.ConsecutiveFailures > 100 {
+    if snap.Status.ConsecutiveFailures > 100 {
         // Signal unrecoverable error - supervisor will restart
-        return s, fsmv2.SignalNeedsRestart, nil
+        return fsmv2.Transition(s, fsmv2.SignalNeedsRestart, nil,
+            fmt.Sprintf("giving up after %d consecutive failures", snap.Status.ConsecutiveFailures), nil)
     }
 
     // Normal retry - emit action again
-    return s, fsmv2.SignalNone, &ConnectAction{}
+    return fsmv2.Transition(s, fsmv2.SignalNone, &ConnectAction{},
+        fmt.Sprintf("connecting (%d consecutive failures)", snap.Status.ConsecutiveFailures), nil)
 }
 ```
 
@@ -502,16 +509,20 @@ func (m *MyFSM) retryWithBackoff(ctx context.Context) {
 // Action fails -> state unchanged -> next tick -> state.Next() called again
 // The supervisor manages the tick interval.
 
-func (s *TryingToSyncState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *TryingToSyncState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+
+    if snap.ShouldStop() {
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
+    }
 
     // Check if sync completed
-    if snap.Observed.IsSynced {
-        return &SyncedState{}, fsmv2.SignalNone, nil
+    if snap.Status.IsSynced {
+        return fsmv2.Transition(&SyncedState{}, fsmv2.SignalNone, nil, "sync complete", nil)
     }
 
     // Emit action - supervisor handles retry on failure
-    return s, fsmv2.SignalNone, &MyAction{}
+    return fsmv2.Transition(s, fsmv2.SignalNone, &MyAction{}, "syncing", nil)
 }
 ```
 
@@ -533,25 +544,28 @@ if !m.healthCheck() {
 ```go
 // Health is part of ObservedState, collected automatically
 func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-    deps := w.GetDependencies()
+    d := w.GetDependencies()
 
-    return &MyObservedState{
-        CollectedAt:      time.Now(),
-        IsHealthy:        deps.Client().Ping() == nil,
-        LastActivityTime: deps.GetLastActivityTime(),
-    }, nil
+    return fsmv2.NewObservation(MyStatus{
+        IsHealthy:        d.Client().Ping() == nil,
+        LastActivityTime: d.GetLastActivityTime(),
+    }), nil
 }
 
 // State checks observation for health
-func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
-    // Health check via observation
-    if !snap.Observed.IsHealthy {
-        return &DegradedState{}, fsmv2.SignalNone, nil
+    if snap.ShouldStop() {
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
     }
 
-    return s, fsmv2.SignalNone, nil
+    // Health check via observation
+    if !snap.Status.IsHealthy {
+        return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "health check failed", nil)
+    }
+
+    return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running healthy", nil)
 }
 ```
 
@@ -577,35 +591,40 @@ func (m *ParentFSM) shutdownChildren() {
 
 **FSMv2:**
 ```go
-// Parent declares children in DeriveDesiredState - supervisor manages lifecycle
-func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-    userSpec := spec.(config.UserSpec)
-
-    var children []config.ChildSpec
-    for _, childConfig := range userSpec.Children {
-        children = append(children, config.ChildSpec{
-            Name:       childConfig.Name,
+// children.go: the parent's child set. The supervisor creates, updates and
+// removes children so that they match the slice a state returns.
+func RenderChildren(cfg MyParentConfig, enabled bool) []config.ChildSpec {
+    specs := make([]config.ChildSpec, 0, len(cfg.Children))
+    for _, child := range cfg.Children {
+        specs = append(specs, config.ChildSpec{
+            Name:       child.Name,
             WorkerType: "mychild",
-            UserSpec:   childConfig,
+            UserSpec:   config.UserSpec{Config: child.Config},
+            Enabled:    enabled,
         })
     }
 
-    return &config.DesiredState{
-        BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-        ChildrenSpecs:    children,
-    }, nil
+    return specs
 }
 
-// Parent state can check children via ChildrenView
-func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[ParentObservedState, *ParentDesiredState](snapAny)
+// state/state_running.go: every Transition passes the children the parent wants
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyParentConfig, MyParentStatus](snapAny)
 
-    // Check if all children are healthy
-    if snap.Observed.ChildrenUnhealthy > 0 {
-        return &DegradedState{Reason: "unhealthy children"}, fsmv2.SignalNone, nil
+    // An empty slice removes every child
+    if snap.ShouldStop() {
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), []config.ChildSpec{})
     }
 
-    return s, fsmv2.SignalNone, nil
+    children := RenderChildren(snap.Config, true)
+
+    // The supervisor counts unhealthy children for the parent
+    if snap.ChildrenUnhealthy > 0 {
+        return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil,
+            fmt.Sprintf("%d children unhealthy", snap.ChildrenUnhealthy), children)
+    }
+
+    return fsmv2.Transition(s, fsmv2.SignalNone, nil, "all children healthy", children)
 }
 ```
 
@@ -657,28 +676,32 @@ State.Next() must not perform I/O operations. It should only make decisions base
 
 **Wrong:**
 ```go
-func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
+func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
     // Don't do I/O in Next()
-    conn, err := net.Dial("tcp", "server:9000")  // NO!
+    _, err := net.Dial("tcp", "server:9000")  // NO!
     if err == nil {
-        return &ConnectedState{}, fsmv2.SignalNone, nil
+        return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connected", nil)
     }
-    return s, fsmv2.SignalNone, nil
+    return fsmv2.Transition(s, fsmv2.SignalNone, nil, "not connected", nil)
 }
 ```
 
 **Correct:**
 ```go
-func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+
+    if snap.ShouldStop() {
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
+    }
 
     // Check observation (collected by CollectObservedState)
-    if snap.Observed.IsConnected {
-        return &ConnectedState{}, fsmv2.SignalNone, nil
+    if snap.Status.IsConnected {
+        return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connected", nil)
     }
 
     // Emit action - I/O happens there
-    return s, fsmv2.SignalNone, &ConnectAction{}
+    return fsmv2.Transition(s, fsmv2.SignalNone, &ConnectAction{}, "connecting", nil)
 }
 ```
 
@@ -709,36 +732,35 @@ func (o MyObservedState) GetTimestamp() time.Time {
 
 ### State XOR Action rule
 
-Return EITHER a state change OR an action from Next(), not both. The supervisor will reject attempts to do both.
+Return EITHER a state change OR an action from Next(), not both. The supervisor panics when a state changes and emits an action in the same result.
 
 **Wrong:**
 ```go
 // Don't return both state change AND action
-return &NewState{}, fsmv2.SignalNone, &SomeAction{}
+return fsmv2.Transition(&NewState{}, fsmv2.SignalNone, &SomeAction{}, "reason", nil)
 ```
 
 **Correct:**
 ```go
 // State change without action
-return &NewState{}, fsmv2.SignalNone, nil
+return fsmv2.Transition(&NewState{}, fsmv2.SignalNone, nil, "reason", nil)
 
 // OR action without state change
-return s, fsmv2.SignalNone, &SomeAction{}
+return fsmv2.Transition(s, fsmv2.SignalNone, &SomeAction{}, "reason", nil)
 ```
 
 ### Check shutdown first in every state
 
-Every state's Next() method should check IsShutdownRequested() as the first condition.
+Every state's Next() method checks snap.ShouldStop() as its first condition. ShouldStop() is true when shutdown is requested and when the parent disabled the worker. The architecture test rejects a state that checks it later.
 
 **Required pattern:**
 ```go
-func (s *AnyState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *AnyState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // ALWAYS check shutdown first
-    if snap.Desired.IsShutdownRequested() {
-        return &StoppedState{}, fsmv2.SignalNeedsRemoval, nil
-        // Or transition to TryingToStop if cleanup needed
+    if snap.ShouldStop() {
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
     }
 
     // ... rest of state logic

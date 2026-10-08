@@ -6,7 +6,7 @@ This file says where the FSMv2 rules for this repository live in the code.
 
 ## Architecture test
 
-`architecture_test.go` checks the source of every worker against the patterns in `internal/validator/`. A failure names the pattern, why it exists and the correct code (`internal/validator/registry.go`). Run it from `umh-core/` after every change to a worker:
+`architecture_test.go` checks the source of every worker against the patterns in `internal/validator/`. A failure names the violating file and line. For a pattern listed in `internal/validator/registry.go`, it also prints why the pattern exists and the correct code. Run it from `umh-core/` after every change to a worker:
 
 ```bash
 go test -tags=test -count=1 ./pkg/fsmv2/ -ginkgo.focus=Architecture -v

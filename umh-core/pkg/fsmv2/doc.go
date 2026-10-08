@@ -206,24 +206,22 @@
 //
 // ## Factory registration
 //
-// Workers register with the factory in their package's init() function:
+// Workers register in their package's init() function with one
+// register.Worker call:
 //
 //	func init() {
-//	    if err := factory.RegisterWorkerType[snapshot.MyObserved, *snapshot.MyDesired](
-//	        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-//	            return NewMyWorker(id, logger)
-//	        },
-//	        func(cfg interface{}) interface{} {
-//	            return supervisor.NewSupervisor[snapshot.MyObserved, *snapshot.MyDesired](
-//	                cfg.(supervisor.Config))
-//	        },
-//	    ); err != nil {
-//	        panic(err)
-//	    }
+//	    register.Worker[MyConfig, MyStatus, *MyDependencies]("myworker",
+//	        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+//	            return NewMyWorker(id, logger, sr)
+//	        })
 //	}
 //
-// The worker type is derived from the ObservedState struct name (MyObserved → "my").
-// See factory/README.md for naming conventions and common mistakes.
+// The call registers the worker factory, the supervisor factory and the
+// storage types under the worker type "myworker". The worker type is the
+// name used in config YAML and storage. Use the worker's folder name, as
+// workers/example/examplechild/worker.go does. See the register package for
+// workers without dependencies (register.NoDeps) and for dependencies a
+// parent passes to its children.
 //
 // ## Parent-child visibility
 //
@@ -347,7 +345,9 @@
 //
 // ## Shutdown handling
 //
-// Check IsShutdownRequested() as the first conditional in Next().
+// Check snap.ShouldStop() as the first conditional in Next(). ShouldStop()
+// is true when shutdown is requested and when the parent disabled the worker.
+// The architecture test rejects a Next() that checks it later.
 // See workers/example/examplechild/state/ for examples.
 //
 // ## Type-safe dependencies
@@ -380,7 +380,7 @@
 //
 //   - Keep Next() pure (no side effects)
 //   - Make actions idempotent (check if work already done)
-//   - Check IsShutdownRequested() first in all states
+//   - Check snap.ShouldStop() first in all states
 //   - Use type-safe state structs, not strings
 //   - Return action or transition, not both (the supervisor panics if both are returned)
 //   - Handle context cancellation in all async operations

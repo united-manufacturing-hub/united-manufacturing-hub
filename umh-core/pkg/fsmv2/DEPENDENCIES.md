@@ -232,13 +232,12 @@ if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
 ### Common Patterns
 
 ```go
-// State.Next() - dependencies come from supervisor injection
-func (s *MyState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap, err := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
-    if err != nil {
-        // Return error state
-    }
-    // Use snap.Observed, snap.Desired safely
+// State.Next() reads the typed snapshot, never the dependencies.
+// The supervisor passes the dependencies to the action's Execute.
+func (s *MyState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+    // Use snap.Config and snap.Status
+    return fsmv2.Transition(s, fsmv2.SignalNone, &MyAction{}, "working", nil)
 }
 ```
 
