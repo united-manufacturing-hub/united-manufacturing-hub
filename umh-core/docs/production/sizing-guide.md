@@ -54,10 +54,10 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 **Dynamic Resource Protection:**
 Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
 
-- **CPU Utilization**: Blocks new bridges if CPU usage exceeds 70%. With CPU health enabled, usage alone no longer blocks: see [CPU Health](./cpu-health.md), where 70% is the fallback used only when host statistics are unreadable
-- **CPU Throttling**: Blocks if the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
-- **Memory Usage**: Blocks if memory exceeds 80%
-- **Disk Usage**: Blocks if disk exceeds 85%
+- **CPU Utilization**: A new bridge waits while CPU usage is above 70%. That is the rule without [CPU Health](./cpu-health.md). With CPU Health turned on (`USE_FSMV2_CPU=true`), usage alone no longer makes a new bridge wait. There, 70% is a last-resort fallback for machine headroom, used only when no CPU limit is set and the kernel publishes no PSI.
+- **CPU Throttling**: A new bridge waits while the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
+- **Memory Usage**: A new bridge waits while memory use is above 80%
+- **Disk Usage**: A new bridge waits while disk use is above 85%
 
 **Redpanda CPU Utilization:**
 UMH Core runs Redpanda with the `--overprovisioned` flag, which optimizes CPU usage for containerized environments. This disables Seastar's busy-polling reactor model, reducing idle CPU usage from 100% to near-zero when not processing messages. The trade-off is slightly higher latency (microseconds to low milliseconds), which is acceptable for manufacturing data that doesn't require sub-millisecond response times. This is required because UMH Core runs in Docker where CPU pinning doesn't work effectively, and Redpanda shares the container with other processes.
@@ -65,28 +65,31 @@ UMH Core runs Redpanda with the `--overprovisioned` flag, which optimizes CPU us
 **Automatic Enforcement:**
 The system will prevent you from deploying new bridges if:
 1. You've reached the theoretical limit for your CPU allocation, OR
-2. The system detects resource degradation (high CPU, throttling, memory, or disk pressure)
+2. The system detects resource degradation (high CPU, throttling, memory, or disk pressure), OR
+3. The instance's resource health is not proven yet, for example right after a restart
 
-This resource-based blocking is controlled by a feature flag and can be configured in your `config.yaml`:
+This check is bridge admission. The emergency setting *Turn off bridge admission* turns it off, in your `config.yaml`:
 ```yaml
 agent:
-  enableResourceLimitBlocking: false  # Disable resource-based bridge blocking (default: true)
+  enableResourceLimitBlocking: false  # Start bridges even when a resource is degraded or not proven yet, or the bridge limit is reached
 ```
 
-When enabled, this ensures system stability and prevents one bridge from impacting others. If you need more bridges, either:
+`true` is the default for new installs. A missing key in an existing `config.yaml` reads as `false`, so set the key explicitly to turn bridge admission on. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.
+
+While bridge admission is on, it keeps one bridge from overloading the others. If you need more bridges, either:
 - Increase CPU allocation (for containerized deployments)
 - Upgrade to a larger instance (for VM/bare-metal deployments)
 - Optimize existing bridges (reduce polling rates, tag counts, or processing complexity)
 
 #### Resource Limit Error Messages
 
-When the system blocks bridge creation, you'll see clear messages explaining why:
+When a new bridge waits, its status reason says why:
 
 - **Bridge limit**: `Cannot create bridge - limit exceeded (5 bridges maximum with 2.0 CPU cores, 1 core reserved for Redpanda)`
-- **CPU throttling**: `CPU throttled (15% of time). Container limited to 2.0 cores, needs more during peaks (host has 8 cores available)`
 - **High CPU**: `CPU degraded: CPU utilization critical`
 - **High Memory**: `Memory degraded: Memory usage at 85%`
 - **High Disk**: `Disk degraded: Disk usage at 90%`
+- **Health not proven yet**: `Resource health not proven yet`
 
 #### Easy vertical scaling
 

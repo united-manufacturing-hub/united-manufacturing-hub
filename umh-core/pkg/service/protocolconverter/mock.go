@@ -116,6 +116,10 @@ type MockProtocolConverterService struct {
 
 	ServiceExistsResult        bool
 	ReconcileManagerReconciled bool
+
+	// BridgeMustWaitReason makes BridgeMustWait hold every bridge back with
+	// this reason. Empty admits every bridge.
+	BridgeMustWaitReason string
 }
 
 // Ensure MockProtocolConverterService implements IProtocolConverterService.
@@ -744,13 +748,8 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	return nil
 }
 
-// IsResourceLimited mocks checking if the system is at resource limits.
-//
-// It returns:
-//
-//	limited – true when resources are limited and bridge creation should be blocked, false otherwise.
-//	reason  – empty when limited is false; otherwise a short explanation of why resources are limited.
-func (m *MockProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot) (bool, string) {
-	// For testing, always return false to allow bridge creation
-	return false, ""
+// BridgeMustWait holds every bridge back while BridgeMustWaitReason is set,
+// and admits every bridge otherwise.
+func (m *MockProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
+	return m.BridgeMustWaitReason != "", m.BridgeMustWaitReason
 }

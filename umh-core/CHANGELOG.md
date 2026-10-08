@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Improvements
+
+- Bridges now start only once CPU, memory and disk are proven healthy, also after a restart. A waiting bridge says why it waits and how to start bridges anyway in an emergency
+- Connection checks now run on the "FSMv2 nmap" backend by default, which lowers the total average CPU usage of an UMH-Core instance by up to 25%. Should any errors occur, you can set the `NMAP_BACKEND=fsmv1` environment variable to switch back to the old backend.
+
+### Fixes
+
+- An instance now runs up to its full bridge limit. Before, it stopped one bridge short
+- With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets a limit of 5 bridges, not 155
+
 ## [0.44.42]
 
 ### New Features

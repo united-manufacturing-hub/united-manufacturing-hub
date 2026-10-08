@@ -62,7 +62,7 @@ var _ = Describe("containerHealthMessage", func() {
 		Expect(msg).NotTo(ContainSubstring("Disk utilization normal"))
 	})
 
-	It("should name the degraded component and carry its message in the words IsResourceLimited uses for its bridge-block reason", func() {
+	It("should name the degraded component and carry its message in the words BridgeMustWait uses for its bridge-block reason", func() {
 		s := healthy()
 		s.OverallHealth = models.Degraded
 		s.CPUHealth = models.Degraded
