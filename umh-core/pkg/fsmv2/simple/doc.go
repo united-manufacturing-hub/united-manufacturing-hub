@@ -84,12 +84,13 @@
 // degraded with reason "poll error: <err>" and Health is NOT called — the error
 // is persisted as a verdict, not returned, so the worker reports degraded with a
 // reason instead of hanging in a bootstrap state. On a good poll the optional
-// Health function decides the verdict; when it is nil the worker is healthy with
-// reason "running (no health check)".
+// Health function decides the verdict. When Health is nil, the good poll counts
+// as the check, and the worker turns healthy with reason "running (no health
+// check)".
 //
 // Status[TStatus] holds the verdict (Result + Degraded + Reason); the framework
-// sets it on the observation. The state machine reads it to switch between
-// running and degraded (emitting the reason on each Transition); the fsmv1
+// sets it on the observation. The state machine starts degraded and reads it to
+// switch between running and degraded (emitting the reason on each Transition); the fsmv1
 // adapter reads it through the HealthReporter interface Status satisfies. Nothing
 // is added to the shared fsmv2.Observation API.
 //

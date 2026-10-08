@@ -10,6 +10,7 @@
 ### Fixes
 
 - With `USE_FSMV2_CPU=true`, CPU health now shows degraded instead of healthy when the instance cannot read a file it needs to measure the CPU
+- With `USE_FSMV2_CPU=true`, CPU health now shows degraded instead of healthy in the first seconds after a start, while it reads "starting up". New bridges wait until the CPU is proven healthy
 - An instance now shows as degraded while the emergency setting *Turn off bridge admission* (`agent.enableResourceLimitBlocking: false`) is in place. Instances created before v0.43.12 usually have `false` written in config.yaml and show as degraded after this update: set it to `true` in the Config File to turn bridge admission back on
 - A config.yaml without `agent.enableResourceLimitBlocking` now counts as `true`. This affects hand-written config.yaml files and instances upgrading straight from v0.43.11 or earlier: their new bridges wait until health is proven and a slot under the bridge limit is free
 - An instance now runs up to its full bridge limit. Before, it stopped one bridge short

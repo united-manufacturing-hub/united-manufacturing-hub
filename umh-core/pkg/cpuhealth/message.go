@@ -90,7 +90,7 @@ func composeHealthy(details Details) string {
 	// derives no rate from its first read, and the mean over the rates after
 	// that needs two of them. It is not the zero-capacity case (a standing
 	// state): that one returns bare, this one carries the table.
-	if !usageMeasured(details) {
+	if !UsageMeasured(details) {
 		return cpuStartingUp + technicalDetails(nil, details)
 	}
 
@@ -198,9 +198,12 @@ func instanceMeasured(details Details) bool {
 	return details.UsageRingActive
 }
 
-// usageMeasured has one floor per mode, because an outage can leave one window
-// thin while the other fills and a limit-mode headline reads only its own usage.
-func usageMeasured(details Details) bool {
+// UsageMeasured reports whether the usage figure the healthy headline needs has
+// a value: the usage window has reduced, and in no-limit mode /proc/stat was
+// readable. Until then composeHealthy renders "CPU: starting up.".
+// It has one floor per mode, because an outage can leave one window thin while
+// the other fills and a limit-mode headline reads only its own usage.
+func UsageMeasured(details Details) bool {
 	if details.LimitApplies {
 		return instanceMeasured(details)
 	}

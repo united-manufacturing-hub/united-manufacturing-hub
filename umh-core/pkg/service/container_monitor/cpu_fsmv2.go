@@ -59,7 +59,8 @@ func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) (*mo
 
 // cpuVerdict is the seam's judgement about the CPU worker's last observation:
 // what to say, how to classify it, and the measurement it was drawn from.
-// cpuHealth is nil whenever there was no measurement to judge.
+// cpuHealth is nil when the seam sends no verdict: there was no measurement to
+// judge, or the worker is degraded while its verdict is not.
 type cpuVerdict struct {
 	cpuHealth *models.CPUHealth
 	message   string
@@ -79,8 +80,9 @@ func (v cpuVerdict) health() *models.Health {
 	}
 }
 
-// degradedCPU is the fail-closed verdict: degraded, with no measurement behind
-// it. Used wherever the seam could not measure or could not classify.
+// degradedCPU is the fail-closed verdict: degraded, with a message and no
+// cpuHealth. Used wherever the seam could not measure, could not classify, or
+// withholds the worker's verdict.
 func degradedCPU(message string) cpuVerdict {
 	return cpuVerdict{message: message, category: models.Degraded}
 }
@@ -117,8 +119,10 @@ func judgeWorkerCPU(
 		return degradedCPU(message)
 	}
 
-	// Degraded without a degraded verdict means the poll failed, not that the box
-	// is degraded.
+	// Degraded with a verdict that is not degraded: the poll failed, or the CPU
+	// usage is not measured yet (cpuhealth.UsageMeasured). Send no verdict. A
+	// healthy verdict next to a degraded category would contradict the message
+	// the operator reads.
 	if status.Degraded && status.Result.Verdict.State != cpuhealth.StateDegraded {
 		return degradedCPU(status.Reason)
 	}
