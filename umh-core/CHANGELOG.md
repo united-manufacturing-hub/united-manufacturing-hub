@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Connection checks now run on the FSMv2 nmap backend by default, which lowers CPU usage by apprxomately 25%. To switch back to the previous backend, set the `NMAP_BACKEND=fsmv1` environment variable.
+
 ## [0.44.42]
 
 ### New Features
