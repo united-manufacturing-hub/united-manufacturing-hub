@@ -104,13 +104,13 @@ type ControlLoop struct {
 // The control loop runs at a fixed interval (defaultTickerTime) and orchestrates
 // all components according to the configuration.
 // globalNmapManagerEnabled reports whether NewControlLoop should append the
-// global fsmv1 nmap manager. It returns false only when NMAP_BACKEND=fsmv2, in
-// which case the connection service owns an embedded fsmv2 nmap manager and the
-// global one would double-manage config.Internal.Nmap.
+// global fsmv1 nmap manager. It returns true only when NMAP_BACKEND=fsmv1.
+// On the default fsmv2 backend the connection service owns an embedded fsmv2
+// nmap manager and the global one would double-manage config.Internal.Nmap.
 func globalNmapManagerEnabled() bool {
-	backend, _ := env.GetAsString("NMAP_BACKEND", false, constants.NmapBackendFSMv1)
+	backend, _ := env.GetAsString("NMAP_BACKEND", false, constants.NmapBackendFSMv2)
 
-	return backend != constants.NmapBackendFSMv2
+	return backend == constants.NmapBackendFSMv1
 }
 
 func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
@@ -136,11 +136,10 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		agent_monitor.NewAgentManager(constants.DefaultManagerName),
 	}
 
-	// Append the global fsmv1 nmap manager at its original position only when the
-	// fsmv2 backend is off. With NMAP_BACKEND=fsmv2 the connection service owns an
-	// embedded fsmv2 nmap manager, so the global fsmv1 manager must be skipped to
-	// avoid two managers double-managing config.Internal.Nmap. When off, the
-	// manager order is byte-identical to before this gate.
+	// Append the global fsmv1 nmap manager only when NMAP_BACKEND=fsmv1. On the
+	// default fsmv2 backend the connection service owns an embedded fsmv2 nmap
+	// manager, so the global fsmv1 manager must be skipped to avoid two managers
+	// double-managing config.Internal.Nmap.
 	if globalNmapManagerEnabled() {
 		managers = append(managers, nmap.NewNmapManager(constants.DefaultManagerName))
 	}
