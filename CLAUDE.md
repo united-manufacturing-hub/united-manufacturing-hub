@@ -50,9 +50,9 @@ Every PR with user-visible changes adds an entry to `umh-core/CHANGELOG.md` unde
 
 PRs that change files under `umh-core/` must modify `CHANGELOG.md`, or CI fails. The `skip-changelog-guard` label bypasses the check (for CI/CD, refactoring, or test-only changes). The check reads labels from the event that started the run, so after adding the label, push a commit to re-run it.
 
-## More context on demand
+## Reading logs in a running instance
 
-- `.claude/skills/umh-core-troubleshooting/`: support investigations (instance offline, stuck bridges, log patterns, cross-repo tracing).
+umh-core is one container. S6 supervises every process in it: the agent, Redpanda and one benthos-umh process per flow. Each process logs to `/data/logs/<service>/`: `current` is the live file, `@<timestamp>.s` an archive rotated cleanly, and `@<timestamp>.u` the file that was `current` when the container was killed. The UI can show stale status while data flows, so check the logs and the Kafka topics too (`rpk topic consume`). Service names, rotation and S6 directories: `umh-core/docs/reference/container-layout.md`.
 
 ## Engineering Handbook
 
