@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -247,9 +248,10 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 			// This is acceptable as it requires deliberate action and the resource limits
 			// will still protect against accidental overload. The system will degrade
 			// appropriately if actually overloaded.
-		} else if limited, reason := p.service.IsResourceLimited(snapshot); limited {
-			// Block creation due to resource limits
-			p.baseFSMInstance.GetLogger().Warnf("Bridge %s blocked: %s", p.baseFSMInstance.GetID(), reason)
+		} else if mustWait, reason := p.service.BridgeMustWait(snapshot, p.baseFSMInstance.GetID()); mustWait {
+			// Block creation due to resource limits. This runs on every tick, so
+			// the warning is throttled per bridge.
+			logger.ThrottledWarn("bridge-waits:"+p.baseFSMInstance.GetID(), "Bridge %s waits: %s", p.baseFSMInstance.GetID(), reason)
 			// Set the status reason so it appears in the snapshot logger and frontend
 			// Just use the reason directly - it's already clear and actionable
 			p.ObservedState.ServiceInfo.StatusReason = reason

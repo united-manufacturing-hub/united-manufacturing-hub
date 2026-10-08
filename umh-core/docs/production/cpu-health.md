@@ -123,21 +123,22 @@ cgroup v2 is what is missing. `No such file or directory` means the kernel ignor
 happens on a kernel built without PSI. If the kernel has no PSI, set a CPU limit on the container
 instead. UMH then judges the container against its limit. Pressure stays unavailable.
 
-## When UMH refuses a new bridge
+## When a new bridge waits for CPU
 
 While CPU is degraded, UMH will not start an additional bridge on the instance, because it would
-compete for CPU that is already short. The bridge stays pending, and its status reason names the
-resource gate that stopped it, usually "System in degraded state". For the cause and the fix, read
-the instance's CPU status. Bridges already running are left alone.
+compete for CPU that is already short. The bridge waits, and its status reason names the
+resource that stopped it, here the CPU. For every reason a bridge waits and the full procedure, see
+[Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md). Bridges already running are left alone.
 
-To turn this off, so that a degraded CPU no longer stops a new bridge:
+To start bridges anyway in an emergency, use the emergency setting *Turn off bridge admission*. It
+turns off every check, not only CPU:
 
 ```yaml
 agent:
   enableResourceLimitBlocking: false
 ```
 
-This is separate from the capacity ceiling, the number of bridges a given core count can hold, which the [Sizing Guide](./sizing-guide.md) covers. That number is a ceiling rather than a guarantee: because real CPU use varies per bridge, UMH can refuse a bridge on CPU health before you reach it.
+This is separate from the bridge limit, the number of bridges a given core count can hold, which the [Sizing Guide](./sizing-guide.md) covers. The bridge limit is an upper bound, not a guarantee: because real CPU use varies per bridge, a bridge can wait on CPU health before you reach it.
 
 ## Known limitation
 
