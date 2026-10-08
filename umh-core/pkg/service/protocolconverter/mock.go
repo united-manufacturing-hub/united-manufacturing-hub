@@ -116,6 +116,10 @@ type MockProtocolConverterService struct {
 
 	ServiceExistsResult        bool
 	ReconcileManagerReconciled bool
+
+	// BridgeMustWaitReason makes BridgeMustWait hold every bridge back with
+	// this reason. Empty admits every bridge.
+	BridgeMustWaitReason string
 }
 
 // Ensure MockProtocolConverterService implements IProtocolConverterService.
@@ -744,7 +748,8 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	return nil
 }
 
-// BridgeMustWait admits every bridge.
+// BridgeMustWait holds every bridge back while BridgeMustWaitReason is set,
+// and admits every bridge otherwise.
 func (m *MockProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
-	return false, ""
+	return m.BridgeMustWaitReason != "", m.BridgeMustWaitReason
 }
