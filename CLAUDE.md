@@ -52,7 +52,7 @@ PRs that change files under `umh-core/` must modify `CHANGELOG.md`, or CI fails.
 
 ## Reading logs in a running instance
 
-umh-core is one container. S6 supervises every process in it: the agent, Redpanda and one benthos-umh process per flow. Each process logs to `/data/logs/<service>/`: `current` is the live file, `@<timestamp>.s` an archive rotated cleanly, and `@<timestamp>.u` the file that was `current` when the container was killed. The UI can show stale status while data flows, so check the logs and the Kafka topics too (`rpk topic consume`). Service names, rotation and S6 directories: `umh-core/docs/reference/container-layout.md`.
+umh-core is one container. S6 supervises every process in it: the agent, Redpanda and one benthos-umh process per flow. Each process logs to `/data/logs/<service>/`: `current` is the live file, `@<timestamp>.s` an archive rotated cleanly, and `@<timestamp>.u` the file that was `current` when the container was killed. The UI can show stale status while data flows, so check the logs and the Kafka topics too (`rpk topic consume`). Service names, rotation and S6 directories: `umh-core/docs/reference/container-layout.md`. A benthos-umh service directory holds the rendered config at `config/benthos.yaml`. `umh-core/tools/s6-analyzer` reads a service directory's S6 state: PID, uptime and exit codes.
 
 ## Engineering Handbook
 
