@@ -9,16 +9,12 @@ For team processes (Linear/Sentry routing, ticket handling), see the `CLAUDE.md`
 
 ## Where things are inside the container
 
-| What | Path |
-|---|---|
-| umh-core log | `/data/logs/umh-core/current` |
-| Service logs | `/data/logs/<service>/current` (e.g. `benthos-dataflow-read-protocolconverter-<bridge>`; `ls /data/logs \| grep <bridge>`) |
-| Config | `/data/config.yaml` |
-| S6 scan directory | `/run/service/` |
-| S6 service directories | `/tmp/umh-core-services/` by default; `/data/services/` when `S6_PERSIST_DIRECTORY=true` |
-| Generated benthos config | `<service dir>/config/benthos.yaml` |
+Log, config and S6 paths, and what the `current`, `.s` and `.u` log files mean: `umh-core/docs/reference/container-layout.md`. Two additions:
 
-Log files: `current` is active, `.s` is a clean rotation, `.u` is unfinished (container was killed). Timestamps are TAI64N: pipe through `tai64nlocal`.
+- A bridge's benthos log is `/data/logs/benthos-dataflow-read-protocolconverter-<bridge>/current` (`ls /data/logs | grep <bridge>`).
+- The rendered benthos config is `<service dir>/config/benthos.yaml`.
+
+Log timestamps are TAI64N: pipe them through `tai64nlocal`.
 
 ## Start every investigation
 
@@ -72,14 +68,14 @@ Usual causes: network instability between the site and the Cloudflare edge, a fu
 
 ## Tracing across repositories
 
-Path of a deploy: frontend → MC backend (queues the action) → umh-core pull → router → action handler writes `config.yaml` → FSM reconcile → benthos config rendered → S6 starts benthos-umh → device. Status returns the other way. Details: `.claude/rules/communicator.md`.
+Path of a deploy: frontend → MC backend (queues the action) → umh-core pull → router → action handler writes `config.yaml` → FSM reconcile → benthos config rendered → S6 starts benthos-umh → device. Status returns the other way. Details: the package doc of `umh-core/pkg/communicator/router`.
 
 | Symptom | Start at |
 |---|---|
 | UI shows an error | MC frontend (browser console) |
 | Status not updating | MC backend → umh-core outbound channel |
 | Bridge stuck in "starting" | umh-core FSM → benthos-umh process log |
-| Data not flowing | rendered benthos config → template expansion (`.claude/rules/config-templates.md`) |
+| Data not flowing | rendered benthos config → template expansion (`umh-core/docs/reference/variables.md`) |
 | Process crash | benthos-umh log → S6 |
 
 A symptom's location is rarely the cause's location. Example: an FSM error is often a benthos config validation failure.

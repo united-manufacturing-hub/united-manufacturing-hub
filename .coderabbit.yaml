@@ -14,13 +14,8 @@
 
 knowledge_base:
   code_guidelines:
-    # The defaults include **/CLAUDE.md but not .claude/rules/. Each rule file applies to the paths in its own frontmatter.
     filePatterns:
       - "**/CLAUDE.md"
-      - files: ".claude/rules/communicator.md"
-        applyTo: "umh-core/pkg/communicator/**,umh-core/pkg/models/action_models.go"
-      - files: ".claude/rules/config-templates.md"
-        applyTo: "umh-core/pkg/config/**,umh-core/pkg/service/protocolconverter/**,umh-core/pkg/service/streamprocessor/**,umh-core/examples/**"
 reviews:
   high_level_summary: false
   poem: false

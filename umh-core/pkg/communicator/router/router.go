@@ -12,6 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package router dispatches the messages that umh-core receives from the
+// Management Console.
+//
+// Actions travel from the Management Console to umh-core, and status travels
+// back. umh-core opens both connections itself: it polls GET /v2/instance/pull
+// for actions and sends status with POST /v2/instance/push. Every message is a
+// JSON models.UMHMessage.
+//
+// An action takes this path:
+//
+//  1. The FSMv2 transport pull worker (pkg/fsmv2/workers/transport/pull)
+//     fetches the messages.
+//  2. fsmv2_adapter.LegacyChannelBridge converts each FSMv2 types.UMHMessage
+//     into a models.UMHMessage.
+//  3. Router.handleAction passes the action to actions.HandleActionMessage.
+//  4. Each action type has its own handler in pkg/communicator/actions. A
+//     handler that changes something writes config.yaml through the config
+//     manager. The Management Console never writes benthos config directly.
+//  5. The FSMs reconcile against the new config.yaml, render the benthos
+//     config and start benthos-umh under S6.
+//
+// Status takes the reverse path. The subscriber package builds the status
+// message, and the FSMv2 transport push worker
+// (pkg/fsmv2/workers/transport/push) sends it.
 package router
 
 import (

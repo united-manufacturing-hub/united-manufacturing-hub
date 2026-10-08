@@ -1,19 +1,7 @@
 # Documentation Guidelines
 
-Full GitBook editing reference (syntax, blocks, variables): <https://gitbook.com/docs/skill.md>
+These docs are a GitBook space, published at docs.umh.app. Follow GitBook's editing reference for syntax, blocks, `SUMMARY.md` and `.gitbook.yaml`: <https://gitbook.com/docs/skill/write-docs.md>
 
-## File Structure
+## Terms
 
-```text
-docs/
-  .gitbook.yaml    # Space config (root, structure, redirects)
-  SUMMARY.md       # Navigation — all pages MUST be listed here
-  README.md        # Homepage
-```
-
-## Rules
-
-- Every new page must be added to `SUMMARY.md`
-- Do not reference the same file twice in `SUMMARY.md`
-- Always close custom block tags (`{% endtabs %}`, `{% endhint %}`, etc.)
-- Keep file paths consistent between `SUMMARY.md` and actual locations
+- **Permission grant**: what the Management Console issues so that a user or an instance can access instances. Never call it a certificate. "Certificate" means TLS only. Describe what the user sees on screen: "permission grant" or "unlocks access to your X".
