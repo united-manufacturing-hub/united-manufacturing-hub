@@ -433,7 +433,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	cacheError := m.cacheError
 	m.cacheMu.RUnlock()
 	// checkk for empty config and return error if it is
-	if reflect.DeepEqual(currentCacheConfig, FullConfig{}) {
+	if isEmptyConfig(currentCacheConfig) {
 		if cacheError == nil {
 			return FullConfig{}, errors.New("cached config is empty. may be fixed by a background refresh")
 		}
@@ -500,7 +500,7 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 	// If the config is empty, return an error
 	// Note: sometimes it can happen that due to a filesystem error or maybe in the tests due to docker cp, the file is empty
 	// In this case we want to return an error, which is then ignored by the control loop and will retry in the next cycle
-	if reflect.DeepEqual(config, FullConfig{}) {
+	if isEmptyConfig(config) {
 		return FullConfig{}, "", fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
@@ -656,9 +656,22 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 	return m
 }
 
+// configWithDefaults holds the value a setting gets when config.yaml leaves it
+// out. ParseConfig decodes onto it, and decoding leaves a field alone when its
+// key is absent. Without it, a missing bool would read as false.
+func configWithDefaults() FullConfig {
+	return FullConfig{Agent: AgentConfig{EnableResourceLimitBlocking: constants.DefaultEnableResourceLimitBlocking}}
+}
+
+// isEmptyConfig reports whether config holds no setting at all, for example
+// from a config.yaml that holds only "---".
+func isEmptyConfig(config FullConfig) bool {
+	return reflect.DeepEqual(config, FullConfig{}) || reflect.DeepEqual(config, configWithDefaults())
+}
+
 // ParseConfig parses YAML configuration data into a FullConfig struct with optional validation.
 // It performs two main operations:
-// 1. Decodes the YAML data using strict field validation (unless allowUnknownFields is true)
+// 1. Decodes the YAML data onto configWithDefaults, using strict field validation (unless allowUnknownFields is true)
 // 2. Processes any templateRef resolution for protocol converters
 //
 // Parameters:
@@ -672,7 +685,7 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 // Note: This function is exported primarily for use in runtime_config_test to provide
 // comprehensive test coverage of the configuration parsing functionality.
 func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (FullConfig, error) {
-	var rawConfig FullConfig
+	rawConfig := configWithDefaults()
 
 	// First decode the YAML into the raw config structure using standard YAML functions
 	dec := yaml.NewDecoder(bytes.NewReader(data))

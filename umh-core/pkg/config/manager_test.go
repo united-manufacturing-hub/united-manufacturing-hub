@@ -332,7 +332,10 @@ agent:
 				emptyYAML := "---\n"
 				config, err := ParseConfig([]byte(emptyYAML), ctx, false)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(config).To(Equal(FullConfig{}))
+
+				want := FullConfig{}
+				want.Agent.EnableResourceLimitBlocking = true
+				Expect(config).To(Equal(want))
 			})
 
 			It("should return error for malformed YAML", func() {
@@ -836,6 +839,55 @@ agent:
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 			})
 		})
+
+		DescribeTable("treats a config.yaml without any setting as empty, so the control loop retries",
+			func(content string) {
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return []byte(content), nil })
+
+				_, _, err := configManager.readAndParseConfig(ctx)
+
+				Expect(err).To(MatchError(ContainSubstring("config file is empty")))
+			},
+			Entry("a document marker only", "---\n"),
+			Entry("an empty map", "{}\n"),
+			Entry("null", "null\n"),
+		)
+
+		DescribeTable("an existing config.yaml keeps admission on unless it says false",
+			func(existingYAML string, want bool, wantWritten string) {
+				var written []byte
+
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error { return nil })
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) { return true, nil })
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return []byte(existingYAML), nil })
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					written = data
+
+					return nil
+				})
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo(DefaultConfigPath, int64(len(existingYAML)), 0644, time.Now(), false), nil
+				})
+
+				var config FullConfig
+
+				// The first call returns the error the manager cached during construction,
+				// before the mock filesystem was installed; the background refresh clears it.
+				Eventually(func() error {
+					got, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, FullConfig{})
+					config = got
+
+					return err
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
+
+				Expect(config.Agent.EnableResourceLimitBlocking).To(Equal(want))
+				Expect(string(written)).To(ContainSubstring(wantWritten))
+			},
+			Entry("without the setting, as in a hand-written config.yaml",
+				"agent:\n  metricsPort: 8080\n", true, "enableResourceLimitBlocking: true"),
+			Entry("with the setting false",
+				"agent:\n  metricsPort: 8080\n  enableResourceLimitBlocking: false\n", false, "enableResourceLimitBlocking: false"),
+		)
 	})
 
 	Describe("Redpanda topic retention defaults", func() {

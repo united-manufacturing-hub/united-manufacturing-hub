@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	agentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"go.uber.org/zap"
 )
 
@@ -64,7 +65,7 @@ func buildAgent(
 	agent := models.Agent{
 		Location: snap.ServiceInfoSnapshot.Location,
 		Health: &models.Health{
-			Message:       getAgentHealthMessage(snap.ServiceInfoSnapshot.OverallHealth),
+			Message:       getAgentHealthMessage(snap.ServiceInfoSnapshot),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      snap.ServiceInfoSnapshot.OverallHealth,
@@ -103,9 +104,13 @@ func defaultAgent() models.Agent {
 	}
 }
 
-// getHealthMessage is agent-specific. Extend as needed.
-func getAgentHealthMessage(cat models.HealthCategory) string {
-	switch cat {
+// getAgentHealthMessage returns the agent's own reason when it gives one.
+func getAgentHealthMessage(info agentservice.ServiceInfo) string {
+	if info.HealthMessage != "" {
+		return info.HealthMessage
+	}
+
+	switch info.OverallHealth {
 	case models.Active:
 		return "Agent operating normally"
 	case models.Degraded:

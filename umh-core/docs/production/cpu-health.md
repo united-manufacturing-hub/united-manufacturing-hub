@@ -140,6 +140,8 @@ agent:
   enableResourceLimitBlocking: false
 ```
 
+While it is `false`, the instance shows as degraded.
+
 This is separate from the bridge limit, the number of bridges a given core count can hold, which the [Sizing Guide](./sizing-guide.md) covers. The bridge limit is an upper bound, not a guarantee: because real CPU use varies per bridge, a bridge can wait on CPU health before you reach it.
 
 ## Known limitation
