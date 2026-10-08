@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
@@ -46,6 +47,31 @@ type loadInnerConfig struct {
 type loadInlineConfig struct {
 	Inner loadInnerConfig `yaml:",inline"`
 	Name  string          `yaml:"name"`
+}
+
+type loadIntKeyEntry struct {
+	Read config.Template `yaml:"read"`
+}
+
+type loadIntKeyConfig struct {
+	Extra map[int]loadIntKeyEntry `yaml:"extra"`
+}
+
+type loadSliceConfig struct {
+	Reads []config.Template `yaml:"reads"`
+}
+
+type loadSelfDecoded struct {
+	Raw string `yaml:"raw"`
+}
+
+func (l *loadSelfDecoded) UnmarshalYAML(value *yaml.Node) error {
+	return value.Decode(l)
+}
+
+type loadSelfDecodedConfig struct {
+	Blob loadSelfDecoded `yaml:"blob"`
+	Keep string          `yaml:"keep"`
 }
 
 var _ = Describe("LoadUserSpec", func() {
@@ -143,5 +169,59 @@ var _ = Describe("EntryFields", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fields).To(Equal(map[string]any{"name": "b1"}))
+	})
+
+	It("removes a template key behind a map with integer keys", func() {
+		cfg := loadIntKeyConfig{Extra: map[int]loadIntKeyEntry{1: {}}}
+
+		fields, err := config.EntryFields("extra:\n  1:\n    read: \"{{ .x }}\"\n    keep: ok\n", &cfg)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fields).To(Equal(map[string]any{
+			"extra": map[string]any{
+				"1": map[string]any{"keep": "ok"},
+			},
+		}))
+	})
+
+	It("rejects a placeholder under a key no field declares, naming the path into the map", func() {
+		cfg := loadEntryConfig{}
+
+		_, err := config.EntryFields("extra:\n  1: \"{{ .x }}\"", &cfg)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("extra.1"))
+	})
+
+	It("rejects a placeholder under a key inside a declared section that no field declares", func() {
+		cfg := loadEntryConfig{}
+
+		_, err := config.EntryFields("connection:\n  bogus: \"{{ .IP }}\"", &cfg)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("connection.bogus"))
+	})
+
+	It("empties every template element of a slice field, keeping other fields", func() {
+		cfg := loadSliceConfig{Reads: []config.Template{"", ""}}
+
+		fields, err := config.EntryFields("reads:\n  - \"{{ .name }}\"\n  - keep\nkeep: ok\n", &cfg)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fields).To(Equal(map[string]any{
+			"reads": []any{nil, nil},
+			"keep":  "ok",
+		}))
+	})
+
+	It("does not re-check a value whose field decodes itself", func() {
+		cfg := loadSelfDecodedConfig{}
+
+		fields, err := config.EntryFields("blob:\n  raw: \"{{ .x }}\"\nkeep: ok\n", &cfg)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fields).To(Equal(map[string]any{"keep": "ok"}))
 	})
 })
