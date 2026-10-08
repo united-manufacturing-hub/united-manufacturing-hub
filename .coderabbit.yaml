@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-knowledge_base:
-  code_guidelines:
-    filePatterns:
-      - "**/CLAUDE.md"
 reviews:
   high_level_summary: false
   poem: false
