@@ -228,6 +228,11 @@
 // they actually had. A level that runs out of budget always warns and moves
 // on, so shutdown never waits forever.
 //
+// These bounds assume the tree does not grow during shutdown. A child that
+// the tick loop starts after Shutdown() sampled the height is not counted,
+// and its drain spends the parent's remaining budget. ENG-5141 tracks this
+// and the wide-tree case.
+//
 // The process's SIGTERM grace period must cover the whole Shutdown(). For a
 // chain that is base × height. In a wider tree, sibling subtrees drain one
 // after another, so add up their budgets, plus a short teardown per
