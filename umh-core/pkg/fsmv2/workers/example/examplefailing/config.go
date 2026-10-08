@@ -23,7 +23,7 @@ import (
 
 // ExamplefailingConfig is the typed configuration for the failing worker.
 type ExamplefailingConfig struct {
-	config.BaseUserSpec
+	config.BaseUserSpec       `yaml:",inline"`
 	ShouldFail                bool `json:"should_fail"                 yaml:"should_fail"`
 	MaxFailures               int  `json:"max_failures"                yaml:"max_failures"`
 	FailureCycles             int  `json:"failure_cycles"              yaml:"failure_cycles"`

@@ -181,7 +181,7 @@ func ValidateNilSpecHandling(baseDir string) []Violation {
 	return violations
 }
 
-// checkNilSpecHandling checks for nil spec check or use of nil-safe helpers (ParseUserSpec).
+// checkNilSpecHandling checks for nil spec check or use of nil-safe helpers (LoadUserSpec).
 func checkNilSpecHandling(filename string) []Violation {
 	var violations []Violation
 
@@ -256,6 +256,7 @@ func checkNilSpecHandling(filename string) []Violation {
 // usesNilSafeHelper checks if the function body uses helpers that handle nil internally.
 func usesNilSafeHelper(body *ast.BlockStmt) bool {
 	nilSafeHelpers := map[string]bool{
+		"LoadUserSpec":  true,
 		"ParseUserSpec": true,
 	}
 

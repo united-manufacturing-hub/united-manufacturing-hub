@@ -18,8 +18,8 @@ import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pk
 
 // ExampleslowConfig is the typed configuration for the slow worker.
 type ExampleslowConfig struct {
-	config.BaseUserSpec
-	DelaySeconds int `json:"delaySeconds" yaml:"delaySeconds"`
+	config.BaseUserSpec `yaml:",inline"`
+	DelaySeconds        int `json:"delaySeconds" yaml:"delaySeconds"`
 }
 
 // ExampleslowStatus is the observed status for the slow worker.
