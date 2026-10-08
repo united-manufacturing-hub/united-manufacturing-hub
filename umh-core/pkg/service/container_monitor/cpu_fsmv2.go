@@ -17,11 +17,18 @@ package container_monitor
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -167,14 +174,10 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	}
 
 	client := fsmv2client.GetClient()
-	// Fallback for a misconfiguration: USE_FSMV2_CPU is on but nothing published
-	// a client, so the fsmv2 supervisor never started (or has not yet).
 	if client == nil {
-		c.cpuWorkerWarnOnce.Do(func() {
-			c.logger.Warn(cpuSeamClientUnavailableMessage)
-		})
+		warnFSMv2SupervisorNotRunning()
 
-		return degradedCPU(cpuSeamClientUnavailableMessage).health(), nil, nil
+		return degradedCPU(fsmv2SupervisorNotRunningMessage).health(), nil, nil
 	}
 
 	// Get the latest poll result from the worker.
@@ -191,8 +194,36 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	return v.health(), v.cpuHealth, nil
 }
 
-// cpuSeamClientUnavailableMessage is the diagnosis when USE_FSMV2_CPU is on
-// but no fsmv2 client is published yet. The supervisor runs with or without
-// Management Console credentials, so a missing client means it is still
-// starting.
-const cpuSeamClientUnavailableMessage = "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); no CPU measurement is available"
+// fsmv2SupervisorNotRunningMessage is the diagnosis when USE_FSMV2_CPU is on
+// but no fsmv2 client is published. cmd/main.go publishes the client before
+// the supervisor runs. It clears it only when the supervisor failed to build
+// or has shut down. Sentry groups the warning by this text, so changing it
+// starts a new Sentry issue.
+const fsmv2SupervisorNotRunningMessage = "USE_FSMV2_CPU is enabled but the fsmv2 supervisor is not running, so CPU is not measured"
+
+// cpuSeamHierarchyPath is parsed by sentry.ParseHierarchyPath as an FSMv1
+// dotted path, so the event is tagged fsm_version=v1 and
+// worker_type=ContainerMonitor.
+const cpuSeamHierarchyPath = "fsmv1.ContainerMonitor"
+
+// fsmv2SupervisorNotRunningOnce limits warnFSMv2SupervisorNotRunning to one
+// event per process.
+var fsmv2SupervisorNotRunningOnce sync.Once
+
+// warnFSMv2SupervisorNotRunning logs fsmv2SupervisorNotRunningMessage on the
+// component logger and sends it to Sentry, once per process. The component
+// logger has no Sentry hook, so it adds one for this call only.
+func warnFSMv2SupervisorNotRunning() {
+	fsmv2SupervisorNotRunningOnce.Do(func() {
+		hook := fsmv2sentry.NewSentryHook(time.Minute)
+		// Stop ends the debouncer's cleanup goroutine. It loses no event:
+		// SentryHook.Write (pkg/fsmv2/sentry/hook.go) captures synchronously,
+		// so the event reaches the Sentry client before SentryWarn returns.
+		defer hook.Stop()
+
+		base := logger.For(logger.ComponentContainerMonitorService)
+		hooked := base.Desugar().WithOptions(zap.WrapCore(hook.Wrap)).Sugar()
+
+		deps.NewFSMLogger(hooked).SentryWarn(deps.FeatureSupportCPU, cpuSeamHierarchyPath, fsmv2SupervisorNotRunningMessage)
+	})
+}

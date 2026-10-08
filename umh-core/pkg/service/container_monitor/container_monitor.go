@@ -20,7 +20,6 @@ import (
 	"crypto/sha3"
 	"fmt"
 	"runtime"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -74,12 +73,11 @@ type ContainerMonitorService struct {
 	instanceName      string
 	lastCollectedAt   time.Time
 	hwid              string
-	architecture      models.ContainerArchitecture //nolint:unused // will be used in the future
-	dataPath          string                       // Path to check for disk metrics and HWID file
-	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
-	wasThrottled      bool                         // Previous throttle state for transition logging
-	useFSMv2CPU       bool                         // when true the fsmv2 CPU worker's verdict replaces the legacy CPU health; read once at construction
-	cpuWorkerWarnOnce sync.Once
+	architecture      models.ContainerArchitecture               //nolint:unused // will be used in the future
+	dataPath          string                                     // Path to check for disk metrics and HWID file
+	throttleSnapshots []cgroupSnapshot                           // Sliding window of cgroup counter snapshots
+	wasThrottled      bool                                       // Previous throttle state for transition logging
+	useFSMv2CPU       bool                                       // when true the fsmv2 CPU worker's verdict replaces the legacy CPU health; read once at construction
 	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
 }
 
