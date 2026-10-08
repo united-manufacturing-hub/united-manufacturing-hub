@@ -285,8 +285,9 @@ type panicOnSentryErrorCollectorLogger struct {
 	panicked atomic.Bool
 }
 
-func (p *panicOnSentryErrorCollectorLogger) Debug(msg string, fields ...deps.Field)     {}
-func (p *panicOnSentryErrorCollectorLogger) Info(msg string, fields ...deps.Field)       {}
+func (p *panicOnSentryErrorCollectorLogger) Debug(msg string, fields ...deps.Field) {}
+func (p *panicOnSentryErrorCollectorLogger) Info(msg string, fields ...deps.Field)  {}
+func (p *panicOnSentryErrorCollectorLogger) Warn(msg string, fields ...deps.Field)  {}
 func (p *panicOnSentryErrorCollectorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {
 }
 func (p *panicOnSentryErrorCollectorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
