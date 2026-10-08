@@ -205,6 +205,15 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
 // GetDependenciesAny returns the typed deps bound via BindDeps as any.
 // Satisfies the DependencyProvider interface. The supervisor uses this to pass
 // deps to action Execute calls.
+//
+// Do not override it. The supervisor and the collector type-assert its result.
+// SetFrameworkState and SetActionHistory, which let a worker read
+// GetFrameworkState and GetActionHistory during CollectObservedState, reach
+// only a deps that has those methods. Worker-metric accumulation needs a
+// MetricsRecorder method. A TDeps that embeds *deps.BaseDependencies has all
+// three. A struct{} TDeps has none, so that worker records no counters of its
+// own; a nil result behaves the same. Framework metrics and action history
+// reach the Observation whatever TDeps is.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) GetDependenciesAny() any {
 	w.mu.RLock()
 	d := w.typedDeps

@@ -162,16 +162,16 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
     // Check shutdown first
     if snap.ShouldStop() {
-        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required")
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
     }
 
     // Transition based on observation, not action completion
     if snap.Status.IsProcessRunning {
-        return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "process running")
+        return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "process running", nil)
     }
 
     // Emit action - stay in same state until observation changes
-    return fsmv2.Result[any, any](s, fsmv2.SignalNone, &StartProcessAction{}, "starting process")
+    return fsmv2.Transition(s, fsmv2.SignalNone, &StartProcessAction{}, "starting process", nil)
 }
 
 func (s *TryingToStartState) String() string { return "trying_to_start" }
@@ -363,16 +363,16 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
     // Check shutdown first (equivalent to leave callback)
     if snap.ShouldStop() {
-        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required")
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
     }
 
     // Health check (equivalent to before callback condition)
     if !snap.Status.IsHealthy {
-        return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "health check failed")
+        return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "health check failed", nil)
     }
 
     // Stay running
-    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "running healthy")
+    return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running healthy", nil)
 }
 
 func (s *RunningState) String() string { return "running" }

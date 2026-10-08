@@ -423,6 +423,10 @@ func ValidateChildSpecValidation(baseDir string) []Violation {
 }
 
 // checkChildSpecValidation checks that parent workers validate ChildrenSpecs.
+// It checks only worker directories whose name contains "parent". There, a
+// DeriveDesiredState passes when it ranges over a Children field, when it
+// builds a []ChildSpec with make, or when any file in the directory declares
+// a top-level RenderChildren function.
 func checkChildSpecValidation(filename string) []Violation {
 	var violations []Violation
 

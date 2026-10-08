@@ -505,7 +505,8 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	// Post-COS framework wrapping for NewObservation-based workers.
-	// Gate: zero CollectedAt means NewObservation (not WrapStatus).
+	// Gate: zero CollectedAt means the worker returned NewObservation. An
+	// observation whose CollectedAt the worker set itself is not wrapped.
 	if observed.GetTimestamp().IsZero() {
 		observed = c.wrapNewObservation(ctx, observed, frameworkMetrics, actionHistory)
 	}
@@ -615,7 +616,7 @@ type baseDepsAccessor interface {
 
 // wrapNewObservation fills framework fields on a NewObservation-based ObservedState.
 // Called only when the zero-time gate fires (CollectedAt is zero), meaning the
-// developer used NewObservation instead of WrapStatus/WrapStatusAccumulated.
+// worker returned NewObservation.
 //
 // Steps: set CollectedAt, inject framework metrics + action history,
 // accumulate worker metrics (load previous from CSE, drain recorder, merge).

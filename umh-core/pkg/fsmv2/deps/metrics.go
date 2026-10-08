@@ -394,7 +394,10 @@ type DrainResult struct {
 }
 
 // Drain returns buffered metrics and resets the buffer for the next tick.
-// Called by CollectObservedState to merge per-tick metrics into cumulative state.
+// The collector calls it after CollectObservedState returns a NewObservation
+// result, and merges the drained values into the cumulative worker metrics.
+// Workers must not call it from CollectObservedState: the buffer would be
+// empty when the collector drains it, and that tick's metrics would be lost.
 //
 // Returns a DrainResult containing:
 //   - Counters: Delta values to ADD to cumulative counters

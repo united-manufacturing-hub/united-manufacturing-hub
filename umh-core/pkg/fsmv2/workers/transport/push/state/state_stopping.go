@@ -30,7 +30,8 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// Cleanup hook: add resource cleanup actions here in the future.
 	// Self-return is valid during cleanup but MUST carry an action  -  never nil.
-	// See CLAUDE.md "State Transition Traps" for the full pattern.
+	// A nil-action self-return would hold the worker in Stopping forever; the
+	// architecture test rejects it (ValidateStoppingStateNoCatchAllSelfReturn).
 
 	return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
 		"stop complete: "+snap.StopReason(), nil)

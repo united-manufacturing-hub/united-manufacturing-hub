@@ -57,6 +57,9 @@ type NoDeps = struct{}
 //   - TStatus carries a field name that collides with the framework wrapper
 //     (DetectFieldCollisions),
 //   - the factory or CSE TypeRegistry already has an entry for workerType.
+//
+// Panics when the factory instantiates the worker and the constructor returns
+// an error or a nil worker.
 func Worker[TConfig any, TStatus any, TDeps any](
 	workerType string,
 	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader) (fsmv2.Worker, error),
@@ -110,6 +113,12 @@ func Worker[TConfig any, TStatus any, TDeps any](
 // The builder receives the standard framework deps so workers can wire per-instance
 // resources (metrics recorders keyed by identity, loggers, state readers).
 // T is the concrete deps type (e.g., *MyDeps).
+//
+// The builder runs when a worker of this type is instantiated, not at init().
+// A child's builder can therefore read its parent's deps with GetDeps: the
+// parent's constructor publishes them with SetDeps, and the supervisor
+// instantiates the parent before its children. workers/transport/push/worker.go
+// is an example.
 //
 // Panics if workerType is empty or builderFn is nil (fail-fast at init time).
 func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {

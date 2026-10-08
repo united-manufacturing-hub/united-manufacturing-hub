@@ -280,6 +280,10 @@ func (a *PushAction) drainChannelToPending(pushDeps snapshot.PushDependencies, m
 // messages. It records the deepest the channel was before any receive: the
 // drain is the channel's only reader, so that is the highest it reached since
 // the previous drain, including bursts that arrive while the drain runs.
+//
+// A message read here is gone from the channel. Execute therefore checks the
+// transport before it drains, and every caller stores what it could not send
+// in the pending buffer for the next tick.
 func drainOutbound(pushDeps snapshot.PushDependencies) []*types.UMHMessage {
 	outChan := pushDeps.GetOutboundChan()
 

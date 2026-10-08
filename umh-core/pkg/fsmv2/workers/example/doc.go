@@ -72,7 +72,7 @@
 //
 //  3. Copy from examplechild/ as a starting point.
 //
-// See pkg/fsmv2/CLAUDE.md for the register.Worker contract and the
+// See the register package for the register.Worker contract and the
 // SetDeps/GetDeps convention for parent-injected dependencies.
 //
 // # Patterns demonstrated

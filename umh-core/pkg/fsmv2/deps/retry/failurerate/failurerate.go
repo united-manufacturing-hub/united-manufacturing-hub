@@ -82,6 +82,11 @@ func New(cfg Config) *Tracker {
 // rolling window. It returns true exactly once when the failure rate first
 // crosses the escalation threshold (one-shot). After the rate drops below
 // the threshold, the one-shot rearms and can fire again on the next crossing.
+//
+// Record an outcome only after a real request completed. A tick with nothing
+// to send, a backpressure skip or a failed precondition is no outcome. When
+// idle ticks outnumber requests, recording them as successes lets a transport
+// that fails every request look healthy.
 func (t *Tracker) RecordOutcome(success bool) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
