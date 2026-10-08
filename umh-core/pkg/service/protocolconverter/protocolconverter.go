@@ -1170,11 +1170,15 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 
 // BridgeMustWait decides whether the bridge named bridgeName may be created.
 func (p *ProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
+	// Health of CPU, memory and disk, and the cores the container may use, from the container monitor.
+	res := admissionResources(snapshot)
 	in := bridgeadmission.Input{
 		EnableResourceLimitBlocking: snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking,
+		CPU:                         res.CPU,
+		Memory:                      res.Memory,
+		Disk:                        res.Disk,
+		Cores:                       res.Cores,
 	}
-	// Health of CPU, memory and disk, and the cores the container may use, from the container monitor.
-	in.CPU, in.Memory, in.Disk, in.Cores = admissionResources(snapshot)
 	// Count the bridges that already exist, and the bridges in front of this one in config.yaml that are also waiting.
 	in.Created, in.WaitingBefore = countBridges(snapshot, bridgeName)
 
@@ -1187,30 +1191,38 @@ func (p *ProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, b
 	return !d.Admit, d.Message()
 }
 
-func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgeadmission.Resource, cores float64) {
-	unproven := func(message string) bridgeadmission.Resource {
-		return bridgeadmission.Resource{Health: bridgeadmission.Unproven, Message: message}
-	}
+// resources is what bridge admission needs from the container monitor: the
+// health of CPU, memory and disk, and how many cores the container may use.
+type resources struct {
+	CPU, Memory, Disk bridgeadmission.Resource
+	Cores             float64
+}
 
+func unproven(message string) bridgeadmission.Resource {
+	return bridgeadmission.Resource{Health: bridgeadmission.Unproven, Message: message}
+}
+
+// allUnproven is the result when the container monitor has no reading at all.
+func allUnproven(message string) resources {
+	r := unproven(message)
+
+	return resources{CPU: r, Memory: r, Disk: r}
+}
+
+func admissionResources(snapshot fsm.SystemSnapshot) resources {
 	containerManager, managerExists := fsm.FindManager(snapshot, constants.ContainerManagerName)
 	if !managerExists {
-		r := unproven("container monitor not available")
-
-		return r, r, r, 0
+		return allUnproven("container monitor not available")
 	}
 
 	instance, instanceExists := containerManager.GetInstances()[constants.CoreInstanceName]
 	if !instanceExists {
-		r := unproven("container health status unavailable")
-
-		return r, r, r, 0
+		return allUnproven("container health status unavailable")
 	}
 
 	observed, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot)
 	if !ok || observed == nil {
-		r := unproven("no health reading yet")
-
-		return r, r, r, 0
+		return allUnproven("no health reading yet")
 	}
 
 	serviceInfo := observed.ServiceInfoSnapshot
@@ -1249,11 +1261,12 @@ func admissionResources(snapshot fsm.SystemSnapshot) (cpu, memory, disk bridgead
 		diskHealth = serviceInfo.Disk.Health
 	}
 
-	cpu = classify(serviceInfo.CPUHealth, cpuHealth)
-	memory = classify(serviceInfo.MemoryHealth, memoryHealth)
-	disk = classify(serviceInfo.DiskHealth, diskHealth)
-
-	return cpu, memory, disk, containerCores(serviceInfo.CPU)
+	return resources{
+		CPU:    classify(serviceInfo.CPUHealth, cpuHealth),
+		Memory: classify(serviceInfo.MemoryHealth, memoryHealth),
+		Disk:   classify(serviceInfo.DiskHealth, diskHealth),
+		Cores:  containerCores(serviceInfo.CPU),
+	}
 }
 
 // containerCores reads how many cores the container may use from whichever

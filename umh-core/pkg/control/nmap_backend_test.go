@@ -16,9 +16,9 @@ package control
 
 // Tests the global-nmap-manager gate: NewControlLoop appends the global fsmv1
 // nmap manager only when globalNmapManagerEnabled reports true. When
-// NMAP_BACKEND=fsmv2 the connection service owns an embedded fsmv2 nmap manager,
-// so the global fsmv1 manager must be skipped to avoid double-managing
-// config.Internal.Nmap.
+// NMAP_BACKEND is unset or fsmv2 the connection service owns an embedded fsmv2
+// nmap manager, so the global fsmv1 manager must be skipped to avoid
+// double-managing config.Internal.Nmap.
 
 import (
 	"os"
@@ -34,25 +34,23 @@ var _ = Describe("globalNmapManagerEnabled", func() {
 		_ = os.Unsetenv("NMAP_BACKEND")
 	})
 
-	It("is disabled when NMAP_BACKEND=fsmv2 (fsmv2 manager owns nmap)", func() {
-		_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv2)
-
-		Expect(globalNmapManagerEnabled()).To(BeFalse(),
-			"the global fsmv1 nmap manager must be skipped when the fsmv2 backend is on")
-	})
-
-	It("is enabled when NMAP_BACKEND is unset (FF-off default)", func() {
+	It("is disabled when NMAP_BACKEND is unset (fsmv2 manager owns nmap)", func() {
 		_ = os.Unsetenv("NMAP_BACKEND")
 
-		Expect(globalNmapManagerEnabled()).To(BeTrue(),
-			"the global fsmv1 nmap manager must be appended by default")
+		Expect(globalNmapManagerEnabled()).To(BeFalse(),
+			"the global fsmv1 nmap manager must be skipped by default")
 	})
 
-	It("is enabled for any non-fsmv2 value", func() {
-		_ = os.Setenv("NMAP_BACKEND", "fsmv1")
+	It("is disabled when NMAP_BACKEND=fsmv2", func() {
+		_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv2)
 
-		defer func() { _ = os.Unsetenv("NMAP_BACKEND") }()
+		Expect(globalNmapManagerEnabled()).To(BeFalse())
+	})
 
-		Expect(globalNmapManagerEnabled()).To(BeTrue())
+	It("is enabled when NMAP_BACKEND=fsmv1", func() {
+		_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv1)
+
+		Expect(globalNmapManagerEnabled()).To(BeTrue(),
+			"the global fsmv1 nmap manager must be appended when opting out of fsmv2")
 	})
 })
