@@ -705,11 +705,9 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 }
 ```
 
-### Observation must include timestamps
+### Return the observation with NewObservation
 
-ObservedState must include a timestamp for staleness detection. The supervisor uses this to detect when observations are too old.
-
-**Worker API v2 (preferred):** Use `fsmv2.NewObservation(status)`; the collector sets `CollectedAt` automatically.
+`CollectObservedState` returns `fsmv2.NewObservation(status)`. The collector sets `CollectedAt`, which the supervisor uses to detect stale observations. It also adds the framework metrics, the action history and the accumulated worker metrics.
 
 ```go
 func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
@@ -717,18 +715,7 @@ func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.Desir
 }
 ```
 
-**Legacy API:** Set `CollectedAt` manually in your ObservedState.
-
-```go
-type MyObservedState struct {
-    CollectedAt time.Time  // REQUIRED for staleness detection
-    // ... other fields
-}
-
-func (o MyObservedState) GetTimestamp() time.Time {
-    return o.CollectedAt
-}
-```
+Do not return your own ObservedState type. A worker registered with `register.Worker` must return `fsmv2.Observation[MyStatus]`: the collector rejects any other type, and `ConvertWorkerSnapshot` panics on it.
 
 ### State XOR Action rule
 

@@ -397,8 +397,11 @@
 // State (FSM state): The FSM's position, represented by a Go State struct
 // (e.g., RunningState, TryingToConnectState).
 //
-// State (string): The snap.Observed.State field for debugging/logging.
-// Built using LifecyclePhase.Prefix() + suffix (e.g., "running_healthy_connected").
+// State (string): Observation.State holds State.String() (e.g., "Connected").
+// The collector writes it into every observation for debugging and logging.
+// The observed state name is a second string: LifecyclePhase.Prefix() +
+// lowercase(State.String()) (e.g., "running_healthy_connected"; a stopped
+// worker is "stopped"). Parent supervisors read it via GetObservedStateName().
 //
 // DesiredState: What the system should be. Derived from user configuration.
 // Does not contain runtime dependencies.

@@ -153,9 +153,7 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	Reason string
 
 	// Children is the parent's intended children-set for this tick.
-	// The supervisor reads this field in L5 and reconciles spawn / despawn /
-	// config-update against its own children registry. Until then, nil signals
-	// 'no opinion' and the supervisor falls back to the legacy ChildrenSpecs path.
+	// The supervisor creates, removes and updates its children to match it.
 	//
 	// Discriminator (Go-level, unambiguous):
 	//   - nil sentinel       → "no opinion" — supervisor falls back to the
