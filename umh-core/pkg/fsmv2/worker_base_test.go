@@ -525,6 +525,8 @@ var _ = Describe("WorkerBase template fields", func() {
 
 		_, err := worker.DeriveDesiredState(spec)
 
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(HavePrefix("failed to render the template fields"))
 		var cfgErr *config.ConfigError
 		Expect(errors.As(err, &cfgErr)).To(BeTrue())
 		Expect(cfgErr.Field).To(Equal("read"))
@@ -538,5 +540,29 @@ var _ = Describe("WorkerBase template fields", func() {
 		var cfgErr *config.ConfigError
 		Expect(errors.As(err, &cfgErr)).To(BeTrue())
 		Expect(cfgErr.Field).To(Equal("name"))
+	})
+
+	It("rejects a placeholder under a config key that no field declares", func() {
+		spec := config.UserSpec{Config: "name: b1\nfoo: \"{{ .IP }}\"\nread: \"{{ .name }}\""}
+
+		_, err := worker.DeriveDesiredState(spec)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("foo"))
+	})
+
+	It("keeps a config key that no field declares when it carries no placeholder", func() {
+		spec := config.UserSpec{Config: "name: b1\nfoo: bar\nread: \"{{ .foo }}\""}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+
+		Expect(wds.Config.Read).To(Equal(config.Template("bar")),
+			"the undeclared key must survive into the names, so a template can use it")
 	})
 })
