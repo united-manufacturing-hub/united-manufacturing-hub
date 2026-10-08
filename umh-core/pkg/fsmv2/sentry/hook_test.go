@@ -33,6 +33,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 var _ = Describe("SentryHook", func() {
@@ -1451,6 +1452,119 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 		ctx, ok := event.Contexts["umh_context"]
 		Expect(ok).To(BeTrue())
 		Expect(ctx["reason"]).To(Equal("timeout"))
+	})
+})
+
+// Warn must reach the log output but never Sentry: it carries a marker field
+// the hook checks, so a user's config mistake lands in logs only.
+var _ = Describe("FSMLogger Warn Sentry skip", func() {
+	var (
+		hook      *sentry.SentryHook
+		store     *eventStore
+		transport *mockTransport
+		fsmLogger deps.FSMLogger
+		observed  *observer.ObservedLogs
+	)
+
+	BeforeEach(func() {
+		store = newEventStore()
+		transport = &mockTransport{store: store}
+
+		err := sentrygo.Init(sentrygo.ClientOptions{
+			Dsn:       "https://test@sentry.io/123",
+			Transport: transport,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		observedCore, logs := observer.New(zapcore.DebugLevel)
+		observed = logs
+
+		hook = sentry.NewSentryHook(time.Hour)
+		wrappedCore := hook.Wrap(observedCore)
+
+		// The observer core must see every entry this spec asserts on. Warn
+		// and above pass the sampler unsampled anyway, but the unsampled
+		// constructor does not rely on that.
+		fsmLogger = deps.NewUnsampledFSMLogger(zap.New(wrappedCore).Sugar())
+	})
+
+	AfterEach(func() {
+		sentrygo.Flush(time.Second)
+		time.Sleep(50 * time.Millisecond)
+
+		if hook != nil {
+			hook.Stop()
+		}
+	})
+
+	It("Warn reaches the inner core with sentry_skip=true and is not captured, while SentryWarn is", func() {
+		fsmLogger.Warn("config_error", deps.String("field", "variables.SLAVEID"))
+		fsmLogger.SentryWarn(deps.FeatureFSMv2, "", "collector_unresponsive")
+
+		warnEntries := observed.FilterMessage("config_error").All()
+		Expect(warnEntries).To(HaveLen(1), "Warn must still reach the inner core")
+		Expect(warnEntries[0].Level).To(Equal(zapcore.WarnLevel), "Warn must log at warn level")
+
+		warnFields := sentry.FieldsToMap(warnEntries[0].Context)
+		Expect(warnFields["sentry_skip"]).To(BeTrue(), "Warn must carry the sentry_skip marker")
+		Expect(warnFields["field"]).To(Equal("variables.SLAVEID"))
+		Expect(warnFields).NotTo(HaveKey("feature"), "Warn does not add a feature field")
+
+		Expect(observed.FilterMessage("collector_unresponsive").All()).To(HaveLen(1),
+			"SentryWarn must still reach the inner core")
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(Equal(1),
+			"only the SentryWarn entry may be captured")
+
+		event := store.GetLast()
+		Expect(event).NotTo(BeNil())
+		Expect(event.Message).To(Equal("collector_unresponsive"))
+	})
+
+	It("a caller cannot turn the Warn marker off with a field of their own", func() {
+		fsmLogger.Warn("config_error", deps.Bool(deps.NoSentryKey, false))
+
+		warnEntries := observed.FilterMessage("config_error").All()
+		Expect(warnEntries).To(HaveLen(1))
+
+		warnFields := sentry.FieldsToMap(warnEntries[0].Context)
+		Expect(warnFields[deps.NoSentryKey]).To(BeTrue(),
+			"the logger's own marker must win over a caller-supplied false")
+
+		Consistently(func() int {
+			return store.Len()
+		}, 200*time.Millisecond, 50*time.Millisecond).Should(BeZero(),
+			"a Warn whose caller tried to disable the marker must still not be captured")
+	})
+
+	It("a caller cannot suppress a SentryWarn capture by passing the marker field", func() {
+		fsmLogger.SentryWarn(deps.FeatureFSMv2, "", "a_real_warning",
+			deps.Bool(deps.NoSentryKey, true))
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(Equal(1),
+			"SentryWarn must be captured even when a caller passes the marker field")
+
+		event := store.GetLast()
+		Expect(event).NotTo(BeNil())
+		Expect(event.Message).To(Equal("a_real_warning"))
+	})
+
+	It("the marker never suppresses an error-level entry", func() {
+		fsmLogger.SentryError(deps.FeatureFSMv2, "", errors.New("boom"), "action_failed",
+			deps.Bool(deps.NoSentryKey, true))
+
+		Eventually(func() int {
+			return store.Len()
+		}, time.Second, 10*time.Millisecond).Should(Equal(1),
+			"a SentryError carrying the marker field must still be captured")
+
+		event := store.GetLast()
+		Expect(event).NotTo(BeNil())
+		Expect(event.Message).To(Equal("action_failed"))
 	})
 })
 

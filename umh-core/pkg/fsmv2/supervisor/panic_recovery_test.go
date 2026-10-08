@@ -494,6 +494,7 @@ type panicOnSentryErrorLogger struct{}
 
 func (p *panicOnSentryErrorLogger) Debug(msg string, fields ...deps.Field)                         {}
 func (p *panicOnSentryErrorLogger) Info(msg string, fields ...deps.Field)                          {}
+func (p *panicOnSentryErrorLogger) Warn(msg string, fields ...deps.Field)                          {}
 func (p *panicOnSentryErrorLogger) SentryWarn(_ deps.Feature, _ string, _ string, _ ...deps.Field) {}
 func (p *panicOnSentryErrorLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
 	panic("logger SentryError panicked")
