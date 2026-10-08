@@ -49,6 +49,14 @@ type plainHosts struct {
 	Hosts []string `yaml:"hosts"`
 }
 
+type plainHostEntry struct {
+	Host string `yaml:"host"`
+}
+
+type plainHostEntries struct {
+	Hosts []plainHostEntry `yaml:"hosts"`
+}
+
 type plainVars struct {
 	Vars map[string]any `yaml:"vars"`
 }
@@ -156,6 +164,16 @@ var _ = Describe("CheckPlainValues", func() {
 		var cfgErr *config.ConfigError
 		Expect(errors.As(err, &cfgErr)).To(BeTrue())
 		Expect(cfgErr.Field).To(Equal("hosts.1"))
+	})
+
+	It("names a list element by its index in the same form as RenderTemplates", func() {
+		err := config.CheckPlainValues(plainHostEntries{
+			Hosts: []plainHostEntry{{Host: "ok"}, {Host: "{{ .x }}"}},
+		}, nil)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("hosts.1.host"))
 	})
 
 	It("walks a nested any held in a map", func() {

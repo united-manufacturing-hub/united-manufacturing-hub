@@ -323,7 +323,6 @@ var Registry = map[string]Scenario{
 	"simple":       SimpleScenario,
 	"cascade":      CascadeScenario,
 	"configerror":  ConfigErrorScenario,
-	"inheritance":  InheritanceScenario,
 	"communicator": CommunicatorScenario,
 	"persistence":  PersistenceScenario,
 

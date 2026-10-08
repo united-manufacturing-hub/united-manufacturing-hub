@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"text/template/parse"
@@ -231,13 +233,17 @@ func RenderTemplates(v any, names map[string]any) error {
 			}
 		case reflect.Slice:
 			for i := range sv.Len() {
-				if err := walk(sv.Index(i), fmt.Sprintf("%s[%d]", prefix, i)); err != nil {
+				if err := walk(sv.Index(i), joinPath(prefix, strconv.Itoa(i))); err != nil {
 					return err
 				}
 			}
 		case reflect.Map:
-			for _, key := range sv.MapKeys() {
-				if err := walk(sv.MapIndex(key), prefix); err != nil {
+			keys := sv.MapKeys()
+			sort.Slice(keys, func(i, j int) bool {
+				return fmt.Sprint(keys[i].Interface()) < fmt.Sprint(keys[j].Interface())
+			})
+			for _, key := range keys {
+				if err := walk(sv.MapIndex(key), joinPath(prefix, fmt.Sprint(key.Interface()))); err != nil {
 					return err
 				}
 			}
@@ -265,7 +271,7 @@ func RenderTemplates(v any, names map[string]any) error {
 // childPrefix extends prefix for a nested struct: an inline-embedded struct
 // merges into its parent, so its YAML path adds nothing.
 func childPrefix(prefix string, sf reflect.StructField) string {
-	if strings.Contains(sf.Tag.Get("yaml"), ",inline") {
+	if isInlineField(sf) {
 		return prefix
 	}
 	return joinPath(prefix, yamlFieldName(sf))

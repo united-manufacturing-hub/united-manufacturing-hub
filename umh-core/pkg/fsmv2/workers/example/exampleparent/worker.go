@@ -17,6 +17,7 @@ package exampleparent
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -94,13 +95,9 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 // DeriveDesiredState determines what state the parent worker should be in.
 // Must be PURE - only uses the spec parameter, never dependencies.
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &fsmv2.WrappedDesiredState[ExampleparentConfig]{}, nil
-	}
-
-	parentSpec, err := config.ParseUserSpec[ExampleparentConfig](spec)
+	parentSpec, err := config.LoadUserSpec[ExampleparentConfig](spec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load exampleparent spec: %w", err)
 	}
 
 	return &fsmv2.WrappedDesiredState[ExampleparentConfig]{

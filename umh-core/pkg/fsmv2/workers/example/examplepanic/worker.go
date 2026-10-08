@@ -109,18 +109,9 @@ func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired f
 }
 
 func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &fsmv2.WrappedDesiredState[ExamplepanicConfig]{}, nil
-	}
-
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	parsed, err := config.ParseUserSpec[ExamplepanicConfig](userSpec)
+	parsed, err := config.LoadUserSpec[ExamplepanicConfig](spec)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse examplepanic spec: %w", err)
+		return nil, fmt.Errorf("failed to load examplepanic spec: %w", err)
 	}
 
 	return &fsmv2.WrappedDesiredState[ExamplepanicConfig]{
