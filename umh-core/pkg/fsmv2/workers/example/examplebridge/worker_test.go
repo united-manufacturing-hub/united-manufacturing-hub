@@ -115,6 +115,15 @@ read: "{{ .connection.host }}"
 			Expect(ok).To(BeTrue())
 			Expect(timescale["host"]).To(Equal("db"))
 
+			By("the config values under their own name")
+
+			configNames, ok := names["config"].(map[string]any)
+			Expect(ok).To(BeTrue())
+
+			configHistorian, ok := configNames["historian"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(configHistorian["timescale"].(map[string]any)["host"]).To(Equal("db"))
+
 			By("the flow template stays unrendered")
 			Expect(string(desired.Config.Read)).To(Equal(`{{ .connection.host }}`))
 		})
