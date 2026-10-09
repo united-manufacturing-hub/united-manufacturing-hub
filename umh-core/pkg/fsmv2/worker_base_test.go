@@ -533,6 +533,41 @@ var _ = Describe("WorkerBase template fields", func() {
 		Expect(wds.Config.Read).To(Equal(config.Template("b1-x")))
 	})
 
+	It("renders a Template field against the entry's own variables section", func() {
+		entry := map[string]any{
+			"variables": map[string]any{"X": "a"},
+			"read":      "{{ .variables.X }}",
+		}
+
+		spec, err := config.NewChildSpec[map[string]any]("b1", "tpl-test-worker-type", entry, true)
+		Expect(err).NotTo(HaveOccurred())
+
+		ds, err := worker.DeriveDesiredState(spec.UserSpec)
+
+		Expect(err).NotTo(HaveOccurred())
+
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("a")))
+	})
+
+	It("rejects an entry variables section when the spec also carries a variables bundle", func() {
+		spec, err := config.NewChildSpec[map[string]any]("b1", "tpl-test-worker-type", map[string]any{
+			"variables": map[string]any{"X": "a"},
+			"read":      "{{ .name }}",
+		}, true)
+		Expect(err).NotTo(HaveOccurred())
+
+		userSpec := spec.UserSpec
+		userSpec.Variables = map[string]any{"X": "b"}
+
+		_, err = worker.DeriveDesiredState(userSpec)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("variables"))
+	})
+
 	It("wraps a render error in a ConfigError naming the field", func() {
 		spec := config.UserSpec{Config: "read: \"{{ .nope }}\""}
 

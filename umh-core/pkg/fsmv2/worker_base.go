@@ -15,6 +15,7 @@
 package fsmv2
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -137,11 +138,32 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		return nil, fmt.Errorf("failed to read the config fields: %w", err)
 	}
 
+	// One channel for variables: the spec's variables bundle when it carries
+	// one, otherwise the entry's own top-level variables mapping, which
+	// EntryFields drops from the fields. Both carrying variables is a config
+	// mistake, because the two would silently hide each other.
+	entryVariables, entryHasVariables, err := config.EntryVariables(userSpec.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the entry's variables: %w", err)
+	}
+
+	variables := userSpec.Variables
+
+	switch {
+	case entryHasVariables && len(variables) > 0:
+		return nil, &config.ConfigError{
+			Field: "variables",
+			Err:   errors.New("the entry declares a variables section while the spec also carries a variables bundle"),
+		}
+	case entryHasVariables:
+		variables = entryVariables
+	}
+
 	names := userSpec.Names
 	if len(names) == 0 {
 		names, err = config.BuildNames(config.Entry{
 			Fields:    fields,
-			Variables: userSpec.Variables,
+			Variables: variables,
 			Config:    userSpec.ConfigValues,
 		})
 		if err != nil {
