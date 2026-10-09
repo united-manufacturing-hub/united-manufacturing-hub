@@ -103,7 +103,8 @@ func (b *BaseDesiredState) SetDisabled(v bool) {
 // with a default of "running" if not specified by the user.
 type BaseUserSpec struct {
 	// State specifies the desired lifecycle state: "running" or "stopped".
-	// Defaults to "running" if empty. Validated in the supervisor after DeriveDesiredState.
+	// Defaults to "running" if empty. Validated by WorkerBase.DeriveDesiredState;
+	// a worker that overrides it validates its own state.
 	State string `json:"state,omitempty" yaml:"state,omitempty"`
 }
 
