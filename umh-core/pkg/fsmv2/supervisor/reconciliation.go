@@ -482,6 +482,13 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	workerCtx.mu.RUnlock()
 
 	if err := s.processSignal(ctx, workerID, result.Signal); err != nil {
+		var cfgErr *config.ConfigError
+		if errors.As(err, &cfgErr) {
+			// A config error from a signal was already warned once by the
+			// restart or re-add path; a Sentry error would duplicate it.
+			return fmt.Errorf("signal processing failed: %w", err)
+		}
+
 		s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "signal_processing_failed",
 			deps.Int("signal", int(result.Signal)))
 
@@ -694,6 +701,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	if firstWorkerID == "" {
 		if !s.started.Load() {
+			return nil
+		}
+
+		// A restart whose re-add failed on a config error leaves the worker
+		// gone and the re-add pending. Retry it here, on every tick while the
+		// config is broken: the retry itself derives again and fails with
+		// the same config error until the config renders.
+		if s.retryPendingReadds(ctx) {
 			return nil
 		}
 

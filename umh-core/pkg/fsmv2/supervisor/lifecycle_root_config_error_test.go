@@ -183,16 +183,21 @@ var _ = Describe("Supervisor worker restart logging", func() {
 		super.TestSetPendingRestart(identity.ID)
 
 		tickErr := super.TestTick(ctx)
-		Expect(tickErr).To(HaveOccurred())
 
-		var cfgErr *config.ConfigError
-		Expect(errors.As(tickErr, &cfgErr)).To(BeTrue(),
-			"the restart failure still carries the config mistake as its cause")
+		// The restart's re-add fails on the config mistake, but the restart
+		// itself no longer fails: the re-add is remembered and retried on
+		// later ticks, so the tick returns nil (the parent worker's own
+		// derive succeeded).
+		Expect(tickErr).NotTo(HaveOccurred())
+		Expect(super.ListWorkers()).To(BeEmpty(),
+			"the old worker is removed and the re-add waits for the config to render")
 
 		Expect(recorder.warnCount("config_error")).To(Equal(1),
 			"the restart warns the config mistake exactly once")
 		Expect(sentryErrorCount(recorder, "worker_add_derive_desired_failed")).To(Equal(0),
 			"the restart's derive failure must not also reach Sentry as a worker_add_derive_desired_failed error")
 		Expect(recorder.sentryWarnEvents()).To(BeEmpty())
+		Expect(recorder.sentryErrorEvents()).To(BeEmpty(),
+			"the restart's config error must not reach Sentry from any site")
 	})
 })
