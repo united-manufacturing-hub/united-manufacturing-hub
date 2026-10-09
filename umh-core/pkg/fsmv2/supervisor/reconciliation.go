@@ -874,7 +874,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			return err
 		}
 
-		// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
+		// Store the worker's own user spec as originalUserSpec, so an
+		// observer can read the entry's config and variables as they were
+		// before the worker interpreted them.
 		if userSpec.Config != "" || len(userSpec.Variables) > 0 {
 			userSpecBytes, marshalErr := json.Marshal(userSpec)
 			if marshalErr != nil {
@@ -1661,7 +1663,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Compute child's hierarchy path: parent path + child segment
 			// Format: "parentID(parentType)/childID(childType)"
-			childID := spec.Name + "-001"
+			childID := config.ChildID(spec.Name)
 
 			// Get parent's full hierarchy path from first worker's stored identity
 			// (uses stored identity for consistency with how paths are assigned)
