@@ -138,6 +138,7 @@ func (w *ExamplebridgeWorker) DeriveDesiredState(spec any) (fsmv2.DesiredState, 
 	names, err := config.BuildNames(config.Entry{
 		Fields:    fields,
 		Variables: cfg.Variables,
+		Config:    userSpec.ConfigValues,
 		ReadyMade: map[string]any{
 			"location":      mergedLocation,
 			"location_path": locationPath,
