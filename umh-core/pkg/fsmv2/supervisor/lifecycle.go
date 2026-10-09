@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
@@ -174,11 +175,22 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.tick(ctx); err != nil {
-				if errors.Is(err, ErrPanicCircuitOpen) || errors.Is(err, ErrInfraCircuitOpen) {
+				var cfgErr *config.ConfigError
+				switch {
+				case errors.Is(err, ErrPanicCircuitOpen) || errors.Is(err, ErrInfraCircuitOpen):
 					s.logger.Debug("tick_suppressed_circuit_open",
 						deps.HierarchyPath(s.GetHierarchyPath()),
 						deps.Err(err))
-				} else {
+				case errors.As(err, &cfgErr):
+					// warnConfigErrorOnce (own-worker derive and worker restart)
+					// and warnChildConfigErrorOnce (child creation) already
+					// warned this config mistake once; a per-tick Sentry error
+					// would duplicate it. The debug line keeps the mistake
+					// visible per tick, the way the circuit-open branch does.
+					s.logger.Debug("tick_suppressed_config_error",
+						deps.HierarchyPath(s.GetHierarchyPath()),
+						deps.Err(err))
+				default:
 					s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPath(), err, "tick_error")
 				}
 			}
@@ -794,6 +806,11 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// 4. Add new worker to supervisor (registers worker in the workers map)
 	if err := s.AddWorker(identity, newWorker); err != nil {
+		var cfgErr *config.ConfigError
+		if errors.As(err, &cfgErr) {
+			s.warnConfigErrorOnce(cfgErr.Error())
+		}
+
 		return fmt.Errorf("failed to add new worker for restart: %w", err)
 	}
 
