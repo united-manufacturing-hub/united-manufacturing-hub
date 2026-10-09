@@ -192,7 +192,15 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// childConfigErrorWarned suppresses repeat "config_error" warns per child
 	// name (child name → last message warned); the entry is cleared when the
 	// child is created, so a child that fails again warns again.
-	childConfigErrorWarned  map[string]string
+	childConfigErrorWarned map[string]string
+	// childCreateConfigError holds the name of every child whose latest
+	// create attempt failed with a *config.ConfigError. The entry is written
+	// on that failure and cleared both when the child is later created and
+	// when a later create attempt fails for another reason, so it always
+	// means "the latest attempt failed with a config error" and never hides a
+	// child that goes missing for a real reason. The caller must hold s.mu,
+	// as reconcileChildren does.
+	childCreateConfigError  map[string]struct{}
 	userSpec                config.UserSpec
 	workerType              string
 	parentID                string
