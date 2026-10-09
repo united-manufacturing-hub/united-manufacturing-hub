@@ -56,11 +56,6 @@ umh-core is one container. S6 supervises every process in it: the agent, Redpand
 
 ## Engineering Handbook
 
-Our shared standards live at https://engineering.umh.app. Look up the pages your task needs before you write code. Each page has a Markdown version: append `.md` to its URL. https://engineering.umh.app/llms.txt lists every page. Start with:
+The [UMH Engineering Handbook](https://engineering.umh.app) describes how we build, test and ship. Reviewers check our work against its rules. https://engineering.umh.app/llms.txt lists every page. It also says how to ask the handbook a question.
 
-- Go: https://engineering.umh.app/engineering/development-process/how-to-build/coding-standards/go
-- Error management: https://engineering.umh.app/engineering/development-process/how-to-build/coding-standards/error-management
-- FSMv2 workers: https://engineering.umh.app/engineering/development-process/how-to-build/coding-standards/fsmv2-workers
-- Product standards: https://engineering.umh.app/product/product-standards ([Opinionated simplicity](https://engineering.umh.app/product/product-standards/opinionated-simplicity) · [Code and UI](https://engineering.umh.app/product/product-standards/code-and-ui) · [Immediate trust](https://engineering.umh.app/product/product-standards/immediate-trust))
-- [How to build](https://engineering.umh.app/engineering/development-process/how-to-build) · [Testing](https://engineering.umh.app/engineering/development-process/how-to-build/testing) · [How to ship](https://engineering.umh.app/engineering/development-process/how-to-ship)
-- Why we exist: https://engineering.umh.app/company/why-we-exist
+Before you start any work, such as code, a pull request or a ticket, read every page whose rules apply to it. Ask the handbook about anything those pages do not answer. Before you hand the work to someone else, check it against those pages.
