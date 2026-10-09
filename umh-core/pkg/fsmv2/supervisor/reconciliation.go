@@ -66,6 +66,32 @@ func (f *factoryRegistryAdapter) ListRegisteredTypes() []string {
 	return factory.ListRegisteredTypes()
 }
 
+// storedLifecycleFlags reads the ShutdownRequested and Disabled flags from
+// the stored desired state. ErrNotFound returns zero flags without an error:
+// a worker that never stored a desired state has no flags to preserve, and
+// the first save proceeds. Any other read error is returned, so the caller
+// can skip a save that would store a document without the flags. The caller
+// must hold lifecycleFlagMu, so the read cannot interleave with the setters
+// that write the flags.
+func (s *Supervisor[TObserved, TDesired]) storedLifecycleFlags(ctx context.Context, workerID string) (shutdown, disabled bool, err error) {
+	var existing TDesired
+
+	loadErr := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &existing)
+	if loadErr != nil {
+		if errors.Is(loadErr, persistence.ErrNotFound) {
+			return false, false, nil
+		}
+
+		return false, false, loadErr
+	}
+
+	if ds, ok := any(existing).(fsmv2.DesiredState); ok {
+		return ds.IsShutdownRequested(), ds.IsDisabled(), nil
+	}
+
+	return false, false, nil
+}
+
 // tickWorker performs one FSM tick for a specific worker.
 func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, workerID string) error {
 	s.logTrace("lifecycle",
@@ -1052,7 +1078,8 @@ func (s *Supervisor[TObserved, TDesired]) deriveDesiredStateCached(
 // saveDerivedDesiredState saves desired as the stored desired state of
 // workerID and returns the document it built. The document also carries the
 // merged user spec and the lifecycle flags already stored. Only a failed
-// conversion to a document returns an error; a failed save is logged.
+// conversion to a document returns an error. A failed read of the stored
+// flags skips the save for this tick, and is logged like a failed save.
 func (s *Supervisor[TObserved, TDesired]) saveDerivedDesiredState(
 	ctx context.Context,
 	desired fsmv2.DesiredState,
@@ -1095,18 +1122,26 @@ func (s *Supervisor[TObserved, TDesired]) saveDerivedDesiredState(
 	// being overwritten by a stale value (ENG-4971).
 	s.lifecycleFlagMu.Lock()
 
-	var existingDesiredTyped TDesired
-	if err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &existingDesiredTyped); err == nil {
-		// Check the existing state's lifecycle flags via interface.
-		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
-			if ds.IsShutdownRequested() {
-				desiredDoc[FieldShutdownRequested] = true
-			}
+	shutdown, disabled, flagErr := s.storedLifecycleFlags(ctx, workerID)
+	if flagErr != nil {
+		s.lifecycleFlagMu.Unlock()
 
-			if ds.IsDisabled() {
-				desiredDoc[FieldDisabled] = true
-			}
-		}
+		// A failed read must not let the save store a document without
+		// the flags, or a pending shutdown request would be wiped. Skip
+		// the save for this tick; the next tick retries it.
+		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "stored_desired_state_load_failed",
+			deps.Err(flagErr),
+			deps.String("worker_id", workerID))
+
+		return desiredDoc, nil
+	}
+
+	if shutdown {
+		desiredDoc[FieldShutdownRequested] = true
+	}
+
+	if disabled {
+		desiredDoc[FieldDisabled] = true
 	}
 
 	_, err = s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc)
