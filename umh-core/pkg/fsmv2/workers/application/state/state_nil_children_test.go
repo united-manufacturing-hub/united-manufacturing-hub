@@ -130,7 +130,7 @@ var _ = Describe("Application renderUnion registry config values", func() {
 		Name:       "communicator",
 		WorkerType: "communicator",
 		Enabled:    true,
-		UserSpec:   config.UserSpec{Variables: config.VariableBundle{User: map[string]any{"IP": "own"}}},
+		UserSpec:   config.UserSpec{Variables: map[string]any{"IP": "own"}},
 	}}
 	dynamic := []config.ChildSpec{{Name: "example", WorkerType: "example", Enabled: false}}
 
@@ -159,13 +159,13 @@ var _ = Describe("Application renderUnion registry config values", func() {
 		Expect(children).To(HaveLen(3))
 
 		for _, c := range children {
-			Expect(c.UserSpec.Variables.User).ToNot(HaveKey("historian"),
+			Expect(c.UserSpec.Variables).ToNot(HaveKey("historian"),
 				"the registry's config values must not merge into %s's variables", c.Name)
 		}
 
 		for _, c := range children {
 			if c.Name == "communicator" {
-				Expect(c.UserSpec.Variables).To(Equal(config.VariableBundle{User: map[string]any{"IP": "own"}}),
+				Expect(c.UserSpec.Variables).To(Equal(map[string]any{"IP": "own"}),
 					"an own child's variables must stay exactly what it declared")
 			}
 		}

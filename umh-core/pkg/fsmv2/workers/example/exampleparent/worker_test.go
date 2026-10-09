@@ -69,7 +69,7 @@ var _ = Describe("ParentWorker", func() {
 		It("should return running state with empty config", func() {
 			spec := fsmv2types.UserSpec{
 				Config:    "children_count: 0",
-				Variables: fsmv2types.VariableBundle{},
+				Variables: nil,
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)
@@ -82,7 +82,7 @@ var _ = Describe("ParentWorker", func() {
 		It("should not populate ChildrenSpecs — children are declared in RenderChildren", func() {
 			spec := fsmv2types.UserSpec{
 				Config:    "children_count: 3",
-				Variables: fsmv2types.VariableBundle{},
+				Variables: nil,
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)
@@ -99,7 +99,7 @@ var _ = Describe("ParentWorker", func() {
 		It("rejects a placeholder in a plain field", func() {
 			spec := fsmv2types.UserSpec{
 				Config:    "child_config: \"{{ .x }}\"",
-				Variables: fsmv2types.VariableBundle{},
+				Variables: nil,
 			}
 
 			_, err := worker.DeriveDesiredState(spec)

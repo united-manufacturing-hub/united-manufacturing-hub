@@ -132,7 +132,7 @@ func (b *BaseUserSpec) GetState() string {
 //	        ↓ DeriveDesiredState()
 //	DesiredState{Host: "192.168.1.100", Port: 502}
 type UserSpec struct {
-	Variables    VariableBundle `json:"variables"               yaml:"variables"` // Variable bundle (User, Global, Internal namespaces)
+	Variables    map[string]any `json:"variables"               yaml:"variables"` // The user's variables section, decoded as written
 	Config       string         `json:"config"                  yaml:"config"`    // Raw user-provided configuration (YAML, JSON, or other format)
 	ConfigValues map[string]any `json:"config_values,omitempty" yaml:"-"`         // Config.yaml values a parent hands down
 	Names        map[string]any `json:"names,omitempty"         yaml:"-"`         // Template names a parent hands a child, used as-is when non-empty; nil and empty both build the names
@@ -144,7 +144,7 @@ type UserSpec struct {
 func (u UserSpec) Clone() UserSpec {
 	return UserSpec{
 		Config:       u.Config,
-		Variables:    u.Variables.Clone(),
+		Variables:    DeepCloneMap(u.Variables),
 		Names:        DeepCloneMap(u.Names),
 		ConfigValues: DeepCloneMap(u.ConfigValues),
 	}

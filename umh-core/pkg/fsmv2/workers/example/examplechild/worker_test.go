@@ -76,7 +76,7 @@ var _ = Describe("ChildWorker", func() {
 
 			spec := config.UserSpec{
 				Config:    "",
-				Variables: config.VariableBundle{},
+				Variables: nil,
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)
@@ -93,7 +93,7 @@ var _ = Describe("ChildWorker", func() {
 
 			spec := config.UserSpec{
 				Config:    "address: \"{{ .IP }}\"",
-				Variables: config.VariableBundle{User: map[string]any{"IP": "192.168.1.100"}},
+				Variables: map[string]any{"IP": "192.168.1.100"},
 			}
 
 			_, err = worker.DeriveDesiredState(spec)
@@ -109,7 +109,7 @@ var _ = Describe("ChildWorker", func() {
 
 			spec := config.UserSpec{
 				Config:    "state: stopped",
-				Variables: config.VariableBundle{},
+				Variables: nil,
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)

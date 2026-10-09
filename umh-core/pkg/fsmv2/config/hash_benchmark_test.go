@@ -46,12 +46,10 @@ var _ = Describe("ComputeUserSpecHash Performance", func() {
 		It("produces identical hashes across many iterations", func() {
 			spec := config.UserSpec{
 				Config: generateLargeConfig(10 * 1024), // 10KB config
-				Variables: config.VariableBundle{
-					User: map[string]any{
-						"IP":        "10.0.0.1",
-						"PORT":      502,
-						"DEVICE_ID": "sensor-array-1",
-					},
+				Variables: map[string]any{
+					"IP":        "10.0.0.1",
+					"PORT":      502,
+					"DEVICE_ID": "sensor-array-1",
 				},
 			}
 
@@ -84,12 +82,10 @@ func BenchmarkComputeUserSpecHash(b *testing.B) {
 	for _, s := range sizes {
 		spec := config.UserSpec{
 			Config: generateLargeConfig(s.size),
-			Variables: config.VariableBundle{
-				User: map[string]any{
-					"IP":        "192.168.1.100",
-					"PORT":      502,
-					"DEVICE_ID": "plc-01",
-				},
+			Variables: map[string]any{
+				"IP":        "192.168.1.100",
+				"PORT":      502,
+				"DEVICE_ID": "plc-01",
 			},
 		}
 

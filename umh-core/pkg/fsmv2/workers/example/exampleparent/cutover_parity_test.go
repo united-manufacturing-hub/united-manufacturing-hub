@@ -57,7 +57,7 @@ var _ = Describe("exampleparent RenderChildren ChildConfig equivalence", func() 
 		Expect(specs).To(HaveLen(3))
 
 		for i, spec := range specs {
-			deviceID, ok := spec.UserSpec.Variables.User["DEVICE_ID"]
+			deviceID, ok := spec.UserSpec.Variables["DEVICE_ID"]
 			Expect(ok).To(BeTrue(),
 				fmt.Sprintf("child-%d must have DEVICE_ID variable", i))
 			Expect(deviceID).To(Equal(fmt.Sprintf("device-%d", i)),
