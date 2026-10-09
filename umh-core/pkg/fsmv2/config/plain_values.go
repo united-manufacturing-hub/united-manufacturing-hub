@@ -48,6 +48,17 @@ func CheckPlainValues(v any, variables map[string]any) error {
 	return checkPlainValue(reflect.ValueOf(variables), "variables")
 }
 
+// CheckConfigValues reports the first entry of values whose value still
+// contains a placeholder (a Go template action, {{ ... }}). Map keys are
+// visited in sorted order, so the reported field is deterministic. Each
+// entry is named by its path under the "config" prefix, which is the
+// prefix a template reads these values under ({{ .config.* }}). These
+// values are substituted into templates but never rendered themselves, so
+// a placeholder in one would reach a child unresolved.
+func CheckConfigValues(values map[string]any) error {
+	return checkPlainValue(reflect.ValueOf(values), "config")
+}
+
 func checkPlainValue(sv reflect.Value, path string) error {
 	for sv.Kind() == reflect.Pointer || sv.Kind() == reflect.Interface {
 		if sv.IsNil() {
