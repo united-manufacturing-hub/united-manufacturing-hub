@@ -414,18 +414,22 @@ Developers implement business logic; the supervisor handles:
 | **Metrics** | FrameworkMetrics auto-injected | TimeInCurrentStateMs, StateTransitionsTotal |
 | **Persistence** | Delta checking (skips unchanged writes) | Automatic I/O reduction |
 | **Shutdown** | `IsShutdownRequested()` propagated to all states | Graceful cleanup |
-| **Templates** | Variable expansion (User/Global/Internal) | Strict mode (fails on missing) |
+| **Templates** | Only `config.Template` fields render; plain values reject `{{` | Strict mode (fails on missing name) |
 | **Children** | Spawn, manage, reconcile child workers | Automatic lifecycle |
 
 ### Template variables
 
-Three namespaces, flattened for templates:
-- **User**: `{{ .IP }}`, `{{ .PORT }}` (from connection config)
-- **Global**: `{{ .global.api_endpoint }}` (fleet-wide settings)
-- **Internal**: `{{ .internal.id }}` (runtime-only, not persisted)
-- **Location**: `{{ .location_path }}` (computed from ISA-95 hierarchy)
+A worker renders its `config.Template` fields against the names `config.BuildNames` assembles from the entry. Every other field is a plain value: a plain value containing `{{` is rejected when the config loads, and `${VAR}` passes through untouched for Benthos to fill in.
 
-Strict mode: missing variables fail immediately (no silent omissions).
+The names a template can use, following one format across every FSMv2 worker:
+
+- The entry's own fields, by their YAML path: `{{ .name }}`, `{{ .connection.host }}`, `{{ .connection.port }}`
+- The entry's `variables:` section: `{{ .variables.SLAVE_ID }}`
+- The config values a parent hands down: `{{ .config.historian.timescale.host }}`
+- Ready-made values the worker's config type declares: `{{ .location }}` is the full merged location (the one exception to the path rule — the raw levels alone are not readable)
+- Worker-declared compatibility shortcuts: `{{ .IP }}` / `{{ .PORT }}` for `connection.host` / `connection.port`, each variable as a top-level name (`{{ .SLAVE_ID }}`)
+
+A missing name fails the render (strict mode); a collision between two name sources is a config error. A config error holds that worker back — it does not start or update — and is logged once as `config_error`, without Sentry. A running worker whose config breaks keeps ticking on its last good config, so it can still be stopped and removed (see `supervisor/doc.go`, Phase 0).
 
 ### Child worker management
 
