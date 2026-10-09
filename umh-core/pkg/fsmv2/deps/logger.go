@@ -23,7 +23,7 @@ const NoSentryKey = "sentry_skip"
 // FSMLogger provides structured logging with compile-time enforcement of Sentry fields.
 //
 // Debug and Info are general-purpose. SentryWarn and SentryError route to
-// Sentry and require Feature and hierarchyPath parameters for that routing —
+// Sentry and require Feature and hierarchyPath parameters for that routing;
 // the compiler rejects any call missing these. The Sentry hook debounces by
 // fingerprint, so only the first occurrence of the same event inside the
 // debounce window (5 minutes in production) is delivered; later repeats are
