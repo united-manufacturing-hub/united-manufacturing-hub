@@ -1686,8 +1686,13 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
 				var cfgErr *config.ConfigError
 				if errors.As(err, &cfgErr) {
+					s.markChildCreateConfigError(spec.Name)
 					s.warnChildConfigErrorOnce(spec.Name, cfgErr.Error())
 				} else {
+					// A later attempt failing for another reason ends the
+					// config-error hold: the latest attempt, not history,
+					// decides whether the child counts as held back.
+					s.clearChildCreateConfigError(spec.Name)
 					s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_supervisor_add_worker_failed",
 						deps.String("child_name", spec.Name))
 				}
@@ -1714,6 +1719,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// The child was created, so a later config error for it warns again.
 			// reconcileChildren holds s.mu, so the map is already protected.
 			delete(s.childConfigErrorWarned, spec.Name)
+			// And a created child is no longer held back, so the reducer's
+			// not-found warning must fire if it ever goes missing again.
+			delete(s.childCreateConfigError, spec.Name)
 
 			s.logTrace("lifecycle",
 				deps.String("lifecycle_event", "child_add_complete"),
@@ -1881,6 +1889,17 @@ func (s *Supervisor[TObserved, TDesired]) applyDisableMapping(ctx context.Contex
 
 			child, exists := s.children[spec.Name]
 			if !exists {
+				if spec.Enabled && s.childHeldBackByConfigError(spec.Name) {
+					// The child's latest create attempt failed with a config
+					// error: the user's config holds it back, and that failure
+					// already warned as config_error. Missing here is the
+					// expected consequence, so it stays out of Sentry.
+					s.logger.Debug("reducer_child_not_found_config_error",
+						deps.String("child_name", spec.Name))
+
+					return
+				}
+
 				if spec.Enabled {
 					// Enabled=true + not found = unexpected (WARN).
 					s.handleDisableMappingError(spec, persistence.ErrNotFound)
@@ -1981,4 +2000,31 @@ func (s *Supervisor[TObserved, TDesired]) warnChildConfigErrorOnce(childName, me
 
 	s.childConfigErrorWarned[childName] = message
 	s.logger.Warn("config_error", deps.String("child_name", childName), deps.String("message", message))
+}
+
+// markChildCreateConfigError records that the child's latest create attempt
+// failed with a config error, which holds the child back. The caller must
+// hold s.mu, as reconcileChildren does.
+func (s *Supervisor[TObserved, TDesired]) markChildCreateConfigError(childName string) {
+	if s.childCreateConfigError == nil {
+		s.childCreateConfigError = make(map[string]struct{})
+	}
+
+	s.childCreateConfigError[childName] = struct{}{}
+}
+
+// clearChildCreateConfigError ends the config-error hold on the child, so a
+// later absence warns again. The caller must hold s.mu, as reconcileChildren
+// does.
+func (s *Supervisor[TObserved, TDesired]) clearChildCreateConfigError(childName string) {
+	delete(s.childCreateConfigError, childName)
+}
+
+// childHeldBackByConfigError reports whether the child's latest create
+// attempt failed with a config error. The caller must hold s.mu, as
+// reconcileChildren does.
+func (s *Supervisor[TObserved, TDesired]) childHeldBackByConfigError(childName string) bool {
+	_, held := s.childCreateConfigError[childName]
+
+	return held
 }
