@@ -24,8 +24,9 @@ type ExamplebridgeConfig struct {
 	// Connection is the bridge's connection. Host and Port become the IP and
 	// PORT template names.
 	Connection Connection `json:"connection" yaml:"connection"`
-	// Location is the bridge's own location levels. It accepts YAML int keys
-	// (1: hall), which a plain map[string]string field would reject.
+	// Location is the bridge's own location levels, keyed by the level
+	// index as written in YAML. The bridge merges these levels with the
+	// agent's to build the location names.
 	Location map[string]string `json:"location,omitempty" yaml:"location"`
 	// Variables is the bridge's own variables section. It becomes the
 	// "variables" template name and the source of one shortcut per variable.

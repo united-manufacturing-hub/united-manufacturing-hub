@@ -177,8 +177,9 @@ var templateType = reflect.TypeOf(Template(""))
 // writes the results back. Each field renders into a pending record first,
 // so either every Template field is updated or none is. Each field is named
 // by its YAML path, so a Template behind an inline-embedded struct reports
-// the inner YAML name. A Template the walk cannot write back — inside a map,
-// where values are not settable — is an error, never a silent skip.
+// the inner YAML name. A Template the walk cannot write back, such as one
+// inside a map where values are not settable, is an error, never a silent
+// skip.
 func RenderTemplates(v any, names map[string]any) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {

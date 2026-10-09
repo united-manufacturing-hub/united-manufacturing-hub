@@ -179,6 +179,88 @@ var _ = Describe("ChildSpec Hash", func() {
 
 			hash1, err1 := spec1.Hash()
 			Expect(err1).NotTo(HaveOccurred())
+
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
+		})
+
+		It("should produce different hashes when only UserSpec.Variables changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config:    "config",
+					Variables: map[string]any{"X": "a"},
+				},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config:    "config",
+					Variables: map[string]any{"X": "b"},
+				},
+			}
+
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
+		})
+
+		It("should produce different hashes when only UserSpec.Names changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config: "config",
+					Names:  map[string]any{"from": "parent-one"},
+				},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config: "config",
+					Names:  map[string]any{"from": "parent-two"},
+				},
+			}
+
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
+		})
+
+		It("should produce different hashes when only UserSpec.ConfigValues changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config:       "config",
+					ConfigValues: map[string]any{"historian": "timescale"},
+				},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config:       "config",
+					ConfigValues: map[string]any{"historian": "kafka"},
+				},
+			}
+
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+
 			hash2, err2 := spec2.Hash()
 			Expect(err2).NotTo(HaveOccurred())
 			Expect(hash1).NotTo(Equal(hash2))
@@ -199,6 +281,7 @@ var _ = Describe("ChildSpec Hash", func() {
 
 			hash1, err1 := spec1.Hash()
 			Expect(err1).NotTo(HaveOccurred())
+
 			hash2, err2 := spec2.Hash()
 			Expect(err2).NotTo(HaveOccurred())
 			Expect(hash1).NotTo(Equal(hash2))
@@ -219,6 +302,7 @@ var _ = Describe("ChildSpec Hash", func() {
 
 			hash1, err1 := spec1.Hash()
 			Expect(err1).NotTo(HaveOccurred())
+
 			hash2, err2 := spec2.Hash()
 			Expect(err2).NotTo(HaveOccurred())
 			Expect(hash1).NotTo(Equal(hash2))
@@ -241,6 +325,7 @@ var _ = Describe("ChildSpec Hash", func() {
 
 			hash1, err1 := spec1.Hash()
 			Expect(err1).NotTo(HaveOccurred())
+
 			hash2, err2 := spec2.Hash()
 			Expect(err2).NotTo(HaveOccurred())
 			Expect(hash1).NotTo(Equal(hash2))

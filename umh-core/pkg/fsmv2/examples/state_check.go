@@ -55,7 +55,7 @@ var validWorkerStates = map[string]map[string]bool{
 		"unknown": true,
 	},
 	"examplebridge": {
-		"TryingToStart": true, "Running": true,
+		"Running":      true,
 		"TryingToStop": true, "Stopped": true,
 		"unknown": true,
 	},
