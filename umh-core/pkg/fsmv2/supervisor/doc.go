@@ -60,27 +60,13 @@
 //
 // See infrastructure_health.go for implementation details.
 //
-// ## Phase 0.5: Variable injection
+// ## Phase 0.5: User spec fetch
 //
-// Injects variables into UserSpec before template expansion:
-//
-// Global variables:
-//   - Taken from the supervisor's spec as they are
-//   - Available as {{ .global.key }} in templates
-//
-// Internal variables:
-//   - supervisorID: Supervisor's worker ID
-//   - createdAt: Worker creation timestamp
-//   - bridgedBy: Parent worker ID (if applicable)
-//   - Available as {{ .internal.key }} in templates
-//
-// User variables:
-//   - From UserSpec.Variables.User (preserved, not overwritten)
-//   - Available as {{ .key }} in templates (flattened namespace)
-//
-// Variables are available for template expansion in DeriveDesiredState().
-//
-// See config/variables.go for the VariableBundle struct definition.
+// Fetches this tick's UserSpec with getUserSpec (avoiding a race with a
+// parent calling updateUserSpec) and hands it to DeriveDesiredState
+// unchanged. The supervisor injects nothing into the spec: a child derives
+// from exactly the UserSpec its parent's ChildSpec set, whose `variables:`
+// section is all a template reads as {{ .variables.<key> }}.
 //
 // ## Phase 0: Hierarchical composition
 //
@@ -88,7 +74,7 @@
 //
 // DeriveDesiredState:
 //   - Worker implementation returns DesiredState with ChildrenSpecs
-//   - Template expansion using injected variables
+//   - Template expansion using the spec's own variables
 //   - Result cached based on UserSpec hash
 //   - Cache invalidated when UserSpec changes
 //
@@ -451,7 +437,7 @@
 //   - Check ShouldStop() as first condition in state.Next()
 //   - Make all actions idempotent (check if work already done)
 //   - Use ChildSpec.Enabled to coordinate child lifecycle (not data passing)
-//   - Pass data to children via VariableBundle, not direct method calls
+//   - Pass data to children via their ChildSpec's UserSpec, not direct method calls
 //   - Release locks before calling child methods (prevent deadlock)
 //   - Handle context cancellation in all async operations
 //   - Log state transitions at INFO level

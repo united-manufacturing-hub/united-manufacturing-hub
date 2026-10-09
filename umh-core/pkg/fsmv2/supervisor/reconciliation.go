@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -746,32 +745,19 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		return errors.New("worker is nil")
 	}
 
-	// PHASE 0.5: Variable Injection
-	// Inject variables BEFORE DeriveDesiredState() so they're available for template expansion
+	// PHASE 0.5: fetch the user spec for this tick.
 	// Use getUserSpec() to avoid race with parent calling updateUserSpec()
-	userSpecWithVars := s.getUserSpec()
+	userSpec := s.getUserSpec()
 
-	if userSpecWithVars.Variables.User == nil {
-		userSpecWithVars.Variables.User = make(map[string]any)
-	}
-
-	userSpecWithVars.Variables.Internal = map[string]any{
-		FieldID:                firstWorkerID,
-		storage.FieldCreatedAt: s.createdAt,
-		FieldParentID:          s.parentID,
-	}
-
-	userVarCount := len(userSpecWithVars.Variables.User)
 	// Per-tick log moved to TRACE for scalability
 	s.logTrace("variables_propagated",
-		deps.Int("user_vars", userVarCount),
-		deps.Int("global_vars", len(userSpecWithVars.Variables.Global)))
+		deps.Int("user_vars", len(userSpec.Variables)))
 	metrics.RecordVariablePropagation(firstWorkerPath)
 
 	// PHASE 0: Hierarchical Composition
 	// 1. DeriveDesiredState (with caching)
 
-	currentHash := config.ComputeUserSpecHash(userSpecWithVars)
+	currentHash := config.ComputeUserSpecHash(userSpec)
 
 	s.mu.RLock()
 	lastHash := s.lastUserSpecHash
@@ -793,7 +779,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 		var err error
 
-		desired, err = worker.DeriveDesiredState(userSpecWithVars)
+		desired, err = worker.DeriveDesiredState(userSpec)
 		templateDuration := time.Since(templateStart)
 
 		if err != nil {
@@ -838,8 +824,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
-	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
-		userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
+	if userSpec.Config != "" || len(userSpec.Variables) > 0 {
+		userSpecBytes, marshalErr := json.Marshal(userSpec)
 		if marshalErr != nil {
 			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
 				deps.Err(marshalErr))
@@ -1522,11 +1508,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				delete(s.pendingRemoval, spec.Name)
 			}
 
-			// Merge parent User variables with child's (child overrides parent)
-			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
-			childUserSpec := spec.UserSpec
-			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
-			child.updateUserSpec(childUserSpec)
+			child.updateUserSpec(spec.UserSpec)
 
 			updatedCount++
 		} else {
@@ -1585,11 +1567,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				continue
 			}
 
-			// Merge parent User variables with child's (child overrides parent)
-			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
-			childUserSpec := spec.UserSpec
-			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
-			childSupervisor.updateUserSpec(childUserSpec)
+			childSupervisor.updateUserSpec(spec.UserSpec)
 			childSupervisor.setParent(s, s.workerType)
 
 			// Compute child's hierarchy path: parent path + child segment

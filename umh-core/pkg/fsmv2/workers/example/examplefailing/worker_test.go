@@ -35,7 +35,7 @@ var _ = Describe("FailingWorker", func() {
 
 		spec := config.UserSpec{
 			Config:    "state: \"{{ .x }}\"",
-			Variables: config.VariableBundle{},
+			Variables: nil,
 		}
 
 		_, err = worker.DeriveDesiredState(spec)

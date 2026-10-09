@@ -38,10 +38,8 @@ func RenderChildren(cfg ExampleparentConfig, enabled bool) ([]config.ChildSpec, 
 	specs := make([]config.ChildSpec, 0, count)
 
 	for i := range count {
-		childVariables := config.VariableBundle{
-			User: map[string]any{
-				"DEVICE_ID": fmt.Sprintf("device-%d", i),
-			},
+		childVariables := map[string]any{
+			"DEVICE_ID": fmt.Sprintf("device-%d", i),
 		}
 
 		specs = append(specs, config.ChildSpec{

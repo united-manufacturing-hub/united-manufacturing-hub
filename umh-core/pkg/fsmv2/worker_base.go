@@ -141,7 +141,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 	if len(names) == 0 {
 		names, err = config.BuildNames(config.Entry{
 			Fields:    fields,
-			Variables: userSpec.Variables.User,
+			Variables: userSpec.Variables,
 			Config:    userSpec.ConfigValues,
 		})
 		if err != nil {

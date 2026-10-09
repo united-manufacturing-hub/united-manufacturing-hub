@@ -18,9 +18,9 @@ This guide covers dependency injection patterns for FSMv2 workers.
 
 Custom dependencies (e.g., `Transport`, `ConnectionPool`, channels) can be added by embedding `BaseDependencies` in your own struct. See `workers/communicator/dependencies.go` for an example.
 
-## Global Variables Flow
+## Variables Flow
 
-Global variables travel in a spec's `VariableBundle` (`config/variables.go`), beside the User variables. A worker reads them as `{{ .global.<key> }}`. A spec gets them from a `children:` entry in the application config, under `userSpec.variables.global`, or from the registry's bundle, which `dynamicchildren.Writer.SetVariables` sets. Each supervisor merges its own variables into its children's specs with `config.Merge`. A parent's Global variables therefore reach every child below it.
+A spec's `Variables` (`map[string]any`, `config/childspec.go`) is the entry's own `variables:` section, decoded as written; a worker reads them as `{{ .variables.<key> }}`. No production code copies a parent's variables into a child's spec: a parent that wants a child to have a value writes it into the child's `ChildSpec` itself (see `workers/example/exampleparent/children.go`), and the registry's config values reach children as `UserSpec.ConfigValues`, never as variables.
 
 ## StateReader Examples
 

@@ -132,10 +132,8 @@ var _ = Describe("LoadUserSpec", func() {
 
 	It("checks the user variables under the variables prefix", func() {
 		spec := config.UserSpec{
-			Config: "host: ok",
-			Variables: config.VariableBundle{
-				User: map[string]any{"IP": "{{ .x }}"},
-			},
+			Config:    "host: ok",
+			Variables: map[string]any{"IP": "{{ .x }}"},
 		}
 
 		_, err := config.LoadUserSpec[loadHostConfig](spec)

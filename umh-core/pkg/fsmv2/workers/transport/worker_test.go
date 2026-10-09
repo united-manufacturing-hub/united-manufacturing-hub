@@ -198,7 +198,7 @@ var _ = Describe("TransportWorker", func() {
 					Config: `relayURL: "https://relay.example.com"
 instanceUUID: "test-uuid"
 authToken: "test-token"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				desired, err := worker.DeriveDesiredState(spec)
@@ -217,7 +217,7 @@ authToken: "test-token"`,
 					Config: `relayURL: "https://relay.example.com"
 instanceUUID: "test-uuid"
 authToken: "test-token"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				desired, err := worker.DeriveDesiredState(spec)
@@ -232,7 +232,7 @@ authToken: "test-token"`,
 				spec := fsmv2types.UserSpec{
 					Config: `state: stopped
 relayURL: "https://relay.example.com"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				desired, err := worker.DeriveDesiredState(spec)
@@ -249,7 +249,7 @@ relayURL: "https://relay.example.com"`,
 relayURL: "https://relay.example.com"
 instanceUUID: "test-uuid"
 authToken: "test-token"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				desired, err := worker.DeriveDesiredState(spec)
@@ -269,7 +269,7 @@ authToken: "test-token"`,
 					Config: `relayURL: "https://test.com"
 instanceUUID: "test-uuid"
 authToken: "test-token"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				desired1, err1 := worker.DeriveDesiredState(spec)
@@ -291,7 +291,7 @@ authToken: "test-token"`,
 					Config: `state: running
 instanceUUID: "test-uuid"
 authToken: "test-token"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				_, err := worker.DeriveDesiredState(spec)
@@ -305,7 +305,7 @@ authToken: "test-token"`,
 					Config: `state: running
 relayURL: "https://relay.example.com"
 authToken: "test-token"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				_, err := worker.DeriveDesiredState(spec)
@@ -319,7 +319,7 @@ authToken: "test-token"`,
 					Config: `state: running
 relayURL: "https://relay.example.com"
 instanceUUID: "test-uuid"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				_, err := worker.DeriveDesiredState(spec)
@@ -331,7 +331,7 @@ instanceUUID: "test-uuid"`,
 			It("should not validate fields when state is stopped", func() {
 				spec := fsmv2types.UserSpec{
 					Config:    `state: stopped`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				desired, err := worker.DeriveDesiredState(spec)
@@ -348,7 +348,7 @@ instanceUUID: "test-uuid"`,
 relayURL: "https://relay.example.com"
 instanceUUID: "test-uuid"
 authToken: "test-token"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				desired, err := worker.DeriveDesiredState(spec)
@@ -363,7 +363,7 @@ authToken: "test-token"`,
 			It("should return error for invalid YAML", func() {
 				spec := fsmv2types.UserSpec{
 					Config:    `invalid: [yaml: missing closing bracket`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				_, err := worker.DeriveDesiredState(spec)
@@ -383,7 +383,7 @@ authToken: "test-token"`,
 			It("rejects a placeholder in a plain field with a ConfigError naming the field", func() {
 				spec := fsmv2types.UserSpec{
 					Config:    `state: "{{ .x }}"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				_, err := worker.DeriveDesiredState(spec)
@@ -398,7 +398,7 @@ authToken: "test-token"`,
 				spec := fsmv2types.UserSpec{
 					Config: `state: stopped
 relayURL: "${DB_PASS}"`,
-					Variables: fsmv2types.VariableBundle{},
+					Variables: nil,
 				}
 
 				desired, err := worker.DeriveDesiredState(spec)

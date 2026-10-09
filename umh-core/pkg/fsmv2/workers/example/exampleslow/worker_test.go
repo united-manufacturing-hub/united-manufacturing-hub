@@ -41,7 +41,7 @@ var _ = Describe("ExampleslowWorker", func() {
 
 		spec := config.UserSpec{
 			Config:    "state: \"{{ .x }}\"",
-			Variables: config.VariableBundle{},
+			Variables: nil,
 		}
 
 		_, err = worker.DeriveDesiredState(spec)

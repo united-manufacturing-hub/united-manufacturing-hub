@@ -87,7 +87,7 @@
 //   - examplechild/action/connect.go shows the empty struct and idempotency patterns.
 //
 // Parent-child:
-//   - exampleparent/worker.go shows ChildrenSpecs and VariableBundle usage.
+//   - exampleparent/children.go shows RenderChildren and per-child UserSpec.Variables.
 //
 // Testing:
 //   - examplechild/action/*_test.go shows action idempotency verification.
