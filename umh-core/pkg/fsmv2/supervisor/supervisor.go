@@ -159,6 +159,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	pendingRemoval     map[string]bool
 	pendingRestart     map[string]bool
 	restartRequestedAt map[string]time.Time
+	pendingReadds      map[string]deps.Identity
 	healthChecker      *InfrastructureHealthChecker
 	panicTracker       *panicRecovery
 	actionExecutor     *execution.ActionExecutor
@@ -316,6 +317,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		pendingRemoval:     make(map[string]bool),
 		pendingRestart:     make(map[string]bool),
 		restartRequestedAt: make(map[string]time.Time),
+		pendingReadds:      make(map[string]deps.Identity),
 		createdAt:          time.Now(),
 		parentID:           "",
 		healthChecker:      NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
