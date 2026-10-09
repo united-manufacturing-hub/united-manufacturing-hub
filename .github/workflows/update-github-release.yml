@@ -94,3 +94,62 @@ jobs:
         run: |
           set -euo pipefail
           gh release edit "$VERSION" --notes-file /tmp/release-body.md
+
+  # Runs for pre-releases too. Runs after update-github-release because that job overwrites the body.
+  publish-image-digest:
+    needs: [update-github-release]
+    if: ${{ !cancelled() && needs.update-github-release.result != 'failure' }}
+    runs-on: depot-ubuntu-24.04
+    # The image is built by build-umh-core.yml on the tag push, which starts at the same time as this workflow.
+    timeout-minutes: 75
+    permissions:
+      contents: write
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # Waits until the image is signed by a tag build, and reads the signed index digest from the verification.
+      - name: Wait for signed image
+        id: image
+        env:
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/united-manufacturing-hub/umh-core:${VERSION}"
+          for attempt in $(seq 1 60); do
+            if OUT=$(cosign verify \
+                --certificate-identity-regexp '^https://github\.com/united-manufacturing-hub/united-manufacturing-hub/\.github/workflows/build-umh-core\.yml@refs/tags/v' \
+                --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+                "$IMAGE" 2>/dev/null); then
+              DIGEST=$(echo "$OUT" | jq -r '.[0].critical.image."docker-manifest-digest"')
+              echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+              echo "Signed index digest of $IMAGE: $DIGEST"
+              exit 0
+            fi
+            echo "Attempt $attempt: $IMAGE is not signed yet, waiting 60s"
+            sleep 60
+          done
+          echo "::error::$IMAGE was not signed within 60 minutes. Re-run this workflow once build-umh-core.yml has finished."
+          exit 1
+
+      - name: Add image digest to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Drop an earlier "## Container image" section so re-runs do not add a second one.
+          gh release view "$VERSION" --json body --jq .body \
+            | awk '/^## Container image/{skip=1; next} /^## /{skip=0} !skip' \
+            | awk 'NF {for (; blank > 0; blank--) print ""; print; next} {blank++}' > /tmp/release-body.md
+          cat >> /tmp/release-body.md <<NOTES
+
+          ## Container image
+
+          \`management.umh.app/oci/united-manufacturing-hub/umh-core@${DIGEST}\`
+
+          The image is signed with cosign. See [how to verify it](https://docs.umh.app/production/security/umh-core/deployment-security#image-signing).
+          NOTES
+          gh release edit "$VERSION" --notes-file /tmp/release-body.md

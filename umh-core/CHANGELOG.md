@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New Features
+
+- umh-core release images are now signed with cosign, and each GitHub release lists the digest of its image. See [Image signing](https://docs.umh.app/production/security/umh-core/deployment-security#image-signing) for how to verify an image before you deploy it
+
 ### Improvements
 
 - Bridges now start only once CPU, memory and disk are proven healthy, also after a restart. A waiting bridge says why it waits and how to start bridges anyway in an emergency

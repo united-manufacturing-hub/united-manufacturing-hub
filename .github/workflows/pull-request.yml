@@ -66,6 +66,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # Pull request builds are not signed. GitHub still refuses to start a called
+      # workflow whose job asks for a permission the caller does not grant.
+      id-token: write
 
   fossa:
     name: FOSSA License Scan

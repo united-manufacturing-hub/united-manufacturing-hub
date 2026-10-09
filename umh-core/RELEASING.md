@@ -15,14 +15,15 @@ During development, all changelog entries go under `## Unreleased` at the top of
 3. Create a **new tag** with the format `v0.X.Y-pre.N` (e.g., `v0.44.10-pre.1`)
 4. Target: `main`
 5. Check **"Set as a pre-release"**
-6. Body can be minimal — pre-releases don't get changelog sync or release notes automation
+6. Body can be minimal — pre-releases don't get changelog sync. Automation only appends the signed image digest
 7. Click **Publish release**
 
 ### What happens automatically
 
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
-| `build-umh-core.yml` | tag push | Builds Docker image, pushes to GHCR, verifies binaries, notifies MC webhook with `channel: nightly` |
+| `build-umh-core.yml` | tag push | Builds Docker image, pushes to GHCR, signs it with cosign, verifies binaries, notifies MC webhook with `channel: nightly` |
+| `update-github-release.yml` | release published | Waits until the image is signed, then appends its digest to the GitHub Release body |
 
 ## Stable release
 
@@ -40,9 +41,9 @@ During development, all changelog entries go under `## Unreleased` at the top of
 
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
-| `build-umh-core.yml` | tag push | Builds Docker image, pushes to GHCR, verifies binaries, notifies MC webhook (see promotion logic below) |
+| `build-umh-core.yml` | tag push | Builds Docker image, pushes to GHCR, signs it with cosign, verifies binaries, notifies MC webhook (see promotion logic below) |
 | `sync-changelog.yml` | release published | Extracts version section from CHANGELOG.md, creates PR on [changelog.umh.app](https://github.com/united-manufacturing-hub/changelog.umh.app) |
-| `update-github-release.yml` | release published | Extracts version section from CHANGELOG.md, overwrites the GitHub Release body, appends changelog.umh.app link |
+| `update-github-release.yml` | release published | Extracts version section from CHANGELOG.md, overwrites the GitHub Release body, appends changelog.umh.app link, then appends the signed image digest once the image is signed |
 
 ### MC webhook promotion logic
 

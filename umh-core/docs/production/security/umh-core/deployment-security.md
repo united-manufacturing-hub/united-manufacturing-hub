@@ -103,6 +103,27 @@ Deploy umh-core in a DMZ with firewalls on both OT and IT boundaries. See IEC 62
 
 **Deployment Considerations**: Supply chain security depends on timely updates from upstream dependencies and proper image verification during deployment.
 
+### Image signing
+
+Every umh-core release image is signed by our GitHub Actions build with [cosign](https://docs.sigstore.dev/cosign/) keyless signing. The signature proves that the image was built by the `build-umh-core.yml` workflow in the `united-manufacturing-hub/united-manufacturing-hub` repository and was not changed afterwards. Each [GitHub release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) lists the digest of its image under "Container image".
+
+To verify a release image, run:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp '^https://github\.com/united-manufacturing-hub/united-manufacturing-hub/\.github/workflows/build-umh-core\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/united-manufacturing-hub/umh-core@sha256:<digest>
+```
+
+The signatures are stored on `ghcr.io`, so run the check there. `management.umh.app/oci` serves the same image under the same digest. The command exits with an error if the image has no valid signature from a release build. Releases whose notes have no "Container image" section were published before signing started and are not signed.
+
+A tag such as `v0.44.42` can be moved to another image, a digest cannot. To run exactly the image you verified, pull it by digest:
+
+```bash
+docker pull management.umh.app/oci/united-manufacturing-hub/umh-core@sha256:<digest>
+```
+
 ---
 
 ## Industrial Protocol Security
