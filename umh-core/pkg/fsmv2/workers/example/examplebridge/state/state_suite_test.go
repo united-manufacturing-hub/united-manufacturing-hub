@@ -34,10 +34,13 @@ func TestExamplebridgeState(t *testing.T) {
 
 var _ = Describe("Examplebridge states", func() {
 	newSnapshot := func(childrenHealthy, childrenUnhealthy int, shutdown bool) fsmv2.Snapshot {
+		// The snapshot the supervisor builds reads a worker's name from its
+		// stored identity, which falls back to the worker id (b1-001) when no
+		// name was saved. The config's own name field is what names the flows.
 		return fsmv2.Snapshot{
 			Identity: deps.Identity{
-				ID:         "bridge-001",
-				Name:       "b1",
+				ID:         "b1-001",
+				Name:       "b1-001",
 				WorkerType: examplebridge.WorkerTypeName,
 			},
 			Observed: fsmv2.Observation[examplebridge.ExamplebridgeStatus]{
@@ -47,6 +50,7 @@ var _ = Describe("Examplebridge states", func() {
 			},
 			Desired: &fsmv2.WrappedDesiredState[examplebridge.ExamplebridgeConfig]{
 				Config: examplebridge.ExamplebridgeConfig{
+					Name:  "b1",
 					Read:  `{{ .connection.host }}`,
 					Write: `{{ .IP }}`,
 				},
@@ -65,6 +69,9 @@ var _ = Describe("Examplebridge states", func() {
 
 		b2 := newSnapshot(2, 0, false)
 		b2.Identity.Name = "b2"
+		b2.Identity.ID = "b2-001"
+		b2Desired := b2.Desired.(*fsmv2.WrappedDesiredState[examplebridge.ExamplebridgeConfig])
+		b2Desired.Config.Name = "b2"
 		b2Result := running.Next(b2)
 
 		namesOf := func(result fsmv2.NextResult[any, any]) []string {
