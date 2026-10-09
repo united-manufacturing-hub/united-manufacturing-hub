@@ -296,6 +296,107 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 				return childNextCalls.Load() - baseline
 			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 3))
 		})
+
+		It("drops the child when a broken parent shuts down, and no child reappears", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			recorder := newRecordingSentryLogger()
+			s := newSupervisor(recorder, createStoreForWorkerTypes(parentWorkerType, childWorkerType))
+
+			parent := &configTextShutdownWorker{
+				childrenSpecs: []config.ChildSpec{{
+					Name:       childName,
+					WorkerType: childWorkerType,
+					UserSpec:   config.UserSpec{},
+					Enabled:    true,
+				}},
+			}
+			Expect(s.AddWorker(mockIdentity(), parent)).NotTo(HaveOccurred())
+
+			s.Start(ctx)
+			defer s.Shutdown()
+
+			Eventually(func() bool {
+				child, ok := s.GetChildren()[childName]
+				if !ok {
+					return false
+				}
+
+				return len(child.ListWorkers()) == 1 && childNextCalls.Load() > 0
+			}, 5*time.Second, 20*time.Millisecond).Should(BeTrue())
+
+			s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
+			Eventually(func() int {
+				return recorder.warnCount("config_error")
+			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+			Expect(s.RequestShutdown(ctx, "test shutdown")).To(Succeed())
+
+			// Both the worker and its child go: the child must be dropped on
+			// the shutdown of a broken parent, not respawned from the cached
+			// children specs.
+			Eventually(func() bool {
+				children := s.GetChildren()
+
+				return len(s.ListWorkers()) == 0 && len(children) == 0
+			}, 5*time.Second, 20*time.Millisecond).Should(BeTrue(),
+				"a parent with a config mistake must drop its children on shutdown")
+
+			// No child supervisor reappears: the tick after the removal does
+			// not recreate one from the cached children specs.
+			Consistently(func() int {
+				return len(s.GetChildren())
+			}, 300*time.Millisecond, 20*time.Millisecond).Should(Equal(0))
+		})
+	})
+
+	Describe("a disabled worker", func() {
+		It("stays disabled across the broken window and its stored flag is unchanged", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			recorder := newRecordingSentryLogger()
+			store := createStoreForWorkerTypes(parentWorkerType)
+			s := newSupervisor(recorder, store)
+
+			worker := &configTextShutdownWorker{}
+			Expect(s.AddWorker(mockIdentity(), worker)).NotTo(HaveOccurred())
+
+			s.Start(ctx)
+			defer s.Shutdown()
+
+			Eventually(func() int64 {
+				return worker.deriveCalls.Load()
+			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 2))
+
+			// Disable the worker through the same path the disable-mapping
+			// pass uses: the stored desired state carries Disabled=true and
+			// the state machine holds it resident in Stopped.
+			Expect(s.SetDisabled(ctx, true)).To(Succeed())
+
+			// Break the spec while the worker is disabled.
+			s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
+			Eventually(func() int {
+				return recorder.warnCount("config_error")
+			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+			// The stored Disabled bit survives the broken window: a tick that
+			// continues on the cached state must not read or write lifecycle
+			// flags through a document it did not save.
+			baseline := worker.nextCalls.Load()
+
+			Eventually(func() int64 {
+				return worker.nextCalls.Load() - baseline
+			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 3))
+
+			var stored config.DesiredState
+
+			err := store.LoadDesiredTyped(ctx, parentWorkerType, "test-worker", &stored)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(stored.IsDisabled()).To(BeTrue(),
+				"a disabled worker's flag must survive a broken-spec window")
+		})
 	})
 })
 

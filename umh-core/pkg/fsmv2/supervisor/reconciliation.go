@@ -731,8 +731,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		}
 
 		// Zero workers on a started supervisor is a transient state (e.g., during child
-		// restart). The supervisor self-heals on the next reconcileChildren cycle.
-		// Log at Info, not Warn/Error, to avoid Sentry noise.
+		// restart). The tick returns here and nothing reconciles or ticks this
+		// supervisor's children again until it has a worker once more or it is shut
+		// down; a child dropped in the removal tick goes with it, so the window is
+		// short. Log at Info, not Warn/Error, to avoid Sentry noise.
 		if s.noWorkersWarnedOnce.CompareAndSwap(false, true) {
 			s.logger.Info("tick_skipped_no_workers",
 				deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
@@ -809,11 +811,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 				return fmt.Errorf("failed to derive desired state: %w", err)
 			}
 
-			// A config mistake must not stop the worker's tick: the worker
-			// must still read a shutdown request and be removable, and its
-			// children must keep running. The tick continues below on the
-			// desired state derived from the worker's last good config, and
-			// the new config reaches the worker once it renders.
+			// A config error keeps the worker ticking on the desired state
+			// derived from its last good config, so shutdown, removal and
+			// the worker's children all keep working; see supervisor/doc.go
+			// (Phase 0) for the rule.
 			desired = cachedState
 			deriveConfigErr = err
 		}
@@ -833,15 +834,18 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	if deriveConfigErr == nil {
-		// The derive succeeded, computed or cached, so a config error that
-		// returns later warns again.
+		// The derive succeeded, so the warn-once memory (lastConfigErrorWarned)
+		// is re-armed: a config error that comes back after this warns again,
+		// even with the same message.
 		s.mu.Lock()
 		s.lastConfigErrorWarned = ""
 		s.mu.Unlock()
 	}
 
-	// The desired state derived from the last good config is already the
-	// stored one, so a tick that continues on it does not save again.
+	// The desired state derived from the last good config is the one the
+	// tick runs on: the save block below stores it with the lifecycle flags
+	// preserved, so the tick that continues on it reloads those flags from
+	// the store instead of saving a new document.
 	var desiredDoc persistence.Document
 
 	if deriveConfigErr == nil {
@@ -910,6 +914,39 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		} else {
 			// Per-tick log moved to TRACE for scalability
 			s.logTrace("derived_desired_state_saved")
+		}
+	} else {
+		// The config error continuation runs the worker on the stored desired
+		// state, so the shutdown gate below must read the lifecycle flags from
+		// that stored document. Load it read-only under the same lock the save
+		// path holds around its load, so a concurrent setter's flag write is
+		// visible here rather than being skipped; do NOT save, or the broken
+		// config's own content would reach the store.
+		s.lifecycleFlagMu.Lock()
+
+		var existingDesiredTyped TDesired
+
+		loadErr := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped)
+		s.lifecycleFlagMu.Unlock()
+
+		if loadErr == nil {
+			if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
+				desiredDoc = make(persistence.Document)
+
+				if ds.IsShutdownRequested() {
+					desiredDoc[FieldShutdownRequested] = true
+				}
+
+				if ds.IsDisabled() {
+					desiredDoc[FieldDisabled] = true
+				}
+			}
+		} else if !errors.Is(loadErr, persistence.ErrNotFound) {
+			// The gate reads what loaded; a failed load leaves it reading a
+			// nil document, same as a worker that never derived.
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "stored_desired_state_load_failed",
+				deps.Err(loadErr),
+				deps.String("worker_id", firstWorkerID))
 		}
 	}
 
