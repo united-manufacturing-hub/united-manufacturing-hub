@@ -282,11 +282,24 @@ var _ = Describe("Supervisor pending re-add retries", func() {
 		// plain error; the restart leaves the re-add pending.
 		flaky.cosFails.Store(true)
 
-		// Several retries fail while the collection is broken.
+		// The first failing retry reaches Sentry once...
 		Eventually(func() int {
 			return sentryErrorCount(recorder, "worker_restart_retry_add_failed")
+		}, 5*time.Second, 10*time.Millisecond).Should(Equal(1),
+			"a failing re-add reports to Sentry once per pending entry")
+
+		// ...and at least two more retries run while the collection is
+		// broken (each retry derives before it collects), without another
+		// Sentry error: later retries of the same entry stay at Debug.
+		deriveBaseline := flaky.deriveCalls.Load()
+
+		Eventually(func() int64 {
+			return flaky.deriveCalls.Load() - deriveBaseline
 		}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 2),
-			"a non-config re-add failure must keep being retried, not attempted once")
+			"the re-add keeps being retried while it fails")
+
+		Expect(sentryErrorCount(recorder, "worker_restart_retry_add_failed")).To(Equal(1),
+			"three failing ticks give exactly one Sentry error")
 
 		// Once the collection works again the worker comes back.
 		flaky.cosFails.Store(false)
