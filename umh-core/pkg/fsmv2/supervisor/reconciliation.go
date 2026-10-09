@@ -811,7 +811,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			isConfigErr := errors.As(err, &cfgErr)
 
 			if isConfigErr {
-				s.warnConfigErrorOnce(cfgErr.Error())
+				s.warnConfigErrorOnce(cfgErr)
 			} else {
 				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "derive_desired_state_failed",
 					deps.DurationMs(templateDuration.Milliseconds()))
@@ -1702,7 +1702,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				var cfgErr *config.ConfigError
 				if errors.As(err, &cfgErr) {
 					s.markChildCreateConfigError(spec.Name)
-					s.warnChildConfigErrorOnce(spec.Name, cfgErr.Error())
+					s.warnChildConfigErrorOnce(spec.Name, cfgErr)
 				} else {
 					// A later attempt failing for another reason ends the
 					// config-error hold: the latest attempt, not history,
@@ -1987,7 +1987,9 @@ func (s *Supervisor[TObserved, TDesired]) classifyDisableMappingError(err error)
 // successful derive clears the memory, so a message that returns after a
 // recovery warns again. A config error is a user mistake, not a system fault,
 // so this is a warning, never Sentry.
-func (s *Supervisor[TObserved, TDesired]) warnConfigErrorOnce(message string) {
+func (s *Supervisor[TObserved, TDesired]) warnConfigErrorOnce(cfgErr *config.ConfigError) {
+	message := cfgErr.Error()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1996,7 +1998,11 @@ func (s *Supervisor[TObserved, TDesired]) warnConfigErrorOnce(message string) {
 	}
 
 	s.lastConfigErrorWarned = message
-	s.logger.Warn("config_error", deps.String("message", message))
+	s.logger.Warn("config_error",
+		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
+		deps.String("field", cfgErr.Field),
+		deps.Err(cfgErr.Err),
+		deps.String("message", message))
 }
 
 // warnChildConfigErrorOnce warns "config_error" for a child the parent could
@@ -2004,7 +2010,9 @@ func (s *Supervisor[TObserved, TDesired]) warnConfigErrorOnce(message string) {
 // rebuilt every tick, so the memory lives on the parent; creating the child
 // clears its entry, so a child that fails again warns again. The caller must
 // hold s.mu, as reconcileChildren does.
-func (s *Supervisor[TObserved, TDesired]) warnChildConfigErrorOnce(childName, message string) {
+func (s *Supervisor[TObserved, TDesired]) warnChildConfigErrorOnce(childName string, cfgErr *config.ConfigError) {
+	message := cfgErr.Error()
+
 	if s.childConfigErrorWarned == nil {
 		s.childConfigErrorWarned = make(map[string]string)
 	}
@@ -2014,7 +2022,12 @@ func (s *Supervisor[TObserved, TDesired]) warnChildConfigErrorOnce(childName, me
 	}
 
 	s.childConfigErrorWarned[childName] = message
-	s.logger.Warn("config_error", deps.String("child_name", childName), deps.String("message", message))
+	s.logger.Warn("config_error",
+		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
+		deps.String("child_name", childName),
+		deps.String("field", cfgErr.Field),
+		deps.Err(cfgErr.Err),
+		deps.String("message", message))
 }
 
 // markChildCreateConfigError records that the child's latest create attempt
