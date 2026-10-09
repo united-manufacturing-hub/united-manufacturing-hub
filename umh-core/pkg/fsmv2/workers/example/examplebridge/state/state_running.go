@@ -38,7 +38,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			"stop required: "+snap.StopReason(), []config.ChildSpec{})
 	}
 
-	specs, err := examplebridge.RenderFlows(snap.Config)
+	specs, err := examplebridge.RenderFlows(snap.Identity.Name, snap.Config)
 	if err != nil {
 		// RenderFlows fails only when yaml cannot encode a flow template,
 		// which the templates' own type forbids. Keep the children from the

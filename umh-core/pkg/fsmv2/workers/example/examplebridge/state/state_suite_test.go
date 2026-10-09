@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplebridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplebridge/state"
 )
@@ -34,6 +35,11 @@ func TestExamplebridgeState(t *testing.T) {
 var _ = Describe("Examplebridge states", func() {
 	newSnapshot := func(childrenHealthy, childrenUnhealthy int, shutdown bool) fsmv2.Snapshot {
 		return fsmv2.Snapshot{
+			Identity: deps.Identity{
+				ID:         "bridge-001",
+				Name:       "b1",
+				WorkerType: examplebridge.WorkerTypeName,
+			},
 			Observed: fsmv2.Observation[examplebridge.ExamplebridgeStatus]{
 				ChildrenHealthy:   childrenHealthy,
 				ChildrenUnhealthy: childrenUnhealthy,
@@ -50,6 +56,29 @@ var _ = Describe("Examplebridge states", func() {
 			},
 		}
 	}
+
+	It("names each flow child after its bridge, so two bridges' children stay distinct", func() {
+		running := &state.RunningState{}
+
+		b1 := newSnapshot(2, 0, false)
+		b1Result := running.Next(b1)
+
+		b2 := newSnapshot(2, 0, false)
+		b2.Identity.Name = "b2"
+		b2Result := running.Next(b2)
+
+		namesOf := func(result fsmv2.NextResult[any, any]) []string {
+			names := make([]string, 0, len(result.Children))
+			for _, spec := range result.Children {
+				names = append(names, spec.Name)
+			}
+
+			return names
+		}
+
+		Expect(namesOf(b1Result)).To(Equal([]string{"b1-read", "b1-write"}))
+		Expect(namesOf(b2Result)).To(Equal([]string{"b2-read", "b2-write"}))
+	})
 
 	It("registers StoppedState as the initial state", func() {
 		initial := fsmv2.LookupInitialState(examplebridge.WorkerTypeName)
@@ -74,8 +103,8 @@ var _ = Describe("Examplebridge states", func() {
 			Expect(spec.WorkerType).To(Equal("exampleflow"))
 			Expect(spec.Enabled).To(BeTrue())
 		}
-		Expect(byName).To(HaveKey("read"))
-		Expect(byName).To(HaveKey("write"))
+		Expect(byName).To(HaveKey("b1-read"))
+		Expect(byName).To(HaveKey("b1-write"))
 	})
 
 	It("transitions to TryingToStop on shutdown with no children", func() {
