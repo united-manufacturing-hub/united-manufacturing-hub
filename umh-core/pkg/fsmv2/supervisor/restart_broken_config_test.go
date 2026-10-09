@@ -179,3 +179,121 @@ var _ = Describe("Supervisor restart with a broken config", func() {
 		}, 5*time.Second, 10*time.Millisecond).Should(BeTrue())
 	})
 })
+
+// restartOnceState signals NeedsRestart on its very first Next call and
+// honors a shutdown request afterwards, so one worker instance walks the
+// restart flow exactly once no matter how often it is re-added.
+type restartOnceState struct {
+	signaled *atomic.Bool
+}
+
+func (restartOnceState) String() string { return "running" }
+
+func (restartOnceState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
+
+func (s restartOnceState) Next(snapshot any) fsmv2.NextResult[any, any] {
+	if !s.signaled.Swap(true) {
+		return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNeedsRestart, State: s, Reason: "unrecoverable"}
+	}
+
+	if snap, ok := snapshot.(fsmv2.Snapshot); ok {
+		if snap.Desired != nil && snap.Desired.IsShutdownRequested() {
+			return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNeedsRemoval, State: s, Reason: "shutdown requested"}
+		}
+	}
+
+	return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNone, State: s, Reason: "running"}
+}
+
+// retryFlakyCOSWorker derives a running desired state; its CollectObservedState
+// fails while its switch is set, so AddWorker's initial collection fails with a
+// plain error that is not a config error.
+type retryFlakyCOSWorker struct {
+	deriveCalls atomic.Int64
+	signaled    atomic.Bool
+	cosFails    atomic.Bool
+}
+
+func (w *retryFlakyCOSWorker) CollectObservedState(context.Context, fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	if w.cosFails.Load() {
+		return nil, errors.New("collection temporarily broken")
+	}
+
+	return &supervisor.TestObservedState{ID: "test-worker", CollectedAt: time.Now()}, nil
+}
+
+func (w *retryFlakyCOSWorker) DeriveDesiredState(any) (fsmv2.DesiredState, error) {
+	w.deriveCalls.Add(1)
+
+	return &config.DesiredState{State: "running"}, nil
+}
+
+func (w *retryFlakyCOSWorker) GetInitialState() fsmv2.State[any, any] {
+	return restartOnceState{signaled: &w.signaled}
+}
+
+var _ = Describe("Supervisor pending re-add retries", func() {
+	const flakyWorkerType = "flakycos"
+
+	It("keeps retrying a re-add whose failure is not a config error, and recovers once the cause clears", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		flaky := &retryFlakyCOSWorker{}
+
+		Expect(factory.RegisterFactoryByType(flakyWorkerType,
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				return flaky
+			})).To(Succeed())
+
+		Expect(factory.RegisterSupervisorFactoryByType(flakyWorkerType, func(cfg any) any {
+			return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg.(supervisor.Config))
+		})).To(Succeed())
+
+		recorder := newRecordingSentryLogger()
+		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+			WorkerType:              flakyWorkerType,
+			Store:                   createStoreForWorkerTypes(flakyWorkerType),
+			Logger:                  recorder,
+			TickInterval:            20 * time.Millisecond,
+			GracefulShutdownTimeout: 500 * time.Millisecond,
+		})
+
+		identity := deps.Identity{
+			ID:         "test-worker",
+			Name:       "Test Worker",
+			WorkerType: flakyWorkerType,
+		}
+
+		Expect(s.AddWorker(identity, flaky)).NotTo(HaveOccurred())
+
+		s.Start(ctx)
+		defer s.Shutdown()
+
+		// The worker signals NeedsRestart on its first tick, so the restart
+		// flow removes it and re-adds it.
+		Eventually(func() int64 {
+			return flaky.deriveCalls.Load()
+		}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
+
+		// The replacement's collection fails, so the re-add fails with a
+		// plain error; the restart leaves the re-add pending.
+		flaky.cosFails.Store(true)
+
+		// Several retries fail while the collection is broken.
+		Eventually(func() int {
+			return sentryErrorCount(recorder, "worker_restart_retry_add_failed")
+		}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 2),
+			"a non-config re-add failure must keep being retried, not attempted once")
+
+		// Once the collection works again the worker comes back.
+		flaky.cosFails.Store(false)
+
+		Eventually(func() int {
+			return len(s.ListWorkers())
+		}, 5*time.Second, 10*time.Millisecond).Should(Equal(1),
+			"a pending re-add whose failure was not a config error must survive until it succeeds")
+	})
+})
