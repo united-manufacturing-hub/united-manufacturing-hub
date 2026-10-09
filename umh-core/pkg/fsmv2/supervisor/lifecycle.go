@@ -722,6 +722,33 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 	return nil
 }
 
+// reportPendingReaddFailure sends a pending re-add's failure to Sentry once
+// per pending entry; later retries of the same entry log at Debug, because
+// every tick retries a still-failing entry and one Sentry event is enough.
+func (s *Supervisor[TObserved, TDesired]) reportPendingReaddFailure(workerID, event string, err error) {
+	s.mu.Lock()
+
+	_, sent := s.pendingReaddSentrySent[workerID]
+	if !sent {
+		s.pendingReaddSentrySent[workerID] = true
+	}
+
+	s.mu.Unlock()
+
+	if sent {
+		s.logger.Debug(event,
+			deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
+			deps.String("target_worker_id", workerID),
+			deps.Reason("already reported for this pending re-add"),
+			deps.Err(err))
+
+		return
+	}
+
+	s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, event,
+		deps.String("target_worker_id", workerID))
+}
+
 // startWorkerProcesses starts the worker's collector and executor when the
 // supervisor is running, so a worker added outside the supervisor's own
 // startup path runs the same way. A collector start failure is logged and
@@ -788,8 +815,7 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context
 
 	newWorker, err := factory.NewWorkerByType(s.workerType, identity, s.baseLogger, s.store, s.deps)
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "worker_restart_retry_create_failed",
-			deps.String("target_worker_id", workerID))
+		s.reportPendingReaddFailure(workerID, "worker_restart_retry_create_failed", err)
 
 		return false
 	}
@@ -799,8 +825,7 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context
 		if errors.As(err, &cfgErr) {
 			s.warnConfigErrorOnce(cfgErr)
 		} else {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "worker_restart_retry_add_failed",
-				deps.String("target_worker_id", workerID))
+			s.reportPendingReaddFailure(workerID, "worker_restart_retry_add_failed", err)
 		}
 
 		// The entry stays, so the next tick retries the re-add.
@@ -809,6 +834,7 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context
 
 	s.mu.Lock()
 	delete(s.pendingReadds, workerID)
+	delete(s.pendingReaddSentrySent, workerID)
 	s.mu.Unlock()
 
 	s.startWorkerProcesses(workerID, identity)
