@@ -28,4 +28,6 @@ type ExampleflowConfig struct {
 type ExampleflowStatus struct {
 	// ID is the worker's ID, for observability.
 	ID string `json:"id,omitempty"`
+	// Started reports whether the start action ran.
+	Started bool `json:"started"`
 }

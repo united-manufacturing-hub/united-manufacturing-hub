@@ -31,7 +31,7 @@ const WorkerTypeName = "exampleflow"
 
 // ExampleflowWorker implements the FSM v2 Worker interface for the example flow.
 type ExampleflowWorker struct {
-	fsmv2.WorkerBase[ExampleflowConfig, ExampleflowStatus, register.NoDeps]
+	fsmv2.WorkerBase[ExampleflowConfig, ExampleflowStatus, *ExampleflowDependencies]
 }
 
 // NewExampleflowWorker creates a new example flow worker.
@@ -49,7 +49,8 @@ func NewExampleflowWorker(
 	}
 
 	w := &ExampleflowWorker{}
-	w.InitBase(identity, logger, stateReader)
+	bd := w.InitBase(identity, logger, stateReader)
+	w.BindDeps(&ExampleflowDependencies{BaseDependencies: bd})
 
 	return w, nil
 }
@@ -63,11 +64,38 @@ func (w *ExampleflowWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	default:
 	}
 
-	return fsmv2.NewObservation(ExampleflowStatus{ID: w.Identity().ID}), nil
+	return fsmv2.NewObservation(ExampleflowStatus{
+		ID:      w.Identity().ID,
+		Started: w.GetDependencies().Started(),
+	}), nil
+}
+
+// StartActionName names the flow's start action.
+const StartActionName = "start"
+
+// Start is the flow's start action: it marks the flow as started, so the
+// observed state can tell a start that ran from one that did not.
+func Start(_ context.Context, d *ExampleflowDependencies) error {
+	d.MarkStarted()
+
+	return nil
+}
+
+// GetDependencies returns the typed ExampleflowDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *ExampleflowWorker) GetDependencies() *ExampleflowDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*ExampleflowDependencies)
+	if !ok || d == nil {
+		panic("ExampleflowWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 func init() {
-	register.Worker[ExampleflowConfig, ExampleflowStatus, register.NoDeps](WorkerTypeName,
+	register.Worker[ExampleflowConfig, ExampleflowStatus, *ExampleflowDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewExampleflowWorker(id, logger, sr)
 		})
