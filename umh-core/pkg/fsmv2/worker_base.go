@@ -71,10 +71,11 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) InitBase(
 
 // Config returns the TConfig cached from the last DeriveDesiredState call.
 //
-// Deprecated: scheduled for deletion in L3 (see L2b_SCOPE_MANIFEST). Production
-// workers override DeriveDesiredState and never populate this cache, so Config()
-// returns zero-value TConfig forever. Read config via fsmv2.ExtractConfig[T](desired)
-// inside CollectObservedState instead.
+// Deprecated: read config via fsmv2.ExtractConfig[T](desired) inside
+// CollectObservedState instead. Only the base DeriveDesiredState writes this
+// cache. An override that calls the base first still fills it; an override
+// that parses the spec on its own leaves it empty, and Config() then returns
+// the zero value. No production code calls Config().
 func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -82,10 +83,12 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 	return w.config
 }
 
-// ConfigReady reports whether DeriveDesiredState has been called at least once.
+// ConfigReady reports whether DeriveDesiredState has filled the config cache
+// at least once.
 //
-// Deprecated: scheduled for deletion in L3 alongside Config(). Returns false
-// forever for any worker that overrides DeriveDesiredState. See Config() godoc.
+// Deprecated: see Config(). The cache is filled the same way, so
+// ConfigReady() stays false only for a worker whose override never calls the
+// base DeriveDesiredState. No production code calls ConfigReady().
 func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -134,20 +137,24 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		}
 	}
 
-	// Duck-type: validate the desired lifecycle state when TConfig embeds
-	// config.BaseUserSpec or implements GetState() string. Validation rejects
-	// illegal user-supplied state values; lifecycle itself is driven by the FSM.
-	wds := &WrappedDesiredState[TConfig]{
-		Config: cfg,
-	}
-
+	// The state is read by duck-typing, so this works for any TConfig that
+	// embeds config.BaseUserSpec or implements GetState() string. Validation
+	// rejects illegal user-supplied state values; lifecycle itself is driven
+	// by the FSM.
 	if g, ok := any(&cfg).(interface{ GetState() string }); ok {
 		state := g.GetState()
 		if state != "" {
 			if err := config.ValidateDesiredState(state); err != nil {
-				return nil, fmt.Errorf("invalid desired state: %w", err)
+				return nil, &config.ConfigError{
+					Field: "state",
+					Err:   fmt.Errorf("invalid desired state: unknown value %q: %w", state, err),
+				}
 			}
 		}
+	}
+
+	wds := &WrappedDesiredState[TConfig]{
+		Config: cfg,
 	}
 
 	w.mu.Lock()
