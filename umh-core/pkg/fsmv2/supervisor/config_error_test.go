@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -117,6 +118,17 @@ func (r *recordingSentryLogger) sentryWarnEvents() []string {
 	}
 
 	return events
+}
+
+// warnFieldMap turns one recorded Warn call into a map of its field values.
+func warnFieldMap(call recordedLogCall) map[string]any {
+	fields := make(map[string]any, len(call.Fields))
+
+	for _, f := range call.Fields {
+		fields[f.Key] = f.Value
+	}
+
+	return fields
 }
 
 // switchableDeriveWorker derives a running desired state until its err field
@@ -490,6 +502,15 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(recorder.warnCount("config_error")).To(Equal(1))
 			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 
+			ownWarnFields := warnFieldMap(recorder.warns[0])
+			Expect(ownWarnFields["field"]).To(Equal("config"),
+				"the warning names the config error's field")
+			Expect(fmt.Sprint(ownWarnFields["error"])).To(ContainSubstring("misspelled"),
+				"the warning carries the underlying error")
+			Expect(ownWarnFields["message"]).To(ContainSubstring("misspelled"))
+			Expect(ownWarnFields["hierarchy_path"]).To(ContainSubstring("test-worker"),
+				"the warning names the worker it is about")
+
 			desiredAfter, err := store.LoadDesired(ctx, "test", "test-worker")
 			Expect(err).NotTo(HaveOccurred())
 
@@ -571,6 +592,15 @@ var _ = Describe("Supervisor config errors", func() {
 			}
 
 			Expect(recorder.warnCount("config_error")).To(Equal(1))
+
+			childWarnFields := warnFieldMap(recorder.warns[0])
+			Expect(childWarnFields["child_name"]).To(Equal("cfgerr-child"))
+			Expect(childWarnFields["field"]).To(Equal("state"),
+				"the child warning names the config error's field")
+			Expect(fmt.Sprint(childWarnFields["error"])).To(ContainSubstring("runing"), //nolint:misspell
+				"the child warning carries the underlying error")
+			Expect(childWarnFields["hierarchy_path"]).To(ContainSubstring("parent-worker"),
+				"the child warning names the parent whose child failed")
 
 			Expect(parentSuper.GetChildren()).To(BeEmpty(),
 				"a worker with a config mistake must not start")

@@ -770,7 +770,7 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context
 	if err := s.AddWorker(identity, newWorker); err != nil {
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
-			s.warnConfigErrorOnce(cfgErr.Error())
+			s.warnConfigErrorOnce(cfgErr)
 
 			s.mu.Lock()
 			s.pendingReadds[workerID] = identity
@@ -912,7 +912,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 			// The old worker is gone and the replacement's config is broken,
 			// so the worker would be lost. Remember the re-add and retry it on
 			// every tick until the config renders.
-			s.warnConfigErrorOnce(cfgErr.Error())
+			s.warnConfigErrorOnce(cfgErr)
 
 			s.mu.Lock()
 			s.pendingReadds[workerID] = identity
