@@ -22,8 +22,8 @@ import (
 // runningState is the healthy steady state of a simple worker. It is generic
 // over the developer's config and status so Next can read the verdict off the
 // wrapped Status the worker persists each tick; the generic Register
-// instantiates one per worker type. Rung "states in sub-files" (later) may split
-// these; for now the machine flips between running and degraded on the verdict.
+// instantiates one per worker type. The machine flips between running and
+// degraded on the verdict.
 type runningState[TConfig, TStatus any] struct {
 	helpers.RunningHealthyBase
 }
@@ -51,8 +51,9 @@ func (s *runningState[TConfig, TStatus]) String() string {
 	return helpers.DeriveStateName(s)
 }
 
-// degradedState is the unhealthy-but-operational state of a simple worker,
-// entered when the verdict reports Degraded (a poll error or a Health verdict).
+// degradedState is the unhealthy-but-operational state of a simple worker. A
+// worker starts in it, and enters it when the verdict reports Degraded (a poll
+// error or a Health verdict).
 type degradedState[TConfig, TStatus any] struct {
 	helpers.RunningDegradedBase
 }

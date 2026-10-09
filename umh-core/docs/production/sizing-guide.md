@@ -54,7 +54,7 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 **Dynamic Resource Protection:**
 Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
 
-- **CPU Utilization**: A new bridge waits while CPU usage is above 70%. That is the rule without [CPU Health](./cpu-health.md). With CPU Health turned on (`USE_FSMV2_CPU=true`), usage alone no longer makes a new bridge wait. There, 70% is a last-resort fallback for machine headroom, used only when no CPU limit is set and the kernel publishes no PSI.
+- **CPU Utilization**: A new bridge waits while CPU usage is above 70%. That is the rule without [CPU Health](./cpu-health.md). With CPU Health turned on (`USE_FSMV2_CPU=true`), usage alone no longer makes a new bridge wait. There, 70% is a last-resort fallback for machine headroom, used only when no CPU limit is set and the kernel publishes no PSI. With CPU Health turned on, if UMH cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits.
 - **CPU Throttling**: A new bridge waits while the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
 - **Memory Usage**: A new bridge waits while memory use is above 80%
 - **Disk Usage**: A new bridge waits while disk use is above 85%
@@ -74,7 +74,7 @@ agent:
   enableResourceLimitBlocking: false  # Start bridges even when a resource is degraded or not proven yet, or the bridge limit is reached
 ```
 
-`true` is the default for new installs. A missing key in an existing `config.yaml` reads as `false`, so set the key explicitly to turn bridge admission on. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.
+`true` is the default, also when `config.yaml` does not contain the key. While it is `false`, the instance shows as degraded. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.
 
 While bridge admission is on, it keeps one bridge from overloading the others. If you need more bridges, either:
 - Increase CPU allocation (for containerized deployments)

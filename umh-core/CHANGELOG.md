@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.43]
+
 ### Improvements
 
 - Bridges now start only once CPU, memory and disk are proven healthy, also after a restart. A waiting bridge says why it waits and how to start bridges anyway in an emergency
@@ -9,6 +11,10 @@
 
 ### Fixes
 
+- With `USE_FSMV2_CPU=true`, CPU health now shows degraded instead of healthy when the instance cannot read a file it needs to measure the CPU
+- With `USE_FSMV2_CPU=true`, CPU health now shows degraded instead of healthy in the first seconds after a start, while it reads "starting up". New bridges wait until the CPU is proven healthy
+- An instance now shows as degraded while the emergency setting *Turn off bridge admission* (`agent.enableResourceLimitBlocking: false`) is in place. Instances created before v0.43.12 usually have `false` written in config.yaml and show as degraded after this update: set it to `true` in the Config File to turn bridge admission back on
+- A config.yaml without `agent.enableResourceLimitBlocking` now counts as `true`. This affects hand-written config.yaml files and instances upgrading straight from v0.43.11 or earlier: their new bridges wait until health is proven and a slot under the bridge limit is free
 - An instance now runs up to its full bridge limit. Before, it stopped one bridge short
 - With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets a limit of 5 bridges, not 155
 

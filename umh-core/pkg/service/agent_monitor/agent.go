@@ -23,6 +23,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -72,6 +73,8 @@ type ServiceInfo struct {
 
 	// Health: Overall, Latency, Release
 	OverallHealth models.HealthCategory `json:"overallHealth"`
+	// HealthMessage says why OverallHealth is degraded, when one reason is known.
+	HealthMessage string                `json:"healthMessage,omitempty"`
 	LatencyHealth models.HealthCategory `json:"latencyHealth"`
 	ReleaseHealth models.HealthCategory `json:"releaseHealth"`
 }
@@ -176,6 +179,11 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 		location[0] = "Unknown location" // fallback
 		status.Location = location
 		status.OverallHealth = models.Degraded
+	}
+
+	if !systemSnapshot.CurrentConfig.Agent.EnableResourceLimitBlocking {
+		status.OverallHealth = models.Degraded
+		status.HealthMessage = bridgeadmission.AdmissionOffReason
 	}
 
 	// Update last collected timestamp

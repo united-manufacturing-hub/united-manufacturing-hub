@@ -29,7 +29,7 @@ During development, all changelog entries go under `## Unreleased` at the top of
 2. Go to [Releases > Draft a new release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/new)
 3. Create a **new tag** with the format `v0.X.Y` (e.g., `v0.44.10`) — no `-pre.` suffix
 4. Target: `staging`
-5. Release name (title): use format `v0.X.Y - Short Descriptive Title` (e.g., `v0.44.12 - Bridge Activate and Memory Fixes`). The part after the dash becomes the changelog.umh.app entry title. The sync workflow will fail without this.
+5. Release name (title): the version only, e.g. `v0.44.12`. The changelog.umh.app entry uses it as its title.
 6. Body (optional): paste the CHANGELOG.md section for this version as a fallback. Automation will overwrite it with a formatted version including the changelog.umh.app link. If automation fails, the original body is preserved.
 7. Do NOT check "Set as a pre-release"
 8. Click **Publish release**

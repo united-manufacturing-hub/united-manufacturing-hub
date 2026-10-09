@@ -32,7 +32,11 @@ const BridgesPerCore = 5
 // Redpanda.
 const redpandaReservedCores = 1
 
-const emergencyHint = "In an emergency, you can start bridges anyway with the emergency setting Turn off bridge admission: set agent.enableResourceLimitBlocking: false in the instance's Config File. It takes effect without a restart. Set it back to true once the resource problem is fixed."
+// AdmissionOffReason is why the instance shows as degraded while bridge
+// admission is off.
+const AdmissionOffReason = "Bridge admission is off (agent.enableResourceLimitBlocking: false). New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit. To turn it back on, set agent.enableResourceLimitBlocking: true in the instance's Config File."
+
+const emergencyHint = "In an emergency, you can start bridges anyway with the emergency setting Turn off bridge admission: set agent.enableResourceLimitBlocking: false in the instance's Config File. It takes effect without a restart. While it is false, the instance shows as degraded. Set it back to true once the resource problem is fixed."
 
 // Health is what the caller knows about one resource.
 type Health int
