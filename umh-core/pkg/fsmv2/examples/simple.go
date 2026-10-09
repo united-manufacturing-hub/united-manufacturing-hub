@@ -90,7 +90,7 @@ package examples
 // Used in logs, metrics, and for referencing the worker.
 //
 // ### workerType (string, required)
-// The registered worker type. Must match a worker registered via RegisterWorkerType().
+// The registered worker type. Must match a worker type passed to register.Worker.
 // Worker types are auto-registered via blank imports (see below).
 //
 // ### location (array, optional)
@@ -121,17 +121,27 @@ package examples
 //
 // # Worker Registration via Blank Imports
 //
-// Workers are automatically registered when their package is imported:
+// Workers are automatically registered when their package is imported. Import
+// the worker package and its state package, as runner.go does:
 //
 //	import (
 //	    _ "github.com/.../fsmv2/workers/example/exampleparent"
-//	    _ "github.com/.../fsmv2/workers/example/example-child"
+//	    _ "github.com/.../fsmv2/workers/example/exampleparent/state"
 //	)
 //
-// Each worker package has an init() function that calls RegisterWorkerType():
+// The worker package's init() calls register.Worker:
 //
 //	func init() {
-//	    factory.RegisterWorkerType("parent", &ParentWorker{})
+//	    register.Worker[ExampleparentConfig, ExampleparentStatus, *ParentDependencies]("exampleparent",
+//	        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+//	            return NewParentWorker(id, logger, sr)
+//	        })
+//	}
+//
+// The state package's init() registers the initial state:
+//
+//	func init() {
+//	    fsmv2.RegisterInitialState("exampleparent", &StoppedState{})
 //	}
 //
 // The blank import (_) ensures the package's init() runs, registering the worker
@@ -141,40 +151,52 @@ package examples
 //
 // To create a new worker for testing:
 //
-// ## 1. Define Worker Structure
+// workers/example/examplechild/ is a complete worker to copy.
+//
+// ## 1. Define Config and Worker Structure
 //
 //	package myworker
 //
-//	import (
-//	    "github.com/.../fsmv2/worker"
-//	    "github.com/.../fsmv2/factory"
-//	)
+//	type MyworkerConfig struct {
+//	    config.BaseUserSpec
+//	    Setting1 string `json:"setting1" yaml:"setting1"`
+//	    Setting2 int    `json:"setting2" yaml:"setting2"`
+//	}
+//
+//	type MyworkerStatus struct {
+//	    Ready bool `json:"ready"`
+//	}
 //
 //	type MyWorker struct {
-//	    worker.BaseWorker
+//	    fsmv2.WorkerBase[MyworkerConfig, MyworkerStatus, register.NoDeps]
+//	}
+//
+//	func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (*MyWorker, error) {
+//	    w := &MyWorker{}
+//	    w.InitBase(id, logger, sr)
+//	    return w, nil
 //	}
 //
 // ## 2. Register Worker Type
 //
 //	func init() {
-//	    factory.RegisterWorkerType("myworker", &MyWorker{})
+//	    register.Worker[MyworkerConfig, MyworkerStatus, register.NoDeps]("myworker",
+//	        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+//	            return NewMyWorker(id, logger, sr)
+//	        })
 //	}
 //
-// ## 3. Define UserSpec
+// The state package registers the initial state with
+// fsmv2.RegisterInitialState("myworker", &StoppedState{}).
 //
-//	type MyWorkerUserSpec struct {
-//	    Setting1 string `json:"setting1" yaml:"setting1"`
-//	    Setting2 int    `json:"setting2" yaml:"setting2"`
-//	}
+// ## 3. Implement Worker Interface
 //
-// ## 4. Implement Worker Interface
+// WorkerBase supplies DeriveDesiredState, which parses userSpec.config into
+// MyworkerConfig, and GetInitialState. The worker implements
+// CollectObservedState and returns fsmv2.NewObservation(MyworkerStatus{...}).
+// The states in the state package decide transitions in Next().
 //
-// Workers must implement:
-//   - ParseUserSpec(config string) (interface{}, error)
-//   - GetChildSpecs(userSpec interface{}) ([]config.ChildSpec, error)
-//   - Lifecycle methods (Start, Stop, etc.)
-//
-// ## 5. Use in Scenario
+// ## 4. Use in Scenario
 //
 //	import _ "path/to/myworker"
 //
@@ -256,20 +278,21 @@ package examples
 //
 // 2. It looks up "exampleparent" worker type in the registry (registered by exampleparent's init())
 //
-// 3. It calls ParentWorker.ParseUserSpec() with config: "children_count: 2"
-//    This returns ExampleparentConfig{ChildrenCount: 2}
+// 3. It calls ParentWorker.DeriveDesiredState() with config: "children_count: 2"
+//    This returns a desired state whose Config is ExampleparentConfig{ChildrenCount: 2}
 //
-// 4. It calls ParentWorker.GetChildSpecs() which returns 2 ChildSpec entries:
-//    - name: "parent-1-child-1", workerType: "child"
-//    - name: "parent-1-child-2", workerType: "child"
+// 4. The parent's states call exampleparent.RenderChildren from Next(), which
+//    returns 2 ChildSpec entries:
+//    - name: "child-0", workerType: "examplechild"
+//    - name: "child-1", workerType: "examplechild"
 //
-// 5. For each child, it looks up "child" worker type and repeats the process
+// 5. For each child, it looks up the "examplechild" worker type and repeats the process
 //
 // 6. The final hierarchy:
 //    app-001 (ApplicationSupervisor)
 //      └─ parent-1 (ParentWorker)
-//          ├─ parent-1-child-1 (ChildWorker)
-//          └─ parent-1-child-2 (ChildWorker)
+//          ├─ child-0 (ChildWorker)
+//          └─ child-1 (ChildWorker)
 //
 // 7. Each worker's FSM independently manages its lifecycle, with state stored in
 //    the triangular store (Identity, Desired, Observed collections)
@@ -317,28 +340,30 @@ package examples
 //
 // ## Dynamic Child Creation
 //
-// Parents can dynamically create children based on runtime conditions:
+// Parents create children from their config. A package-level RenderChildren
+// function builds the ChildSpecs, and each state passes them to
+// fsmv2.Transition as the children argument:
 //
-//	func (w *ParentWorker) GetChildSpecs(userSpec interface{}) ([]config.ChildSpec, error) {
-//	    spec := userSpec.(*ExampleparentConfig)
-//	    children := make([]config.ChildSpec, spec.ChildrenCount)
-//
-//	    for i := 0; i < spec.ChildrenCount; i++ {
-//	        children[i] = config.ChildSpec{
-//	            Name:       fmt.Sprintf("child-%d", i+1),
-//	            WorkerType: "child",
-//	        }
+//	func RenderChildren(cfg ExampleparentConfig, enabled bool) ([]config.ChildSpec, error) {
+//	    specs := make([]config.ChildSpec, 0, cfg.ChildrenCount)
+//	    for i := range cfg.ChildrenCount {
+//	        specs = append(specs, config.ChildSpec{
+//	            Name:       fmt.Sprintf("child-%d", i),
+//	            WorkerType: cfg.GetChildWorkerType(),
+//	            UserSpec:   config.UserSpec{Config: cfg.ChildConfig},
+//	            Enabled:    enabled,
+//	        })
 //	    }
-//
-//	    return children, nil
+//	    return specs, nil
 //	}
 //
-// Scenarios to create variable numbers of workers based on configuration.
+// workers/example/exampleparent/children.go has the full version. Scenarios
+// use this to create variable numbers of workers based on configuration.
 
 // SimpleScenario demonstrates the minimal FSM v2 hierarchy: one parent with two children.
 //
 // Hierarchy Created:
-//   - 1 parent worker (workerType: "parent")
+//   - 1 parent worker (workerType: "exampleparent")
 //   - 2 child workers (dynamically created by parent based on children_count: 2)
 //
 // This scenario tests:
@@ -354,7 +379,7 @@ package examples
 //
 // Expected Behavior:
 //  1. ApplicationSupervisor creates parent-1
-//  2. parent-1 creates parent-1-child-1 and parent-1-child-2
+//  2. parent-1 creates child-0 and child-1
 //  3. All workers transition through FSM states (starting → running)
 //  4. Workers persist state to triangular store
 //  5. On shutdown, all workers transition to stopped

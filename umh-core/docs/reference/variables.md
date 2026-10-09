@@ -13,7 +13,7 @@ UMH Core uses a three-tier variable system for protocol converter templates that
 ## Variable Precedence
 
 Variables follow a clear precedence hierarchy:
-1. **User Variables** (highest priority) - Override all others when flattened by VariableBundle
+1. **User Variables** - Flattened to the top level. Some names are reserved: see [User-Defined Variables](#user-defined-variables).
 2. **Internal Variables** - System-generated values
 3. **Global Variables** - Fleet-wide defaults (**NOT YET IMPLEMENTED**)
 
@@ -102,7 +102,7 @@ The following variables should be replaced in your configurations:
 
 ## User-Defined Variables
 
-You can define custom variables in the `variables:` section of your configuration. These are flattened to top-level access and override any internal variables with the same name.
+You can define custom variables in the `variables:` section of your configuration. These are flattened to top-level access. Do not name a variable `location`, `location_path`, `historian`, `global` or `internal`. umh-core reserves these names for its own values.
 
 **Common patterns:**
 - `{{ .SCAN_RATE }}` - Polling intervals

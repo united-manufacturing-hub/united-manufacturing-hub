@@ -205,6 +205,9 @@ func (s *Handler) notify() {
 				},
 				SenderEmail: email,
 			}
+			// A full outbound channel drops this status message. The
+			// Management Console then shows stale status while data keeps
+			// flowing. The same holds for the FSMv2 channel below.
 			select {
 			case s.gatekeeperOutboundChannel <- msg:
 				// Successfully sent to gatekeeper

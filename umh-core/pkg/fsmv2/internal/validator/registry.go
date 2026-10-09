@@ -439,8 +439,8 @@ Any other value (like "connected", "starting") confuses DESIRED state
 and unpredictable behavior.
 
 NOTE: This is validated BOTH at test-time (AST checks in worker.go DeriveDesiredState)
-AND at runtime (user YAML config validation). Runtime errors are user-facing
-and follow UX_STANDARDS.md Error Excellence - provide actionable guidance.`,
+AND at runtime (user YAML config validation). Runtime errors are user-facing.
+They name the invalid value, list the allowed values, and say what the user changes.`,
 		CorrectCode: `// Correct: use constants in DeriveDesiredState
 return config.DesiredState{
     State: config.DesiredStateRunning,  // Use constants!

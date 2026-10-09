@@ -258,8 +258,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Release lock before graceful shutdown operations
 	s.mu.Unlock()
 
-	// Sample the cascaded drain budget once, at entry (pkg/fsmv2/CLAUDE.md
-	// §"Graceful Shutdown Cascading"): base × subtree height, so a leaf keeps
+	// Sample the cascaded drain budget once, at entry (doc.go, "Graceful
+	// shutdown budget"): base × subtree height, so a leaf keeps
 	// the base budget and every level above adds one base. Sampling before
 	// Phase 2 matters twice over: the synchronous child drains below spend
 	// from this same budget (Phase 3 arms only the remainder, so per-level

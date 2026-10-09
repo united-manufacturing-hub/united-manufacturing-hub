@@ -29,6 +29,8 @@ const ResetTransportActionName = "reset_transport"
 // Resolves stale TCP connections, DNS caching, corrupted connection pool, or TLS issues.
 // Idempotent: creates fresh HTTP client while preserving JWT tokens.
 // After reset, increments resetGeneration to signal children to clear pending buffers.
+// Only this parent action resets the transport. The push and pull children
+// detect the reset with CheckAndClearOnReset; they never call Reset themselves.
 type ResetTransportAction struct{}
 
 func NewResetTransportAction() *ResetTransportAction {

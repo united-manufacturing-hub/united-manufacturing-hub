@@ -82,19 +82,21 @@ See also [configuration-reference.md](configuration-reference.md "mention")
 
 ### /logs
 
+Every process that S6 supervises writes to its own directory, `/data/logs/<service>/`. The agent writes to `/data/logs/umh-core/`. The read flow of a bridge writes to `/data/logs/benthos-dataflow-read-protocolconverter-<bridge name>/`. Each log line starts with an ISO 8601 timestamp in the container's local time.
+
 | File/dir                                 | What it is for                                                                                 | When it appears                                                                                                     |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **`current`**                            | The file S6 is _actively_ appending log lines to. Keep an eye on this one with `tail -f`.      | Always – it is recreated immediately after every rotation. ([Skarnet](https://skarnet.org/software/s6/s6-log.html)) |
 | **`previous`**                           | A temporary name used _during_ a rotation; disappears once rotation completes.                 | Only while a rotation is in flight. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))                        |
-| **`@<timestamp>.s`**                     | An archived log that was rotated _cleanly_. The timestamp is the moment the rotation occurred. | After every successful rotation. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))                           |
+| **`@<timestamp>.s`**                     | An archived log that was rotated _cleanly_. The timestamp is the moment the rotation occurred, in TAI64N format. | After every successful rotation. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))                           |
 | **`@<timestamp>.u`**                     | A “unfinished” archive – it was the `current` file when the container was killed.              | Only after an un-clean shutdown. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))                           |
 | `lock`, `state`, `processed`, `newstate` | Book-keeping files S6-log uses while rotating or while a post-processor runs.                  | Internal – you normally ignore them. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))                       |
 
 #### The life-cycle in practice
 
 1. **Normal running** – all services write to their own `current` file.
-2. **Size hits 1 MB** – S6 atomically renames `current` to a name such as `@20250530T131218Z.s`, then immediately creates a fresh empty `current`. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))
-3. **Prune** – if the directory now has > 20 archives, the oldest ones are deleted so the newest 20 remain. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))
+2. **Size hits the limit** – S6 atomically renames `current` to `@<timestamp>.s`, then immediately creates a fresh empty `current`. The agent's log rotates at 10 MB. Other services rotate at a size umh-core sets per service, or at s6-log's default of 99,999 bytes. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))
+3. **Prune** – S6 deletes the oldest archives. The agent keeps the newest 5, and every other service keeps the newest 20. ([Skarnet](https://skarnet.org/software/s6/s6-log.html))
 4.  **You read logs** – use:
 
     ```bash
@@ -102,7 +104,7 @@ See also [configuration-reference.md](configuration-reference.md "mention")
     tail -f /data/logs/<service>/current
 
     # inspect an old file (the '@…s' ones are plain text)
-    less /data/logs/<service>/@20250530T131218Z.
+    less /data/logs/<service>/@<timestamp>.s
     ```
 
 ### /redpanda

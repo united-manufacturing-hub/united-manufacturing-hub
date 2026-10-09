@@ -22,7 +22,7 @@ type S6ServiceConfig struct {
 	ConfigFiles map[string]string `yaml:"configFiles"`
 	Command     []string          `yaml:"command"`
 	MemoryLimit int64             `yaml:"memoryLimit"` // 0 means no memory limit, see also https://skarnet.org/software/s6/s6-softlimit.html
-	LogFilesize int64             `yaml:"logFilesize"` // 0 means default (1MB). Setting smaller values (like 16KB) significantly improves performance for services that regularly read logs. Each log read/parse operation is proportional to file size, so keep this small for monitoring services. Cannot be set lower than 4096 or higher than 268435455, see also https://skarnet.org/software/s6/s6-log.html
+	LogFilesize int64             `yaml:"logFilesize"` // 0 means s6-log's default (99999 bytes). Setting smaller values (like 16KB) significantly improves performance for services that regularly read logs. Each log read/parse operation is proportional to file size, so keep this small for monitoring services. Cannot be set lower than 4096 or higher than 268435455, see also https://skarnet.org/software/s6/s6-log.html
 }
 
 // Equal checks if two S6ServiceConfigs are equal.
