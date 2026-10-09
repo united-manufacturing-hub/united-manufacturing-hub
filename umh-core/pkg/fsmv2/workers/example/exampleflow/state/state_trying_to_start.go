@@ -15,23 +15,10 @@
 package state
 
 import (
-	"context"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleflow"
 )
-
-// StartActionName names the flow's start action.
-const StartActionName = "start"
-
-// start marks the flow's start. The flow's actual work — rendering its
-// template — happens in WorkerBase during the derive, so the action itself
-// only observes the start.
-func start(_ context.Context, _ register.NoDeps) error {
-	return nil
-}
 
 // TryingToStartState is a transitional state on the way to running.
 type TryingToStartState struct {
@@ -48,8 +35,13 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			"stop required: "+snap.StopReason(), nil)
 	}
 
+	if snap.Status.Started {
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil,
+			"The flow has started, transitioning to running", nil)
+	}
+
 	return fsmv2.Transition(s, fsmv2.SignalNone,
-		fsmv2.SimpleAction[register.NoDeps](StartActionName, start),
+		fsmv2.SimpleAction[*exampleflow.ExampleflowDependencies](exampleflow.StartActionName, exampleflow.Start),
 		"The flow is starting", nil)
 }
 
