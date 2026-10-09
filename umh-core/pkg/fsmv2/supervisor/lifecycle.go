@@ -728,13 +728,49 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 	return nil
 }
 
-// retryPendingReadds retries the re-adds a restart left pending on a config
-// error, once per tick. It creates a fresh worker through the factory and
-// adds it; while the config is still broken, AddWorker fails with the same
-// config error and the re-add stays pending. On the first successful derive
-// the worker is back and the pending entry is dropped. The caller must have
-// observed zero workers first: a retry while a worker exists would race the
-// tick loop's own work. Returns true when it re-added a worker.
+// startWorkerProcesses starts the worker's collector and executor when the
+// supervisor is running, so a worker added outside the supervisor's own
+// startup path runs the same way. A collector start failure is logged and
+// the executor still starts.
+func (s *Supervisor[TObserved, TDesired]) startWorkerProcesses(workerID string, identity deps.Identity) {
+	supervisorCtx, started := s.getStartedContext()
+	if !started {
+		return
+	}
+
+	s.mu.RLock()
+
+	workerCtx, exists := s.workers[workerID]
+
+	var collector *collection.Collector[TObserved]
+
+	var executor *execution.ActionExecutor
+
+	if exists && workerCtx != nil {
+		collector = workerCtx.collector
+		executor = workerCtx.executor
+	}
+
+	s.mu.RUnlock()
+
+	if collector != nil {
+		if err := collector.Start(supervisorCtx); err != nil {
+			s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "restart_collector_start_failed")
+		}
+	}
+
+	if executor != nil {
+		executor.Start(supervisorCtx)
+	}
+}
+
+// retryPendingReadds retries the re-adds a restart left pending on a failed
+// add, once per tick. It creates a fresh worker through the factory and adds
+// it; while the add keeps failing, the entry stays pending and every tick
+// retries it. On the first successful add the worker is back and the pending
+// entry is dropped. The caller must have observed zero workers first: a
+// retry while a worker exists would race the tick loop's own work. Returns
+// true when it re-added a worker.
 func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context) bool {
 	s.mu.Lock()
 
@@ -754,9 +790,6 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context
 		break
 	}
 
-	// Keep the entry until the retry succeeds, so a failing retry is retried
-	// again on the next tick.
-	delete(s.pendingReadds, workerID)
 	s.mu.Unlock()
 
 	newWorker, err := factory.NewWorkerByType(s.workerType, identity, s.baseLogger, s.store, s.deps)
@@ -771,50 +804,20 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
 			s.warnConfigErrorOnce(cfgErr)
-
-			s.mu.Lock()
-			s.pendingReadds[workerID] = identity
-			s.mu.Unlock()
-
-			return false
+		} else {
+			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "worker_restart_retry_add_failed",
+				deps.String("target_worker_id", workerID))
 		}
 
-		s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "worker_restart_retry_add_failed",
-			deps.String("target_worker_id", workerID))
-
+		// The entry stays, so the next tick retries the re-add.
 		return false
 	}
 
-	if s.started.Load() {
-		// Start the collector and executor the same way handleWorkerRestart
-		// starts a re-added worker.
-		if supervisorCtx, started := s.getStartedContext(); started {
-			s.mu.RLock()
+	s.mu.Lock()
+	delete(s.pendingReadds, workerID)
+	s.mu.Unlock()
 
-			newWorkerCtx, exists := s.workers[workerID]
-
-			var collector *collection.Collector[TObserved]
-
-			var executor *execution.ActionExecutor
-
-			if exists && newWorkerCtx != nil {
-				collector = newWorkerCtx.collector
-				executor = newWorkerCtx.executor
-			}
-
-			s.mu.RUnlock()
-
-			if collector != nil {
-				if err := collector.Start(supervisorCtx); err != nil {
-					s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "restart_collector_start_failed")
-				}
-			}
-
-			if executor != nil {
-				executor.Start(supervisorCtx)
-			}
-		}
-	}
+	s.startWorkerProcesses(workerID, identity)
 
 	s.logger.Info("worker_restart_retry_added",
 		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
@@ -907,16 +910,18 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// 4. Add new worker to supervisor (registers worker in the workers map)
 	if err := s.AddWorker(identity, newWorker); err != nil {
+		// The old worker is gone and the re-add failed, so the worker would
+		// be lost. Remember the re-add and retry it on every tick until it
+		// succeeds.
+		s.mu.Lock()
+		s.pendingReadds[workerID] = identity
+		s.mu.Unlock()
+
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
-			// The old worker is gone and the replacement's config is broken,
-			// so the worker would be lost. Remember the re-add and retry it on
-			// every tick until the config renders.
+			// A config error was already warned once; failing the restart
+			// again would only duplicate the warning.
 			s.warnConfigErrorOnce(cfgErr)
-
-			s.mu.Lock()
-			s.pendingReadds[workerID] = identity
-			s.mu.Unlock()
 
 			return nil
 		}
@@ -925,17 +930,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	}
 
 	// 5. Start collector and executor if supervisor is running
-	if supervisorCtx, started := s.getStartedContext(); started {
-		s.mu.RLock()
-
-		newWorkerCtx, exists := s.workers[workerID]
-
-		s.mu.RUnlock()
-
-		if exists && newWorkerCtx != nil {
-			s.startWorker(supervisorCtx, identity.HierarchyPath, newWorkerCtx.collector, newWorkerCtx.executor, "restart_collector_start_failed")
-		}
-	}
+	s.startWorkerProcesses(workerID, identity)
 
 	// 6. Reset health counters for fresh start
 	s.mu.Lock()
