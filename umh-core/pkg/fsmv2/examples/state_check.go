@@ -54,6 +54,16 @@ var validWorkerStates = map[string]map[string]bool{
 		"TryingToStop": true, "Stopped": true,
 		"unknown": true,
 	},
+	"examplebridge": {
+		"TryingToStart": true, "Running": true,
+		"TryingToStop": true, "Stopped": true,
+		"unknown": true,
+	},
+	"exampleflow": {
+		"TryingToStart": true, "Running": true,
+		"Stopped": true,
+		"unknown": true,
+	},
 	"examplechild": {
 		"TryingToConnect": true, "Connected": true, "Disconnected": true,
 		"TryingToStop": true, "Stopped": true,
