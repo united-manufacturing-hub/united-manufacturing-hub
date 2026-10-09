@@ -38,22 +38,23 @@ type Ref struct {
 }
 
 // Registry holds the child specs recorded by Upsert, keyed by Ref, and the
-// variable bundle recorded by SetVariables. Upsert and Delete are the only
-// spec writers; every read accessor returns a copy, so no caller can mutate
-// the stored state.
+// config values recorded by SetConfigVariables. Upsert and Delete are the
+// only spec writers; every read accessor returns a copy, so no caller can
+// mutate the stored state.
 type Registry struct {
-	specs map[Ref]config.ChildSpec
-	vars  config.VariableBundle
-	mu    sync.RWMutex
+	specs        map[Ref]config.ChildSpec
+	configValues map[string]any
+	mu           sync.RWMutex
 }
 
-// Variables returns a copy of the variable bundle recorded by SetVariables.
-// The application worker puts it on every child spec it renders.
-func (r *Registry) Variables() config.VariableBundle {
+// ConfigVariables returns a deep copy of the config values recorded by
+// SetConfigVariables. The application worker puts them on every child spec
+// it renders, as the child's own config section.
+func (r *Registry) ConfigVariables() map[string]any {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	return r.vars.Clone()
+	return config.DeepCloneMap(r.configValues)
 }
 
 // Lookup returns a copy of the spec recorded for ref, and whether it exists.
@@ -193,13 +194,22 @@ func (w *Writer) Upsert(ref Ref, cfg map[string]any) error {
 	return nil
 }
 
-// SetVariables replaces the variable bundle every child of the application
-// receives, and stores a copy.
-func (w *Writer) SetVariables(vars config.VariableBundle) {
+// SetConfigVariables replaces the config values every child of the
+// application receives as its own config section. A value that still
+// contains a placeholder is rejected as a *config.ConfigError naming its
+// path under the "config" prefix, and nothing is stored. A valid map is
+// stored as a deep copy, so the caller keeps ownership of its own map.
+func (w *Writer) SetConfigVariables(values map[string]any) error {
+	if err := config.CheckConfigValues(values); err != nil {
+		return err
+	}
+
 	w.registry.mu.Lock()
 	defer w.registry.mu.Unlock()
 
-	w.registry.vars = vars.Clone()
+	w.registry.configValues = config.DeepCloneMap(values)
+
+	return nil
 }
 
 // Delete removes the child spec recorded for ref from the shared registry.

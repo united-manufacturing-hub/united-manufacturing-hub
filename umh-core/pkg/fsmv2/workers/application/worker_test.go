@@ -90,7 +90,7 @@ children:
 		})
 	})
 
-	Describe("CollectObservedState with the registry's variable bundle", func() {
+	Describe("CollectObservedState with the registry's config values", func() {
 		var w *dynamicchildren.Writer
 
 		BeforeEach(func() {
@@ -106,31 +106,29 @@ children:
 			return obs.(fsmv2.Observation[snapshot.ApplicationStatus]).Status
 		}
 
-		It("reports the variable bundle the registry holds", func() {
-			vars := config.VariableBundle{
-				User:   map[string]any{"IP": "10.0.0.1"},
-				Global: map[string]any{"cluster_id": "c1"},
+		It("reports the config values the registry holds", func() {
+			values := map[string]any{
+				"historian": map[string]any{"timescale": map[string]any{"host": "db"}},
 			}
-			w.SetVariables(vars)
+			Expect(w.SetConfigVariables(values)).To(Succeed())
 
 			status := collectStatus()
-			Expect(status.Variables).NotTo(BeNil())
-			Expect(*status.Variables).To(Equal(vars))
+			Expect(status.ConfigValues).To(Equal(values))
 		})
 
-		It("leaves Variables out of the observation when the registry holds none", func() {
+		It("leaves ConfigValues out of the observation when the registry holds none", func() {
 			status := collectStatus()
 			Expect(status.RegistryConfigured).To(BeTrue())
-			Expect(status.Variables).To(BeNil())
+			Expect(status.ConfigValues).To(BeNil())
 
-			// A dynamic child's spec also serialises a "variables" key, so the
-			// check must look at the observation's own top-level keys.
+			// A dynamic child's spec also serialises a "config_values" key, so
+			// the check must look at the observation's own top-level keys.
 			raw, err := json.Marshal(status)
 			Expect(err).ToNot(HaveOccurred())
 
 			var m map[string]any
 			Expect(json.Unmarshal(raw, &m)).To(Succeed())
-			Expect(m).NotTo(HaveKey("variables"))
+			Expect(m).NotTo(HaveKey("config_values"))
 		})
 	})
 

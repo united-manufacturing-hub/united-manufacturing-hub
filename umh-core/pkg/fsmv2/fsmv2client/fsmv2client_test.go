@@ -17,6 +17,7 @@ package fsmv2client
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -68,16 +69,19 @@ func TestGetReturnsErrorOnNilStateReader(t *testing.T) {
 	}
 }
 
-// TestSetVariablesPassesThroughToWriter verifies the FSMv2Client delegates
-// SetVariables to the Writer it wraps.
-func TestSetVariablesPassesThroughToWriter(t *testing.T) {
+// TestSetConfigVariablesPassesThroughToWriter verifies the FSMv2Client
+// delegates SetConfigVariables to the Writer it wraps.
+func TestSetConfigVariablesPassesThroughToWriter(t *testing.T) {
 	w := dynamicchildren.NewWriter()
 	client := NewFSMv2Client(w, nil)
 
-	client.SetVariables(config.VariableBundle{User: map[string]any{"IP": "10.0.0.1"}})
+	values := map[string]any{"historian": map[string]any{"timescale": map[string]any{"host": "db"}}}
+	if err := client.SetConfigVariables(values); err != nil {
+		t.Fatalf("client.SetConfigVariables returned error: %v", err)
+	}
 
-	if got := w.Registry().Variables().User["IP"]; got != "10.0.0.1" {
-		t.Fatalf("registry User[IP] = %v, want 10.0.0.1", got)
+	if got := w.Registry().ConfigVariables(); !reflect.DeepEqual(got, values) {
+		t.Fatalf("registry ConfigVariables() = %v, want %v", got, values)
 	}
 }
 

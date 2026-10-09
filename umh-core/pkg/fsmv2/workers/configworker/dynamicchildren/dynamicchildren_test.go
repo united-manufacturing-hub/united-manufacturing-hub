@@ -16,6 +16,7 @@ package dynamicchildren
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -318,47 +319,84 @@ func TestUpsertRejectsNameReuseAcrossWorkerTypes(t *testing.T) {
 	}
 }
 
-// TestSetVariablesIsReadBackAsACopy verifies the registry stores the variable
-// bundle SetVariables records as a copy and returns a copy: neither the
-// caller that recorded the bundle nor a reader that got one back can mutate
-// what the registry holds, and a second SetVariables replaces the bundle
-// instead of merging into it.
-func TestSetVariablesIsReadBackAsACopy(t *testing.T) {
+// TestSetConfigVariablesRejectsAPlaceholder verifies SetConfigVariables
+// rejects a value that still contains a placeholder with a *config.ConfigError
+// naming the value's path under the "config" prefix, and stores nothing: the
+// values the registry already held survive the rejected call unchanged.
+func TestSetConfigVariablesRejectsAPlaceholder(t *testing.T) {
 	w := NewWriter()
 
-	if got := w.Registry().Variables(); len(got.User) > 0 || len(got.Global) > 0 {
-		t.Fatalf("new writer's Variables() = %+v, want no User and no Global keys", got)
+	stored := map[string]any{"historian": map[string]any{"timescale": map[string]any{"host": "db"}}}
+	if err := w.SetConfigVariables(stored); err != nil {
+		t.Fatalf("SetConfigVariables(%v) returned error: %v", stored, err)
 	}
 
-	vars := config.VariableBundle{
-		User:   map[string]any{"IP": "10.0.0.1"},
-		Global: map[string]any{"cluster_id": "c1"},
+	rejected := map[string]any{
+		"historian": map[string]any{
+			"timescale": map[string]any{"password": "{{ .x }}"},
+		},
 	}
-	w.SetVariables(vars)
-	vars.User["IP"] = "changed-by-caller"
+	err := w.SetConfigVariables(rejected)
 
-	got := w.Registry().Variables()
-	if got.User["IP"] != "10.0.0.1" {
-		t.Errorf("User[IP] = %v, want 10.0.0.1 after the caller mutated its own map", got.User["IP"])
+	var cfgErr *config.ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Fatalf("SetConfigVariables returned %v, want a *config.ConfigError", err)
 	}
-	if got.Global["cluster_id"] != "c1" {
-		t.Errorf("Global[cluster_id] = %v, want c1", got.Global["cluster_id"])
-	}
-
-	got.User["IP"] = "changed-by-reader"
-	if again := w.Registry().Variables(); again.User["IP"] != "10.0.0.1" {
-		t.Errorf("User[IP] = %v on second read, want 10.0.0.1: Variables() must return a copy", again.User["IP"])
+	if cfgErr.Field != "config.historian.timescale.password" {
+		t.Errorf("ConfigError.Field = %q, want %q", cfgErr.Field, "config.historian.timescale.password")
 	}
 
-	w.SetVariables(config.VariableBundle{User: map[string]any{"PORT": "502"}})
-	replaced := w.Registry().Variables()
-	if _, ok := replaced.User["IP"]; ok {
-		t.Errorf("User still holds IP after the second SetVariables, want the bundle replaced")
+	if got := w.Registry().ConfigVariables(); !reflect.DeepEqual(got, stored) {
+		t.Errorf("registry holds %v after the rejected call, want the previously stored %v", got, stored)
 	}
-	if replaced.User["PORT"] != "502" {
-		t.Errorf("User[PORT] = %v, want 502", replaced.User["PORT"])
+}
+
+// TestSetConfigVariablesRoundTripsThroughConfigVariables verifies the registry
+// stores the values SetConfigVariables records as a deep copy and returns a
+// deep copy: neither the caller that recorded the values nor a reader that got
+// them back can mutate what the registry holds, and a second
+// SetConfigVariables replaces the values instead of merging into them.
+func TestSetConfigVariablesRoundTripsThroughConfigVariables(t *testing.T) {
+	w := NewWriter()
+
+	if got := w.Registry().ConfigVariables(); got != nil {
+		t.Fatalf("new writer's ConfigVariables() = %v, want nil", got)
 	}
-	if len(replaced.Global) > 0 {
-		t.Errorf("Global = %v after the second SetVariables, want empty", replaced.Global)
+
+	values := map[string]any{
+		"historian": map[string]any{"timescale": map[string]any{"host": "db"}},
+	}
+	if err := w.SetConfigVariables(values); err != nil {
+		t.Fatalf("SetConfigVariables returned error: %v", err)
+	}
+
+	values["historian"].(map[string]any)["timescale"].(map[string]any)["host"] = "changed-by-caller"
+
+	got := w.Registry().ConfigVariables()
+	if !reflect.DeepEqual(got, map[string]any{
+		"historian": map[string]any{"timescale": map[string]any{"host": "db"}},
+	}) {
+		t.Errorf("ConfigVariables() = %v, want the recorded values after the caller mutated its own map", got)
+	}
+
+	got["historian"].(map[string]any)["timescale"].(map[string]any)["host"] = "changed-by-reader"
+
+	if again := w.Registry().ConfigVariables(); !reflect.DeepEqual(again, map[string]any{
+		"historian": map[string]any{"timescale": map[string]any{"host": "db"}},
+	}) {
+		t.Errorf("ConfigVariables() = %v on second read, want the recorded values: ConfigVariables must return a copy", again)
+	}
+
+	replacement := map[string]any{"agent": map[string]any{"name": "edge"}}
+	if err := w.SetConfigVariables(replacement); err != nil {
+		t.Fatalf("second SetConfigVariables returned error: %v", err)
+	}
+
+	replaced := w.Registry().ConfigVariables()
+	if _, ok := replaced["historian"]; ok {
+		t.Errorf("values still hold historian after the second SetConfigVariables, want the values replaced")
+	}
+	if !reflect.DeepEqual(replaced, replacement) {
+		t.Errorf("ConfigVariables() = %v after the second SetConfigVariables, want %v", replaced, replacement)
 	}
 }

@@ -145,8 +145,8 @@ func (u UserSpec) Clone() UserSpec {
 	return UserSpec{
 		Config:       u.Config,
 		Variables:    u.Variables.Clone(),
-		Names:        deepCloneMap(u.Names),
-		ConfigValues: deepCloneMap(u.ConfigValues),
+		Names:        DeepCloneMap(u.Names),
+		ConfigValues: DeepCloneMap(u.ConfigValues),
 	}
 }
 

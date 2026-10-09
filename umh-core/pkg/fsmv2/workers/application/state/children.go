@@ -44,8 +44,11 @@ const kernelWorkerType = "configworker"
 // real need, honor snap.Status.DynamicChildren's Enabled here instead of
 // overwriting it.
 //
-// Every emitted child also gets the registry's variable bundle. When an own
-// child sets the same key, the child's value is kept.
+// Every emitted child except the config worker itself gets the registry's
+// config values as its own config section (UserSpec.ConfigValues), as a
+// deep copy, for templates written as {{ .config.* }}. A child's own
+// Variables is left exactly as it declared: the registry's values no
+// longer merge into them.
 func renderUnion(snap fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]) []config.ChildSpec {
 	union := make([]config.ChildSpec, 0, 1+len(snap.Status.DynamicChildren)+len(snap.ChildrenSpecs))
 
@@ -72,8 +75,8 @@ func renderUnion(snap fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.
 		seen[spec.Name] = struct{}{}
 		spec.Enabled = true
 
-		if snap.Status.Variables != nil {
-			spec.UserSpec.Variables = config.Merge(*snap.Status.Variables, spec.UserSpec.Variables)
+		if spec.WorkerType != kernelWorkerType {
+			spec.UserSpec.ConfigValues = config.DeepCloneMap(snap.Status.ConfigValues)
 		}
 
 		deduped = append(deduped, spec)
