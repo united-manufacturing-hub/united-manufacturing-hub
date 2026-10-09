@@ -38,7 +38,16 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			"stop required: "+snap.StopReason(), []config.ChildSpec{})
 	}
 
-	specs, err := examplebridge.RenderFlows(snap.Identity.Name, snap.Config)
+	// The flows are named after the bridge, so two bridges' flow children
+	// stay apart in the child registry. The config's own name field is the
+	// name the user gave the bridge; the worker id stands in when a bridge
+	// carries no name.
+	bridge := snap.Config.Name
+	if bridge == "" {
+		bridge = snap.Identity.ID
+	}
+
+	specs, err := examplebridge.RenderFlows(bridge, snap.Config)
 	if err != nil {
 		// RenderFlows fails only when yaml cannot encode a flow template,
 		// which the templates' own type forbids. Keep the children from the
