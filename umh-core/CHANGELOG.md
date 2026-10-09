@@ -9,6 +9,7 @@
 
 ### Improvements
 
+- FSMv2 (preview, behind the FSMv2 feature flags): a worker now renders only the config fields it marks as templates. A `{{` in any other field is rejected when the config loads, with an error that names the field. A template names values by where they sit (`{{ .connection.host }}`, `{{ .variables.SLAVE_ID }}`, `{{ .config.historian.timescale.host }}`), and `{{ .IP }}`, `{{ .PORT }}` and `{{ .historian.timescale.* }}` keep working. A mistake in a template is logged once as a `config_error` warning that names the worker and the field. It holds back only that worker, and a running worker keeps its last good config. FSMv1 protocol converters are unchanged and still read their variables as top-level names
 - A bridge refused because the instance is short of resources now says which resource and why, such as the CPU health message, instead of "System in degraded state". Which bridges are refused is unchanged
 - Routine start-up and restart messages from umh-core's internal components are now DEBUG instead of INFO, which makes state changes, warnings and errors easier to spot
 
