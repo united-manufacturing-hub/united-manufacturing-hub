@@ -160,10 +160,14 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	pendingRestart     map[string]bool
 	restartRequestedAt map[string]time.Time
 	pendingReadds      map[string]deps.Identity
-	healthChecker      *InfrastructureHealthChecker
-	panicTracker       *panicRecovery
-	actionExecutor     *execution.ActionExecutor
-	ctxCancel          context.CancelFunc
+	// pendingReaddSentrySent remembers which pending re-adds already sent
+	// their one Sentry error, so later retries of the same entry log at
+	// Debug instead of spamming Sentry every tick.
+	pendingReaddSentrySent map[string]bool
+	healthChecker          *InfrastructureHealthChecker
+	panicTracker           *panicRecovery
+	actionExecutor         *execution.ActionExecutor
+	ctxCancel              context.CancelFunc
 	// tickLoopDone is closed when the tickLoop goroutine exits. Stored here so
 	// Shutdown() can wait for tickLoop to fully exit in Phase 4 after ctxCancel().
 	// Nil when Start() has not been called (StartAsChild supervisors have no tickLoop).
@@ -303,26 +307,27 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 	}
 
 	return &Supervisor[TObserved, TDesired]{
-		workerType:         cfg.WorkerType,
-		workers:            make(map[string]*WorkerContext[TObserved, TDesired]),
-		lockManager:        lm,
-		mu:                 lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
-		ctxMu:              lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
-		store:              cfg.Store,
-		logger:             cfg.Logger,
-		baseLogger:         cfg.Logger,
-		tickInterval:       tickInterval,
-		freshnessChecker:   freshnessChecker,
-		children:           make(map[string]SupervisorInterface),
-		pendingRemoval:     make(map[string]bool),
-		pendingRestart:     make(map[string]bool),
-		restartRequestedAt: make(map[string]time.Time),
-		pendingReadds:      make(map[string]deps.Identity),
-		createdAt:          time.Now(),
-		parentID:           "",
-		healthChecker:      NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
-		panicTracker:       newPanicRecovery(DefaultPanicEscalationWindow, DefaultMaxTickPanics),
-		actionExecutor:     execution.NewActionExecutor(10, cfg.WorkerType, deps.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
+		workerType:             cfg.WorkerType,
+		workers:                make(map[string]*WorkerContext[TObserved, TDesired]),
+		lockManager:            lm,
+		mu:                     lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
+		ctxMu:                  lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
+		store:                  cfg.Store,
+		logger:                 cfg.Logger,
+		baseLogger:             cfg.Logger,
+		tickInterval:           tickInterval,
+		freshnessChecker:       freshnessChecker,
+		children:               make(map[string]SupervisorInterface),
+		pendingRemoval:         make(map[string]bool),
+		pendingRestart:         make(map[string]bool),
+		restartRequestedAt:     make(map[string]time.Time),
+		pendingReadds:          make(map[string]deps.Identity),
+		pendingReaddSentrySent: make(map[string]bool),
+		createdAt:              time.Now(),
+		parentID:               "",
+		healthChecker:          NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
+		panicTracker:           newPanicRecovery(DefaultPanicEscalationWindow, DefaultMaxTickPanics),
+		actionExecutor:         execution.NewActionExecutor(10, cfg.WorkerType, deps.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
 			staleThreshold:     staleThreshold,
