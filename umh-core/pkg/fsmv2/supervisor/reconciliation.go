@@ -796,6 +796,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// desired is fsmv2.DesiredState interface - workers return their typed DesiredState
 	var desired fsmv2.DesiredState
 
+	// deriveConfigErr is set when the derive failed with a config error and
+	// the tick continues below on the desired state derived from the last
+	// good config. It is returned after the tick's work, so callers keep
+	// seeing the error they see today.
+	var deriveConfigErr error
+
 	if lastHash == currentHash && cachedState != nil {
 		// Cache hit - reuse previous result
 		desired = cachedState
@@ -813,100 +819,127 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 		if err != nil {
 			var cfgErr *config.ConfigError
-			if errors.As(err, &cfgErr) {
+
+			isConfigErr := errors.As(err, &cfgErr)
+
+			if isConfigErr {
 				s.warnConfigErrorOnce(cfgErr.Error())
 			} else {
 				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "derive_desired_state_failed",
 					deps.DurationMs(templateDuration.Milliseconds()))
 			}
+
 			metrics.RecordTemplateRenderingDuration(firstWorkerPath, "error", templateDuration)
 			metrics.RecordTemplateRenderingError(firstWorkerPath, "derivation_failed")
 
-			// Don't cache errors - will retry next tick
-			return fmt.Errorf("failed to derive desired state: %w", err)
+			if !isConfigErr || cachedState == nil {
+				// A worker that never derived successfully has no last good
+				// config to run on. Don't cache errors - will retry next tick.
+				return fmt.Errorf("failed to derive desired state: %w", err)
+			}
+
+			// A config mistake must not stop the worker's tick: the worker
+			// must still read a shutdown request and be removable, and its
+			// children must keep running. The tick continues below on the
+			// desired state derived from the worker's last good config, and
+			// the new config reaches the worker once it renders.
+			desired = cachedState
+			deriveConfigErr = err
 		}
 
-		// Update cache
+		if deriveConfigErr == nil {
+			// Update cache
+			s.mu.Lock()
+			s.lastUserSpecHash = currentHash
+			s.cachedDesiredState = desired
+			s.mu.Unlock()
+
+			s.logTrace("derive_desired_state_computed",
+				deps.String("hash", currentHash[:8]+"..."),
+				deps.DurationMs(templateDuration.Milliseconds()))
+			metrics.RecordTemplateRenderingDuration(firstWorkerPath, "success", templateDuration)
+		}
+	}
+
+	if deriveConfigErr == nil {
+		// The derive succeeded, computed or cached, so a config error that
+		// returns later warns again.
 		s.mu.Lock()
-		s.lastUserSpecHash = currentHash
-		s.cachedDesiredState = desired
+		s.lastConfigErrorWarned = ""
 		s.mu.Unlock()
-
-		s.logTrace("derive_desired_state_computed",
-			deps.String("hash", currentHash[:8]+"..."),
-			deps.DurationMs(templateDuration.Milliseconds()))
-		metrics.RecordTemplateRenderingDuration(firstWorkerPath, "success", templateDuration)
 	}
 
-	// The derive succeeded, computed or cached, so a config error that
-	// returns later warns again.
-	s.mu.Lock()
-	s.lastConfigErrorWarned = ""
-	s.mu.Unlock()
+	// The desired state derived from the last good config is already the
+	// stored one, so a tick that continues on it does not save again.
+	var desiredDoc persistence.Document
 
-	// Save before tickWorker, which loads the freshest desired state from snapshot
-	desiredDoc, err := s.toDocument(desired, firstWorkerID, "", documentConversion{
-		what: "derived desired state",
-	})
-	if err != nil {
-		return err
-	}
+	if deriveConfigErr == nil {
+		// Save before tickWorker, which loads the freshest desired state from snapshot
+		var err error
 
-	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
-	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
-		userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
-		if marshalErr != nil {
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
-				deps.Err(marshalErr))
-		} else {
-			var userSpecMap map[string]any
-			if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_unmarshal_failed",
-					deps.Err(unmarshalErr))
+		desiredDoc, err = s.toDocument(desired, firstWorkerID, "", documentConversion{
+			what: "derived desired state",
+		})
+		if err != nil {
+			return err
+		}
+
+		// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
+		if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
+			userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
+			if marshalErr != nil {
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
+					deps.Err(marshalErr))
 			} else {
-				desiredDoc["originalUserSpec"] = userSpecMap
+				var userSpecMap map[string]any
+				if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr != nil {
+					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_unmarshal_failed",
+						deps.Err(unmarshalErr))
+				} else {
+					desiredDoc["originalUserSpec"] = userSpecMap
+				}
 			}
 		}
-	}
 
-	// Preserve ShutdownRequested and Disabled: both are supervisor operations
-	// (shutdown request and the disable-mapping pass) that override DeriveDesiredState.
-	// Workers always re-derive these as false, so the persisted value must be carried
-	// forward or the disable bit would be clobbered every tick.
-	//
-	// The store full-replaces on write, so this load-and-rewrite races the
-	// explicit setters (requestShutdown / clearShutdownRequested / setDisabled).
-	// lifecycleFlagMu serializes them: held across the load and the save, a setter
-	// that commits in between is observed by the load on the next tick instead of
-	// being overwritten by a stale value (ENG-4971).
-	s.lifecycleFlagMu.Lock()
+		// Preserve ShutdownRequested and Disabled: both are supervisor operations
+		// (shutdown request and the disable-mapping pass) that override DeriveDesiredState.
+		// Workers always re-derive these as false, so the persisted value must be carried
+		// forward or the disable bit would be clobbered every tick.
+		//
+		// The store full-replaces on write, so this load-and-rewrite races the
+		// explicit setters (requestShutdown / clearShutdownRequested / setDisabled).
+		// lifecycleFlagMu serializes them: held across the load and the save, a setter
+		// that commits in between is observed by the load on the next tick instead of
+		// being overwritten by a stale value (ENG-4971).
+		s.lifecycleFlagMu.Lock()
 
-	var existingDesiredTyped TDesired
-	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
-		// Check the existing state's lifecycle flags via interface.
-		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
-			if ds.IsShutdownRequested() {
-				desiredDoc[FieldShutdownRequested] = true
-			}
+		var existingDesiredTyped TDesired
+		if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
+			// Check the existing state's lifecycle flags via interface.
+			if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
+				if ds.IsShutdownRequested() {
+					desiredDoc[FieldShutdownRequested] = true
+				}
 
-			if ds.IsDisabled() {
-				desiredDoc[FieldDisabled] = true
+				if ds.IsDisabled() {
+					desiredDoc[FieldDisabled] = true
+				}
 			}
 		}
-	}
 
-	_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
+		_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
 
-	s.lifecycleFlagMu.Unlock()
+		s.lifecycleFlagMu.Unlock()
 
-	if err != nil {
-		// Log the error but continue with the tick - the system can recover on the next tick
-		// The tickWorker will use the previously saved desired state
-		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "derived_desired_state_save_failed",
-			deps.Err(err))
-	} else {
-		// Per-tick log moved to TRACE for scalability
-		s.logTrace("derived_desired_state_saved")
+		if err != nil {
+			// Log the error but continue with the tick - the system can recover on the next tick
+			// The tickWorker will use the previously saved desired state
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "derived_desired_state_save_failed",
+				deps.Err(err))
+		} else {
+			// Per-tick log moved to TRACE for scalability
+			s.logTrace("derived_desired_state_saved")
+		}
 	}
 
 	// Tick the worker first so its state machine progresses before child reconciliation.
@@ -1027,6 +1060,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			}
 			// Continue with other children
 		}
+	}
+
+	if deriveConfigErr != nil {
+		return fmt.Errorf("failed to derive desired state: %w", deriveConfigErr)
 	}
 
 	return nil
