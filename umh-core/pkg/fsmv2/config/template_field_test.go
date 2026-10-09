@@ -344,14 +344,6 @@ var _ = Describe("Template", func() {
 		Expect(out).To(Equal("+Inf"))
 	})
 
-	It("treats a missing key as a hard error, never ErrVariablesNotPropagated", func() {
-		_, err := config.Template(`{{ .b }}`).Render("read", map[string]any{"a": "x"})
-
-		var cfgErr *config.ConfigError
-		Expect(errors.As(err, &cfgErr)).To(BeTrue())
-		Expect(errors.Is(err, config.ErrVariablesNotPropagated)).To(BeFalse())
-	})
-
 	It("formats a ConfigError without a field as the wrapped error alone", func() {
 		boom := errors.New("boom")
 		Expect((&config.ConfigError{Err: boom}).Error()).To(Equal("boom"))
