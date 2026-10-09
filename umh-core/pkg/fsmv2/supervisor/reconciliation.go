@@ -66,6 +66,32 @@ func (f *factoryRegistryAdapter) ListRegisteredTypes() []string {
 }
 
 // tickWorker performs one FSM tick for a specific worker.
+// storedLifecycleFlags reads the ShutdownRequested and Disabled flags from
+// the stored desired state. ErrNotFound returns zero flags without an error:
+// a worker that never stored a desired state has no flags to preserve, and
+// the first save proceeds. Any other read error is returned, so the caller
+// can skip a save that would store a document without the flags. The caller
+// must hold lifecycleFlagMu, so the read cannot interleave with the setters
+// that write the flags.
+func (s *Supervisor[TObserved, TDesired]) storedLifecycleFlags(ctx context.Context, workerID string) (shutdown, disabled bool, err error) {
+	var existing TDesired
+
+	loadErr := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &existing)
+	if loadErr != nil {
+		if errors.Is(loadErr, persistence.ErrNotFound) {
+			return false, false, nil
+		}
+
+		return false, false, loadErr
+	}
+
+	if ds, ok := any(existing).(fsmv2.DesiredState); ok {
+		return ds.IsShutdownRequested(), ds.IsDisabled(), nil
+	}
+
+	return false, false, nil
+}
+
 func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, workerID string) error {
 	s.logTrace("lifecycle",
 		deps.String("lifecycle_event", "mutex_lock_acquire"),
@@ -873,32 +899,39 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		// being overwritten by a stale value (ENG-4971).
 		s.lifecycleFlagMu.Lock()
 
-		var existingDesiredTyped TDesired
-		if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
-			// Check the existing state's lifecycle flags via interface.
-			if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
-				if ds.IsShutdownRequested() {
-					desiredDoc[FieldShutdownRequested] = true
-				}
+		shutdown, disabled, flagErr := s.storedLifecycleFlags(ctx, firstWorkerID)
 
-				if ds.IsDisabled() {
-					desiredDoc[FieldDisabled] = true
-				}
-			}
-		}
+		if flagErr != nil {
+			s.lifecycleFlagMu.Unlock()
 
-		_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
-
-		s.lifecycleFlagMu.Unlock()
-
-		if err != nil {
-			// Log the error but continue with the tick - the system can recover on the next tick
-			// The tickWorker will use the previously saved desired state
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "derived_desired_state_save_failed",
-				deps.Err(err))
+			// A failed read must not let the save store a document without
+			// the flags, or a pending shutdown request would be wiped. Skip
+			// the save for this tick; the next tick retries it.
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "stored_desired_state_load_failed",
+				deps.Err(flagErr),
+				deps.String("worker_id", firstWorkerID))
 		} else {
-			// Per-tick log moved to TRACE for scalability
-			s.logTrace("derived_desired_state_saved")
+			if shutdown {
+				desiredDoc[FieldShutdownRequested] = true
+			}
+
+			if disabled {
+				desiredDoc[FieldDisabled] = true
+			}
+
+			_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
+
+			s.lifecycleFlagMu.Unlock()
+
+			if err != nil {
+				// Log the error but continue with the tick - the system can recover on the next tick
+				// The tickWorker will use the previously saved desired state
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "derived_desired_state_save_failed",
+					deps.Err(err))
+			} else {
+				// Per-tick log moved to TRACE for scalability
+				s.logTrace("derived_desired_state_saved")
+			}
 		}
 	} else {
 		// After a config error the tick runs the worker on the stored desired
@@ -910,29 +943,26 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		// content would reach the store.
 		s.lifecycleFlagMu.Lock()
 
-		var existingDesiredTyped TDesired
+		shutdown, disabled, flagErr := s.storedLifecycleFlags(ctx, firstWorkerID)
 
-		loadErr := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped)
 		s.lifecycleFlagMu.Unlock()
 
-		if loadErr == nil {
-			if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
-				desiredDoc = make(persistence.Document)
-
-				if ds.IsShutdownRequested() {
-					desiredDoc[FieldShutdownRequested] = true
-				}
-
-				if ds.IsDisabled() {
-					desiredDoc[FieldDisabled] = true
-				}
-			}
-		} else if !errors.Is(loadErr, persistence.ErrNotFound) {
+		if flagErr != nil {
 			// The gate reads what loaded; a failed load leaves it reading a
 			// nil document, same as a worker that never derived.
 			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "stored_desired_state_load_failed",
-				deps.Err(loadErr),
+				deps.Err(flagErr),
 				deps.String("worker_id", firstWorkerID))
+		} else {
+			desiredDoc = make(persistence.Document)
+
+			if shutdown {
+				desiredDoc[FieldShutdownRequested] = true
+			}
+
+			if disabled {
+				desiredDoc[FieldDisabled] = true
+			}
 		}
 	}
 
