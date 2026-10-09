@@ -71,7 +71,7 @@ name: {{ .name }}`
 			}
 
 			flattened := bundle.Flatten()
-			rendered, err := config.RenderTemplate(template, flattened)
+			rendered, err := config.Template(template).Render("config", flattened)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rendered).To(ContainSubstring("host: 192.168.1.100"))
@@ -151,7 +151,7 @@ name: {{ .name }}`
 			Expect(childSpec.UserSpec.Variables.Global["cluster_id"]).To(Equal("prod-cluster"))
 
 			flattened := childSpec.UserSpec.Variables.Flatten()
-			rendered, err := config.RenderTemplate(childSpec.UserSpec.Config, flattened)
+			rendered, err := config.Template(childSpec.UserSpec.Config).Render("config", flattened)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rendered).To(ContainSubstring("url: tcp://192.168.1.1:1883"))
@@ -169,7 +169,7 @@ name: {{ .name }}`
 			}
 
 			flattened := bundle.Flatten()
-			_, err := config.RenderTemplate(template, flattened)
+			_, err := config.Template(template).Render("config", flattened)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("MISSING_VAR"))
@@ -195,7 +195,7 @@ internal_id: {{ .internal.id }}`
 			}
 
 			flattened := bundle.Flatten()
-			rendered, err := config.RenderTemplate(template, flattened)
+			rendered, err := config.Template(template).Render("config", flattened)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rendered).To(ContainSubstring("user_ip: 192.168.1.100"))
