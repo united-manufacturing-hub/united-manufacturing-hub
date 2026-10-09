@@ -104,6 +104,10 @@ jobs:
     timeout-minutes: 75
     permissions:
       contents: write
+    env:
+      # Must match the cosign verify command in deployment-security.md.
+      SIGNER_IDENTITY_REGEXP: '^https://github\.com/united-manufacturing-hub/united-manufacturing-hub/\.github/workflows/build-umh-core\.yml@refs/tags/v'
+      SIGNER_OIDC_ISSUER: https://token.actions.githubusercontent.com
     steps:
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -118,8 +122,8 @@ jobs:
           IMAGE="ghcr.io/united-manufacturing-hub/umh-core:${VERSION}"
           for attempt in $(seq 1 60); do
             if OUT=$(cosign verify \
-                --certificate-identity-regexp '^https://github\.com/united-manufacturing-hub/united-manufacturing-hub/\.github/workflows/build-umh-core\.yml@refs/tags/v' \
-                --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+                --certificate-identity-regexp "$SIGNER_IDENTITY_REGEXP" \
+                --certificate-oidc-issuer "$SIGNER_OIDC_ISSUER" \
                 "$IMAGE" 2>/dev/null); then
               DIGEST=$(echo "$OUT" | jq -r '.[0].critical.image."docker-manifest-digest"')
               echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
@@ -153,3 +157,20 @@ jobs:
           The image is signed with cosign. See [how to verify it](https://docs.umh.app/production/security/umh-core/deployment-security#image-signing).
           NOTES
           gh release edit "$VERSION" --notes-file /tmp/release-body.md
+
+      # Customers pull through management.umh.app, a proxy in front of ghcr. This proves that
+      # verification also works there. It runs after the digest is published, because the digest
+      # is correct either way.
+      - name: Verify image through management.umh.app
+        env:
+          IMAGE: management.umh.app/oci/united-manufacturing-hub/umh-core@${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if ! cosign verify \
+              --certificate-identity-regexp "$SIGNER_IDENTITY_REGEXP" \
+              --certificate-oidc-issuer "$SIGNER_OIDC_ISSUER" \
+              "$IMAGE" > /dev/null; then
+            echo "::error::cosign verify fails through management.umh.app for $IMAGE, but works on ghcr.io. Check the OCI proxy in ManagementConsole (router/cmd/oci_v2)."
+            exit 1
+          fi
+          echo "Verified $IMAGE through management.umh.app" >> "$GITHUB_STEP_SUMMARY"
