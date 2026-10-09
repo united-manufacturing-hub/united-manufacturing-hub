@@ -114,46 +114,71 @@ func buildInfraIssueSnap(ownChildren, dynamicChildren []config.ChildSpec, regist
 	}
 }
 
-var _ = Describe("Application renderUnion registry variable bundle", func() {
-	// withVars returns snap with vars on its status, so renderUnion sees the
-	// variable bundle the application worker recorded from the registry.
-	withVars := func(snap fsmv2.Snapshot, vars *config.VariableBundle) fsmv2.Snapshot {
+var _ = Describe("Application renderUnion registry config values", func() {
+	// withConfigValues returns snap with the registry's config values on its
+	// status, so renderUnion sees what the application worker recorded from
+	// the registry.
+	withConfigValues := func(snap fsmv2.Snapshot, values map[string]any) fsmv2.Snapshot {
 		obs := snap.Observed.(fsmv2.Observation[snapshot.ApplicationStatus])
-		obs.Status.Variables = vars
+		obs.Status.ConfigValues = values
 		snap.Observed = obs
 
 		return snap
 	}
 
-	own := []config.ChildSpec{{Name: "communicator", WorkerType: "communicator", Enabled: true}}
+	own := []config.ChildSpec{{
+		Name:       "communicator",
+		WorkerType: "communicator",
+		Enabled:    true,
+		UserSpec:   config.UserSpec{Variables: config.VariableBundle{User: map[string]any{"IP": "own"}}},
+	}}
 	dynamic := []config.ChildSpec{{Name: "example", WorkerType: "example", Enabled: false}}
 
-	It("puts the registry's variable bundle on the kernel, registry and own children", func() {
-		vars := &config.VariableBundle{
-			User:   map[string]any{"IP": "10.0.0.1"},
-			Global: map[string]any{"cluster_id": "c1"},
-		}
+	values := map[string]any{
+		"historian": map[string]any{"timescale": map[string]any{"host": "db"}},
+	}
 
-		children := (&state.RunningState{}).Next(withVars(buildUnionSnap(own, dynamic, true), vars)).Children
+	It("puts the registry's config values on every child except the config worker", func() {
+		children := (&state.RunningState{}).Next(withConfigValues(buildUnionSnap(own, dynamic, true), values)).Children
 		Expect(children).To(HaveLen(3))
 
 		for _, c := range children {
-			Expect(c.UserSpec.Variables.User).To(HaveKeyWithValue("IP", "10.0.0.1"), "%s", c.Name)
-			Expect(c.UserSpec.Variables.Global).To(HaveKeyWithValue("cluster_id", "c1"), "%s", c.Name)
+			if c.WorkerType == "configworker" {
+				Expect(c.UserSpec.ConfigValues).To(BeNil(),
+					"the config worker must not carry its own config values, %s", c.Name)
+
+				continue
+			}
+
+			Expect(c.UserSpec.ConfigValues).To(Equal(values), "%s", c.Name)
 		}
 	})
 
-	It("leaves every child's Variables untouched when the registry holds none", func() {
-		// The merge in renderUnion must not run with an empty bundle: it would
-		// turn a nil User map into an empty non-nil one.
-		children := (&state.RunningState{}).Next(withVars(buildUnionSnap(own, dynamic, true), nil)).Children
+	It("leaves a child's own Variables exactly as declared, with no registry keys added", func() {
+		children := (&state.RunningState{}).Next(withConfigValues(buildUnionSnap(own, dynamic, true), values)).Children
 		Expect(children).To(HaveLen(3))
 
 		for _, c := range children {
-			Expect(c.UserSpec.Variables).To(Equal(config.VariableBundle{}), "%s", c.Name)
+			Expect(c.UserSpec.Variables.User).ToNot(HaveKey("historian"),
+				"the registry's config values must not merge into %s's variables", c.Name)
+		}
+
+		for _, c := range children {
+			if c.Name == "communicator" {
+				Expect(c.UserSpec.Variables).To(Equal(config.VariableBundle{User: map[string]any{"IP": "own"}}),
+					"an own child's variables must stay exactly what it declared")
+			}
 		}
 	})
 
+	It("leaves every child's ConfigValues nil when the registry holds none", func() {
+		children := (&state.RunningState{}).Next(withConfigValues(buildUnionSnap(own, dynamic, true), nil)).Children
+		Expect(children).To(HaveLen(3))
+
+		for _, c := range children {
+			Expect(c.UserSpec.ConfigValues).To(BeNil(), "%s", c.Name)
+		}
+	})
 })
 
 var _ = Describe("Application state nil-Children invariant", func() {

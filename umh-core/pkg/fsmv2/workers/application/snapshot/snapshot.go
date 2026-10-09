@@ -56,11 +56,11 @@ type ApplicationStatus struct {
 	// so a later step can emit it as a spawnable child from Next(), which only
 	// sees the snapshot; a Ref (WorkerType+Name only) cannot be spawned.
 	DynamicChildren []config.ChildSpec `json:"dynamic_children"`
-	// Variables is the registry's variable bundle, which renderUnion puts on
-	// every child. It is nil while the registry holds no variables. It is a
-	// pointer because omitempty does not omit a struct. A value field would
-	// store an empty "variables" key in every observation.
-	Variables *config.VariableBundle `json:"variables,omitempty"`
+	// ConfigValues carries the registry's config values, which renderUnion
+	// puts on every child as its own config section (UserSpec.ConfigValues),
+	// for templates written as {{ .config.* }}. It is nil while the registry
+	// holds none.
+	ConfigValues map[string]any `json:"config_values,omitempty"`
 	// ChildrenCircuitOpen is the count of children with circuit breaker open.
 	ChildrenCircuitOpen int `json:"children_circuit_open"`
 	// ChildrenStale is the count of children whose observations are older than

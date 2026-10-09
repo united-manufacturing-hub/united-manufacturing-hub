@@ -158,10 +158,11 @@ func (c *FSMv2Client) Upsert(ref dynamicchildren.Ref, cfg map[string]any) error 
 	return err
 }
 
-// SetVariables passes vars to the wrapped Writer. See Writer.SetVariables
-// for what it replaces.
-func (c *FSMv2Client) SetVariables(vars config.VariableBundle) {
-	c.w.SetVariables(vars)
+// SetConfigVariables passes values to the wrapped Writer, which hands them to
+// every child of the application as the child's own config section. See
+// Writer.SetConfigVariables for what it replaces.
+func (c *FSMv2Client) SetConfigVariables(values map[string]any) error {
+	return c.w.SetConfigVariables(values)
 }
 
 // Delete removes ref from the wrapped Writer. From this call on, Get reads

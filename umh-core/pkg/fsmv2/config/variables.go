@@ -205,10 +205,10 @@ func MergeWithOverrides(parent, child VariableBundle) MergeResult {
 	}
 }
 
-// deepCloneMap creates a deep copy of a map preserving original types.
+// DeepCloneMap creates a deep copy of a map preserving original types.
 // Unlike JSON round-trip, this preserves numeric types (int, int64, float32, etc.)
 // instead of coercing all numbers to float64.
-func deepCloneMap(m map[string]any) map[string]any {
+func DeepCloneMap(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
 	}
@@ -230,7 +230,7 @@ func deepCloneValue(v any) any {
 
 	switch val := v.(type) {
 	case map[string]any:
-		return deepCloneMap(val)
+		return DeepCloneMap(val)
 
 	case []any:
 		result := make([]any, len(val))
@@ -253,8 +253,8 @@ func deepCloneValue(v any) any {
 func (v VariableBundle) Clone() VariableBundle {
 	clone := VariableBundle{}
 
-	clone.User = deepCloneMap(v.User)
-	clone.Global = deepCloneMap(v.Global)
+	clone.User = DeepCloneMap(v.User)
+	clone.Global = DeepCloneMap(v.Global)
 
 	return clone
 }
