@@ -232,6 +232,26 @@ func (w *plainErrorDeriveWorker) DeriveDesiredState(any) (fsmv2.DesiredState, er
 
 func (w *plainErrorDeriveWorker) GetInitialState() fsmv2.State[any, any] { return &mockState{} }
 
+// stateTypoConfig is parsed by the real WorkerBase.DeriveDesiredState, so an
+// unknown state value in the user spec runs the real validation.
+//
+//nolint:unused // instantiated as the config argument of WorkerBase below
+type stateTypoConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+}
+
+// stateTypoWorker derives through the promoted WorkerBase method, unlike the
+// hand-built mocks above.
+type stateTypoWorker struct {
+	fsmv2.WorkerBase[stateTypoConfig, struct{}, struct{}]
+}
+
+func (w *stateTypoWorker) CollectObservedState(context.Context, fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return &supervisor.TestObservedState{ID: "state-typo-child", CollectedAt: time.Now()}, nil
+}
+
+func (w *stateTypoWorker) GetInitialState() fsmv2.State[any, any] { return &mockState{} }
+
 var _ = Describe("Supervisor config errors", func() {
 	ctx := context.Background()
 
@@ -510,6 +530,57 @@ var _ = Describe("Supervisor config errors", func() {
 
 			Expect(recorder.sentryErrorEvents()).To(ConsistOf("derive_desired_state_failed"))
 			Expect(recorder.warnCount("config_error")).To(Equal(0))
+		})
+	})
+
+	Describe("A child whose spec has an unknown state value", func() {
+		// The value is the user's typo, so misspell must not flag it.
+		const brokenStateConfig = "state: runing\nname: b1" //nolint:misspell
+
+		It("warns once with a config error naming the value and stays out of Sentry", func() {
+			recorder := newRecordingSentryLogger()
+
+			err := factory.RegisterFactoryByType("statetypochild",
+				func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+					return &stateTypoWorker{}
+				})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = factory.RegisterSupervisorFactoryByType("statetypochild", func(cfg any) any {
+				return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg.(supervisor.Config))
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			parentSuper := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType: "parent",
+				Store:      newMockTriangularStore(),
+				Logger:     recorder,
+			})
+
+			err = parentSuper.AddWorker(deps.Identity{
+				ID:         "parent-worker",
+				Name:       "Parent Worker",
+				WorkerType: "parent",
+			}, &childSpecParentWorker{childWorkerType: "statetypochild"})
+			Expect(err).NotTo(HaveOccurred())
+
+			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: brokenStateConfig})
+
+			for range 3 {
+				Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
+			}
+
+			Expect(recorder.warnCount("config_error")).To(Equal(1))
+
+			Expect(parentSuper.GetChildren()).To(BeEmpty(),
+				"a worker with a config mistake must not start")
+
+			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
+			Expect(recorder.sentryWarnEvents()).To(BeEmpty())
+
+			Expect(recorder.warns[0].Fields).To(ContainElement(
+				WithTransform(func(f deps.Field) any { return f.Value }, ContainSubstring("runing"))), //nolint:misspell
+				"the warning must name the rejected state value")
 		})
 	})
 })
