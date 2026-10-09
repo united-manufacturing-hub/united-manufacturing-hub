@@ -578,4 +578,44 @@ var _ = Describe("WorkerBase template fields", func() {
 		Expect(wds.Config.Read).To(Equal(config.Template("bar")),
 			"the undeclared key must survive into the names, so a template can use it")
 	})
+
+	It("renders with the Names a parent hands down, and with ConfigValues when it hands down none", func() {
+		namesSpec := config.UserSpec{
+			Config: `read: "{{ .x }}"`,
+			Names:  map[string]any{"x": "from-parent"},
+		}
+
+		ds, err := worker.DeriveDesiredState(namesSpec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("from-parent")))
+
+		valuesSpec := config.UserSpec{
+			Config:       `read: "{{ .config.historian.timescale.host }}"`,
+			ConfigValues: map[string]any{"historian": map[string]any{"timescale": map[string]any{"host": "db"}}},
+		}
+
+		ds, err = worker.DeriveDesiredState(valuesSpec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok = ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("db")))
+	})
+
+	It("builds the names when a parent hands down an empty Names map", func() {
+		spec := config.UserSpec{
+			Config: "name: b1\nread: \"{{ .name }}-x\"",
+			Names:  map[string]any{},
+		}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("b1-x")))
+	})
 })

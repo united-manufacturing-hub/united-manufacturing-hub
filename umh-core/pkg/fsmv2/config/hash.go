@@ -17,6 +17,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"hash"
 	"hash/fnv"
 )
 
@@ -26,7 +27,12 @@ import (
 //
 // The hash is computed from:
 //   - Config string (hashed directly)
-//   - Variables.User and Variables.Global (serialized as sorted JSON for determinism)
+//   - Variables, ConfigValues and Names (serialized as JSON for determinism)
+//
+// Each map part passes through normalize first, so a value yaml.v3 decoded
+// with non-string keys cannot fail the marshal. A part that still cannot be
+// marshaled hashes as its error text, so two different failing parts differ
+// from each other and from a part that marshals.
 //
 // Variables.Internal is excluded (via json:"-" tag) because Internal contains
 // only supervisor-assigned constants (workerID, parentID) that are set once
@@ -42,11 +48,27 @@ import (
 func ComputeUserSpecHash(spec UserSpec) string {
 	h := fnv.New64a()
 	h.Write([]byte(spec.Config))
+	h.Write([]byte{0}) // separator
 
-	// Marshal failure falls back to Config-only hash; Variables from YAML are always serializable.
-	if varsBytes, err := json.Marshal(spec.Variables); err == nil {
-		h.Write(varsBytes)
-	}
+	writeHashedJSON(h, spec.Variables)
+	h.Write([]byte{0}) // separator
+
+	writeHashedJSON(h, spec.ConfigValues)
+	h.Write([]byte{0}) // separator
+
+	writeHashedJSON(h, spec.Names)
 
 	return fmt.Sprintf("%016x", h.Sum64())
+}
+
+// writeHashedJSON writes v to h as JSON, after normalize. A value that cannot
+// be marshaled writes its error text instead, so it never drops out of the
+// hash silently.
+func writeHashedJSON(h hash.Hash, v any) {
+	b, err := json.Marshal(normalize(v))
+	if err != nil {
+		b = []byte(err.Error())
+	}
+
+	h.Write(b)
 }
