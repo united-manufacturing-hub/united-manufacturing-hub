@@ -25,11 +25,13 @@ import (
 // flowNames are the flow template fields the bridge hands down to a flow child.
 var flowNames = []string{"read", "write"}
 
-// RenderFlows returns one flow child spec per non-empty flow template. Each
-// child carries its template as the flow key of a YAML mapping, so quotes and
-// colons in the template survive the child's config load unchanged, and the
-// bridge's names as a deep copy.
-func RenderFlows(cfg ExamplebridgeConfig) ([]config.ChildSpec, error) {
+// RenderFlows returns one flow child spec per non-empty flow template, named
+// after the bridge ("<bridge>-read" / "<bridge>-write") so two bridges' flow
+// children stay distinct in the child registry. Each child carries its
+// template as the flow key of a YAML mapping, so quotes and colons in the
+// template survive the child's config load unchanged, and the bridge's names
+// as a deep copy.
+func RenderFlows(bridge string, cfg ExamplebridgeConfig) ([]config.ChildSpec, error) {
 	specs := make([]config.ChildSpec, 0, len(flowNames))
 
 	for _, flow := range flowNames {
@@ -44,7 +46,7 @@ func RenderFlows(cfg ExamplebridgeConfig) ([]config.ChildSpec, error) {
 		}
 
 		specs = append(specs, config.ChildSpec{
-			Name:       flow,
+			Name:       bridge + "-" + flow,
 			WorkerType: "exampleflow",
 			UserSpec: config.UserSpec{
 				Config: string(encoded),

@@ -166,7 +166,7 @@ write: "{{ .IP }}:{{ .PORT }}"
 			}
 
 			It("renders one child per non-empty flow template with the exact template text", func() {
-				specs, err := examplebridge.RenderFlows(cfg)
+				specs, err := examplebridge.RenderFlows("b1", cfg)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(specs).To(HaveLen(2))
 
@@ -174,11 +174,11 @@ write: "{{ .IP }}:{{ .PORT }}"
 				for _, spec := range specs {
 					byName[spec.Name] = spec
 				}
-				Expect(byName).To(HaveKey("read"))
-				Expect(byName).To(HaveKey("write"))
+				Expect(byName).To(HaveKey("b1-read"))
+				Expect(byName).To(HaveKey("b1-write"))
 
-				for _, name := range []string{"read", "write"} {
-					spec := byName[name]
+				for _, flow := range []string{"read", "write"} {
+					spec := byName["b1-"+flow]
 
 					Expect(spec.WorkerType).To(Equal("exampleflow"))
 					Expect(spec.Enabled).To(BeTrue())
@@ -190,7 +190,7 @@ write: "{{ .IP }}:{{ .PORT }}"
 					}
 					err := yaml.Unmarshal([]byte(spec.UserSpec.Config), &decoded)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(decoded.Flow).To(Equal(string(cfg.Template(name))))
+					Expect(decoded.Flow).To(Equal(string(cfg.Template(flow))))
 				}
 			})
 
@@ -198,10 +198,30 @@ write: "{{ .IP }}:{{ .PORT }}"
 				onlyRead := cfg
 				onlyRead.Write = ""
 
-				specs, err := examplebridge.RenderFlows(onlyRead)
+				specs, err := examplebridge.RenderFlows("b1", onlyRead)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(specs).To(HaveLen(1))
-				Expect(specs[0].Name).To(Equal("read"))
+				Expect(specs[0].Name).To(Equal("b1-read"))
+			})
+
+			It("names two bridges' children apart, so their store keys stay distinct", func() {
+				b2 := cfg
+				b2.Name = "b2"
+				b2.Connection.Host = "10.0.0.6"
+
+				b1Specs, err := examplebridge.RenderFlows("b1", cfg)
+				Expect(err).ToNot(HaveOccurred())
+				b2Specs, err := examplebridge.RenderFlows("b2", b2)
+				Expect(err).ToNot(HaveOccurred())
+
+				b1Names := map[string]bool{}
+				for _, spec := range b1Specs {
+					b1Names[spec.Name] = true
+				}
+
+				for _, spec := range b2Specs {
+					Expect(b1Names).NotTo(HaveKey(spec.Name))
+				}
 			})
 		})
 
