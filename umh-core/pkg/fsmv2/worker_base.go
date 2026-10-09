@@ -97,10 +97,12 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 // DeriveDesiredState parses spec into a *WrappedDesiredState[TConfig].
 // When spec is nil, returns a default desired state with an empty TConfig.
 // When spec is a config.UserSpec, loads the YAML into TConfig without
-// rendering it, renders every config.Template field against the names built
-// from the config's own fields and the user variables, validates the
-// lifecycle state when TConfig embeds config.BaseUserSpec (or implements
-// GetState() string), and caches the config.
+// rendering it, renders every config.Template field, validates the lifecycle
+// state when TConfig embeds config.BaseUserSpec (or implements GetState()
+// string), and caches the config. Templates render against the names a
+// parent hands down when UserSpec.Names carries at least one entry; a nil
+// or empty Names builds the names from the config's own fields, the config
+// values a parent hands down, and the user variables.
 //
 // Workers that need children specs must override this method in their own struct
 // and either call w.WorkerBase.DeriveDesiredState(spec) first (then read the
@@ -135,12 +137,16 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		return nil, fmt.Errorf("failed to read the config fields: %w", err)
 	}
 
-	names, err := config.BuildNames(config.Entry{
-		Fields:    fields,
-		Variables: userSpec.Variables.User,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to build the template names: %w", err)
+	names := userSpec.Names
+	if len(names) == 0 {
+		names, err = config.BuildNames(config.Entry{
+			Fields:    fields,
+			Variables: userSpec.Variables.User,
+			Config:    userSpec.ConfigValues,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to build the template names: %w", err)
+		}
 	}
 
 	if err := config.RenderTemplates(&cfg, names); err != nil {
