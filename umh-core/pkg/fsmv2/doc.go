@@ -158,14 +158,12 @@
 //
 // See factory/README.md for worker type derivation and registration patterns.
 //
-// ## Variable namespaces
+// ## Variables
 //
-// VariableBundle provides three namespaces:
-//   - User: Top-level template access (flattened, e.g., {{ .IP }})
-//   - Global: Fleet-wide settings (nested, e.g., {{ .global.cluster_id }})
-//   - Internal: Runtime metadata (nested), not serialized
-//
-// See config/variables.go for the VariableBundle struct definition.
+// A worker entry's variables are one map: UserSpec.Variables holds the
+// entry's own `variables:` section, and a template reads one as
+// {{ .variables.<key> }}. Nothing merges a parent's variables into a child's;
+// see config/childspec.go for the UserSpec definition.
 //
 // ## Parent-child workers
 //
@@ -184,9 +182,9 @@
 //     Stopped state without resuming, preserving dependency state (e.g.,
 //     the transport push worker's buffer).
 //
-// Per-child variables (e.g., DEVICE_ID, INDEX) are passed via UserSpec.Variables;
-// see VariableBundle. See config/childspec.go for the field-level definitions
-// of ChildSpec, Enabled, IsShutdownRequested, and IsDisabled.
+// Per-child values (e.g., DEVICE_ID, INDEX) are passed via UserSpec.Variables
+// on the child's ChildSpec. See config/childspec.go for the field-level
+// definitions of ChildSpec, Enabled, IsShutdownRequested, and IsDisabled.
 //
 // See workers/example/exampleparent/children.go for the despawn variant
 // (children are stateless, so the empty slice is correct in stop states).

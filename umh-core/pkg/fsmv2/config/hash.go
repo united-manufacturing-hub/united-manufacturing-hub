@@ -34,10 +34,6 @@ import (
 // marshaled hashes as its error text, so two different failing parts differ
 // from each other and from a part that marshals.
 //
-// Variables.Internal is excluded (via json:"-" tag) because Internal contains
-// only supervisor-assigned constants (workerID, parentID) that are set once
-// at supervisor creation and never change.
-//
 // Cache behavior: DeriveDesiredState is called when Config or Variables change.
 // If neither changes, the cached result is reused.
 //

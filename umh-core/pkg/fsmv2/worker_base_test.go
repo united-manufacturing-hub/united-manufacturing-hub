@@ -618,4 +618,35 @@ var _ = Describe("WorkerBase template fields", func() {
 		Expect(ok).To(BeTrue())
 		Expect(wds.Config.Read).To(Equal(config.Template("b1-x")))
 	})
+
+	It("renders a variable through the variables section", func() {
+		spec := config.UserSpec{
+			Config:    `read: "{{ .variables.A }}"`,
+			Variables: map[string]any{"A": "1"},
+		}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("1")))
+	})
+
+	It("errors naming the top-level name when the worker declares no shortcut for it", func() {
+		// wbTplConfig declares no shortcuts, so {{ .A }} has no top-level name.
+		spec := config.UserSpec{
+			Config:    `read: "{{ .variables.A }}-{{ .A }}"`,
+			Variables: map[string]any{"A": "1"},
+		}
+
+		_, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).To(HaveOccurred())
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("read"))
+		Expect(err.Error()).To(ContainSubstring(`"A"`),
+			"the render error must name the top-level name the worker declares no shortcut for")
+	})
 })

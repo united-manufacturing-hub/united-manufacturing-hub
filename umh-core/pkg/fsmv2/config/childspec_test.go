@@ -105,10 +105,8 @@ var _ = Describe("ChildSpec Clone", func() {
 				WorkerType: "mqtt_connection",
 				UserSpec: config.UserSpec{
 					Config: "original-config",
-					Variables: config.VariableBundle{
-						User: map[string]interface{}{
-							"key1": "value1",
-						},
+					Variables: map[string]any{
+						"key1": "value1",
 					},
 				},
 				Enabled: true,
@@ -124,10 +122,10 @@ var _ = Describe("ChildSpec Clone", func() {
 			Expect(cloned.Enabled).To(Equal(original.Enabled))
 
 			// Modify the clone's deep-copied UserSpec variables
-			cloned.UserSpec.Variables.User["key1"] = "modified"
+			cloned.UserSpec.Variables["key1"] = "modified"
 
 			// Verify the original is NOT affected
-			Expect(original.UserSpec.Variables.User["key1"]).To(Equal("value1"))
+			Expect(original.UserSpec.Variables["key1"]).To(Equal("value1"))
 		})
 	})
 })
@@ -140,10 +138,8 @@ var _ = Describe("ChildSpec Hash", func() {
 				WorkerType: "mqtt_connection",
 				UserSpec: config.UserSpec{
 					Config: "test-config",
-					Variables: config.VariableBundle{
-						User: map[string]interface{}{
-							"key": "value",
-						},
+					Variables: map[string]interface{}{
+						"key": "value",
 					},
 				},
 				Enabled: true,
@@ -154,10 +150,8 @@ var _ = Describe("ChildSpec Hash", func() {
 				WorkerType: "mqtt_connection",
 				UserSpec: config.UserSpec{
 					Config: "test-config",
-					Variables: config.VariableBundle{
-						User: map[string]interface{}{
-							"key": "value",
-						},
+					Variables: map[string]interface{}{
+						"key": "value",
 					},
 				},
 				Enabled: true,
@@ -273,10 +267,7 @@ var _ = Describe("ChildSpec Hash", func() {
 var _ = Describe("UserSpec Clone", func() {
 	It("should copy every field deeply, and keep the original when the clone changes", func() {
 		spec := config.UserSpec{
-			Variables: config.VariableBundle{
-				User:   map[string]any{"user": map[string]any{"nested": "original"}},
-				Global: map[string]any{"global": map[string]any{"nested": "original"}},
-			},
+			Variables:    map[string]any{"vars": map[string]any{"nested": "original"}},
 			Config:       "config: {{ .x }}",
 			ConfigValues: map[string]any{"historian": map[string]any{"host": "original"}},
 			Names:        map[string]any{"x": map[string]any{"nested": "original"}},
@@ -293,13 +284,11 @@ var _ = Describe("UserSpec Clone", func() {
 
 		clone := spec.Clone()
 
-		clone.Variables.User["user"].(map[string]any)["nested"] = "changed"
-		clone.Variables.Global["global"].(map[string]any)["nested"] = "changed"
+		clone.Variables["vars"].(map[string]any)["nested"] = "changed"
 		clone.ConfigValues["historian"].(map[string]any)["host"] = "changed"
 		clone.Names["x"].(map[string]any)["nested"] = "changed"
 
-		Expect(spec.Variables.User["user"].(map[string]any)["nested"]).To(Equal("original"))
-		Expect(spec.Variables.Global["global"].(map[string]any)["nested"]).To(Equal("original"))
+		Expect(spec.Variables["vars"].(map[string]any)["nested"]).To(Equal("original"))
 		Expect(spec.ConfigValues["historian"].(map[string]any)["host"]).To(Equal("original"))
 		Expect(spec.Names["x"].(map[string]any)["nested"]).To(Equal("original"))
 	})
@@ -308,7 +297,7 @@ var _ = Describe("UserSpec Clone", func() {
 var _ = Describe("UserSpec serialization", func() {
 	It("should keep the handed-down maps through a JSON round trip", func() {
 		spec := config.UserSpec{
-			Variables:    config.VariableBundle{User: map[string]any{"a": "b"}},
+			Variables:    map[string]any{"a": "b"},
 			Config:       "config",
 			ConfigValues: map[string]any{"historian": map[string]any{"host": "db"}},
 			Names:        map[string]any{"x": "from-parent"},
@@ -340,6 +329,19 @@ names:
 		Expect(spec.Config).To(Equal("user config"))
 		Expect(spec.ConfigValues).To(BeNil())
 		Expect(spec.Names).To(BeNil())
+	})
+
+	It("should decode a user's variables section straight into Variables", func() {
+		yamlData := `
+variables:
+  IP: 10.0.0.1
+`
+
+		var spec config.UserSpec
+		err := yaml.Unmarshal([]byte(yamlData), &spec)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(spec.Variables).To(Equal(map[string]any{"IP": "10.0.0.1"}))
 	})
 })
 

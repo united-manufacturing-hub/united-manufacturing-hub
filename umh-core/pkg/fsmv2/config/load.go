@@ -48,7 +48,7 @@ func LoadUserSpec[T any](spec any) (T, error) {
 		}
 	}
 
-	if err := CheckPlainValues(&result, userSpec.Variables.User); err != nil {
+	if err := CheckPlainValues(&result, userSpec.Variables); err != nil {
 		return zero, err
 	}
 
