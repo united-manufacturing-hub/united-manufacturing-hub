@@ -95,10 +95,14 @@
 // When the derive fails with a config error and a cached desired state from
 // an earlier good config exists, the supervisor keeps ticking the worker on
 // that cached state: the worker must still read a shutdown request and be
-// removable, and its children must keep running. The new config reaches the
-// worker once it renders. The spec-hash cache is not updated on the error, so
-// every tick retries the derive. A worker whose first derive fails has no
-// cached state and is not ticked.
+// removable, and its children must keep being reconciled and ticked. The
+// worker runs on the stored desired state, which carries the lifecycle flags
+// (ShutdownRequested, Disabled), so a shutdown or disable requested during
+// the broken window still takes effect. The spec-hash cache is not updated
+// on the error, so every tick retries the derive and the new config reaches
+// the worker on the first derive that succeeds. A worker whose first derive
+// fails has no cached state and is not ticked. When such a supervisor shuts
+// down, its children are dropped, not recreated from the cached specs.
 //
 // Reconcile children:
 //   - Creates child supervisors for new ChildrenSpecs
