@@ -92,6 +92,34 @@ func EntryFields(configYAML string, cfg any) (map[string]any, error) {
 	return fields, nil
 }
 
+// EntryVariables decodes the entry's top-level variables mapping, the same
+// mapping EntryFields drops from the fields. A missing or null mapping is
+// present with no keys; any other value is a *ConfigError on the variables
+// field. The result is normalized, so json.Marshal always accepts it.
+func EntryVariables(configYAML string) (map[string]any, bool, error) {
+	fields := map[string]any{}
+	if configYAML != "" {
+		if err := yaml.Unmarshal([]byte(configYAML), &fields); err != nil {
+			return nil, false, &ConfigError{Err: err}
+		}
+	}
+
+	raw, present := fields["variables"]
+	if !present || raw == nil {
+		return map[string]any{}, false, nil
+	}
+
+	variables, ok := normalize(raw).(map[string]any)
+	if !ok {
+		return nil, false, &ConfigError{
+			Field: "variables",
+			Err:   fmt.Errorf("the variables section must be a mapping, got %T", raw),
+		}
+	}
+
+	return variables, true, nil
+}
+
 // templatePaths returns the YAML path of every Template field of the value v
 // points to, as segments in the same form the walkers use: an
 // inline-embedded struct adds no segment.
