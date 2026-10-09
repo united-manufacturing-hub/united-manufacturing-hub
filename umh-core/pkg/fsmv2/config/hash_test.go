@@ -275,3 +275,58 @@ var _ = Describe("ComputeUserSpecHash", func() {
 		})
 	})
 })
+
+var _ = Describe("ComputeUserSpecHash handed-down fields", func() {
+	baseSpec := func() config.UserSpec {
+		return config.UserSpec{
+			Config: "topic: sensors",
+			Variables: config.VariableBundle{
+				User:   map[string]any{"IP": "192.168.1.100"},
+				Global: map[string]any{"site": "factory"},
+			},
+			Names: map[string]any{"x": "from-parent"},
+		}
+	}
+
+	It("produces a different hash when only ConfigValues differs", func() {
+		spec1 := baseSpec()
+		spec1.ConfigValues = map[string]any{"historian": "timescale"}
+
+		spec2 := baseSpec()
+		spec2.ConfigValues = map[string]any{"historian": "kafka"}
+
+		Expect(config.ComputeUserSpecHash(spec1)).ToNot(Equal(config.ComputeUserSpecHash(spec2)))
+	})
+
+	It("produces a different hash when only Names differs", func() {
+		spec1 := baseSpec()
+		spec1.Names = map[string]any{"x": "one"}
+
+		spec2 := baseSpec()
+		spec2.Names = map[string]any{"x": "two"}
+
+		Expect(config.ComputeUserSpecHash(spec1)).ToNot(Equal(config.ComputeUserSpecHash(spec2)))
+	})
+
+	It("produces the same hash for equal input across 50 calls", func() {
+		spec := baseSpec()
+		spec.ConfigValues = map[string]any{"historian": "timescale"}
+
+		hashes := make(map[string]bool)
+		for range 50 {
+			hashes[config.ComputeUserSpecHash(spec)] = true
+		}
+
+		Expect(hashes).To(HaveLen(1))
+	})
+
+	It("hashes a value yaml decodes with non-string keys instead of dropping it", func() {
+		spec1 := baseSpec()
+		spec1.ConfigValues = map[string]any{"m": map[any]any{1: "a"}}
+
+		spec2 := baseSpec()
+		spec2.ConfigValues = nil
+
+		Expect(config.ComputeUserSpecHash(spec1)).ToNot(Equal(config.ComputeUserSpecHash(spec2)))
+	})
+})

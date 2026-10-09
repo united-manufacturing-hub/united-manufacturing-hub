@@ -16,6 +16,7 @@ package config_test
 
 import (
 	"encoding/json"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -269,6 +270,79 @@ var _ = Describe("ChildSpec Hash", func() {
 	})
 })
 
+var _ = Describe("UserSpec Clone", func() {
+	It("should copy every field deeply, and keep the original when the clone changes", func() {
+		spec := config.UserSpec{
+			Variables: config.VariableBundle{
+				User:   map[string]any{"user": map[string]any{"nested": "original"}},
+				Global: map[string]any{"global": map[string]any{"nested": "original"}},
+			},
+			Config:       "config: {{ .x }}",
+			ConfigValues: map[string]any{"historian": map[string]any{"host": "original"}},
+			Names:        map[string]any{"x": map[string]any{"nested": "original"}},
+		}
+
+		// Every field of the spec must be non-zero, so a field added to
+		// UserSpec later fails this test until the test sets it.
+		rv := reflect.ValueOf(spec)
+		for i := range rv.NumField() {
+			field := rv.Type().Field(i)
+			Expect(rv.Field(i).IsZero()).To(BeFalse(),
+				"UserSpec field %s must be non-zero so the test keeps covering it", field.Name)
+		}
+
+		clone := spec.Clone()
+
+		clone.Variables.User["user"].(map[string]any)["nested"] = "changed"
+		clone.Variables.Global["global"].(map[string]any)["nested"] = "changed"
+		clone.ConfigValues["historian"].(map[string]any)["host"] = "changed"
+		clone.Names["x"].(map[string]any)["nested"] = "changed"
+
+		Expect(spec.Variables.User["user"].(map[string]any)["nested"]).To(Equal("original"))
+		Expect(spec.Variables.Global["global"].(map[string]any)["nested"]).To(Equal("original"))
+		Expect(spec.ConfigValues["historian"].(map[string]any)["host"]).To(Equal("original"))
+		Expect(spec.Names["x"].(map[string]any)["nested"]).To(Equal("original"))
+	})
+})
+
+var _ = Describe("UserSpec serialization", func() {
+	It("should keep the handed-down maps through a JSON round trip", func() {
+		spec := config.UserSpec{
+			Variables:    config.VariableBundle{User: map[string]any{"a": "b"}},
+			Config:       "config",
+			ConfigValues: map[string]any{"historian": map[string]any{"host": "db"}},
+			Names:        map[string]any{"x": "from-parent"},
+		}
+
+		data, err := json.Marshal(spec)
+		Expect(err).ToNot(HaveOccurred())
+
+		var back config.UserSpec
+		err = json.Unmarshal(data, &back)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(back.ConfigValues).To(Equal(map[string]any{"historian": map[string]any{"host": "db"}}))
+		Expect(back.Names).To(Equal(map[string]any{"x": "from-parent"}))
+	})
+
+	It("should leave the handed-down maps nil when a user sets their keys in YAML", func() {
+		yamlData := `
+config: "user config"
+config_values:
+  a: 1
+names:
+  a: 1
+`
+
+		var spec config.UserSpec
+		err := yaml.Unmarshal([]byte(yamlData), &spec)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(spec.Config).To(Equal("user config"))
+		Expect(spec.ConfigValues).To(BeNil())
+		Expect(spec.Names).To(BeNil())
+	})
+})
+
 var _ = Describe("DesiredState", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize to YAML correctly", func() {
@@ -305,6 +379,7 @@ childrenSpecs:
     userSpec:
       config: "processor config"
 `
+
 			var desired config.DesiredState
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
 
