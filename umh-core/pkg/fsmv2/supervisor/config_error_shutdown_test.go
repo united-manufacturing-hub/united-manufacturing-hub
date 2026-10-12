@@ -335,13 +335,15 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 
 			// Both the worker and its child go: the child must be dropped on
 			// the shutdown of a broken parent, not respawned from the cached
-			// children specs.
+			// children specs. Removing a parent drains its child first, so the
+			// wait allows the 15s that pkg/fsmv2/CLAUDE.md gives a two-level
+			// shutdown.
 			Eventually(func() bool {
 				children := s.GetChildren()
 
 				return len(s.ListWorkers()) == 0 && len(children) == 0
-			}, 5*time.Second, 20*time.Millisecond).Should(BeTrue(),
-				"a parent with a config mistake must drop its children on shutdown")
+			}, 15*time.Second, 20*time.Millisecond).Should(BeTrue(),
+				"a parent with a config error must drop its children on shutdown")
 
 			// No child supervisor reappears: the tick after the removal does
 			// not recreate one from the cached children specs.
