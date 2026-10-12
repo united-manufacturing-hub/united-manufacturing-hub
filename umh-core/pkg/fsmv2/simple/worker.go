@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -64,6 +65,15 @@ func (w *simpleWorker[TConfig, TStatus, TDeps]) pollDeps() TDeps {
 	d, _ := w.GetDependenciesAny().(TDeps)
 
 	return d
+}
+
+func (w *simpleWorker[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	cfg, err := config.ParseUserSpec[TConfig](spec)
+	if err != nil {
+		return nil, err
+	}
+
+	return &fsmv2.WrappedDesiredState[TConfig]{Config: cfg}, nil
 }
 
 // reasonNoHealthCheck is the verdict reason for a good poll on a worker that

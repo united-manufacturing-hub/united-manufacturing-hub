@@ -411,6 +411,25 @@ var _ = Describe("simpleWorker", func() {
 		})
 	})
 
+	Describe("DeriveDesiredState", func() {
+		It("reads a setting containing {{ as a literal value", func() {
+			w, err := newProbeWorker(MonitorSpec[probeConfig, probeStatus, struct{}]{
+				WorkerType: "simpleworker_derive_braces",
+				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+					return probeStatus{}, nil
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			childSpec, err := config.NewChildSpec("probe", "simpleworker_derive_braces", probeConfig{Target: "ab{{cd"}, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			desired, err := w.DeriveDesiredState(childSpec.UserSpec)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fsmv2.ExtractConfig[probeConfig](desired).Target).To(Equal("ab{{cd"))
+		})
+	})
+
 	Describe("dependencies", func() {
 		It("binds the author's poll value into the framework's deps slot", func() {
 			type probeDeps struct {
