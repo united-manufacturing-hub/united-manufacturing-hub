@@ -95,6 +95,13 @@ var _ = Describe("MergeAgentLocation", func() {
 			wantMerged: map[string]string{"enterprise": "acme"},
 			wantPath:   "",
 		},
+		{
+			name:       "a non-canonical integer key is copied but never affects the path",
+			agent:      map[string]string{"0": "acme"},
+			own:        map[string]string{"01": "x", "+2": "y"},
+			wantMerged: map[string]string{"0": "acme", "01": "x", "+2": "y"},
+			wantPath:   "acme",
+		},
 	}
 
 	for _, tc := range mergeCases {
