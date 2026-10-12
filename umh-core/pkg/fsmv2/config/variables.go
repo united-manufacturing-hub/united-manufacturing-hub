@@ -18,6 +18,9 @@ package config
 // Unlike a JSON round-trip, this preserves numeric types (int, int64,
 // float32, etc.) instead of coercing all numbers to float64.
 //
+// The values it copies are map[string]any, map[any]any and []any, cloned
+// recursively; every other value is returned as is.
+//
 // UserSpec's three map fields (Variables, ConfigValues, Names) pass through
 // here on every Clone: a spec handed to another goroutine must not share
 // map storage with the spec the supervisor keeps.
@@ -45,6 +48,14 @@ func deepCloneValue(v any) any {
 	case map[string]any:
 		return DeepCloneMap(val)
 
+	case map[any]any:
+		result := make(map[any]any, len(val))
+		for k, item := range val {
+			result[k] = deepCloneValue(item)
+		}
+
+		return result
+
 	case []any:
 		result := make([]any, len(val))
 		for i, item := range val {
@@ -53,8 +64,9 @@ func deepCloneValue(v any) any {
 
 		return result
 
-	// Primitive types are immutable, return as-is (preserving original type).
-	// This preserves int, int64, float32, float64, bool, string, etc.
+	// Every other value is immutable or a typed container the caller owns,
+	// so it is returned as is. This preserves int, int64, float32, float64,
+	// bool, string, []string, map[string]string, etc.
 	default:
 		return v
 	}
