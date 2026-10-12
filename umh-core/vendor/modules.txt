@@ -584,8 +584,8 @@ github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap
 ## explicit; go 1.19
 github.com/united-manufacturing-hub/umh-utils/env
 github.com/united-manufacturing-hub/umh-utils/logger
-# github.com/vektah/gqlparser/v2 v2.5.58
-## explicit; go 1.22
+# github.com/vektah/gqlparser/v2 v2.5.60
+## explicit; go 1.25
 github.com/vektah/gqlparser/v2
 github.com/vektah/gqlparser/v2/ast
 github.com/vektah/gqlparser/v2/gqlerror
@@ -703,7 +703,7 @@ golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
-# golang.org/x/sync v0.23.0
+# golang.org/x/sync v0.24.0
 ## explicit; go 1.26.0
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
