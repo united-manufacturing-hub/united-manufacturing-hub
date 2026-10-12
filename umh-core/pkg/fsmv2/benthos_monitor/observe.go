@@ -81,6 +81,10 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	}
 
 	prev := d.prev
+	// before holds the failure counters this scrape is compared with for
+	// LastIncreaseAt: the previous scrape's, or 0 after a restart, the same
+	// values the engine compares this scrape against.
+	var before map[string]int64
 	switch {
 	case prev == nil:
 		d.engine = newEngine()
@@ -89,7 +93,10 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	case counterSeriesChanged(prev, &cur):
 		rebuild(d, nil, at)
 	case at.Sub(prev.at) > constants.BenthosLogWindow:
+		before = prev.failures
 		rebuild(d, prev.failures, at)
+	default:
+		before = prev.failures
 	}
 
 	fired, _ := d.engine.Observe(sampleFrom(cur), diagnosis.Environment{}, at)
@@ -106,6 +113,12 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	}
 	cur.result.IsActive = cur.result.Input.MessagesPerSecond > 0
 	cur.verdict = failureVerdict(d.engine, fired, at)
+	if prev != nil {
+		cur.verdict.LastIncreaseAt = prev.verdict.LastIncreaseAt
+		if rose(before, cur.failures) {
+			cur.verdict.LastIncreaseAt = at
+		}
+	}
 	d.prev = &cur
 
 	return cur.result, cur.verdict
@@ -126,6 +139,18 @@ func counterSeriesChanged(prev, cur *observation) bool {
 
 	for name, v := range cur.failures {
 		if v < prev.failures[name] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// A counter missing from before counts as 0. before is nil after a restart,
+// so any counter above 0 on the first scrape after it is a rise.
+func rose(before, cur map[string]int64) bool {
+	for name, v := range cur {
+		if v > before[name] {
 			return true
 		}
 	}

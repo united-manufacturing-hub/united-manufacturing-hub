@@ -34,7 +34,10 @@ type FailureVerdict struct {
 	// ObservedAt is the scrape the verdict was computed for.
 	ObservedAt time.Time
 
-	// LastIncreaseAt is when the most recent increase crossed its mark.
+	// LastIncreaseAt is the latest scrape at which any failure counter was
+	// higher than at the scrape before it. After a restart the scrape before
+	// counts as 0. It is zero until the first increase, and it is computed from
+	// the raw counters, not from the fired signals.
 	LastIncreaseAt time.Time
 }
 
