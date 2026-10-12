@@ -55,7 +55,7 @@ This section documents umh-core's security features across container security, a
 
 **Applicable Standards**: NIST SP 800-53 AU-2 and AU-3 (comprehensive audit logging with timestamps, event types, and outcomes), NIST SP 800-92 (log generation, storage, and protection), IEC 62443-4-2 CR 2.8 (auditable events for security-relevant actions)
 
-**Implementation**: All services write structured logs to /data/logs/ with S6 supervision, using TAI64N timestamps for precise event ordering. FSM state transitions are tracked for all components, with rolling log rotation to manage storage. Logs capture configuration changes, component lifecycle events, and connection status for all industrial protocols and data flows.
+**Implementation**: All services write structured logs to /data/logs/ with S6 supervision, with an ISO 8601 timestamp on every line. FSM state transitions are tracked for all components, with rolling log rotation to manage storage. Logs capture configuration changes, component lifecycle events, and connection status for all industrial protocols and data flows.
 
 **Deployment Considerations**: Current logging tracks system events and component states but does not capture individual user actions performed through the ManagementConsole interface. User-level audit trails for configuration changes are planned for future releases.
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package supervisor internal test for the graceful-drain budget cascading
-// contract (pkg/fsmv2/CLAUDE.md §"Graceful Shutdown Cascading"): each level
+// contract (supervisor/doc.go, "Graceful shutdown budget"): each level
 // samples base × subtree height at Shutdown entry and its child drains spend
 // from that same budget, so per-level budgets do not sum — a chain of depth N
 // drains within N×base total (depth 1 = base, depth 2 = 2×base, depth 3 =
@@ -191,7 +191,7 @@ func (w *cascadeTreeWorker) GetInitialState() fsmv2.State[any, any] {
 	return w.initialState
 }
 
-var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown Cascading)", func() {
+var _ = Describe("Graceful drain budget cascading", func() {
 	var buf *shutdownTestSyncBuffer
 
 	BeforeEach(func() {
@@ -312,8 +312,8 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		}, 5*time.Second, 20*time.Millisecond).Should(BeTrue(),
 			"depth-3 tree (root worker → mid supervisor → leaf supervisor) never fully spawned")
 
-		// Drain the whole tree. Contract under test (pkg/fsmv2/CLAUDE.md
-		// §"Graceful Shutdown Cascading"): each level samples base × subtree
+		// Drain the whole tree. Contract under test (supervisor/doc.go,
+		// "Graceful shutdown budget"): each level samples base × subtree
 		// HEIGHT at Shutdown entry — leaf base, mid 2×base, root 3×base — and
 		// its child drains spend from that same budget, so the mid worker's
 		// 1.1×base graceful stop completes warn-free and the whole chain
@@ -444,8 +444,8 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 			elapsed, 3*cascadeTruncationBase, 3*perLevelTeardownSlop)
 	})
 
-	// Sibling-sequential exhaustion (CLAUDE.md §Graceful Shutdown Cascading,
-	// wide-tree paragraph): two stuck depth-2 subtrees spend ≈2×base each from
+	// Sibling-sequential exhaustion (supervisor/doc.go, "Graceful shutdown
+	// budget", the wide-tree case): two stuck depth-2 subtrees spend ≈2×base each from
 	// the root's 3×base budget, so the root's own workers reach Phase 3 with
 	// the budget already overdrawn. The root must warn immediately and break
 	// out — a regression that regrants a fresh window on a non-positive
@@ -575,8 +575,8 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 			elapsed, 4*cascadeTruncationBase, 5*perLevelTeardownSlop)
 	})
 
-	// Zero-worker exhaustion (CLAUDE.md §Graceful Shutdown Cascading: "A level
-	// that exhausts its budget always warns and breaks out"): zero workers on
+	// Zero-worker exhaustion (supervisor/doc.go, "Graceful shutdown budget":
+	// "A level that runs out of budget always warns and moves on"): zero workers on
 	// a started supervisor is a normal transient (reconciliation.go, tick's
 	// no-worker skip), and such a level still has children whose drains can
 	// overrun its budget. The warn must not hide inside the worker-drain

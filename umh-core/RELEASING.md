@@ -2,7 +2,7 @@
 
 ## Overview
 
-All development happens on `staging`. To release, merge `staging` into `main` via PR, then create a GitHub Release on `main`. Creating the Release also creates the git tag, which triggers all downstream automation.
+All development happens on `staging`, and releases are cut from it: create a GitHub Release that targets `staging`. Creating the Release also creates the git tag, which triggers all downstream automation. The `main` branch is no longer used.
 
 ## Changelog convention
 
@@ -10,13 +10,12 @@ During development, all changelog entries go under `## Unreleased` at the top of
 
 ## Pre-release (nightly)
 
-1. Create a PR from `staging` → `main`, review and merge
-2. Go to [Releases > Draft a new release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/new)
-3. Create a **new tag** with the format `v0.X.Y-pre.N` (e.g., `v0.44.10-pre.1`)
-4. Target: `main`
-5. Check **"Set as a pre-release"**
-6. Body can be minimal — pre-releases don't get changelog sync or release notes automation
-7. Click **Publish release**
+1. Go to [Releases > Draft a new release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/new)
+2. Create a **new tag** with the format `v0.X.Y-pre.N` (e.g., `v0.44.10-pre.1`)
+3. Target: `staging`
+4. Check **"Set as a pre-release"**
+5. Body can be minimal — pre-releases don't get changelog sync or release notes automation
+6. Click **Publish release**
 
 ### What happens automatically
 
@@ -27,14 +26,13 @@ During development, all changelog entries go under `## Unreleased` at the top of
 ## Stable release
 
 1. Create a PR to `staging` that renames `## Unreleased` in `CHANGELOG.md` to the version being released (e.g., `## [0.44.12]`) and adds a fresh empty `## Unreleased` section above it. Review all entries. Merge this PR.
-2. Create a PR from `staging` → `main`, review and merge
-3. Go to [Releases > Draft a new release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/new)
-4. Create a **new tag** with the format `v0.X.Y` (e.g., `v0.44.10`) — no `-pre.` suffix
-5. Target: `main`
-6. Release name (title): the version only, e.g. `v0.44.12`. The changelog.umh.app entry uses it as its title.
-7. Body (optional): paste the CHANGELOG.md section for this version as a fallback. Automation will overwrite it with a formatted version including the changelog.umh.app link. If automation fails, the original body is preserved.
-8. Do NOT check "Set as a pre-release"
-9. Click **Publish release**
+2. Go to [Releases > Draft a new release](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/new)
+3. Create a **new tag** with the format `v0.X.Y` (e.g., `v0.44.10`) — no `-pre.` suffix
+4. Target: `staging`
+5. Release name (title): the version only, e.g. `v0.44.12`. The changelog.umh.app entry uses it as its title.
+6. Body (optional): paste the CHANGELOG.md section for this version as a fallback. Automation will overwrite it with a formatted version including the changelog.umh.app link. If automation fails, the original body is preserved.
+7. Do NOT check "Set as a pre-release"
+8. Click **Publish release**
 
 ### What happens automatically
 

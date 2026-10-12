@@ -130,7 +130,7 @@ type Action[TDeps any] interface {
 }
 
 // NextResult contains the result of a State.Next() evaluation.
-// All fields except State are optional - use helpers.Result() to construct.
+// All fields except State are optional. State files construct it with Transition.
 type NextResult[TSnapshot any, TDeps any] struct {
 	// State is the next state (can be same state if no transition).
 	State State[TSnapshot, TDeps]
@@ -140,14 +140,20 @@ type NextResult[TSnapshot any, TDeps any] struct {
 
 	// Reason is a human-readable explanation of the current state.
 	// REQUIRED - describes WHY we're in this state.
-	// Can include dynamic data from the snapshot.
+	// Operators read it in the state-transition log, in the supervisor's
+	// heartbeat log and in the parent's ChildInfo.StateReason, so write it for
+	// someone who has not read the code. Build it with fmt.Sprintf from
+	// snapshot values instead of fixed text:
+	//   - a stop transition includes snap.StopReason();
+	//   - a catch-all self-return names the precondition still missing
+	//     ("waiting: hasTransport=true, hasValidToken=false");
+	//   - a degraded state includes the consecutive error count.
 	// Example: "sync degraded: 5 consecutive errors (authentication_failure)"
+	// See workers/transport/pull/state/state_degraded.go.
 	Reason string
 
 	// Children is the parent's intended children-set for this tick.
-	// The supervisor reads this field in L5 and reconciles spawn / despawn /
-	// config-update against its own children registry. Until then, nil signals
-	// 'no opinion' and the supervisor falls back to the legacy ChildrenSpecs path.
+	// The supervisor creates, removes and updates its children to match it.
 	//
 	// Discriminator (Go-level, unambiguous):
 	//   - nil sentinel       → "no opinion" — supervisor falls back to the
@@ -407,6 +413,10 @@ type BaseUserSpec interface {
 }
 
 // --- Capability interfaces (optional, discovered via type assertion) ---
+//
+// Implement these on the concrete worker struct, never on an embedded base
+// type such as WorkerBase. Go promotes a base type's methods, so the type
+// assertion would switch the capability on for every worker that embeds it.
 
 // ActionProvider enables side effects via actions.
 // Workers that implement this interface opt into the action execution pipeline.

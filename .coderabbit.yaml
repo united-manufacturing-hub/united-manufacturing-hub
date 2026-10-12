@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Query the connected MCP servers (the Engineering Handbook and docs.umh.app) during reviews.
+# The default, auto, skips them on public repositories like this one.
+knowledge_base:
+  mcp:
+    usage: enabled
 reviews:
   high_level_summary: false
   poem: false

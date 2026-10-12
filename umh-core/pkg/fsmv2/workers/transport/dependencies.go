@@ -28,8 +28,9 @@ import (
 )
 
 // ChildFailureRateConfig is the shared failurerate.Config for push and pull
-// child workers. WindowSize=600 at the 1-second production tick rate covers
-// roughly 10 minutes. Threshold=0.9 triggers escalation at 90% failure rate.
+// child workers. WindowSize=600 counts outcomes, not time: at one outcome per
+// 100ms production tick it covers about one minute, and longer under backoff.
+// Threshold=0.9 triggers escalation at 90% failure rate.
 // MinSamples=100 suppresses spurious alerts during startup.
 var ChildFailureRateConfig = failurerate.Config{
 	WindowSize: 600,
