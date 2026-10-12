@@ -52,6 +52,10 @@ type templateSliceOuter struct {
 	Items []templateInner `yaml:"items"`
 }
 
+type templateArrayOuter struct {
+	Items [2]templateInner `yaml:"items"`
+}
+
 type templatePtrField struct {
 	Read *config.Template `yaml:"read"`
 }
@@ -400,6 +404,20 @@ var _ = Describe("Template", func() {
 		var cfgErr *config.ConfigError
 		Expect(errors.As(err, &cfgErr)).To(BeTrue())
 		Expect(cfgErr.Field).To(Equal("items.0.read"))
+	})
+
+	It("renders a Template inside an array of structs", func() {
+		s := templateArrayOuter{Items: [2]templateInner{{Read: `{{ .a }}`}, {Read: `{{ .b }}`}}}
+		err := config.RenderTemplates(&s, map[string]any{"a": "x", "b": "y"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s.Items[0].Read).To(Equal(config.Template("x")))
+		Expect(s.Items[1].Read).To(Equal(config.Template("y")))
+
+		bad := templateArrayOuter{Items: [2]templateInner{{Read: `{{ .a }}`}, {Read: `{{ .missing }}`}}}
+		err = config.RenderTemplates(&bad, map[string]any{"a": "x"})
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("items.1.read"))
 	})
 
 	It("names a list element with a dot-joined index, the form CheckPlainValues uses", func() {
