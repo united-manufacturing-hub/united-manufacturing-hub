@@ -72,20 +72,19 @@ Steal uses the 95th percentile once 20 samples are in, and the mean before that,
 instance is judgeable within seconds of starting. Bare metal reports no steal at all, so on a
 physical machine that signal reads "not measured" with its reason rather than 0%.
 
-### What 20% CPU pressure means
+### CPU contention while cores are free
 
-CPU pressure is the `some avg60` value of the container's
-[Pressure Stall Information](https://docs.kernel.org/accounting/psi.html), as defined by the Linux
-kernel. It is the share of the last 60 seconds in which at least one task of the instance was ready
-to run but had no free core. At 20%, tasks waited for a core during 12 seconds of the last minute.
-That is work that was due and did not run, so it arrives late.
+The **CPU contention** status means that work in the UMH Core container had to wait for a CPU core. It can appear while the machine has free cores. Work that waits finishes late, for example a bridge reading its PLC or UMH Core applying a configuration change. Above 20% CPU pressure, the CPU health is degraded and UMH starts no new bridge on the instance. Bridges already running are left alone. Once pressure falls below 12%, the CPU health recovers. A waiting bridge then starts on its own.
 
-Pressure can pass 20% while the machine still has free cores. Usage is an average of how busy the
-cores were over the minute. Pressure counts the moments in which more tasks wanted a core than
-there were free cores. A workload that wakes many tasks at the same time, for example on every
-tick of a control loop, waits in each of those bursts, even if the cores are idle for the rest of
-the minute. The average hides these waits, which is why UMH reads pressure instead. For more, see
-[why we should get rid of average CPU utilization](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/).
+CPU pressure is the share of time in which at least one task in the container was ready to run and waited for a core. Linux measures it per container. At 20%, a task was waiting during about 12 of every 60 seconds.
+
+Any program on Linux can wait for a core on a machine whose cores are free on average. A CPU usage graph averages over a second or longer. A wait of a few milliseconds disappears in that average. A program that starts more tasks at one moment than there are cores makes the extra tasks wait. The cores can then be idle for the rest of the second. Tasks also wait when other software on the machine holds the cores. They wait as well when the container has used up its CPU limit (see **Throttling** in the [Glossary](#glossary)).
+
+UMH Core is one such program. Every 100 ms, it starts the checks and updates for all its bridges and data flows at the same moment. This is UMH Core's own internal work, separate from how often a bridge polls its PLC. UMH is moving this work to FSMv2, a new design of UMH Core's internals that spreads it over time.
+
+To lower the pressure, give the machine more cores, move other software off it, or raise the container's CPU limit if it has one.
+
+To read the value yourself, run `docker exec <container name> cat /sys/fs/cgroup/cpu.pressure`. The CPU health check uses the `avg60` value of the `some` line, as defined in the Linux kernel's [Pressure Stall Information](https://docs.kernel.org/accounting/psi.html) documentation. The kernel updates it every 2 seconds and weights recent seconds more than older ones. The 12 seconds hold exactly only when the load is steady. [Why we should get rid of average CPU utilization](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/) shows with examples how an average CPU graph hides these waits.
 
 ## Enabling CPU pressure stats
 
