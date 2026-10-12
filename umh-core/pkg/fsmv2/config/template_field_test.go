@@ -320,6 +320,17 @@ var _ = Describe("Template", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("renders a variable declared from a map and reads a key through it", func() {
+		names := map[string]any{"conn": map[string]any{"host": "h"}}
+
+		out, err := config.Template(`{{ $c := .conn }}{{ $c.host }}`).Render("read", names)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out).To(Equal("h"))
+
+		_, err = config.Template(`{{ $c := .conn }}{{ $c }}`).Render("read", names)
+		Expect(err).To(HaveOccurred(), "printing the declared map must still fail")
+	})
+
 	It("renders variable assignments without guarding them", func() {
 		out, err := config.Template(`{{$x := .a}}{{ $x }}`).Render("read", map[string]any{"a": "x"})
 
