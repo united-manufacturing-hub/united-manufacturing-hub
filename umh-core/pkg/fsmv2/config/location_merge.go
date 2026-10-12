@@ -25,6 +25,19 @@ import (
 // forcing a merge loop over a billion entries.
 const maxLocationLevel = 1000
 
+// canonicalLevelIndex returns the level index a location key names and
+// whether the key spells the index the way strconv.Itoa does. A key like
+// "01" or "+2" parses as an integer but is not canonical, so it names no
+// level.
+func canonicalLevelIndex(key string) (int, bool) {
+	n, err := strconv.Atoi(key)
+	if err != nil || n < 0 || strconv.Itoa(n) != key {
+		return 0, false
+	}
+
+	return n, true
+}
+
 // MergeAgentLocation merges the agent's location with a worker's own. Map keys
 // are level indexes, the canonical string form of 0, 1, 2, ..., not the named
 // ISA-95 tiers of LocationLevel. The agent's value is kept on a level index
@@ -40,13 +53,13 @@ func MergeAgentLocation(agent, own map[string]string) (map[string]string, string
 	max := -1
 
 	for key := range agent {
-		if n, err := strconv.Atoi(key); err == nil && n <= maxLocationLevel && n > max {
+		if n, ok := canonicalLevelIndex(key); ok && n <= maxLocationLevel && n > max {
 			max = n
 		}
 	}
 
 	for key := range own {
-		if n, err := strconv.Atoi(key); err == nil && n <= maxLocationLevel && n > max {
+		if n, ok := canonicalLevelIndex(key); ok && n <= maxLocationLevel && n > max {
 			max = n
 		}
 	}
@@ -119,8 +132,8 @@ func LocationFromAny(raw any) (map[string]string, error) {
 	for rawKey, rawValue := range entries {
 		key := fmt.Sprint(rawKey)
 
-		n, err := strconv.Atoi(key)
-		if err != nil || n < 0 || strconv.Itoa(n) != key {
+		n, canonical := canonicalLevelIndex(key)
+		if !canonical {
 			return nil, &ConfigError{Field: "location", Err: fmt.Errorf("level key %q is not a non-negative canonical integer", key)}
 		}
 
