@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- A connected historian now shows "connected to TimescaleDB" as its status message instead of "running (no health check)"
+
 ## [0.44.43]
 
 ### Improvements

@@ -352,11 +352,16 @@ func databaseSizeReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host st
 	}
 }
 
+func health(config.HistorianConfig, TimescaleStatus) simple.Health {
+	return simple.Healthy("connected to TimescaleDB")
+}
+
 func init() {
 	simple.Register(simple.MonitorSpec[config.HistorianConfig, TimescaleStatus, Deps]{
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		Poll:       Poll,
+		Health:     health,
 		NewDeps:    newDeps,
 	})
 }
