@@ -235,7 +235,7 @@ func RenderTemplates(v any, names map[string]any) error {
 					return err
 				}
 			}
-		case reflect.Slice:
+		case reflect.Slice, reflect.Array:
 			for i := range sv.Len() {
 				if err := walk(sv.Index(i), joinPath(prefix, strconv.Itoa(i))); err != nil {
 					return err
