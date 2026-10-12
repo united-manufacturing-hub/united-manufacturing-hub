@@ -30,14 +30,14 @@ import (
 // BridgeVariablesScenario checks that a bridge's own values render into its
 // flow templates. Those values are its config fields, its variables, the agent
 // location and the config values the application hands down. It checks that
-// each bridge's flows stay its own. It also checks that a config mistake holds
+// each bridge's flows stay its own. It also checks that a config error holds
 // back only the worker or the flow it is a mistake in. A broken write template
 // keeps write's last good text while read keeps rendering. A bridge whose
 // connection host or variable name is a mistake is never created. A bridge
 // whose read template cannot parse runs, and its read flow is never created.
 var BridgeVariablesScenario = Scenario{
 	Name:        "bridge-variables",
-	Description: "A bridge's values render into its flows; two bridges with one shared template render apart; a config mistake holds back only the flow it is a mistake in",
+	Description: "A bridge's values render into its flows; two bridges with one shared template render apart; a config error holds back only the flow it is a mistake in",
 
 	Run: func(ctx context.Context, env Env) error {
 		env.Step("hand the application its config values: the agent's location and the historian's host and password")
@@ -53,7 +53,7 @@ var BridgeVariablesScenario = Scenario{
 				},
 			},
 		}); err != nil {
-			return fmt.Errorf("set the config variables: %w", err)
+			return fmt.Errorf("set the config values: %w", err)
 		}
 
 		env.Step("upsert bridge b1 with a read and a write template that use its connection, location and variables")
@@ -238,7 +238,7 @@ ns=3;s="DB2"."X"
 			return fmt.Errorf("wait for b3's read flow: %w", err)
 		}
 
-		env.Step("S7: break b1's write template with a misspelled variable name")
+		env.Step("break b1's write template with a misspelled variable name")
 
 		brokenWrite := b1Values()
 		brokenWrite["write"] = "{{ .variables.SLAVEID }}\n"
@@ -261,7 +261,7 @@ ns=3;s="DB2"."X"
 			return fmt.Errorf("read keeps rendering while write is broken: %w", err)
 		}
 
-		env.Step("S8: restore b1's write template with a suffix")
+		env.Step("restore b1's write template with a suffix")
 
 		fixedWrite := b1Values()
 		fixedWrite["write"] = b1Write + " fixed\n"
@@ -274,10 +274,12 @@ ns=3;s="DB2"."X"
 			return fmt.Errorf("wait for write's new rendered text: %w", err)
 		}
 
-		// absentForNPolls checks, ten times with a pause between, that every
-		// given child is absent (the client holds no observation for it)
-		// while b1's read and write flows stay Running. The caller waits for
-		// the positive events first: the config_error warning.
+		// absentForNPolls checks, on every poll of the loop below with a
+		// pause between, that every given child is absent (the client holds
+		// no observation for it) while b1's read and write flows stay
+		// Running. Call it only after the child's config_error warning was
+		// seen; before that, an absent child may only mean the supervisor
+		// has not reached it yet.
 		absentForNPolls := func(refs ...dynamicchildren.Ref) error {
 			for range 10 {
 				for _, ref := range refs {
@@ -311,7 +313,7 @@ ns=3;s="DB2"."X"
 			return nil
 		}
 
-		env.Step("S9: a bridge whose connection host holds a placeholder is never created")
+		env.Step("a bridge whose connection host holds a placeholder is never created")
 
 		b4Ref := dynamicchildren.Ref{WorkerType: example_bridge.WorkerTypeName, Name: "b4"}
 
@@ -335,7 +337,7 @@ ns=3;s="DB2"."X"
 			return fmt.Errorf("poll for b4's absence while b1's flows stay Running: %w", err)
 		}
 
-		env.Step("S10: a bridge whose variable claims the location name is never created")
+		env.Step("a bridge whose variable claims the location name is never created")
 
 		b5Ref := dynamicchildren.Ref{WorkerType: example_bridge.WorkerTypeName, Name: "b5"}
 
@@ -358,7 +360,7 @@ ns=3;s="DB2"."X"
 			return fmt.Errorf("poll for b5's absence while b1's flows stay Running: %w", err)
 		}
 
-		env.Step("S14: a bridge whose read template cannot parse runs, and its read flow is never created")
+		env.Step("a bridge whose read template cannot parse runs, and its read flow is never created")
 
 		b6Ref := dynamicchildren.Ref{WorkerType: example_bridge.WorkerTypeName, Name: "b6"}
 
@@ -390,13 +392,13 @@ ns=3;s="DB2"."X"
 			return fmt.Errorf("b6 left Running: state=%s", b6Obs.State)
 		}
 
-		env.Step("S11: only the changed flow changes")
+		env.Step("only the changed flow changes")
 
-		// read uses the variables, the agent location and the config
-		// historian; write uses only the connection port.
-		s11Read := `{{ .variables.SLAVE_ID }} {{ .location_path }} {{ .config.historian.timescale.host }}
+		// read reads every input the changeInput cases below change; write
+		// reads none of them, so its text must stay the same.
+		changedInputRead := `{{ .variables.SLAVE_ID }} {{ .location_path }} {{ .config.historian.timescale.host }}
 `
-		s11Write := "{{ .connection.port }}\n"
+		changedInputWrite := "{{ .connection.port }}\n"
 
 		// The client exposes a child spec's names only through the bridge's
 		// own desired config: the names the flows render from are a deep
@@ -439,7 +441,7 @@ ns=3;s="DB2"."X"
 			}
 
 			if err := env.Client.SetConfigVariables(cfgValues); err != nil {
-				return fmt.Errorf("set the config variables: %w", err)
+				return fmt.Errorf("set the config values: %w", err)
 			}
 
 			return env.Client.Upsert(b1Ref, map[string]any{
@@ -451,8 +453,8 @@ ns=3;s="DB2"."X"
 				},
 				"location":  location,
 				"variables": variables,
-				"read":      s11Read,
-				"write":     s11Write,
+				"read":      changedInputRead,
+				"write":     changedInputWrite,
 			})
 		}
 
@@ -465,13 +467,13 @@ ns=3;s="DB2"."X"
 			return fmt.Errorf("upsert bridge b1 for the changed-input cases: %w", err)
 		}
 
-		const s11WriteWant = "502\n"
+		const changedInputWriteWant = "502\n"
 
 		if err := waitFlow("b1-read", "7 acme.hall.unknown.cell db.local\n"); err != nil {
 			return fmt.Errorf("read renders the changed-input base: %w", err)
 		}
 
-		if err := waitFlow("b1-write", s11WriteWant); err != nil {
+		if err := waitFlow("b1-write", changedInputWriteWant); err != nil {
 			return fmt.Errorf("write renders the changed-input base: %w", err)
 		}
 
@@ -481,7 +483,7 @@ ns=3;s="DB2"."X"
 		changeInput := func(label string, variables, agent, historian, location map[string]any,
 			readWant, probe, probeWant string,
 		) error {
-			env.Step("S11: change " + label)
+			env.Step("change " + label)
 
 			if err := upsertB1(variables, agent, historian, location); err != nil {
 				return fmt.Errorf("upsert bridge b1 with %s: %w", label, err)
@@ -495,7 +497,7 @@ ns=3;s="DB2"."X"
 				return fmt.Errorf("the new names reach the bridge: %w", err)
 			}
 
-			return waitFlow("b1-write", s11WriteWant)
+			return waitFlow("b1-write", changedInputWriteWant)
 		}
 
 		if err := changeInput("the SLAVE_ID variable",
@@ -541,7 +543,10 @@ ns=3;s="DB2"."X"
 		return nil
 	},
 
-	// The config_error warnings of the cases that hold a worker back are
-	// expected; no Sentry error or warning comes from any of them.
+	// Each case that holds a worker back logs one config_error warning
+	// without Sentry: warnConfigErrorOnce for the running write flow, and
+	// warnChildConfigErrorOnce for b4, b5 and b6's read flow, which are never
+	// created (both in supervisor/reconciliation.go). Any other warning or
+	// error fails the run.
 	ExpectedWarnings: []string{"config_error"},
 }

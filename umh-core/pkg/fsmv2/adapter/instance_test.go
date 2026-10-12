@@ -158,9 +158,9 @@ var _ = Describe("AdaptedInstance", func() {
 		fsmv2client.SetClient(nil)
 	})
 
-	// --- GetCurrentFSMState ladder (brief precedence, one It per rung) ---
+	// --- GetCurrentFSMState precedence, in order; the bootstrap rule has two Its ---
 
-	It("rung 1: isDisabled returns desiredState verbatim without reading the client", func() {
+	It("isDisabled returns desiredState verbatim without reading the client", func() {
 		// Even a degraded observation staged in the client must be ignored.
 		stageClient(true, freshObs(probeStatus{PortState: "open", Degraded: true, Reason: "boom"}), nil)
 
@@ -169,7 +169,7 @@ var _ = Describe("AdaptedInstance", func() {
 		Expect(inst.GetCurrentFSMState()).To(Equal("stopped"))
 	})
 
-	It("rung 2: GetClient()==nil with no prior state returns starting", func() {
+	It("GetClient()==nil with no prior state returns starting", func() {
 		fsmv2client.SetClient(nil)
 
 		inst := newInstance("running", false)
@@ -177,7 +177,7 @@ var _ = Describe("AdaptedInstance", func() {
 		Expect(inst.GetCurrentFSMState()).To(Equal("starting"))
 	})
 
-	It("rung 3: a degraded verdict on a Fresh observation returns degraded", func() {
+	It("a degraded verdict on a Fresh observation returns degraded", func() {
 		stageClient(true, freshObs(probeStatus{PortState: "open", Degraded: true, Reason: "boom"}), nil)
 
 		inst := newInstance("running", false)
@@ -185,7 +185,7 @@ var _ = Describe("AdaptedInstance", func() {
 		Expect(inst.GetCurrentFSMState()).To(Equal("degraded"))
 	})
 
-	It("rung 4: Unregistered (ref never upserted) returns starting (bootstrap)", func() {
+	It("Unregistered (ref never upserted) returns starting (bootstrap)", func() {
 		stageClient(false, nil, nil)
 
 		inst := newInstance("running", false)
@@ -193,7 +193,7 @@ var _ = Describe("AdaptedInstance", func() {
 		Expect(inst.GetCurrentFSMState()).To(Equal("starting"))
 	})
 
-	It("rung 4: NeverObserved (upserted but store ErrNotFound) returns starting", func() {
+	It("NeverObserved (upserted but store ErrNotFound) returns starting", func() {
 		stageClient(true, nil, persistence.ErrNotFound)
 
 		inst := newInstance("running", false)
@@ -201,7 +201,7 @@ var _ = Describe("AdaptedInstance", func() {
 		Expect(inst.GetCurrentFSMState()).To(Equal("starting"))
 	})
 
-	It("rung 5: a Stale observation (older than staleAfter) returns degraded", func() {
+	It("a Stale observation (older than staleAfter) returns degraded", func() {
 		stale := &fsmv2.Observation[probeStatus]{
 			CollectedAt: time.Now().Add(-5 * time.Second), // > 1s fallback staleAfter
 			Status:      probeStatus{PortState: "open"},
@@ -213,7 +213,7 @@ var _ = Describe("AdaptedInstance", func() {
 		Expect(inst.GetCurrentFSMState()).To(Equal("degraded"))
 	})
 
-	It("rung 6: a Fresh healthy observation returns the mapFresh output", func() {
+	It("a Fresh healthy observation returns the mapFresh output", func() {
 		stageClient(true, freshObs(probeStatus{PortState: "open"}), nil)
 
 		inst := newInstance("running", false)

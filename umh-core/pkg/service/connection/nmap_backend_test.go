@@ -14,9 +14,8 @@
 
 package connection
 
-// RED-phase (TDD) specs for the NMAP_BACKEND=fsmv2 wiring inside the
-// connection service. These describe NOT-YET-BUILT behavior and MUST fail to
-// compile/run until GREEN implements the assumed production symbols:
+// Specs for the NMAP_BACKEND=fsmv2 wiring inside the
+// connection service. They rely on these production symbols:
 //
 //   - constants.NmapBackendFSMv2          == "fsmv2"
 //   - (*ConnectionService).UsesFsmv2Backend() bool

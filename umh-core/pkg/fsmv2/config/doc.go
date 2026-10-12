@@ -24,15 +24,15 @@
 //
 // # Variables
 //
-// A worker entry's variables are one map: UserSpec.Variables
-// (map[string]any) holds the entry's own `variables:` section, decoded as
-// written. A template reads one as {{ .variables.<key> }}.
-//
-// Nothing merges a parent's variables into a child's. A parent that wants a
-// child to have a value writes it into the child's ChildSpec (see
-// workers/example/exampleparent/children.go), and the config.yaml values the
-// registry hands down reach a child as UserSpec.ConfigValues, which a
-// template reads as {{ .config.<key> }}.
+// A template reads a worker entry's variables as {{ .variables.<key> }}.
+// They come from one of two places: UserSpec.Variables (map[string]any),
+// which a parent sets on the entry, or a `variables:` section inside the
+// entry's config text, which DeriveDesiredState reads with EntryVariables.
+// Setting both is a config error. A parent that wants a child to have a value writes it into the child's
+// UserSpec.Variables (see workers/example/exampleparent/children.go,
+// RenderChildren), and the config.yaml values the registry hands down reach a
+// child as UserSpec.ConfigValues, which a template reads as
+// {{ .config.<key> }}.
 //
 // UserSpec.Variables uses map[string]any because users define arbitrary
 // config fields in YAML. A typed struct would require code changes for each
@@ -47,8 +47,10 @@
 //	    {
 //	        Name:       "mqtt-connection",
 //	        WorkerType: "mqtt_client",
-//	        UserSpec:   config.UserSpec{Config: "url: tcp://..."},
-//	        Variables: map[string]any{"URL": "tcp://localhost:1883"},
+//	        UserSpec: config.UserSpec{
+//	            Config:    "url: tcp://...",
+//	            Variables: map[string]any{"URL": "tcp://localhost:1883"},
+//	        },
 //	        Enabled: true,
 //	    },
 //	}

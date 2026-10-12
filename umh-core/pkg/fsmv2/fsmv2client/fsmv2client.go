@@ -73,9 +73,8 @@ func (c *FSMv2Client) Upsert(ref dynamicchildren.Ref, cfg map[string]any) error 
 	return c.w.Upsert(ref, cfg)
 }
 
-// SetConfigVariables passes values to the wrapped Writer, which hands them to
-// every child of the application as the child's own config section. See
-// Writer.SetConfigVariables for what it replaces.
+// SetConfigVariables passes values to the wrapped Writer. See
+// Writer.SetConfigVariables for what it stores and who receives it.
 func (c *FSMv2Client) SetConfigVariables(values map[string]any) error {
 	return c.w.SetConfigVariables(values)
 }

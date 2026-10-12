@@ -99,8 +99,10 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	return runScenario(ctx, cfg)
 }
 
-// runScenario executes a scenario on the kernel-only application supervisor (no
-// YAML children, so the config worker kernel is the only child).
+// runScenario runs a scenario on an application supervisor that starts with
+// one child, the config worker. The scenario adds workers through env.Client
+// into the dynamicchildren registry, and the application worker spawns each
+// one as its own child beside the config worker.
 //
 // runScenario keeps the process-global configworker deps key published for exactly
 // the supervisor's lifetime: the dynamicchildren registry is published under

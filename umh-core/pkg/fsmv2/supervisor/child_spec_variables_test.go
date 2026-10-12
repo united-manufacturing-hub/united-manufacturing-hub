@@ -61,6 +61,6 @@ var _ = Describe("Child spec variables", func() {
 		Expect(childSpec).To(Equal(config.UserSpec{
 			Config:    "child-config",
 			Variables: map[string]any{"A": "1"},
-		}), "the child keeps exactly its spec's variables: no parent, id or internal key appears anywhere in its UserSpec")
+		}), "the child's UserSpec must equal its ChildSpec's UserSpec, without the parent's variables")
 	})
 })

@@ -46,9 +46,7 @@ const kernelWorkerType = "configworker"
 //
 // Every emitted child except the config worker itself gets the registry's
 // config values as its own config section (UserSpec.ConfigValues), as a
-// deep copy, for templates written as {{ .config.* }}. A child's own
-// Variables is left exactly as it declared: the registry's values no
-// longer merge into them.
+// deep copy, for templates written as {{ .config.* }}.
 func renderUnion(snap fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]) []config.ChildSpec {
 	union := make([]config.ChildSpec, 0, 1+len(snap.Status.DynamicChildren)+len(snap.ChildrenSpecs))
 

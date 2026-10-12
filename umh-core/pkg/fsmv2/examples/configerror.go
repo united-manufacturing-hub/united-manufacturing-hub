@@ -32,7 +32,6 @@ var ConfigErrorScenario = Scenario{
 	Name:        "configerror",
 	Description: "Workers with a bad config are rejected and never start; beside them a valid parent reaches Running and an empty-config parent stays in TryingToStart",
 
-	// This run expects no logged errors.
 	ExpectedWarnings: []string{"reducer_error", "config_error"},
 
 	Run: func(ctx context.Context, env Env) error {
@@ -41,7 +40,7 @@ var ConfigErrorScenario = Scenario{
 		emptyRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-empty"}
 		defaultsRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "config-bad-max-failures"}
 
-		env.Step("create a valid parent, an empty-config parent, and two workers whose config has a string where a number belongs; the two are rejected with an error on every tick")
+		env.Step("create a valid parent, an empty-config parent, and two workers whose config has a string where a number belongs; the two are rejected, and each is logged once as a config_error warning")
 
 		if err := env.Client.Upsert(validRef, map[string]any{
 			"state":          "running",

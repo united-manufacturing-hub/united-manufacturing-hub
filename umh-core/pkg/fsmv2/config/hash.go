@@ -25,17 +25,13 @@ import (
 // This is used by the supervisor to detect when a UserSpec has changed,
 // enabling it to skip DeriveDesiredState calls when inputs are unchanged.
 //
-// The hash is computed from:
-//   - Config string (hashed directly)
-//   - Variables, ConfigValues and Names (serialized as JSON for determinism)
+// The hash is computed from every UserSpec field. The Config string is
+// hashed directly; the Variables, ConfigValues and Names maps are
+// serialized as JSON for determinism. Each map part is written through
+// writeHashedJSON.
 //
-// Each map part passes through normalize first, so a value yaml.v3 decoded
-// with non-string keys cannot fail the marshal. A part that still cannot be
-// marshaled hashes as its error text, so two different failing parts differ
-// from each other and from a part that marshals.
-//
-// Cache behavior: DeriveDesiredState is called when Config or Variables change.
-// If neither changes, the cached result is reused.
+// Cache behavior: DeriveDesiredState is called when any hashed part of the
+// UserSpec changes. If none changes, the cached result is reused.
 //
 // Map key ordering does not affect the hash because JSON marshaling
 // in Go produces sorted keys for maps.
@@ -57,9 +53,9 @@ func ComputeUserSpecHash(spec UserSpec) string {
 	return fmt.Sprintf("%016x", h.Sum64())
 }
 
-// writeHashedJSON writes v to h as JSON, after normalize. A value that cannot
-// be marshaled writes its error text instead, so it never drops out of the
-// hash silently.
+// writeHashedJSON writes v to h as JSON, after normalize. A part that still
+// cannot be marshaled hashes as its error text, so it never drops out of
+// the hash. Two failing parts with the same error text hash the same.
 func writeHashedJSON(h hash.Hash, v any) {
 	b, err := json.Marshal(normalize(v))
 	if err != nil {

@@ -160,10 +160,10 @@
 //
 // ## Variables
 //
-// A worker entry's variables are one map: UserSpec.Variables holds the
-// entry's own `variables:` section, and a template reads one as
-// {{ .variables.<key> }}. Nothing merges a parent's variables into a child's;
-// see config/childspec.go for the UserSpec definition.
+// A template reads a worker entry's own `variables:` section as
+// {{ .variables.<key> }}. The section arrives in UserSpec.Variables or as a
+// top-level `variables:` mapping in UserSpec.Config; WorkerBase rejects an
+// entry that sets both. See config/childspec.go for the UserSpec definition.
 //
 // ## Parent-child workers
 //
@@ -275,7 +275,6 @@
 //   - internal/helpers/ - Convenience helpers (base state types: RunningHealthyBase, DegradedBase, etc.)
 //   - supervisor/supervisor.go - Orchestration and lifecycle management
 //   - config/childspec.go - Hierarchical composition
-//   - config/variables.go - Variable namespaces
 //
 // # Architecture validation
 //

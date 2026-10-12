@@ -512,11 +512,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 //   - Child restart handled with exponential backoff (managed by health checker)
 //   - Non-blocking: health check completes in <1ms
 //
-// PHASE 0.5: Variable Injection (from Phase 0.5)
-//   - Global variables from the supervisor's spec, as they are
-//   - Internal variables (supervisorID, createdAt, bridgedBy)
-//   - User variables from UserSpec (preserved, not overwritten)
-//   - Variables available for template expansion in DeriveDesiredState
+// PHASE 0.5: User spec fetch
+//   - Reads this tick's UserSpec with getUserSpec and passes it to
+//     DeriveDesiredState unchanged; templates read its variables as
+//     {{ .variables.<key> }}
 //
 // PHASE 0: Hierarchical Composition (from Phase 0)
 //   - DeriveDesiredState from worker implementation
@@ -712,11 +711,11 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			return nil
 		}
 
-		// Zero workers on a started supervisor is a transient state (e.g., during child
-		// restart). The tick returns here and nothing reconciles or ticks this
-		// supervisor's children again until it has a worker once more or it is shut
-		// down; a child dropped in the removal tick goes with it, so the window is
-		// short. Log at Info, not Warn/Error, to avoid Sentry noise.
+		// With zero workers the tick returns here, and nothing reconciles or
+		// ticks this supervisor's children until it has a worker again or is
+		// shut down. A pending re-add that fails on a config error keeps it
+		// here for as long as the config stays broken. Tracked in ENG-6527.
+		// Log at Info, not Warn/Error, to avoid Sentry noise.
 		if s.noWorkersWarnedOnce.CompareAndSwap(false, true) {
 			s.logger.Info("tick_skipped_no_workers",
 				deps.HierarchyPath(s.GetHierarchyPathUnlocked()))
@@ -753,8 +752,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	// deriveConfigErr is set when the derive failed with a config error and
 	// the tick continues below on the desired state derived from the last
-	// good config. It is returned after the tick's work, so callers keep
-	// seeing the error they see today.
+	// good config. It is returned after the tick's work, so the caller still
+	// receives the derive's config error.
 	var deriveConfigErr error
 
 	if lastHash == currentHash && cachedState != nil {
@@ -816,18 +815,17 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	if deriveConfigErr == nil {
-		// The derive succeeded, so the warn-once memory (lastConfigErrorWarned)
-		// is re-armed: a config error that comes back after this warns again,
-		// even with the same message.
+		// The derive succeeded, so re-arm the warn-once memory; see
+		// warnConfigErrorOnce.
 		s.mu.Lock()
 		s.lastConfigErrorWarned = ""
 		s.mu.Unlock()
 	}
 
-	// The desired state derived from the last good config is the one the
-	// tick runs on: the save block below stores it with the lifecycle flags
-	// preserved, so the tick that continues on it reloads those flags from
-	// the store instead of saving a new document.
+	// A successful derive saves its desired state below, with the lifecycle
+	// flags preserved. A tick that continues after a config error saves
+	// nothing: it reloads only the lifecycle flags from the document an
+	// earlier tick stored.
 	var desiredDoc persistence.Document
 
 	if deriveConfigErr == nil {
@@ -903,12 +901,13 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			s.logTrace("derived_desired_state_saved")
 		}
 	} else {
-		// The config error continuation runs the worker on the stored desired
-		// state, so the shutdown gate below must read the lifecycle flags from
-		// that stored document. Load it read-only under the same lock the save
-		// path holds around its load, so a concurrent setter's flag write is
-		// visible here rather than being skipped; do NOT save, or the broken
-		// config's own content would reach the store.
+		// After a config error the tick runs the worker on the stored desired
+		// state, so the desiredDoc[FieldShutdownRequested] check before
+		// reconcileChildren must read the lifecycle flags from that stored
+		// document. Load it read-only under the same lock the save path holds
+		// around its load, so a concurrent setter's flag write is visible here
+		// rather than being skipped; do NOT save, or the broken config's own
+		// content would reach the store.
 		s.lifecycleFlagMu.Lock()
 
 		var existingDesiredTyped TDesired
@@ -1680,8 +1679,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// The child was created, so a later config error for it warns again.
 			// reconcileChildren holds s.mu, so the map is already protected.
 			delete(s.childConfigErrorWarned, spec.Name)
-			// And a created child is no longer held back, so the reducer's
-			// not-found warning must fire if it ever goes missing again.
+			// A created child is no longer held back, so applyDisableMapping's
+			// not-found warning (reducer_error) fires if it goes missing again.
 			delete(s.childCreateConfigError, spec.Name)
 
 			s.logTrace("lifecycle",
@@ -1952,10 +1951,10 @@ func (s *Supervisor[TObserved, TDesired]) warnConfigErrorOnce(cfgErr *config.Con
 }
 
 // warnChildConfigErrorOnce warns "config_error" for a child the parent could
-// not create, once per child name and message. The child supervisor is
-// rebuilt every tick, so the memory lives on the parent; creating the child
-// clears its entry, so a child that fails again warns again. The caller must
-// hold s.mu, as reconcileChildren does.
+// not create, once per child name and message. A child whose create keeps
+// failing gets a new child supervisor on every tick, so the memory lives on
+// the parent; creating the child clears its entry, so a child that fails
+// again warns again. The caller must hold s.mu, as reconcileChildren does.
 func (s *Supervisor[TObserved, TDesired]) warnChildConfigErrorOnce(childName string, cfgErr *config.ConfigError) {
 	message := cfgErr.Error()
 

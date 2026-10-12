@@ -90,8 +90,8 @@ func TestFatalMessage(t *testing.T) {
 	}
 }
 
-func TestRunnerCLIRouting(t *testing.T) {
-	t.Run("duration default: without --duration settles 1s", func(t *testing.T) {
+func TestRunnerCLI(t *testing.T) {
+	t.Run("duration default: without --duration settles defaultSettleWindow", func(t *testing.T) {
 		got, defaulted := resolveDuration(false, 0)
 		if got != defaultSettleWindow {
 			t.Errorf("a run given no --duration must settle %s after Run returns, got %v", defaultSettleWindow, got)

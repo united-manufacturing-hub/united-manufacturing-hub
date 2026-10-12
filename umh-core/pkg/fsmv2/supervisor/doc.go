@@ -64,9 +64,9 @@
 //
 // Fetches this tick's UserSpec with getUserSpec (avoiding a race with a
 // parent calling updateUserSpec) and hands it to DeriveDesiredState
-// unchanged. The supervisor injects nothing into the spec: a child derives
-// from exactly the UserSpec its parent's ChildSpec set, whose `variables:`
-// section is all a template reads as {{ .variables.<key> }}.
+// unchanged. A child derives from exactly the UserSpec its parent's
+// ChildSpec set; templates read its `variables:` section as
+// {{ .variables.<key> }}.
 //
 // ## Phase 0: Hierarchical composition
 //
@@ -79,16 +79,18 @@
 //   - Cache invalidated when UserSpec changes
 //
 // When the derive fails with a config error and a cached desired state from
-// an earlier good config exists, the supervisor keeps ticking the worker on
-// that cached state: the worker must still read a shutdown request and be
-// removable, and its children must keep being reconciled and ticked. The
-// worker runs on the stored desired state, which carries the lifecycle flags
-// (ShutdownRequested, Disabled), so a shutdown or disable requested during
-// the broken window still takes effect. The spec-hash cache is not updated
-// on the error, so every tick retries the derive and the new config reaches
-// the worker on the first derive that succeeds. A worker whose first derive
-// fails has no cached state and is not ticked. When such a supervisor shuts
-// down, its children are dropped, not recreated from the cached specs.
+// an earlier good config exists, the supervisor keeps ticking the worker,
+// because the worker must still read a shutdown request and be removable,
+// and its children must keep being reconciled and ticked. The worker runs
+// on the desired state stored from that good config. When the state machine
+// renders no children, the cached state supplies the children specs. The stored state carries the lifecycle
+// flags (ShutdownRequested, Disabled), so a shutdown or disable requested
+// during the broken window still takes effect. The spec-hash cache is not
+// updated on the error, so every tick retries the derive and the new config
+// reaches the worker on the first derive that succeeds. A worker whose
+// first derive fails has no cached state and is not ticked. When a
+// supervisor shuts down during a config error, its children are dropped,
+// not recreated from the cached children specs.
 //
 // Reconcile children:
 //   - Creates child supervisors for new ChildrenSpecs

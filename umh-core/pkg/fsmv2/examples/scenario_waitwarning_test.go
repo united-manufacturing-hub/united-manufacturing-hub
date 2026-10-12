@@ -33,7 +33,7 @@ var _ = Describe("WaitForWarning", func() {
 	})
 
 	It("waits for a Warn a goroutine logs after a delay, matching a field value", func() {
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
@@ -44,7 +44,7 @@ var _ = Describe("WaitForWarning", func() {
 				"config_error",
 			},
 			Run: func(ctx context.Context, env examples.Env) error {
-				env.Step("break the config once the wait is running")
+				env.Step("log a config_error warning 100 ms after the wait starts")
 
 				time.AfterFunc(100*time.Millisecond, func() {
 					env.Logger.Warn("config_error",
@@ -76,7 +76,7 @@ var _ = Describe("WaitForWarning", func() {
 		restore := examples.SetWaitForTimeoutForTest(200 * time.Millisecond)
 		DeferCleanup(restore)
 
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
@@ -124,7 +124,7 @@ var _ = Describe("WaitForWarning", func() {
 
 	It("fails the run for an unexpected Warn message and passes for an expected one", func() {
 		runScenario := func(expected []string) error {
-			logBuf := &v2LogBuffer{}
+			logBuf := &logBuffer{}
 			logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 			store := examples.SetupStore(logger)
 

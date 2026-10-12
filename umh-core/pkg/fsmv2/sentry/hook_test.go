@@ -1456,7 +1456,7 @@ var _ = Describe("FSMLogger to Sentry Event Mapping", func() {
 })
 
 // Warn must reach the log output but never Sentry: it carries a marker field
-// the hook checks, so a user's config mistake lands in logs only.
+// the hook checks, so a user's config error lands in logs only.
 var _ = Describe("FSMLogger Warn Sentry skip", func() {
 	var (
 		hook      *sentry.SentryHook

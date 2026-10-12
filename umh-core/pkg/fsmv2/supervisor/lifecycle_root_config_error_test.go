@@ -67,11 +67,11 @@ func sentryErrorCount(recorder *recordingSentryLogger, event string) int {
 }
 
 var _ = Describe("Supervisor root tick loop logging", func() {
-	It("keeps a root worker's config mistake out of Sentry while a plain derive error still reaches it", func() {
+	It("keeps a root worker's config error out of Sentry while a plain derive error still reaches it", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		// The root worker's config mistake must not reach Sentry from the
+		// The root worker's config error must not reach Sentry from the
 		// tick loop: warnConfigErrorOnce in the derive path already reported
 		// it.
 		configRecorder := newRecordingSentryLogger()
@@ -90,8 +90,7 @@ var _ = Describe("Supervisor root tick loop logging", func() {
 		configSuper.Start(ctx)
 		defer configSuper.Shutdown()
 
-		// The warn count stays >= 1 once set, so wait for it rather than
-		// sleeping a fixed interval and checking once.
+		// Wait for the first config_error warning.
 		Eventually(func() int {
 			return configRecorder.warnCount("config_error")
 		}, 5*time.Second).Should(BeNumerically(">=", 1))
@@ -106,13 +105,13 @@ var _ = Describe("Supervisor root tick loop logging", func() {
 		}, 5*time.Second).Should(BeNumerically(">=", afterWarn+5))
 
 		Expect(sentryErrorCount(configRecorder, "tick_error")).To(Equal(0),
-			"a config mistake must not reach Sentry from the root tick loop")
+			"a config error must not reach Sentry from the root tick loop")
 		Expect(configRecorder.sentryWarnEvents()).To(BeEmpty(),
-			"a config mistake must not reach Sentry as a warning either")
+			"a config error must not reach Sentry as a warning either")
 		Expect(configRecorder.warnCount("config_error")).To(Equal(1),
-			"the config mistake is warned exactly once")
+			"the config error is warned exactly once")
 
-		// A plain derive error is not a config mistake, so the root tick loop
+		// A plain derive error is not a config error, so the root tick loop
 		// still sends it to Sentry.
 		plainRecorder := newRecordingSentryLogger()
 		plainSuper := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
@@ -130,8 +129,6 @@ var _ = Describe("Supervisor root tick loop logging", func() {
 		plainSuper.Start(ctx)
 		defer plainSuper.Shutdown()
 
-		// Wait on the asserted event itself: the Sentry count only grows, so
-		// waiting on it cannot read the log before the tick finishes.
 		Eventually(func() int {
 			return sentryErrorCount(plainRecorder, "tick_error")
 		}, 5*time.Second).Should(BeNumerically(">=", 1),
@@ -140,12 +137,12 @@ var _ = Describe("Supervisor root tick loop logging", func() {
 })
 
 var _ = Describe("Supervisor worker restart logging", func() {
-	It("warns a config mistake that breaks a restart re-creation exactly once", func() {
+	It("warns a config error that breaks a restart re-creation exactly once", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		// The factory builds the replacement worker; its derive fails with
-		// the same kind of config mistake a broken spec produces.
+		// the same kind of config error a broken spec produces.
 		err := factory.RegisterFactoryByType("configerrorrestart",
 			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
 				return &countingDeriveWorker{
@@ -170,7 +167,7 @@ var _ = Describe("Supervisor worker restart logging", func() {
 		}
 
 		// The old worker asks for a restart; the replacement's derive then
-		// fails with the config mistake.
+		// fails with the config error.
 		removalState := &mockState{signal: fsmv2.SignalNeedsRemoval}
 		removalState.nextState = removalState
 
@@ -184,16 +181,15 @@ var _ = Describe("Supervisor worker restart logging", func() {
 
 		tickErr := super.TestTick(ctx)
 
-		// The restart's re-add fails on the config mistake, but the restart
-		// itself no longer fails: the re-add is remembered and retried on
-		// later ticks, so the tick returns nil (the parent worker's own
-		// derive succeeded).
+		// The restart's re-add fails on the config error. The restart itself
+		// returns nil: the re-add stays pending and later ticks retry it, so the
+		// tick returns nil (the parent worker's own derive succeeded).
 		Expect(tickErr).NotTo(HaveOccurred())
 		Expect(super.ListWorkers()).To(BeEmpty(),
 			"the old worker is removed and the re-add waits for the config to render")
 
 		Expect(recorder.warnCount("config_error")).To(Equal(1),
-			"the restart warns the config mistake exactly once")
+			"the restart warns the config error exactly once")
 		Expect(sentryErrorCount(recorder, "worker_add_derive_desired_failed")).To(Equal(0),
 			"the restart's derive failure must not also reach Sentry as a worker_add_derive_desired_failed error")
 		Expect(recorder.sentryWarnEvents()).To(BeEmpty())

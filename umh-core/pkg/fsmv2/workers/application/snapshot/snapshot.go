@@ -56,10 +56,9 @@ type ApplicationStatus struct {
 	// so a later step can emit it as a spawnable child from Next(), which only
 	// sees the snapshot; a Ref (WorkerType+Name only) cannot be spawned.
 	DynamicChildren []config.ChildSpec `json:"dynamic_children"`
-	// ConfigValues carries the registry's config values, which renderUnion
-	// puts on every child as its own config section (UserSpec.ConfigValues),
-	// for templates written as {{ .config.* }}. It is nil while the registry
-	// holds none.
+	// ConfigValues holds the registry's config values. renderUnion copies
+	// them onto each child except the config worker; see renderUnion. It is
+	// nil while the registry holds none.
 	ConfigValues map[string]any `json:"config_values,omitempty"`
 	// ChildrenCircuitOpen is the count of children with circuit breaker open.
 	ChildrenCircuitOpen int `json:"children_circuit_open"`

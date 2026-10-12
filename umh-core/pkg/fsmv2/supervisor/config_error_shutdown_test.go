@@ -34,7 +34,7 @@ import (
 )
 
 // countingShutdownState counts its Next calls and emits SignalNeedsRemoval
-// once the snapshot's desired state carries a shutdown request, so a spec
+// once the snapshot's desired state carries a shutdown request, so a test
 // can prove both that the supervisor keeps ticking a worker while its spec
 // is broken and that the worker reaches removal after RequestShutdown.
 type countingShutdownState struct {
@@ -61,7 +61,7 @@ func (s countingShutdownState) Next(snapshot any) fsmv2.NextResult[any, any] {
 
 // configTextShutdownWorker derives a running desired state, with the
 // children set on it, unless the user spec's config text contains "{{",
-// which fails the derive with a config mistake.
+// which fails the derive with a config error.
 type configTextShutdownWorker struct {
 	deriveCalls   atomic.Int64
 	nextCalls     atomic.Int64
@@ -107,7 +107,7 @@ func createStoreForWorkerTypes(workerTypes ...string) *storage.TriangularStore {
 	return storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 }
 
-var _ = Describe("Supervisor shutdown with a config mistake", func() {
+var _ = Describe("Supervisor shutdown with a config error", func() {
 	const (
 		parentWorkerType = "test"
 		childWorkerType  = "shutdownchild"
@@ -139,7 +139,7 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 		})).To(Succeed())
 	})
 
-	It("removes a running worker whose derive fails with a config mistake after RequestShutdown", func() {
+	It("removes a running worker whose derive fails with a config error after RequestShutdown", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -171,14 +171,14 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Break the spec and wait until a tick derived it and warned the
-		// config mistake, so the checks below run while the error lasts.
+		// config error, so the checks below run while the error lasts.
 		s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
 		Eventually(func() int {
 			return recorder.warnCount("config_error")
 		}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 		// The worker must stay listed while the spec is broken: a regression
-		// that removes it on the config mistake would pass the removal check
+		// that removes it on the config error would pass the removal check
 		// below vacuously, because RequestShutdown on zero workers returns nil.
 		Consistently(func() int {
 			return len(s.ListWorkers())
@@ -193,22 +193,21 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 
 		Expect(s.RequestShutdown(ctx, "test shutdown")).To(Succeed())
 
-		// Removal is a state the worker stays in, so waiting on it cannot pass
-		// on a window: the worker is only gone once the tick that read the
-		// shutdown request removed it.
+		// The worker is gone only after the tick that read the shutdown request
+		// removed it.
 		Eventually(func() []string {
 			return s.ListWorkers()
 		}, 5*time.Second, 10*time.Millisecond).Should(BeEmpty(),
-			"a worker with a config mistake must still be ticked on the desired state derived from its last good config, so it reaches removal after RequestShutdown")
+			"a worker with a config error must still be ticked on the desired state derived from its last good config, so it reaches removal after RequestShutdown")
 
 		// One warning and no Sentry event across the broken window: the
-		// config mistake is a user mistake, warned once, never escalated.
+		// config error is a user mistake, warned once, never escalated.
 		Expect(recorder.warnCount("config_error")).To(Equal(1))
 		Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 		Expect(recorder.sentryWarnEvents()).To(BeEmpty())
 	})
 
-	It("keeps calling the worker's state machine while the config mistake lasts", func() {
+	It("keeps calling the worker's state machine while the config error lasts", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -239,9 +238,8 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 			return worker.deriveCalls.Load() - deriveBaseline
 		}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 3))
 
-		// The worker's Next keeps being called while the error lasts. An
-		// implementation that ticks the worker only once a shutdown request is
-		// stored keeps the removal spec above green, but cannot pass here.
+		// The worker's Next keeps being called while the error lasts, not only
+		// after a shutdown request.
 		baseline := worker.nextCalls.Load()
 
 		Eventually(func() int64 {
@@ -341,7 +339,7 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 
 				return len(s.ListWorkers()) == 0 && len(children) == 0
 			}, 5*time.Second, 20*time.Millisecond).Should(BeTrue(),
-				"a parent with a config mistake must drop its children on shutdown")
+				"a parent with a config error must drop its children on shutdown")
 
 			// No child supervisor reappears: the tick after the removal does
 			// not recreate one from the cached children specs.
@@ -370,9 +368,9 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 				return worker.deriveCalls.Load()
 			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 2))
 
-			// Disable the worker through the same path the disable-mapping
-			// pass uses: the stored desired state carries Disabled=true and
-			// the state machine holds it resident in Stopped.
+			// Disable the worker with SetDisabled, the setter applyDisableMapping
+			// calls: the stored desired state carries Disabled=true and the state
+			// machine holds it resident in Stopped.
 			Expect(s.SetDisabled(ctx, true)).To(Succeed())
 
 			// Break the spec while the worker is disabled.
@@ -400,9 +398,9 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 	})
 })
 
-// shutdownChildWorker is the child of the parent-with-child spec: its state
-// counts Next calls, so a spec can prove the parent keeps ticking the child
-// while the parent's own spec is broken.
+// shutdownChildWorker is the child of the parent-with-child worker: its
+// state counts Next calls, so a test can prove the parent keeps ticking the
+// child while the parent's own spec is broken.
 type shutdownChildWorker struct {
 	nextCalls *atomic.Int64
 }

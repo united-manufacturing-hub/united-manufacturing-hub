@@ -182,11 +182,10 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 						deps.HierarchyPath(s.GetHierarchyPath()),
 						deps.Err(err))
 				case errors.As(err, &cfgErr):
-					// warnConfigErrorOnce (own-worker derive and worker restart)
-					// and warnChildConfigErrorOnce (child creation) already
-					// warned this config mistake once; a per-tick Sentry error
-					// would duplicate it. The debug line keeps the mistake
-					// visible per tick, the way the circuit-open branch does.
+					// warnConfigErrorOnce already warned this config error in
+					// tick's derive; a per-tick Sentry error would
+					// duplicate it. The debug line keeps it visible per tick, as
+					// the circuit-open branch does.
 					s.logger.Debug("tick_suppressed_config_error",
 						deps.HierarchyPath(s.GetHierarchyPath()),
 						deps.Err(err))
@@ -939,8 +938,9 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
-			// A config error was already warned once; failing the restart
-			// again would only duplicate the warning.
+			// The re-add is pending and retryPendingReadds retries it every tick,
+			// so the restart has not failed: warn the config error once and
+			// return nil.
 			s.warnConfigErrorOnce(cfgErr)
 
 			return nil

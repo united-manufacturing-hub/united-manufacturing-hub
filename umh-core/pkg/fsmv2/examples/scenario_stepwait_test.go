@@ -48,7 +48,7 @@ var _ = Describe("Scenario steps and waits", func() {
 	})
 
 	It("logs each step once, and fails a never-done wait naming the last step, the check and the last value seen", func() {
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
@@ -139,7 +139,7 @@ var _ = Describe("Scenario steps and waits", func() {
 	It("logs one scenario_wait_passed line per wait that passes, and none for a wait that never passes", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 

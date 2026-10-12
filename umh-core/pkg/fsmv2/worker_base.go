@@ -101,10 +101,11 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 // rendering it, renders every config.Template field, validates the lifecycle
 // state when TConfig embeds config.BaseUserSpec (or implements GetState()
 // string), and caches the config. Templates render against the names a
-// parent hands down when UserSpec.Names carries at least one entry; a nil
-// or empty Names builds the names from the config's own fields, the config
-// values a parent hands down, the user variables, and whatever names the
-// config type's ReadyMade and Shortcuts methods supply when it has them.
+// parent hands down when UserSpec.Names carries at least one entry; with a
+// nil or empty Names, DeriveDesiredState builds the names from the config's
+// own fields, the config values a parent hands down, the user variables, and
+// whatever names the config type's ReadyMade and Shortcuts methods supply
+// when it has them.
 //
 // Workers that need children specs must override this method in their own struct
 // and either call w.WorkerBase.DeriveDesiredState(spec) first (then read the
@@ -139,10 +140,11 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		return nil, fmt.Errorf("failed to read the config fields: %w", err)
 	}
 
-	// One channel for variables: the spec's variables bundle when it carries
-	// one, otherwise the entry's own top-level variables mapping, which
-	// EntryFields drops from the fields. Both carrying variables is a config
-	// mistake, because the two would silently hide each other.
+	// One channel for the variables a template reads as {{ .variables.<key> }}:
+	// the spec's UserSpec.Variables when the spec carries them, otherwise
+	// the config's variables section, which EntryFields drops from the
+	// fields. Both carrying variables is a config error, because the two
+	// would silently hide each other.
 	entryVariables, entryHasVariables, err := config.EntryVariables(userSpec.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read the entry's variables: %w", err)
@@ -154,7 +156,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 	case entryHasVariables && len(variables) > 0:
 		return nil, &config.ConfigError{
 			Field: "variables",
-			Err:   errors.New("the entry declares a variables section while the spec also carries a variables bundle"),
+			Err:   errors.New("variables is set both inside the config and on the spec; set it in one place"),
 		}
 	case entryHasVariables:
 		variables = entryVariables
@@ -182,7 +184,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 			if err := config.ValidateDesiredState(state); err != nil {
 				return nil, &config.ConfigError{
 					Field: "state",
-					Err:   fmt.Errorf("invalid desired state: unknown value %q: %w", state, err),
+					Err:   fmt.Errorf("unknown value %q: %w", state, err),
 				}
 			}
 		}

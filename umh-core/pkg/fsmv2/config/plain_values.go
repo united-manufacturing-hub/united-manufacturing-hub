@@ -72,10 +72,10 @@ func checkPlainValue(sv reflect.Value, path string) error {
 		return nil
 	}
 
-	// Exempt leaves: these types carry text their own decoding consumes, so
-	// the walk must not judge it. EntryFields removes the same paths from
-	// the raw config map, so the typed walk and the map walk judge the
-	// same values.
+	// Exempt leaves: Template fields render later; a UserSpec and a type
+	// with its own UnmarshalYAML consume their own text. EntryFields removes
+	// the same paths from the raw config map, so CheckPlainValues on the
+	// typed config and EntryFields on the raw map judge the same values.
 	if sv.Type() == templateType || sv.Type() == userSpecType || isYAMLUnmarshaler(sv.Type()) {
 		return nil
 	}

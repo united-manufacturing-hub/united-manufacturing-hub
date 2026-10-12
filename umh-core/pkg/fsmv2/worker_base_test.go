@@ -687,9 +687,7 @@ var _ = Describe("WorkerBase template fields", func() {
 })
 
 // wbHookConfig is a config type with a Template field and both optional name
-// methods. ReadyMade publishes the ready-from config value a parent hands down
-// under the name ready, and Shortcuts publishes the short-from value under the
-// name short.
+// methods.
 type wbHookConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 	Read                config.Template `yaml:"read"`

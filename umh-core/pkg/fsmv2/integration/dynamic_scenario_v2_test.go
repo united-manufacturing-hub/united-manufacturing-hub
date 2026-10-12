@@ -42,8 +42,8 @@ var _ = Describe("Dynamic Scenario: migration-API lifecycle real proof", func() 
 
 	It("drives one helloworld child through create->Running, update->observed-change, then Delete while the kernel keeps running", func() {
 		// The dynamic scenario must be registered beside noop and reachable
-		// through the same merged listing the CLI reads. A missing entry here is
-		// the first thing this rung adds.
+		// through the same merged listing the CLI reads. A missing entry fails
+		// here, before the lifecycle checks below.
 		listing := examples.ListScenarios()
 		Expect(listing).To(HaveKey("dynamic"),
 			"merged ListScenarios must contain the dynamic scenario")

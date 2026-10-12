@@ -41,21 +41,21 @@ import (
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
-// v2LogBuffer is a goroutine-safe buffer for capturing JSON log output in
+// logBuffer is a goroutine-safe buffer for capturing JSON log output in
 // the Scenario specs.
-type v2LogBuffer struct {
+type logBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
 }
 
-func (b *v2LogBuffer) Write(p []byte) (int, error) {
+func (b *logBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	return b.buf.Write(p)
 }
 
-func (b *v2LogBuffer) String() string {
+func (b *logBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -272,7 +272,7 @@ var _ = Describe("Scenario framework", func() {
 	})
 
 	It("prints the store dump when a scenario's Run fails", func() {
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
@@ -390,7 +390,7 @@ var _ = Describe("Scenario framework", func() {
 	})
 
 	It("tears down gracefully on a live tick loop when the caller ctx is cancelled mid-run", func() {
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 

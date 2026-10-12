@@ -310,7 +310,7 @@ var _ = Describe("BuildWorkerNames", func() {
 		Expect(err).To(MatchError(ContainSubstring("shortcuts failed")))
 	})
 
-	It("builds the same names for a config type with neither method", func() {
+	It("builds names from the fields, variables and config alone for a config type with neither method", func() {
 		names, err := config.BuildWorkerNames(struct{}{},
 			map[string]any{"name": "b1"},
 			map[string]any{"SLAVE_ID": "7"},

@@ -427,7 +427,7 @@ Developers implement business logic; the supervisor handles:
 
 ### Template variables
 
-A worker renders its `config.Template` fields against the names `config.BuildNames` assembles from the entry. Every other field is a plain value: a plain value containing `{{` is rejected when the config loads, and `${VAR}` passes through untouched for Benthos to fill in.
+A worker renders its `config.Template` fields against a set of names. By default `config.BuildNames` assembles them from the worker's own entry. A parent can instead hand a child a finished set in `UserSpec.Names`, which the child uses as-is (see `examplebridge.RenderFlows`). Every other field is a plain value: a plain value containing `{{` is rejected when the config loads, and `${VAR}` passes through untouched for Benthos to fill in.
 
 The names a template can use, following one format across every FSMv2 worker:
 
@@ -437,7 +437,7 @@ The names a template can use, following one format across every FSMv2 worker:
 - Ready-made values the worker's config type declares: `{{ .location }}` is the full merged location (the one exception to the path rule — the raw levels alone are not readable)
 - Worker-declared compatibility shortcuts: `{{ .IP }}` / `{{ .PORT }}` for `connection.host` / `connection.port`, each variable as a top-level name (`{{ .SLAVE_ID }}`)
 
-A missing name fails the render (strict mode); a collision between two name sources is a config error. A config error holds that worker back — it does not start or update — and is logged once as `config_error`, without Sentry. A running worker whose config breaks keeps ticking on its last good config, so it can still be stopped and removed (see `supervisor/doc.go`, Phase 0).
+A missing name fails the render (strict mode); a collision between two name sources is a config error. A config error holds that worker back (it does not start or update) and is logged as a `config_error` warning, without Sentry. A repeat of the same message is not logged again until the config recovers (`warnConfigErrorOnce` and, for a child that cannot be created, `warnChildConfigErrorOnce`, both in `supervisor/reconciliation.go`). A running worker whose config breaks keeps ticking on its last good config, so it can still be stopped and removed (see `supervisor/doc.go`, Phase 0).
 
 ### Child worker management
 
@@ -511,7 +511,7 @@ go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=10s
 go run pkg/fsmv2/cmd/runner/main.go --scenario=communicator --log-level=debug
 ```
 
-`--list` prints every scenario. Every scenario is registered in `Registry` or `LiveRegistry`.
+`--list` prints every scenario in `Registry` and `LiveRegistry` (`examples/env.go`). `LiveRegistry` holds the scenarios that read the real machine; the CLI runs them, `examples/registry_run_test.go` does not.
 
 ### Unit tests
 

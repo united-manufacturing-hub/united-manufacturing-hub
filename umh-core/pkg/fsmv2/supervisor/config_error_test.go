@@ -372,7 +372,7 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 			Expect(recorder.sentryWarnEvents()).To(BeEmpty())
 
-			// Creating the child clears its dedup entry, so the same message warns again.
+			// Creating the child clears its entry in childConfigErrorWarned, so the same message warns again.
 			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: validChildConfig})
 			Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 			Expect(parentSuper.GetChildren()).To(HaveKey("cfgerr-child"))
@@ -463,7 +463,7 @@ var _ = Describe("Supervisor config errors", func() {
 			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: plainErrorChildConfig})
 		})
 
-		It("logs child_supervisor_add_worker_failed and stays out of config handling", func() {
+		It("logs child_supervisor_add_worker_failed and no config_error warning", func() {
 			Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 
 			Expect(parentSuper.GetChildren()).To(BeEmpty())
@@ -520,7 +520,7 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(afterJSON)).To(Equal(string(beforeJSON)))
 
-			// A successful derive clears the memory, so the same message warns again.
+			// A successful derive clears lastConfigErrorWarned, so the same message warns again.
 			s.TestUpdateUserSpec(config.UserSpec{Config: "valid"})
 			Expect(s.TestTick(ctx)).NotTo(HaveOccurred())
 
@@ -603,7 +603,7 @@ var _ = Describe("Supervisor config errors", func() {
 				"the child warning names the parent whose child failed")
 
 			Expect(parentSuper.GetChildren()).To(BeEmpty(),
-				"a worker with a config mistake must not start")
+				"a worker with a config error must not start")
 
 			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 			Expect(recorder.sentryWarnEvents()).To(BeEmpty())

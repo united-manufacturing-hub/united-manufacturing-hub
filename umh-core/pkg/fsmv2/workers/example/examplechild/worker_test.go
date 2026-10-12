@@ -87,7 +87,7 @@ var _ = Describe("ChildWorker", func() {
 			Expect(desired).NotTo(BeNil())
 		})
 
-		It("rejects a placeholder in a plain field instead of rendering the whole config", func() {
+		It("rejects a placeholder in a plain field with a ConfigError naming the field", func() {
 			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 

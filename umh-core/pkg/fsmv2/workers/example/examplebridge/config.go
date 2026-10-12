@@ -53,7 +53,8 @@ type Connection struct {
 	Port int `json:"port" yaml:"port"`
 }
 
-// Template returns the flow template named by flow ("read" or "write").
+// Template returns the flow template named by flow, or "" for a name that is
+// not a flow.
 func (c ExamplebridgeConfig) Template(flow string) config.Template {
 	switch flow {
 	case "read":
@@ -95,10 +96,9 @@ func (c ExamplebridgeConfig) ReadyMade(cfgValues map[string]any) (map[string]any
 	}, nil
 }
 
-// Shortcuts returns the bridge's shortcut names: IP and PORT from the
-// connection, one name per variable, and the historian shortcut from
-// cfgValues. Two shortcuts that claim one name are a *ConfigError naming both
-// sources.
+// Shortcuts returns the bridge's shortcut names, one source per entry of
+// shortcutSources. Two shortcuts that claim one name are a *ConfigError
+// naming both sources.
 func (c ExamplebridgeConfig) Shortcuts(cfgValues map[string]any) (map[string]any, error) {
 	connShortcuts := map[string]any{}
 	if c.Connection.Host != "" {
