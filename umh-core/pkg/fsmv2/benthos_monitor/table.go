@@ -74,8 +74,9 @@ func table() diagnosis.Table[sample] {
 					Polarity: diagnosis.HigherIsWorse,
 				},
 			}},
-			DemoteSpan: constants.BenthosLogWindow,
-			Tier:       counter.tier,
+			DemoteSpan:   constants.BenthosLogWindow,
+			Tier:         counter.tier,
+			RefireAtOnce: true, // with the 10-minute window, a failure every 11 minutes would otherwise be hidden for 9 of them
 		})
 	}
 
