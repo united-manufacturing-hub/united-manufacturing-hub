@@ -203,17 +203,13 @@ var _ = Describe("the registered worker type", func() {
 var _ = Describe("Poll", func() {
 	It("reports unreachable with authentication unknown when the host is malformed", func() {
 		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
-			Host:     "host:with:colons",
-			Password: "unlikely-to-appear-by-accident",
+			Host: "host:with:colons",
 		}}
 
 		status, err := Poll(context.Background(),
 			newDeps(idUnder("parent-a"), baseUnder("parent-a")), cfg)
 
-		Expect(err).To(MatchError(ContainSubstring(cfg.Timescale.Host)),
-			"the error names the host, so the degraded verdict names the cause")
-		Expect(err).NotTo(MatchError(ContainSubstring(cfg.Timescale.Password)),
-			"this error is logged, so it must not carry the password")
+		Expect(err).NotTo(HaveOccurred(), "the DSN parsed, so the failed dial is an observation")
 		Expect(status.Reachable).To(BeFalse(), "no server answered, so the endpoint is not proven reachable")
 		Expect(status.Auth).To(Equal(models.TimescaleAuthUnknown),
 			"no server answered, so the credentials stay unverified rather than rejected")
@@ -242,16 +238,17 @@ var _ = Describe("Poll", func() {
 
 		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
 
-		_, err := Poll(ctx, d, cfg)
-		Expect(err).To(MatchError(ContainSubstring("timescale query")),
-			"the DSN parsed and the pool was built, so the failure is the refused SELECT 1")
+		status, err := Poll(ctx, d, cfg)
+		Expect(err).NotTo(HaveOccurred(), "a refused SELECT 1 is an observation, not a failure to observe")
+		Expect(status.Reachable).To(BeFalse(), "the DSN parsed and the pool was built, so the refused SELECT 1 is what failed")
 
 		first := pooledBy(d.pool)
 		Expect(first).NotTo(BeNil(),
 			"Poll went through the holder in its deps: a Poll that built its own pool leaves this nil")
 
-		_, err = Poll(ctx, d, cfg)
-		Expect(err).To(HaveOccurred(), "still nothing listening on the port")
+		status, err = Poll(ctx, d, cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Reachable).To(BeFalse(), "still nothing listening on the port")
 
 		Expect(pooledBy(d.pool)).To(BeIdenticalTo(first),
 			"the second poll reused the cached pool rather than building a second one")
@@ -286,11 +283,28 @@ var _ = Describe("Poll on a connection fault", func() {
 
 		status, err := Poll(ctx, d, cfg)
 
-		Expect(err).To(MatchError(ContainSubstring("timescale query")))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Reachable).To(BeFalse())
 		Expect(status.TableNames).To(ConsistOf("value_bench"))
 		Expect(status.JobCount).To(Equal(2))
 		Expect(status.DatabaseOccupiedDiskBytes).To(Equal(int64(900_000_000)))
 	})
+})
+
+var _ = Describe("health", func() {
+	DescribeTable("derives the verdict from the observed status",
+		func(status TimescaleStatus, wantDegraded bool) {
+			Expect(health(config.HistorianConfig{}, status).Degraded).To(Equal(wantDegraded))
+		},
+		Entry("query succeeded",
+			TimescaleStatus{Reachable: true, Auth: models.TimescaleAuthValid}, false),
+		Entry("credentials or database name rejected",
+			TimescaleStatus{Reachable: true, Auth: models.TimescaleAuthInvalid}, true),
+		Entry("nothing answered",
+			TimescaleStatus{Reachable: false, Auth: models.TimescaleAuthUnknown}, true),
+		Entry("server answered with another error",
+			TimescaleStatus{Reachable: true, Auth: models.TimescaleAuthUnknown}, true),
+	)
 })
 
 var _ = Describe("the summary cache", func() {

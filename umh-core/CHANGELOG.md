@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- A connected historian now shows "connected to TimescaleDB" as its status message instead of "running (no health check)"
+- The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
 
 ## [0.44.43]
 
