@@ -141,6 +141,33 @@ var _ = Describe("TimescaleConfig", func() {
 		})
 	})
 
+	Describe("environment variable references", func() {
+		DescribeTable("Validate and ValidateForUpdate reject an unsupported form and name the setting",
+			func(setting string, setField func(t *TimescaleConfig)) {
+				t := validTimescale()
+				setField(&t)
+
+				Expect(t.Validate()).To(MatchError(And(ContainSubstring(setting), ContainSubstring("not supported"))))
+				Expect(t.ValidateForUpdate()).To(MatchError(And(ContainSubstring(setting), ContainSubstring("not supported"))))
+			},
+			Entry("host", "host", func(t *TimescaleConfig) { t.Host = "${HOST|base64decode}" }),
+			Entry("username", "username", func(t *TimescaleConfig) { t.Username = "${{USER}}" }),
+			Entry("password", "password", func(t *TimescaleConfig) { t.Password = "${PASSWORD|base64decode}" }),
+			Entry("database", "database", func(t *TimescaleConfig) { t.Database = "${{DATABASE}}" }),
+			Entry("sslrootcert", "sslrootcert", func(t *TimescaleConfig) { t.SSLRootCert = "${{CA}}"; t.SSLMode = HistorianSSLModeVerifyFull }),
+			Entry("sslcert", "sslcert", func(t *TimescaleConfig) { t.SSLCert = "${{CERT}}"; t.SSLMode = HistorianSSLModeVerifyFull }),
+			Entry("sslkey", "sslkey", func(t *TimescaleConfig) { t.SSLKey = "${{KEY}}"; t.SSLMode = HistorianSSLModeVerifyFull }),
+		)
+
+		It("accepts ${VAR} and ${VAR:default} without the variables being set", func() {
+			t := validTimescale()
+			t.Host = "${UMH_TEST_HISTORIAN_HOST_UNSET}"
+			t.Password = "${UMH_TEST_HISTORIAN_PASSWORD_UNSET:fallback}"
+
+			Expect(t.Validate()).To(Succeed())
+		})
+	})
+
 	Describe("ValidateForUpdate", func() {
 		It("should pass when the password is missing (kept unchanged on edit)", func() {
 			cfg := TimescaleConfig{Host: "timescale.example.com"}

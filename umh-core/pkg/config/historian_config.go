@@ -141,6 +141,10 @@ func (t TimescaleConfig) Validate() error {
 		}
 	}
 
+	if err := t.validateEnvVariableReferences(); err != nil {
+		return err
+	}
+
 	return t.validateSSL()
 }
 
@@ -153,7 +157,43 @@ func (t TimescaleConfig) ValidateForUpdate() error {
 		return errors.New("missing required field host")
 	}
 
+	if err := t.validateEnvVariableReferences(); err != nil {
+		return err
+	}
+
 	return t.validateSSL()
+}
+
+func (t TimescaleConfig) validateEnvVariableReferences() error {
+	if err := env.ValidateReferences(t.Host); err != nil {
+		return fmt.Errorf("historian host: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.Username); err != nil {
+		return fmt.Errorf("historian username: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.Password); err != nil {
+		return fmt.Errorf("historian password: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.Database); err != nil {
+		return fmt.Errorf("historian database: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.SSLRootCert); err != nil {
+		return fmt.Errorf("historian sslrootcert: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.SSLCert); err != nil {
+		return fmt.Errorf("historian sslcert: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.SSLKey); err != nil {
+		return fmt.Errorf("historian sslkey: %w", err)
+	}
+
+	return nil
 }
 
 // hasTLSCerts reports whether any TLS certificate path is configured.
