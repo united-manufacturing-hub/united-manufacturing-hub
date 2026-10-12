@@ -39,6 +39,9 @@ type FeatureUsage struct {
 	FSMv2MemoryCleanupEnabled bool `json:"fsmv2MemoryCleanupEnabled"`
 	// FSMv2ProtocolConverterEnabled reports whether USE_FSMV2_PROTOCOL_CONVERTER is set.
 	FSMv2ProtocolConverterEnabled bool `json:"fsmv2ProtocolConverterEnabled"`
+	// FSMv2BenthosMonitorEnabled reports whether USE_FSMV2_BENTHOS_MONITOR is
+	// set, so Benthos instances are monitored by the FSMv2 benthos monitor.
+	FSMv2BenthosMonitorEnabled bool `json:"fsmv2BenthosMonitorEnabled"`
 	// FSMv2CPUEnabled reports whether the fsmv2 CPU path is running. The
 	// FSMv2CPUEnabled function below computes it.
 	FSMv2CPUEnabled bool `json:"fsmv2CpuEnabled"`

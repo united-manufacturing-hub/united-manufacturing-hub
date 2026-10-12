@@ -73,6 +73,12 @@ const (
 // spellings). Any other value keeps FSMv1.
 const envUseFsmv2BenthosMonitor = "USE_FSMV2_BENTHOS_MONITOR"
 
+// FSMv2BenthosMonitorEnabled reads USE_FSMV2_BENTHOS_MONITOR. A value that is
+// not a boolean returns an error naming the variable, together with false.
+func FSMv2BenthosMonitorEnabled() (bool, error) {
+	return env.GetAsBoolStrict(envUseFsmv2BenthosMonitor, false)
+}
+
 // IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
@@ -324,7 +330,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	}
 
 	if service.benthosMonitorManager == nil {
-		useFsmv2, err := env.GetAsBoolStrict(envUseFsmv2BenthosMonitor, false)
+		useFsmv2, err := FSMv2BenthosMonitorEnabled()
 		if err != nil {
 			log.Warnf("%v; ignoring it and keeping the default bridge metrics collection", err)
 		}
