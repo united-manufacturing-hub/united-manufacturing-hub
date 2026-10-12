@@ -152,6 +152,34 @@ var _ = Describe("DeployProtocolConverter", func() {
 			Expect(err.Error()).To(ContainSubstring("missing required field Connection.IP"))
 		})
 
+		It("should reject an unsupported environment variable reference in the connection IP", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"connection": map[string]interface{}{
+					"ip":   "${PLC_IP|base64decode}",
+					"port": pcPort,
+				},
+				"location": pcLocation,
+			}
+
+			Expect(action.Parse(payload)).To(Succeed())
+			Expect(action.Validate()).To(MatchError(And(ContainSubstring("Connection.IP"), ContainSubstring("not supported"))))
+		})
+
+		It("should accept a ${VAR} reference in the connection IP", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"connection": map[string]interface{}{
+					"ip":   "${PLC_IP}",
+					"port": pcPort,
+				},
+				"location": pcLocation,
+			}
+
+			Expect(action.Parse(payload)).To(Succeed())
+			Expect(action.Validate()).To(Succeed())
+		})
+
 		It("should return error for missing connection port", func() {
 			// Payload with missing connection port field
 			payload := map[string]interface{}{

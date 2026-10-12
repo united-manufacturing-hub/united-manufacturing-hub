@@ -486,6 +486,20 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err.Error()).To(ContainSubstring("missing or invalid protocol converter UUID"))
 		})
 
+		It("should reject an unsupported environment variable reference in the connection IP", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"connection": map[string]interface{}{
+					"ip":   "${{PLC_IP}}",
+					"port": 502,
+				},
+			}
+
+			Expect(action.Parse(payload)).To(Succeed())
+			Expect(action.Validate()).To(MatchError(And(ContainSubstring("Connection.IP"), ContainSubstring("not supported"))))
+		})
+
 		It("should validate write DFC without explicit inputs (auto-generated)", func() {
 			payload := map[string]interface{}{
 				"name": pcName,
