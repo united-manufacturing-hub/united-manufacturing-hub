@@ -24,9 +24,9 @@ import (
 // Each child receives cfg.ChildConfig verbatim as UserSpec.Config and a
 // per-child DEVICE_ID variable (device-0, device-1, ...).
 //
-// When cfg.ChildConfig is empty, the child's Config is also empty. The child
-// loads its config without rendering it, so a placeholder such as {{ .IP }}
-// in a plain field is a config error, never a value the child renders.
+// When cfg.ChildConfig is empty, the child's Config is also empty:
+// cfg.ChildConfig is the only source of a child's config, so RenderChildren
+// adds no fallback.
 //
 // enabled=false here is unused: exampleparent's stop-states pass empty
 // slices directly because the children are stateless. See workers/transport

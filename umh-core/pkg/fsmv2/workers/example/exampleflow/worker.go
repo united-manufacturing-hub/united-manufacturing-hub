@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package exampleflow provides the example flow worker: the smallest
-// WorkerBase worker whose template field a parent renders with the names it
-// hands down.
+// Package exampleflow provides the example flow worker: a WorkerBase worker
+// whose template field it renders with the names a parent hands down.
 package exampleflow
 
 import (

@@ -48,8 +48,8 @@ type Registry struct {
 }
 
 // ConfigVariables returns a deep copy of the config values recorded by
-// SetConfigVariables. The application worker puts them on every child spec
-// it renders, as the child's own config section.
+// SetConfigVariables. The application worker's renderUnion copies them onto
+// each child spec except the config worker's.
 func (r *Registry) ConfigVariables() map[string]any {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -194,11 +194,11 @@ func (w *Writer) Upsert(ref Ref, cfg map[string]any) error {
 	return nil
 }
 
-// SetConfigVariables replaces the config values every child of the
-// application receives as its own config section. A value that still
-// contains a placeholder is rejected as a *config.ConfigError naming its
-// path under the "config" prefix, and nothing is stored. A valid map is
-// stored as a deep copy, so the caller keeps ownership of its own map.
+// SetConfigVariables replaces the config values that renderUnion hands to
+// the application's children (all but the config worker). A value that
+// still contains a placeholder is rejected as a *config.ConfigError naming
+// its path under the "config" prefix, and nothing is stored. A valid map
+// is stored as a deep copy, so the caller keeps ownership of its own map.
 func (w *Writer) SetConfigVariables(values map[string]any) error {
 	if err := config.CheckConfigValues(values); err != nil {
 		return err

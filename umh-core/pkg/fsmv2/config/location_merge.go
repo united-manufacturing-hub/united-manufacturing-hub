@@ -43,12 +43,16 @@ func canonicalLevelIndex(key string) (int, bool) {
 // ISA-95 tiers of LocationLevel. The agent's value is kept on a level index
 // both define, the worker's own value fills a missing or empty agent level and
 // extends the map, and level indexes below the highest that neither side
-// defines become "unknown". A level explicitly set to the empty string stays
-// empty. The path joins levels 0..max with dots and drops trailing dots.
-// Neither input map is modified. Callers normally pass maps produced by
-// LocationFromAny, which rejects keys that are not canonical level indexes; a
-// key that is not one is copied to the merged map unchanged and never affects
-// the path.
+// defines become "unknown". A level that is empty on one side, and empty or
+// absent on the other, stays empty; it does not become "unknown". The path
+// joins levels 0..max with dots and drops trailing dots. An empty level
+// between two defined levels stays an empty segment (a..c), unlike
+// ComputeLocationPath, which skips empty values. This matches the FSMv1
+// bridge path, so a bridge topic is byte-identical after moving from FSMv1
+// to FSMv2. Neither input map is modified. Callers normally pass maps
+// produced by LocationFromAny, which rejects keys that are not canonical
+// level indexes; a key that is not one is copied to the merged map unchanged
+// and never affects the path.
 func MergeAgentLocation(agent, own map[string]string) (map[string]string, string) {
 	max := -1
 
@@ -134,7 +138,7 @@ func LocationFromAny(raw any) (map[string]string, error) {
 
 		n, canonical := canonicalLevelIndex(key)
 		if !canonical {
-			return nil, &ConfigError{Field: "location", Err: fmt.Errorf("level key %q is not a non-negative canonical integer", key)}
+			return nil, &ConfigError{Field: "location", Err: fmt.Errorf("level key %q must be a whole number 0 or greater, written without a sign or leading zeros", key)}
 		}
 
 		if n > maxLocationLevel {

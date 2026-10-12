@@ -281,7 +281,7 @@ var _ = Describe("ComputeUserSpecHash handed-down fields", func() {
 		Expect(hashes).To(HaveLen(1))
 	})
 
-	It("hashes a value yaml decodes with non-string keys instead of dropping it", func() {
+	It("gives ConfigValues holding a map with non-string keys a different hash from nil ConfigValues", func() {
 		spec1 := baseSpec()
 		spec1.ConfigValues = map[string]any{"m": map[any]any{1: "a"}}
 

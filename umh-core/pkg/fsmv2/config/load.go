@@ -56,16 +56,16 @@ func LoadUserSpec[T any](spec any) (T, error) {
 }
 
 // EntryFields decodes configYAML into the fields a template's names are built
-// from: the config's own values as a map, with the variables section, the
-// key of every Template field and every field the typed plain-value walk
-// exempts removed, because BuildNames supplies those names itself and the
-// exempt fields decode their own text. cfg is the struct the same YAML
-// decodes into; its Template fields are found by reflection, honouring an
-// inline embed. The decoded map is normalized, so a Template key behind a
-// map yaml decoded with a non-string key is removed too. A value left in
-// the map that still contains a placeholder is a *ConfigError naming its
-// path: yaml.Unmarshal into the typed struct drops keys no field declares,
-// so CheckPlainValues in LoadUserSpec never runs on them.
+// from: the config's own values as a map. It removes the variables key and
+// every Template field, because BuildNames supplies those names itself. It
+// also removes every field checkPlainValue exempts, because those fields
+// decode their own text. cfg is the struct the same YAML decodes into; its
+// Template fields are found by reflection, honouring an inline embed. The
+// decoded map is normalized, so a Template key behind a map yaml decoded
+// with a non-string key is removed too. A value left in the map that still
+// contains a placeholder is a *ConfigError naming its path:
+// yaml.Unmarshal into the typed struct drops keys no field declares, so
+// CheckPlainValues in LoadUserSpec never runs on them.
 func EntryFields(configYAML string, cfg any) (map[string]any, error) {
 	fields := map[string]any{}
 	if configYAML != "" {
@@ -92,10 +92,11 @@ func EntryFields(configYAML string, cfg any) (map[string]any, error) {
 	return fields, nil
 }
 
-// EntryVariables decodes the entry's top-level variables mapping, the same
-// mapping EntryFields drops from the fields. A missing or null mapping is
-// present with no keys; any other value is a *ConfigError on the variables
-// field. The result is normalized, so json.Marshal always accepts it.
+// EntryVariables decodes the config's variables section, the same mapping
+// EntryFields drops from the fields. The bool reports whether the entry
+// declares a variables mapping. A missing or null mapping returns an empty
+// map and false. A variables value that is not a mapping is a *ConfigError on
+// the variables field. The result is normalized, so every map in it is keyed by string.
 func EntryVariables(configYAML string) (map[string]any, bool, error) {
 	fields := map[string]any{}
 	if configYAML != "" {
@@ -120,19 +121,17 @@ func EntryVariables(configYAML string) (map[string]any, bool, error) {
 	return variables, true, nil
 }
 
-// templatePaths returns the YAML path of every Template field of the value v
-// points to, as segments in the same form the walkers use: an
-// inline-embedded struct adds no segment.
+// templatePaths returns the leafPaths of every Template field of the value v
+// points to.
 func templatePaths(v reflect.Value) [][]string {
 	return leafPaths(v, func(t reflect.Type) bool {
 		return t == templateType
 	})
 }
 
-// exemptPaths returns the YAML path of every field of the value v points to
-// whose type the plain-value walk skips: a UserSpec, or a type that decodes
-// itself in yaml.v3 and may legitimately carry placeholder text its own
-// decoding consumes.
+// exemptPaths returns the leafPaths of every field of the value v points to
+// whose type checkPlainValue skips; see checkPlainValue for which types and
+// why.
 func exemptPaths(v reflect.Value) [][]string {
 	return leafPaths(v, func(t reflect.Type) bool {
 		return t == userSpecType || isYAMLUnmarshaler(t)
@@ -140,8 +139,8 @@ func exemptPaths(v reflect.Value) [][]string {
 }
 
 // leafPaths returns the YAML path of every leaf-matching field of the value v
-// points to, as segments in the same form the walkers use: an
-// inline-embedded struct adds no segment.
+// points to, as segments in the same path form CheckPlainValues and
+// RenderTemplates report: an inline-embedded struct adds no segment.
 func leafPaths(v reflect.Value, leaf func(reflect.Type) bool) [][]string {
 	var paths [][]string
 

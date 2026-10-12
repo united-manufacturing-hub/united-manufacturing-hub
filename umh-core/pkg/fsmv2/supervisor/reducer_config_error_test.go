@@ -59,7 +59,7 @@ func (w *childrenSpecsParent) DeriveDesiredState(spec any) (fsmv2.DesiredState, 
 
 func (w *childrenSpecsParent) GetInitialState() fsmv2.State[any, any] { return &mockState{} }
 
-var _ = Describe("The reducer's not-found warning and config mistakes", func() {
+var _ = Describe("The reducer's not-found warning and config errors", func() {
 	ctx := context.Background()
 
 	registerChildTypes := func() {
@@ -108,7 +108,7 @@ var _ = Describe("The reducer's not-found warning and config mistakes", func() {
 		return out
 	}
 
-	It("keeps a child held back by a config mistake out of the Sentry warning", func() {
+	It("keeps a child held back by a config error out of the Sentry warning", func() {
 		registerChildTypes()
 
 		recorder := newRecordingSentryLogger()

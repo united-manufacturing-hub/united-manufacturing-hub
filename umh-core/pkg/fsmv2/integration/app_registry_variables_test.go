@@ -31,7 +31,7 @@ import (
 )
 
 // configTplWorkerType is a test-only worker type. No production worker carries
-// a config.Template field yet, so this suite registers a minimal one to
+// a config.Template field, so this suite registers a minimal one to
 // observe what a child renders from the values the application hands down.
 const configTplWorkerType = "configtpl"
 
@@ -49,8 +49,8 @@ type configTplStatus struct {
 }
 
 // configTplWorker embeds WorkerBase the way a production worker does, so
-// DeriveDesiredState renders its Template field from the names WorkerBase
-// builds.
+// DeriveDesiredState renders its Template field from the names
+// config.BuildWorkerNames builds.
 type configTplWorker struct {
 	fsmv2.WorkerBase[configTplUserConfig, configTplStatus, struct{}]
 }

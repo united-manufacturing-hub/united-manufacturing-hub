@@ -27,7 +27,7 @@ import (
 // recovers exactly the same fields. Catches two silent failure modes:
 //   - marshalling the wrong thing (empty struct, wrong type)
 //   - field name mismatch between marshal and unmarshal tags
-var _ = Describe("NewChildSpec round-trip (P2-2)", func() {
+var _ = Describe("NewChildSpec round-trip", func() {
 	type sampleSpec struct {
 		Host string `yaml:"host"`
 		Port int    `yaml:"port"`

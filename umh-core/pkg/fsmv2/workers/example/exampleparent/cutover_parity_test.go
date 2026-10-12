@@ -29,9 +29,8 @@ import (
 //  2. Per-child DEVICE_ID is "device-N" (index-based).
 //  3. Empty cfg.ChildConfig produces empty child Config — no fallback template.
 //
-// Item 3 is deliberate: legacy DeriveDesiredState injected an "address:..."
-// template when cfg.ChildConfig was empty, and RenderChildren does not. The
-// RenderChildren doc says why.
+// Item 3 is deliberate: cfg.ChildConfig is the only source of a child's
+// config, so an empty ChildConfig gives the child an empty Config.
 var _ = Describe("exampleparent RenderChildren ChildConfig equivalence", func() {
 	It("RenderChildren threads cfg.ChildConfig to child UserSpec.Config", func() {
 		cfg := exampleparent.ExampleparentConfig{

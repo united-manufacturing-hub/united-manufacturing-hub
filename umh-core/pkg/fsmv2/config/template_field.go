@@ -32,8 +32,9 @@ import (
 type Template string
 
 // ConfigError reports that a config field failed to load or render.
-// Field is the field's YAML path.
 type ConfigError struct {
+	// Field is the YAML path of the failing field, the colliding top-level
+	// name for a names collision, or empty when no single field is at fault.
 	Field string
 	Err   error
 }
@@ -137,13 +138,14 @@ func addPrintChecksToBranch(list, elseList *parse.ListNode) {
 	}
 }
 
-// normalize rebuilds v for template execution: a whole float64 within int64
-// range becomes an int64 (a JSON round trip turns 1000000 into 1e+06
-// otherwise; outside the range the conversion is undefined and even
-// platform-dependent, so the float renders its own form), and the two map
-// types yaml.v3 and JSON decoding produce become keyed by string (yaml.v3
-// decodes `1: hall` with an int key, which index cannot reach with a
-// string). The input is never modified; all containers are rebuilt.
+// normalize rebuilds v for template execution. A whole float64 within int64
+// range becomes an int64, because a JSON round trip would otherwise print
+// 1000000 as 1e+06. A float outside that range keeps its float form, because
+// converting it to int64 is undefined. A map[any]any becomes a
+// map[string]any: yaml.v3 decodes `1: hall` with an int key, and index cannot
+// reach an int key with a string. The input is never modified. Every
+// map[string]any, map[any]any and []any is rebuilt; any other value except
+// a float64 is returned as is.
 func normalize(v any) any {
 	switch x := v.(type) {
 	case float64:

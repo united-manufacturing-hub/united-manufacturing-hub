@@ -20,10 +20,6 @@ package config
 //
 // The values it copies are map[string]any, map[any]any and []any, cloned
 // recursively; every other value is returned as is.
-//
-// UserSpec's three map fields (Variables, ConfigValues, Names) pass through
-// here on every Clone: a spec handed to another goroutine must not share
-// map storage with the spec the supervisor keeps.
 func DeepCloneMap(m map[string]any) map[string]any {
 	if m == nil {
 		return nil

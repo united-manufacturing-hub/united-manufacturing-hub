@@ -13,9 +13,11 @@
 // limitations under the License.
 
 // Package examplebridge provides the example bridge worker, the scenario
-// stand-in for a protocol converter: it owns a connection and a read flow
-// template, and builds the names a flow (a data-flow child that renders the
-// bridge's templates) renders against.
+// stand-in for a protocol converter: it owns a connection and its read and
+// write flow templates, and builds the names a flow (a data-flow child that
+// renders the bridge's templates) renders against. The names are the values
+// a template reads by path, such as .connection.host; see
+// config.BuildWorkerNames.
 package examplebridge
 
 import (
@@ -60,10 +62,11 @@ func NewExamplebridgeWorker(
 
 // DeriveDesiredState loads the bridge's config and builds every name a flow
 // template can use: the config's own fields by their YAML path, its variables
-// section, the merged agent location with the bridge's own levels, and one
-// shortcut each for IP, PORT, every variable and the historian. The
-// ExamplebridgeConfig methods supply the merged location and the shortcuts.
-// A nil spec yields the default desired state, like the base.
+// section, the merged agent location with the bridge's own levels, one
+// shortcut each for IP, PORT, every variable and the historian, and the
+// config values a parent hands down under config. The ExamplebridgeConfig
+// methods supply the merged location and the shortcuts. A nil spec yields
+// the default desired state, like the base.
 func (w *ExamplebridgeWorker) DeriveDesiredState(spec any) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[ExamplebridgeConfig]{}, nil
@@ -98,7 +101,7 @@ func (w *ExamplebridgeWorker) DeriveDesiredState(spec any) (fsmv2.DesiredState, 
 			if err := config.ValidateDesiredState(state); err != nil {
 				return nil, &config.ConfigError{
 					Field: "state",
-					Err:   fmt.Errorf("invalid desired state: unknown value %q: %w", state, err),
+					Err:   fmt.Errorf("unknown value %q: %w", state, err),
 				}
 			}
 		}

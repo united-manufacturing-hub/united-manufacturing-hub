@@ -31,9 +31,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
-// restartSignalState signals NeedsRestart on its first Next call, then
-// NeedsRemoval once the desired state carries a shutdown request, so a spec
-// can drive the full restart flow: signal, graceful shutdown, re-add.
+// restartSignalState signals NeedsRestart on every Next call until the
+// desired state carries a shutdown request, then NeedsRemoval.
 type restartSignalState struct {
 	restarts *atomic.Int64
 }
@@ -60,8 +59,8 @@ func (s restartSignalState) Next(snapshot any) fsmv2.NextResult[any, any] {
 
 // restartBrokenConfigWorker derives a running desired state unless the user
 // spec's config text contains "{{", which fails the derive with a config
-// error. Its state signals NeedsRestart once, so the supervisor walks the
-// full restart flow while the config is broken.
+// error. Its state keeps signalling NeedsRestart, so the supervisor walks the
+// restart flow while the config is broken.
 type restartBrokenConfigWorker struct {
 	deriveCalls atomic.Int64
 	restarts    atomic.Int64
@@ -144,10 +143,6 @@ var _ = Describe("Supervisor restart with a broken config", func() {
 		// so the restart aborts after the removal.
 		s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
 
-		// The state signals NeedsRestart on its first call after the break,
-		// so the next tick starts the restart flow. The old worker runs its
-		// graceful shutdown and the re-derive fails with the config error,
-		// so the restart aborts after the removal.
 		Eventually(func() int {
 			return len(s.ListWorkers())
 		}, 5*time.Second, 10*time.Millisecond).Should(Equal(0),
@@ -159,7 +154,7 @@ var _ = Describe("Supervisor restart with a broken config", func() {
 			"the restart's config error must not reach Sentry")
 		Expect(recorder.sentryWarnEvents()).To(BeEmpty())
 
-		// The config mistake warned exactly once.
+		// The config error warned exactly once.
 		Expect(recorder.warnCount("config_error")).To(Equal(1))
 
 		// Fixing the config brings the worker back: the supervisor retries
@@ -171,7 +166,7 @@ var _ = Describe("Supervisor restart with a broken config", func() {
 		}, 5*time.Second, 10*time.Millisecond).Should(Equal(1),
 			"a worker whose restart aborted on a broken config returns once the config renders")
 
-		// The re-added worker is ticked.
+		// The re-added worker is listed under its original ID.
 		Eventually(func() bool {
 			workers := s.ListWorkers()
 
@@ -299,7 +294,7 @@ var _ = Describe("Supervisor pending re-add retries", func() {
 			"the re-add keeps being retried while it fails")
 
 		Expect(sentryErrorCount(recorder, "worker_restart_retry_add_failed")).To(Equal(1),
-			"three failing ticks give exactly one Sentry error")
+			"later failing retries of the same pending re-add add no Sentry error")
 
 		// Once the collection works again the worker comes back.
 		flaky.cosFails.Store(false)

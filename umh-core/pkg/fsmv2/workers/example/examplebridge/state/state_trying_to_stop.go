@@ -27,8 +27,8 @@ import (
 // StopActionName names the bridge's stop action.
 const StopActionName = "stop"
 
-// stop observes the bridge's stop. The flows despawn through the child set
-// this state already returned, so the action itself only observes the stop.
+// stop is a no-op action. The flows despawn through the empty child set this
+// state returns.
 func stop(_ context.Context, _ register.NoDeps) error {
 	return nil
 }

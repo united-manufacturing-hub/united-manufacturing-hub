@@ -82,7 +82,7 @@ var _ = Describe("Scenario run end", func() {
 	It("logs one scenario_run_finished line after a Run that returned nil", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
@@ -139,7 +139,7 @@ var _ = Describe("Scenario run end", func() {
 	It("logs no scenario_run_finished line for a Run that returns an error", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
@@ -175,7 +175,7 @@ var _ = Describe("Scenario run end", func() {
 	It("logs no scenario_run_finished line for a Run whose logged-error check fails", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
-		logBuf := &v2LogBuffer{}
+		logBuf := &logBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 

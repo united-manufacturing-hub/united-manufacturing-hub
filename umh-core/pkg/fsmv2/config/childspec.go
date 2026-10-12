@@ -132,15 +132,16 @@ func (b *BaseUserSpec) GetState() string {
 //	        ↓ DeriveDesiredState()
 //	DesiredState{Host: "192.168.1.100", Port: 502}
 type UserSpec struct {
-	Variables    map[string]any `json:"variables"               yaml:"variables"` // The user's variables section, decoded as written
+	Variables    map[string]any `json:"variables"               yaml:"variables"` // Variables the parent sets for this entry, or the YAML variables key next to config
 	Config       string         `json:"config"                  yaml:"config"`    // Raw user-provided configuration (YAML, JSON, or other format)
 	ConfigValues map[string]any `json:"config_values,omitempty" yaml:"-"`         // Config.yaml values a parent hands down
-	Names        map[string]any `json:"names,omitempty"         yaml:"-"`         // Template names a parent hands a child, used as-is when non-empty; nil and empty both build the names
+	Names        map[string]any `json:"names,omitempty"         yaml:"-"`         // Template names a parent hands a child; see WorkerBase.DeriveDesiredState for when they replace the built names
 }
 
 // Clone creates a deep copy of the UserSpec.
 // The Config string is copied by value; the Variables, Names and
-// ConfigValues maps are deep-copied.
+// ConfigValues maps are deep-copied. A spec handed to another goroutine
+// must not share map storage with the spec the supervisor keeps.
 func (u UserSpec) Clone() UserSpec {
 	return UserSpec{
 		Config:       u.Config,
@@ -267,13 +268,11 @@ func (c ChildSpec) Clone() ChildSpec {
 // This is used by the supervisor to detect when a ChildSpec has changed,
 // enabling incremental validation (only re-validate specs whose hash changed).
 //
-// The hash is computed from all relevant fields: Name, WorkerType, UserSpec
-// (config string, variables, names, config values), and Enabled (excluding
-// any unexported fields).
+// The hash is computed from every UserSpec field, and every ChildSpec field
+// except Dependencies.
 //
-// Returns a hex-encoded FNV-1a 64-bit hash string (16 characters). A UserSpec
-// part that cannot be marshaled to JSON hashes as its error text, so it never
-// drops out of the hash silently.
+// Returns a hex-encoded FNV-1a 64-bit hash string (16 characters). Each map
+// part of the UserSpec is written through writeHashedJSON.
 func (c ChildSpec) Hash() (string, error) {
 	h := fnv.New64a()
 
@@ -285,7 +284,6 @@ func (c ChildSpec) Hash() (string, error) {
 	h.Write([]byte(c.WorkerType))
 	h.Write([]byte{0}) // separator
 
-	// Hash UserSpec (config string + variables + names + config values)
 	h.Write([]byte(c.UserSpec.Config))
 	h.Write([]byte{0}) // separator
 

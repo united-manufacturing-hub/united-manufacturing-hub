@@ -20,7 +20,7 @@ import (
 	"sort"
 )
 
-// Entry holds the rows BuildNames assembles a template's names from.
+// Entry holds the sources BuildNames assembles a template's names from.
 type Entry struct {
 	// Fields is the entry's own config, with template fields and the
 	// variables key already removed.
@@ -39,13 +39,14 @@ type Entry struct {
 // ready-made value and shortcut becomes one top-level name, and the
 // variables and config sections sit under their own names, empty maps when
 // the entry carries none. A ready-made value replaces a field of the same
-// name; every other collision between two rows is a *ConfigError naming
-// both sources. The result passes through normalize, so json.Marshal always
-// accepts it, and the entry is never modified.
+// name; every other collision between two sources is a *ConfigError naming
+// both sources. The result passes through normalize, so every map in it is
+// keyed by string, and the entry is never modified.
 func BuildNames(e Entry) (map[string]any, error) {
-	// A field or a ready-made value can only collide with another row
-	// through one of the two section names, so checking those keys
-	// directly keeps the reported error deterministic.
+	// The two section names are checked by key before the copy loops, so
+	// the reported error does not depend on map iteration order. A
+	// collision between a field and a shortcut is reported in the
+	// shortcut loop below.
 	for _, section := range [...]string{"config", "variables"} {
 		if _, ok := e.Fields[section]; ok {
 			return nil, namesCollision(section, "a field", "the "+section+" section")
@@ -91,7 +92,7 @@ func BuildNames(e Entry) (map[string]any, error) {
 	return names, nil
 }
 
-// namesCollision reports a key that two rows claim.
+// namesCollision reports a key that two sources claim.
 func namesCollision(key, a, b string) error {
 	return &ConfigError{
 		Field: key,
@@ -143,7 +144,7 @@ type ReadyMadeProvider interface {
 // ShortcutsProvider is a worker config type that supplies shortcut names:
 // extra top-level names beyond its fields and the two section names, such as
 // IP and PORT for a connection's host and port. A shortcut that claims a
-// name another row already carries is a *ConfigError (see BuildNames).
+// name another source already carries is a *ConfigError (see BuildNames).
 type ShortcutsProvider interface {
 	// Shortcuts returns the names the config type supplies, keyed by the
 	// top-level name a template reads. cfgValues is the config a parent
@@ -155,7 +156,7 @@ type ShortcutsProvider interface {
 // its loaded config cfg, its fields, its variables and the config values a
 // parent hands down. A config type (or a pointer to it) that implements
 // ReadyMadeProvider or ShortcutsProvider fills the entry's ReadyMade or
-// Shortcuts rows through its method, with cfgValues passed to it. An error
+// Shortcuts through its method, with cfgValues passed to it. An error
 // from a method that is not already a *ConfigError is wrapped as one.
 func BuildWorkerNames[T any](cfg T, fields, variables, cfgValues map[string]any) (map[string]any, error) {
 	entry := Entry{

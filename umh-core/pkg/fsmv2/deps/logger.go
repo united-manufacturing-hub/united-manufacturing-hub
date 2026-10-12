@@ -24,11 +24,9 @@ const NoSentryKey = "sentry_skip"
 //
 // Debug and Info are general-purpose. SentryWarn and SentryError route to
 // Sentry and require Feature and hierarchyPath parameters for that routing;
-// the compiler rejects any call missing these. The Sentry hook debounces by
-// fingerprint, so only the first occurrence of the same event inside the
-// debounce window (5 minutes in production) is delivered; later repeats are
-// dropped until the window expires. Warn is logs-only: it never reaches
-// Sentry.
+// the compiler rejects any call missing these. Repeats of the same
+// SentryWarn/SentryError with one fingerprint are dropped inside the hook's
+// debounce window (5 minutes in production); see sentry.FingerprintDebouncer.
 type FSMLogger interface {
 	// Debug logs at DEBUG level with structured fields.
 	Debug(msg string, fields ...Field)
@@ -39,7 +37,7 @@ type FSMLogger interface {
 	// Warn logs at WARN level without Sentry routing. The entry carries a
 	// NoSentryKey marker so the Sentry hook never captures it. Use this for
 	// warnings a Sentry issue cannot help with, such as a user's config
-	// mistake.
+	// error.
 	Warn(msg string, fields ...Field)
 
 	// SentryWarn logs at WARN level with required Feature and hierarchyPath for Sentry routing.

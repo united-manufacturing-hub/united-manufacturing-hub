@@ -20,7 +20,7 @@ import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pk
 // Flow is rendered by WorkerBase from UserSpec.Names when Names is set.
 type ExampleflowConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
-	// Flow is the flow template a parent hands down rendered.
+	// Flow is the flow template a parent hands down. WorkerBase renders it.
 	Flow config.Template `json:"flow" yaml:"flow"`
 }
 

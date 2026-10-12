@@ -24,13 +24,8 @@
 //
 //	ACME.Factory-1.Line-A.Cell-5
 //
-// Two path rules live in this package. MergeLocations and ComputeLocationPath
-// (named ISA-95 tiers) skip an empty level in the path to avoid double dots.
-// MergeAgentLocation (numeric level indexes) keeps the FSMv1 bridge rule: an
-// empty level stays empty in the merged map and appears in the path as an
-// empty segment, so a bridge topic stays byte-identical across the migration.
-// The rules are separate because the bridge path is data identity; see
-// MergeAgentLocation's godoc.
+// ComputeLocationPath (named ISA-95 tiers) and MergeAgentLocation (numeric
+// level indexes) follow different empty-level rules; see MergeAgentLocation.
 package config
 
 import (
