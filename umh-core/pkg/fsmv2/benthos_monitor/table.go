@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
@@ -35,13 +36,52 @@ const (
 type sample struct {
 	inputReceived diagnosis.Reading
 	outputSent    diagnosis.Reading
+
+	// failures holds one reading per failureCounters entry, keyed by the
+	// counter's name.
+	failures map[string]diagnosis.Reading
 }
 
-// table declares what the engine measures: the input and output rates, each
-// the slope of its counter over windowSpan.
+// table declares what the engine measures and judges: the input and output
+// rates, each the slope of its counter over windowSpan, and one failure signal
+// per failureCounters entry, firing when its counter rose inside the last
+// constants.BenthosLogWindow.
 func table() diagnosis.Table[sample] {
+	signals := make([]diagnosis.Signal[sample], 0, len(failureCounters))
+	for _, c := range failureCounters {
+		// counter is loop-local so the closure below reads this entry.
+		counter := c
+		signals = append(signals, diagnosis.Signal[sample]{
+			Name: counter.name,
+			Instruments: []diagnosis.Instrument[sample]{{
+				Measurement: diagnosis.Measurement[sample]{
+					Name:    counter.name,
+					Extract: func(s sample) diagnosis.Reading { return s.failures[counter.name] },
+					// Counter false, not true: a drop means benthos
+					// restarted, and observe rebuilds the engine there,
+					// so the window never spans two counter series.
+					Reduction: increase,
+					Span:      constants.BenthosLogWindow,
+					Counter:   false,
+				},
+				Marks: diagnosis.Marks{
+					// Fire at the first rise, clear when the window holds no
+					// rise again. An inclusive clear reads a flat window as
+					// error-free.
+					Fire:     diagnosis.Mark{At: 0.5},
+					Clear:    diagnosis.Mark{At: 0, Inclusive: true},
+					Worst:    100,
+					Polarity: diagnosis.HigherIsWorse,
+				},
+			}},
+			DemoteSpan: constants.BenthosLogWindow,
+			Tier:       counter.tier,
+		})
+	}
+
 	return diagnosis.Table[sample]{
 		Interval: pollInterval,
+		Signals:  signals,
 		Measurements: []diagnosis.Measurement[sample]{
 			{
 				Name:      inputRate,

@@ -102,6 +102,9 @@ type BenthosMonitorStatus struct {
 	// IsActive is Input.MessagesPerSecond > 0. Output traffic does not count.
 	IsActive bool
 
+	// Failures is the scrape's failure verdict.
+	Failures *benthosmonitorservice.FailureVerdict
+
 	// PingAlive is whether /ping answered.
 	PingAlive bool
 
@@ -172,10 +175,11 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 
 	// The port is passed because a config update can change MetricsPort without
 	// restarting the worker.
-	t := observe(d, int(cfg.MetricsPort), m, status.PollStartedAt)
+	t, verdict := observe(d, int(cfg.MetricsPort), m, status.PollStartedAt)
 	status.Input = t.Input
 	status.Output = t.Output
 	status.IsActive = t.IsActive
+	status.Failures = &verdict
 
 	return status, nil
 }

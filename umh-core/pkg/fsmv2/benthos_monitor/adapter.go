@@ -61,7 +61,8 @@ func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitor
 			},
 			// Bridge health reads the connection counters from here. A nil map
 			// is safe: consumers only read it through the *Total() methods.
-			Metrics: status.BenthosMetrics,
+			Metrics:  status.BenthosMetrics,
+			Failures: status.Failures,
 		},
 		HealthCheck: benthosmonitorservice.HealthCheck{
 			Version: status.Version,

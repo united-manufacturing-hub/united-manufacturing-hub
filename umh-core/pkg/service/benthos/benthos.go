@@ -116,14 +116,16 @@ type IBenthosService interface {
 	//	ok    – true when logs look clean, false otherwise.
 	//	entry – zero value when ok is true; otherwise the first offending log line.
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
-	// IsMetricsErrorFree reports true when Benthos metrics contain no error
-	// counters.
+	// IsMetricsErrorFree reports true when the metrics show no recent errors:
+	// with a windowed verdict present, no failure signal fired in the last
+	// constants.BenthosLogWindow, and processor errors are not judged on that
+	// path. Only a nil verdict falls back to the cumulative counters.
 	//
 	// It returns:
 	//
 	//	ok     – true when metrics are error‑free, false otherwise.
 	//	reason – empty when ok is true; otherwise a short explanation (e.g.
-	//	         "benthos reported 3 processor errors").
+	//	         "benthos reported 1 output errors in the last 10m0s").
 	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string)
 	// HasProcessingActivity reports true when metrics (or other status signals)
 	// indicate the instance is actively processing data.
@@ -1105,15 +1107,23 @@ func (s *BenthosService) IsLogsFine(
 	return true, s6service.LogEntry{}
 }
 
-// IsMetricsErrorFree reports true when Benthos metrics contain no error
-// counters.
+// IsMetricsErrorFree reports true when the metrics show no recent errors:
+// with a windowed verdict present, no failure signal fired in the last
+// constants.BenthosLogWindow, and processor errors are not judged on that
+// path. Only a nil verdict falls back to the cumulative counters.
 //
 // It returns:
 //
 //	ok     – true when metrics are error‑free, false otherwise.
 //	reason – empty when ok is true; otherwise a short explanation (e.g.
-//	         "benthos reported 3 processor errors").
+//	         "benthos reported 1 output errors in the last 10m0s").
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
+	// Processor errors are not judged on the windowed path until a
+	// processor_error signal joins the table.
+	if metrics.Failures != nil {
+		return metrics.Failures.ErrorFree()
+	}
+
 	// Check output errors. OutputErrorTotal sums across all output paths,
 	// so a switch/broker/fallback config reports the true total instead
 	// of only the last route's error count.

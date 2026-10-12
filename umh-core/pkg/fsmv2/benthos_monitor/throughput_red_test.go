@@ -43,7 +43,7 @@ func TestObserveRateIsTimeBased(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 	deps := &benthosMonitorDeps{}
 
-	got := observe(deps, 4195, counts(10, 5), t0)
+	got, _ := observe(deps, 4195, counts(10, 5), t0)
 	if inRate := got.Input.MessagesPerSecond; inRate != 0 {
 		t.Errorf("single-sample window: Input MessagesPerSecond = %v, want 0 (one sample cannot compute a rate)", inRate)
 	}
@@ -51,7 +51,7 @@ func TestObserveRateIsTimeBased(t *testing.T) {
 		t.Errorf("single-sample window: Output MessagesPerSecond = %v, want 0", outRate)
 	}
 
-	got = observe(deps, 4195, counts(12, 6), t0.Add(1*time.Second))
+	got, _ = observe(deps, 4195, counts(12, 6), t0.Add(1*time.Second))
 	if inRate := got.Input.MessagesPerSecond; inRate < 1.5 || inRate > 2.5 {
 		t.Errorf("1s-apart +2 input: Input MessagesPerSecond = %v, want ~2.0 (within tolerance)", inRate)
 	}
@@ -67,7 +67,7 @@ func TestObserveRateIsTimeBased(t *testing.T) {
 
 	// A scrape stamped 61s before the newest one is out of order, so observe
 	// does not record it: the rate and the newest count stay unchanged.
-	got = observe(deps, 4195, counts(5, 5), t0.Add(-61*time.Second))
+	got, _ = observe(deps, 4195, counts(5, 5), t0.Add(-61*time.Second))
 	if inRate2 := got.Input.MessagesPerSecond; inRate2 < 1.5 || inRate2 > 2.5 {
 		t.Errorf("out-of-order scrape: Input MessagesPerSecond = %v, want ~2.0 (a scrape older than the previous one is ignored)", inRate2)
 	}
@@ -83,7 +83,7 @@ func TestObserveRateIsTimeBased(t *testing.T) {
 	gap := &benthosMonitorDeps{}
 	observe(gap, 4195, counts(0, 0), t0)
 	observe(gap, 4195, counts(30, 30), t0.Add(30*time.Second))
-	got = observe(gap, 4195, counts(90, 90), t0.Add(60*time.Second))
+	got, _ = observe(gap, 4195, counts(90, 90), t0.Add(60*time.Second))
 	if r := got.Input.MessagesPerSecond; r < 1.4 || r > 1.6 {
 		t.Errorf("mid-window gap: Input MessagesPerSecond = %v, want ~1.5 (real-time delta 90/60, not a count-window 2.0)", r)
 	}
@@ -94,7 +94,7 @@ func TestObserveRateIsTimeBased(t *testing.T) {
 	aged := &benthosMonitorDeps{}
 	observe(aged, 4195, counts(0, 0), t0)
 	observe(aged, 4195, counts(30, 30), t0.Add(30*time.Second))
-	got = observe(aged, 4195, counts(90, 90), t0.Add(61*time.Second))
+	got, _ = observe(aged, 4195, counts(90, 90), t0.Add(61*time.Second))
 	if r := got.Input.MessagesPerSecond; r < 1.85 || r > 2.05 {
 		t.Errorf("aged-out sample: Input MessagesPerSecond = %v, want ~1.94 (60/31 over the last 60s, not 90/61)", r)
 	}
@@ -103,7 +103,7 @@ func TestObserveRateIsTimeBased(t *testing.T) {
 	// this sample alone. The rate then reads 0, never negative.
 	restart := &benthosMonitorDeps{}
 	observe(restart, 4195, counts(100, 100), t0)
-	got = observe(restart, 4195, counts(5, 5), t0.Add(10*time.Second))
+	got, _ = observe(restart, 4195, counts(5, 5), t0.Add(10*time.Second))
 	if r := got.Input.MessagesPerSecond; r != 0 {
 		t.Errorf("after both-counter drop: Input MessagesPerSecond = %v, want 0 (the rebuild leaves a single sample)", r)
 	}
@@ -115,7 +115,7 @@ func TestObserveRateIsTimeBased(t *testing.T) {
 func TestObserveZeroDepsIsSafe(t *testing.T) {
 	var d benthosMonitorDeps
 
-	got := observe(&d, 4195, counts(7, 3), time.Now().Truncate(time.Second))
+	got, _ := observe(&d, 4195, counts(7, 3), time.Now().Truncate(time.Second))
 	if in := got.Input.MessagesPerSecond; in != 0 {
 		t.Errorf("Input MessagesPerSecond after one scrape = %v, want 0", in)
 	}

@@ -35,16 +35,21 @@ type observation struct {
 	port          int
 	inputReceived int
 	outputSent    int
-	result        throughput
+
+	// failures holds the raw failure counters, keyed by the counter's name.
+	failures map[string]int64
+
+	result  throughput
+	verdict benthosmonitorservice.FailureVerdict
 }
 
 // observe records one successful scrape of the benthos at port, taken at time
 // at, and returns the throughput over the window that ends at the newest
-// observed scrape.
+// observed scrape, and the failure verdict of that scrape.
 //
 // A scrape whose at is not after the previous one's is not observed, and the
-// previous result is returned. The engine's windows must receive points in time
-// order.
+// previous result and verdict are returned. The engine's windows must receive
+// points in time order.
 //
 // The engine is rebuilt when the port changed or when a counter dropped. A new
 // port is a different benthos, and a dropped counter means benthos restarted,
@@ -52,12 +57,16 @@ type observation struct {
 // holds one point, so the first rate after a rebuild is 0. Without the rebuild,
 // the rate would be the slope from the old count to the new one, a negative
 // number.
-func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, at time.Time) throughput {
+//
+// The first scrape on fresh deps is observed alone: counters that were already
+// high before it have no older point to rise against, so they are not judged.
+func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, at time.Time) (throughput, benthosmonitorservice.FailureVerdict) {
 	cur := observation{
 		at:            at,
 		port:          port,
 		inputReceived: int(m.InputReceivedTotal()),
 		outputSent:    int(m.OutputSentTotal()),
+		failures:      readFailures(m),
 	}
 
 	prev := d.prev
@@ -65,15 +74,12 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	case prev == nil:
 		d.engine = newEngine()
 	case !at.After(prev.at):
-		return prev.result
+		return prev.result, prev.verdict
 	case counterSeriesChanged(prev, &cur):
 		d.engine = newEngine()
 	}
 
-	d.engine.Observe(sample{
-		inputReceived: diagnosis.Known(float64(cur.inputReceived)),
-		outputSent:    diagnosis.Known(float64(cur.outputSent)),
-	}, diagnosis.Environment{}, at)
+	fired, _ := d.engine.Observe(sampleFrom(cur), diagnosis.Environment{}, at)
 
 	cur.result = throughput{
 		Input: ComponentThroughput{
@@ -86,19 +92,31 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 		},
 	}
 	cur.result.IsActive = cur.result.Input.MessagesPerSecond > 0
+	cur.verdict = failureVerdict(d.engine, fired, at)
 	d.prev = &cur
 
-	return cur.result
+	return cur.result, cur.verdict
 }
 
 // counterSeriesChanged reports whether cur's counters cannot be compared with
 // prev's: the port changed, or a counter went down because benthos restarted. A
 // drop in the output counter alone counts, because a reconfigured benthos can
-// leave the input counter unchanged.
+// leave the input counter unchanged. A dropped failure counter counts for the
+// same reason.
 func counterSeriesChanged(prev, cur *observation) bool {
-	return cur.port != prev.port ||
+	if cur.port != prev.port ||
 		cur.inputReceived < prev.inputReceived ||
-		cur.outputSent < prev.outputSent
+		cur.outputSent < prev.outputSent {
+		return true
+	}
+
+	for name, v := range cur.failures {
+		if v < prev.failures[name] {
+			return true
+		}
+	}
+
+	return false
 }
 
 // rate is a measurement's slope, or 0 while the engine marks it untrusted or
