@@ -297,6 +297,28 @@ connection: 10.0.0.5:502
 			Expect(cfgErr.Field).To(Equal("agent"))
 		})
 
+		It("rejects a location level key that is not a canonical integer", func() {
+			logger := deps.NewNopFSMLogger()
+
+			worker, err := examplebridge.NewExamplebridgeWorker(
+				deps.Identity{ID: "test-bridge", Name: "Test Bridge"},
+				logger,
+				nil,
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := fsmv2types.UserSpec{Config: `name: b1
+location:
+  "007": hall
+`}
+
+			_, err = worker.DeriveDesiredState(spec)
+
+			var cfgErr *fsmv2types.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue())
+			Expect(cfgErr.Field).To(Equal("location"))
+		})
+
 		It("rejects a variable named like a connection shortcut", func() {
 			logger := deps.NewNopFSMLogger()
 

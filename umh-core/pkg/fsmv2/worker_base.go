@@ -103,7 +103,8 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 // string), and caches the config. Templates render against the names a
 // parent hands down when UserSpec.Names carries at least one entry; a nil
 // or empty Names builds the names from the config's own fields, the config
-// values a parent hands down, and the user variables.
+// values a parent hands down, the user variables, and whatever names the
+// config type's ReadyMade and Shortcuts methods supply when it has them.
 //
 // Workers that need children specs must override this method in their own struct
 // and either call w.WorkerBase.DeriveDesiredState(spec) first (then read the
@@ -161,11 +162,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 
 	names := userSpec.Names
 	if len(names) == 0 {
-		names, err = config.BuildNames(config.Entry{
-			Fields:    fields,
-			Variables: variables,
-			Config:    userSpec.ConfigValues,
-		})
+		names, err = config.BuildWorkerNames(cfg, fields, variables, userSpec.ConfigValues)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build the template names: %w", err)
 		}

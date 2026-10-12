@@ -224,3 +224,104 @@ var _ = Describe("HistorianShortcut", func() {
 		Expect(names).To(Equal(map[string]any{}))
 	})
 })
+
+// namesHookConfig is a config type whose name methods place fixed values, so a
+// test can check BuildWorkerNames carries their results into the names.
+type namesHookConfig struct{}
+
+func (namesHookConfig) ReadyMade(map[string]any) (map[string]any, error) {
+	return map[string]any{"location_path": "acme.hall"}, nil
+}
+
+func (namesHookConfig) Shortcuts(map[string]any) (map[string]any, error) {
+	return map[string]any{"IP": "10.0.0.5"}, nil
+}
+
+// pointerHookConfig implements ReadyMade on its pointer, so a test can check
+// BuildWorkerNames finds the method behind the pointer too.
+type pointerHookConfig struct{}
+
+func (*pointerHookConfig) ReadyMade(map[string]any) (map[string]any, error) {
+	return map[string]any{"ready": "ready-value"}, nil
+}
+
+// errReadyConfig is a config type whose ReadyMade returns a plain error.
+type errReadyConfig struct{}
+
+func (errReadyConfig) ReadyMade(map[string]any) (map[string]any, error) {
+	return nil, errors.New("ready-made failed")
+}
+
+// errShortcutsConfig is a config type whose Shortcuts returns a plain error.
+type errShortcutsConfig struct{}
+
+func (errShortcutsConfig) Shortcuts(map[string]any) (map[string]any, error) {
+	return nil, errors.New("shortcuts failed")
+}
+
+var _ = Describe("BuildWorkerNames", func() {
+	It("places the names both methods supply", func() {
+		names, err := config.BuildWorkerNames(namesHookConfig{},
+			map[string]any{"name": "b1"},
+			map[string]any{"SLAVE_ID": "7"},
+			map[string]any{"historian": map[string]any{"timescale": map[string]any{"host": "db"}}},
+		)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(names["name"]).To(Equal("b1"))
+		Expect(names["location_path"]).To(Equal("acme.hall"))
+		Expect(names["IP"]).To(Equal("10.0.0.5"))
+	})
+
+	It("finds a method implemented on the pointer", func() {
+		names, err := config.BuildWorkerNames(pointerHookConfig{},
+			map[string]any{"name": "b1"},
+			map[string]any{},
+			map[string]any{},
+		)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(names["ready"]).To(Equal("ready-value"))
+	})
+
+	It("wraps a plain ReadyMade error as a *ConfigError", func() {
+		_, err := config.BuildWorkerNames(errReadyConfig{},
+			map[string]any{"name": "b1"},
+			map[string]any{},
+			map[string]any{},
+		)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue(),
+			"a plain error from a name method must be wrapped as a *config.ConfigError, got %T", err)
+		Expect(err).To(MatchError(ContainSubstring("ready-made failed")))
+	})
+
+	It("wraps a plain Shortcuts error as a *ConfigError", func() {
+		_, err := config.BuildWorkerNames(errShortcutsConfig{},
+			map[string]any{"name": "b1"},
+			map[string]any{},
+			map[string]any{},
+		)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue(),
+			"a plain error from a name method must be wrapped as a *config.ConfigError, got %T", err)
+		Expect(err).To(MatchError(ContainSubstring("shortcuts failed")))
+	})
+
+	It("builds the same names for a config type with neither method", func() {
+		names, err := config.BuildWorkerNames(struct{}{},
+			map[string]any{"name": "b1"},
+			map[string]any{"SLAVE_ID": "7"},
+			map[string]any{"historian": map[string]any{"timescale": map[string]any{"host": "db"}}},
+		)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(names).To(Equal(map[string]any{
+			"name":      "b1",
+			"variables": map[string]any{"SLAVE_ID": "7"},
+			"config":    map[string]any{"historian": map[string]any{"timescale": map[string]any{"host": "db"}}},
+		}))
+	})
+})
