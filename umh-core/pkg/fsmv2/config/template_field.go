@@ -90,9 +90,10 @@ func printable(v any) (any, error) {
 // addPrintChecks appends printable to every print action in tmpl's parse
 // tree, so each printed value passes through it. The bodies of templates
 // that define and block create are associated trees, so they are walked too.
-// The pipelines of if, range and with judge truth and are left alone.
-// printable sees only the final value of a pipeline, so a print or printf
-// earlier in the pipeline can stringify a value first.
+// The pipelines of if, range and with judge truth and are left alone, and so
+// are declarations and assignments, which print nothing. printable sees
+// only the final value of a pipeline, so a print or printf earlier in the
+// pipeline can stringify a value first.
 func addPrintChecks(tmpl *template.Template) {
 	addPrintChecksToNode(tmpl.Tree.Root)
 	for _, assoc := range tmpl.Templates() {
@@ -109,7 +110,9 @@ func addPrintChecksToNode(node parse.Node) {
 			addPrintChecksToNode(child)
 		}
 	case *parse.ActionNode:
-		if !n.Pipe.IsAssign {
+		// A declaration ({{ $c := .conn }}) and an assignment ({{ $c = .conn }})
+		// print nothing, so neither is checked.
+		if !n.Pipe.IsAssign && len(n.Pipe.Decl) == 0 {
 			cmd := &parse.CommandNode{
 				NodeType: parse.NodeCommand,
 				Args:     []parse.Node{parse.NewIdentifier("printable")},
