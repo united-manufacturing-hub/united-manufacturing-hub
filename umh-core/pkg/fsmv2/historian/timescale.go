@@ -247,7 +247,8 @@ func authRejected(err error) bool {
 // health to judge: an authentication or unknown-database error sets
 // Auth=TimescaleAuthInvalid, and a network or timeout error leaves
 // Reachable=false and Auth=TimescaleAuthUnknown. Poll returns an error only when
-// it could not observe: the pool could not be built.
+// it could not observe: the pool could not be built, or the worker is shutting
+// down.
 func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	cfg = cfg.WithDefaults()
 	host, port := cfg.Timescale.Host, cfg.Timescale.Port
@@ -274,6 +275,16 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 
 	var one int
 	if err := pool.QueryRow(ctx, "SELECT 1").Scan(&one); err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return TimescaleStatus{
+				Host:                      host,
+				Port:                      port,
+				Auth:                      models.TimescaleAuthUnknown,
+				Summary:                   d.summary.last(dsn),
+				DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+			}, fmt.Errorf("timescale query %s cancelled: %w", host, ctx.Err())
+		}
+
 		// Any server-side PgError means the endpoint is reachable. Auth is proven
 		// invalid only when the server rejected the credentials or database name;
 		// other server errors leave the config unverified. A non-PgError (network,

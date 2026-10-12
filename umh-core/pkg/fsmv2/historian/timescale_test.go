@@ -291,6 +291,23 @@ var _ = Describe("Poll on a connection fault", func() {
 	})
 })
 
+var _ = Describe("Poll during shutdown", func() {
+	It("returns an error instead of reporting the endpoint unreachable", func() {
+		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:    "127.0.0.1",
+			Port:    closedPort(),
+			SSLMode: config.HistorianSSLModeDisable,
+		}}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := Poll(ctx, newDeps(idUnder("parent-a"), baseUnder("parent-a")), cfg)
+
+		Expect(err).To(MatchError(context.Canceled))
+	})
+})
+
 var _ = Describe("health", func() {
 	DescribeTable("derives the verdict from the observed status",
 		func(status TimescaleStatus, wantDegraded bool) {
