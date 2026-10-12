@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -396,5 +397,114 @@ var _ = Describe("the summary cache", func() {
 
 		Expect(cache.last(dsnA).TableNames).To(ConsistOf("value_bench"))
 		Expect(cache.last(dsnB).TableNames).To(BeEmpty())
+	})
+})
+
+var _ = DescribeTable("unexpectedQueryFailure",
+	func(err error, want bool) {
+		Expect(unexpectedQueryFailure(err)).To(Equal(want))
+	},
+	Entry("server error outside the auth classes",
+		&pgconn.PgError{Code: "42601", Message: "syntax error"}, true),
+	Entry("credentials rejected",
+		&pgconn.PgError{Code: "28P01", Message: "password authentication failed"}, false),
+	Entry("unknown database",
+		&pgconn.PgError{Code: "3D000", Message: `database "nope" does not exist`}, false),
+	Entry("nothing answered",
+		errors.New("dial tcp: connection refused"), false),
+)
+
+type sentryEvent struct {
+	message string
+	err     error
+}
+
+type recordingLogger struct {
+	deps.FSMLogger
+
+	events *[]sentryEvent
+}
+
+func (l recordingLogger) With(fields ...deps.Field) deps.FSMLogger {
+	return recordingLogger{FSMLogger: l.FSMLogger.With(fields...), events: l.events}
+}
+
+func (l recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath, msg string, fields ...deps.Field) {
+	event := sentryEvent{message: msg}
+
+	for _, field := range fields {
+		if fieldErr, isErr := field.Value.(error); isErr {
+			event.err = fieldErr
+		}
+	}
+
+	*l.events = append(*l.events, event)
+	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
+}
+
+var _ = Describe("Sentry reporting", func() {
+	var (
+		events []sentryEvent
+		d      Deps
+	)
+
+	BeforeEach(func() {
+		original := sharedReported
+		sharedReported = &sync.Map{}
+
+		DeferCleanup(func() { sharedReported = original })
+
+		events = nil
+		logger := recordingLogger{FSMLogger: deps.NewNopFSMLogger(), events: &events}
+		d = newDeps(idUnder("parent-a"), deps.NewBaseDependencies(logger, nil, idUnder("parent-a")))
+	})
+
+	unreachableConfig := func() config.HistorianConfig {
+		return config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:    "127.0.0.1",
+			Port:    closedPort(),
+			SSLMode: config.HistorianSSLModeDisable,
+		}}
+	}
+
+	unbuildablePoolConfig := func() config.HistorianConfig {
+		return config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:     "127.0.0.1",
+			Password: "unlikely-to-appear-by-accident",
+			SSLMode:  "not-a-mode",
+		}}
+	}
+
+	It("reports a pool that cannot be built once, without the password", func() {
+		cfg := unbuildablePoolConfig()
+
+		_, err := Poll(context.Background(), d, cfg)
+		Expect(err).To(HaveOccurred())
+		_, err = Poll(context.Background(), d, cfg)
+		Expect(err).To(HaveOccurred())
+
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].message).To(Equal(string(tagPoolFailed)))
+		Expect(events[0].err).NotTo(MatchError(ContainSubstring(cfg.Timescale.Password)))
+	})
+
+	It("reports nothing for an unreachable database", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := Poll(ctx, d, unreachableConfig())
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(events).To(BeEmpty())
+	})
+
+	It("reports nothing during shutdown", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := Poll(ctx, d, unbuildablePoolConfig())
+
+		Expect(err).To(MatchError(ContainSubstring("timescale pool")))
+		Expect(events).To(BeEmpty())
 	})
 })

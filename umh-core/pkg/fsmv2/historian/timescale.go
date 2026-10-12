@@ -131,6 +131,7 @@ type Deps struct {
 	pool         *poolHolder
 	summary      *readCache[timescalemetrics.Summary]
 	databaseSize *readCache[int64]
+	reported     *sync.Map
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -144,6 +145,7 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 		pool:             sharedPool,
 		summary:          sharedSummary,
 		databaseSize:     sharedDatabaseSize,
+		reported:         sharedReported,
 	}
 }
 
@@ -241,6 +243,33 @@ func authRejected(err error) bool {
 	return badCredentials || unknownDatabase
 }
 
+func unexpectedQueryFailure(err error) bool {
+	return serverAnswered(err) && !authRejected(err)
+}
+
+type failureTag string
+
+const (
+	tagPoolFailed  failureTag = "historian::pool_failed"
+	tagQueryFailed failureTag = "historian::query_failed"
+)
+
+var sharedReported = &sync.Map{}
+
+func (d Deps) reportOnce(ctx context.Context, tag failureTag, host string, err error) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	if _, reportedBefore := d.reported.LoadOrStore(tag, struct{}{}); reportedBefore {
+		return
+	}
+
+	d.GetLogger().SentryWarn(deps.FeatureSupportHistorian, d.GetHierarchyPath(), string(tag),
+		deps.String("host", host),
+		deps.Err(err))
+}
+
 // Poll runs a `SELECT 1` over the shared pool once and logs the outcome. A
 // successful query returns a reachable, auth-valid status with the measured
 // latency. A failed query is an observation, returned with a nil error for
@@ -261,6 +290,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.String("host", host),
 			deps.Bool("reachable", false),
 			deps.Err(err))
+		d.reportOnce(ctx, tagPoolFailed, host, err)
 
 		return TimescaleStatus{
 			Host:                      host,
@@ -299,6 +329,10 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Bool("reachable", reachable),
 			deps.String("auth", string(auth)),
 			deps.Err(err))
+
+		if unexpectedQueryFailure(err) {
+			d.reportOnce(ctx, tagQueryFailed, host, err)
+		}
 
 		return TimescaleStatus{
 			Host:                      host,
