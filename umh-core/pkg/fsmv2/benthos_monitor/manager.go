@@ -68,6 +68,23 @@ type benthosMonitorDeps struct {
 
 	// prev is the previous observed scrape, nil before the first.
 	prev *observation
+
+	// now stamps each scrape; see scrapeTime.
+	now func() time.Time
+}
+
+// scrapeClock is the clock NewDeps gives each worker. Tests replace it to
+// drive the failure window without waiting one constants.BenthosLogWindow.
+var scrapeClock = time.Now
+
+// scrapeTime falls back to time.Now for deps built without a clock, as tests
+// that construct benthosMonitorDeps directly do.
+func (d *benthosMonitorDeps) scrapeTime() time.Time {
+	if d.now == nil {
+		return time.Now()
+	}
+
+	return d.now()
 }
 
 // ComponentThroughput carries the rate for one direction of the benthos pipeline.
@@ -129,7 +146,7 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 
 	base := fmt.Sprintf("http://localhost:%d", cfg.MetricsPort)
-	status := BenthosMonitorStatus{PollStartedAt: time.Now()}
+	status := BenthosMonitorStatus{PollStartedAt: d.scrapeTime()}
 
 	_, err := get(ctx, d.client, base+"/ping")
 	if err == nil {
@@ -243,7 +260,7 @@ func init() {
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		NewDeps: func(_ deps.Identity, _ *deps.BaseDependencies) *benthosMonitorDeps {
-			return &benthosMonitorDeps{client: &http.Client{Timeout: monitorClientTimeout}}
+			return &benthosMonitorDeps{client: &http.Client{Timeout: monitorClientTimeout}, now: scrapeClock}
 		},
 		Poll:   Poll,
 		Health: health,
