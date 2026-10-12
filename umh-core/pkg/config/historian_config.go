@@ -247,34 +247,6 @@ func (t TimescaleConfig) ToTemplateMap() map[string]any {
 	return toTemplateMap(t.WithDefaults())
 }
 
-type timescaleSetting struct {
-	name  string
-	value *string
-}
-
-func (t TimescaleConfig) withEnvVariablesExpanded() (TimescaleConfig, error) {
-	settings := []timescaleSetting{
-		{"host", &t.Host},
-		{"username", &t.Username},
-		{"password", &t.Password},
-		{"database", &t.Database},
-		{"sslrootcert", &t.SSLRootCert},
-		{"sslcert", &t.SSLCert},
-		{"sslkey", &t.SSLKey},
-	}
-
-	for _, setting := range settings {
-		expanded, err := env.Expand(*setting.value)
-		if err != nil {
-			return TimescaleConfig{}, fmt.Errorf("historian %s: %w", setting.name, err)
-		}
-
-		*setting.value = expanded
-	}
-
-	return t, nil
-}
-
 // ToDSN builds a libpq/pgx connection string ("postgres://...") from the
 // connection settings, applying defaults first. Username and password are
 // percent-escaped so reserved characters survive; sslmode and any TLS cert paths
@@ -283,31 +255,63 @@ func (t TimescaleConfig) withEnvVariablesExpanded() (TimescaleConfig, error) {
 // referenced variable is not set. The returned string carries the raw password:
 // never log it (see String, which masks the password for %v logging).
 func (t TimescaleConfig) ToDSN() (string, error) {
-	t, err := t.WithDefaults().withEnvVariablesExpanded()
+	t = t.WithDefaults()
+
+	host, err := env.Expand(t.Host)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("historian host: %w", err)
+	}
+
+	username, err := env.Expand(t.Username)
+	if err != nil {
+		return "", fmt.Errorf("historian username: %w", err)
+	}
+
+	password, err := env.Expand(t.Password)
+	if err != nil {
+		return "", fmt.Errorf("historian password: %w", err)
+	}
+
+	database, err := env.Expand(t.Database)
+	if err != nil {
+		return "", fmt.Errorf("historian database: %w", err)
+	}
+
+	sslRootCert, err := env.Expand(t.SSLRootCert)
+	if err != nil {
+		return "", fmt.Errorf("historian sslrootcert: %w", err)
+	}
+
+	sslCert, err := env.Expand(t.SSLCert)
+	if err != nil {
+		return "", fmt.Errorf("historian sslcert: %w", err)
+	}
+
+	sslKey, err := env.Expand(t.SSLKey)
+	if err != nil {
+		return "", fmt.Errorf("historian sslkey: %w", err)
 	}
 
 	q := url.Values{}
 	q.Set("sslmode", string(t.SSLMode))
 
-	if t.SSLRootCert != "" {
-		q.Set("sslrootcert", t.SSLRootCert)
+	if sslRootCert != "" {
+		q.Set("sslrootcert", sslRootCert)
 	}
 
-	if t.SSLCert != "" {
-		q.Set("sslcert", t.SSLCert)
+	if sslCert != "" {
+		q.Set("sslcert", sslCert)
 	}
 
-	if t.SSLKey != "" {
-		q.Set("sslkey", t.SSLKey)
+	if sslKey != "" {
+		q.Set("sslkey", sslKey)
 	}
 
 	u := url.URL{
 		Scheme:   "postgres",
-		User:     url.UserPassword(t.Username, t.Password),
-		Host:     net.JoinHostPort(t.Host, strconv.Itoa(int(t.Port))),
-		Path:     "/" + t.Database,
+		User:     url.UserPassword(username, password),
+		Host:     net.JoinHostPort(host, strconv.Itoa(int(t.Port))),
+		Path:     "/" + database,
 		RawQuery: q.Encode(),
 	}
 
