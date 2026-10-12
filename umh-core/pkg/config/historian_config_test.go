@@ -15,7 +15,9 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
+	"net/url"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -343,6 +345,78 @@ var _ = Describe("TimescaleConfig", func() {
 			Expect(m).To(HaveKeyWithValue("database", "metrics"))
 			Expect(m).To(HaveKeyWithValue("username", "svc"))
 			Expect(m).To(HaveKeyWithValue("sslmode", "disable"))
+		})
+	})
+
+	Describe("ToDSN", func() {
+		const (
+			setVariable             = "UMH_TEST_HISTORIAN_PASSWORD"
+			unsetVariable           = "UMH_TEST_HISTORIAN_PASSWORD_UNSET"
+			passwordFromEnvironment = "from-environment"
+		)
+
+		passwordInDSN := func(password string) (string, error) {
+			t := validTimescale()
+			t.Password = password
+
+			dsn, err := t.ToDSN()
+			if err != nil {
+				return "", err
+			}
+
+			parsedDSN, err := url.Parse(dsn)
+			Expect(err).NotTo(HaveOccurred())
+
+			urlPassword, _ := parsedDSN.User.Password()
+
+			return urlPassword, nil
+		}
+
+		BeforeEach(func() {
+			GinkgoT().Setenv(setVariable, passwordFromEnvironment)
+		})
+
+		It("keeps a password without a reference unchanged", func() {
+			Expect(passwordInDSN("pa$word{x}")).To(Equal("pa$word{x}"))
+		})
+
+		It("replaces ${VAR} with the environment variable", func() {
+			Expect(passwordInDSN("${" + setVariable + "}")).To(Equal(passwordFromEnvironment))
+		})
+
+		It("replaces a reference inside a longer password", func() {
+			Expect(passwordInDSN("prefix-${" + setVariable + "}-suffix")).
+				To(Equal("prefix-" + passwordFromEnvironment + "-suffix"))
+		})
+
+		It("uses the default of ${VAR:default} when the variable is unset", func() {
+			Expect(passwordInDSN("${" + unsetVariable + ":fallback}")).To(Equal("fallback"))
+		})
+
+		It("prefers the variable over the default when it is set", func() {
+			Expect(passwordInDSN("${" + setVariable + ":fallback}")).To(Equal(passwordFromEnvironment))
+		})
+
+		It("decodes ${VAR|base64decode}", func() {
+			GinkgoT().Setenv(setVariable, base64.StdEncoding.EncodeToString([]byte("decoded")))
+
+			Expect(passwordInDSN("${" + setVariable + "|base64decode}")).To(Equal("decoded"))
+		})
+
+		It("turns the escape ${{VAR}} into the literal text ${VAR}", func() {
+			Expect(passwordInDSN("${{" + setVariable + "}}")).To(Equal("${" + setVariable + "}"))
+		})
+
+		It("fails and names the variable when it is unset and has no default", func() {
+			_, err := passwordInDSN("${" + unsetVariable + "}")
+
+			Expect(err).To(MatchError(ContainSubstring(unsetVariable)))
+		})
+
+		It("fails on an unknown transform", func() {
+			_, err := passwordInDSN("${" + setVariable + "|rot13}")
+
+			Expect(err).To(MatchError(ContainSubstring("rot13")))
 		})
 	})
 })

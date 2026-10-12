@@ -219,6 +219,24 @@ var _ = Describe("Poll", func() {
 			"no server answered, so the credentials stay unverified rather than rejected")
 	})
 
+	It("names an unset password variable without opening a connection", func() {
+		const unsetVariable = "UMH_TEST_HISTORIAN_POLL_PASSWORD_UNSET"
+
+		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:     "127.0.0.1",
+			Password: "${" + unsetVariable + "}",
+		}}
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
+		d.pool = &poolHolder{}
+
+		status, err := Poll(context.Background(), d, cfg)
+
+		Expect(err).To(MatchError(ContainSubstring(unsetVariable)))
+		Expect(pooledBy(d.pool)).To(BeNil())
+		Expect(status.Reachable).To(BeFalse())
+		Expect(status.Auth).To(Equal(models.TimescaleAuthUnknown))
+	})
+
 	It("reuses the pool cached by the holder it was handed", func() {
 		// The two sharing specs pin where the holder is stored, not that Poll reads
 		// it: a Poll that ignored d.pool and called (&poolHolder{}).get itself would
@@ -267,7 +285,8 @@ var _ = Describe("Poll on a connection fault", func() {
 		}}
 
 		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
-		dsn := cfg.WithDefaults().Timescale.ToDSN()
+		dsn, err := cfg.WithDefaults().Timescale.ToDSN()
+		Expect(err).NotTo(HaveOccurred())
 		d.summary = &readCache[timescalemetrics.Summary]{
 			interval: time.Minute,
 			dsn:      dsn,

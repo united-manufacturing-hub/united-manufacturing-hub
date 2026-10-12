@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 )
 
@@ -248,10 +249,17 @@ func (t TimescaleConfig) ToTemplateMap() map[string]any {
 // ToDSN builds a libpq/pgx connection string ("postgres://...") from the
 // connection settings, applying defaults first. Username and password are
 // percent-escaped so reserved characters survive; sslmode and any TLS cert paths
-// become query parameters. The returned string carries the raw password: never
+// become query parameters. The password expands environment variable references
+// such as ${VAR} the way benthos does in bridges, and fails when a referenced
+// variable is not set. The returned string carries the raw password: never
 // log it (see String, which masks the password for %v logging).
-func (t TimescaleConfig) ToDSN() string {
+func (t TimescaleConfig) ToDSN() (string, error) {
 	t = t.WithDefaults()
+
+	password, err := expandEnvVariables(t.Password, os.LookupEnv)
+	if err != nil {
+		return "", fmt.Errorf("historian password: %w", err)
+	}
 
 	q := url.Values{}
 	q.Set("sslmode", string(t.SSLMode))
@@ -270,13 +278,13 @@ func (t TimescaleConfig) ToDSN() string {
 
 	u := url.URL{
 		Scheme:   "postgres",
-		User:     url.UserPassword(t.Username, t.Password),
+		User:     url.UserPassword(t.Username, password),
 		Host:     net.JoinHostPort(t.Host, strconv.Itoa(int(t.Port))),
 		Path:     "/" + t.Database,
 		RawQuery: q.Encode(),
 	}
 
-	return u.String()
+	return u.String(), nil
 }
 
 // toTemplateMap serialises a config value to a map keyed by its json field names.
