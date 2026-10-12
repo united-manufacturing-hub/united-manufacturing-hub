@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
@@ -65,19 +67,28 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 // reconciliation loop, which reports it on the bridge.
 //
 // The agent location is read from the system snapshot; with no snapshot manager that half
-// of the bridge location is unknown, so the check is skipped.
-func validateWriteTopicHierarchy(pcConfig config.ProtocolConverterConfig, snapshotManager *fsm.SnapshotManager) error {
+// of the bridge location is unknown, so the check is skipped. The historian section is not
+// part of the snapshot, so it is read from the config manager to render historian variables.
+func validateWriteTopicHierarchy(pcConfig config.ProtocolConverterConfig, snapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) error {
 	if snapshotManager == nil {
 		return nil
 	}
 
 	snapshot := snapshotManager.GetDeepCopySnapshot()
 
-	_, err := runtime_config.BuildRuntimeConfig(
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	currentConfig, err := configManager.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to read current config for historian variables: %w", err)
+	}
+
+	_, err = runtime_config.BuildRuntimeConfig(
 		pcConfig.ProtocolConverterServiceConfig,
 		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
 		nil, // TODO: add global vars
-		nil, // historian: a write flow referencing it fails the render, which is not this check's concern
+		currentConfig.Historian,
 		runtime_config.BridgedByPlaceholder,
 		pcConfig.Name,
 	)

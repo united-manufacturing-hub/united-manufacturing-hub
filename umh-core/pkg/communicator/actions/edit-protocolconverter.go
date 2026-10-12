@@ -398,7 +398,7 @@ func (a *EditProtocolConverterAction) validateSuppliedWriteTopics(newSpec config
 		return nil
 	}
 
-	return validateWriteTopicHierarchy(newSpec, a.systemSnapshotManager)
+	return validateWriteTopicHierarchy(newSpec, a.systemSnapshotManager, a.configManager)
 }
 
 // applyMutation analyzes the current configuration and applies the necessary mutations
