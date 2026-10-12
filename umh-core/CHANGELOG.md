@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- Historian settings and bridge connection IPs can now reference an environment variable as `${VAR}` or `${VAR:default}`, so a password or host no longer has to be written into config.yaml. Before, bridge flows resolved the reference but the connection checks used the literal text and failed. A referenced variable that is not set, or any other reference form such as `${VAR|base64decode}`, now produces an error that names it
+- Historian settings and bridge connection IPs accept `${VAR}` and `${VAR:default}` to read a value, such as a password, from an environment variable instead of config.yaml. An unset variable or an unsupported form produces an error naming it
 
 ## [0.44.43]
 
