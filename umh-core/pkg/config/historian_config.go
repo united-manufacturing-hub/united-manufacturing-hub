@@ -246,19 +246,45 @@ func (t TimescaleConfig) ToTemplateMap() map[string]any {
 	return toTemplateMap(t.WithDefaults())
 }
 
+// withEnvVariablesExpanded returns a copy of t with ${VAR} references resolved
+// in every string setting.
+func (t TimescaleConfig) withEnvVariablesExpanded() (TimescaleConfig, error) {
+	settings := []struct {
+		name  string
+		value *string
+	}{
+		{"host", &t.Host},
+		{"username", &t.Username},
+		{"password", &t.Password},
+		{"database", &t.Database},
+		{"sslrootcert", &t.SSLRootCert},
+		{"sslcert", &t.SSLCert},
+		{"sslkey", &t.SSLKey},
+	}
+
+	for _, setting := range settings {
+		expanded, err := expandEnvVariables(*setting.value, os.LookupEnv)
+		if err != nil {
+			return TimescaleConfig{}, fmt.Errorf("historian %s: %w", setting.name, err)
+		}
+
+		*setting.value = expanded
+	}
+
+	return t, nil
+}
+
 // ToDSN builds a libpq/pgx connection string ("postgres://...") from the
 // connection settings, applying defaults first. Username and password are
 // percent-escaped so reserved characters survive; sslmode and any TLS cert paths
-// become query parameters. The password expands environment variable references
-// such as ${VAR} the way benthos does in bridges, and fails when a referenced
-// variable is not set. The returned string carries the raw password: never
-// log it (see String, which masks the password for %v logging).
+// become query parameters. Every string setting expands environment variable
+// references such as ${VAR} the way benthos does in bridges, and fails when a
+// referenced variable is not set. The returned string carries the raw password:
+// never log it (see String, which masks the password for %v logging).
 func (t TimescaleConfig) ToDSN() (string, error) {
-	t = t.WithDefaults()
-
-	password, err := expandEnvVariables(t.Password, os.LookupEnv)
+	t, err := t.WithDefaults().withEnvVariablesExpanded()
 	if err != nil {
-		return "", fmt.Errorf("historian password: %w", err)
+		return "", err
 	}
 
 	q := url.Values{}
@@ -278,7 +304,7 @@ func (t TimescaleConfig) ToDSN() (string, error) {
 
 	u := url.URL{
 		Scheme:   "postgres",
-		User:     url.UserPassword(t.Username, password),
+		User:     url.UserPassword(t.Username, t.Password),
 		Host:     net.JoinHostPort(t.Host, strconv.Itoa(int(t.Port))),
 		Path:     "/" + t.Database,
 		RawQuery: q.Encode(),

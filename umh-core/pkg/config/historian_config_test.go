@@ -18,6 +18,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -417,6 +418,48 @@ var _ = Describe("TimescaleConfig", func() {
 			_, err := passwordInDSN("${" + setVariable + "|rot13}")
 
 			Expect(err).To(MatchError(ContainSubstring("rot13")))
+		})
+
+		DescribeTable("resolves ${VAR} in every string setting",
+			func(setField func(t *TimescaleConfig, value string), readField func(dsn *url.URL) string) {
+				t := validTimescale()
+				t.SSLMode = HistorianSSLModeVerifyFull
+				setField(&t, "${"+setVariable+"}")
+
+				dsn, err := t.ToDSN()
+				Expect(err).NotTo(HaveOccurred())
+
+				parsedDSN, err := url.Parse(dsn)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(readField(parsedDSN)).To(Equal(passwordFromEnvironment))
+			},
+			Entry("host",
+				func(t *TimescaleConfig, value string) { t.Host = value },
+				func(dsn *url.URL) string { return dsn.Hostname() }),
+			Entry("username",
+				func(t *TimescaleConfig, value string) { t.Username = value },
+				func(dsn *url.URL) string { return dsn.User.Username() }),
+			Entry("database",
+				func(t *TimescaleConfig, value string) { t.Database = value },
+				func(dsn *url.URL) string { return strings.TrimPrefix(dsn.Path, "/") }),
+			Entry("sslrootcert",
+				func(t *TimescaleConfig, value string) { t.SSLRootCert = value },
+				func(dsn *url.URL) string { return dsn.Query().Get("sslrootcert") }),
+			Entry("sslcert",
+				func(t *TimescaleConfig, value string) { t.SSLCert = value },
+				func(dsn *url.URL) string { return dsn.Query().Get("sslcert") }),
+			Entry("sslkey",
+				func(t *TimescaleConfig, value string) { t.SSLKey = value },
+				func(dsn *url.URL) string { return dsn.Query().Get("sslkey") }),
+		)
+
+		It("names the setting that references an unset variable", func() {
+			t := validTimescale()
+			t.Host = "${" + unsetVariable + "}"
+
+			_, err := t.ToDSN()
+
+			Expect(err).To(MatchError(And(ContainSubstring("host"), ContainSubstring(unsetVariable))))
 		})
 	})
 })
