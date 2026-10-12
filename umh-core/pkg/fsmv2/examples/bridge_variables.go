@@ -148,6 +148,12 @@ ns=3;s="DB"."X"
 
 					cfg, err := fsmv2client.GetDesired[example_flow.ExampleflowConfig](ctx, env.Client, ref)
 					if err != nil {
+						// A new flow can publish its observation before the
+						// supervisor saves its desired state.
+						if errors.Is(err, fsmv2client.ErrNoDesiredState) {
+							return false, fmt.Sprintf("state=%s, the flow has no desired state yet", obs.State), nil
+						}
+
 						return false, "", err
 					}
 
