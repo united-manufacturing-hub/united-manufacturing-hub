@@ -27,44 +27,44 @@ const (
 	variableValue = "from-environment"
 )
 
-var _ = Describe("Expand", func() {
+var _ = Describe("ResolveVariables", func() {
 	BeforeEach(func() {
 		GinkgoT().Setenv(setVariable, variableValue)
 	})
 
 	It("keeps a value without a reference unchanged", func() {
-		Expect(env.Expand("pa$word{x}")).To(Equal("pa$word{x}"))
+		Expect(env.ResolveVariables("pa$word{x}")).To(Equal("pa$word{x}"))
 	})
 
 	It("replaces ${VAR} with the environment variable", func() {
-		Expect(env.Expand("${" + setVariable + "}")).To(Equal(variableValue))
+		Expect(env.ResolveVariables("${" + setVariable + "}")).To(Equal(variableValue))
 	})
 
 	It("replaces a reference inside a longer value", func() {
-		Expect(env.Expand("prefix-${" + setVariable + "}-suffix")).
+		Expect(env.ResolveVariables("prefix-${" + setVariable + "}-suffix")).
 			To(Equal("prefix-" + variableValue + "-suffix"))
 	})
 
 	It("uses the default of ${VAR:default} when the variable is unset", func() {
-		Expect(env.Expand("${" + unsetVariable + ":fallback}")).To(Equal("fallback"))
+		Expect(env.ResolveVariables("${" + unsetVariable + ":fallback}")).To(Equal("fallback"))
 	})
 
 	It("uses the default of ${VAR:default} when the variable is empty", func() {
 		GinkgoT().Setenv(setVariable, "")
 
-		Expect(env.Expand("${" + setVariable + ":fallback}")).To(Equal("fallback"))
+		Expect(env.ResolveVariables("${" + setVariable + ":fallback}")).To(Equal("fallback"))
 	})
 
 	It("prefers the variable over the default when it is set", func() {
-		Expect(env.Expand("${" + setVariable + ":fallback}")).To(Equal(variableValue))
+		Expect(env.ResolveVariables("${" + setVariable + ":fallback}")).To(Equal(variableValue))
 	})
 
 	It("accepts an empty default", func() {
-		Expect(env.Expand("${" + unsetVariable + ":}")).To(Equal(""))
+		Expect(env.ResolveVariables("${" + unsetVariable + ":}")).To(Equal(""))
 	})
 
 	It("fails and names every variable that is unset and has no default", func() {
-		_, err := env.Expand("${" + unsetVariable + "}${" + unsetVariable + "_SECOND}")
+		_, err := env.ResolveVariables("${" + unsetVariable + "}${" + unsetVariable + "_SECOND}")
 
 		Expect(err).To(MatchError(And(
 			ContainSubstring(unsetVariable),
@@ -73,7 +73,7 @@ var _ = Describe("Expand", func() {
 
 	DescribeTable("rejects reference forms other than ${VAR} and ${VAR:default}, quoting only the reference",
 		func(value, reference string) {
-			_, err := env.Expand("secret-prefix-" + value)
+			_, err := env.ResolveVariables("secret-prefix-" + value)
 
 			Expect(err).To(MatchError(ContainSubstring(reference)))
 			Expect(err).NotTo(MatchError(ContainSubstring("secret-prefix")))

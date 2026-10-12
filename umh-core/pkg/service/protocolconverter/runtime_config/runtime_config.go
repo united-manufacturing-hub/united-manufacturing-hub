@@ -328,7 +328,7 @@ func renderConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
-	conn, err = withEnvVariablesExpanded(conn)
+	conn, err = withVariablesResolved(conn)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
@@ -420,19 +420,19 @@ func getProcessors(pipeline map[string]any) []any {
 	return []any{}
 }
 
-func withEnvVariablesExpanded(
+func withVariablesResolved(
 	conn connectionserviceconfig.ConnectionServiceConfigTemplate,
 ) (connectionserviceconfig.ConnectionServiceConfigTemplate, error) {
 	if conn.NmapTemplate == nil {
 		return conn, nil
 	}
 
-	target, err := env.Expand(conn.NmapTemplate.Target)
+	target, err := env.ResolveVariables(conn.NmapTemplate.Target)
 	if err != nil {
 		return conn, fmt.Errorf("connection target: %w", err)
 	}
 
-	port, err := env.Expand(conn.NmapTemplate.Port)
+	port, err := env.ResolveVariables(conn.NmapTemplate.Port)
 	if err != nil {
 		return conn, fmt.Errorf("connection port: %w", err)
 	}

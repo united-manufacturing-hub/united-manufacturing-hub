@@ -141,7 +141,7 @@ func (t TimescaleConfig) Validate() error {
 		}
 	}
 
-	if err := t.validateEnvVariableReferences(); err != nil {
+	if err := t.validateVariableReferences(); err != nil {
 		return err
 	}
 
@@ -157,14 +157,14 @@ func (t TimescaleConfig) ValidateForUpdate() error {
 		return errors.New("missing required field host")
 	}
 
-	if err := t.validateEnvVariableReferences(); err != nil {
+	if err := t.validateVariableReferences(); err != nil {
 		return err
 	}
 
 	return t.validateSSL()
 }
 
-func (t TimescaleConfig) validateEnvVariableReferences() error {
+func (t TimescaleConfig) validateVariableReferences() error {
 	if err := env.ValidateReferences(t.Host); err != nil {
 		return fmt.Errorf("historian host: %w", err)
 	}
@@ -290,44 +290,44 @@ func (t TimescaleConfig) ToTemplateMap() map[string]any {
 // ToDSN builds a libpq/pgx connection string ("postgres://...") from the
 // connection settings, applying defaults first. Username and password are
 // percent-escaped so reserved characters survive; sslmode and any TLS cert paths
-// become query parameters. Every string setting expands environment variable
-// references such as ${VAR} the way benthos does in bridges, and fails when a
-// referenced variable is not set. The returned string carries the raw password:
-// never log it (see String, which masks the password for %v logging).
+// become query parameters. Every string setting resolves ${VAR} and
+// ${VAR:default} references (see env.ResolveVariables). The returned string
+// carries the raw password: never log it (see String, which masks the password
+// for %v logging).
 func (t TimescaleConfig) ToDSN() (string, error) {
 	t = t.WithDefaults()
 
-	host, err := env.Expand(t.Host)
+	host, err := env.ResolveVariables(t.Host)
 	if err != nil {
 		return "", fmt.Errorf("historian host: %w", err)
 	}
 
-	username, err := env.Expand(t.Username)
+	username, err := env.ResolveVariables(t.Username)
 	if err != nil {
 		return "", fmt.Errorf("historian username: %w", err)
 	}
 
-	password, err := env.Expand(t.Password)
+	password, err := env.ResolveVariables(t.Password)
 	if err != nil {
 		return "", fmt.Errorf("historian password: %w", err)
 	}
 
-	database, err := env.Expand(t.Database)
+	database, err := env.ResolveVariables(t.Database)
 	if err != nil {
 		return "", fmt.Errorf("historian database: %w", err)
 	}
 
-	sslRootCert, err := env.Expand(t.SSLRootCert)
+	sslRootCert, err := env.ResolveVariables(t.SSLRootCert)
 	if err != nil {
 		return "", fmt.Errorf("historian sslrootcert: %w", err)
 	}
 
-	sslCert, err := env.Expand(t.SSLCert)
+	sslCert, err := env.ResolveVariables(t.SSLCert)
 	if err != nil {
 		return "", fmt.Errorf("historian sslcert: %w", err)
 	}
 
-	sslKey, err := env.Expand(t.SSLKey)
+	sslKey, err := env.ResolveVariables(t.SSLKey)
 	if err != nil {
 		return "", fmt.Errorf("historian sslkey: %w", err)
 	}

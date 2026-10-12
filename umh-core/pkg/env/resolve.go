@@ -36,11 +36,11 @@ type variableReference struct {
 	hasDefault   bool
 }
 
-// Expand replaces ${VAR} and ${VAR:default} references in value with environment
-// variables. It fails on any other reference form and on a variable that is not
-// set and has no default.
-func Expand(value string) (string, error) {
-	var expanded strings.Builder
+// ResolveVariables replaces ${VAR} and ${VAR:default} references in value with
+// environment variables. It fails on any other reference form and on a variable
+// that is not set and has no default.
+func ResolveVariables(value string) (string, error) {
+	var resolvedValue strings.Builder
 
 	var missingNames []string
 
@@ -48,7 +48,7 @@ func Expand(value string) (string, error) {
 
 	for _, match := range referencePattern.FindAllStringIndex(value, -1) {
 		start, end := match[0], match[1]
-		expanded.WriteString(value[previousEnd:start])
+		resolvedValue.WriteString(value[previousEnd:start])
 		previousEnd = end
 
 		reference, err := parseReference(value[start:end])
@@ -56,23 +56,23 @@ func Expand(value string) (string, error) {
 			return "", err
 		}
 
-		resolved, found := lookup(reference)
+		variableValue, found := lookup(reference)
 		if !found {
 			missingNames = append(missingNames, reference.name)
 
 			continue
 		}
 
-		expanded.WriteString(resolved)
+		resolvedValue.WriteString(variableValue)
 	}
 
-	expanded.WriteString(value[previousEnd:])
+	resolvedValue.WriteString(value[previousEnd:])
 
 	if len(missingNames) > 0 {
 		return "", fmt.Errorf("required environment variables were not set: %s", strings.Join(missingNames, ", "))
 	}
 
-	return expanded.String(), nil
+	return resolvedValue.String(), nil
 }
 
 // ValidateReferences fails when value contains a reference other than ${VAR} or
