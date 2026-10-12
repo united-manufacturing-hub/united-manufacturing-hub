@@ -87,10 +87,8 @@ func (shutdownHonoringState) LifecyclePhase() config.LifecyclePhase {
 
 func (s shutdownHonoringState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if snap, ok := snapshot.(fsmv2.Snapshot); ok {
-		if ds, ok := snap.Desired.(fsmv2.DesiredState); ok {
-			if ds.IsShutdownRequested() {
-				return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNeedsRemoval, State: s, Reason: "shutdown requested"}
-			}
+		if snap.Desired.IsShutdownRequested() {
+			return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNeedsRemoval, State: s, Reason: "shutdown requested"}
 		}
 	}
 
