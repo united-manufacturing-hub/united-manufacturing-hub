@@ -18,6 +18,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -40,17 +41,17 @@ func (e *missingEnvVariablesError) Error() string {
 	return "required environment variables were not set: " + strings.Join(e.Names, ", ")
 }
 
-// expandEnvVariables replaces benthos-style environment variable references in
+// ExpandEnvVariables replaces benthos-style environment variable references in
 // value: ${VAR}, ${VAR:default}, ${VAR|base64decode}, and the escape ${{VAR}},
 // which becomes the literal text ${VAR}.
-func expandEnvVariables(value string, lookup func(name string) (string, bool)) (string, error) {
+func ExpandEnvVariables(value string) (string, error) {
 	var (
 		missingNames    []string
 		transformErrors []error
 	)
 
 	expanded := envVariableReferencePattern.ReplaceAllStringFunc(value, func(reference string) string {
-		resolved, err := resolveEnvVariableReference(reference, lookup)
+		resolved, err := resolveEnvVariableReference(reference)
 
 		var missing *missingEnvVariablesError
 		if errors.As(err, &missing) {
@@ -81,7 +82,7 @@ func expandEnvVariables(value string, lookup func(name string) (string, bool)) (
 
 // resolveEnvVariableReference resolves one reference matched by
 // envVariableReferencePattern, such as ${VAR:default|base64decode}.
-func resolveEnvVariableReference(reference string, lookup func(name string) (string, bool)) (string, error) {
+func resolveEnvVariableReference(reference string) (string, error) {
 	body := reference[len("${") : len(reference)-len("}")]
 
 	name, defaultValue, hasDefault := strings.Cut(body, ":")
@@ -93,7 +94,7 @@ func resolveEnvVariableReference(reference string, lookup func(name string) (str
 		name, transform = cutTransform(name)
 	}
 
-	value, isSet := lookup(name)
+	value, isSet := os.LookupEnv(name)
 	if hasDefault && value == "" {
 		value = defaultValue
 	}

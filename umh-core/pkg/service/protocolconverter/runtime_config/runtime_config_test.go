@@ -198,6 +198,39 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Port).To(Equal(uint16(6432)))
 		})
 
+		It("should resolve a ${VAR} historian host for the connection check", func() {
+			GinkgoT().Setenv("UMH_TEST_HISTORIAN_HOST", "timescale.internal")
+
+			historian := &config.HistorianConfig{
+				Timescale: config.TimescaleConfig{
+					Host:     "${UMH_TEST_HISTORIAN_HOST}",
+					Password: "secret",
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(
+				historianRefSpec("{{ .historian.timescale.host }}", "{{ .historian.timescale.port }}"),
+				agentLocation, globalVars, historian, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("timescale.internal"))
+		})
+
+		It("should name an unset variable in the connection target", func() {
+			historian := &config.HistorianConfig{
+				Timescale: config.TimescaleConfig{
+					Host:     "${UMH_TEST_HISTORIAN_HOST_UNSET}",
+					Password: "secret",
+				},
+			}
+
+			_, err := runtime_config.BuildRuntimeConfig(
+				historianRefSpec("{{ .historian.timescale.host }}", "{{ .historian.timescale.port }}"),
+				agentLocation, globalVars, historian, nodeName, pcName)
+
+			Expect(err).To(MatchError(ContainSubstring("UMH_TEST_HISTORIAN_HOST_UNSET")))
+		})
+
 		It("should apply historian defaults before rendering", func() {
 			historian := &config.HistorianConfig{
 				Timescale: config.TimescaleConfig{Host: "h", Password: "p"},

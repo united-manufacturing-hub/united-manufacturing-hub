@@ -327,6 +327,11 @@ func renderConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
+	conn, err = withEnvVariablesExpanded(conn)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
 	// 2. Convert the rendered template to runtime config with proper types
 	// This handles the string-to-uint16 port conversion and type safety
 	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(conn)
@@ -412,4 +417,29 @@ func getProcessors(pipeline map[string]any) []any {
 	}
 
 	return []any{}
+}
+
+func withEnvVariablesExpanded(
+	conn connectionserviceconfig.ConnectionServiceConfigTemplate,
+) (connectionserviceconfig.ConnectionServiceConfigTemplate, error) {
+	if conn.NmapTemplate == nil {
+		return conn, nil
+	}
+
+	target, err := config.ExpandEnvVariables(conn.NmapTemplate.Target)
+	if err != nil {
+		return conn, fmt.Errorf("connection target: %w", err)
+	}
+
+	port, err := config.ExpandEnvVariables(conn.NmapTemplate.Port)
+	if err != nil {
+		return conn, fmt.Errorf("connection port: %w", err)
+	}
+
+	conn.NmapTemplate = &connectionserviceconfig.NmapConfigTemplate{
+		Target: target,
+		Port:   port,
+	}
+
+	return conn, nil
 }

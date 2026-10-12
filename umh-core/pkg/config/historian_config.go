@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"strconv"
 )
 
@@ -263,7 +262,7 @@ func (t TimescaleConfig) withEnvVariablesExpanded() (TimescaleConfig, error) {
 	}
 
 	for _, setting := range settings {
-		expanded, err := expandEnvVariables(*setting.value, os.LookupEnv)
+		expanded, err := ExpandEnvVariables(*setting.value)
 		if err != nil {
 			return TimescaleConfig{}, fmt.Errorf("historian %s: %w", setting.name, err)
 		}
