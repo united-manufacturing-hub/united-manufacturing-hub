@@ -16,7 +16,6 @@ package env
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -27,86 +26,74 @@ import (
 // rules are copied so a value means the same in umh-core as in a bridge.
 // https://github.com/redpanda-data/benthos/blob/v4.78.0/internal/config/env_vars.go
 var (
-	envVariableReferencePattern        = regexp.MustCompile(`\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?(?:\|[0-9A-Za-z]+)?}`)
-	escapedEnvVariableReferencePattern = regexp.MustCompile(`\${({[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?})}`)
+	referencePattern        = regexp.MustCompile(`\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?(?:\|[0-9A-Za-z]+)?}`)
+	escapedReferencePattern = regexp.MustCompile(`\${({[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?})}`)
 )
 
-// missingEnvVariablesError lists the referenced environment variables that are
-// not set and have no default.
-type missingEnvVariablesError struct {
-	Names []string
+type variableReference struct {
+	name         string
+	defaultValue string
+	hasDefault   bool
+	transform    string
 }
 
-func (e *missingEnvVariablesError) Error() string {
-	return "required environment variables were not set: " + strings.Join(e.Names, ", ")
-}
-
-// Expand replaces benthos-style environment variable references in value: ${VAR}, ${VAR:default}, ${VAR|base64decode}, and the escape ${{VAR}},
-// which becomes the literal text ${VAR}.
+// Expand replaces benthos-style environment variable references in value:
+// ${VAR}, ${VAR:default}, ${VAR|base64decode}, and the escape ${{VAR}}, which
+// becomes the literal text ${VAR}.
 func Expand(value string) (string, error) {
-	var (
-		missingNames    []string
-		transformErrors []error
-	)
+	var expanded strings.Builder
 
-	expanded := envVariableReferencePattern.ReplaceAllStringFunc(value, func(reference string) string {
-		resolved, err := resolveEnvVariableReference(reference)
+	var missingNames []string
 
-		var missing *missingEnvVariablesError
-		if errors.As(err, &missing) {
-			missingNames = append(missingNames, missing.Names...)
+	previousEnd := 0
 
-			return ""
+	for _, match := range referencePattern.FindAllStringIndex(value, -1) {
+		start, end := match[0], match[1]
+		expanded.WriteString(value[previousEnd:start])
+		previousEnd = end
+
+		reference := parseReference(value[start:end])
+
+		resolved, found := lookup(reference)
+		if !found {
+			missingNames = append(missingNames, reference.name)
+
+			continue
 		}
 
+		transformed, err := applyTransform(resolved, reference.transform)
 		if err != nil {
-			transformErrors = append(transformErrors, err)
-
-			return ""
+			return "", err
 		}
 
-		return resolved
-	})
-
-	if len(transformErrors) > 0 {
-		return "", errors.Join(transformErrors...)
+		expanded.WriteString(transformed)
 	}
+
+	expanded.WriteString(value[previousEnd:])
 
 	if len(missingNames) > 0 {
-		return "", &missingEnvVariablesError{Names: missingNames}
+		return "", fmt.Errorf("required environment variables were not set: %s", strings.Join(missingNames, ", "))
 	}
 
-	return escapedEnvVariableReferencePattern.ReplaceAllString(expanded, "$$$1"), nil
+	return escapedReferencePattern.ReplaceAllString(expanded.String(), "$$$1"), nil
 }
 
-// resolveEnvVariableReference resolves one reference matched by
-// envVariableReferencePattern, such as ${VAR:default|base64decode}.
-func resolveEnvVariableReference(reference string) (string, error) {
-	body := reference[len("${") : len(reference)-len("}")]
+func parseReference(text string) variableReference {
+	body := text[len("${") : len(text)-len("}")]
 
-	name, defaultValue, hasDefault := strings.Cut(body, ":")
+	beforeColon, afterColon, hasDefault := strings.Cut(body, ":")
+	if !hasDefault {
+		name, transform := cutTransform(beforeColon)
 
-	var transform string
-	if hasDefault {
-		defaultValue, transform = cutTransform(defaultValue)
-	} else {
-		name, transform = cutTransform(name)
+		return variableReference{name: name, transform: transform}
 	}
 
-	value, isSet := os.LookupEnv(name)
-	if hasDefault && value == "" {
-		value = defaultValue
-	}
+	defaultValue, transform := cutTransform(afterColon)
 
-	if !hasDefault && !isSet {
-		return "", &missingEnvVariablesError{Names: []string{name}}
-	}
-
-	return applyEnvVariableTransform(value, transform)
+	return variableReference{name: beforeColon, defaultValue: defaultValue, hasDefault: true, transform: transform}
 }
 
-// cutTransform splits a trailing "|transform" off a reference part.
-func cutTransform(part string) (string, string) {
+func cutTransform(part string) (rest, transform string) {
 	pipeIndex := strings.LastIndex(part, "|")
 	if pipeIndex == -1 {
 		return part, ""
@@ -115,7 +102,20 @@ func cutTransform(part string) (string, string) {
 	return part[:pipeIndex], part[pipeIndex+1:]
 }
 
-func applyEnvVariableTransform(value string, transform string) (string, error) {
+func lookup(reference variableReference) (string, bool) {
+	value, isSet := os.LookupEnv(reference.name)
+	if !reference.hasDefault {
+		return value, isSet
+	}
+
+	if value == "" {
+		return reference.defaultValue, true
+	}
+
+	return value, true
+}
+
+func applyTransform(value, transform string) (string, error) {
 	switch transform {
 	case "":
 		return value, nil

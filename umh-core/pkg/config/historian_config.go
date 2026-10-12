@@ -247,13 +247,13 @@ func (t TimescaleConfig) ToTemplateMap() map[string]any {
 	return toTemplateMap(t.WithDefaults())
 }
 
-// withEnvVariablesExpanded returns a copy of t with ${VAR} references resolved
-// in every string setting.
+type timescaleSetting struct {
+	name  string
+	value *string
+}
+
 func (t TimescaleConfig) withEnvVariablesExpanded() (TimescaleConfig, error) {
-	settings := []struct {
-		name  string
-		value *string
-	}{
+	settings := []timescaleSetting{
 		{"host", &t.Host},
 		{"username", &t.Username},
 		{"password", &t.Password},

@@ -121,7 +121,8 @@ func (a *GetHistorianMetricsAction) Execute() (interface{}, map[string]interface
 
 	dsn, err := cfg.Historian.Timescale.ToDSN()
 	if err != nil {
-		return a.fail(err.Error(), models.ErrHistorianMetricsFailed, nil, "")
+		return a.fail(fmt.Sprintf("Failed to read the historian settings: %v", err),
+			models.ErrHistorianMetricsFailed, nil, "")
 	}
 
 	metrics, err := collectOverNewConnection(ctx, dsn)
