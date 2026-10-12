@@ -27,55 +27,54 @@ import (
 )
 
 // TestThroughputWindowIsTimeBased asserts that the throughput window is held by
-// time over the 60s windowSpan (throughput_window.go) rather than by FSMv1's
-// count-based ThroughputWindowSize of 600 entries
+// time over the 60s windowSpan rather than by FSMv1's count-based
+// ThroughputWindowSize of 600 entries
 // (pkg/service/benthos_monitor/metrics_state.go). windowSpan's doc is where
 // the reason for that choice is stated.
 //
-// Semantics under test: throughputWindow.inputRate and inputCount
-// (throughput_window.go), plus BenthosMonitorStatus.IsActive, which
-// Poll derives from Input.MessagesPerSecond > 0 (manager.go), so a zero rate
-// means inactive.
+// Semantics under test: the rates and counts observe returns, plus IsActive,
+// which observe derives from Input.MessagesPerSecond > 0, so a zero rate means
+// inactive.
 //
-// Every sample time is injected so the test is deterministic: no real 1s
-// real-time sleeps. throughputWindow.Add (throughput_window.go) accepts the
-// explicit sample time precisely so an aged sample can be injected.
+// Every scrape time is injected so the test is deterministic: no real-time
+// sleeps. observe takes the scrape time as an argument precisely so an aged
+// scrape can be injected.
 func TestThroughputWindowIsTimeBased(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 	deps := &benthosMonitorDeps{}
 
-	deps.window.Add(t0, 4195, 10, 5)
-	if inRate := deps.window.inputRate(); inRate != 0 {
+	got := observe(deps, 4195, counts(10, 5), t0)
+	if inRate := got.Input.MessagesPerSecond; inRate != 0 {
 		t.Errorf("single-sample window: Input MessagesPerSecond = %v, want 0 (one sample cannot compute a rate)", inRate)
 	}
-	if outRate := deps.window.outputRate(); outRate != 0 {
+	if outRate := got.Output.MessagesPerSecond; outRate != 0 {
 		t.Errorf("single-sample window: Output MessagesPerSecond = %v, want 0", outRate)
 	}
 
-	deps.window.Add(t0.Add(1*time.Second), 4195, 12, 6)
-	if inRate := deps.window.inputRate(); inRate < 1.5 || inRate > 2.5 {
+	got = observe(deps, 4195, counts(12, 6), t0.Add(1*time.Second))
+	if inRate := got.Input.MessagesPerSecond; inRate < 1.5 || inRate > 2.5 {
 		t.Errorf("1s-apart +2 input: Input MessagesPerSecond = %v, want ~2.0 (within tolerance)", inRate)
 	}
-	if outRate := deps.window.outputRate(); outRate < 0.5 || outRate > 1.5 {
+	if outRate := got.Output.MessagesPerSecond; outRate < 0.5 || outRate > 1.5 {
 		t.Errorf("1s-apart +1 output: Output MessagesPerSecond = %v, want ~1.0", outRate)
 	}
-	if in := deps.window.inputCount(); in != 12 {
-		t.Errorf("inputCount = %d, want 12 (LastCount is the newest sample's count)", in)
+	if in := got.Input.LastCount; in != 12 {
+		t.Errorf("Input.LastCount = %d, want 12 (LastCount is the newest sample's count)", in)
 	}
-	if out := deps.window.outputCount(); out != 6 {
-		t.Errorf("outputCount = %d, want 6", out)
+	if out := got.Output.LastCount; out != 6 {
+		t.Errorf("Output.LastCount = %d, want 6", out)
 	}
 
 	// A sample 61s older than the newest is outside the 60s window and must be
-	// dropped, leaving the rate unchanged. A count-based window of 3 entries would
-	// keep that sample and change the rate, so this is the assertion that
-	// separates the two designs.
-	deps.window.Add(t0.Add(-61*time.Second), 4195, 5, 5)
-	if inRate2 := deps.window.inputRate(); inRate2 < 1.5 || inRate2 > 2.5 {
+	// dropped, leaving the rate and the newest count unchanged. A count-based
+	// window of 3 entries would keep that sample and change the rate, so this is
+	// the assertion that separates the two designs.
+	got = observe(deps, 4195, counts(5, 5), t0.Add(-61*time.Second))
+	if inRate2 := got.Input.MessagesPerSecond; inRate2 < 1.5 || inRate2 > 2.5 {
 		t.Errorf("after adding a 61s-old sample: Input MessagesPerSecond = %v, want ~2.0 (an aged sample must be dropped)", inRate2)
 	}
-	if got := len(deps.window.samples); got != 2 {
-		t.Errorf("after adding a 61s-old sample, window holds %d samples, want 2 (aged samples must be pruned)", got)
+	if in := got.Input.LastCount; in != 12 {
+		t.Errorf("after adding a 61s-old sample: Input.LastCount = %d, want 12 (the aged sample is not the newest)", in)
 	}
 
 	// A mid-window dropped-tick gap must not drift the by-time rate. Samples
@@ -83,50 +82,41 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 	// t0..t0+60s (oldest in-window to newest), so the rate is the real-time delta
 	// 90/60 = 1.5/s — not a two-newest count-window rate of 60/30 = 2/s.
 	gap := &benthosMonitorDeps{}
-	gap.window.Add(t0, 4195, 0, 0)
-	gap.window.Add(t0.Add(30*time.Second), 4195, 30, 30)
-	gap.window.Add(t0.Add(60*time.Second), 4195, 90, 90)
-	if r := gap.window.inputRate(); r < 1.4 || r > 1.6 {
+	observe(gap, 4195, counts(0, 0), t0)
+	observe(gap, 4195, counts(30, 30), t0.Add(30*time.Second))
+	got = observe(gap, 4195, counts(90, 90), t0.Add(60*time.Second))
+	if r := got.Input.MessagesPerSecond; r < 1.4 || r > 1.6 {
 		t.Errorf("mid-window gap: Input MessagesPerSecond = %v, want ~1.5 (real-time delta 90/60, not a count-window 2.0)", r)
 	}
 
-	// A restart drops the input counter, which is what Add keys the wipe on, so
-	// this sample re-seeds the window. The rate then reads 0 — never negative.
+	// A restart drops the input counter, which re-seeds the window with this
+	// sample alone. The rate then reads 0 — never negative.
 	restart := &benthosMonitorDeps{}
-	restart.window.Add(t0, 4195, 100, 100)
-	restart.window.Add(t0.Add(10*time.Second), 4195, 5, 5)
-	if r := restart.window.inputRate(); r != 0 {
+	observe(restart, 4195, counts(100, 100), t0)
+	got = observe(restart, 4195, counts(5, 5), t0.Add(10*time.Second))
+	if r := got.Input.MessagesPerSecond; r != 0 {
 		t.Errorf("after both-counter drop: Input MessagesPerSecond = %v, want 0 (wipe leaves a single sample)", r)
 	}
 }
 
-// TestThroughputWindowZeroValueIsSafe asserts the contract stated on the
-// throughputWindow type (throughput_window.go): the zero value is a valid
-// empty window, so every accessor returns 0 rather than panicking and no
-// constructor is needed. The closing Add covers the next case up — one sample is
-// still not two, so the rates stay 0 while inputCount tracks that sample; the
-// fewer-than-two rule is stated on inputRate (throughput_window.go).
-func TestThroughputWindowZeroValueIsSafe(t *testing.T) {
-	var w throughputWindow
+// TestObserveZeroDepsIsSafe asserts that a zero benthosMonitorDeps is ready to
+// use, with no constructor: the first scrape reads rate 0 and LastCount is that
+// scrape's count.
+func TestObserveZeroDepsIsSafe(t *testing.T) {
+	var d benthosMonitorDeps
 
-	if in := w.inputRate(); in != 0 {
-		t.Errorf("inputRate on empty window = %v, want 0", in)
+	got := observe(&d, 4195, counts(7, 3), time.Now().Truncate(time.Second))
+	if in := got.Input.MessagesPerSecond; in != 0 {
+		t.Errorf("Input MessagesPerSecond after one scrape = %v, want 0", in)
 	}
-	if out := w.outputRate(); out != 0 {
-		t.Errorf("outputRate on empty window = %v, want 0", out)
+	if out := got.Output.MessagesPerSecond; out != 0 {
+		t.Errorf("Output MessagesPerSecond after one scrape = %v, want 0", out)
 	}
-	if in := w.inputCount(); in != 0 {
-		t.Errorf("inputCount on empty window = %d, want 0", in)
+	if in := got.Input.LastCount; in != 7 {
+		t.Errorf("Input.LastCount after one scrape = %d, want 7", in)
 	}
-	if out := w.outputCount(); out != 0 {
-		t.Errorf("outputCount on empty window = %d, want 0", out)
-	}
-	w.Add(time.Now(), 4195, 7, 3)
-	if in := w.inputRate(); in != 0 {
-		t.Errorf("inputRate on single-sample window = %v, want 0", in)
-	}
-	if in := w.inputCount(); in != 7 {
-		t.Errorf("inputCount after one Add = %d, want 7", in)
+	if out := got.Output.LastCount; out != 3 {
+		t.Errorf("Output.LastCount after one scrape = %d, want 3", out)
 	}
 }
 
@@ -205,12 +195,11 @@ func TestPollComputesThroughput(t *testing.T) {
 // LastCount must carry the post-restart counter.
 //
 // This test covers the Poll->status wiring and how LastCount propagates; the
-// window-level wipe itself (len(samples)==1) is the discriminating assertion,
-// covered by TestThroughputWindowWipesOnCounterReset
-// (throughput_reset_red_test.go). The IsActive assertion below is vacuous with
-// respect to the wipe: drop the wipe and both samples remain, but inputRate's
-// newest-below-oldest guard (throughput_window.go) still returns 0, so
-// IsActive reads false either way.
+// wipe itself is asserted by TestThroughputWindowWipesOnCounterReset
+// (throughput_reset_red_test.go), through the rate on the tick after the reset.
+// The IsActive assertion below is vacuous with respect to the wipe: drop the
+// wipe and both samples remain, but the newest count is below the oldest, so
+// the rate still reads 0 and IsActive reads false either way.
 func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 	inputCounter := 100
 	outputCounter := 100

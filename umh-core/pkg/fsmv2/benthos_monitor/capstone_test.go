@@ -39,12 +39,11 @@ const (
 // TestIsActiveEquivalenceAcrossIdleCrossing asserts that the worker's rate-based
 // IsActive means the same thing as FSMv1's per-tick one on the SAME count
 // sequence, driven over one crossing from active to idle and back. The worker's
-// predicate is the one Poll applies — IsActive = Input.MessagesPerSecond > 0, at
-// manager.go. FSMv1's is the one UpdateFromMetrics applies — IsActive =
+// predicate is the one observe applies — IsActive = Input.MessagesPerSecond > 0,
+// in observe.go, which Poll copies into the status. FSMv1's is the one UpdateFromMetrics applies — IsActive =
 // Input.MessagesPerTick > 0, in pkg/service/benthos_monitor/metrics_state.go.
-// This test reads the worker side straight off inputRate
-// (throughput_window.go), the value Poll assigns to Input.MessagesPerSecond,
-// so it needs no HTTP scrape.
+// This test reads the worker side straight off observe's IsActive, the value
+// Poll copies into the status, so it needs no HTTP scrape.
 //
 // Equivalence holds for steady-state arrivals only: two kinds of divergence are
 // excluded from the equality assertion — the reset tick and the window-length
@@ -58,7 +57,7 @@ const (
 func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
-	var w throughputWindow
+	d := &benthosMonitorDeps{}
 	fsmState := benthos_monitor.NewBenthosMetricsState()
 
 	tick := 0
@@ -67,21 +66,20 @@ func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
 	// step advances both derivations by one poll and returns their verdicts.
 	step := func(inputCount int) (workerActive, fsmActive bool) {
 		at := t0.Add(time.Duration(tick) * isActiveTickInterval)
-		w.Add(at, testPort, inputCount, 0)
+		workerActive = observe(d, testPort, counts(inputCount, 0), at).IsActive
 		fsmState.UpdateFromMetrics(benthos_monitor.Metrics{Inputs: map[string]benthos_monitor.InputInstance{
 			"root.input": {Received: int64(inputCount)},
 		}}, uint64(tick))
 		tick++
 
-		return w.inputRate() > 0, fsmState.IsActive
+		return workerActive, fsmState.IsActive
 	}
 
 	// Phase 0 — prime with one sample, asserting nothing. The first tick takes
 	// FSMv1's reset/cold-start branch in updateComponentThroughput
 	// (pkg/service/benthos_monitor/metrics_state.go), which publishes the
 	// cumulative count as MessagesPerTick, so IsActive is true. The worker holds one
-	// sample, and inputRate returns 0 below two samples (throughput_window.go),
-	// so it reads false. TestPollComputesThroughput (throughput_red_test.go)
+	// sample, and one sample has no rate, so it reads false. TestPollComputesThroughput (throughput_red_test.go)
 	// asserts the worker's side of it, so it is behaviour, not an accident here.
 	in++
 	step(in)

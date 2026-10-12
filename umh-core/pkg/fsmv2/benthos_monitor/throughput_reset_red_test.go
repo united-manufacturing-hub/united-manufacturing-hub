@@ -18,9 +18,19 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	benthosmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
 
 const testPort = 4195
+
+// counts returns a scrape whose input and output totals are input and output.
+func counts(input, output int) benthosmonitorservice.Metrics {
+	return benthosmonitorservice.Metrics{
+		Inputs:  map[string]benthosmonitorservice.InputInstance{"root.input": {Received: int64(input)}},
+		Outputs: map[string]benthosmonitorservice.OutputInstance{"root.output": {Sent: int64(output)}},
+	}
+}
 
 // wipeOnRestart (throughput_window.go) states why an input-counter drop is the
 // restart signal and why the input counter alone decides it. fsmv1 keys on the
@@ -30,24 +40,24 @@ func TestThroughputWindowWipesOnCounterReset(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
 	// A restart drops both counters: input 100 -> 5, output 100 -> 5.
-	w := &throughputWindow{}
-	w.Add(t0, testPort, 100, 100)
-	w.Add(t0.Add(10*time.Second), testPort, 5, 5)
-	if got := len(w.samples); got != 1 {
-		t.Errorf("after input drop the window holds %d samples, want 1 (an input counter drop wipes and re-seeds)", got)
+	d := &benthosMonitorDeps{}
+	observe(d, testPort, counts(100, 100), t0)
+
+	// First tick after the restart: the post-restart sample has nothing to
+	// subtract from, so the rate reads 0, never the cumulative count as a rate.
+	got := observe(d, testPort, counts(5, 5), t0.Add(10*time.Second))
+	if r := got.Input.MessagesPerSecond; r != 0 {
+		t.Errorf("first tick after counter drop: MessagesPerSecond = %v, want 0", r)
+	}
+	if c := got.Input.LastCount; c != 5 {
+		t.Errorf("first tick after counter drop: LastCount = %d, want 5 (the post-restart count)", c)
 	}
 
-	// First tick after the wipe: one sample has nothing to subtract from, so
-	// inputRate() reads 0, never the cumulative count as a rate. Its value is
-	// reported as ComponentThroughput.MessagesPerSecond (manager.go).
-	if r := w.inputRate(); r != 0 {
-		t.Errorf("first tick after counter-drop wipe: MessagesPerSecond = %v, want 0", r)
-	}
-
-	// Post-restart clean second sample 1s later: the rate is ~7/s from the
-	// post-restart baseline only (5 -> 12).
-	w.Add(t0.Add(11*time.Second), testPort, 12, 12)
-	if r := w.inputRate(); r < 6 || r > 8 {
+	// Post-restart second sample 1s later: the rate is ~7/s from the
+	// post-restart baseline only (5 -> 12). Had the pre-restart 100 stayed in
+	// the window, it would be the oldest sample and the rate would read 0.
+	got = observe(d, testPort, counts(12, 12), t0.Add(11*time.Second))
+	if r := got.Input.MessagesPerSecond; r < 6 || r > 8 {
 		t.Errorf("post-restart input rate = %v, want ~7/s (5->12 over 1s, not diluted by pre-restart 100)", r)
 	}
 }
@@ -60,14 +70,14 @@ func TestThroughputWindowWipesOnOneCounterZeroRestart(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
 	// Input 100 -> 5 (reset) while output was already 0 and stays 0. A strict
-	// both-drop condition would not wipe here; wipeOnRestart
-	// (throughput_window.go) says why, including what the surviving 100 baseline
-	// would then do inside the window's 60s span.
-	w := &throughputWindow{}
-	w.Add(t0, testPort, 100, 0)
-	w.Add(t0.Add(10*time.Second), testPort, 5, 0)
-	if got := len(w.samples); got != 1 {
-		t.Errorf("after a one-counter-zero restart the window holds %d samples, want 1 (input drop wipes even when output was already 0)", got)
+	// both-drop condition would not wipe here, the 100 would stay the oldest
+	// input sample, and the rate on the next tick would read 0.
+	d := &benthosMonitorDeps{}
+	observe(d, testPort, counts(100, 0), t0)
+	observe(d, testPort, counts(5, 0), t0.Add(10*time.Second))
+	got := observe(d, testPort, counts(12, 0), t0.Add(11*time.Second))
+	if r := got.Input.MessagesPerSecond; r < 6 || r > 8 {
+		t.Errorf("after a one-counter-zero restart: input rate = %v, want ~7/s (input drop wipes even when output was already 0)", r)
 	}
 }
 
@@ -75,65 +85,63 @@ func TestThroughputWindowWipesOnOneCounterZeroRestart(t *testing.T) {
 // pkg/config/config.go) while it keeps running, so the next poll scrapes a
 // different endpoint with no restart in between. A new endpoint is a new counter
 // series, so a sample whose port differs from the previous poll's wipes the
-// window and re-seeds with only the new-port sample.
+// window and re-seeds with only the new-port sample. The new port's counter is
+// above the old one, so no counter drop can cause the wipe instead.
 func TestThroughputWindowWipesOnPortChange(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
-	w := &throughputWindow{}
-	w.Add(t0, 4195, 100, 100)
-	w.Add(t0.Add(10*time.Second), 4196, 5, 5)
-	if got := len(w.samples); got != 1 {
-		t.Errorf("after a port change the window holds %d samples, want 1 (the window re-seeds on a new scrape port)", got)
+	d := &benthosMonitorDeps{}
+	observe(d, 4195, counts(100, 100), t0)
+	got := observe(d, 4196, counts(150, 150), t0.Add(10*time.Second))
+	if r := got.Input.MessagesPerSecond; r != 0 {
+		t.Errorf("first tick after a port change: MessagesPerSecond = %v, want 0", r)
 	}
-	if w.port != 4196 {
-		t.Errorf("window port = %d, want 4196 (the new port becomes the window's key)", w.port)
-	}
-	if r := w.inputRate(); r != 0 {
-		t.Errorf("first tick after port-change wipe: MessagesPerSecond = %v, want 0", r)
+
+	// The next new-port sample reads its rate from the new port's first sample.
+	// Had the old port's 100 stayed in the window, the rate would read
+	// (157-100)/11 ≈ 5.2/s.
+	got = observe(d, 4196, counts(157, 157), t0.Add(11*time.Second))
+	if r := got.Input.MessagesPerSecond; r < 6.5 || r > 7.5 {
+		t.Errorf("second tick on the new port: input rate = %v, want ~7/s (150->157 over 1s, the old port's 100 dropped)", r)
 	}
 }
 
 // TestThroughputWindowRecoveredAboveBaseline asserts that the rate is read from
 // the post-restart baseline: {100, 0, 150} over 30s, with the 0 tick dropping the
-// 100, reads 10/s. The wipe happens at the drop tick (Add,
-// throughput_window.go); keeping the pre-restart sample and dividing across
-// the full span would instead read (150-100)/30 ≈ 1.67/s.
+// 100, reads 10/s. Keeping the pre-restart sample and dividing across the full
+// span would instead read (150-100)/30 ≈ 1.67/s.
 func TestThroughputWindowRecoveredAboveBaseline(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
-	w := &throughputWindow{}
-	w.Add(t0, testPort, 100, 100)
-	w.Add(t0.Add(15*time.Second), testPort, 0, 0) // restart: input drop wipes 100
-	w.Add(t0.Add(30*time.Second), testPort, 150, 150)
-	if r := w.inputRate(); r < 9 || r > 11 {
+	d := &benthosMonitorDeps{}
+	observe(d, testPort, counts(100, 100), t0)
+	observe(d, testPort, counts(0, 0), t0.Add(15*time.Second)) // restart: input drop wipes 100
+	got := observe(d, testPort, counts(150, 150), t0.Add(30*time.Second))
+	if r := got.Input.MessagesPerSecond; r < 9 || r > 11 {
 		t.Errorf("recovered-above-baseline input rate = %v, want ~10/s (0->150 over 15s, not diluted by pre-restart 100)", r)
 	}
 }
 
-// Two samples with the same observed time make the elapsed span zero, so
-// inputRate's `elapsed <= 0` guard (throughput_window.go) reads 0 instead of
-// dividing by it. Zero elapsed always implies a zero delta, because newest()
-// breaks a timestamp tie in favour of the earlier sample and oldest then stays
-// equal to newest — so the unguarded expression is 0/0 = NaN, and +Inf is
-// unreachable. w2 covers the tie-break: a counter that rose between two
-// equally-stamped samples still reads 0, not (150-100)/0.
+// Two scrapes with the same observed time span zero seconds, so the rate reads
+// 0 instead of dividing by zero. The second case has a counter that rose
+// between the two equally-stamped scrapes; it still reads 0, not (150-100)/0.
 func TestThroughputWindowEqualTimestampsNeverDivideByZero(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
-	w := &throughputWindow{}
-	w.Add(t0, testPort, 100, 100)
-	w.Add(t0, testPort, 100, 100) // same timestamp: not newer, so wipeOnRestart skips it; two samples in the window
-	if r := w.inputRate(); r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
+	d := &benthosMonitorDeps{}
+	observe(d, testPort, counts(100, 100), t0)
+	got := observe(d, testPort, counts(100, 100), t0)
+	if r := got.Input.MessagesPerSecond; r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
 		t.Errorf("equal-timestamp equal-input rate = %v, want 0 (never NaN)", r)
 	}
-	if r := w.outputRate(); r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
+	if r := got.Output.MessagesPerSecond; r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
 		t.Errorf("equal-timestamp equal-output rate = %v, want 0 (never NaN)", r)
 	}
 
-	w2 := &throughputWindow{}
-	w2.Add(t0, testPort, 100, 100)
-	w2.Add(t0, testPort, 150, 150)
-	if r := w2.inputRate(); r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
+	d2 := &benthosMonitorDeps{}
+	observe(d2, testPort, counts(100, 100), t0)
+	got = observe(d2, testPort, counts(150, 150), t0)
+	if r := got.Input.MessagesPerSecond; r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
 		t.Errorf("equal-timestamp raised-input rate = %v, want 0 (a tie in observed time yields no rate, whatever the counter did)", r)
 	}
 }

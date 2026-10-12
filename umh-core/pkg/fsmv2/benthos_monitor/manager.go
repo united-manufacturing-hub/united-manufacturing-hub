@@ -171,16 +171,10 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	// from per-poll counter snapshots. It is keyed on the scrape port: an
 	// in-place config update can re-point this child at a new MetricsPort with no
 	// worker restart, and throughputWindow.port explains the wipe that follows.
-	d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), int(m.InputReceivedTotal()), int(m.OutputSentTotal()))
-	status.Input = ComponentThroughput{
-		MessagesPerSecond: d.window.inputRate(),
-		LastCount:         d.window.inputCount(),
-	}
-	status.Output = ComponentThroughput{
-		MessagesPerSecond: d.window.outputRate(),
-		LastCount:         d.window.outputCount(),
-	}
-	status.IsActive = status.Input.MessagesPerSecond > 0
+	t := observe(d, int(cfg.MetricsPort), m, status.ScrapedAt)
+	status.Input = t.Input
+	status.Output = t.Output
+	status.IsActive = t.IsActive
 
 	return status, nil
 }
