@@ -178,8 +178,8 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 
 	// --- observation 1: the cold tick -------------------------------------
 	// The scrape must reach all four endpoints and land in the status. With a
-	// single sample in the throughput window (throughputWindow,
-	// throughput_window.go) the rate is not yet computable, so the worker reports
+	// single scrape observed (observe, observe.go) the rate is not yet
+	// computable, so the worker reports
 	// no throughput and stays inactive — never FSMv1's cumulative-count-as-rate.
 	first := observe(t, worker, spec)
 

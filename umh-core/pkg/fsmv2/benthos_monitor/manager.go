@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosmonitorfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
@@ -63,8 +64,12 @@ type benthosMonitorDeps struct {
 	// client scrapes the benthos monitor's endpoints.
 	client *http.Client
 
-	// window accumulates counter samples across polls.
-	window throughputWindow
+	// engine holds the windows that turn counters into rates across polls.
+	// observe builds it on first use; observe's doc says when it is rebuilt.
+	engine *diagnosis.Engine[sample]
+
+	// prev is the previous observed scrape, nil before the first.
+	prev *observation
 }
 
 // ComponentThroughput carries the rate for one direction of the benthos pipeline.
@@ -167,10 +172,10 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 	status.BenthosMetrics = m
 
-	// The window lives in d and survives across polls, so a rate is computable
-	// from per-poll counter snapshots. It is keyed on the scrape port: an
-	// in-place config update can re-point this child at a new MetricsPort with no
-	// worker restart, and throughputWindow.port explains the wipe that follows.
+	// The engine lives in d and survives across polls, so a rate is computable
+	// from per-poll counter snapshots. observe is passed the scrape port because
+	// an in-place config update can re-point this child at a new MetricsPort with
+	// no worker restart; observe's doc says what a new port does.
 	t := observe(d, int(cfg.MetricsPort), m, status.ScrapedAt)
 	status.Input = t.Input
 	status.Output = t.Output

@@ -28,7 +28,7 @@ const (
 	// ENTRIES (pkg/service/benthos_monitor/metrics_state.go), and
 	// ThroughputWindowSize itself (same file) records that the 600 assumes
 	// 100ms per tick, i.e. one minute. The worker's window is TIME-based, over
-	// windowSpan = 60s (throughput_window.go).
+	// windowSpan = 60s (table.go).
 	isActiveTickInterval = 100 * time.Millisecond
 	// Flat samples needed before BOTH windows contain no counter movement:
 	// ThroughputWindowSize=600 entries evicts FSMv1's window, and 600 x 100ms = 60s

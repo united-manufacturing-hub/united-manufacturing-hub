@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// TestThroughputWindowIsTimeBased asserts that the throughput window is held by
+// TestObserveRateIsTimeBased asserts that the throughput window is held by
 // time over the 60s windowSpan rather than by FSMv1's count-based
 // ThroughputWindowSize of 600 entries
 // (pkg/service/benthos_monitor/metrics_state.go). windowSpan's doc is where
@@ -39,7 +39,7 @@ import (
 // Every scrape time is injected so the test is deterministic: no real-time
 // sleeps. observe takes the scrape time as an argument precisely so an aged
 // scrape can be injected.
-func TestThroughputWindowIsTimeBased(t *testing.T) {
+func TestObserveRateIsTimeBased(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 	deps := &benthosMonitorDeps{}
 
@@ -65,10 +65,8 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 		t.Errorf("Output.LastCount = %d, want 6", out)
 	}
 
-	// A sample 61s older than the newest is outside the 60s window and must be
-	// dropped, leaving the rate and the newest count unchanged. A count-based
-	// window of 3 entries would keep that sample and change the rate, so this is
-	// the assertion that separates the two designs.
+	// A scrape stamped 61s before the newest one is out of order, so observe
+	// does not record it: the rate and the newest count stay unchanged.
 	got = observe(deps, 4195, counts(5, 5), t0.Add(-61*time.Second))
 	if inRate2 := got.Input.MessagesPerSecond; inRate2 < 1.5 || inRate2 > 2.5 {
 		t.Errorf("after adding a 61s-old sample: Input MessagesPerSecond = %v, want ~2.0 (an aged sample must be dropped)", inRate2)
@@ -80,7 +78,8 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 	// A mid-window dropped-tick gap must not drift the by-time rate. Samples
 	// at t0, +30s, +60s with input 0, 30, 90: the in-window span is the full
 	// t0..t0+60s (oldest in-window to newest), so the rate is the real-time delta
-	// 90/60 = 1.5/s — not a two-newest count-window rate of 60/30 = 2/s.
+	// 90/60 = 1.5/s — not a two-newest count-window rate of 60/30 = 2/s. This is
+	// the assertion that separates a time window from a count window.
 	gap := &benthosMonitorDeps{}
 	observe(gap, 4195, counts(0, 0), t0)
 	observe(gap, 4195, counts(30, 30), t0.Add(30*time.Second))
@@ -89,13 +88,24 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 		t.Errorf("mid-window gap: Input MessagesPerSecond = %v, want ~1.5 (real-time delta 90/60, not a count-window 2.0)", r)
 	}
 
-	// A restart drops the input counter, which re-seeds the window with this
-	// sample alone. The rate then reads 0 — never negative.
+	// A sample older than 60s leaves the window. Samples at t0, +30s, +61s with
+	// input 0, 30, 90: at +61s the t0 sample is out, so the rate is
+	// (90-30)/31 ≈ 1.94/s. Kept, it would read 90/61 ≈ 1.48/s.
+	aged := &benthosMonitorDeps{}
+	observe(aged, 4195, counts(0, 0), t0)
+	observe(aged, 4195, counts(30, 30), t0.Add(30*time.Second))
+	got = observe(aged, 4195, counts(90, 90), t0.Add(61*time.Second))
+	if r := got.Input.MessagesPerSecond; r < 1.85 || r > 2.05 {
+		t.Errorf("aged-out sample: Input MessagesPerSecond = %v, want ~1.94 (60/31 over the last 60s, not 90/61)", r)
+	}
+
+	// A restart drops the input counter, so observe rebuilds the engine with
+	// this sample alone. The rate then reads 0, never negative.
 	restart := &benthosMonitorDeps{}
 	observe(restart, 4195, counts(100, 100), t0)
 	got = observe(restart, 4195, counts(5, 5), t0.Add(10*time.Second))
 	if r := got.Input.MessagesPerSecond; r != 0 {
-		t.Errorf("after both-counter drop: Input MessagesPerSecond = %v, want 0 (wipe leaves a single sample)", r)
+		t.Errorf("after both-counter drop: Input MessagesPerSecond = %v, want 0 (the rebuild leaves a single sample)", r)
 	}
 }
 
@@ -189,17 +199,16 @@ func TestPollComputesThroughput(t *testing.T) {
 
 // TestPollResetTickReportsIsActiveFalse asserts that the status layer reflects a
 // counter drop through Poll. Both counters drop when the process restarts, and
-// the input-counter drop alone makes Add wipe the window to a single sample
-// (wipeOnRestart, throughput_window.go). On the reset tick — the poll on which
+// the drop makes observe rebuild its engine (restarted, observe.go), so the
+// window restarts from the new sample. On the reset tick — the poll on which
 // that drop is first observed — the status must read IsActive=false, and
 // LastCount must carry the post-restart counter.
 //
 // This test covers the Poll->status wiring and how LastCount propagates; the
-// wipe itself is asserted by TestThroughputWindowWipesOnCounterReset
+// rebuild itself is asserted by TestObserveRebuildsOnCounterReset
 // (throughput_reset_red_test.go), through the rate on the tick after the reset.
-// The IsActive assertion below is vacuous with respect to the wipe: drop the
-// wipe and both samples remain, but the newest count is below the oldest, so
-// the rate still reads 0 and IsActive reads false either way.
+// The IsActive assertion below does not depend on the rebuild: without it both
+// samples remain and the rate is negative, so IsActive reads false either way.
 func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 	inputCounter := 100
 	outputCounter := 100
@@ -242,7 +251,7 @@ func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 		t.Fatalf("reset-tick Poll errored: %v", err)
 	}
 	if status.IsActive {
-		t.Errorf("reset tick after both-counter drop: IsActive = true, want false (window wiped to a single sample)")
+		t.Errorf("reset tick after both-counter drop: IsActive = true, want false (the rebuild leaves a single sample)")
 	}
 	if status.Input.LastCount != 5 {
 		t.Errorf("reset tick Input.LastCount = %d, want 5 (post-restart counter)", status.Input.LastCount)
