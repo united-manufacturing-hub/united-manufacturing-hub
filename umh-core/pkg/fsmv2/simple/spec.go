@@ -73,7 +73,8 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// passed by value, so a resource assigned to a non-pointer field of d is
 	// discarded when Poll returns. A non-nil error drives the worker degraded
 	// with reason "poll error: <err>"; any status returned alongside the error is
-	// still preserved as the Result. Required.
+	// still preserved as the Result. Return an error only when the target could
+	// not be observed; a target that is down is a status for Health. Required.
 	Poll func(ctx context.Context, d TDeps, cfg TConfig) (TStatus, error)
 	// Health turns a good poll's status into a health verdict. Optional: when
 	// nil, a good poll is healthy with reason "running (no health check)". Never
