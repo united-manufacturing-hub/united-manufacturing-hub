@@ -5,10 +5,12 @@
 ### Improvements
 
 - Optional lower-CPU collection of bridge metrics, about 0.02 CPU cores less per bridge (roughly a full core on a 50-bridge instance). Set `USE_FSMV2_BENTHOS_MONITOR=true` and restart the container to enable it
+- With `USE_FSMV2_BENTHOS_MONITOR=true`, failed and lost connections on a data flow's inputs and outputs now mark it degraded for 10 minutes after the last such failure
 
 ### Fixes
 
 - The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
+- With `USE_FSMV2_BENTHOS_MONITOR=true`, an output or processor error now marks a data flow degraded for 10 minutes after the last such error, then the flow returns to active on its own. Before, a single error kept it degraded until Benthos restarted
 - A typo in `USE_FSMV2_BENTHOS_MONITOR` no longer passes unnoticed. An unrecognised value now logs a warning naming the variable and the value it received, instead of silently leaving the instance on the previous bridge metrics collection
 
 ## [0.44.43]

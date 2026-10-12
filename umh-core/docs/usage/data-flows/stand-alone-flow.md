@@ -159,4 +159,5 @@ dataFlow:
 
 - Learn about [Bridges](bridges.md) for device connectivity
 - Explore [Stream Processors](stream-processor.md) for data transformation
+- Read [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) when a flow shows degraded
 - See [Benthos-UMH Documentation](https://docs.umh.app/benthos-umh) for all processors
