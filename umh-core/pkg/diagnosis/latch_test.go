@@ -221,6 +221,32 @@ var _ = Describe("Latch", func() {
 		Expect(fired).To(BeTrue(), "a value above the fire mark re-fires once one full window has elapsed since the release")
 	})
 
+	// Both settings share one timeline: fire at t0, release at t0+1s, then one
+	// reading past the fire mark at t0+2s. The cooldown is the wait after a
+	// release, one Coverage span, before the latch may fire again. It is the only
+	// thing refireAtOnce drops, so the same final reading must land on the
+	// opposite verdict per setting.
+	It("should fire again on the first reading past its fire mark after a release when RefireAtOnce is set", func() {
+		t0 := time.Unix(1_000_000, 0)
+		for _, refire := range []bool{false, true} {
+			l := NewLatch(Identity{})
+			l.refireAtOnce = refire
+
+			l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
+			l.Update("march", Reduced{v: 0.01, state: StateValue}, full(), march(), t0.Add(time.Second))
+			_, fired := l.Fired()
+			Expect(fired).To(BeFalse(), "the latch released at t0+1s")
+
+			l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(2*time.Second))
+			_, fired = l.Fired()
+			Expect(fired).To(Equal(refire), "one second after a release, only a RefireAtOnce latch fires (refire=%t)", refire)
+			if refire {
+				f, _ := l.Fired()
+				Expect(f.Since).To(Equal(t0.Add(2*time.Second)), "a re-fired episode is stamped with its own start")
+			}
+		}
+	})
+
 	It("should not discard a fired latch merely because a different instrument became usable", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
