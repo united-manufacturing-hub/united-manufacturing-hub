@@ -250,8 +250,10 @@ func unexpectedQueryFailure(err error) bool {
 type failureTag string
 
 const (
-	tagPoolFailed  failureTag = "historian::pool_failed"
-	tagQueryFailed failureTag = "historian::query_failed"
+	tagPoolFailed             failureTag = "historian::pool_failed"
+	tagQueryFailed            failureTag = "historian::query_failed"
+	tagSummaryReadFailed      failureTag = "historian::summary_read_failed"
+	tagDatabaseSizeReadFailed failureTag = "historian::database_size_read_failed"
 )
 
 var sharedReported = &sync.Map{}
@@ -364,7 +366,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	}, nil
 }
 
-// The error is logged and discarded: a summary that cannot be read is not a
+// The error is logged and reported, not returned: a summary that cannot be read is not a
 // connection fault, and returning it would drive the worker degraded for a
 // database that is answering.
 func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
@@ -374,6 +376,7 @@ func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string)
 			d.GetLogger().Debug("timescale summary",
 				deps.String("host", host),
 				deps.Err(err))
+			d.reportOnce(ctx, tagSummaryReadFailed, host, err)
 
 			return timescalemetrics.Summary{}, false
 		}
@@ -389,6 +392,7 @@ func databaseSizeReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host st
 			d.GetLogger().Debug("timescale database size",
 				deps.String("host", host),
 				deps.Err(err))
+			d.reportOnce(ctx, tagDatabaseSizeReadFailed, host, err)
 
 			return 0, false
 		}

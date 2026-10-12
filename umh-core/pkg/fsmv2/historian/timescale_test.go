@@ -507,4 +507,34 @@ var _ = Describe("Sentry reporting", func() {
 		Expect(err).To(MatchError(ContainSubstring("timescale pool")))
 		Expect(events).To(BeEmpty())
 	})
+
+	It("reports a failed summary read", func() {
+		cfg := unreachableConfig().WithDefaults()
+		pool, err := d.pool.get(cfg.Timescale.ToDSN())
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, read := summaryReader(ctx, d, pool, cfg.Timescale.Host)()
+
+		Expect(read).To(BeFalse())
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].message).To(Equal(string(tagSummaryReadFailed)))
+	})
+
+	It("reports a failed database size read", func() {
+		cfg := unreachableConfig().WithDefaults()
+		pool, err := d.pool.get(cfg.Timescale.ToDSN())
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, read := databaseSizeReader(ctx, d, pool, cfg.Timescale.Host)()
+
+		Expect(read).To(BeFalse())
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].message).To(Equal(string(tagDatabaseSizeReadFailed)))
+	})
 })
