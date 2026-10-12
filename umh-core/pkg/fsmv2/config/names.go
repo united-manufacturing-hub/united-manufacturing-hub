@@ -15,6 +15,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 )
@@ -126,4 +127,99 @@ func HistorianShortcut(cfgValues map[string]any) map[string]any {
 		names["historian"] = historian
 	}
 	return names
+}
+
+// ReadyMadeProvider is a worker config type that supplies ready-made values:
+// top-level names the type computes in its own code, such as a merged
+// location. A ready-made value replaces a field of the same name (see
+// BuildNames).
+type ReadyMadeProvider interface {
+	// ReadyMade returns the names the config type supplies, keyed by the
+	// top-level name a template reads. cfgValues is the config a parent
+	// hands down.
+	ReadyMade(cfgValues map[string]any) (map[string]any, error)
+}
+
+// ShortcutsProvider is a worker config type that supplies shortcut names:
+// extra top-level names beyond its fields and the two section names, such as
+// IP and PORT for a connection's host and port. A shortcut that claims a
+// name another row already carries is a *ConfigError (see BuildNames).
+type ShortcutsProvider interface {
+	// Shortcuts returns the names the config type supplies, keyed by the
+	// top-level name a template reads. cfgValues is the config a parent
+	// hands down.
+	Shortcuts(cfgValues map[string]any) (map[string]any, error)
+}
+
+// BuildWorkerNames builds the names a worker's templates render against, from
+// its loaded config cfg, its fields, its variables and the config values a
+// parent hands down. A config type (or a pointer to it) that implements
+// ReadyMadeProvider or ShortcutsProvider fills the entry's ReadyMade or
+// Shortcuts rows through its method, with cfgValues passed to it. An error
+// from a method that is not already a *ConfigError is wrapped as one.
+func BuildWorkerNames[T any](cfg T, fields, variables, cfgValues map[string]any) (map[string]any, error) {
+	entry := Entry{
+		Fields:    fields,
+		Variables: variables,
+		Config:    cfgValues,
+	}
+
+	if p := readyMadeProvider(cfg); p != nil {
+		ready, err := p.ReadyMade(cfgValues)
+		if err != nil {
+			return nil, asConfigError(err)
+		}
+
+		entry.ReadyMade = ready
+	}
+
+	if p := shortcutsProvider(cfg); p != nil {
+		shortcuts, err := p.Shortcuts(cfgValues)
+		if err != nil {
+			return nil, asConfigError(err)
+		}
+
+		entry.Shortcuts = shortcuts
+	}
+
+	return BuildNames(entry)
+}
+
+// readyMadeProvider returns the config's ReadyMadeProvider when the config
+// type, or a pointer to it, implements the method, else nil.
+func readyMadeProvider[T any](cfg T) ReadyMadeProvider {
+	if p, ok := any(cfg).(ReadyMadeProvider); ok {
+		return p
+	}
+
+	if p, ok := any(&cfg).(ReadyMadeProvider); ok {
+		return p
+	}
+
+	return nil
+}
+
+// shortcutsProvider returns the config's ShortcutsProvider when the config
+// type, or a pointer to it, implements the method, else nil.
+func shortcutsProvider[T any](cfg T) ShortcutsProvider {
+	if p, ok := any(cfg).(ShortcutsProvider); ok {
+		return p
+	}
+
+	if p, ok := any(&cfg).(ShortcutsProvider); ok {
+		return p
+	}
+
+	return nil
+}
+
+// asConfigError returns err unchanged when it already carries a *ConfigError
+// and wraps any other error as one with no field.
+func asConfigError(err error) error {
+	var cfgErr *ConfigError
+	if errors.As(err, &cfgErr) {
+		return err
+	}
+
+	return &ConfigError{Err: err}
 }

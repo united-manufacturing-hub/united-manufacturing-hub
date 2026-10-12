@@ -14,7 +14,12 @@
 
 package examplebridge
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+import (
+	"fmt"
+	"sort"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+)
 
 // ExamplebridgeConfig is the typed configuration of the example bridge worker.
 type ExamplebridgeConfig struct {
@@ -58,6 +63,119 @@ func (c ExamplebridgeConfig) Template(flow string) config.Template {
 	default:
 		return ""
 	}
+}
+
+// ReadyMade returns the bridge's ready-made names: the agent's location levels
+// from cfgValues merged with the bridge's own Location levels as the location
+// name, and their joined path as location_path. Both sides pass the level key
+// check of LocationFromAny, so a key that is not a canonical level index is a
+// *ConfigError on the location field. A bridge with no location on either side
+// yields the empty path.
+func (c ExamplebridgeConfig) ReadyMade(cfgValues map[string]any) (map[string]any, error) {
+	agentLocation, err := agentLocationFrom(cfgValues)
+	if err != nil {
+		return nil, err
+	}
+
+	own, err := config.LocationFromAny(c.Location)
+	if err != nil {
+		return nil, err
+	}
+
+	merged, locationPath := config.MergeAgentLocation(agentLocation, own)
+
+	mergedLocation := make(map[string]any, len(merged))
+	for level, value := range merged {
+		mergedLocation[level] = value
+	}
+
+	return map[string]any{
+		"location":      mergedLocation,
+		"location_path": locationPath,
+	}, nil
+}
+
+// Shortcuts returns the bridge's shortcut names: IP and PORT from the
+// connection, one name per variable, and the historian shortcut from
+// cfgValues. Two shortcuts that claim one name are a *ConfigError naming both
+// sources.
+func (c ExamplebridgeConfig) Shortcuts(cfgValues map[string]any) (map[string]any, error) {
+	connShortcuts := map[string]any{}
+	if c.Connection.Host != "" {
+		connShortcuts["IP"] = c.Connection.Host
+	}
+	if c.Connection.Port != 0 {
+		connShortcuts["PORT"] = c.Connection.Port
+	}
+
+	shortcutSources := []struct {
+		label  string
+		values map[string]any
+	}{
+		{"the connection shortcut", connShortcuts},
+		{"a variable", config.VariableShortcuts(c.Variables)},
+		{"the historian shortcut", config.HistorianShortcut(cfgValues)},
+	}
+
+	shortcuts := map[string]any{}
+	shortcutSource := map[string]string{}
+
+	for _, source := range shortcutSources {
+		for _, name := range sortedKeys(source.values) {
+			previous, exists := shortcutSource[name]
+			if exists {
+				return nil, &config.ConfigError{
+					Field: name,
+					Err:   fmt.Errorf("names: %q is both %s and %s", name, previous, source.label),
+				}
+			}
+
+			shortcutSource[name] = source.label
+			shortcuts[name] = source.values[name]
+		}
+	}
+
+	return shortcuts, nil
+}
+
+// agentLocationFrom reads the agent's location out of the config values a
+// parent hands down. A parent that hands down no agent yields the empty
+// location; an agent that is not a mapping is a *ConfigError on the agent
+// field.
+func agentLocationFrom(cfgValues map[string]any) (map[string]string, error) {
+	raw, exists := cfgValues["agent"]
+	if !exists {
+		return map[string]string{}, nil
+	}
+
+	agent, ok := raw.(map[string]any)
+	if !ok {
+		return nil, &config.ConfigError{
+			Field: "agent",
+			Err:   fmt.Errorf("agent must be a mapping, got %T", raw),
+		}
+	}
+
+	location, err := config.LocationFromAny(agent["location"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the agent location: %w", err)
+	}
+
+	return location, nil
+}
+
+// sortedKeys returns the keys of m in sorted order, so a name two sources
+// claim always produces the same error.
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+
+	for key := range m {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }
 
 // ExamplebridgeStatus is the observed status of the example bridge worker.

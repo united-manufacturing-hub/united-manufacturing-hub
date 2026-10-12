@@ -685,3 +685,56 @@ var _ = Describe("WorkerBase template fields", func() {
 			"the render error must name the top-level name the worker declares no shortcut for")
 	})
 })
+
+// wbHookConfig is a config type with a Template field and both optional name
+// methods. ReadyMade publishes the ready-from config value a parent hands down
+// under the name ready, and Shortcuts publishes the short-from value under the
+// name short.
+type wbHookConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+	Read                config.Template `yaml:"read"`
+}
+
+func (c wbHookConfig) ReadyMade(cfgValues map[string]any) (map[string]any, error) {
+	return map[string]any{"ready": cfgValues["ready-from"]}, nil
+}
+
+func (c wbHookConfig) Shortcuts(cfgValues map[string]any) (map[string]any, error) {
+	return map[string]any{"short": cfgValues["short-from"]}, nil
+}
+
+// HookTestWorker embeds WorkerBase with a config type that implements the
+// optional name methods.
+type HookTestWorker struct {
+	fsmv2.WorkerBase[wbHookConfig, wbTestStatus, *wbTestDeps]
+}
+
+func (w *HookTestWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return nil, nil
+}
+
+var _ = Describe("WorkerBase config-type name methods", func() {
+	It("renders the value ReadyMade returns and the value Shortcuts returns", func() {
+		worker := &HookTestWorker{}
+		worker.InitBase(
+			wbMakeIdentity("hook-test-worker-type"),
+			deps.NewNopFSMLogger(),
+			wbMakeStateReader(),
+		)
+
+		spec := config.UserSpec{
+			Config: `read: "{{ .ready }} {{ .short }}"`,
+			ConfigValues: map[string]any{
+				"ready-from": "ready-value",
+				"short-from": "short-value",
+			},
+		}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbHookConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("ready-value short-value")))
+	})
+})

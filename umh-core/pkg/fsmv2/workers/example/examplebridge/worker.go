@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -61,11 +60,10 @@ func NewExamplebridgeWorker(
 
 // DeriveDesiredState loads the bridge's config and builds every name a flow
 // template can use: the config's own fields by their YAML path, its variables
-// section, the agent location merged with the bridge's own levels as the
-// ready-made location and location_path, and one shortcut each for IP, PORT,
-// every variable and the historian. Two shortcuts that claim one name are a
-// *ConfigError naming both sources. A nil spec yields the default desired
-// state, like the base.
+// section, the merged agent location with the bridge's own levels, and one
+// shortcut each for IP, PORT, every variable and the historian. The
+// ExamplebridgeConfig methods supply the merged location and the shortcuts.
+// A nil spec yields the default desired state, like the base.
 func (w *ExamplebridgeWorker) DeriveDesiredState(spec any) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[ExamplebridgeConfig]{}, nil
@@ -86,65 +84,7 @@ func (w *ExamplebridgeWorker) DeriveDesiredState(spec any) (fsmv2.DesiredState, 
 		return nil, fmt.Errorf("failed to read the examplebridge config fields: %w", err)
 	}
 
-	agentLocation, err := agentLocationFrom(userSpec.ConfigValues)
-	if err != nil {
-		return nil, err
-	}
-
-	ownLocation, err := config.LocationFromAny(fields["location"])
-	if err != nil {
-		return nil, fmt.Errorf("failed to read the examplebridge location: %w", err)
-	}
-
-	merged, locationPath := config.MergeAgentLocation(agentLocation, ownLocation)
-
-	mergedLocation := make(map[string]any, len(merged))
-	for level, value := range merged {
-		mergedLocation[level] = value
-	}
-
-	connShortcuts, err := connectionShortcuts(fields)
-	if err != nil {
-		return nil, err
-	}
-
-	shortcutSources := []struct {
-		label  string
-		values map[string]any
-	}{
-		{"the connection shortcut", connShortcuts},
-		{"a variable", config.VariableShortcuts(cfg.Variables)},
-		{"the historian shortcut", config.HistorianShortcut(userSpec.ConfigValues)},
-	}
-
-	shortcuts := map[string]any{}
-	shortcutSource := map[string]string{}
-
-	for _, source := range shortcutSources {
-		for _, name := range sortedKeys(source.values) {
-			previous, exists := shortcutSource[name]
-			if exists {
-				return nil, &config.ConfigError{
-					Field: name,
-					Err:   fmt.Errorf("names: %q is both %s and %s", name, previous, source.label),
-				}
-			}
-
-			shortcutSource[name] = source.label
-			shortcuts[name] = source.values[name]
-		}
-	}
-
-	names, err := config.BuildNames(config.Entry{
-		Fields:    fields,
-		Variables: cfg.Variables,
-		Config:    userSpec.ConfigValues,
-		ReadyMade: map[string]any{
-			"location":      mergedLocation,
-			"location_path": locationPath,
-		},
-		Shortcuts: shortcuts,
-	})
+	names, err := config.BuildWorkerNames(cfg, fields, cfg.Variables, userSpec.ConfigValues)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build the template names: %w", err)
 	}
@@ -186,76 +126,6 @@ func init() {
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewExamplebridgeWorker(id, logger, sr)
 		})
-}
-
-// agentLocationFrom reads the agent's location out of the config values a
-// parent hands down. A parent that hands down no agent yields the empty
-// location; an agent that is not a mapping is a *ConfigError on the agent
-// field.
-func agentLocationFrom(cfgValues map[string]any) (map[string]string, error) {
-	raw, exists := cfgValues["agent"]
-	if !exists {
-		return map[string]string{}, nil
-	}
-
-	agent, ok := raw.(map[string]any)
-	if !ok {
-		return nil, &config.ConfigError{
-			Field: "agent",
-			Err:   fmt.Errorf("agent must be a mapping, got %T", raw),
-		}
-	}
-
-	location, err := config.LocationFromAny(agent["location"])
-	if err != nil {
-		return nil, fmt.Errorf("failed to read the agent location: %w", err)
-	}
-
-	return location, nil
-}
-
-// connectionShortcuts returns the IP and PORT names a template reads without
-// the connection prefix. A config that carries no connection yields none; a
-// connection that is not a mapping is a *ConfigError on the connection field.
-func connectionShortcuts(fields map[string]any) (map[string]any, error) {
-	shortcuts := map[string]any{}
-
-	raw, exists := fields["connection"]
-	if !exists {
-		return shortcuts, nil
-	}
-
-	connection, ok := raw.(map[string]any)
-	if !ok {
-		return nil, &config.ConfigError{
-			Field: "connection",
-			Err:   fmt.Errorf("connection must be a mapping, got %T", raw),
-		}
-	}
-
-	if host, ok := connection["host"]; ok {
-		shortcuts["IP"] = host
-	}
-
-	if port, ok := connection["port"]; ok {
-		shortcuts["PORT"] = port
-	}
-
-	return shortcuts, nil
-}
-
-// sortedKeys returns the keys of m in sorted order, so a name two sources
-// claim always produces the same error.
-func sortedKeys(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-
-	for key := range m {
-		keys = append(keys, key)
-	}
-
-	sort.Strings(keys)
-
-	return keys
 }
 
 var _ fsmv2.Worker = (*ExamplebridgeWorker)(nil)
