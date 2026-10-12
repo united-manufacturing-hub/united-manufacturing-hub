@@ -15,32 +15,30 @@
 package env
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 )
 
-// benthos-umh expands these references in every bridge config through the
-// redpanda-data/benthos library it is built on (v4.80.0 in benthos-umh v0.16.0);
-// the patterns and rules are copied so a value means the same in umh-core.
+// benthos resolves these two forms the same way in bridge flows; every other
+// benthos form (transforms, the ${{VAR}} escape) is rejected so the two never
+// disagree on a value both read.
 // https://github.com/redpanda-data/benthos/blob/v4.80.0/internal/config/env_vars.go
 var (
-	referencePattern        = regexp.MustCompile(`\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?(?:\|[0-9A-Za-z]+)?}`)
-	escapedReferencePattern = regexp.MustCompile(`\${({[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?})}`)
+	referencePattern          = regexp.MustCompile(`\$\{[^}]*\}`)
+	supportedReferencePattern = regexp.MustCompile(`^\$\{[0-9A-Za-z_.]+(:[^}|{$]*)?\}$`)
 )
 
 type variableReference struct {
 	name         string
 	defaultValue string
 	hasDefault   bool
-	transform    string
 }
 
-// Expand replaces benthos-style environment variable references in value:
-// ${VAR}, ${VAR:default}, ${VAR|base64decode}, and the escape ${{VAR}}, which
-// becomes the literal text ${VAR}.
+// Expand replaces ${VAR} and ${VAR:default} references in value with environment
+// variables. It fails on any other reference form and on a variable that is not
+// set and has no default.
 func Expand(value string) (string, error) {
 	var expanded strings.Builder
 
@@ -53,7 +51,10 @@ func Expand(value string) (string, error) {
 		expanded.WriteString(value[previousEnd:start])
 		previousEnd = end
 
-		reference := parseReference(value[start:end])
+		reference, err := parseReference(value[start:end])
+		if err != nil {
+			return "", err
+		}
 
 		resolved, found := lookup(reference)
 		if !found {
@@ -62,12 +63,7 @@ func Expand(value string) (string, error) {
 			continue
 		}
 
-		transformed, err := applyTransform(resolved, reference.transform)
-		if err != nil {
-			return "", err
-		}
-
-		expanded.WriteString(transformed)
+		expanded.WriteString(resolved)
 	}
 
 	expanded.WriteString(value[previousEnd:])
@@ -76,31 +72,30 @@ func Expand(value string) (string, error) {
 		return "", fmt.Errorf("required environment variables were not set: %s", strings.Join(missingNames, ", "))
 	}
 
-	return escapedReferencePattern.ReplaceAllString(expanded.String(), "$$$1"), nil
+	return expanded.String(), nil
 }
 
-func parseReference(text string) variableReference {
+// ValidateReferences fails when value contains a reference other than ${VAR} or
+// ${VAR:default}. It does not read the environment.
+func ValidateReferences(value string) error {
+	for _, reference := range referencePattern.FindAllString(value, -1) {
+		if _, err := parseReference(reference); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func parseReference(text string) (variableReference, error) {
+	if !supportedReferencePattern.MatchString(text) {
+		return variableReference{}, fmt.Errorf("environment variable reference %s is not supported: use ${VAR} or ${VAR:default}", text)
+	}
+
 	body := text[len("${") : len(text)-len("}")]
+	name, defaultValue, hasDefault := strings.Cut(body, ":")
 
-	beforeColon, afterColon, hasDefault := strings.Cut(body, ":")
-	if !hasDefault {
-		name, transform := cutTransform(beforeColon)
-
-		return variableReference{name: name, transform: transform}
-	}
-
-	defaultValue, transform := cutTransform(afterColon)
-
-	return variableReference{name: beforeColon, defaultValue: defaultValue, hasDefault: true, transform: transform}
-}
-
-func cutTransform(part string) (rest, transform string) {
-	pipeIndex := strings.LastIndex(part, "|")
-	if pipeIndex == -1 {
-		return part, ""
-	}
-
-	return part[:pipeIndex], part[pipeIndex+1:]
+	return variableReference{name: name, defaultValue: defaultValue, hasDefault: hasDefault}, nil
 }
 
 func lookup(reference variableReference) (string, bool) {
@@ -114,20 +109,4 @@ func lookup(reference variableReference) (string, bool) {
 	}
 
 	return value, true
-}
-
-func applyTransform(value, transform string) (string, error) {
-	switch transform {
-	case "":
-		return value, nil
-	case "base64decode":
-		decoded, err := base64.StdEncoding.DecodeString(value)
-		if err != nil {
-			return "", fmt.Errorf("failed to decode base64-encoded env var: %w", err)
-		}
-
-		return string(decoded), nil
-	default:
-		return "", fmt.Errorf("unknown env var decode function: %s", transform)
-	}
 }
