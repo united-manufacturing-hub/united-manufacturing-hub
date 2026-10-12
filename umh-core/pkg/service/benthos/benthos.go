@@ -118,8 +118,8 @@ type IBenthosService interface {
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
 	// IsMetricsErrorFree reports true when the metrics show no recent errors:
 	// with a windowed verdict present, no failure signal fired in the last
-	// constants.BenthosLogWindow, and processor errors are not judged on that
-	// path. Only a nil verdict falls back to the cumulative counters.
+	// constants.BenthosLogWindow. Only a nil verdict falls back to the
+	// cumulative counters.
 	//
 	// It returns:
 	//
@@ -1109,8 +1109,8 @@ func (s *BenthosService) IsLogsFine(
 
 // IsMetricsErrorFree reports true when the metrics show no recent errors:
 // with a windowed verdict present, no failure signal fired in the last
-// constants.BenthosLogWindow, and processor errors are not judged on that
-// path. Only a nil verdict falls back to the cumulative counters.
+// constants.BenthosLogWindow. Only a nil verdict falls back to the cumulative
+// counters.
 //
 // It returns:
 //
@@ -1118,8 +1118,6 @@ func (s *BenthosService) IsLogsFine(
 //	reason – empty when ok is true; otherwise a short explanation (e.g.
 //	         "benthos reported 1 output errors in the last 10m0s").
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
-	// Processor errors are not judged on the windowed path until a
-	// processor_error signal joins the table.
 	if metrics.Failures != nil {
 		return metrics.Failures.ErrorFree()
 	}

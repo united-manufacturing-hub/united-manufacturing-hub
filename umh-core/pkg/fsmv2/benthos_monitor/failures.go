@@ -45,6 +45,36 @@ var failureCounters = []failureCounter{
 		tier:  0,
 		read:  benthosmonitorservice.Metrics.OutputErrorTotal,
 	},
+	{
+		name:  "processor_error",
+		label: "processor errors",
+		tier:  0,
+		read:  benthosmonitorservice.Metrics.ProcessorErrorTotal,
+	},
+	{
+		name:  "input_connection_failed",
+		label: "failed input connections",
+		tier:  1,
+		read:  benthosmonitorservice.Metrics.InputConnectionFailedTotal,
+	},
+	{
+		name:  "input_connection_lost",
+		label: "lost input connections",
+		tier:  1,
+		read:  benthosmonitorservice.Metrics.InputConnectionLostTotal,
+	},
+	{
+		name:  "output_connection_failed",
+		label: "failed output connections",
+		tier:  1,
+		read:  benthosmonitorservice.Metrics.OutputConnectionFailedTotal,
+	},
+	{
+		name:  "output_connection_lost",
+		label: "lost output connections",
+		tier:  1,
+		read:  benthosmonitorservice.Metrics.OutputConnectionLostTotal,
+	},
 }
 
 // increase is the reduction the failure signals judge by: how much a counter

@@ -234,18 +234,25 @@ func TestPollCarriesFailureVerdict(t *testing.T) {
 type failureFeed struct{}
 
 func (failureFeed) Readable(time.Time) sample {
-	return sample{
+	s := sample{
 		inputReceived: diagnosis.Known(0),
 		outputSent:    diagnosis.Known(0),
-		failures:      map[string]diagnosis.Reading{"output_error": diagnosis.Known(0)},
+		failures:      map[string]diagnosis.Reading{},
 	}
+	for _, c := range failureCounters {
+		s.failures[c.name] = diagnosis.Known(0)
+	}
+
+	return s
 }
 
+// Unreadable leaves every failure reading out of the map; a missing key reads
+// as an unknown reading.
 func (failureFeed) Unreadable(time.Time) sample {
 	return sample{
 		inputReceived: diagnosis.Unknown(),
 		outputSent:    diagnosis.Unknown(),
-		failures:      map[string]diagnosis.Reading{"output_error": diagnosis.Unknown()},
+		failures:      map[string]diagnosis.Reading{},
 	}
 }
 
