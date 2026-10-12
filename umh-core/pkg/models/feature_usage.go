@@ -46,6 +46,13 @@ type FeatureUsage struct {
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.
 	HistorianConfigured bool `json:"historianConfigured"`
+	// StaleMetricDegradedInstanceCount is the number of Benthos instances whose
+	// failure verdict still marks the flow degraded with no new failure past
+	// that verdict's window plus a margin. The verdict is the FSMv2 benthos
+	// monitor's judgement of which failure counters rose in the last 10
+	// minutes. staleMetricDegradedInstanceCount in pkg/communicator/pkg/generator
+	// defines it.
+	StaleMetricDegradedInstanceCount int `json:"staleMetricDegradedInstanceCount"`
 }
 
 // FSMv2CPUEnabled reports the effective state of the fsmv2 CPU path, given the

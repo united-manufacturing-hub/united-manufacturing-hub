@@ -51,6 +51,20 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).To(HaveKeyWithValue("fsmv2CpuEnabled", true))
 	})
 
+	It("serializes the stale metric degraded instance count under the JSON key staleMetricDegradedInstanceCount", func() {
+		usage := models.FeatureUsage{
+			StaleMetricDegradedInstanceCount: 3,
+		}
+
+		data, err := json.Marshal(usage)
+		Expect(err).NotTo(HaveOccurred())
+
+		var raw map[string]interface{}
+		Expect(json.Unmarshal(data, &raw)).To(Succeed())
+
+		Expect(raw).To(HaveKeyWithValue("staleMetricDegradedInstanceCount", BeNumerically("==", 3)))
+	})
+
 	It("serializes the historian adoption fields", func() {
 		usage := models.FeatureUsage{
 			HistorianConfigured:  true,

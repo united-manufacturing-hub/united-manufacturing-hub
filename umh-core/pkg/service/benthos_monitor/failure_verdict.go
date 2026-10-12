@@ -37,7 +37,8 @@ type FailureVerdict struct {
 	// LastIncreaseAt is the latest scrape at which any failure counter was
 	// higher than at the scrape before it. After a restart the scrape before
 	// counts as 0. It is zero until the first increase, and it is computed from
-	// the raw counters, not from the fired signals.
+	// the raw counters, not from the fired signals. A signal fires only on a
+	// rise, so whenever Fired is non-empty LastIncreaseAt is set.
 	LastIncreaseAt time.Time
 }
 
