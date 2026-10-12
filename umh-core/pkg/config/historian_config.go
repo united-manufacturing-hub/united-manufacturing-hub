@@ -21,6 +21,8 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 )
 
 // ErrHistorianNotConfigured is returned by AtomicEditHistorian when no historian
@@ -139,6 +141,10 @@ func (t TimescaleConfig) Validate() error {
 		}
 	}
 
+	if err := t.validateVariableReferences(); err != nil {
+		return err
+	}
+
 	return t.validateSSL()
 }
 
@@ -151,7 +157,43 @@ func (t TimescaleConfig) ValidateForUpdate() error {
 		return errors.New("missing required field host")
 	}
 
+	if err := t.validateVariableReferences(); err != nil {
+		return err
+	}
+
 	return t.validateSSL()
+}
+
+func (t TimescaleConfig) validateVariableReferences() error {
+	if err := env.ValidateReferences(t.Host); err != nil {
+		return fmt.Errorf("historian host: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.Username); err != nil {
+		return fmt.Errorf("historian username: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.Password); err != nil {
+		return fmt.Errorf("historian password: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.Database); err != nil {
+		return fmt.Errorf("historian database: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.SSLRootCert); err != nil {
+		return fmt.Errorf("historian sslrootcert: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.SSLCert); err != nil {
+		return fmt.Errorf("historian sslcert: %w", err)
+	}
+
+	if err := env.ValidateReferences(t.SSLKey); err != nil {
+		return fmt.Errorf("historian sslkey: %w", err)
+	}
+
+	return nil
 }
 
 // hasTLSCerts reports whether any TLS certificate path is configured.
@@ -248,35 +290,72 @@ func (t TimescaleConfig) ToTemplateMap() map[string]any {
 // ToDSN builds a libpq/pgx connection string ("postgres://...") from the
 // connection settings, applying defaults first. Username and password are
 // percent-escaped so reserved characters survive; sslmode and any TLS cert paths
-// become query parameters. The returned string carries the raw password: never
-// log it (see String, which masks the password for %v logging).
-func (t TimescaleConfig) ToDSN() string {
+// become query parameters. Every string setting resolves ${VAR} and
+// ${VAR:default} references (see env.ResolveVariables). The returned string
+// carries the raw password: never log it (see String, which masks the password
+// for %v logging).
+func (t TimescaleConfig) ToDSN() (string, error) {
 	t = t.WithDefaults()
+
+	host, err := env.ResolveVariables(t.Host)
+	if err != nil {
+		return "", fmt.Errorf("historian host: %w", err)
+	}
+
+	username, err := env.ResolveVariables(t.Username)
+	if err != nil {
+		return "", fmt.Errorf("historian username: %w", err)
+	}
+
+	password, err := env.ResolveVariables(t.Password)
+	if err != nil {
+		return "", fmt.Errorf("historian password: %w", err)
+	}
+
+	database, err := env.ResolveVariables(t.Database)
+	if err != nil {
+		return "", fmt.Errorf("historian database: %w", err)
+	}
+
+	sslRootCert, err := env.ResolveVariables(t.SSLRootCert)
+	if err != nil {
+		return "", fmt.Errorf("historian sslrootcert: %w", err)
+	}
+
+	sslCert, err := env.ResolveVariables(t.SSLCert)
+	if err != nil {
+		return "", fmt.Errorf("historian sslcert: %w", err)
+	}
+
+	sslKey, err := env.ResolveVariables(t.SSLKey)
+	if err != nil {
+		return "", fmt.Errorf("historian sslkey: %w", err)
+	}
 
 	q := url.Values{}
 	q.Set("sslmode", string(t.SSLMode))
 
-	if t.SSLRootCert != "" {
-		q.Set("sslrootcert", t.SSLRootCert)
+	if sslRootCert != "" {
+		q.Set("sslrootcert", sslRootCert)
 	}
 
-	if t.SSLCert != "" {
-		q.Set("sslcert", t.SSLCert)
+	if sslCert != "" {
+		q.Set("sslcert", sslCert)
 	}
 
-	if t.SSLKey != "" {
-		q.Set("sslkey", t.SSLKey)
+	if sslKey != "" {
+		q.Set("sslkey", sslKey)
 	}
 
 	u := url.URL{
 		Scheme:   "postgres",
-		User:     url.UserPassword(t.Username, t.Password),
-		Host:     net.JoinHostPort(t.Host, strconv.Itoa(int(t.Port))),
-		Path:     "/" + t.Database,
+		User:     url.UserPassword(username, password),
+		Host:     net.JoinHostPort(host, strconv.Itoa(int(t.Port))),
+		Path:     "/" + database,
 		RawQuery: q.Encode(),
 	}
 
-	return u.String()
+	return u.String(), nil
 }
 
 // toTemplateMap serialises a config value to a map keyed by its json field names.

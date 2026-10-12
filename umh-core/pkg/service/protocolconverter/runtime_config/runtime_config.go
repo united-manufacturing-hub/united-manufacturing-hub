@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 )
 
 // BridgedByPlaceholder is the node-name sentinel passed to BuildRuntimeConfig when
@@ -327,6 +328,11 @@ func renderConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
+	conn, err = withVariablesResolved(conn)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
 	// 2. Convert the rendered template to runtime config with proper types
 	// This handles the string-to-uint16 port conversion and type safety
 	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(conn)
@@ -412,4 +418,29 @@ func getProcessors(pipeline map[string]any) []any {
 	}
 
 	return []any{}
+}
+
+func withVariablesResolved(
+	conn connectionserviceconfig.ConnectionServiceConfigTemplate,
+) (connectionserviceconfig.ConnectionServiceConfigTemplate, error) {
+	if conn.NmapTemplate == nil {
+		return conn, nil
+	}
+
+	target, err := env.ResolveVariables(conn.NmapTemplate.Target)
+	if err != nil {
+		return conn, fmt.Errorf("connection target: %w", err)
+	}
+
+	port, err := env.ResolveVariables(conn.NmapTemplate.Port)
+	if err != nil {
+		return conn, fmt.Errorf("connection port: %w", err)
+	}
+
+	conn.NmapTemplate = &connectionserviceconfig.NmapConfigTemplate{
+		Target: target,
+		Port:   port,
+	}
+
+	return conn, nil
 }

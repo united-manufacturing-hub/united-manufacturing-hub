@@ -49,6 +49,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -274,6 +275,10 @@ func (a *EditProtocolConverterAction) Validate() error {
 
 	if err := config.ValidateComponentName(a.name); err != nil {
 		return err
+	}
+
+	if err := env.ValidateReferences(a.connectionIP); err != nil {
+		return fmt.Errorf("invalid Connection.IP: %w", err)
 	}
 
 	if a.readDFCState != "" {

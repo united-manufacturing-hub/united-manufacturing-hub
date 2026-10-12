@@ -252,7 +252,19 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	cfg = cfg.WithDefaults()
 	host, port := cfg.Timescale.Host, cfg.Timescale.Port
 
-	dsn := cfg.Timescale.ToDSN()
+	dsn, err := cfg.Timescale.ToDSN()
+	if err != nil {
+		d.GetLogger().Debug("timescale connection check",
+			deps.String("host", host),
+			deps.Bool("reachable", false),
+			deps.Err(err))
+
+		return TimescaleStatus{
+			Host: host,
+			Port: port,
+			Auth: models.TimescaleAuthUnknown,
+		}, err
+	}
 
 	pool, err := d.pool.get(dsn)
 	if err != nil {

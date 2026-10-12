@@ -48,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
@@ -134,6 +135,10 @@ func (a *DeployProtocolConverterAction) Validate() error {
 
 	if a.payload.Connection.Port == 0 {
 		return errors.New("missing required field Connection.Port")
+	}
+
+	if err := env.ValidateReferences(a.payload.Connection.IP); err != nil {
+		return fmt.Errorf("invalid Connection.IP: %w", err)
 	}
 
 	if err := config.ValidateComponentName(a.payload.Name); err != nil {

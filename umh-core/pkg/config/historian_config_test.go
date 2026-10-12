@@ -16,6 +16,8 @@ package config
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -136,6 +138,33 @@ var _ = Describe("TimescaleConfig", func() {
 			err := cfg.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("verify-full"))
+		})
+	})
+
+	Describe("environment variable references", func() {
+		DescribeTable("Validate and ValidateForUpdate reject an unsupported form and name the setting",
+			func(setting string, setField func(t *TimescaleConfig)) {
+				t := validTimescale()
+				setField(&t)
+
+				Expect(t.Validate()).To(MatchError(And(ContainSubstring(setting), ContainSubstring("not supported"))))
+				Expect(t.ValidateForUpdate()).To(MatchError(And(ContainSubstring(setting), ContainSubstring("not supported"))))
+			},
+			Entry("host", "host", func(t *TimescaleConfig) { t.Host = "${HOST|base64decode}" }),
+			Entry("username", "username", func(t *TimescaleConfig) { t.Username = "${{USER}}" }),
+			Entry("password", "password", func(t *TimescaleConfig) { t.Password = "${PASSWORD|base64decode}" }),
+			Entry("database", "database", func(t *TimescaleConfig) { t.Database = "${{DATABASE}}" }),
+			Entry("sslrootcert", "sslrootcert", func(t *TimescaleConfig) { t.SSLRootCert = "${{CA}}"; t.SSLMode = HistorianSSLModeVerifyFull }),
+			Entry("sslcert", "sslcert", func(t *TimescaleConfig) { t.SSLCert = "${{CERT}}"; t.SSLMode = HistorianSSLModeVerifyFull }),
+			Entry("sslkey", "sslkey", func(t *TimescaleConfig) { t.SSLKey = "${{KEY}}"; t.SSLMode = HistorianSSLModeVerifyFull }),
+		)
+
+		It("accepts ${VAR} and ${VAR:default} without the variables being set", func() {
+			t := validTimescale()
+			t.Host = "${UMH_TEST_HISTORIAN_HOST_UNSET}"
+			t.Password = "${UMH_TEST_HISTORIAN_PASSWORD_UNSET:fallback}"
+
+			Expect(t.Validate()).To(Succeed())
 		})
 	})
 
@@ -343,6 +372,76 @@ var _ = Describe("TimescaleConfig", func() {
 			Expect(m).To(HaveKeyWithValue("database", "metrics"))
 			Expect(m).To(HaveKeyWithValue("username", "svc"))
 			Expect(m).To(HaveKeyWithValue("sslmode", "disable"))
+		})
+	})
+
+	Describe("ToDSN", func() {
+		const (
+			setVariable             = "UMH_TEST_HISTORIAN_SETTING"
+			unsetVariable           = "UMH_TEST_HISTORIAN_SETTING_UNSET"
+			passwordFromEnvironment = "from-environment"
+		)
+
+		BeforeEach(func() {
+			GinkgoT().Setenv(setVariable, passwordFromEnvironment)
+		})
+
+		DescribeTable("resolves ${VAR} in every string setting",
+			func(setField func(t *TimescaleConfig, value string), readField func(dsn *url.URL) string) {
+				t := validTimescale()
+				t.SSLMode = HistorianSSLModeVerifyFull
+				setField(&t, "${"+setVariable+"}")
+
+				dsn, err := t.ToDSN()
+				Expect(err).NotTo(HaveOccurred())
+
+				parsedDSN, err := url.Parse(dsn)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(readField(parsedDSN)).To(Equal(passwordFromEnvironment))
+			},
+			Entry("host",
+				func(t *TimescaleConfig, value string) { t.Host = value },
+				func(dsn *url.URL) string { return dsn.Hostname() }),
+			Entry("username",
+				func(t *TimescaleConfig, value string) { t.Username = value },
+				func(dsn *url.URL) string { return dsn.User.Username() }),
+			Entry("password",
+				func(t *TimescaleConfig, value string) { t.Password = value },
+				func(dsn *url.URL) string {
+					password, _ := dsn.User.Password()
+
+					return password
+				}),
+			Entry("database",
+				func(t *TimescaleConfig, value string) { t.Database = value },
+				func(dsn *url.URL) string { return strings.TrimPrefix(dsn.Path, "/") }),
+			Entry("sslrootcert",
+				func(t *TimescaleConfig, value string) { t.SSLRootCert = value },
+				func(dsn *url.URL) string { return dsn.Query().Get("sslrootcert") }),
+			Entry("sslcert",
+				func(t *TimescaleConfig, value string) { t.SSLCert = value },
+				func(dsn *url.URL) string { return dsn.Query().Get("sslcert") }),
+			Entry("sslkey",
+				func(t *TimescaleConfig, value string) { t.SSLKey = value },
+				func(dsn *url.URL) string { return dsn.Query().Get("sslkey") }),
+		)
+
+		It("names the setting that references an unset variable", func() {
+			t := validTimescale()
+			t.Host = "${" + unsetVariable + "}"
+
+			_, err := t.ToDSN()
+
+			Expect(err).To(MatchError(And(ContainSubstring("host"), ContainSubstring(unsetVariable))))
+		})
+
+		It("names the setting that holds an unsupported reference", func() {
+			t := validTimescale()
+			t.Password = "${" + setVariable + "|base64decode}"
+
+			_, err := t.ToDSN()
+
+			Expect(err).To(MatchError(And(ContainSubstring("password"), ContainSubstring("not supported"))))
 		})
 	})
 })

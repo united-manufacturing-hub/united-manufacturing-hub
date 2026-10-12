@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Historian settings and bridge connection IPs accept `${VAR}` and `${VAR:default}` to read a value, such as a password, from an environment variable instead of config.yaml. An unset variable or an unsupported form produces an error naming it
+
 ## [0.44.43]
 
 ### Improvements
