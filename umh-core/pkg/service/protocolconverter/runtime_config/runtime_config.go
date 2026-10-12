@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 )
 
 // BridgedByPlaceholder is the node-name sentinel passed to BuildRuntimeConfig when
@@ -426,12 +427,12 @@ func withEnvVariablesExpanded(
 		return conn, nil
 	}
 
-	target, err := config.ExpandEnvVariables(conn.NmapTemplate.Target)
+	target, err := env.Expand(conn.NmapTemplate.Target)
 	if err != nil {
 		return conn, fmt.Errorf("connection target: %w", err)
 	}
 
-	port, err := config.ExpandEnvVariables(conn.NmapTemplate.Port)
+	port, err := env.Expand(conn.NmapTemplate.Port)
 	if err != nil {
 		return conn, fmt.Errorf("connection port: %w", err)
 	}

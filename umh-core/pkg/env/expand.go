@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package env
 
 import (
 	"encoding/base64"
@@ -41,10 +41,9 @@ func (e *missingEnvVariablesError) Error() string {
 	return "required environment variables were not set: " + strings.Join(e.Names, ", ")
 }
 
-// ExpandEnvVariables replaces benthos-style environment variable references in
-// value: ${VAR}, ${VAR:default}, ${VAR|base64decode}, and the escape ${{VAR}},
+// Expand replaces benthos-style environment variable references in value: ${VAR}, ${VAR:default}, ${VAR|base64decode}, and the escape ${{VAR}},
 // which becomes the literal text ${VAR}.
-func ExpandEnvVariables(value string) (string, error) {
+func Expand(value string) (string, error) {
 	var (
 		missingNames    []string
 		transformErrors []error

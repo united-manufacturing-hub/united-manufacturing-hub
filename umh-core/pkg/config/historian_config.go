@@ -21,6 +21,8 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 )
 
 // ErrHistorianNotConfigured is returned by AtomicEditHistorian when no historian
@@ -262,7 +264,7 @@ func (t TimescaleConfig) withEnvVariablesExpanded() (TimescaleConfig, error) {
 	}
 
 	for _, setting := range settings {
-		expanded, err := ExpandEnvVariables(*setting.value)
+		expanded, err := env.Expand(*setting.value)
 		if err != nil {
 			return TimescaleConfig{}, fmt.Errorf("historian %s: %w", setting.name, err)
 		}
