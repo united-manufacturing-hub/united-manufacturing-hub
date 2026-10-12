@@ -22,9 +22,10 @@ import (
 	"strings"
 )
 
-// benthos expands these references in every bridge config; the patterns and
-// rules are copied so a value means the same in umh-core as in a bridge.
-// https://github.com/redpanda-data/benthos/blob/v4.78.0/internal/config/env_vars.go
+// benthos-umh expands these references in every bridge config through the
+// redpanda-data/benthos library it is built on (v4.80.0 in benthos-umh v0.16.0);
+// the patterns and rules are copied so a value means the same in umh-core.
+// https://github.com/redpanda-data/benthos/blob/v4.80.0/internal/config/env_vars.go
 var (
 	referencePattern        = regexp.MustCompile(`\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?(?:\|[0-9A-Za-z]+)?}`)
 	escapedReferencePattern = regexp.MustCompile(`\${({[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?})}`)
