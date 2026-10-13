@@ -326,6 +326,9 @@ var _ = Describe("ActionHistory Integration", func() {
 				WorkerType: "test",
 				Store:      supervisor.CreateTestTriangularStore(),
 				Logger:     deps.NewNopFSMLogger(),
+				// The started worker never honors ShutdownRequested, so the
+				// AfterEach Shutdown waits out the whole drain budget.
+				GracefulShutdownTimeout: 100 * time.Millisecond,
 				CollectorHealth: supervisor.CollectorHealthConfig{
 					ObservationTimeout: 5 * time.Second,
 					StaleThreshold:     10 * time.Second,

@@ -96,6 +96,9 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 					Store:        store,
 					Logger:       logger,
 					TickInterval: 10 * time.Millisecond,
+					// The worker never honors ShutdownRequested, so Shutdown
+					// waits out the whole drain budget.
+					GracefulShutdownTimeout: 100 * time.Millisecond,
 					UserSpec: config.UserSpec{
 						Config: "test config that stays the same",
 						Variables: config.VariableBundle{
@@ -148,6 +151,9 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 					Store:        store,
 					Logger:       logger,
 					TickInterval: 10 * time.Millisecond,
+					// The worker never honors ShutdownRequested, so Shutdown
+					// waits out the whole drain budget.
+					GracefulShutdownTimeout: 100 * time.Millisecond,
 					UserSpec: config.UserSpec{
 						Config: "initial config",
 					},
@@ -196,6 +202,9 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 					Store:        store,
 					Logger:       logger,
 					TickInterval: 10 * time.Millisecond,
+					// The worker never honors ShutdownRequested, so Shutdown
+					// waits out the whole drain budget.
+					GracefulShutdownTimeout: 100 * time.Millisecond,
 					UserSpec: config.UserSpec{
 						Config: "same config",
 						Variables: config.VariableBundle{
@@ -249,6 +258,9 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 					Store:        store,
 					Logger:       logger,
 					TickInterval: 10 * time.Millisecond,
+					// The worker never honors ShutdownRequested, so Shutdown
+					// waits out the whole drain budget.
+					GracefulShutdownTimeout: 100 * time.Millisecond,
 					UserSpec: config.UserSpec{
 						Config: "test config",
 					},
