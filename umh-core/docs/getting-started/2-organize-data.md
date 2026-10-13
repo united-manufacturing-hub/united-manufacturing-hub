@@ -249,10 +249,23 @@ enterprise.sksk.machine-2._raw.quality.DB3.I270     [789]
 
 You now control every part of the topic:
 
-```text
-umh.v1.enterprise.sksk.machine-1._raw.sensors.DB1.DW20
-       └─ fixed ─┘└─ location_path ─┘     └virtual┘└tag┘
-                                             path   name
+`umh.v1.enterprise.sksk.machine-1._raw.sensors.DB1.DW20`
+
+```mermaid
+flowchart LR
+    subgraph Fixed["fixed"]
+        A["umh.v1"]
+    end
+    subgraph Location["location_path"]
+        B["enterprise.sksk.machine-1"]
+    end
+    subgraph Virtual["virtual_path"]
+        D["sensors.DB1"]
+    end
+    subgraph Tag["tag_name"]
+        E["DW20"]
+    end
+    A --> B --> C["_raw"] --> D --> E
 ```
 
 - **location_path**: WHERE the device is (can be dynamic)

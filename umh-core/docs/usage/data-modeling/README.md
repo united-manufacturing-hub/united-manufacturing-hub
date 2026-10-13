@@ -19,9 +19,17 @@ Each component builds on the previous:
 
 In any UNS topic, data modeling controls specific portions:
 
-```text
-umh.v1.enterprise.site.area.line._contract.virtual.path.name
-       └───────── fixed ─────────┘         └── modeled ──┘
+`umh.v1.enterprise.site.area.line._contract.virtual.path.name`
+
+```mermaid
+flowchart LR
+    subgraph Fixed["fixed"]
+        A["umh.v1.enterprise.site.area.line._contract"]
+    end
+    subgraph Modeled["modeled"]
+        B["virtual.path"] --> C["name"]
+    end
+    A --> B
 ```
 
 - **Fixed**: Location hierarchy comes from bridge configuration

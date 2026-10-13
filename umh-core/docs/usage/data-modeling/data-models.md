@@ -82,9 +82,20 @@ structure:
 ```
 
 **Complete topic path:**
-```text
-umh.v1.enterprise.site._pump_v1.vibration.x-axis
-       └─ fixed ─┘     └contract┘└─from model─┘
+`umh.v1.enterprise.site._pump_v1.vibration.x-axis`
+
+```mermaid
+flowchart LR
+    subgraph Fixed["fixed"]
+        A["umh.v1.enterprise.site"]
+    end
+    subgraph Contract["contract"]
+        B["_pump_v1"]
+    end
+    subgraph Model["from model"]
+        C["vibration.x-axis"]
+    end
+    A --> B --> C
 ```
 
 ## The Three Building Blocks
