@@ -62,6 +62,10 @@ func NewProtocolConverterInstance(
 
 	var startingAndRunningStates = append(startingStatesWithFailed, runningStates...)
 
+	// A flow rejected by config validation never becomes healthy, so the bridge reports it
+	// as degraded instead of waiting in starting_dfc forever.
+	var dfcDegradedStates = append([]string{OperationalStateStartingDFC}, runningStates...)
+
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
@@ -91,7 +95,7 @@ func NewProtocolConverterInstance(
 			//	active/idle -> degraded
 			{Name: EventConnectionUnhealthy, Src: runningStates, Dst: OperationalStateDegradedConnection},
 			{Name: EventRedpandaDegraded, Src: runningStates, Dst: OperationalStateDegradedRedpanda},
-			{Name: EventDFCDegraded, Src: runningStates, Dst: OperationalStateDegradedDFC},
+			{Name: EventDFCDegraded, Src: dfcDegradedStates, Dst: OperationalStateDegradedDFC},
 			{Name: EventDegradedOther, Src: runningStates, Dst: OperationalStateDegradedOther},
 
 			// active -> idle

@@ -54,7 +54,20 @@ var (
 
 	goodDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 		Source: dataflowcomponentserviceconfig.WriteConfigSource{
-			Topics: "umh.v1.test.*",
+			// Beneath the agent location the harness sets ("test-location"), as the
+			// topic hierarchy check requires.
+			Topics: "umh.v1.test-location.*",
+		},
+		Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+			Protocol: "stdout",
+		},
+	}
+
+	// outsideLocationDataflowComponentWriteConfig subscribes above the bridge location the
+	// harness sets, which the topic hierarchy check rejects.
+	outsideLocationDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+		Source: dataflowcomponentserviceconfig.WriteConfigSource{
+			Topics: "umh.v1.some-other-location.*",
 		},
 		Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
 			Protocol: "stdout",
@@ -96,6 +109,22 @@ func CreateProtocolConverterTestConfig(name string, desiredState string) config.
 			},
 		},
 	}
+}
+
+// SetupProtocolConverterInstanceWithOutsideLocationWriteTopics creates and configures a
+// ProtocolConverter instance whose write flow topics lie outside the bridge location, which
+// the topic hierarchy check rejects. Returns the instance, the mock service, and the config.
+func SetupProtocolConverterInstanceWithOutsideLocationWriteTopics(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *protocolconvertersvc.MockProtocolConverterService, config.ProtocolConverterConfig) {
+	cfg := CreateProtocolConverterTestConfig(serviceName, desiredState)
+	cfg.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = outsideLocationDataflowComponentWriteConfig
+
+	mockService := protocolconvertersvc.NewMockProtocolConverterService()
+	mockService.ExistingComponents = map[string]bool{serviceName: true}
+	ConfigureProtocolConverterServiceConfig(mockService)
+
+	instance := setUpMockProtocolConverterInstance(cfg, mockService, serviceregistry.NewMockRegistry())
+
+	return instance, mockService, cfg
 }
 
 // CreateProtocolConverterTestConfigWithMissingDfc creates a standard ProtocolConverter config for testing
