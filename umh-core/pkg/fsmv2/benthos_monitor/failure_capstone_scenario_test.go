@@ -35,6 +35,7 @@ type failingBenthosStub struct {
 	server            *httptest.Server
 	processorErrors   atomic.Int64
 	inputConnFailures atomic.Int64
+	inputConnUps      atomic.Int64
 	metricsDown       atomic.Bool
 }
 
@@ -55,6 +56,7 @@ func newFailingBenthosStub() *failingBenthosStub {
 				return
 			}
 			fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} 10\n")
+			fmt.Fprintf(w, "input_connection_up{label=\"\",path=\"root.input\"} %d\n", s.inputConnUps.Load())
 			fmt.Fprintf(w, "input_connection_failed{label=\"\",path=\"root.input\"} %d\n", s.inputConnFailures.Load())
 			fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} 10\n")
 			fmt.Fprintf(w, "processor_error{label=\"\",path=\"root.pipeline.processors.0\"} %d\n", s.processorErrors.Load())
@@ -146,18 +148,20 @@ func TestScenarioFailureVerdictFromScrapeToFSM(t *testing.T) {
 		t.Fatalf("one window after the second processor error: ErrorFree() = (false, %q), want true", reason)
 	}
 
-	// A failed input connection keeps the verdict not error-free for one
-	// window. IsBenthosRunningForSomeTimeWithoutErrors (pkg/fsm/benthos) reads
-	// this verdict while a flow is starting, so it holds the flow in starting.
+	// An input that failed to connect keeps the verdict not error-free until
+	// benthos reconnects, however long that takes.
+	// IsBenthosRunningForSomeTimeWithoutErrors (pkg/fsm/benthos) reads this
+	// verdict while a flow is starting, so it holds the flow in starting.
 	stub.inputConnFailures.Store(1)
-	if ok, reason := step(); ok || reason != "benthos reported 1 failed input connection in the last 10m0s" {
+	if ok, reason := step(); ok || reason != "benthos reports 1 input not connected" {
 		t.Fatalf("one failed input connection: ErrorFree() = (%v, %q), want not error-free", ok, reason)
 	}
-	if ok, reason := stepFor(window - time.Minute); ok {
-		t.Fatalf("9m after the failed connection: ErrorFree() = (true, %q), want still not error-free", reason)
+	if ok, reason := stepFor(window + time.Minute); ok {
+		t.Fatalf("11m without a reconnect: ErrorFree() = (true, %q), want still not error-free", reason)
 	}
-	if ok, reason := stepFor(time.Minute + time.Second); !ok {
-		t.Fatalf("one window after the failed connection: ErrorFree() = (false, %q), want true", reason)
+	stub.inputConnUps.Store(1)
+	if ok, reason := stepFor(2 * time.Second); !ok {
+		t.Fatalf("two scrapes after the reconnect: ErrorFree() = (false, %q), want true", reason)
 	}
 
 	// /metrics fails for the scrapes in the loop below while benthos counts

@@ -23,7 +23,7 @@ import (
 
 var _ = Describe("FailureVerdict.ErrorFree", func() {
 	reason := func(increase float64) string {
-		v := FailureVerdict{Fired: []FailureEntry{{Signal: "output_error", Label: "output error", Increase: increase, Window: 10 * time.Minute}}}
+		v := FailureVerdict{Fired: []FailureEntry{{Signal: "output_error", Label: "output error", Count: increase, Window: 10 * time.Minute}}}
 		ok, r := v.ErrorFree()
 		Expect(ok).To(BeFalse())
 

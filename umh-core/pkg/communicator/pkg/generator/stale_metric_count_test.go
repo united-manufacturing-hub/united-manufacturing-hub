@@ -41,7 +41,7 @@ var lastRise = time.Unix(1_800_000_000, 0)
 func verdictObservedAfter(sinceRise time.Duration, fired bool) *benthos_monitor.FailureVerdict {
 	v := &benthos_monitor.FailureVerdict{ObservedAt: lastRise.Add(sinceRise), LastIncreaseAt: lastRise}
 	if fired {
-		v.Fired = []benthos_monitor.FailureEntry{{Signal: "output_error", Label: "output error", Increase: 1, Since: lastRise, Window: constants.BenthosLogWindow}}
+		v.Fired = []benthos_monitor.FailureEntry{{Signal: "output_error", Label: "output error", Count: 1, Since: lastRise, Window: constants.BenthosLogWindow}}
 	}
 
 	return v
@@ -100,6 +100,20 @@ var _ = Describe("staleMetricDegradedInstanceCount", func() {
 		}}
 
 		Expect(staleMetricDegradedInstanceCount(snapshot)).To(Equal(4))
+	})
+
+	It("does not count a connection that is still down", func() {
+		// The entry is 30 minutes past its last rise, older than any failure
+		// window, and still must not count: a connection entry has no window.
+		v := verdictObservedAfter(30*time.Minute, false)
+		v.Fired = []benthos_monitor.FailureEntry{{Signal: "input_connection", Label: "input", Count: 1, Since: lastRise}}
+		snapshot := fsm.SystemSnapshot{Managers: map[string]fsm.ManagerSnapshot{
+			constants.DataflowcomponentManagerName: manager(constants.DataflowcomponentManagerName, map[string]fsm.ObservedStateSnapshot{
+				"dfc": &dfcfsm.DataflowComponentObservedStateSnapshot{ServiceInfo: dfcsvc.ServiceInfo{BenthosObservedState: benthosWith(v)}},
+			}),
+		}}
+
+		Expect(staleMetricDegradedInstanceCount(snapshot)).To(Equal(0))
 	})
 
 	It("judges a fired entry by its own window", func() {

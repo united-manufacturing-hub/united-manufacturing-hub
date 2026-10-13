@@ -5,7 +5,7 @@
 ### Improvements
 
 - Optional lower-CPU collection of bridge metrics, about 0.02 CPU cores less per bridge (roughly a full core on a 50-bridge instance). Set `USE_FSMV2_BENTHOS_MONITOR=true` and restart the container to enable it
-- With `USE_FSMV2_BENTHOS_MONITOR=true`, failed and lost connections on a data flow's inputs and outputs now mark it degraded for 10 minutes after the last such failure
+- With `USE_FSMV2_BENTHOS_MONITOR=true`, a data flow whose input or output is not connected now shows degraded, and returns to active as soon as Benthos reconnects
 
 ### Fixes
 

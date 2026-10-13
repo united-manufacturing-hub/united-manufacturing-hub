@@ -51,30 +51,69 @@ var failureCounters = []failureCounter{
 		tier:  0,
 		read:  benthosmonitorservice.Metrics.ProcessorErrorTotal,
 	},
-	{
-		name:  "input_connection_failed",
-		label: "failed input connection",
-		tier:  1,
-		read:  benthosmonitorservice.Metrics.InputConnectionFailedTotal,
-	},
-	{
-		name:  "input_connection_lost",
-		label: "lost input connection",
-		tier:  1,
-		read:  benthosmonitorservice.Metrics.InputConnectionLostTotal,
-	},
-	{
-		name:  "output_connection_failed",
-		label: "failed output connection",
-		tier:  1,
-		read:  benthosmonitorservice.Metrics.OutputConnectionFailedTotal,
-	},
-	{
-		name:  "output_connection_lost",
-		label: "lost output connection",
-		tier:  1,
-		read:  benthosmonitorservice.Metrics.OutputConnectionLostTotal,
-	},
+}
+
+// connectionSide is one side of a benthos instance whose connection the
+// worker judges: its inputs or its outputs.
+type connectionSide struct {
+	// name is the side's name everywhere: the table's signal, the sample's
+	// key, and the verdict's entry.
+	name string
+	// label is the wording the entry's reason shows for one path.
+	label string
+	// notConnected counts the paths on this side that are not connected.
+	notConnected func(benthosmonitorservice.Metrics) int64
+}
+
+// connectionTier ranks the connection signals after the failure counters.
+const connectionTier = 1
+
+// connectionSides lists the sides the connection signals are built from.
+var connectionSides = []connectionSide{
+	{name: "input_connection", label: "input", notConnected: inputsNotConnected},
+	{name: "output_connection", label: "output", notConnected: outputsNotConnected},
+}
+
+// notConnected reports whether one path's connection counters say it is not
+// connected now. Benthos raises connection_up at the first connect and again
+// after each connection_lost (benthos v4, internal/component/input
+// async_reader.go and internal/component/output async_writer.go), so up not
+// above lost means the path is connecting. A failed or lost connection says an
+// attempt already went wrong; a first connect still in progress has neither
+// and is not reported.
+func notConnected(up, lost, failed int64) bool {
+	return up <= lost && (failed > 0 || lost > 0)
+}
+
+func inputsNotConnected(m benthosmonitorservice.Metrics) int64 {
+	var n int64
+	for _, in := range m.Inputs {
+		if notConnected(in.ConnectionUp, in.ConnectionLost, in.ConnectionFailed) {
+			n++
+		}
+	}
+
+	return n
+}
+
+func outputsNotConnected(m benthosmonitorservice.Metrics) int64 {
+	var n int64
+	for _, out := range m.Outputs {
+		if notConnected(out.ConnectionUp, out.ConnectionLost, out.ConnectionFailed) {
+			n++
+		}
+	}
+
+	return n
+}
+
+func readConnections(m benthosmonitorservice.Metrics) map[string]int64 {
+	out := make(map[string]int64, len(connectionSides))
+	for _, c := range connectionSides {
+		out[c.name] = c.notConnected(m)
+	}
+
+	return out
 }
 
 // increase is the reduction the failure signals judge by: how much a counter
@@ -103,64 +142,86 @@ func readFailures(m benthosmonitorservice.Metrics) map[string]int64 {
 }
 
 // sampleFrom turns one observation into the sample the engine reads: the
-// throughput counters and one reading per failure counter.
+// throughput counters, one reading per failure counter, and one per
+// connection side.
 func sampleFrom(cur observation) sample {
 	s := sample{
 		inputReceived: diagnosis.Known(float64(cur.inputReceived)),
 		outputSent:    diagnosis.Known(float64(cur.outputSent)),
 		failures:      make(map[string]diagnosis.Reading, len(cur.failures)),
+		connections:   make(map[string]diagnosis.Reading, len(cur.connections)),
 	}
 	for name, v := range cur.failures {
 		s.failures[name] = diagnosis.Known(float64(v))
+	}
+	for name, v := range cur.connections {
+		s.connections[name] = diagnosis.Known(float64(v))
 	}
 
 	return s
 }
 
-// counterByName finds the failureCounter a signal name was built from. Every
-// signal in the table is built from a failureCounters entry, so the not-found
-// arm has no reachable caller.
-func counterByName(name string) (failureCounter, bool) {
+// entrySpec is what the verdict needs about one signal of the table.
+type entrySpec struct {
+	label  string
+	tier   int
+	window time.Duration
+}
+
+// specByName finds the failureCounters or connectionSides entry a signal name
+// was built from. Every signal in the table is built from one of them, so the
+// not-found arm has no reachable caller.
+func specByName(name string) (entrySpec, bool) {
 	for _, c := range failureCounters {
 		if c.name == name {
-			return c, true
+			return entrySpec{label: c.label, tier: c.tier, window: constants.BenthosLogWindow}, true
+		}
+	}
+	for _, c := range connectionSides {
+		if c.name == name {
+			return entrySpec{label: c.label, tier: connectionTier}, true
 		}
 	}
 
-	return failureCounter{}, false
+	return entrySpec{}, false
 }
 
 // failureVerdict turns the fired set of one Observe call into the verdict Poll
-// reports, sorted by tier, then by the current increase, largest first; ties
-// keep the fired order. A window with fewer readings than the increase
+// reports, most urgent entry first. A window with fewer readings than the
 // reduction needs reports 0.
 func failureVerdict(e *diagnosis.Engine[sample], fired []diagnosis.Fired, at time.Time) benthosmonitorservice.FailureVerdict {
 	v := benthosmonitorservice.FailureVerdict{ObservedAt: at}
 	for _, f := range fired {
-		c, ok := counterByName(f.Signal)
+		spec, ok := specByName(f.Signal)
 		if !ok {
 			continue
 		}
 
-		increaseNow, _ := e.Reduction(c.name, c.name).Get()
+		now, _ := e.Reduction(f.Signal, f.Signal).Get()
+		// A connection signal can stay fired after the newest scrape shows
+		// every path connected, until its window has collected for its span.
+		// The verdict follows the newest scrape, so it leaves the entry out.
+		if spec.window == 0 && now == 0 {
+			continue
+		}
+
 		v.Fired = append(v.Fired, benthosmonitorservice.FailureEntry{
-			Signal:   c.name,
-			Label:    c.label,
-			Increase: increaseNow,
-			Since:    f.Since,
-			Window:   constants.BenthosLogWindow,
+			Signal: f.Signal,
+			Label:  spec.label,
+			Count:  now,
+			Since:  f.Since,
+			Window: spec.window,
 		})
 	}
 
 	sort.SliceStable(v.Fired, func(i, j int) bool {
-		a, b := v.Fired[i], v.Fired[j]
-		ac, _ := counterByName(a.Signal)
-		bc, _ := counterByName(b.Signal)
-		if ac.tier != bc.tier {
-			return ac.tier < bc.tier
+		a, _ := specByName(v.Fired[i].Signal)
+		b, _ := specByName(v.Fired[j].Signal)
+		if a.tier != b.tier {
+			return a.tier < b.tier
 		}
 
-		return a.Increase > b.Increase
+		return v.Fired[i].Count > v.Fired[j].Count
 	})
 
 	return v

@@ -20,24 +20,14 @@ import (
 )
 
 var _ = Describe("failure counter totals", func() {
-	It("sums each failure counter across every path", func() {
+	It("sums the processor error counter across every path", func() {
 		m := Metrics{
-			Inputs: map[string]InputInstance{
-				"root.input.broker.inputs.0": {ConnectionFailed: 2},
-				"root.input.broker.inputs.1": {ConnectionFailed: 3},
-			},
-			Outputs: map[string]OutputInstance{
-				"root.output.switch.cases.0": {ConnectionFailed: 4},
-				"root.output.switch.cases.1": {ConnectionFailed: 5},
-			},
 			Process: ProcessMetrics{Processors: map[string]ProcessorMetrics{
 				"root.pipeline.processors.0": {Error: 6},
 				"root.pipeline.processors.1": {Error: 7},
 			}},
 		}
 
-		Expect(m.InputConnectionFailedTotal()).To(Equal(int64(2 + 3)))
-		Expect(m.OutputConnectionFailedTotal()).To(Equal(int64(4 + 5)))
 		Expect(m.ProcessorErrorTotal()).To(Equal(int64(6 + 7)))
 	})
 })

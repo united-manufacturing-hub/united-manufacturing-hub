@@ -98,8 +98,8 @@ func TestObserveOutputErrorHoldsForLogWindow(t *testing.T) {
 		t.Fatalf("at T+1s: %d fired entries, want 1", n)
 	}
 	e := tl.verdict.Fired[0]
-	if e.Signal != "output_error" || e.Label != "output error" || e.Increase != 1 || !e.Since.Equal(failureT) || e.Window != constants.BenthosLogWindow {
-		t.Errorf("at T+1s: entry = %+v, want Signal output_error, Label output errors, Increase 1, Since T, Window %v", e, constants.BenthosLogWindow)
+	if e.Signal != "output_error" || e.Label != "output error" || e.Count != 1 || !e.Since.Equal(failureT) || e.Window != constants.BenthosLogWindow {
+		t.Errorf("at T+1s: entry = %+v, want Signal output_error, Label output error, Count 1, Since T, Window %v", e, constants.BenthosLogWindow)
 	}
 	if !tl.verdict.ObservedAt.Equal(failureT.Add(time.Second)) {
 		t.Errorf("at T+1s: ObservedAt = %v, want T+1s", tl.verdict.ObservedAt)
@@ -238,9 +238,13 @@ func (failureFeed) Readable(time.Time) sample {
 		inputReceived: diagnosis.Known(0),
 		outputSent:    diagnosis.Known(0),
 		failures:      map[string]diagnosis.Reading{},
+		connections:   map[string]diagnosis.Reading{},
 	}
 	for _, c := range failureCounters {
 		s.failures[c.name] = diagnosis.Known(0)
+	}
+	for _, c := range connectionSides {
+		s.connections[c.name] = diagnosis.Known(0)
 	}
 
 	return s
@@ -256,17 +260,35 @@ func (failureFeed) Unreadable(time.Time) sample {
 	}
 }
 
-// TestTableConformance drives every failure signal of table() through the
-// generated diagnosis suite. The increase reduction needs two readings, so the
-// signal is first ready on the second tick.
+// TestTableConformance drives every signal of table() through the generated
+// diagnosis suite. A failure signal's increase reduction needs two readings,
+// so it is first ready on the second tick. A connection signal reads the last
+// value, so it is ready on the first; the suite then documents two cases
+// differently (pkg/diagnosis, Run): the dip after a long outage is Ready, and
+// below the floor no readable tick is driven, so it is AllAbsent.
 func TestTableConformance(t *testing.T) {
-	want := map[diagnosis.Case]diagnosis.Availability{
+	failureWant := map[diagnosis.Case]diagnosis.Availability{
 		diagnosis.CaseLive:          diagnosis.Ready,
 		diagnosis.CaseBriefOutage:   diagnosis.NoneReady,
 		diagnosis.CaseLongOutage:    diagnosis.AllAbsent,
 		diagnosis.CaseUnsupported:   diagnosis.Ready,
 		diagnosis.CasePostOutageDip: diagnosis.NoneReady,
 		diagnosis.CaseBelowFloor:    diagnosis.NoneReady,
+	}
+	connectionWant := map[diagnosis.Case]diagnosis.Availability{
+		diagnosis.CaseLive:          diagnosis.Ready,
+		diagnosis.CaseBriefOutage:   diagnosis.NoneReady,
+		diagnosis.CaseLongOutage:    diagnosis.AllAbsent,
+		diagnosis.CaseUnsupported:   diagnosis.Ready,
+		diagnosis.CasePostOutageDip: diagnosis.Ready,
+		diagnosis.CaseBelowFloor:    diagnosis.AllAbsent,
+	}
+	want := map[string]map[diagnosis.Case]diagnosis.Availability{}
+	for _, c := range failureCounters {
+		want[c.name] = failureWant
+	}
+	for _, c := range connectionSides {
+		want[c.name] = connectionWant
 	}
 
 	outcomes := diagnosis.Run(table(), diagnosis.NewEnvironment(), failureFeed{})
@@ -276,17 +298,23 @@ func TestTableConformance(t *testing.T) {
 			seen[o.Signal] = map[diagnosis.Case]bool{}
 		}
 		seen[o.Signal][o.Case] = true
-		if o.Availability != want[o.Case] {
-			t.Errorf("signal %q, case %v: Availability %v, want %v", o.Signal, o.Case, o.Availability, want[o.Case])
+		w, ok := want[o.Signal]
+		if !ok {
+			t.Errorf("signal %q: not a failureCounters or connectionSides entry", o.Signal)
+
+			continue
+		}
+		if o.Availability != w[o.Case] {
+			t.Errorf("signal %q, case %v: Availability %v, want %v", o.Signal, o.Case, o.Availability, w[o.Case])
 		}
 	}
 
 	// A signal table() dropped has no outcome, so the loop above cannot see
-	// it. Every failure counter must reach every case.
-	for _, c := range failureCounters {
-		for cs := range want {
-			if !seen[c.name][cs] {
-				t.Errorf("signal %q, case %v: no outcome, want one per failure counter and case", c.name, cs)
+	// it. Every failure counter and connection side must reach every case.
+	for name, w := range want {
+		for cs := range w {
+			if !seen[name][cs] {
+				t.Errorf("signal %q, case %v: no outcome, want one per signal and case", name, cs)
 			}
 		}
 	}

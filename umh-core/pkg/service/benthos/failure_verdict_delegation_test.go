@@ -39,11 +39,11 @@ var _ = Describe("IsMetricsErrorFree with a failure verdict", func() {
 	It("returns the verdict's result when the verdict has a fired entry", func() {
 		verdict := &benthos_monitor.FailureVerdict{
 			Fired: []benthos_monitor.FailureEntry{{
-				Signal:   "output_error",
-				Label:    "output error",
-				Increase: 2,
-				Since:    time.Unix(1_800_000_000, 0),
-				Window:   constants.BenthosLogWindow,
+				Signal: "output_error",
+				Label:  "output error",
+				Count:  2,
+				Since:  time.Unix(1_800_000_000, 0),
+				Window: constants.BenthosLogWindow,
 			}},
 		}
 		wantOK, wantReason := verdict.ErrorFree()

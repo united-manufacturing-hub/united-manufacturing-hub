@@ -55,12 +55,8 @@ func failureScrape(v map[string]int64) benthosmonitorservice.Metrics {
 // the tests pin the wording rather than read it from failureCounters.
 // TestFailureLabelsCoverEveryCounter keeps the two lists in step.
 var failureLabels = map[string]string{
-	"output_error":             "output error",
-	"processor_error":          "processor error",
-	"input_connection_failed":  "failed input connection",
-	"input_connection_lost":    "lost input connection",
-	"output_connection_failed": "failed output connection",
-	"output_connection_lost":   "lost output connection",
+	"output_error":    "output error",
+	"processor_error": "processor error",
 }
 
 // verdictAfterRise scrapes before at T-1s, then after at T, and returns the
@@ -164,12 +160,8 @@ func TestObserveDropInAnyFailureCounterIsARestart(t *testing.T) {
 // its label. This covers the parser's name for each counter.
 func TestPollJudgesEveryFailureCounterFromTheWire(t *testing.T) {
 	lines := map[string]string{
-		"output_error":             `output_error{label="",path="root.output"} %d`,
-		"processor_error":          `processor_error{label="",path="root.pipeline.processors.0"} %d`,
-		"input_connection_failed":  `input_connection_failed{label="",path="root.input"} %d`,
-		"input_connection_lost":    `input_connection_lost{label="",path="root.input"} %d`,
-		"output_connection_failed": `output_connection_failed{label="",path="root.output"} %d`,
-		"output_connection_lost":   `output_connection_lost{label="",path="root.output"} %d`,
+		"output_error":    `output_error{label="",path="root.output"} %d`,
+		"processor_error": `processor_error{label="",path="root.pipeline.processors.0"} %d`,
 	}
 
 	for name, label := range failureLabels {

@@ -23,12 +23,13 @@ import (
 // signals fired, and when. The zero verdict, with no entry, is the
 // error-free case.
 type FailureVerdict struct {
-	// Fired lists every fired failure signal, most urgent first. A signal has
-	// fired when its counter rose inside its window and has not yet cleared.
-	// More urgent means a lower tier, then a larger current increase. The tier
-	// is the counter's rank class, errors before connection failures; the
-	// FSMv2 benthos monitor (pkg/fsmv2/benthos_monitor, failureCounters)
-	// assigns it and sorts Fired.
+	// Fired lists every fired failure signal, most urgent first. An error
+	// signal has fired when its counter rose inside its window and has not
+	// yet cleared. A connection signal holds while a path is not connected.
+	// More urgent means a lower tier, then a larger current value. The tier is
+	// the signal's rank class, errors before connections; the FSMv2 benthos
+	// monitor (pkg/fsmv2/benthos_monitor, failureCounters and
+	// connectionSides) assigns it and sorts Fired.
 	Fired []FailureEntry
 
 	// ObservedAt is the scrape the verdict was computed for.
@@ -37,8 +38,9 @@ type FailureVerdict struct {
 	// LastIncreaseAt is the latest scrape at which any failure counter was
 	// higher than at the scrape before it. After a restart the scrape before
 	// counts as 0. It is zero until the first increase, and it is computed from
-	// the raw counters, not from the fired signals. A signal fires only on a
-	// rise, so whenever Fired is non-empty LastIncreaseAt is set.
+	// the raw error counters, not from the fired signals. An error signal
+	// fires only on a rise, so whenever Fired holds an entry with a Window,
+	// LastIncreaseAt is set. Connection entries do not move it.
 	LastIncreaseAt time.Time
 }
 
@@ -51,30 +53,38 @@ type FailureEntry struct {
 	// ErrorFree adds an "s" for any other count.
 	Label string
 
-	// Increase is how much the counter rose inside the window, read on every
-	// scrape so the reason names the current rise, not the one that fired.
-	Increase float64
+	// Count is the number the reason names, read on every scrape so it is
+	// the current number, not the one at firing: how much an error counter
+	// rose inside its window, or how many paths a connection entry finds not
+	// connected.
+	Count float64
 
 	// Since is the scrape the signal fired at.
 	Since time.Time
 
-	// Window is how long after an increase the signal stays fired.
+	// Window is how long after an increase the signal stays fired. It is
+	// zero for a connection entry, which holds only while the path is not
+	// connected.
 	Window time.Duration
 }
 
 // ErrorFree reports whether no failure signal fired. The reason names the
-// first entry's current increase, so a later rise raises the number even
-// while the entry keeps the Since of the first one.
+// first entry's current value, so a later rise raises the number even while
+// the entry keeps the Since of the first one.
 func (v *FailureVerdict) ErrorFree() (bool, string) {
 	if len(v.Fired) == 0 {
 		return true, ""
 	}
 
 	e := v.Fired[0]
-	n := int(e.Increase)
+	n := int(e.Count)
 	label := e.Label
 	if n != 1 {
 		label += "s"
+	}
+
+	if e.Window == 0 {
+		return false, fmt.Sprintf("benthos reports %d %s not connected", n, label)
 	}
 
 	return false, fmt.Sprintf("benthos reported %d %s in the last %s", n, label, e.Window)

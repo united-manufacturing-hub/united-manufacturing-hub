@@ -40,14 +40,19 @@ type sample struct {
 	// failures holds one reading per failureCounters entry, keyed by the
 	// counter's name.
 	failures map[string]diagnosis.Reading
+
+	// connections holds one reading per connectionSides entry, keyed by the
+	// side's name: the number of paths on that side not connected.
+	connections map[string]diagnosis.Reading
 }
 
 // table declares what the engine measures and judges: the input and output
-// rates, each the slope of its counter over windowSpan, and one failure signal
-// per failureCounters entry, firing when its counter rose inside the last
-// constants.BenthosLogWindow.
+// rates, each the slope of its counter over windowSpan; one failure signal per
+// failureCounters entry, firing when its counter rose inside the last
+// constants.BenthosLogWindow; and one connection signal per connectionSides
+// entry, firing while a path on that side is not connected.
 func table() diagnosis.Table[sample] {
-	signals := make([]diagnosis.Signal[sample], 0, len(failureCounters))
+	signals := make([]diagnosis.Signal[sample], 0, len(failureCounters)+len(connectionSides))
 	for _, c := range failureCounters {
 		// counter is loop-local so the closure below reads this entry.
 		counter := c
@@ -77,6 +82,36 @@ func table() diagnosis.Table[sample] {
 			DemoteSpan:   constants.BenthosLogWindow,
 			Tier:         counter.tier,
 			RefireAtOnce: true, // with the 10-minute window, a failure every 11 minutes would otherwise be hidden for 9 of them
+		})
+	}
+
+	for _, c := range connectionSides {
+		side := c
+		signals = append(signals, diagnosis.Signal[sample]{
+			Name: side.name,
+			Instruments: []diagnosis.Instrument[sample]{{
+				Measurement: diagnosis.Measurement[sample]{
+					Name:    side.name,
+					Extract: func(s sample) diagnosis.Reading { return s.connections[side.name] },
+					// Last: the newest scrape decides, so the signal holds
+					// while a path is not connected. The latch also needs the
+					// window to have collected for its span before it
+					// releases; ten polls keep that true when scrapes come up
+					// to ten seconds apart. failureVerdict does not wait for
+					// the latch: it leaves out an entry with no path down.
+					Reduction: diagnosis.Last,
+					Span:      10 * pollInterval,
+				},
+				Marks: diagnosis.Marks{
+					Fire:     diagnosis.Mark{At: 0.5},
+					Clear:    diagnosis.Mark{At: 0, Inclusive: true},
+					Worst:    10,
+					Polarity: diagnosis.HigherIsWorse,
+				},
+			}},
+			DemoteSpan:   constants.BenthosLogWindow,
+			Tier:         connectionTier,
+			RefireAtOnce: true,
 		})
 	}
 

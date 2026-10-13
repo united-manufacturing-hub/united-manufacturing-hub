@@ -137,17 +137,6 @@ func (m Metrics) InputConnectionLostTotal() int64 {
 	return total
 }
 
-// InputConnectionFailedTotal returns the sum of ConnectionFailed across every
-// input.
-func (m Metrics) InputConnectionFailedTotal() int64 {
-	var total int64
-	for _, in := range m.Inputs {
-		total += in.ConnectionFailed
-	}
-
-	return total
-}
-
 // OutputSentTotal returns the sum of Sent across every output instance.
 func (m Metrics) OutputSentTotal() int64 {
 	var total int64
@@ -195,17 +184,6 @@ func (m Metrics) OutputErrorTotal() int64 {
 	var total int64
 	for _, out := range m.Outputs {
 		total += out.Error
-	}
-
-	return total
-}
-
-// OutputConnectionFailedTotal returns the sum of ConnectionFailed across every
-// output.
-func (m Metrics) OutputConnectionFailedTotal() int64 {
-	var total int64
-	for _, out := range m.Outputs {
-		total += out.ConnectionFailed
 	}
 
 	return total

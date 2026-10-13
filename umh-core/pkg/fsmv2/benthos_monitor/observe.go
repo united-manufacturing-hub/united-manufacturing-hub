@@ -40,6 +40,10 @@ type observation struct {
 	// failures holds the raw failure counters, keyed by the counter's name.
 	failures map[string]int64
 
+	// connections holds the number of paths not connected, keyed by the
+	// connection side's name.
+	connections map[string]int64
+
 	result  throughput
 	verdict benthosmonitorservice.FailureVerdict
 }
@@ -69,8 +73,9 @@ type observation struct {
 // a rise during the gap counts. The seed's throughput is unknown, so the first
 // rate after a rebuild is 0.
 //
-// The first scrape on fresh deps is observed alone: counters that were already
-// high before it have no older point to rise against, so they are not judged.
+// The first scrape on fresh deps is observed alone: failure counters that were
+// already high before it have no older point to rise against, so they are not
+// judged. The connection signals read that scrape alone and are judged at once.
 func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, at time.Time) (throughput, benthosmonitorservice.FailureVerdict) {
 	cur := observation{
 		at:            at,
@@ -78,6 +83,7 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 		inputReceived: int(m.InputReceivedTotal()),
 		outputSent:    int(m.OutputSentTotal()),
 		failures:      readFailures(m),
+		connections:   readConnections(m),
 	}
 
 	prev := d.prev
