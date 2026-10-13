@@ -20,11 +20,31 @@ What UMH measures headroom against depends on whether the container has a CPU li
 | **CPU healthy** | The instance has the CPU it needs. Usage is shown for context, for example "1.2 of 4 cores". | Nothing. |
 | **CPU healthy, limited visibility** | The instance looks fine, but UMH cannot fully measure CPU health here: no CPU limit is set and the operating system is not reporting CPU-pressure statistics. | For full monitoring, set a CPU limit, or [enable CPU pressure stats](#enabling-cpu-pressure-stats). |
 | **CPU limited** | The instance hit its CPU limit and was paused until the next scheduling cycle, for example in 12% of cycles over the last minute. Work is being delayed. | Raise the CPU limit, or reduce the load on the instance. |
-| **CPU contention** | Tasks inside the instance spent time waiting for a free CPU core, for example 23% of the last minute. | Reduce the load, or give the instance more CPU. Workloads sharing the server may be competing for it. |
+| **CPU contention** | Tasks inside the instance spent time waiting for a free CPU core, for example 23% of the last minute. See [CPU contention while cores are free](#cpu-contention-while-cores-are-free). | Give the machine more cores, move other software off it, or raise the container's CPU limit if it has one. |
 | **CPU taken by the server** | Other virtual machines on the same physical server took CPU this instance needed. | On your virtualization platform, give this VM more guaranteed CPU, or move the other VMs off the server. |
 | **CPU running near full** | There is no room left for the next burst of work, because either the machine is full or the instance is at its CPU limit. The status message says which. | Add CPU capacity, reduce load, or raise the CPU limit. If the host is full and this container is not the cause, reserve or pin cores for UMH, or reduce what else runs on the machine: a CPU limit caps UMH rather than protecting it. |
 
 If UMH cannot read a file it needs to measure the CPU, the CPU health is degraded and the message names the file, for example `CPU not measured: open /sys/fs/cgroup/cpu.stat: no such file or directory`. To check whether the container can read that file, run `docker exec <container> cat <file>`, for example `docker exec umh-core cat /sys/fs/cgroup/cpu.stat`.
+
+## CPU contention while cores are free
+
+The **CPU contention** status means that work in the UMH Core container had to wait for a CPU core. It can appear while the machine has free cores. Work that waits finishes late, for example a bridge reading its PLC or UMH Core applying a configuration change. When pressure rises above its **Degrades** value in [Thresholds](#thresholds), the CPU health is degraded and UMH starts no new bridge on the instance (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)). The CPU health recovers once pressure falls below its **Recovers** value.
+
+### What to do
+
+To lower the pressure, give the machine more cores, move other software off it, or raise the container's CPU limit if it has one.
+
+### Background
+
+CPU pressure is the share of time in which at least one task in the container was ready to run and waited for a core. Linux measures it per container. At 10%, for example, a task was waiting during about 6 of every 60 seconds.
+
+Any program on Linux can wait for a core on a machine whose cores are free on average. A CPU usage graph averages over a second or longer. A wait of a few milliseconds disappears in that average. A program that starts more tasks at one moment than there are cores makes the extra tasks wait. The cores can then be idle for the rest of the second. Tasks also wait when other software on the machine holds the cores. They wait as well when the container has used up its CPU limit (see **Throttling** in the [Glossary](#glossary)).
+
+UMH Core is one such program. Every 100 ms, it starts the checks and updates for all its bridges and data flows at the same moment. This is UMH Core's own internal work, separate from how often a bridge polls its PLC. UMH is moving this work to FSMv2, a new design of UMH Core's internals that spreads it over time.
+
+### Read the value yourself
+
+Run `docker exec <container name> cat /sys/fs/cgroup/cpu.pressure` to print the value. The CPU health check uses the `avg60` value of the `some` line, as defined in the Linux kernel's [Pressure Stall Information](https://docs.kernel.org/accounting/psi.html) documentation. The kernel updates it every 2 seconds and weights recent seconds more than older ones. The 6 seconds in the example hold exactly only when the load is steady. [Why we should get rid of average CPU utilization](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/) shows with examples how an average CPU graph hides these waits.
 
 ## Where to see the CPU health
 
@@ -71,20 +91,6 @@ to pass a threshold, not merely reach it, except where the table says "at".
 Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a fresh
 instance is judgeable within seconds of starting. Bare metal reports no steal at all, so on a
 physical machine that signal reads "not measured" with its reason rather than 0%.
-
-### CPU contention while cores are free
-
-The **CPU contention** status means that work in the UMH Core container had to wait for a CPU core. It can appear while the machine has free cores. Work that waits finishes late, for example a bridge reading its PLC or UMH Core applying a configuration change. Above 20% CPU pressure, the CPU health is degraded and UMH starts no new bridge on the instance. Bridges already running are left alone. Once pressure falls below 12%, the CPU health recovers. A waiting bridge then starts on its own.
-
-CPU pressure is the share of time in which at least one task in the container was ready to run and waited for a core. Linux measures it per container. At 20%, a task was waiting during about 12 of every 60 seconds.
-
-Any program on Linux can wait for a core on a machine whose cores are free on average. A CPU usage graph averages over a second or longer. A wait of a few milliseconds disappears in that average. A program that starts more tasks at one moment than there are cores makes the extra tasks wait. The cores can then be idle for the rest of the second. Tasks also wait when other software on the machine holds the cores. They wait as well when the container has used up its CPU limit (see **Throttling** in the [Glossary](#glossary)).
-
-UMH Core is one such program. Every 100 ms, it starts the checks and updates for all its bridges and data flows at the same moment. This is UMH Core's own internal work, separate from how often a bridge polls its PLC. UMH is moving this work to FSMv2, a new design of UMH Core's internals that spreads it over time.
-
-To lower the pressure, give the machine more cores, move other software off it, or raise the container's CPU limit if it has one.
-
-To read the value yourself, run `docker exec <container name> cat /sys/fs/cgroup/cpu.pressure`. The CPU health check uses the `avg60` value of the `some` line, as defined in the Linux kernel's [Pressure Stall Information](https://docs.kernel.org/accounting/psi.html) documentation. The kernel updates it every 2 seconds and weights recent seconds more than older ones. The 12 seconds hold exactly only when the load is steady. [Why we should get rid of average CPU utilization](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/) shows with examples how an average CPU graph hides these waits.
 
 ## Enabling CPU pressure stats
 
@@ -146,17 +152,9 @@ compete for CPU that is already short. The bridge waits, and its status reason n
 resource that stopped it, here the CPU. For every reason a bridge waits and the full procedure, see
 [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md). Bridges already running are left alone.
 
-To start bridges anyway in an emergency, use the emergency setting *Turn off bridge admission*. It
-turns off every check, not only CPU:
+To start bridges anyway in an emergency, use the emergency setting [Turn off bridge admission](../usage/data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission). It turns off every check, not only CPU.
 
-```yaml
-agent:
-  enableResourceLimitBlocking: false
-```
-
-While it is `false`, the instance shows as degraded.
-
-This is separate from the bridge limit, the number of bridges a given core count can hold, which the [Sizing Guide](./sizing-guide.md) covers. The bridge limit is an upper bound, not a guarantee: because real CPU use varies per bridge, a bridge can wait on CPU health before you reach it.
+Waiting for CPU health is separate from the bridge limit, the number of bridges a given core count can hold, which the [Sizing Guide](./sizing-guide.md) covers. The bridge limit is an upper bound, not a guarantee: because real CPU use varies per bridge, a bridge can wait on CPU health before you reach it.
 
 ## Known limitation
 
