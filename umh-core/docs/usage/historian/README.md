@@ -16,12 +16,10 @@ show you how to get started.
 
 ## How it fits together
 
-```text
-Bridges / Stream Processors
-        │
-        ▼
-  Unified Namespace  ──►  Historian bridge  ──►  TimescaleDB  ──►  Grafana
-                          (one per contract)      umh schema
+```mermaid
+flowchart LR
+    SRC["Bridges / Stream Processors"] --> UNS["Unified Namespace"]
+    UNS --> H["Historian bridge<br/>(one per contract)"] --> TS["TimescaleDB<br/>(umh schema)"] --> G["Grafana"]
 ```
 
 You configure the database connection **once per instance**, in the instance's Plugins tab. Every

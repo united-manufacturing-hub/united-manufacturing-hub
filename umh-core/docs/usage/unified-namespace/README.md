@@ -16,8 +16,9 @@ Every new dashboard means updating PLCs. Every new sensor means modifying databa
 ## The Solution: One Central Hub
 
 The UNS flips this architecture:
-```text
-100 devices → 1 namespace ← 100 systems = 200 total connections
+```mermaid
+flowchart LR
+    D["100 devices"] --> N(("1 namespace")) --> S["100 systems"]
 ```
 
 All data flows through one place with consistent structure, validation, and access patterns.

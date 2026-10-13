@@ -48,13 +48,27 @@ Advanced concepts (after getting-started):
 
 ### How It Works
 
-```text
-Your Factory Floor                    UMH Core                         Your Systems
-──────────────────                    ────────                         ────────────
-                                                        
-PLCs (S7, Modbus)    ─┐                                          ┌─▶ Dashboards
-Sensors (OPC UA)     ─┼─[Bridge]─▶ Unified Namespace ─[Bridge]───┼─▶ Cloud/MQTT
-MES/ERP (REST)       ─┘              (organized data)            └─▶ Databases
+```mermaid
+flowchart LR
+    subgraph Floor["Your Factory Floor"]
+        PLC["PLCs (S7, Modbus)"]
+        SEN["Sensors (OPC UA)"]
+        MES["MES/ERP (REST)"]
+    end
+    subgraph Core["UMH Core"]
+        UNS["Unified Namespace<br/>(organized data)"]
+    end
+    subgraph Sys["Your Systems"]
+        DASH["Dashboards"]
+        CLOUD["Cloud/MQTT"]
+        DB["Databases"]
+    end
+    PLC -->|Bridge| UNS
+    SEN -->|Bridge| UNS
+    MES -->|Bridge| UNS
+    UNS -->|Bridge| DASH
+    UNS -->|Bridge| CLOUD
+    UNS -->|Bridge| DB
 ```
 
 1. **Bridges** connect your devices to the UNS (50+ protocols supported) - they're the ONLY entry point

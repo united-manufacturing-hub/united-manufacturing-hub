@@ -8,10 +8,10 @@ Data models define the hierarchical structure of your industrial data. They crea
 
 In the [component chain](README.md#the-component-chain), models provide the structure:
 
-```text
-Payload Shapes → Data Models → Data Contracts → Data Flows
-                      ↑
-                 Structure defined here
+```mermaid
+flowchart LR
+    A["Payload Shapes"] --> B["Data Models"] --> C["Data Contracts"] --> D["Data Flows"]
+    B -.- N["Structure defined here"]
 ```
 
 When you create a data model, you're defining:
@@ -82,9 +82,20 @@ structure:
 ```
 
 **Complete topic path:**
-```text
-umh.v1.enterprise.site._pump_v1.vibration.x-axis
-       └─ fixed ─┘     └contract┘└─from model─┘
+`umh.v1.enterprise.site._pump_v1.vibration.x-axis`
+
+```mermaid
+flowchart LR
+    subgraph Fixed["fixed"]
+        A["umh.v1.enterprise.site"]
+    end
+    subgraph Contract["contract"]
+        B["_pump_v1"]
+    end
+    subgraph Model["from model"]
+        C["vibration.x-axis"]
+    end
+    A --> B --> C
 ```
 
 ## The Three Building Blocks
