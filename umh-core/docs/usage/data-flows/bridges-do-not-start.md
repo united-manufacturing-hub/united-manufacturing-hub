@@ -6,7 +6,7 @@ Before umh-core starts a new bridge, it runs bridge admission. A new bridge wait
 
 ## What the reason says
 
-- **CPU degraded: [message]** — the instance's CPU is short on headroom. The message comes from the CPU health check. The [CPU Health](../../production/cpu-health.md) page explains every status and how to fix it. If the message is "CPU contention" while the machine has free cores, see [CPU contention while cores are free](../../production/cpu-health.md#cpu-contention-while-cores-are-free). If the message starts with "CPU not measured", umh-core cannot read a file it needs to measure the CPU. The CPU Health page says how to check that file.
+- **CPU degraded: [message]** — the instance's CPU is short on headroom. The message comes from the CPU health check. The [CPU Health](../instances/cpu-health/README.md) page explains every status and how to fix it. If the message is "CPU contention" while the machine has free cores, see [CPU contention while cores are free](../instances/cpu-health/cpu-contention-while-cores-are-free.md). If the message starts with "CPU not measured", umh-core cannot read a file it needs to measure the CPU. The CPU Health page says how to check that file.
 - **Memory degraded: [message]** — memory is short. Free memory on the host, or raise the container's memory limit.
 - **Disk degraded: [message]** — the disk is short. Free space on the volume, or make the volume larger.
 - **Resource health not proven yet** — umh-core has not yet shown the instance's resources to be healthy. A bridge always waits for this proof, so a fresh instance starts no bridges until its first health readings arrive. If the reason stays at "no health reading yet", the instance cannot read its own resources: use the emergency setting below and report it to UMH. The reason "instance not active yet" means the container has not reached the active state; the same advice applies. The reasons "container monitor not available", "container health status unavailable" and "CPU cores not measured yet" also mean umh-core has no reading yet. The same advice applies.
@@ -15,7 +15,7 @@ Before umh-core starts a new bridge, it runs bridge admission. A new bridge wait
 ## What to do
 
 1. Read the reason on the bridge's status.
-2. Fix the resource it names. For CPU, follow the [CPU Health](../../production/cpu-health.md) page. For the bridge limit, follow the [Sizing Guide](../../production/sizing-guide.md).
+2. Fix the resource it names. For CPU, follow the [CPU Health](../instances/cpu-health/README.md) page. For the bridge limit, follow the [Sizing Guide](../../production/sizing-guide.md).
 3. Wait. The bridge starts on its own once the resource is healthy again, or once the instance runs fewer bridges than its limit. Nothing needs to be redeployed.
 
 ## Emergency settings: Turn off bridge admission
