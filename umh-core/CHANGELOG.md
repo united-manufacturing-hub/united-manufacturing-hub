@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- A historian setting containing `{{`, such as a password, no longer stops the historian status from being reported
+
 ## [0.44.43]
 
 ### Improvements

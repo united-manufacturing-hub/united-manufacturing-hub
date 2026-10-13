@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -520,7 +521,7 @@ func NewChildSpec[T any](name, workerType string, cfg T, enabled bool) (ChildSpe
 	return ChildSpec{
 		Name:       name,
 		WorkerType: workerType,
-		UserSpec:   UserSpec{Config: string(data)},
+		UserSpec:   UserSpec{Config: strings.ReplaceAll(string(data), "{{", `{{"{{"}}`)},
 		Enabled:    enabled,
 	}, nil
 }
