@@ -88,6 +88,11 @@
 // as the check, and the worker turns healthy with reason "running (no health
 // check)".
 //
+// A Poll error means the worker could not observe, for example because its
+// context was cancelled. A failure of the monitored target is an observation:
+// Poll records it in the status and returns a nil error, and Health turns it
+// into a degraded verdict.
+//
 // Status[TStatus] holds the verdict (Result + Degraded + Reason); the framework
 // sets it on the observation. The state machine starts degraded and reads it to
 // switch between running and degraded (emitting the reason on each Transition); the fsmv1
@@ -121,8 +126,11 @@
 //	        Poll: func(ctx context.Context, _ struct{}, cfg Config) (Status, error) {
 //	            d := net.Dialer{}
 //	            conn, err := d.DialContext(ctx, "tcp", cfg.Address)
+//	            if ctx.Err() != nil {
+//	                return Status{}, ctx.Err() // -> degraded, "poll error: <err>"
+//	            }
 //	            if err != nil {
-//	                return Status{}, err // -> degraded, "poll error: <err>"
+//	                return Status{Open: false}, nil // -> Health: "port closed"
 //	            }
 //	            conn.Close()
 //	            return Status{Open: true}, nil

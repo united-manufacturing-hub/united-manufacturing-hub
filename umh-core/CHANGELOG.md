@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
+
 ## [0.44.43]
 
 ### Improvements
