@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -449,11 +448,6 @@ var _ = Describe("Sentry reporting", func() {
 	)
 
 	BeforeEach(func() {
-		original := sharedReported
-		sharedReported = &sync.Map{}
-
-		DeferCleanup(func() { sharedReported = original })
-
 		events = nil
 		logger := recordingLogger{FSMLogger: deps.NewNopFSMLogger(), events: &events}
 		d = newDeps(idUnder("parent-a"), deps.NewBaseDependencies(logger, nil, idUnder("parent-a")))
@@ -475,12 +469,10 @@ var _ = Describe("Sentry reporting", func() {
 		}}
 	}
 
-	It("reports a pool that cannot be built once, without the password", func() {
+	It("reports a pool that cannot be built, without the password", func() {
 		cfg := unbuildablePoolConfig()
 
 		_, err := Poll(context.Background(), d, cfg)
-		Expect(err).To(HaveOccurred())
-		_, err = Poll(context.Background(), d, cfg)
 		Expect(err).To(HaveOccurred())
 
 		Expect(events).To(HaveLen(1))

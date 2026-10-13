@@ -131,7 +131,6 @@ type Deps struct {
 	pool         *poolHolder
 	summary      *readCache[timescalemetrics.Summary]
 	databaseSize *readCache[int64]
-	reported     *sync.Map
 }
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
@@ -145,7 +144,6 @@ func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 		pool:             sharedPool,
 		summary:          sharedSummary,
 		databaseSize:     sharedDatabaseSize,
-		reported:         sharedReported,
 	}
 }
 
@@ -256,14 +254,8 @@ const (
 	tagDatabaseSizeReadFailed failureTag = "historian::database_size_read_failed"
 )
 
-var sharedReported = &sync.Map{}
-
-func (d Deps) reportOnce(ctx context.Context, tag failureTag, host string, err error) {
+func (d Deps) report(ctx context.Context, tag failureTag, host string, err error) {
 	if ctx.Err() != nil {
-		return
-	}
-
-	if _, reportedBefore := d.reported.LoadOrStore(tag, struct{}{}); reportedBefore {
 		return
 	}
 
@@ -292,7 +284,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.String("host", host),
 			deps.Bool("reachable", false),
 			deps.Err(err))
-		d.reportOnce(ctx, tagPoolFailed, host, err)
+		d.report(ctx, tagPoolFailed, host, err)
 
 		return TimescaleStatus{
 			Host:                      host,
@@ -333,7 +325,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Err(err))
 
 		if unexpectedQueryFailure(err) {
-			d.reportOnce(ctx, tagQueryFailed, host, err)
+			d.report(ctx, tagQueryFailed, host, err)
 		}
 
 		return TimescaleStatus{
@@ -366,9 +358,9 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	}, nil
 }
 
-// The error is logged and reported, not returned: a summary that cannot be read is not a
-// connection fault, and returning it would drive the worker degraded for a
-// database that is answering.
+// The error is logged and reported, not returned: a summary that cannot be
+// read is not a connection fault, and returning it would drive the worker
+// degraded for a database that is answering.
 func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
 	return func() (timescalemetrics.Summary, bool) {
 		summary, err := timescalemetrics.CollectSummary(ctx, pool)
@@ -376,7 +368,7 @@ func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string)
 			d.GetLogger().Debug("timescale summary",
 				deps.String("host", host),
 				deps.Err(err))
-			d.reportOnce(ctx, tagSummaryReadFailed, host, err)
+			d.report(ctx, tagSummaryReadFailed, host, err)
 
 			return timescalemetrics.Summary{}, false
 		}
@@ -392,7 +384,7 @@ func databaseSizeReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host st
 			d.GetLogger().Debug("timescale database size",
 				deps.String("host", host),
 				deps.Err(err))
-			d.reportOnce(ctx, tagDatabaseSizeReadFailed, host, err)
+			d.report(ctx, tagDatabaseSizeReadFailed, host, err)
 
 			return 0, false
 		}
