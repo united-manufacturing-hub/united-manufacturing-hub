@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- While a bridge waits for its connection, the deploy dialog no longer repeats "re-applying config: … exists in desired but missing in observed" every second
+
 ## [0.44.43]
 
 ### Improvements
