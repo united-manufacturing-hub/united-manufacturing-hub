@@ -357,10 +357,10 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return err
 	}
 
-	if !protocolconverterserviceconfig.ConfigsEqualRuntimeWithDFCState(p.runtimeConfig, appliedConfig, false, false) {
+	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, appliedConfig) {
 		p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
 
-		diffStr := protocolconverterserviceconfig.ConfigDiffRuntimeWithDFCState(p.runtimeConfig, appliedConfig, false, false)
+		diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, appliedConfig)
 		p.ObservedState.ConfigDivergence = protocolconverterserviceconfig.BoundDiff(diffStr, constants.ProtocolConverterConfigDivergenceCapRunes)
 		p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
@@ -395,7 +395,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	// 2. Empty DFCs should remain stopped; populated DFCs should be started.
 	// 3. Per-DFC desired state overrides (ReadDFCDesiredState/WriteDFCDesiredState) must be
 	//    applied even when only the state changed and the Benthos config stayed the same —
-	//    ConfigsEqualRuntimeWithDFCState does not include those fields, so the block above would not fire.
+	//    ConfigsEqualRuntime does not include those fields, so the block above would not fire.
 	if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("re-evaluating flow desired states")

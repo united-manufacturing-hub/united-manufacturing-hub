@@ -133,32 +133,23 @@ func ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }
 
-// ConfigsEqualRuntimeWithDFCState compares two fully-rendered runtime configurations.
+// ConfigsEqualRuntime compares two fully-rendered runtime configurations.
 // Connection configs are converted back to template form first (to normalise the
 // uint16 port → string port difference); DFC configs are compared directly.
-//
-// A DFC whose desired state is stopped is skipped: a stopped DFC renders an empty
-// benthos config on disk by design, so comparing its (empty) observed config
-// against the full desired config would report permanent false divergence and
-// trigger an endless re-apply loop.
-func ConfigsEqualRuntimeWithDFCState(desired, observed ProtocolConverterServiceConfigRuntime, readStopped, writeStopped bool) bool {
+func ConfigsEqualRuntime(desired, observed ProtocolConverterServiceConfigRuntime) bool {
 	desiredConnT := connectionserviceconfig.ConvertRuntimeToTemplate(desired.ConnectionServiceConfig)
 	observedConnT := connectionserviceconfig.ConvertRuntimeToTemplate(observed.ConnectionServiceConfig)
 
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 
-	readEqual := readStopped ||
-		comparatorDFC.ConfigsEqual(desired.DataflowComponentReadServiceConfig, observed.DataflowComponentReadServiceConfig)
-	writeEqual := writeStopped ||
-		comparatorDFC.ConfigsEqual(desired.DataflowComponentWriteServiceConfig, observed.DataflowComponentWriteServiceConfig)
+	readEqual := comparatorDFC.ConfigsEqual(desired.DataflowComponentReadServiceConfig, observed.DataflowComponentReadServiceConfig)
+	writeEqual := comparatorDFC.ConfigsEqual(desired.DataflowComponentWriteServiceConfig, observed.DataflowComponentWriteServiceConfig)
 
 	return reflect.DeepEqual(desiredConnT, observedConnT) && readEqual && writeEqual
 }
 
-// ConfigDiffRuntimeWithDFCState returns a human-readable diff between two runtime
-// configurations, skipping a DFC whose desired state is stopped (see
-// ConfigsEqualRuntimeWithDFCState for why).
-func ConfigDiffRuntimeWithDFCState(desired, observed ProtocolConverterServiceConfigRuntime, readStopped, writeStopped bool) string {
+// ConfigDiffRuntime returns a human-readable diff between two runtime configurations.
+func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) string {
 	desiredConnT := connectionserviceconfig.ConvertRuntimeToTemplate(desired.ConnectionServiceConfig)
 	observedConnT := connectionserviceconfig.ConvertRuntimeToTemplate(observed.ConnectionServiceConfig)
 
@@ -173,11 +164,11 @@ func ConfigDiffRuntimeWithDFCState(desired, observed ProtocolConverterServiceCon
 	// returns "No significant differences" (never "") for equal configs, which
 	// would otherwise emit a noisy ReadDFC/WriteDFC line every tick.
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
-	if !readStopped && !comparatorDFC.ConfigsEqual(desired.DataflowComponentReadServiceConfig, observed.DataflowComponentReadServiceConfig) {
+	if !comparatorDFC.ConfigsEqual(desired.DataflowComponentReadServiceConfig, observed.DataflowComponentReadServiceConfig) {
 		diff += "ReadDFC: " + comparatorDFC.ConfigDiff(desired.DataflowComponentReadServiceConfig, observed.DataflowComponentReadServiceConfig) + "\n"
 	}
 
-	if !writeStopped && !comparatorDFC.ConfigsEqual(desired.DataflowComponentWriteServiceConfig, observed.DataflowComponentWriteServiceConfig) {
+	if !comparatorDFC.ConfigsEqual(desired.DataflowComponentWriteServiceConfig, observed.DataflowComponentWriteServiceConfig) {
 		diff += "WriteDFC: " + comparatorDFC.ConfigDiff(desired.DataflowComponentWriteServiceConfig, observed.DataflowComponentWriteServiceConfig) + "\n"
 	}
 
