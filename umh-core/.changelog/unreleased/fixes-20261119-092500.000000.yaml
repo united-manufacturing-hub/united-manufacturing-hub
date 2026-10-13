@@ -1,0 +1,3 @@
+kind: fixes
+body: A historian setting containing `{{`, such as a password, no longer stops the historian status from being reported
+time: 2026-11-19T09:25:00.000000+01:00
