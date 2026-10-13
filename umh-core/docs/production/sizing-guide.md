@@ -19,7 +19,7 @@
 * **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
 * Keeps **seven days** of replayable raw history under the defaults a new instance starts with (`log_retention_ms = 7 days`, `log_cleanup_policy = delete`)
-* Runs comfortably below 70% CPU (automatic throttling protection kicks in above this)
+* Runs below 70% CPU. Above 70%, a new bridge waits unless CPU Health is turned on. [CPU Health](../usage/instances/cpu-health/README.md) explains when a new bridge waits then.
 
 #### Disk usage in practice
 
