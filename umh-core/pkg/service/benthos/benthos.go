@@ -131,7 +131,7 @@ type IBenthosService interface {
 	//
 	//	ok     – true when metrics are error‑free, false otherwise.
 	//	reason – empty when ok is true; otherwise a short explanation (e.g.
-	//	         "benthos reported 1 output errors in the last 10m0s").
+	//	         "benthos reported 1 output error in the last 10m0s").
 	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string)
 	// HasProcessingActivity reports true when metrics (or other status signals)
 	// indicate the instance is actively processing data.
@@ -1122,7 +1122,7 @@ func (s *BenthosService) IsLogsFine(
 //
 //	ok     – true when metrics are error‑free, false otherwise.
 //	reason – empty when ok is true; otherwise a short explanation (e.g.
-//	         "benthos reported 1 output errors in the last 10m0s").
+//	         "benthos reported 1 output error in the last 10m0s").
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
 	if metrics.Failures != nil {
 		return metrics.Failures.ErrorFree()

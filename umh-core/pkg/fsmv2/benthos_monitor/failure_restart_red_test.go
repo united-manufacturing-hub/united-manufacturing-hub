@@ -69,7 +69,11 @@ func firedAt(t *testing.T, n int64) *scrapes {
 // wantFailure fails the test unless the latest verdict names n output errors.
 func (s *scrapes) wantFailure(when string, n int64) {
 	s.t.Helper()
-	s.wantReason(when, "benthos reported "+strconv.FormatInt(n, 10)+" output errors in the last 10m0s")
+	label := "output errors"
+	if n == 1 {
+		label = "output error"
+	}
+	s.wantReason(when, "benthos reported "+strconv.FormatInt(n, 10)+" "+label+" in the last 10m0s")
 }
 
 // The config is fixed, benthos restarts, and its counter starts again at 0.

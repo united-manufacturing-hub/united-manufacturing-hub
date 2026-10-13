@@ -47,7 +47,8 @@ type FailureEntry struct {
 	// Signal is the name the worker's table declared, e.g. "output_error".
 	Signal string
 
-	// Label is the human wording for the reason, e.g. "output errors".
+	// Label is the human wording for one failure, e.g. "output error".
+	// ErrorFree adds an "s" for any other count.
 	Label string
 
 	// Increase is how much the counter rose inside the window, read on every
@@ -70,5 +71,11 @@ func (v *FailureVerdict) ErrorFree() (bool, string) {
 	}
 
 	e := v.Fired[0]
-	return false, fmt.Sprintf("benthos reported %d %s in the last %s", int(e.Increase), e.Label, e.Window)
+	n := int(e.Increase)
+	label := e.Label
+	if n != 1 {
+		label += "s"
+	}
+
+	return false, fmt.Sprintf("benthos reported %d %s in the last %s", n, label, e.Window)
 }

@@ -40,7 +40,7 @@ var _ = Describe("IsMetricsErrorFree with a failure verdict", func() {
 		verdict := &benthos_monitor.FailureVerdict{
 			Fired: []benthos_monitor.FailureEntry{{
 				Signal:   "output_error",
-				Label:    "output errors",
+				Label:    "output error",
 				Increase: 2,
 				Since:    time.Unix(1_800_000_000, 0),
 				Window:   constants.BenthosLogWindow,

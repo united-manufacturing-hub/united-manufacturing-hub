@@ -29,7 +29,7 @@ type failureCounter struct {
 	// name is the counter's name everywhere: the table's signal, the
 	// sample's key, and the verdict's entry.
 	name string
-	// label is the wording the entry's reason shows.
+	// label is the wording the entry's reason shows for a count of 1.
 	label string
 	// tier is the counter's rank class in the verdict's order, lower first.
 	tier int
@@ -41,37 +41,37 @@ type failureCounter struct {
 var failureCounters = []failureCounter{
 	{
 		name:  "output_error",
-		label: "output errors",
+		label: "output error",
 		tier:  0,
 		read:  benthosmonitorservice.Metrics.OutputErrorTotal,
 	},
 	{
 		name:  "processor_error",
-		label: "processor errors",
+		label: "processor error",
 		tier:  0,
 		read:  benthosmonitorservice.Metrics.ProcessorErrorTotal,
 	},
 	{
 		name:  "input_connection_failed",
-		label: "failed input connections",
+		label: "failed input connection",
 		tier:  1,
 		read:  benthosmonitorservice.Metrics.InputConnectionFailedTotal,
 	},
 	{
 		name:  "input_connection_lost",
-		label: "lost input connections",
+		label: "lost input connection",
 		tier:  1,
 		read:  benthosmonitorservice.Metrics.InputConnectionLostTotal,
 	},
 	{
 		name:  "output_connection_failed",
-		label: "failed output connections",
+		label: "failed output connection",
 		tier:  1,
 		read:  benthosmonitorservice.Metrics.OutputConnectionFailedTotal,
 	},
 	{
 		name:  "output_connection_lost",
-		label: "lost output connections",
+		label: "lost output connection",
 		tier:  1,
 		read:  benthosmonitorservice.Metrics.OutputConnectionLostTotal,
 	},

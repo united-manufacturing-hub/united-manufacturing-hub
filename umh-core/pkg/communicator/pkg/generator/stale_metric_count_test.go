@@ -41,7 +41,7 @@ var lastRise = time.Unix(1_800_000_000, 0)
 func verdictObservedAfter(sinceRise time.Duration, fired bool) *benthos_monitor.FailureVerdict {
 	v := &benthos_monitor.FailureVerdict{ObservedAt: lastRise.Add(sinceRise), LastIncreaseAt: lastRise}
 	if fired {
-		v.Fired = []benthos_monitor.FailureEntry{{Signal: "output_error", Label: "output errors", Increase: 1, Since: lastRise, Window: constants.BenthosLogWindow}}
+		v.Fired = []benthos_monitor.FailureEntry{{Signal: "output_error", Label: "output error", Increase: 1, Since: lastRise, Window: constants.BenthosLogWindow}}
 	}
 
 	return v

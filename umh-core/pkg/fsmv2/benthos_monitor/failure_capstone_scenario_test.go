@@ -131,7 +131,7 @@ func TestScenarioFailureVerdictFromScrapeToFSM(t *testing.T) {
 	}
 
 	stub.processorErrors.Store(1)
-	if ok, reason := step(); ok || reason != "benthos reported 1 processor errors in the last 10m0s" {
+	if ok, reason := step(); ok || reason != "benthos reported 1 processor error in the last 10m0s" {
 		t.Fatalf("one processor error: ErrorFree() = (%v, %q), want not error-free with 1 processor errors", ok, reason)
 	}
 	if ok, reason := stepFor(window + time.Second); !ok {
@@ -139,7 +139,7 @@ func TestScenarioFailureVerdictFromScrapeToFSM(t *testing.T) {
 	}
 
 	stub.processorErrors.Store(2)
-	if ok, reason := step(); ok || reason != "benthos reported 1 processor errors in the last 10m0s" {
+	if ok, reason := step(); ok || reason != "benthos reported 1 processor error in the last 10m0s" {
 		t.Fatalf("a new processor error right after recovery: ErrorFree() = (%v, %q), want not error-free on that scrape", ok, reason)
 	}
 	if ok, reason := stepFor(window + time.Second); !ok {
@@ -150,7 +150,7 @@ func TestScenarioFailureVerdictFromScrapeToFSM(t *testing.T) {
 	// window. IsBenthosRunningForSomeTimeWithoutErrors (pkg/fsm/benthos) reads
 	// this verdict while a flow is starting, so it holds the flow in starting.
 	stub.inputConnFailures.Store(1)
-	if ok, reason := step(); ok || reason != "benthos reported 1 failed input connections in the last 10m0s" {
+	if ok, reason := step(); ok || reason != "benthos reported 1 failed input connection in the last 10m0s" {
 		t.Fatalf("one failed input connection: ErrorFree() = (%v, %q), want not error-free", ok, reason)
 	}
 	if ok, reason := stepFor(window - time.Minute); ok {

@@ -91,14 +91,14 @@ func TestObserveOutputErrorHoldsForLogWindow(t *testing.T) {
 
 	tl.runTo(failureT.Add(time.Second))
 	ok, reason := tl.errorFree()
-	if ok || reason != "benthos reported 1 output errors in the last 10m0s" {
-		t.Fatalf("at T+1s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, "benthos reported 1 output errors in the last 10m0s")
+	if ok || reason != "benthos reported 1 output error in the last 10m0s" {
+		t.Fatalf("at T+1s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, "benthos reported 1 output error in the last 10m0s")
 	}
 	if n := len(tl.verdict.Fired); n != 1 {
 		t.Fatalf("at T+1s: %d fired entries, want 1", n)
 	}
 	e := tl.verdict.Fired[0]
-	if e.Signal != "output_error" || e.Label != "output errors" || e.Increase != 1 || !e.Since.Equal(failureT) || e.Window != constants.BenthosLogWindow {
+	if e.Signal != "output_error" || e.Label != "output error" || e.Increase != 1 || !e.Since.Equal(failureT) || e.Window != constants.BenthosLogWindow {
 		t.Errorf("at T+1s: entry = %+v, want Signal output_error, Label output errors, Increase 1, Since T, Window %v", e, constants.BenthosLogWindow)
 	}
 	if !tl.verdict.ObservedAt.Equal(failureT.Add(time.Second)) {

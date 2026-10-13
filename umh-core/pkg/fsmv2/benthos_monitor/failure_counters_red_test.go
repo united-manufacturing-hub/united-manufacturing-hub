@@ -50,16 +50,17 @@ func failureScrape(v map[string]int64) benthosmonitorservice.Metrics {
 	}
 }
 
-// failureLabels is the label each counter's reason shows, written out here so
+// failureLabels is the label each counter's reason shows for a count of 1,
+// written out here so
 // the tests pin the wording rather than read it from failureCounters.
 // TestFailureLabelsCoverEveryCounter keeps the two lists in step.
 var failureLabels = map[string]string{
-	"output_error":             "output errors",
-	"processor_error":          "processor errors",
-	"input_connection_failed":  "failed input connections",
-	"input_connection_lost":    "lost input connections",
-	"output_connection_failed": "failed output connections",
-	"output_connection_lost":   "lost output connections",
+	"output_error":             "output error",
+	"processor_error":          "processor error",
+	"input_connection_failed":  "failed input connection",
+	"input_connection_lost":    "lost input connection",
+	"output_connection_failed": "failed output connection",
+	"output_connection_lost":   "lost output connection",
 }
 
 // verdictAfterRise scrapes before at T-1s, then after at T, and returns the
@@ -107,7 +108,7 @@ func TestObserveEveryFailureCounterDegrades(t *testing.T) {
 // connections.
 func TestObserveTierOrdersReason(t *testing.T) {
 	v := verdictAfterRise(nil, map[string]int64{"input_connection_failed": 5, "processor_error": 1})
-	want := "benthos reported 1 processor errors in the last 10m0s"
+	want := "benthos reported 1 processor error in the last 10m0s"
 	if ok, reason := v.ErrorFree(); ok || reason != want {
 		t.Fatalf("input_connection_failed +5 and processor_error +1: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
@@ -205,7 +206,7 @@ func TestPollJudgesEveryFailureCounterFromTheWire(t *testing.T) {
 			if err != nil {
 				t.Fatalf("second Poll errored: %v", err)
 			}
-			want := fmt.Sprintf("benthos reported 2 %s in the last 10m0s", label)
+			want := fmt.Sprintf("benthos reported 2 %ss in the last 10m0s", label)
 			if ok, reason := status.Failures.ErrorFree(); ok || reason != want {
 				t.Fatalf("%s 0 -> 2 on the wire: ErrorFree() = (%v, %q), want (false, %q)", name, ok, reason, want)
 			}

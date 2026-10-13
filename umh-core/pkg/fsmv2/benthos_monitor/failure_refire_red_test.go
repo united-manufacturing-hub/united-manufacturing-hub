@@ -55,9 +55,9 @@ func TestObserveFailureRightAfterReleaseFiresAtOnce(t *testing.T) {
 	secondAt = released.Add(time.Second)
 	tl.runTo(secondAt)
 	ok, reason := tl.errorFree()
-	if ok || reason != "benthos reported 1 output errors in the last 10m0s" {
+	if ok || reason != "benthos reported 1 output error in the last 10m0s" {
 		t.Fatalf("one second after the release at R=T+%v, a new error: ErrorFree() = (%v, %q), want (false, %q)",
-			released.Sub(failureT), ok, reason, "benthos reported 1 output errors in the last 10m0s")
+			released.Sub(failureT), ok, reason, "benthos reported 1 output error in the last 10m0s")
 	}
 	if since := tl.verdict.Fired[0].Since; !since.Equal(secondAt) {
 		t.Errorf("re-fired entry Since = T+%v, want R+1s = T+%v", since.Sub(failureT), secondAt.Sub(failureT))
