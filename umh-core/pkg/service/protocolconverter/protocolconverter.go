@@ -74,6 +74,11 @@ type IProtocolConverterService interface {
 	// UpdateInManager updates an existing ProtocolConverter in the Connection & DFC manager
 	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string, debugLevel bool) error
 
+	// ManagerDFCConfigs returns the read and write DFC configs held in the DFC manager:
+	// the config last written by AddToManager or UpdateInManager, and the desired state
+	// last set by EvaluateDFCDesiredStates.
+	ManagerDFCConfigs(protConvName string) (read config.DataFlowComponentConfig, write config.DataFlowComponentConfig, err error)
+
 	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
 
@@ -676,6 +681,35 @@ func (p *ProtocolConverterService) UpdateInManager(
 	p.logger.Debugf("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
+}
+
+// ManagerDFCConfigs returns the read and write DFC configs held in the DFC manager.
+// A missing DFC is returned as the zero value. ErrServiceNotExist means neither exists.
+func (p *ProtocolConverterService) ManagerDFCConfigs(protConvName string) (config.DataFlowComponentConfig, config.DataFlowComponentConfig, error) {
+	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
+	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
+
+	var readConfig, writeConfig config.DataFlowComponentConfig
+
+	readFound := false
+	writeFound := false
+
+	for _, dfcConfig := range p.dataflowComponentConfig {
+		switch dfcConfig.Name {
+		case dfcReadName:
+			readConfig = dfcConfig
+			readFound = true
+		case dfcWriteName:
+			writeConfig = dfcConfig
+			writeFound = true
+		}
+	}
+
+	if !readFound && !writeFound {
+		return readConfig, writeConfig, ErrServiceNotExist
+	}
+
+	return readConfig, writeConfig, nil
 }
 
 // RemoveFromManager deletes a protocolconverter configuration.

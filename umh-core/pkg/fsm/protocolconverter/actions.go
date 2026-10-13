@@ -352,18 +352,15 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
-	// A DFC that is desired-stopped renders an empty benthos config on disk by
-	// design, so its observed config never matches the full desired config.
-	// Exclude such a DFC from the divergence comparison to avoid a permanent
-	// false divergence and endless re-apply loop.
-	pcStopped := p.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
-	readStopped := pcStopped || p.specConfig.ReadDFCDesiredState == OperationalStateStopped
-	writeStopped := pcStopped || p.specConfig.WriteDFCDesiredState == OperationalStateStopped
+	appliedConfig, err := p.appliedRuntimeConfig()
+	if err != nil {
+		return err
+	}
 
-	if !protocolconverterserviceconfig.ConfigsEqualRuntimeWithDFCState(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig, readStopped, writeStopped) {
+	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, appliedConfig) {
 		p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
 
-		diffStr := protocolconverterserviceconfig.ConfigDiffRuntimeWithDFCState(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig, readStopped, writeStopped)
+		diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, appliedConfig)
 		p.ObservedState.ConfigDivergence = protocolconverterserviceconfig.BoundDiff(diffStr, constants.ProtocolConverterConfigDivergenceCapRunes)
 		p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
@@ -398,7 +395,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	// 2. Empty DFCs should remain stopped; populated DFCs should be started.
 	// 3. Per-DFC desired state overrides (ReadDFCDesiredState/WriteDFCDesiredState) must be
 	//    applied even when only the state changed and the Benthos config stayed the same —
-	//    ConfigsEqualRuntimeWithDFCState does not include those fields, so the block above would not fire.
+	//    ConfigsEqualRuntime does not include those fields, so the block above would not fire.
 	if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("re-evaluating flow desired states")
@@ -540,6 +537,33 @@ type connectionMetrics struct {
 // isActive returns true when more connections have come up than have been lost.
 func (m connectionMetrics) isActive() bool {
 	return m.ConnectionUp-m.ConnectionLost > 0
+}
+
+// appliedRuntimeConfig returns the config the rendered config is compared against: the
+// observed config, with each desired-stopped flow replaced by its config in the DFC manager.
+// A stopped flow never writes its benthos config to disk, so its observed config stays
+// empty; comparing against it reports a divergence on every tick.
+func (p *ProtocolConverterInstance) appliedRuntimeConfig() (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
+	appliedConfig := p.ObservedState.ObservedProtocolConverterRuntimeConfig
+
+	managerReadConfig, managerWriteConfig, err := p.service.ManagerDFCConfigs(p.baseFSMInstance.GetID())
+	if errors.Is(err, protocolconvertersvc.ErrServiceNotExist) {
+		return appliedConfig, nil
+	}
+
+	if err != nil {
+		return appliedConfig, fmt.Errorf("failed to read flow configs from the manager: %w", err)
+	}
+
+	if managerReadConfig.DesiredFSMState == dataflowfsm.OperationalStateStopped {
+		appliedConfig.DataflowComponentReadServiceConfig = managerReadConfig.DataFlowComponentServiceConfig
+	}
+
+	if managerWriteConfig.DesiredFSMState == dataflowfsm.OperationalStateStopped {
+		appliedConfig.DataflowComponentWriteServiceConfig = managerWriteConfig.DataFlowComponentServiceConfig
+	}
+
+	return appliedConfig, nil
 }
 
 // safeBenthosMetricsFrom safely extracts Benthos metrics from a DFC observed state,
