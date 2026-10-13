@@ -90,9 +90,9 @@ You can switch between UI and Code Mode anytime to fine-tune configurations.
 
 Stream processors subscribe to multiple UNS topics and output to a single model-based topic:
 
-```text
-Multiple Device Model Topics → Stream Processor → Business Model Topic
-(e.g., _pump_v1, _cnc_v1)        (aggregation)     (e.g., _maintenance_v1)
+```mermaid
+flowchart LR
+    A["Multiple Device Model Topics<br/>(e.g., _pump_v1, _cnc_v1)"] --> B["Stream Processor<br/>(aggregation)"] --> C["Business Model Topic<br/>(e.g., _maintenance_v1)"]
 ```
 
 Example: Combining temperature and pressure from different sensors into a pump model:

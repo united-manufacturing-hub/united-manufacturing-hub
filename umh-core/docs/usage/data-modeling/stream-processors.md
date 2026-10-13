@@ -8,10 +8,10 @@ Stream processors are one way to create business models by transforming multiple
 
 Stream processors aggregate device data into business KPIs:
 
-```text
-Multiple Device Model Topics → Stream Processor → Business Model Topic
-                                     ↑
-                           Aggregation happens here
+```mermaid
+flowchart LR
+    A["Multiple Device Model Topics"] --> B["Stream Processor"] --> C["Business Model Topic"]
+    B -.- N["Aggregation happens here"]
 ```
 
 Stream processors are for:

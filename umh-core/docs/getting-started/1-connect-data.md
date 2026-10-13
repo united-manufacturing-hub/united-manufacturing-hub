@@ -138,8 +138,9 @@ Exactly as we configured it! Click on `my_data` to see details.
 
 You just created a complete data pipeline:
 
-```text
-Bridge → Processing → Unified Namespace → Topic Browser
+```mermaid
+flowchart LR
+    A["Bridge"] --> B["Processing"] --> C["Unified Namespace"] --> D["Topic Browser"]
 ```
 
 **Key Concepts:**

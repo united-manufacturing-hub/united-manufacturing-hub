@@ -4,10 +4,9 @@ Data modeling in UMH Core transforms device data into business-ready information
 
 ## The Component Chain
 
-```text
-Payload Shapes → Data Models → Data Contracts → Data Flows
-       ↓              ↓              ↓                ↓
-  Value types     Structure      Enforcement    Execution
+```mermaid
+flowchart LR
+    A["Payload Shapes<br/>(value types)"] --> B["Data Models<br/>(structure)"] --> C["Data Contracts<br/>(enforcement)"] --> D["Data Flows<br/>(execution)"]
 ```
 
 Each component builds on the previous:
@@ -39,8 +38,9 @@ Data can follow these patterns based on your needs:
 ### Device Language (_raw)
 Start by exploring your equipment data with original naming:
 
-```text
-Device → Bridge → _raw → Topic Browser
+```mermaid
+flowchart LR
+    A["Device"] --> B["Bridge"] --> C["_raw"] --> D["Topic Browser"]
 ```
 
 **Example**: `umh.v1.enterprise.chicago.line-1.pump._raw.DB1.DW20`
@@ -51,9 +51,9 @@ Device → Bridge → _raw → Topic Browser
 ### Device Models
 Apply business naming directly in bridges:
 
-```text
-Device → Bridge + Model → _pump_v1 → Applications
-         (one step)
+```mermaid
+flowchart LR
+    A["Device"] --> B["Bridge + Model<br/>(one step)"] --> C["_pump_v1"] --> D["Applications"]
 ```
 
 **Example**: `umh.v1.enterprise.chicago.line-1.pump._pump_v1.inlet_temperature`
@@ -64,8 +64,9 @@ Device → Bridge + Model → _pump_v1 → Applications
 ### Business Models
 Transform device data into business KPIs:
 
-```text
-Multiple _pump_v1 → Stream Processor → _maintenance_v1 → Enterprise Apps
+```mermaid
+flowchart LR
+    A["Multiple _pump_v1"] --> B["Stream Processor"] --> C["_maintenance_v1"] --> D["Enterprise Apps"]
 ```
 
 **Example**: `umh.v1.enterprise.chicago._maintenance_v1.work_orders.create`
@@ -177,34 +178,34 @@ Based on your data source, choose the appropriate path:
 ## Implementation Patterns
 
 ### Pattern 1: Equipment Monitoring
-```text
-PLC tags → Bridge + tag_processor → Device Model (_pump_v1)
-Location: enterprise.site.line.pump-01
-Model adds: .temperature, .pressure, .status
+```mermaid
+flowchart LR
+    A["PLC tags"] --> B["Bridge + tag_processor"] --> C["Device Model (_pump_v1)<br/>Location: enterprise.site.line.pump-01<br/>Model adds: .temperature, .pressure, .status"]
 ```
 **When**: Connecting industrial equipment with time-series data
 
 ### Pattern 2: ERP Integration
-```text
-SAP work orders → Bridge + nodered_js → Business Model (_workorder_v1)
+```mermaid
+flowchart LR
+    A["SAP work orders"] --> B["Bridge + nodered_js"] --> C["Business Model (_workorder_v1)"]
 ```
 **When**: Connecting business systems with relational data
 
 ### Pattern 3: Multi-Site Aggregation
-```text
-site1._pump_v1 ─┐
-site2._pump_v1 ─├→ Stream Processor → _maintenance_v1
-site3._pump_v1 ─┘   (JavaScript expressions)
+```mermaid
+flowchart LR
+    A["site1._pump_v1"] --> SP
+    B["site2._pump_v1"] --> SP
+    C["site3._pump_v1"] --> SP
+    SP["Stream Processor<br/>(JavaScript expressions)"] --> D["_maintenance_v1"]
 ```
 **When**: Creating KPIs from multiple device models
 
 ### Pattern 4: Exploration First
-```text
-Unknown PLC → Bridge + tag_processor → _raw → Topic Browser
-                                           ↓
-                                    Design device model
-                                           ↓
-                                    Apply in bridge
+```mermaid
+flowchart LR
+    A["Unknown PLC"] --> B["Bridge + tag_processor"] --> C["_raw"] --> D["Topic Browser"]
+    D --> E["Design device model"] --> F["Apply in bridge"]
 ```
 **When**: Understanding new equipment before modeling
 

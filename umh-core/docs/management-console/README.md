@@ -4,13 +4,18 @@ The Management Console at [management.umh.app](https://management.umh.app) is wh
 
 ## How it works together with UMH Core
 
-```text
-Management Console (cloud)                       Your site
-──────────────────────────                       ─────────
-
-Account, organization, users, licence
-Instance configuration        ───── pull ─────▶  UMH Core ──▶ Unified Namespace
-Status, logs, metrics, topics  ◀──── push ─────   (container)   (your data)
+```mermaid
+flowchart LR
+    subgraph MC["Management Console (cloud)"]
+        ACC["Account, organization, users, licence"]
+        CFG["Instance configuration"]
+        STAT["Status, logs, metrics, topics"]
+    end
+    subgraph Site["Your site"]
+        CORE["UMH Core (container)"] --> UNS["Unified Namespace<br/>(your data)"]
+    end
+    CFG -- pull --> CORE
+    CORE -- push --> STAT
 ```
 
 An instance registers itself once, using a token you generate in the console. After that, configuration travels down and status travels up:

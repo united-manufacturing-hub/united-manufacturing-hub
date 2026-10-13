@@ -8,10 +8,10 @@ Data contracts are the enforcement mechanism that makes data models mandatory. W
 
 In the [component chain](README.md#the-component-chain), contracts sit between models and execution:
 
-```text
-Payload Shapes → Data Models → Data Contracts → Data Flows
-                                      ↑
-                              Enforcement happens here
+```mermaid
+flowchart LR
+    A["Payload Shapes"] --> B["Data Models"] --> C["Data Contracts"] --> D["Data Flows"]
+    C -.- N["Enforcement happens here"]
 ```
 
 When you specify a data contract in a bridge, the UNS output plugin validates every message against the associated model.
@@ -72,10 +72,10 @@ Contracts follow the pattern `_modelname_version`:
 
 ### Where Validation Happens
 
-```text
-Bridge → UNS Output Plugin → [Contract Check] → Kafka/Redpanda
-                                    ↑
-                            Validation happens here
+```mermaid
+flowchart LR
+    A["Bridge"] --> B["UNS Output Plugin"] --> C{"Contract Check"} --> D["Kafka/Redpanda"]
+    C -.- N["Validation happens here"]
 ```
 
 The UNS output plugin (`output: uns: {}`) performs validation:

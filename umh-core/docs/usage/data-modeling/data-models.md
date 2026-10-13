@@ -8,10 +8,10 @@ Data models define the hierarchical structure of your industrial data. They crea
 
 In the [component chain](README.md#the-component-chain), models provide the structure:
 
-```text
-Payload Shapes → Data Models → Data Contracts → Data Flows
-                      ↑
-                 Structure defined here
+```mermaid
+flowchart LR
+    A["Payload Shapes"] --> B["Data Models"] --> C["Data Contracts"] --> D["Data Flows"]
+    B -.- N["Structure defined here"]
 ```
 
 When you create a data model, you're defining:
