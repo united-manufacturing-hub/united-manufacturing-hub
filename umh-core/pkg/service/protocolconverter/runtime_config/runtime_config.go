@@ -89,6 +89,7 @@ func BuildRuntimeConfig(
 	agentLocation map[string]string,
 	globalVars map[string]any,
 	historian *config.HistorianConfig,
+	dataContracts []config.DataContractsConfig,
 	nodeName string,
 	pcName string,
 ) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
@@ -237,13 +238,24 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
 
-	runtime, err := renderConfig(spec, scope, locationPath, secrets) // unexported helper that enforces UNS
+	runtime, err := renderConfig(spec, scope, locationPath, dataContractNames(dataContracts), secrets) // unexported helper that enforces UNS
 	if err != nil && !historianUsable && referencesMissingHistorian(err) {
 		return runtime, fmt.Errorf(
 			"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", err)
 	}
 
 	return runtime, err
+}
+
+// dataContractNames lists the names of the configured data contracts, the set a write flow
+// topic may name on top of dataflowcomponentserviceconfig.BuiltinDataContracts.
+func dataContractNames(dataContracts []config.DataContractsConfig) []string {
+	names := make([]string, 0, len(dataContracts))
+	for _, dataContract := range dataContracts {
+		names = append(names, dataContract.Name)
+	}
+
+	return names
 }
 
 // WriteFlowConfigError marks a configuration failure confined to the write flow of a
@@ -333,6 +345,7 @@ func renderConfig(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	scope map[string]any,
 	locationPath string,
+	dataContracts []string,
 	secrets []string,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
@@ -379,15 +392,16 @@ func renderConfig(
 	}
 
 	// Enforce the UNS hierarchy: a write flow may only consume topics beneath the location
-	// of the bridge it belongs to. Checked after rendering, so topics written as
-	// `umh.v1.{{ .location_path }}.…` are checked in their resolved form. A violation blanks
-	// the write flow instead of failing the render, leaving connection and read flow up.
-	// A write flow with no destination, or a stopped one, subscribes to nothing.
+	// of the bridge it belongs to, and every topic must name one data contract. Checked
+	// after rendering, so topics written as `umh.v1.{{ .location_path }}.…` are checked in
+	// their resolved form. A violation blanks the write flow instead of failing the render,
+	// leaving connection and read flow up. A write flow with no destination, or a stopped
+	// one, subscribes to nothing.
 	var writeFlowErr error
 
 	writeStopped := spec.WriteDFCDesiredState == dfcDesiredStateStopped
 	if renderedWriteConfig.HasOutput() && !writeStopped {
-		if err := renderedWriteConfig.ToWriteConfig().ValidateTopicsUnderLocation(locationPath); err != nil {
+		if err := renderedWriteConfig.ToWriteConfig().ValidateTopics(locationPath, dataContracts); err != nil {
 			writeFlowErr = &WriteFlowConfigError{Err: err}
 			renderedWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{}
 		}

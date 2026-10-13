@@ -27,7 +27,7 @@ func historianWriteDFC() dataflowcomponentserviceconfig.DataflowComponentWriteCo
 			Protocol: "historian",
 			Code:     "host: '{{ .historian.timescale.host }}'\ndata_contract_name: pump",
 		},
-		Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.*"},
+		Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.{{ .location_path }}._historian.*"},
 	}
 }
 
@@ -37,7 +37,7 @@ func standardWriteDFC() dataflowcomponentserviceconfig.DataflowComponentWriteCon
 			Protocol: "kafka",
 			Code:     "topic: t",
 		},
-		Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.*"},
+		Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.{{ .location_path }}._historian.*"},
 	}
 }
 

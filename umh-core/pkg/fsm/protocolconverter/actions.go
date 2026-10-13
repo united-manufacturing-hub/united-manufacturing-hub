@@ -335,6 +335,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		agentLocationStr,
 		nil, // TODO: add global vars
 		snapshot.CurrentConfig.Historian,
+		snapshot.CurrentConfig.DataContracts,
 		runtime_config.BridgedByPlaceholder,
 		p.baseFSMInstance.GetID(),
 	)
