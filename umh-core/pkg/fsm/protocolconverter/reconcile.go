@@ -416,7 +416,7 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		// bridge in starting forever and leave the read flow looking stopped. Degrade
 		// instead: the read flow keeps running and the cause is visible.
 		if p.writeFlowConfigErr != nil {
-			p.ObservedState.ServiceInfo.StatusReason = "flow degraded: " + p.writeFlowConfigReason()
+			p.ObservedState.ServiceInfo.StatusReason = "flow degraded: " + p.writeFlowConfigErr.Error()
 
 			return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 		}

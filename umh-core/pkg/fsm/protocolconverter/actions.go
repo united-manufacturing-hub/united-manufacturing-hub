@@ -348,9 +348,9 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	switch {
 	case errors.As(err, &writeFlowErr):
 		// Repeats every tick until the config is fixed, so dedup by format string.
-		p.baseFSMInstance.Logger.LogErrorDedup("write flow config error: %v", writeFlowErr)
+		p.baseFSMInstance.Logger.LogErrorDedup("write flow not started: %v", writeFlowErr)
 		p.writeFlowConfigErr = writeFlowErr.Err
-		p.ObservedState.ServiceInfo.StatusReason = p.writeFlowConfigReason()
+		p.ObservedState.ServiceInfo.StatusReason = p.writeFlowConfigErr.Error()
 	case err != nil:
 		p.baseFSMInstance.Logger.LogErrorDedup("failed to build runtime config: %v", err)
 		// Capture the configuration error in StatusReason for troubleshooting
@@ -370,8 +370,8 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	// Exclude such a DFC from the divergence comparison to avoid a permanent
 	// false divergence and endless re-apply loop.
 	pcStopped := p.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
-	readStopped := pcStopped || p.specConfig.ReadDFCDesiredState == OperationalStateStopped
-	writeStopped := pcStopped || p.specConfig.WriteDFCDesiredState == OperationalStateStopped
+	readStopped := pcStopped || p.specConfig.ReadDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
+	writeStopped := pcStopped || p.specConfig.WriteDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
 
 	if !protocolconverterserviceconfig.ConfigsEqualRuntimeWithDFCState(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig, readStopped, writeStopped) {
 		p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
@@ -474,16 +474,6 @@ func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
 	return false, statusReason
 }
 
-// writeFlowConfigReason renders the write flow's config failure for StatusReason, or
-// returns an empty string when the write flow config is fine.
-func (p *ProtocolConverterInstance) writeFlowConfigReason() string {
-	if p.writeFlowConfigErr == nil {
-		return ""
-	}
-
-	return "write flow config error: " + p.writeFlowConfigErr.Error()
-}
-
 // IsDFCHealthy checks whether the underlying DFCs are healthy.
 // A DFC is considered healthy when it is active/idle, intentionally stopped
 // (ReadDFCDesiredState/WriteDFCDesiredState == "stopped"), or has no configuration
@@ -501,8 +491,8 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	writeRunning := writeState == dataflowfsm.OperationalStateIdle || writeState == dataflowfsm.OperationalStateActive
 
 	// Intentionally stopped counts as healthy
-	readIntentionallyStopped := p.specConfig.ReadDFCDesiredState == OperationalStateStopped
-	writeIntentionallyStopped := p.specConfig.WriteDFCDesiredState == OperationalStateStopped
+	readIntentionallyStopped := p.specConfig.ReadDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
+	writeIntentionallyStopped := p.specConfig.WriteDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
 
 	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
 	writeHasConfig := p.specConfig.Config.DataflowComponentWriteServiceConfig.HasOutput()
@@ -530,7 +520,7 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	}
 
 	if p.writeFlowConfigErr != nil {
-		return false, p.writeFlowConfigReason()
+		return false, p.writeFlowConfigErr.Error()
 	}
 
 	statusReason := p.ObservedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.StatusReason
@@ -544,8 +534,8 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 // areBothDFCsIntentionallyStopped returns true when both the read and write DFC
 // desired states are set to stopped and at least one of them has a config deployed.
 func (p *ProtocolConverterInstance) areBothDFCsIntentionallyStopped() bool {
-	if p.specConfig.ReadDFCDesiredState != OperationalStateStopped ||
-		p.specConfig.WriteDFCDesiredState != OperationalStateStopped {
+	if p.specConfig.ReadDFCDesiredState != protocolconverterserviceconfig.DFCDesiredStateStopped ||
+		p.specConfig.WriteDFCDesiredState != protocolconverterserviceconfig.DFCDesiredStateStopped {
 		return false
 	}
 

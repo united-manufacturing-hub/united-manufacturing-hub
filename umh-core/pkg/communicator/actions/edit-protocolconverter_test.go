@@ -130,10 +130,9 @@ var _ = Describe("EditProtocolConverter", func() {
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
 		stateMocker     *actions.StateMocker
-		messages        []*models.UMHMessage
+		recorder        *replyRecorder
 		pcName          string
 		pcUUID          uuid.UUID
-		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -143,9 +142,6 @@ var _ = Describe("EditProtocolConverter", func() {
 		actionUUID = uuid.New()
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
-		mu.Lock()
-		messages = nil
-		mu.Unlock()
 		pcName = "wetter"
 		pcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(pcName)
 
@@ -205,7 +201,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 		action = actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		recorder = newReplyRecorder(outboundChannel)
 	})
 
 	// Cleanup after each test
@@ -272,7 +268,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"code":     "addresses:\n- localhost:9092\n",
 					},
 					"source": map[string]interface{}{
-						"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*",
+						"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.",
 					},
 				},
 			}
@@ -287,7 +283,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			writeCfg := action.GetDesiredWriteDFCConfig()
 			Expect(writeCfg).NotTo(BeNil())
 			Expect(writeCfg.Destination.Protocol).To(Equal("kafka"))
-			Expect(writeCfg.Source.Topics).To(Equal("umh.v1.test-enterprise.test-site.test-area.test-line._raw.*"))
+			Expect(writeCfg.Source.Topics).To(Equal("^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\."))
 		})
 
 		It("should return error for missing UUID", func() {
@@ -357,7 +353,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]interface{}{
-						"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*",
+						"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.",
 					},
 				},
 			}
@@ -376,7 +372,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]interface{}{
-						"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*\numh.v1.test-enterprise.test-site.test-area.test-line._historian.*",
+						"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.\n^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._historian\\.",
 					},
 				},
 			}
@@ -387,7 +383,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			writeCfg := action.GetDesiredWriteDFCConfig()
 			Expect(writeCfg).NotTo(BeNil())
-			Expect(writeCfg.Source.Topics).To(Equal("umh.v1.test-enterprise.test-site.test-area.test-line._raw.*\numh.v1.test-enterprise.test-site.test-area.test-line._historian.*"))
+			Expect(writeCfg.Source.Topics).To(Equal("^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.\n^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._historian\\."))
 		})
 
 		It("should parse write DFC with golang template vars in input_topics", func() {
@@ -405,7 +401,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]interface{}{
-						"topics": "umh.v1.{{ .location_path }}.{{ .IP }}.*",
+						"topics": "^umh\\.v1\\.{{ .location_path }}\\.{{ .IP }}\\.",
 					},
 				},
 			}
@@ -415,7 +411,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			writeCfg := action.GetDesiredWriteDFCConfig()
 			Expect(writeCfg).NotTo(BeNil())
-			Expect(writeCfg.Source.Topics).To(Equal("umh.v1.{{ .location_path }}.{{ .IP }}.*"))
+			Expect(writeCfg.Source.Topics).To(Equal("^umh\\.v1\\.{{ .location_path }}\\.{{ .IP }}\\."))
 		})
 
 		It("should preserve explicit 'stopped' state on read DFC", func() {
@@ -496,7 +492,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]interface{}{
-						"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*",
+						"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.",
 					},
 				},
 			}
@@ -660,7 +656,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]interface{}{
-						"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.line-1.*\numh.v1.test-enterprise.test-site.test-area.test-line._raw.line-2.*",
+						"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.line-1\\.\n^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.line-2\\.",
 					},
 				},
 			}
@@ -694,7 +690,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 			Expect(updatedPC).NotTo(BeNil())
-			Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("umh.v1.test-enterprise.test-site.test-area.test-line._raw.line-1.*\numh.v1.test-enterprise.test-site.test-area.test-line._raw.line-2.*"))
+			Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.line-1\\.\n^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.line-2\\."))
 		})
 
 		Context("when protocol converter already has both DFCs configured", func() {
@@ -713,7 +709,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
-					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\."},
 				}
 
 				stateMocker = actions.NewStateMocker(mockConfig)
@@ -731,7 +727,7 @@ var _ = Describe("EditProtocolConverter", func() {
 							"code":     "addresses:\n- localhost:9092\n",
 						},
 						"source": map[string]interface{}{
-							"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._historian.*",
+							"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._historian\\.",
 						},
 					},
 				}
@@ -827,7 +823,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(writeDestType).To(Equal("stdout"))
 
 				// Source.Topics must be untouched
-				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("umh.v1.test-enterprise.test-site.test-area.test-line._raw.*"))
+				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\."))
 			})
 		})
 
@@ -898,7 +894,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
-					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\."},
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "active"
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
@@ -1022,16 +1018,22 @@ var _ = Describe("EditProtocolConverter", func() {
 			}
 
 			It("rejects the edit without persisting it", func() {
-				err := editWithWriteTopics("umh.v1.test-enterprise.other-site.foo")
+				topic := "^umh\\.v1\\.test-enterprise\\.other-site\\.foo"
 
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("must be beneath the bridge location"))
-				Expect(err.Error()).To(ContainSubstring("umh.v1.test-enterprise.other-site.foo"))
+				Expect(editWithWriteTopics(topic)).To(MatchError(ContainSubstring(topic)))
 				Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeFalse())
 			})
 
+			It("reports the violation as a validation failure before announcing the update", func() {
+				Expect(editWithWriteTopics("^umh\\.v1\\.test-enterprise\\.other-site\\.foo")).NotTo(Succeed())
+
+				Eventually(func() queuedReply { return failureReply(recorder.replies()) }).
+					Should(HaveField("ErrorCode", models.ErrValidationFailed))
+				Expect(recorder.replies()).NotTo(ContainElement(HaveField("State", string(models.ActionExecuting))))
+			})
+
 			It("accepts topics that resolve beneath the bridge location", func() {
-				Expect(editWithWriteTopics("umh.v1.{{ .location_path }}._historian.foo")).To(Succeed())
+				Expect(editWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._historian\\.foo")).To(Succeed())
 			})
 
 			It("does not block a read-only edit on a bridge whose write flow already violates the rule", func() {
@@ -1039,7 +1041,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				// read flow must go through; the render degrades the write flow on its own.
 				spec := &mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig
 				spec.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.test-enterprise.other-site.foo"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "^umh\\.v1\\.test-enterprise\\.other-site\\.foo"},
 					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 				}
 				spec.WriteDFCDesiredState = "active"
@@ -1081,6 +1083,59 @@ var _ = Describe("EditProtocolConverter", func() {
 				_, _, err := readOnlyAction.Execute()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeTrue())
+			})
+
+			Context("when an edit moves the bridge", func() {
+				// moveToCell edits only the connection and location of a bridge whose write flow
+				// subscribes to topics, moving it from cell-1 to cell-2.
+				moveToCell := func(topics string) error {
+					spec := &mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig
+					spec.Location["4"] = "cell-1"
+					spec.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: topics},
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+					}
+
+					// A location-only edit cannot opt out of the rollout check, so no snapshot
+					// manager is passed to skip it.
+					moveAction := actions.NewEditProtocolConverterAction(
+						userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
+
+					Expect(moveAction.Parse(map[string]interface{}{
+						"name": pcName,
+						"uuid": pcUUID.String(),
+						"connection": map[string]interface{}{
+							"ip":   "wttr.in",
+							"port": 80,
+						},
+						"location": map[string]interface{}{
+							"0": "test-enterprise",
+							"1": "test-site",
+							"2": "test-area",
+							"3": "test-line",
+							"4": "cell-2",
+						},
+					})).To(Succeed())
+					Expect(moveAction.Validate()).To(Succeed())
+
+					_, _, err := moveAction.Execute()
+
+					return err
+				}
+
+				It("rejects a move that puts valid write flow topics outside the new location", func() {
+					topic := "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\.cell-1\\._raw\\."
+
+					Expect(moveToCell(topic)).To(MatchError(ContainSubstring(topic)))
+					Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeFalse())
+					Eventually(func() queuedReply { return failureReply(recorder.replies()) }).
+						Should(HaveField("ErrorCode", models.ErrValidationFailed))
+				})
+
+				It("accepts a move when the write flow topics follow location_path", func() {
+					Expect(moveToCell("^umh\\.v1\\.{{ .location_path }}\\._raw\\.")).To(Succeed())
+					Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeTrue())
+				})
 			})
 		})
 
@@ -1405,7 +1460,7 @@ var _ = Describe("EditProtocolConverter", func() {
 							"protocol": "stdout",
 						},
 						"source": map[string]interface{}{
-							"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*",
+							"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.",
 						},
 					},
 				}
@@ -1431,7 +1486,7 @@ var _ = Describe("EditProtocolConverter", func() {
 							"protocol": "stdout",
 						},
 						"source": map[string]interface{}{
-							"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._historian.*", // different topic
+							"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._historian\\.", // different topic
 						},
 					},
 				}
@@ -1471,7 +1526,7 @@ var _ = Describe("EditProtocolConverter", func() {
 					},
 					"writeDFC": map[string]interface{}{
 						"destination": map[string]interface{}{"protocol": "stdout"},
-						"source":      map[string]interface{}{"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*"},
+						"source":      map[string]interface{}{"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\."},
 					},
 				}
 				firstAction := actions.NewEditProtocolConverterAction(userEmail, uuid.New(), instanceUUID, outboundChannel, mockConfig, nil)
@@ -1513,7 +1568,7 @@ var _ = Describe("EditProtocolConverter", func() {
 					},
 					"writeDFC": map[string]interface{}{
 						"destination": map[string]interface{}{"protocol": "stdout"},
-						"source":      map[string]interface{}{"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*"},
+						"source":      map[string]interface{}{"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\."},
 					},
 				}
 				err = action2.Parse(payload)
@@ -1584,7 +1639,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
-					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\."},
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "active"
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
@@ -1618,7 +1673,7 @@ var _ = Describe("EditProtocolConverter", func() {
 							"code":     "addresses:\n- localhost:9092\n",
 						},
 						"source": map[string]interface{}{
-							"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._historian.*",
+							"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._historian\\.",
 						},
 					},
 				}
@@ -1661,7 +1716,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(writeDestType).To(Equal("kafka"))
 
 				// Source.Topics updated
-				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("umh.v1.test-enterprise.test-site.test-area.test-line._historian.*"))
+				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._historian\\."))
 			})
 		})
 
@@ -1745,7 +1800,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
-					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\."},
 				}
 
 				snapshotMgr := fsm.NewSnapshotManager()
@@ -1956,7 +2011,7 @@ var _ = Describe("EditProtocolConverter", func() {
 							"code":     "line1\n{{ .inject }}",
 						},
 						"source": map[string]interface{}{
-							"topics": "umh.v1.test-enterprise.test-site.test-area.test-line._raw.*",
+							"topics": "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\._raw\\.",
 						},
 					},
 				}
