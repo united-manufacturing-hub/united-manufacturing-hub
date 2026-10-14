@@ -247,3 +247,27 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 		}, 15*time.Second, 200*time.Millisecond).Should(Equal(fsmv2client.Fresh))
 	})
 })
+
+var _ = Describe("isAuthenticatedUUID", func() {
+	// isAuthenticatedUUID is the check the communicator watcher runs before
+	// handing the TransportWorker's observed UUID to the communication state.
+	// It is a pure function, so it is asserted directly here. The placeholder
+	// and an empty observed UUID must never pass, or the communicator would
+	// apply an unauthenticated UUID.
+	const (
+		authenticatedUUID = "a4c3c2b3-1fe8-465f-a73f-0222b1da17b5"
+		placeholderUUID   = "0b6b0d5e-0000-4000-8000-000000000001"
+	)
+
+	It("accepts the backend's instance UUID", func() {
+		Expect(isAuthenticatedUUID(authenticatedUUID, placeholderUUID)).To(BeTrue())
+	})
+
+	It("rejects the placeholder UUID", func() {
+		Expect(isAuthenticatedUUID(placeholderUUID, placeholderUUID)).To(BeFalse())
+	})
+
+	It("rejects an empty UUID", func() {
+		Expect(isAuthenticatedUUID("", placeholderUUID)).To(BeFalse())
+	})
+})
