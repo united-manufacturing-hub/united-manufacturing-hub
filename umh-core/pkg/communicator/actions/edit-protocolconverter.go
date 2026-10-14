@@ -340,8 +340,8 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	// edit must not be blocked by a violation it did not introduce.
 	if err := a.validateSuppliedWriteTopics(newSpec); err != nil {
 		errorMsg := fmt.Sprintf("Invalid write flow configuration: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditProtocolConverter)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrConfigFileInvalid, nil, a.outboundChannel, models.EditProtocolConverter, nil)
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}

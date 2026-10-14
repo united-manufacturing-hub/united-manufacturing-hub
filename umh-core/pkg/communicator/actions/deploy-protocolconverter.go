@@ -180,8 +180,8 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 	if err := validateWriteTopicHierarchy(pcConfig, a.systemSnapshotManager, a.configManager); err != nil {
 		errorMsg := fmt.Sprintf("Invalid write flow configuration: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrConfigFileInvalid, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
