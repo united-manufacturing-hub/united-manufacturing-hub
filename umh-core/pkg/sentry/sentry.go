@@ -73,6 +73,19 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	}
 }
 
+// SetInstanceUUID sets the tag instance_uuid on the current hub's scope.
+// Every event captured afterwards through sentry.CurrentHub() or a clone of it
+// carries the tag. An empty uuid is ignored.
+func SetInstanceUUID(uuid string) {
+	if uuid == "" {
+		return
+	}
+
+	sentry.CurrentHub().ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetTag("instance_uuid", uuid)
+	})
+}
+
 func getMeaningfulErrorTitle(err error) string {
 	message := err.Error()
 
@@ -155,7 +168,6 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				event.Contexts["extra"][key] = v
 			}
 
-
 			// Special context keys that affect Sentry fingerprinting for better error grouping.
 			// These keys group errors by their semantic meaning rather than instance-specific data,
 			// making it easier to identify patterns and root causes in Sentry.
@@ -187,10 +199,10 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				event.Fingerprint = append(event.Fingerprint, valueStr)
 			}
 
-		if key == "trigger" {
-			valueStr := fmt.Sprintf("trigger: %v", value)
-			event.Fingerprint = append(event.Fingerprint, valueStr)
-		}
+			if key == "trigger" {
+				valueStr := fmt.Sprintf("trigger: %v", value)
+				event.Fingerprint = append(event.Fingerprint, valueStr)
+			}
 		}
 	}
 
