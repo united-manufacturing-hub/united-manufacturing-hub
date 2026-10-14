@@ -15,7 +15,6 @@
 package actions
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -58,27 +57,21 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 	return nil
 }
 
-// validateWriteTopicHierarchy rejects a bridge whose write flow subscribes to topics
-// outside the bridge's own location, or to a data contract that does not exist, so the
-// violation is reported to the user instead of only degrading the bridge later. The rule
-// itself lives in BuildRuntimeConfig, which reports it as a WriteFlowConfigError; every
-// other render failure is left to the reconciliation loop, which reports it on the bridge.
+// writeTopicViolation returns why the write flow of pcConfig may not subscribe to its
+// topics within fullConfig, which supplies the agent location and the declared data
+// contracts, or nil when it may. The rule itself lives in BuildRuntimeConfig, which
+// reports it as a WriteFlowConfigError; every other render failure is left to the
+// reconciliation loop, which reports it on the bridge.
 //
-// The agent location and the declared data contracts are read from the config manager
-// rather than from the system snapshot, because the snapshot carries no config (see
-// fsm.GetManagerSnapshots).
-func validateWriteTopicHierarchy(ctx context.Context, pcConfig config.ProtocolConverterConfig, configManager config.ConfigManager) error {
-	currentConfig, err := configManager.GetConfig(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to read current config: %w", err)
-	}
-
-	_, err = runtime_config.BuildRuntimeConfig(
+// Actions pass the config from the config manager rather than from the system snapshot,
+// because the snapshot carries no config (see fsm.GetManagerSnapshots).
+func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig config.FullConfig) error {
+	_, err := runtime_config.BuildRuntimeConfig(
 		pcConfig.ProtocolConverterServiceConfig,
-		convertIntMapToStringMap(currentConfig.Agent.Location),
+		convertIntMapToStringMap(fullConfig.Agent.Location),
 		nil, // TODO: add global vars
-		currentConfig.Historian,
-		currentConfig.DataContracts,
+		fullConfig.Historian,
+		fullConfig.DataContracts,
 		runtime_config.BridgedByPlaceholder,
 		pcConfig.Name,
 	)
@@ -89,6 +82,19 @@ func validateWriteTopicHierarchy(ctx context.Context, pcConfig config.ProtocolCo
 	}
 
 	return nil
+}
+
+// introducedWriteTopicViolation returns the write topic violation of a bridge after a
+// change, unless the bridge already had one before it. A change, such as a new location,
+// must not turn valid write flow topics invalid, but it is not blocked by a violation it
+// did not cause.
+func introducedWriteTopicViolation(before, after config.ProtocolConverterConfig, beforeConfig, afterConfig config.FullConfig) error {
+	err := writeTopicViolation(after, afterConfig)
+	if err == nil || writeTopicViolation(before, beforeConfig) != nil {
+		return nil
+	}
+
+	return err
 }
 
 // validateReadProtocolConverterDFC validates a read ProtocolConverterDFC's state and configuration.

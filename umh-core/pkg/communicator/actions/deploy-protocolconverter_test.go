@@ -15,8 +15,6 @@
 package actions_test
 
 import (
-	"sync"
-
 	"errors"
 
 	"github.com/google/uuid"
@@ -46,8 +44,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		pcPort          uint32
 		pcLocation      map[int]string
 		stateMocker     *actions.StateMocker
-		messages        []*models.UMHMessage
-		mu              sync.Mutex
+		recorder        *replyRecorder
 	)
 
 	// Setup before each test
@@ -86,7 +83,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		stateMocker.Tick()
 		action = actions.NewDeployProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		recorder = newReplyRecorder(outboundChannel)
 	})
 
 	// Cleanup after each test
@@ -234,7 +231,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]interface{}{
-						"topics": "umh.v1.{{ .location_path }}.{{ .IP }}.*",
+						"topics": "^umh\\.v1\\.{{ .location_path }}\\.{{ .IP }}\\.",
 					},
 				},
 			}
@@ -280,49 +277,59 @@ var _ = Describe("DeployProtocolConverter", func() {
 			return err
 		}
 
-		It("should reject a write flow whose topics are outside the bridge location", func() {
-			err := deployWithWriteTopics("umh.v1.TestEnterprise.OtherSite._historian.foo")
+		// expectRejected asserts that the deploy failed as a validation failure naming
+		// topic, and that nothing was persisted.
+		expectRejected := func(err error, topic string) {
+			Expect(err).To(MatchError(ContainSubstring(topic)))
+			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
 
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must be beneath the bridge location"))
-			Expect(err.Error()).To(ContainSubstring("umh.v1.TestEnterprise.OtherSite._historian.foo"))
+			Eventually(func() queuedReply { return failureReply(recorder.replies()) }).
+				Should(HaveField("ErrorCode", models.ErrValidationFailed))
+		}
+
+		It("should reject a write flow whose topics are outside the bridge location", func() {
+			topic := "^umh\\.v1\\.TestEnterprise\\.OtherSite\\._historian\\.foo"
+
+			expectRejected(deployWithWriteTopics(topic), topic)
+		})
+
+		It("should report a config read failure as retryable, not as a topic violation", func() {
+			mockConfig.WithConfigError(errors.New("mock GetConfig failure"))
+
+			Expect(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._historian\\.foo")).NotTo(Succeed())
+
+			Eventually(func() queuedReply { return failureReply(recorder.replies()) }).
+				Should(HaveField("ErrorCode", models.ErrRetryConfigReadFailed))
+			Expect(failureReply(recorder.replies()).Message).NotTo(ContainSubstring("topic"))
 			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
 		})
 
 		It("should reject a write flow whose topics name no data contract", func() {
-			err := deployWithWriteTopics("umh.v1.{{ .location_path }}.*")
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must each name one existing data contract"))
-			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
+			expectRejected(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\."),
+				"^umh\\.v1\\.TestEnterprise\\.TestSite\\.")
 		})
 
 		It("should reject a write flow whose topics name a data contract that does not exist", func() {
-			err := deployWithWriteTopics("umh.v1.{{ .location_path }}._pump_v1.pressure")
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must each name one existing data contract"))
-			Expect(err.Error()).To(ContainSubstring("_pump_v1"))
-			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
+			expectRejected(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._pump_v1\\.pressure"),
+				"^umh\\.v1\\.TestEnterprise\\.TestSite\\._pump_v1\\.pressure")
 		})
 
 		It("should accept a write flow naming a data contract declared in the config", func() {
 			mockConfig.Config.DataContracts = []config.DataContractsConfig{{Name: "_pump_v1"}}
 
-			Expect(deployWithWriteTopics("umh.v1.{{ .location_path }}._pump_v1.pressure")).To(Succeed())
+			Expect(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._pump_v1\\.pressure")).To(Succeed())
 		})
 
 		It("should list the configured data contracts when a topic names an unknown one", func() {
 			mockConfig.Config.DataContracts = []config.DataContractsConfig{{Name: "_pump_v1"}}
 
-			err := deployWithWriteTopics("umh.v1.{{ .location_path }}._pmup_v1.pressure")
+			err := deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._pmup_v1\\.pressure")
 
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("_pump_v1"))
+			Expect(err).To(MatchError(ContainSubstring("_pump_v1")))
 		})
 
 		It("should accept a write flow whose topics resolve beneath the bridge location", func() {
-			Expect(deployWithWriteTopics("umh.v1.{{ .location_path }}._historian.foo")).To(Succeed())
+			Expect(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._historian\\.foo")).To(Succeed())
 		})
 
 		It("should deploy protocol converter successfully", func() {
@@ -469,7 +476,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]any{
-						"topics": "umh.v1.TestEnterprise.TestSite._raw.*\numh.v1.TestEnterprise.TestSite._historian.*",
+						"topics": "^umh\\.v1\\.TestEnterprise\\.TestSite\\._raw\\.\n^umh\\.v1\\.TestEnterprise\\.TestSite\\._historian\\.",
 					},
 				},
 			}
@@ -492,7 +499,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			addedPC := mockConfig.Config.ProtocolConverter[0]
 			Expect(addedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal(
-				"umh.v1.TestEnterprise.TestSite._raw.*\numh.v1.TestEnterprise.TestSite._historian.*",
+				"^umh\\.v1\\.TestEnterprise\\.TestSite\\._raw\\.\n^umh\\.v1\\.TestEnterprise\\.TestSite\\._historian\\.",
 			))
 		})
 
@@ -509,7 +516,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 						"protocol": "stdout",
 					},
 					"source": map[string]any{
-						"topics": "umh.v1.TestEnterprise.TestSite._raw.*",
+						"topics": "^umh\\.v1\\.TestEnterprise\\.TestSite\\._raw\\.",
 					},
 					"state": "stopped",
 				},

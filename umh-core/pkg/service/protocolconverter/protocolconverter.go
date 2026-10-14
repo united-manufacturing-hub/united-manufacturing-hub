@@ -803,7 +803,7 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 			switch {
 			case protocolConverterDesiredState == "stopped": // NOTE: Hardcoded to avoid circular import with pkg/fsm/protocolconverter
 				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			case readDFCDesiredState == "stopped":
+			case readDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped:
 				// Per-DFC override: user explicitly wants read DFC stopped
 				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			default:
@@ -839,7 +839,7 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 			switch {
 			case protocolConverterDesiredState == "stopped": // NOTE: Hardcoded to avoid circular import with pkg/fsm/protocolconverter
 				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			case writeDFCDesiredState == "stopped":
+			case writeDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped:
 				// Per-DFC override: user explicitly wants write DFC stopped
 				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			default:

@@ -56,7 +56,7 @@ var (
 		Source: dataflowcomponentserviceconfig.WriteConfigSource{
 			// Beneath the agent location the harness sets ("test-location") and naming a
 			// data contract, as the topic checks require.
-			Topics: "umh.v1.test-location._historian.*",
+			Topics: "^umh\\.v1\\.test-location\\._historian\\.",
 		},
 		Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
 			Protocol: "stdout",
@@ -67,7 +67,7 @@ var (
 	// harness sets, which the topic hierarchy check rejects.
 	outsideLocationDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 		Source: dataflowcomponentserviceconfig.WriteConfigSource{
-			Topics: "umh.v1.some-other-location._historian.*",
+			Topics: "^umh\\.v1\\.some-other-location\\._historian\\.",
 		},
 		Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
 			Protocol: "stdout",
