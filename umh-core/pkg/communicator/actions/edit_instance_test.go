@@ -24,6 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -250,6 +253,80 @@ var _ = Describe("EditInstance", func() {
 			Expect(updatedConfig.Agent.Location[2]).To(Equal("New Area"))
 		})
 
+		Describe("bridges with a write flow", func() {
+			// withWriteBridge adds a bridge at the agent location whose write flow
+			// subscribes to topics.
+			withWriteBridge := func(topics string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+
+				cfg, err := mockConfig.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg.ProtocolConverter = []config.ProtocolConverterConfig{{
+					FSMInstanceConfig: config.FSMInstanceConfig{Name: "writer", DesiredFSMState: "active"},
+					ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{Target: "127.0.0.1", Port: "80"},
+							},
+							DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+								Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: topics},
+								Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+							},
+						},
+						Location: map[string]string{"0": "Old Enterprise", "1": "Old Site"},
+					},
+				}}
+				mockConfig.WithConfig(cfg)
+			}
+
+			moveTo := func(enterprise string) error {
+				Expect(action.Parse(map[string]interface{}{
+					"location": map[string]interface{}{"enterprise": enterprise, "site": "Old Site"},
+				})).To(Succeed())
+
+				_, _, err := action.Execute()
+
+				return err
+			}
+
+			agentEnterprise := func() string {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+
+				cfg, err := mockConfig.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+
+				return cfg.Agent.Location[0]
+			}
+
+			It("rejects a location that moves valid write flow topics outside the bridge location", func() {
+				withWriteBridge(`^umh\.v1\.Old Enterprise\.Old Site\._raw\.`)
+
+				err := moveTo("New Enterprise")
+				Expect(err).To(MatchError(ContainSubstring(`bridge "writer"`)))
+				Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
+				Expect(agentEnterprise()).To(Equal("Old Enterprise"))
+
+				Expect(failureReply(drainReplies(outboundChannel)).ErrorCode).To(Equal(models.ErrValidationFailed))
+			})
+
+			It("accepts a location that write flow topics follow through location_path", func() {
+				withWriteBridge(`^umh\.v1\.{{ .location_path }}\._raw\.`)
+
+				Expect(moveTo("New Enterprise")).To(Succeed())
+				Expect(agentEnterprise()).To(Equal("New Enterprise"))
+			})
+
+			It("does not block on write flow topics that were invalid before", func() {
+				withWriteBridge(`^umh\.v1\.Elsewhere\._raw\.`)
+
+				Expect(moveTo("New Enterprise")).To(Succeed())
+				Expect(agentEnterprise()).To(Equal("New Enterprise"))
+			})
+		})
+
 		It("should handle GetConfig failure", func() {
 			// Set up mock to fail on GetConfig
 			mockConfig.WithConfigError(errors.New("mock GetConfig failure"))
@@ -271,16 +348,10 @@ var _ = Describe("EditInstance", func() {
 			Expect(metadata).To(BeNil())
 
 			// Verify all expected messages: Confirmed + Executing + Failure
-			var messages []*models.UMHMessage
-			for range 3 {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(3))
+			replies := drainReplies(outboundChannel)
+			Expect(replies).To(HaveLen(3))
+			Expect(replies[2].State).To(Equal(string(models.ActionFinishedWithFailure)))
+			Expect(replies[2].ErrorCode).To(Equal(models.ErrRetryConfigReadFailed))
 		})
 
 		It("should handle WriteConfig failure", func() {

@@ -161,8 +161,8 @@ var _ = Describe("write_config", func() {
 		})
 	})
 
-	Describe("topic hierarchy", func() {
-		DescribeTable("reports whether a topic lies beneath the bridge location",
+	Describe("topic location", func() {
+		DescribeTable("reports whether a topic can only match beneath the bridge location",
 			func(topic, locationPath string, expected bool) {
 				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
@@ -171,41 +171,90 @@ var _ = Describe("write_config", func() {
 
 				Expect(accepted).To(Equal(expected))
 			},
-			Entry("direct child", "umh.v1.UMHDEVTEST.cologne._historian.foo", "UMHDEVTEST.cologne", true),
-			Entry("deep child", "umh.v1.UMHDEVTEST.cologne.a.b._historian.c", "UMHDEVTEST.cologne", true),
-			Entry("topic without umh.v1. prefix", "UMHDEVTEST.cologne._historian.foo", "UMHDEVTEST.cologne", true),
-			Entry("sibling branch", "umh.v1.UMHDEVTEST.cologne._historian.foo", "UMHDEVTEST.cologne.sublevel", false),
-			Entry("parent level", "umh.v1.UMHDEVTEST._historian.foo", "UMHDEVTEST.cologne", false),
-			Entry("shared prefix but different level", "umh.v1.UMHDEVTEST.cologne2._historian.foo", "UMHDEVTEST.cologne", false),
-			Entry("bridge location itself", "umh.v1.UMHDEVTEST.cologne", "UMHDEVTEST.cologne", false),
-			Entry("empty location accepts any topic naming a contract", "umh.v1.anything._historian.foo", "", true),
+			Entry("direct child", `^umh\.v1\.acme\.cologne\._raw\.`, "acme.cologne", true),
+			Entry("deep child", `^umh\.v1\.acme\.cologne\.a\.b\._raw\.c`, "acme.cologne", true),
+			Entry("child of a bridge one level up", `^umh\.v1\.acme\.cologne\._raw\.`, "acme", true),
+			Entry("sibling of a bridge one level up", `^umh\.v1\.acme\.barcelona\._raw\.`, "acme", true),
+			Entry("sibling branch", `^umh\.v1\.acme\.barcelona\._raw\.`, "acme.cologne", false),
+			Entry("above the bridge location", `^umh\.v1\.acme\._raw\.`, "acme.cologne", false),
+			Entry("shared prefix but different level", `^umh\.v1\.acme\.cologne2\._raw\.`, "acme.cologne", false),
+			Entry("bridge location itself", `^umh\.v1\.acme\.cologne$`, "acme.cologne", false),
+			Entry("alternation reaching a sibling", `^umh\.v1\.acme\.(?:cologne|barcelona)\._raw\.`, "acme.cologne", false),
+			Entry("unescaped location dot also matches a sibling such as acme-cologne", `^umh.v1.acme.cologne\._raw\.`, "acme.cologne", false),
+			Entry("unescaped location dots", `^umh.v1.acme.cologne.line-4._raw\.`, "acme.cologne.line-4", false),
+			Entry("unescaped dot ending a level beneath the location also matches a level such as x-_raw", `^umh\.v1\.acme\.x._raw\.`, "acme", false),
+			Entry("location levels become levels beneath a bridge moved up", `^umh\.v1\.acme\.cologne\.foo\.bar\.baz\._raw\.motor_running`, "acme.cologne.foo.bar", true),
+			Entry("unescaped dot in place of a location character", `^umh\.v1\.acm.\.cologne\._raw\.`, "acme.cologne", false),
+			Entry("wildcard in place of a location level", `^umh\.v1\.acme\..*\._raw\.`, "acme.cologne", false),
+			Entry("wildcard across location levels", `^umh\.v1\.acme.*\._raw\.`, "acme.cologne", false),
+			Entry("unanchored pattern also matches mid-topic", `umh\.v1\.acme\.cologne\._raw\.`, "acme.cologne", false),
+			Entry("location with regex metacharacters taken literally", `^umh\.v1\.acme\.line-4\._raw\.`, "acme.line-4", true),
+			Entry("case-insensitive pattern also matches other locations", `(?i)^umh\.v1\.acme\.cologne\._raw\.`, "acme.cologne", false),
+			Entry("empty location accepts any level naming a contract", `^umh\.v1\.anything\._raw\.`, "", true),
 		)
 	})
 
 	Describe("topic data contract", func() {
-		configured := []string{"_pump_v1"}
+		declared := []string{"_pump_v1", "_pump_v2", "_pump_v3", "_pump_v4", "_pump_v5", "_valve_v1"}
 
-		DescribeTable("reports whether a topic names an existing data contract",
+		DescribeTable("reports whether a topic names exactly one existing data contract",
 			func(topic string, expected bool) {
 				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
 				}
-				accepted := input.ToWriteConfig().ValidateTopics("UMHDEVTEST.cologne", configured) == nil
+				accepted := input.ToWriteConfig().ValidateTopics("acme.cologne.line-4", declared) == nil
 
 				Expect(accepted).To(Equal(expected))
 			},
-			Entry("built-in contract and tag", "umh.v1.UMHDEVTEST.cologne._historian.temperature", true),
-			Entry("built-in contract subtree", "umh.v1.UMHDEVTEST.cologne._raw.*", true),
-			Entry("contract without a virtual path", "umh.v1.UMHDEVTEST.cologne._historian", true),
-			Entry("configured contract", "umh.v1.UMHDEVTEST.cologne._pump_v1.pressure", true),
-			Entry("contract behind further location levels", "umh.v1.UMHDEVTEST.cologne.line-4._raw.temperature", true),
-			Entry("contract that is not configured", "umh.v1.UMHDEVTEST.cologne._valve_v1.position", false),
-			Entry("misspelled contract", "umh.v1.UMHDEVTEST.cologne._pmup_v1.pressure", false),
-			Entry("no contract at all", "umh.v1.UMHDEVTEST.cologne.temperature", false),
-			Entry("wildcard in place of the contract", "umh.v1.UMHDEVTEST.cologne.*", false),
-			Entry("wildcard contract", "umh.v1.UMHDEVTEST.cologne._*", false),
-			Entry("bare contract prefix", "umh.v1.UMHDEVTEST.cologne._.temperature", false),
+			Entry("one machine", `^umh\.v1\.acme\.cologne\.line-4\.pump-01\._pump_v1\.`, true),
+			Entry("every level beneath the bridge", `^umh\.v1\.acme\.cologne\.line-4\.(?:[^._][^.]*\.)*_pump_v1\.`, true),
+			Entry("one tag on every level beneath the bridge", `^umh\.v1\.acme\.cologne\.line-4\.(?:[^._][^.]*\.)*_pump_v1\.motor\.current`, true),
+			Entry("built-in contract", `^umh\.v1\.acme\.cologne\.line-4\._raw\.`, true),
+			Entry("built-in historian contract", `^umh\.v1\.acme\.cologne\.line-4\._historian\.temperature`, true),
+			Entry("specific virtual path and tag", `^umh\.v1\.acme\.cologne\.line-4\._pump_v1\.motor\.current`, true),
+			Entry("virtual path subtree", `^umh\.v1\.acme\.cologne\.line-4\._pump_v1\.motor\..*`, true),
+			Entry("every tag of the contract", `^umh\.v1\.acme\.cologne\.line-4\._pump_v1\..*`, true),
+			Entry("explicit version range", `^umh\.v1\.acme\.cologne\.line-4\._pump_v[1-5]\.`, true),
+			Entry("explicit version alternation", `^umh\.v1\.acme\.cologne\.line-4\._pump_v(?:1|3)\.`, true),
+			Entry("custom contract", `^umh\.v1\.acme\.cologne\.line-4\._valve_v1\.`, true),
+			Entry("contract not declared", `^umh\.v1\.acme\.cologne\.line-4\._pump_v6\.`, false),
+			Entry("version range reaching undeclared versions", `^umh\.v1\.acme\.cologne\.line-4\._pump_v[1-8]\.`, false),
+			Entry("wildcard over versions", `^umh\.v1\.acme\.cologne\.line-4\._pump_v\d+\.`, false),
+			Entry("any version", `^umh\.v1\.acme\.cologne\.line-4\._pump_v.*\.`, false),
+			Entry("optional version", `^umh\.v1\.acme\.cologne\.line-4\._pump(?:_v\d+)?\.`, false),
+			Entry("contract without a version", `^umh\.v1\.acme\.cologne\.line-4\._pump\.`, false),
+			Entry("unescaped dot after the contract also matches _pump_v10", `^umh\.v1\.acme\.cologne\.line-4\._pump_v1.*`, false),
+			Entry("unescaped topic", `umh.v1.acme.cologne.line-4._pump_v1.*`, false),
+			Entry("contract not followed by a dot", `^umh\.v1\.acme\.cologne\.line-4\._pump_v1`, false),
+			Entry("two different contracts", `^umh\.v1\.acme\.cologne\.line-4\._(?:pump|valve)_v1\.`, false),
+			Entry("no contract", `^umh\.v1\.acme\.cologne\.line-4\.pump-01\.temperature`, false),
+			Entry("wildcard instead of a contract", `^umh\.v1\.acme\.cologne\.line-4\..*`, false),
+			Entry("wildcard contract", `^umh\.v1\.acme\.cologne\.line-4\._.*\.`, false),
+			Entry("any levels as .* also match other contracts, such as _raw.x._pump_v1.motor.current", `^umh\.v1\.acme\.cologne\.line-4\..*\._pump_v1\.motor\.current`, false),
+			Entry("wildcard levels reaching into the contract", `^umh\.v1\.acme\.cologne\.line-4\.a.*_pump_v1\.`, false),
+			Entry("contract wildcard after any levels", `^umh\.v1\.acme\.cologne\.line-4\.(?:[^.]*\.)*_pump_v1\.`, false),
+			Entry("underscore-prefixed level read as the contract", `^umh\.v1\.acme\.cologne\.line-4\._area\._raw\.`, false),
+			Entry("empty level", `^umh\.v1\.acme\.cologne\.line-4\.\._raw\.`, false),
+			Entry("unescaped dot ending a level beneath the location also matches a level such as x-_pump_v1", `^umh\.v1\.acme\.cologne\.line-4\.x._pump_v1\.`, false),
 		)
+	})
+
+	Describe("underscore-prefixed bridge location", func() {
+		validate := func(topic string) error {
+			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
+			}
+
+			return input.ToWriteConfig().ValidateTopics("acme._site", nil)
+		}
+
+		It("reads the contract beneath the location, not the location level", func() {
+			Expect(validate(`^umh\.v1\.acme\._site\._raw\.`)).To(Succeed())
+		})
+
+		It("rejects a topic naming no contract beneath the location", func() {
+			Expect(validate(`^umh\.v1\.acme\._site\.temperature`)).NotTo(Succeed())
+		})
 	})
 
 	Describe("ValidateTopics", func() {
@@ -218,28 +267,49 @@ var _ = Describe("write_config", func() {
 		}
 
 		It("reports every offending topic", func() {
-			err := validate("umh.v1.UMHDEVTEST.cologne._historian.foo\numh.v1.UMHDEVTEST.cologne._historian.bar", "UMHDEVTEST.cologne.sublevel")
-			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne._historian.foo")))
-			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne._historian.bar")))
-			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.sublevel")))
+			err := validate(`^umh\.v1\.acme\.cologne\._raw\.foo`+"\n"+`^umh\.v1\.acme\.cologne\._raw\.bar`, "acme.cologne.sublevel")
+			Expect(err).To(MatchError(ContainSubstring(`^umh\.v1\.acme\.cologne\._raw\.foo`)))
+			Expect(err).To(MatchError(ContainSubstring(`^umh\.v1\.acme\.cologne\._raw\.bar`)))
+			Expect(err).To(MatchError(ContainSubstring(`^umh\.v1\.acme\.cologne\.sublevel\.`)))
 		})
 
-		It("reports a location violation and an unknown contract in one error", func() {
-			err := validate("umh.v1.elsewhere._historian.foo\numh.v1.UMHDEVTEST.cologne.bar", "UMHDEVTEST.cologne")
-			Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
-			Expect(err).To(MatchError(ContainSubstring("umh.v1.elsewhere._historian.foo")))
-			Expect(err).To(MatchError(ContainSubstring("must each name one existing data contract")))
-			Expect(err).To(MatchError(ContainSubstring("umh.v1.UMHDEVTEST.cologne.bar")))
+		It("reports each kind of violation in one error", func() {
+			err := validate(`^umh\.v1\.elsewhere\._raw\.foo`+"\n"+`^umh\.v1\.acme\.cologne\.bar`+"\n"+
+				`umh\.v1\.acme\.cologne\._raw\.`+"\n"+`^umh\.v1\.acme\.cologne\.(`, "acme.cologne")
+			Expect(err).To(MatchError(ContainSubstring(`must be beneath the bridge location, starting with ^umh\.v1\.acme\.cologne\.: ^umh\.v1\.elsewhere\._raw\.foo`)))
+			Expect(err).To(MatchError(ContainSubstring(`must each name one existing data contract`)))
+			Expect(err).To(MatchError(ContainSubstring(`^umh\.v1\.acme\.cologne\.bar`)))
+			Expect(err).To(MatchError(ContainSubstring(`must start with ^: umh\.v1\.acme\.cologne\._raw\.`)))
+			Expect(err).To(MatchError(ContainSubstring(`must be valid regular expressions: ^umh\.v1\.acme\.cologne\.(`)))
 		})
 
 		It("names the contracts a topic may use", func() {
-			err := validate("umh.v1.UMHDEVTEST.cologne._nope.foo", "UMHDEVTEST.cologne")
+			err := validate(`^umh\.v1\.acme\.cologne\._nope\.foo`, "acme.cologne")
 			Expect(err).To(MatchError(ContainSubstring("_raw")))
 			Expect(err).To(MatchError(ContainSubstring("_historian")))
 		})
 
+		It("rejects a declared data contract without a version and says why", func() {
+			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: `^umh\.v1\.acme\.cologne\._pump\.`},
+			}
+
+			err := input.ToWriteConfig().ValidateTopics("acme.cologne", []string{"_pump", "_valve_v1"})
+			Expect(err).To(MatchError(ContainSubstring(`must each name one existing data contract`)))
+			Expect(err).To(MatchError(ContainSubstring(`data contracts _pump are declared without a version`)))
+			Expect(err).NotTo(MatchError(ContainSubstring(`(_raw, _historian, _pump,`)))
+		})
+
+		It("accepts a versioned data contract next to an unversioned declared one", func() {
+			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: `^umh\.v1\.acme\.cologne\._valve_v1\.`},
+			}
+
+			Expect(input.ToWriteConfig().ValidateTopics("acme.cologne", []string{"_pump", "_valve_v1"})).To(Succeed())
+		})
+
 		It("accepts the placeholder used when no topic was configured", func() {
-			Expect(validate(dataflowcomponentserviceconfig.PlaceholderUMHTopicUnset, "UMHDEVTEST.cologne")).To(Succeed())
+			Expect(validate(dataflowcomponentserviceconfig.PlaceholderUMHTopicUnset, "acme.cologne")).To(Succeed())
 		})
 	})
 })

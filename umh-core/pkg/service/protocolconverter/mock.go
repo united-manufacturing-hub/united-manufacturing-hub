@@ -709,7 +709,7 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 			switch {
 			case protocolConverterDesiredState == "stopped" || !connectionConfirmedUp:
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			case readDFCDesiredState == "stopped":
+			case readDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped:
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			default:
 				// Only start the DFC, if it has been configured and connection is up
@@ -730,7 +730,7 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 			switch {
 			case protocolConverterDesiredState == "stopped" || !connectionConfirmedUp:
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			case writeDFCDesiredState == "stopped":
+			case writeDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped:
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			default:
 				// Only start the DFC, if it has been configured and connection is up

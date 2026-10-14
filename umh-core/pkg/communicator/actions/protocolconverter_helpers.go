@@ -58,27 +58,41 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 	return nil
 }
 
-// validateWriteTopicHierarchy rejects a bridge whose write flow subscribes to topics
-// outside the bridge's own location, or to a data contract that does not exist, so the
-// violation is reported to the user instead of only degrading the bridge later. The rule
-// itself lives in BuildRuntimeConfig, which reports it as a WriteFlowConfigError; every
-// other render failure is left to the reconciliation loop, which reports it on the bridge.
+// checkWriteTopics reads the current config and passes it to violation, which reports a
+// write flow topic violation the action must not persist, so the user sees it right away
+// instead of only on the degraded bridge later. It returns the action error code along
+// with the error: models.ErrRetryConfigReadFailed when the config cannot be read, which a
+// retry may fix, and models.ErrValidationFailed for a violation, which only a change to
+// the topics fixes.
 //
-// The agent location and the declared data contracts are read from the config manager
+// The agent location and the declared data contracts come from the config manager
 // rather than from the system snapshot, because the snapshot carries no config (see
 // fsm.GetManagerSnapshots).
-func validateWriteTopicHierarchy(ctx context.Context, pcConfig config.ProtocolConverterConfig, configManager config.ConfigManager) error {
+func checkWriteTopics(ctx context.Context, configManager config.ConfigManager, violation func(config.FullConfig) error) (string, error) {
 	currentConfig, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
-		return fmt.Errorf("failed to read current config: %w", err)
+		return models.ErrRetryConfigReadFailed, fmt.Errorf("failed to read current config: %w", err)
 	}
 
-	_, err = runtime_config.BuildRuntimeConfig(
+	if err := violation(currentConfig); err != nil {
+		return models.ErrValidationFailed, err
+	}
+
+	return "", nil
+}
+
+// writeTopicViolation returns why the write flow of pcConfig may not subscribe to its
+// topics within fullConfig, which supplies the agent location and the declared data
+// contracts, or nil when it may. The rule itself lives in BuildRuntimeConfig, which
+// reports it as a WriteFlowConfigError; every other render failure is left to the
+// reconciliation loop, which reports it on the bridge.
+func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig config.FullConfig) error {
+	_, err := runtime_config.BuildRuntimeConfig(
 		pcConfig.ProtocolConverterServiceConfig,
-		convertIntMapToStringMap(currentConfig.Agent.Location),
+		convertIntMapToStringMap(fullConfig.Agent.Location),
 		nil, // TODO: add global vars
-		currentConfig.Historian,
-		currentConfig.DataContracts,
+		fullConfig.Historian,
+		fullConfig.DataContracts,
 		runtime_config.BridgedByPlaceholder,
 		pcConfig.Name,
 	)
@@ -89,6 +103,19 @@ func validateWriteTopicHierarchy(ctx context.Context, pcConfig config.ProtocolCo
 	}
 
 	return nil
+}
+
+// introducedWriteTopicViolation returns the write topic violation of a bridge after a
+// change, unless the bridge already had one before it. A change, such as a new location,
+// must not turn valid write flow topics invalid, but it is not blocked by a violation it
+// did not cause.
+func introducedWriteTopicViolation(before, after config.ProtocolConverterConfig, beforeConfig, afterConfig config.FullConfig) error {
+	err := writeTopicViolation(after, afterConfig)
+	if err == nil || writeTopicViolation(before, beforeConfig) != nil {
+		return nil
+	}
+
+	return err
 }
 
 // validateReadProtocolConverterDFC validates a read ProtocolConverterDFC's state and configuration.

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -162,6 +163,14 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
+	if errCode, err := checkWriteTopics(ctx, a.configManager, a.writeTopicViolation); err != nil {
+		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, errCode, nil, a.outboundChannel, models.EditInstance, nil)
+
+		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
+	}
+
 	err := a.configManager.AtomicSetLocation(ctx, *a.location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
@@ -175,6 +184,29 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	// TODO: check against observedState as well
 
 	return "Successfully updated instance location", nil, nil
+}
+
+// writeTopicViolation reports the bridges of currentConfig whose valid write flow topics
+// the location change moves outside the bridge's new location. Bridges whose topics were
+// already invalid are left to the reconciliation loop, which reports them on the bridge.
+func (a *EditInstanceAction) writeTopicViolation(currentConfig config.FullConfig) error {
+	updatedConfig := currentConfig.Clone()
+	updatedConfig.ApplyAgentLocation(*a.location)
+
+	var broken []string
+
+	for i, pc := range updatedConfig.ProtocolConverter {
+		if err := introducedWriteTopicViolation(currentConfig.ProtocolConverter[i], pc, currentConfig, updatedConfig); err != nil {
+			broken = append(broken, fmt.Sprintf("bridge %q: %v", pc.Name, err))
+		}
+	}
+
+	if len(broken) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("the new location would stop the write flows of these bridges, update their topics first: %s",
+		strings.Join(broken, "; "))
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.

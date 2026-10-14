@@ -794,6 +794,9 @@ const (
 	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
 	// It is retryable because the write failure might be caused by temporary filesystem issues.
 	ErrRetryConfigWriteFailed = "ERR_RETRY_CONFIG_WRITE_FAILED"
+	// ErrRetryConfigReadFailed is the error code for a config file read failure.
+	// It is retryable because the read failure might be caused by temporary filesystem issues.
+	ErrRetryConfigReadFailed = "ERR_RETRY_CONFIG_READ_FAILED"
 	// ErrGetCacheModTimeFailed is the error code for a failed cache mod time retrieval.
 	// It is not retryable because we already changed the config file and the user should refresh the page.
 	ErrGetCacheModTimeFailed = "ERR_GET_CACHE_MOD_TIME_FAILED"

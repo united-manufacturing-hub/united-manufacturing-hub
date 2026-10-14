@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -778,6 +779,46 @@ func (m *FileConfigManagerWithBackoff) GetLastError() error {
 	return m.backoffManager.GetLastError()
 }
 
+// ApplyAgentLocation sets the agent location and copies each of its levels onto every
+// bridge and stream processor, overriding their own value for that level. Levels the agent
+// location does not set keep the component's value. It modifies the bridge and stream
+// processor slice elements in place, which a shallow copy of c shares, so callers that
+// still need the original apply it to a Clone.
+func (c *FullConfig) ApplyAgentLocation(location models.EditInstanceLocationModel) {
+	// Location is a hierarchical structure represented as map[int]string
+	// 0: Enterprise, 1: Site, 2: Area, 3: Line, 4: WorkCell
+	c.Agent.Location = map[int]string{0: location.Enterprise}
+
+	for level, value := range map[int]*string{1: location.Site, 2: location.Area, 3: location.Line, 4: location.WorkCell} {
+		if value != nil {
+			c.Agent.Location[level] = *value
+		}
+	}
+
+	withAgentLevels := func(componentLocation map[string]string) map[string]string {
+		merged := maps.Clone(componentLocation)
+		if merged == nil {
+			merged = make(map[string]string, len(c.Agent.Location))
+		}
+
+		for level, value := range c.Agent.Location {
+			merged[strconv.Itoa(level)] = value
+		}
+
+		return merged
+	}
+
+	for i := range c.ProtocolConverter {
+		spec := &c.ProtocolConverter[i].ProtocolConverterServiceConfig
+		spec.Location = withAgentLevels(spec.Location)
+	}
+
+	for i := range c.StreamProcessor {
+		spec := &c.StreamProcessor[i].StreamProcessorServiceConfig
+		spec.Location = withAgentLevels(spec.Location)
+	}
+}
+
 // AtomicSetLocation sets the location in the config atomically
 // This function updates the agent location and propagates the changes to all
 // other components (ProtocolConverter, StreamProcessor) to maintain consistency.
@@ -794,61 +835,7 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Always create a new location map like in the mock implementation
-	config.Agent.Location = make(map[int]string)
-
-	// Location is a hierarchical structure represented as map[int]string
-	// 0: Enterprise, 1: Site, 2: Area, 3: Line, 4: WorkCell
-	config.Agent.Location[0] = location.Enterprise
-
-	// Update optional fields if they exist
-	if location.Site != nil {
-		config.Agent.Location[1] = *location.Site
-	}
-
-	if location.Area != nil {
-		config.Agent.Location[2] = *location.Area
-	}
-
-	if location.Line != nil {
-		config.Agent.Location[3] = *location.Line
-	}
-
-	if location.WorkCell != nil {
-		config.Agent.Location[4] = *location.WorkCell
-	}
-
-	// Convert the agent location to string map for use in other components
-	agentLocationStr := make(map[string]string)
-	for k, v := range config.Agent.Location {
-		agentLocationStr[strconv.Itoa(k)] = v
-	}
-
-	// Update all ProtocolConverter locations to match the agent location
-	for i := range config.ProtocolConverter {
-		if config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location == nil {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location = make(map[string]string)
-		}
-
-		// Update each level in the protocol converter location with the agent location
-		// Only update levels that exist in the agent location
-		for levelStr, value := range agentLocationStr {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location[levelStr] = value
-		}
-	}
-
-	// Update all StreamProcessor locations to match the agent location
-	for i := range config.StreamProcessor {
-		if config.StreamProcessor[i].StreamProcessorServiceConfig.Location == nil {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location = make(map[string]string)
-		}
-
-		// Update each level in the stream processor location with the agent location
-		// Only update levels that exist in the agent location
-		for levelStr, value := range agentLocationStr {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location[levelStr] = value
-		}
-	}
+	config.ApplyAgentLocation(location)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {

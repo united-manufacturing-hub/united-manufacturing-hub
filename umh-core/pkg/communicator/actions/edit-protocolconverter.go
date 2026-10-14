@@ -306,18 +306,6 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
 		confirmationMessage, a.outboundChannel, models.EditProtocolConverter)
 
-	var err error
-
-	if a.dfcType != DFCTypeEmpty {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Updating bridge configuration with %s DFC...", a.dfcType.String()),
-			a.outboundChannel, models.EditProtocolConverter)
-	} else {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Updating bridge configuration (connection and location only)...",
-			a.outboundChannel, models.EditProtocolConverter)
-	}
-
 	// Apply mutations to create new spec
 	newSpec, atomicEditUUID, desiredPCState, err := a.applyMutation()
 	if err != nil {
@@ -336,14 +324,28 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Only an edit that supplies a write config is held to the topic hierarchy: a read-only
-	// edit must not be blocked by a violation it did not introduce.
-	if err := a.validateSuppliedWriteTopics(newSpec); err != nil {
-		errorMsg := fmt.Sprintf("Invalid write flow configuration: %v", err)
+	validateCtx, cancelValidate := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancelValidate()
+
+	errCode, err := checkWriteTopics(validateCtx, a.configManager, func(currentConfig config.FullConfig) error {
+		return a.writeTopicViolation(newSpec, currentConfig)
+	})
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to update bridge: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, models.ErrConfigFileInvalid, nil, a.outboundChannel, models.EditProtocolConverter, nil)
+			errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	if a.dfcType != DFCTypeEmpty {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			fmt.Sprintf("Updating bridge configuration with %s DFC...", a.dfcType.String()),
+			a.outboundChannel, models.EditProtocolConverter)
+	} else {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			"Updating bridge configuration (connection and location only)...",
+			a.outboundChannel, models.EditProtocolConverter)
 	}
 
 	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
@@ -391,17 +393,23 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	return response, nil, nil
 }
 
-// validateSuppliedWriteTopics enforces the topic hierarchy only when this edit supplies a
-// write config. See validateWriteTopicHierarchy for the rule itself.
-func (a *EditProtocolConverterAction) validateSuppliedWriteTopics(newSpec config.ProtocolConverterConfig) error {
-	if a.writeDFCInput == nil {
-		return nil
+// writeTopicViolation returns the write topic violation of newSpec within currentConfig
+// when the edit is its cause: the edit supplies the write config, or it changes what the
+// existing topics are checked against, such as the bridge location, a variable, or the
+// state of a stopped write flow. A violation the bridge already had does not block an
+// unrelated edit.
+func (a *EditProtocolConverterAction) writeTopicViolation(newSpec config.ProtocolConverterConfig, currentConfig config.FullConfig) error {
+	if a.writeDFCInput != nil {
+		return writeTopicViolation(newSpec, currentConfig)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-	defer cancel()
+	for _, pc := range currentConfig.ProtocolConverter {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(pc.Name) == a.protocolConverterUUID {
+			return introducedWriteTopicViolation(pc, newSpec, currentConfig, currentConfig)
+		}
+	}
 
-	return validateWriteTopicHierarchy(ctx, newSpec, a.configManager)
+	return writeTopicViolation(newSpec, currentConfig)
 }
 
 // applyMutation analyzes the current configuration and applies the necessary mutations
