@@ -843,9 +843,10 @@ func isAuthenticatedUUID(observed, placeholder string) bool {
 	return observed != "" && observed != placeholder
 }
 
-// applyAuthenticatedUUID hands the backend's instance UUID to the communicator.
+// applyAuthenticatedUUID hands the backend's instance UUID to the communicator and to Sentry.
 func applyAuthenticatedUUID(uuid string, cs *communication_state.CommunicationState) {
 	cs.SetLoginResponseForFSMv2(uuid)
+	sentry.SetInstanceUUID(uuid)
 	if cs.Gatekeeper != nil {
 		cs.Gatekeeper.SetInstanceUUID(uuid)
 	}

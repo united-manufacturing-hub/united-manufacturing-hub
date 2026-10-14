@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
@@ -30,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestMain(t *testing.T) {
@@ -269,5 +271,62 @@ var _ = Describe("isAuthenticatedUUID", func() {
 
 	It("rejects an empty UUID", func() {
 		Expect(isAuthenticatedUUID("", placeholderUUID)).To(BeFalse())
+	})
+})
+
+var _ = Describe("applyAuthenticatedUUID", func() {
+	const authenticatedUUID = "a4c3c2b3-1fe8-465f-a73f-0222b1da17b5"
+
+	var transport *sentry.MockTransport
+
+	BeforeEach(func() {
+		transport = &sentry.MockTransport{}
+		client, err := sentry.NewClient(sentry.ClientOptions{
+			Dsn:       "https://test@sentry.io/123",
+			Transport: transport,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The pushed scope confines the instance_uuid tag to this spec;
+		// PopScope in teardown drops it, so later specs see an untagged scope.
+		sentry.CurrentHub().PushScope()
+		sentry.CurrentHub().BindClient(client)
+	})
+
+	AfterEach(func() {
+		sentry.CurrentHub().PopScope()
+	})
+
+	It("tags later Sentry events with the applied UUID and keeps the login response apply", func() {
+		// NewCommunicationState initializes both mutexes; a bare struct
+		// literal leaves the unexported mu nil, and SetLoginResponseForFSMv2
+		// panics locking it.
+		cs := communication_state.NewCommunicationState(
+			nil,
+			nil,
+			nil,
+			"",
+			nil,
+			nil,
+			zaptest.NewLogger(GinkgoT()).Sugar(),
+			nil,
+			nil,
+		)
+
+		applyAuthenticatedUUID(authenticatedUUID, cs)
+
+		By("keeping the login response apply")
+		cs.LoginResponseMu.RLock()
+		loginResponse := cs.LoginResponse
+		cs.LoginResponseMu.RUnlock()
+		Expect(loginResponse).NotTo(BeNil())
+		Expect(loginResponse.UUID.String()).To(Equal(authenticatedUUID))
+
+		By("tagging a later Sentry event")
+		sentry.CaptureMessage("applyAuthenticatedUUID capstone")
+
+		events := transport.Events()
+		Expect(events).To(HaveLen(1), "expected exactly one captured event")
+		Expect(events[0].Tags["instance_uuid"]).To(Equal(authenticatedUUID))
 	})
 })
