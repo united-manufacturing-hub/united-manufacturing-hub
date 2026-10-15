@@ -83,6 +83,48 @@ Steal uses the 95th percentile once 20 samples are in, and the mean before that,
 instance gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine
 the Steal line reads `not measured` with its reason.
 
+## Metrics
+
+With `USE_FSMV2_CPU=true`, the CPU worker publishes the gauges below on the Prometheus endpoint on port 8080. [Metrics](../../../production/metrics.md) explains how to read the endpoint. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
+
+When a tick could not measure, every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
+
+### Measurements
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_worker_cpu_avg_usage_cores` | gauge | This container's mean usage over 60 seconds, in cores |
+| `umh_fsmv2_worker_cpu_avg_usage_fraction` | gauge | That mean as a fraction (0 to 1) of the CPUs this container may run on |
+| `umh_fsmv2_worker_cpu_throttle_ratio` | gauge | The share of scheduling periods in the last 60 seconds that were throttled, 0 to 1 |
+| `umh_fsmv2_worker_cpu_pressure_avg60_ratio` | gauge | The kernel's PSI cpu-some avg60, as a fraction from 0 to 1 |
+| `umh_fsmv2_worker_cpu_host_headroom_cores` | gauge | Cores free on the machine after the reserve, in cores. Negative on a full machine. |
+| `umh_fsmv2_worker_cpu_avg_host_busy_cores` | gauge | The whole machine's mean busy time over 60 seconds, in cores |
+| `umh_fsmv2_worker_cpu_capacity_cores` | gauge | The ceiling that CPU health judges against, in cores |
+| `umh_fsmv2_worker_cpu_reserve_cores` | gauge | The part of that ceiling held back, in cores |
+| `umh_fsmv2_worker_cpu_host_cpus` | gauge | The machine's CPU count |
+| `umh_fsmv2_worker_cpu_last_sample_unix` | gauge | The Unix time, in seconds, of the last tick that measured |
+
+### Flags
+
+Each flag reads 1 or 0. A 0 means the gauge it covers is not worth acting on in this tick. A mean over too few samples and a 0 that nobody measured both publish with the flag at 0. Nothing in the metrics tells the two apart.
+
+| Name | Type | Covers |
+|---|---|---|
+| `umh_fsmv2_worker_cpu_usage_ring_active` | gauge | `cpu_avg_usage_cores` |
+| `umh_fsmv2_worker_cpu_host_busy_ring_active` | gauge | `cpu_avg_host_busy_cores` |
+| `umh_fsmv2_worker_cpu_host_busy_cores_available` | gauge | `cpu_avg_host_busy_cores` and `cpu_host_headroom_cores` |
+| `umh_fsmv2_worker_cpu_throttle_signal_ready` | gauge | `cpu_throttle_ratio` |
+| `umh_fsmv2_worker_cpu_pressure_signal_ready` | gauge | `cpu_pressure_avg60_ratio` |
+| `umh_fsmv2_worker_cpu_host_headroom_available` | gauge | `cpu_host_headroom_cores` |
+
+The flags come in three kinds:
+
+- A `_ring_active` flag covers one 60-second window. It reads 0 until that window holds enough samples to trust.
+- A `_signal_ready` flag covers a whole signal. It reads 0 while the window fills and when the signal could not be read. It also reads 0 for as long as the container runs on a machine with no source for that signal, such as a bare-metal host without cgroup throttle counters.
+- An `_available` flag reads 0 when this tick's sample could not supply the figure. `cpu_host_headroom_available` reads 0 when the container is pinned to a subset of the machine's CPUs. It also reads 0 when the machine's CPU count could not be read. The first is a deployment choice. The second is a read failure worth investigating.
+
+`cpu_host_headroom_cores` has no flag of its own. Trust it only when `cpu_host_headroom_available`, `cpu_host_busy_cores_available` and `cpu_host_busy_ring_active` all read 1.
+
 ## Known limitation
 
 A container pinned to a subset of the machine's CPUs (`cpuset`) with no CPU limit set can print a
