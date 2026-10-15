@@ -50,10 +50,7 @@ const (
 // boundary — each stated at the phase where it occurs, Phase 0 and Phase 2 below.
 //
 // The two agree because MessagesPerTick = MessagesPerSecond x tickSeconds with
-// tickSeconds > 0, so the two >0 predicates are identical. What this guards is the
-// DERIVATION: comparing raw counts, differencing consecutive polls, or holding
-// active for N ticks after the last message would each diverge from
-// UpdateFromMetrics.
+// tickSeconds > 0, so the two >0 predicates are identical.
 func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
@@ -98,17 +95,9 @@ func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
 		}
 	}
 
-	// Phase 2 — the counter stops moving. Both windows must drain to idle. Equality
-	// is NOT asserted during the drain: the two windows have the same nominal span
-	// but different eviction rules, so they disagree for about one sample at the
-	// boundary. At that boundary, the tick where FSMv1's 600-entry window has just
-	// evicted the last rising sample, the worker's 60s time window still contains
-	// it, so worker reads active while FSMv1 reads idle. FSMv1 evicts by ENTRY
-	// COUNT, so which sample falls out at the boundary follows the number of polls
-	// rather than elapsed time, and its idle edge therefore moves with the poll
-	// cadence while the worker's stays at 60s. This test does not adjudicate which
-	// of the two readings is right at that tick; it asserts only the settled state
-	// at the end.
+	// Phase 2 — the counter stops. The two windows can disagree for one sample at
+	// the 60s edge, because FSMv1 drops samples by count and the worker drops them
+	// by age. So this phase checks only that both read idle at the end.
 	var lastWorker, lastFSM bool
 
 	for i := 0; i < isActiveFlatSamples; i++ {

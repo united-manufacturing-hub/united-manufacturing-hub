@@ -19,10 +19,10 @@ import (
 	"testing"
 )
 
-// TestGetAsBoolStrictReportsUnrecognisedValues pins the one way
+// TestGetAsBoolStrictReportsUnrecognisedValues asserts the one way
 // GetAsBoolStrict differs from GetAsBool: a value that is set but is not one of
-// the recognised spellings comes back with an error instead of being folded
-// into defaultValue. Unset stays error-free, because callers use an unset
+// the recognised spellings comes back with an error instead of being silently
+// replaced by defaultValue. Unset stays error-free, because callers use an unset
 // variable as their normal default.
 func TestGetAsBoolStrictReportsUnrecognisedValues(t *testing.T) {
 	const key = "UMH_TEST_GET_AS_BOOL_STRICT"
@@ -83,7 +83,7 @@ func TestGetAsBoolStrictReportsUnrecognisedValues(t *testing.T) {
 	}
 }
 
-// TestGetAsBoolStrictHonoursDefaultOnUnrecognisedValue pins that the parsed
+// TestGetAsBoolStrictHonoursDefaultOnUnrecognisedValue asserts that the parsed
 // value returned alongside the error is defaultValue, so a caller that only
 // logs the error still behaves exactly like GetAsBool.
 func TestGetAsBoolStrictHonoursDefaultOnUnrecognisedValue(t *testing.T) {

@@ -68,8 +68,9 @@ const (
 	OPCDebugEnvVar = "OPC_DEBUG"
 )
 
-// envUseFsmv2BenthosMonitor names the env var selecting the fsmv2 benthos
-// monitor backend in NewDefaultBenthosService; unset or false-y means fsmv1.
+// envUseFsmv2BenthosMonitor selects the fsmv2 benthos monitor in
+// NewDefaultBenthosService when it holds a true value (env.GetAsBool
+// spellings). Any other value keeps FSMv1.
 const envUseFsmv2BenthosMonitor = "USE_FSMV2_BENTHOS_MONITOR"
 
 // IBenthosService is the interface for managing Benthos services.
@@ -206,18 +207,12 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 	return nil
 }
 
-// benthosMonitorManagerIface lets BenthosService hold either benthos monitor
-// backend: the fsmv1 BenthosMonitorManager or the fsmv2 adapter WorkerManager,
-// depending on the USE_FSMV2_BENTHOS_MONITOR flag. A method added here must
-// exist on both backends, and the fsmv2 side is a generic
-// adapter.WorkerManager whose method set this package does not control — which
-// is why GetCurrentFSMState is absent even though Status calls it on s6Manager.
+// benthosMonitorManagerIface is the method set that both benthos monitor
+// backends implement: the FSMv1 BenthosMonitorManager and the fsmv2
+// adapter.WorkerManager. Add a method only if both backends have it.
 type benthosMonitorManagerIface interface {
-	// GetLastObservedState is called from GetHealthCheckAndMetrics.
 	GetLastObservedState(serviceName string) (fsm.ObservedState, error)
-	// GetInstance is called from RemoveBenthosFromS6Manager.
 	GetInstance(name string) (fsm.FSMInstance, bool)
-	// Reconcile is called from ReconcileManager.
 	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
 }
 
@@ -327,14 +322,9 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	}
 
 	if service.benthosMonitorManager == nil {
-		// GetAsBoolStrict rather than GetAsBool: a typo such as "ture" has to be
-		// visible. GetAsBool folds any unrecognised value into the default, so a
-		// misspelled flag would run on fsmv1 with nothing in the log to say so.
-		// The error already names the variable and quotes the value, and the
-		// value it returns alongside the error is the fsmv1 default.
 		useFsmv2, err := env.GetAsBoolStrict(envUseFsmv2BenthosMonitor, false)
 		if err != nil {
-			log.Warnf("%v; treating the flag as off, so this benthos instance stays on the fsmv1 monitor", err)
+			log.Warnf("%v; ignoring it and keeping the default bridge metrics collection", err)
 		}
 
 		if useFsmv2 {
@@ -345,9 +335,9 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 				fmt.Sprintf("%s_%s", logger.ComponentBenthosMonitorManager, benthosName),
 			)
 		} else {
-			// No Infof counterpart on purpose: this flag-unset default must keep
-			// its pre-flag log output. The "logs nothing about the variable when
-			// it is unset" spec in benthos_backend_test.go pins that silence.
+			// Unset is the default in every existing container, so this branch
+			// logs nothing. The spec "logs nothing about the variable when it is
+			// unset" in benthos_backend_test.go asserts it.
 			service.benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManager(benthosName)
 		}
 	}

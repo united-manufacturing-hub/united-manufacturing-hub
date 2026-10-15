@@ -73,8 +73,8 @@ output_sent{label="",path="root.output"} 7
 		t.Fatalf("Poll errored: %v", err)
 	}
 
-	if status.ScrapedAt.IsZero() {
-		t.Errorf("ScrapedAt is zero; Poll did not record a real scrape time")
+	if status.PollStartedAt.IsZero() {
+		t.Errorf("PollStartedAt is zero; Poll did not record its start time")
 	}
 	if status.BenthosMetrics.InputReceivedTotal() != 42 {
 		t.Errorf("InputReceivedTotal() = %d, want 42 (from served /metrics counter)", status.BenthosMetrics.InputReceivedTotal())

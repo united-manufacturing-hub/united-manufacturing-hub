@@ -33,7 +33,7 @@ func counts(input, output int) benthosmonitorservice.Metrics {
 }
 
 // A counter drop means benthos restarted, so observe rebuilds its engine
-// (restarted, observe.go) and the window holds only post-restart samples.
+// (counterSeriesChanged, observe.go) and the window holds only post-restart samples.
 // fsmv1 keys on the same drop: 'count < throughput.LastCount' in
 // updateComponentThroughput (pkg/service/benthos_monitor/metrics_state.go).
 func TestObserveRebuildsOnCounterReset(t *testing.T) {

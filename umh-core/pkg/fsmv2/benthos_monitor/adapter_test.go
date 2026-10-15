@@ -41,20 +41,20 @@ func testConfig() config.BenthosMonitorConfig {
 // guarded in BenthosService.HasProcessingActivity (benthos.go) but not in its
 // test double MockBenthosService.HasProcessingActivity
 // (pkg/service/benthos/mock.go), so the MetricsState assertion below still
-// earns its place.
+// catches a nil in the mock.
 //
 // It also asserts the single conversion mapObserved performs: MessagesPerSecond
 // becomes MessagesPerTick, scaled by tickSeconds (adapter.go).
 func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 	status := simple.Status[BenthosMonitorStatus]{
 		Result: BenthosMonitorStatus{
-			ScrapedAt: time.Now().Truncate(time.Second),
-			Input:     ComponentThroughput{MessagesPerSecond: 20, LastCount: 5},
-			Output:    ComponentThroughput{MessagesPerSecond: 10, LastCount: 3},
-			IsActive:  true,
-			PingAlive: true,
-			Ready:     true,
-			Version:   "1.2.3",
+			PollStartedAt: time.Now().Truncate(time.Second),
+			Input:         ComponentThroughput{MessagesPerSecond: 20, LastCount: 5},
+			Output:        ComponentThroughput{MessagesPerSecond: 10, LastCount: 3},
+			IsActive:      true,
+			PingAlive:     true,
+			Ready:         true,
+			Version:       "1.2.3",
 		},
 	}
 
@@ -87,7 +87,7 @@ func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 		t.Errorf("Output.MessagesPerTick = %v, want %v (10 msg/s x 0.1s tick)", ms.Output.MessagesPerTick, wantOut)
 	}
 	if ms.Input.LastCount != int64(status.Result.Input.LastCount) {
-		t.Errorf("Input.LastCount = %d, want %d (never left zero; it gates every MC panel)", ms.Input.LastCount, status.Result.Input.LastCount)
+		t.Errorf("Input.LastCount = %d, want %d (the Management Console throughput panels read LastCount)", ms.Input.LastCount, status.Result.Input.LastCount)
 	}
 	if ms.Output.LastCount != int64(status.Result.Output.LastCount) {
 		t.Errorf("Output.LastCount = %d, want %d", ms.Output.LastCount, status.Result.Output.LastCount)
@@ -96,7 +96,7 @@ func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 		t.Errorf("MetricsState.IsActive = %v, want %v (copied through, never scaled)", ms.IsActive, status.Result.IsActive)
 	}
 	if ms.Output.MessagesPerTick == ms.Input.MessagesPerTick {
-		t.Errorf("input and output ticks must differ (20 vs 10 msg/s)")
+		t.Errorf("Input and Output MessagesPerTick must differ (20 vs 10 msg/s)")
 	}
 
 	// HealthCheck mirrors the scrape's liveness/readiness/version.
@@ -108,23 +108,19 @@ func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 
 // TestMapObservedSetsIsRunning asserts the rule behind mapObserved's IsRunning
 // field (observationIsTrustworthy, adapter.go): when an observation exists
-// (ScrapedAt non-zero) and the framework's verdict is not degraded, IsRunning is
+// (PollStartedAt non-zero) and the framework's verdict is not degraded, IsRunning is
 // true; otherwise false. It matters because GetHealthCheckAndMetrics
 // (pkg/service/benthos/benthos.go) treats IsRunning=false as no-data —
 // discarding the HealthCheck it just copied out of LastScan and returning
 // ErrBenthosMonitorNotRunning — so IsRunning gates HealthCheck delivery to every
 // consumer.
-//
-// This failure was observed, not hypothesised: in a live container the worker
-// polled correctly and every DataFlowComponent still reported "healthchecks did
-// not pass".
 func TestMapObservedSetsIsRunning(t *testing.T) {
-	// A real scrape: ScrapedAt set, both probes true.
+	// A real scrape: PollStartedAt set, both probes true.
 	live := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
 		Result: BenthosMonitorStatus{
-			ScrapedAt: time.Now(),
-			PingAlive: true,
-			Ready:     true,
+			PollStartedAt: time.Now(),
+			PingAlive:     true,
+			Ready:         true,
 		},
 	})
 	bm, ok := live.(benthosmonitorfsm.BenthosMonitorObservedState)
@@ -148,18 +144,12 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 		t.Error("IsRunning is true for a zero status: an unobserved worker must not report itself running")
 	}
 
-	// A FAILED poll. This is the case the timestamp alone cannot express, and the
-	// one that made IsRunning permanently true: Poll stamps ScrapedAt before its
-	// first request and returns that partial status on every path below the stamp,
-	// and simple.CollectObservedState deliberately persists it (with Degraded set
-	// and the error in Reason) so partial detail survives. So a dead monitor
-	// arrives here with a FRESH ScrapedAt and must still map to not-running,
-	// otherwise GetHealthCheckAndMetrics copies a dead monitor's HealthCheck out
-	// as if live and its ErrBenthosMonitorNotRunning gate can never fire.
+	// A failed poll: PollStartedAt is fresh and Degraded is true. It must map to
+	// not-running.
 	failed := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
 		Result: BenthosMonitorStatus{
-			ScrapedAt: time.Now(), // fresh, exactly as a failed poll leaves it
-			PingAlive: true,       // /ping answered before /metrics failed
+			PollStartedAt: time.Now(), // fresh, exactly as a failed poll leaves it
+			PingAlive:     true,       // /ping answered before /metrics failed
 		},
 		Degraded: true,
 		Reason:   "poll error: scrape /metrics: connection refused",
@@ -176,7 +166,7 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 	// USE_FSMV2_BENTHOS_MONITOR there is no separate process that could be
 	// "running but unhealthy", so it maps to not-running too.
 	stale := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
-		Result:   BenthosMonitorStatus{ScrapedAt: time.Now()},
+		Result:   BenthosMonitorStatus{PollStartedAt: time.Now()},
 		Degraded: true,
 		Reason:   "benthos monitor scan is stale",
 	})
@@ -211,16 +201,16 @@ func TestMapObservedToleratesZeroStatus(t *testing.T) {
 // TestHealthReproducesIsMonitorHealthy asserts the monitor is healthy iff its scan is fresh
 // (within BenthosMaxMetricsAndConfigAge). A stale scan is degraded.
 func TestHealthReproducesIsMonitorHealthy(t *testing.T) {
-	if h := health(testConfig(), BenthosMonitorStatus{ScrapedAt: time.Now()}); h.Degraded {
+	if h := health(testConfig(), BenthosMonitorStatus{PollStartedAt: time.Now()}); h.Degraded {
 		t.Errorf("fresh scan reported degraded: %+v", h)
 	}
 
-	// Past the 10s age -> degraded (never healthy).
-	if h := health(testConfig(), BenthosMonitorStatus{ScrapedAt: time.Now().Add(-(constants.BenthosMaxMetricsAndConfigAge + time.Second))}); !h.Degraded {
+	// Older than BenthosMaxMetricsAndConfigAge -> degraded.
+	if h := health(testConfig(), BenthosMonitorStatus{PollStartedAt: time.Now().Add(-(constants.BenthosMaxMetricsAndConfigAge + time.Second))}); !h.Degraded {
 		t.Errorf("stale scan reported healthy: %+v", h)
 	}
 
 	if h := health(testConfig(), BenthosMonitorStatus{}); !h.Degraded {
-		t.Errorf("empty ScrapedAt reported healthy: %+v", h)
+		t.Errorf("empty PollStartedAt reported healthy: %+v", h)
 	}
 }

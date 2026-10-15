@@ -177,17 +177,16 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 	}
 
 	// --- observation 1: the cold tick -------------------------------------
-	// The scrape must reach all four endpoints and land in the status. With a
-	// single scrape observed (observe, observe.go) the rate is not yet
-	// computable, so the worker reports
-	// no throughput and stays inactive — never FSMv1's cumulative-count-as-rate.
+	// The scrape must reach all four endpoints and land in the status. The rate
+	// window (observe.go) holds a single sample, so the rate is not yet
+	// computable, and the worker reports no throughput and stays inactive.
 	first := observe(t, worker, spec)
 
 	if first.Degraded {
 		t.Errorf("cold observation is degraded (%q); a reachable benthos must be healthy", first.Reason)
 	}
-	if first.Result.ScrapedAt.IsZero() {
-		t.Error("ScrapedAt is zero: Poll did not record a scrape time through the framework")
+	if first.Result.PollStartedAt.IsZero() {
+		t.Error("PollStartedAt is zero: Poll did not record its start time through the framework")
 	}
 	if !first.Result.PingAlive {
 		t.Error("PingAlive is false: /ping was not scraped through the framework")
@@ -205,7 +204,7 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 		t.Errorf("OutputSentTotal() = %d, want 80 (summed across both broker legs, not last-wins)", first.Result.BenthosMetrics.OutputSentTotal())
 	}
 	if first.Result.Input.MessagesPerSecond != 0 {
-		t.Errorf("cold Input.MessagesPerSecond = %v, want 0 (one sample cannot be delta-ed)", first.Result.Input.MessagesPerSecond)
+		t.Errorf("cold Input.MessagesPerSecond = %v, want 0 (a rate needs two samples)", first.Result.Input.MessagesPerSecond)
 	}
 	if first.Result.IsActive {
 		t.Error("cold IsActive is true; a single sample must read inactive")
@@ -238,7 +237,7 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 		t.Errorf("Input.MessagesPerSecond = %v, want > 0 after a 40-message rise", second.Result.Input.MessagesPerSecond)
 	}
 	if !second.Result.IsActive {
-		t.Error("IsActive is false after input rose: the tick-free derivation did not reach the status")
+		t.Error("IsActive is false after input rose: Poll did not copy IsActive into the status")
 	}
 }
 
@@ -251,9 +250,8 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 // The verdict comes from the framework, not from the worker: a failed scrape
 // makes Poll return an error, and the poll-error path degrades the observation
 // WITHOUT consulting the worker's Health function (see
-// simple.CollectObservedState's godoc, simple/worker.go). Deleting Health
-// therefore does not change this test's outcome; Health is exercised at the unit
-// level (TestHealthReproducesIsMonitorHealthy). Staleness of an
+// simple.CollectObservedState's godoc, simple/worker.go). Health is exercised at
+// the unit level (TestHealthReproducesIsMonitorHealthy). Staleness of an
 // otherwise-successful scrape is caught one layer up, by staleAfterFor — 3x the
 // registered observation interval (adapter/instance.go).
 func TestScenarioUnreachableBenthosIsDegraded(t *testing.T) {

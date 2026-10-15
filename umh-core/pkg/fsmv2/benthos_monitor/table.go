@@ -21,9 +21,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// windowSpan bounds the throughput window BY TIME, not by FSMv1's count-based
-// ThroughputWindowSize of 600 entries: the window takes one sample per poll and
-// an unscheduled poll produces none, so 600 entries can stretch past a minute.
+// windowSpan is how far back the throughput rates look. It is a duration, not a
+// sample count, so a skipped poll does not stretch the window past one minute.
 const windowSpan = 60 * time.Second
 
 // Names of the engine's measurements.

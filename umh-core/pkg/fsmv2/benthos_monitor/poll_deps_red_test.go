@@ -25,18 +25,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// TestPollRefusesToScrapeWithUnboundDeps asserts that Poll reports unbound deps
-// as an error instead of scraping with a substitute client.
+// TestPollRefusesToScrapeWithUnboundDeps asserts that Poll returns an error,
+// and sends no request, when its deps are nil or carry no HTTP client.
 //
-// The contract exists because simpleWorker.pollDeps (pkg/fsmv2/simple) discards
-// the comma-ok of its type assertion, so deps that were never bound — or bound
-// to another type — reach Poll as a nil *benthosMonitorDeps rather than
-// panicking. A fallback client would then scrape a healthy monitor successfully
-// but drop the cross-poll throughput window on the floor, publishing zero Input,
-// Output and IsActive: a wiring fault rendered as plausible idle traffic. That is
-// why the monitor served below is fully healthy — the fault has to be caught on a
-// scrape that would otherwise succeed, not on an unreachable port where any
-// client fails anyway.
+// simpleWorker.pollDeps (pkg/fsmv2/simple) ignores whether its type assertion
+// succeeded. So deps that NewDeps did not create, or deps of another type, reach
+// Poll as a nil *benthosMonitorDeps. A Poll that scraped anyway would publish
+// zero Input, Output and IsActive, which looks like an idle pipeline. The
+// monitor below is healthy, so only the deps check can make Poll fail here.
 func TestPollRefusesToScrapeWithUnboundDeps(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -64,7 +60,7 @@ output_sent{label="",path="root.output"} 7
 	t.Run("nil deps", func(t *testing.T) {
 		status, err := Poll(context.Background(), nil, cfg)
 		if err == nil {
-			t.Fatalf("Poll with nil deps returned nil error, want an error (unbound deps must not scrape)")
+			t.Fatalf("Poll with nil deps returned nil error, want an error (Poll must not scrape without a client)")
 		}
 		if !reflect.DeepEqual(status, BenthosMonitorStatus{}) {
 			t.Errorf("Poll with nil deps returned %+v, want the zero status", status)
@@ -74,23 +70,22 @@ output_sent{label="",path="root.output"} 7
 	t.Run("deps with no client", func(t *testing.T) {
 		status, err := Poll(context.Background(), &benthosMonitorDeps{}, cfg)
 		if err == nil {
-			t.Fatalf("Poll with a clientless deps returned nil error, want an error (unbound deps must not scrape)")
+			t.Fatalf("Poll with a clientless deps returned nil error, want an error (Poll must not scrape without a client)")
 		}
 		if !reflect.DeepEqual(status, BenthosMonitorStatus{}) {
 			t.Errorf("Poll with a clientless deps returned %+v, want the zero status", status)
 		}
 	})
 
-	// The control: deps carrying a client is the bound case, and the guard must
-	// not fire on it. Without this the two cases above would still pass if the
-	// guard rejected every call.
-	t.Run("bound deps reach the scrape", func(t *testing.T) {
+	// The control: the guard must not fire on deps with a client. Without this
+	// the two cases above would still pass if the guard rejected every call.
+	t.Run("deps with a client reach the scrape", func(t *testing.T) {
 		status, err := Poll(context.Background(), &benthosMonitorDeps{client: &http.Client{Timeout: monitorClientTimeout}}, cfg)
 		if err != nil {
-			t.Fatalf("Poll with bound deps errored: %v (the deps guard must not fire on bound deps)", err)
+			t.Fatalf("Poll with a client errored: %v (the deps guard must not fire)", err)
 		}
 		if status.Version != "1.2.3" {
-			t.Errorf("Version = %q, want %q (bound deps must scrape the same monitor the cases above were refused)", status.Version, "1.2.3")
+			t.Errorf("Version = %q, want %q (Poll with a client must scrape the monitor the cases above refused)", status.Version, "1.2.3")
 		}
 	})
 }

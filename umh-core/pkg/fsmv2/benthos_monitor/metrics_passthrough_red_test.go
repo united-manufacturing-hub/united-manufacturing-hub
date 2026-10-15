@@ -32,8 +32,9 @@ import (
 // components. Every connection counter appears once per child `path` and never
 // as a top-level aggregate, so this exposition carries two series for each
 // counter. Benthos labels each child with its own `path`, and the
-// broker/fallback wrapper emits nothing of its own — the shape the ENG-5006 fix
-// already handles for output_sent.
+// broker/fallback wrapper emits nothing of its own. This is the same per-path
+// summing already used for output_sent (the switch-output metrics fix
+// (ENG-5006)).
 //
 // Both *_connection_lost TOTALS are non-zero — input 1+1, output 2+0 — so an
 // all-empty Metrics cannot satisfy the "lost" half of the assertions. Individual
@@ -41,8 +42,9 @@ import (
 //
 // Connections are up more often than they were lost. Both bridge-health
 // consumers judge a direction connected when connection up minus connection
-// lost exceeds zero; that predicate is isActive
-// (pkg/fsm/protocolconverter/actions.go). It holds for both directions
+// lost exceeds zero; that predicate is the connection check isActive in
+// pkg/fsm/protocolconverter/actions.go (unrelated to this package's IsActive).
+// It holds for both directions
 // here: this fixture describes a healthy bridge.
 const connectionCounterMetrics = `# HELP input_received Benthos Counter metric
 # TYPE input_received counter

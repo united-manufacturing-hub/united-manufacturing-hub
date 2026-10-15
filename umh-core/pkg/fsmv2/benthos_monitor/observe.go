@@ -66,7 +66,7 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 		d.engine = newEngine()
 	case !at.After(prev.at):
 		return prev.result
-	case restarted(prev, &cur):
+	case counterSeriesChanged(prev, &cur):
 		d.engine = newEngine()
 	}
 
@@ -91,11 +91,11 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	return cur.result
 }
 
-// restarted reports whether cur comes from a different counter series than prev:
-// another port, or any counter lower than before. A drop in the output counter
-// alone counts too: a reconfigured or restarted benthos can leave the input
-// counter where it was.
-func restarted(prev, cur *observation) bool {
+// counterSeriesChanged reports whether cur's counters cannot be compared with
+// prev's: the port changed, or a counter went down because benthos restarted. A
+// drop in the output counter alone counts, because a reconfigured benthos can
+// leave the input counter unchanged.
+func counterSeriesChanged(prev, cur *observation) bool {
 	return cur.port != prev.port ||
 		cur.inputReceived < prev.inputReceived ||
 		cur.outputSent < prev.outputSent

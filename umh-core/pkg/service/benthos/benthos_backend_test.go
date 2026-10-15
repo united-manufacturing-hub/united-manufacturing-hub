@@ -62,18 +62,12 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 	})
 
 	Describe("backend selection", func() {
-		It("stores the fsmv1 manager when USE_FSMV2_BENTHOS_MONITOR is unset (FF-off default)", func() {
-			// The BeforeEach above unsets the var, so this is the flag-off default.
-			// "byte-identical" below means flag-off keeps constructing the same
-			// fsmv1 BenthosMonitorManager as before the fsmv2 seam existed, and
-			// logs no line of its own, so an operator sees no change: the else
-			// branch of NewDefaultBenthosService
-			// (pkg/service/benthos/benthos.go).
+		It("stores the fsmv1 manager when USE_FSMV2_BENTHOS_MONITOR is unset", func() {
 			svc := NewDefaultBenthosService("flag-off-benthos")
 
 			_, ok := svc.benthosMonitorManager.(*benthos_monitor_fsm.BenthosMonitorManager)
 			Expect(ok).To(BeTrue(),
-				"unset USE_FSMV2_BENTHOS_MONITOR must keep the byte-identical fsmv1 monitor manager")
+				"unset USE_FSMV2_BENTHOS_MONITOR must select the fsmv1 BenthosMonitorManager")
 		})
 
 		It("stores the fsmv2 adapter manager when USE_FSMV2_BENTHOS_MONITOR=true", func() {
@@ -87,10 +81,7 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 				"USE_FSMV2_BENTHOS_MONITOR=true must select the fsmv2 adapter manager")
 		})
 
-		// Every value env.GetAsBool accepts must select the fsmv2 backend. "ON"
-		// matters most: it is the spelling the CPU measurement rig sets, that rig
-		// is not in this repo, and a run that silently fell back to fsmv1 on both
-		// arms measured no CPU difference at all.
+		// Every spelling env.GetAsBool accepts as true must select the fsmv2 backend.
 		for _, truthy := range []string{"true", "TRUE", "1", "on", "ON", "On", "yes", "y"} {
 			value := truthy
 
@@ -132,7 +123,7 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 				"an explicit false must behave like unset (fsmv1 manager)")
 		})
 
-		It("treats an unrecognized value as off (fsmv1), not as on", func() {
+		It("treats an unrecognised value as off (fsmv1), not as on", func() {
 			_ = os.Setenv(envUseFsmv2BenthosMonitor, "ture")
 			defer func() { _ = os.Unsetenv(envUseFsmv2BenthosMonitor) }()
 
@@ -140,7 +131,7 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 
 			_, ok := svc.benthosMonitorManager.(*benthos_monitor_fsm.BenthosMonitorManager)
 			Expect(ok).To(BeTrue(),
-				"an unrecognized boolean value must not silently select a backend; it must stay on the fsmv1 default")
+				"an unrecognised boolean value must not silently select a backend; it must stay on the fsmv1 default")
 		})
 
 		It("lets WithMonitorManager override the flag-selected backend", func() {
@@ -261,6 +252,6 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR unrecognised-value logging", func() 
 		Expect(ok).To(BeTrue(),
 			"unset must keep the fsmv1 manager")
 		Expect(linesNaming(logs, envUseFsmv2BenthosMonitor)).To(BeEmpty(),
-			"the unset default must keep its pre-flag log output: no line may mention the variable")
+			"the unset default must log nothing: no line may mention the variable")
 	})
 })

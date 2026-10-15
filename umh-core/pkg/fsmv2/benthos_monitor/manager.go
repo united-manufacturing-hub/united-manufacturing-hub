@@ -46,11 +46,9 @@ const (
 	// pollInterval is the cadence at which the framework calls Poll.
 	pollInterval = 1 * time.Second
 
-	// monitorClientTimeout bounds each scrape request so one hung connection
-	// cannot consume the whole observation budget and starve the remaining
-	// endpoints. Four endpoints at ~400ms each fit the ~2.2s budget
-	// (supervisor.DefaultObservationTimeout); the fsmv1 curl bound of 1s would
-	// let a single poll run past it.
+	// monitorClientTimeout bounds each request. Poll makes four requests in
+	// sequence, and 4 x 400ms stays under supervisor.DefaultObservationTimeout
+	// (~2.2s).
 	monitorClientTimeout = 400 * time.Millisecond
 
 	// maxScrapeBody caps the response bodies Poll reads, so a misbehaving
@@ -82,16 +80,17 @@ type ComponentThroughput struct {
 	LastCount int
 }
 
-// BenthosMonitorStatus is the result of one scrape of the benthos monitor.
+// BenthosMonitorStatus is what one Poll observed. After a failed Poll it holds
+// only the fields filled before the error; the worker's Degraded flag says which
+// case it is.
 type BenthosMonitorStatus struct {
-	// ScrapedAt is when the scrape happened.
-	ScrapedAt time.Time
+	// PollStartedAt is when Poll began. Poll sets it before the first request, so
+	// a failed poll also carries a fresh value.
+	PollStartedAt time.Time
 
-	// BenthosMetrics is the per-path struct the fsmv1 parser produces, carried
-	// whole. Narrowing it to scalars breaks the four connection-counter reads that
-	// decide whether a bridge is connected; those reads, their access path and their
-	// two consumers are named in
-	// TestMapObservedDeliversParsedConnectionCountersToBridgeHealth.
+	// BenthosMetrics is the parsed /metrics, kept whole: bridge health reads its
+	// connection counters (see
+	// TestMapObservedDeliversParsedConnectionCountersToBridgeHealth).
 	BenthosMetrics benthosmonitorservice.Metrics
 
 	// Input is the input-direction throughput computed over windowSpan.
@@ -100,10 +99,7 @@ type BenthosMonitorStatus struct {
 	// Output is the output-direction throughput computed over windowSpan.
 	Output ComponentThroughput
 
-	// IsActive is true when input traffic was observed in the window: Poll sets it
-	// from Input.MessagesPerSecond > 0, input-only and with no hysteresis. FSMv1
-	// computed the same rule from a tick delta (s.IsActive =
-	// s.Input.MessagesPerTick > 0).
+	// IsActive is Input.MessagesPerSecond > 0. Output traffic does not count.
 	IsActive bool
 
 	// PingAlive is whether /ping answered.
@@ -119,23 +115,25 @@ type BenthosMonitorStatus struct {
 
 // Poll scrapes the configured benthos monitor's /ping, /ready, /version, and
 // /metrics endpoints once, using the HTTP client d carries. All requests carry
-// ctx, so cancellation surfaces as a request error. Deps that were never bound
-// are rejected before any request goes out: substituting a client would report a
-// wiring fault as ordinary idle traffic.
+// ctx, so cancellation surfaces as a request error.
+//
+// Poll returns an error without sending a request when d or d.client is nil.
+// That only happens through a programming error, such as registering the worker
+// without NewDeps.
 func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorConfig) (BenthosMonitorStatus, error) {
 	if d == nil || d.client == nil {
-		return BenthosMonitorStatus{}, fmt.Errorf("benthos monitor dependencies not bound (deps present: %t, HTTP client present: %t): worker wiring fault, not a scrape failure", d != nil, d != nil && d.client != nil)
+		return BenthosMonitorStatus{}, fmt.Errorf("benthos monitor has no HTTP client (deps nil: %t): the worker was registered without NewDeps", d == nil)
 	}
 
 	base := fmt.Sprintf("http://localhost:%d", cfg.MetricsPort)
-	status := BenthosMonitorStatus{ScrapedAt: time.Now()}
+	status := BenthosMonitorStatus{PollStartedAt: time.Now()}
 
-	_, _, err := get(ctx, d.client, base+"/ping")
+	_, err := get(ctx, d.client, base+"/ping")
 	if err == nil {
 		status.PingAlive = true
 	}
 
-	readyBody, _, err := get(ctx, d.client, base+"/ready")
+	readyBody, err := get(ctx, d.client, base+"/ready")
 	if err == nil {
 		// The /ready endpoint reports readiness by returning JSON whose error
 		// field is empty when every input/output connection is up (fsmv1
@@ -150,7 +148,7 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 		}
 	}
 
-	versionBody, _, err := get(ctx, d.client, base+"/version")
+	versionBody, err := get(ctx, d.client, base+"/version")
 	if err != nil {
 		return status, fmt.Errorf("scrape /version: %w", err)
 	}
@@ -162,7 +160,7 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 	status.Version = v.Version
 
-	metricsBody, _, err := get(ctx, d.client, base+"/metrics")
+	metricsBody, err := get(ctx, d.client, base+"/metrics")
 	if err != nil {
 		return status, fmt.Errorf("scrape /metrics: %w", err)
 	}
@@ -172,11 +170,9 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 	status.BenthosMetrics = m
 
-	// The engine lives in d and survives across polls, so a rate is computable
-	// from per-poll counter snapshots. observe is passed the scrape port because
-	// an in-place config update can re-point this child at a new MetricsPort with
-	// no worker restart; observe's doc says what a new port does.
-	t := observe(d, int(cfg.MetricsPort), m, status.ScrapedAt)
+	// The port is passed because a config update can change MetricsPort without
+	// restarting the worker.
+	t := observe(d, int(cfg.MetricsPort), m, status.PollStartedAt)
 	status.Input = t.Input
 	status.Output = t.Output
 	status.IsActive = t.IsActive
@@ -184,38 +180,35 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	return status, nil
 }
 
-// get performs a GET request with ctx, returning the body, the HTTP status, and
-// any error. A non-2xx response is returned as an error: a benthos that answers
-// a 500 error page is not healthy, and parsing its HTML as /metrics or /version
-// yields garbage.
-func get(ctx context.Context, client *http.Client, url string) ([]byte, int, error) {
+// get performs a GET request with ctx and returns the body. A non-2xx response
+// is returned as an error: a benthos that answers a 500 error page is not
+// healthy, and parsing its HTML as /metrics or /version yields garbage.
+func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	// Unreachable via net/http: Do returns a non-nil error whenever resp is nil,
-	// so the check above already covers it. The guard stays as a cheap floor on
-	// the dereferences below.
+	// nilaway cannot prove resp is non-nil when Do returns a nil error.
 	if resp == nil {
-		return nil, 0, fmt.Errorf("GET %s: nil response", url)
+		return nil, fmt.Errorf("GET %s: nil response", url)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, resp.StatusCode, fmt.Errorf("GET %s: unexpected status %d", url, resp.StatusCode)
+		return nil, fmt.Errorf("GET %s: unexpected status %d", url, resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxScrapeBody+1))
 	if err != nil {
-		return nil, resp.StatusCode, err
+		return nil, err
 	}
 	if len(body) > maxScrapeBody {
-		return nil, resp.StatusCode, fmt.Errorf("GET %s: response body exceeds %d bytes", url, maxScrapeBody)
+		return nil, fmt.Errorf("GET %s: response body exceeds %d bytes", url, maxScrapeBody)
 	}
-	return body, resp.StatusCode, nil
+	return body, nil
 }
 
 // cfgFor renders a BenthosMonitorConfig into the map the adapter hands to
@@ -255,7 +248,7 @@ func init() {
 
 // NewFsmv2BenthosMonitorManager builds the fsmv1-compatible manager that drives
 // the fsmv2 benthos monitor workers. It extracts BenthosMonitorConfig entries
-// from the snapshot, upserts enabled workers into the fsmv2 runtime, and maps
+// from the snapshot, adds or updates a worker for each enabled config, and maps
 // their stored status back to the fsmv1 benthos monitor operational states.
 func NewFsmv2BenthosMonitorManager(managerName string) *adapter.WorkerManager[config.BenthosMonitorConfig, simple.Status[BenthosMonitorStatus]] {
 	return adapter.NewWorkerManager(adapter.WorkerManagerSpec[config.BenthosMonitorConfig, simple.Status[BenthosMonitorStatus]]{
@@ -268,23 +261,21 @@ func NewFsmv2BenthosMonitorManager(managerName string) *adapter.WorkerManager[co
 		CfgFor:      cfgFor,
 		MapFresh:    mapFresh,
 		MapObserved: mapObserved,
-		// DesiredRunning is the state reported when a config leaves desiredState
-		// empty. benthos_monitor's FSM accepts only active/stopped as a desired
-		// state — SetDesiredFSMState in pkg/fsm/benthos_monitor/machine.go rejects
-		// anything else.
 		States: adapter.StateVocabulary{
-			Starting:       benthosmonitorfsm.OperationalStateStarting,
-			Degraded:       benthosmonitorfsm.OperationalStateDegraded,
-			Stopped:        benthosmonitorfsm.OperationalStateStopped,
+			Starting: benthosmonitorfsm.OperationalStateStarting,
+			Degraded: benthosmonitorfsm.OperationalStateDegraded,
+			Stopped:  benthosmonitorfsm.OperationalStateStopped,
+			// DesiredRunning is used when a config leaves desiredState empty.
+			// SetDesiredFSMState in pkg/fsm/benthos_monitor/machine.go accepts
+			// only active or stopped.
 			DesiredRunning: benthosmonitorfsm.OperationalStateActive,
 		},
 	})
 }
 
-// mapFresh maps a Fresh, healthy observation to its fsmv1 operational state:
-// metrics are OK, so the monitor is active. The Degraded, stale and bootstrap
-// verdicts are owned by adapter.WorkerManager (its verdict-to-state table is in
-// pkg/fsmv2/adapter/doc.go), so this only classifies the healthy leaf.
+// mapFresh returns "active" for a fresh, healthy observation.
+// adapter.WorkerManager handles every other case (table in
+// pkg/fsmv2/adapter/doc.go).
 func mapFresh(_ config.BenthosMonitorConfig, _ simple.Status[BenthosMonitorStatus]) string {
 	return benthosmonitorfsm.OperationalStateActive
 }

@@ -85,8 +85,9 @@ func GetAsBool(key string, required bool, defaultValue bool) (bool, error) {
 	}
 }
 
-// GetAsBoolStrict retrieves an environment variable as a boolean, reporting a
-// value it does not recognise instead of folding it into defaultValue.
+// GetAsBoolStrict retrieves an environment variable as a boolean, returning an
+// error for a value it does not recognise instead of silently returning
+// defaultValue.
 //
 // It behaves like GetAsBool with required=false, plus one difference: when the
 // variable is set to something outside the recognised true/false spellings, it
@@ -101,9 +102,8 @@ func GetAsBoolStrict(key string, defaultValue bool) (bool, error) {
 		return defaultValue, nil
 	}
 
-	// required=true is what makes GetAsBool report an unrecognised value rather
-	// than swallow it, and it decides which spellings are recognised. The
-	// empty-string case above means its not-set error is unreachable from here.
+	// required=true makes GetAsBool return an error for an unrecognised value.
+	// Its not-set error cannot occur here, because the empty case returned above.
 	value, err := GetAsBool(key, true, defaultValue)
 	if err != nil {
 		return defaultValue, fmt.Errorf("%w (got %q)", err, raw)

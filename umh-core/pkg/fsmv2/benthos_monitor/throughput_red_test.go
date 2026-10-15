@@ -69,10 +69,10 @@ func TestObserveRateIsTimeBased(t *testing.T) {
 	// does not record it: the rate and the newest count stay unchanged.
 	got = observe(deps, 4195, counts(5, 5), t0.Add(-61*time.Second))
 	if inRate2 := got.Input.MessagesPerSecond; inRate2 < 1.5 || inRate2 > 2.5 {
-		t.Errorf("after adding a 61s-old sample: Input MessagesPerSecond = %v, want ~2.0 (an aged sample must be dropped)", inRate2)
+		t.Errorf("out-of-order scrape: Input MessagesPerSecond = %v, want ~2.0 (a scrape older than the previous one is ignored)", inRate2)
 	}
 	if in := got.Input.LastCount; in != 12 {
-		t.Errorf("after adding a 61s-old sample: Input.LastCount = %d, want 12 (the aged sample is not the newest)", in)
+		t.Errorf("out-of-order scrape: Input.LastCount = %d, want 12", in)
 	}
 
 	// A mid-window dropped-tick gap must not drift the by-time rate. Samples
@@ -199,7 +199,7 @@ func TestPollComputesThroughput(t *testing.T) {
 
 // TestPollResetTickReportsIsActiveFalse asserts that the status layer reflects a
 // counter drop through Poll. Both counters drop when the process restarts, and
-// the drop makes observe rebuild its engine (restarted, observe.go), so the
+// the drop makes observe rebuild its engine (counterSeriesChanged, observe.go), so the
 // window restarts from the new sample. On the reset tick — the poll on which
 // that drop is first observed — the status must read IsActive=false, and
 // LastCount must carry the post-restart counter.
@@ -251,7 +251,7 @@ func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 		t.Fatalf("reset-tick Poll errored: %v", err)
 	}
 	if status.IsActive {
-		t.Errorf("reset tick after both-counter drop: IsActive = true, want false (the rebuild leaves a single sample)")
+		t.Errorf("reset tick after both counters dropped: IsActive = true, want false")
 	}
 	if status.Input.LastCount != 5 {
 		t.Errorf("reset tick Input.LastCount = %d, want 5 (post-restart counter)", status.Input.LastCount)

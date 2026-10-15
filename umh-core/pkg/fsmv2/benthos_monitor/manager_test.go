@@ -99,7 +99,7 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 	}
 
 	// freshHealthy is degradedFresh with no degraded verdict, so mapFresh maps it to
-	// benthos_monitor's own "active" word.
+	// benthos_monitor's own "active" state.
 	freshHealthy := func() *fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]] {
 		return &fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]]{
 			CollectedAt: time.Now().Add(-100 * time.Millisecond),
@@ -113,7 +113,7 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		fsmv2client.SetClient(nil)
 	})
 
-	It("registers the worker and drives benthos_monitor's own state words through the adapter", func() {
+	It("registers the worker and reports benthos_monitor's own state names through the adapter", func() {
 		// The worker registers itself on import: a "benthos_monitor" worker type
 		// exists with a positive observation interval, and WorkerType is exactly
 		// the canonical string.
@@ -125,11 +125,10 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 
 		// One registered client, held across the reads; only the reader's
 		// observation/error changes. The ref stays registered, so the first read
-		// takes the NeverObserved bootstrap exit rather than Unregistered. The two
-		// later reads are classified by freshness. fsmv2client.Freshness
-		// (fsmv2client/fsmv2client.go) defines both words: Unregistered means the
-		// ref was never Upserted, NeverObserved means Upserted with nothing stored
-		// yet.
+		// is NeverObserved, not Unregistered. The two later reads are classified
+		// by freshness. fsmv2client.Freshness (fsmv2client/fsmv2client.go) defines
+		// both: Unregistered means the ref was never added, NeverObserved means it
+		// was added and nothing is stored yet.
 		reader := &stubManagerReader{err: persistence.ErrNotFound}
 		writer := dynamicchildren.NewWriter()
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))
@@ -138,19 +137,19 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		err, _ := mgr.Reconcile(context.Background(), snapshotWith(benthosConfig("active")), nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		// BOOTSTRAP: no observation yet (NeverObserved) => the Starting word this
+		// BOOTSTRAP: no observation yet (NeverObserved) => the Starting state this
 		// worker declared, benthosmonitorfsm.OperationalStateStarting
-		// ("benthos_monitoring_starting"). The adapter supplies no fallback word of
+		// ("benthos_monitoring_starting"). The adapter supplies no fallback state of
 		// its own: adapter.StateVocabulary (adapter/manager.go) requires a
 		// worker to declare all four.
 		state, gerr := mgr.GetCurrentFSMState(name)
 		Expect(gerr).NotTo(HaveOccurred())
 		Expect(state).To(Equal(benthosmonitorfsm.OperationalStateStarting))
 
-		// DEGRADED verdict on a Fresh observation => the Degraded word this worker
+		// DEGRADED verdict on a Fresh observation => the Degraded state this worker
 		// declared, benthosmonitorfsm.OperationalStateDegraded ("degraded"). The four
-		// declared words must be pairwise distinct, so this word cannot double as any
-		// other exit: adapter.StateVocabulary says why (adapter/manager.go) and
+		// declared states must be pairwise distinct, so this state cannot be reused
+		// for another case: adapter.StateVocabulary says why (adapter/manager.go) and
 		// adapter.NewWorkerManager panics otherwise (same file).
 		reader.err = nil
 		reader.obs = degradedFresh()
@@ -159,8 +158,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		Expect(gerr).NotTo(HaveOccurred())
 		Expect(state).To(Equal(benthosmonitorfsm.OperationalStateDegraded))
 
-		// FRESH + healthy verdict => the mapFresh leaf, which returns
-		// benthosmonitorfsm.OperationalStateActive ("active"), the same word this
+		// FRESH + healthy verdict => mapFresh's result,
+		// benthosmonitorfsm.OperationalStateActive ("active"), the same state this
 		// worker declares as adapter.StateVocabulary.DesiredRunning.
 		reader.obs = freshHealthy()
 
@@ -168,9 +167,9 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		Expect(gerr).NotTo(HaveOccurred())
 		Expect(state).To(Equal(benthosmonitorfsm.OperationalStateActive))
 
-		// EMPTY desired state on a config => the declared DesiredRunning word,
+		// EMPTY desired state on a config => the declared DesiredRunning state,
 		// benthosmonitorfsm.OperationalStateActive ("active"). Why it has to be that
-		// word rather than a generic "running" is on the States field in
+		// state rather than a generic "running" is on the DesiredRunning field in
 		// NewFsmv2BenthosMonitorManager (manager.go).
 		mgr2 := fsmv2benthosmonitor.NewFsmv2BenthosMonitorManager("test")
 		err, _ = mgr2.Reconcile(context.Background(), snapshotWith(benthosConfig("")), nil)

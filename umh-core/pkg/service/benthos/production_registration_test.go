@@ -28,20 +28,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 )
 
-// TestProductionImportRegistersBenthosMonitorWorker guards one link: the
-// production import that registers the worker type. Drop it and
-// USE_FSMV2_BENTHOS_MONITOR selects a backend that registers nothing, while a CPU
-// measurement still reports a win because no monitor processes get spawned either
-// way. It does NOT guard the FF-on constructor call: registration happens in the
-// worker package's init(), so a blank import would satisfy this test with no
-// constructor call at all. The backend-selection specs in benthos_backend_test.go
-// cover the call.
+// TestProductionImportRegistersBenthosMonitorWorker fails if pkg/service/benthos
+// stops importing the fsmv2 benthos_monitor package. Without that import,
+// USE_FSMV2_BENTHOS_MONITOR=true selects a worker type that is not registered.
+// The backend-selection specs in benthos_backend_test.go cover the constructor
+// call.
 func TestProductionImportRegistersBenthosMonitorWorker(t *testing.T) {
 	const workerType = "benthos_monitor"
 
-	// benthos_monitor is the only type this test binary's import graph registers,
-	// so an empty registry is the exact shape of the failure this guards against;
-	// the message prints the whole list rather than checking emptiness separately.
 	registered := factory.ListRegisteredTypes()
 	for _, wt := range registered {
 		if wt == workerType {
