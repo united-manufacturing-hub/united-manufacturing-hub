@@ -68,6 +68,12 @@ type FailureEntry struct {
 	// for a connection entry, which stays only while an input or output is
 	// not connected.
 	Window time.Duration
+
+	// Blocked is set on an output error entry whose output sent nothing for
+	// 2 minutes or more while at least 3 of its writes failed. It is how long
+	// the output has sent nothing. It is zero otherwise, and on every other
+	// entry. blockedFor in pkg/fsmv2/benthos_monitor sets it.
+	Blocked time.Duration
 }
 
 // IsConnection reports whether e is a connection entry. A connection entry
@@ -85,6 +91,10 @@ func (v *FailureVerdict) ErrorFree() (bool, string) {
 	}
 
 	e := v.Fired[0]
+	if e.Blocked > 0 {
+		return false, fmt.Sprintf("benthos output blocked: no message written for %v", e.Blocked.Truncate(time.Minute))
+	}
+
 	n := e.Count
 	label := e.Label
 	if n != 1 {

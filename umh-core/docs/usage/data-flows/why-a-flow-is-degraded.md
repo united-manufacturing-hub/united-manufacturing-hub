@@ -13,6 +13,8 @@ umh-core checks each Benthos instance in two ways:
   - **Errors:** output errors and processor errors. The reason names the counter, for example `benthos reported 3 output errors in the last 10m0s`.
   - **Connections:** an input or output that failed to connect, or lost its connection, counts until Benthos reconnects it. The reason reads, for example, `benthos reports 1 input not connected`.
 
+An output is blocked when it has written nothing for 2 minutes, at least 3 of its writes failed in that time, and the last failed write was less than 2 minutes ago. Its output errors then read as `benthos output blocked: no message written for 2m0s`, with the time in whole minutes. An output whose write hangs without returning an error moves no counter, so it does not show as blocked.
+
 When both are present, the reason names errors before connections.
 
 ## When a failure stops counting

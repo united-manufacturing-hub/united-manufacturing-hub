@@ -104,16 +104,27 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	switch {
 	case prev == nil:
 		d.engine = newEngine()
+		d.writes = outputWrites{sentAt: at, errorsAtSent: cur.errors[outputError]}
 	case !at.After(prev.at):
 		return prev.result, prev.verdict
 	case counterSeriesChanged(prev, &cur):
 		rebuild(d, nil, at)
+		d.writes = outputWrites{sentAt: at}
 	case at.Sub(prev.at) > constants.BenthosLogWindow:
 		before = prev.errors
 		rebuild(d, prev.errors, at)
 	default:
 		before = prev.errors
 		prevNotConnectedSince = prev.notConnectedSince
+	}
+	if prev != nil {
+		if cur.outputSent > prev.outputSent {
+			d.writes.sentAt = at
+			d.writes.errorsAtSent = cur.errors[outputError]
+		}
+		if cur.errors[outputError] > before[outputError] {
+			d.writes.errorAt = prev.at
+		}
 	}
 
 	cur.notConnectedSince = notConnectedSince(prevNotConnectedSince, cur.connections, at)
@@ -137,7 +148,7 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 			cur.lastIncreaseAt = at
 		}
 	}
-	cur.verdict = failureVerdict(d.engine, fired, cur)
+	cur.verdict = failureVerdict(d.engine, fired, cur, blockedFor(d.writes, cur.errors[outputError], at))
 	d.prev = &cur
 
 	return cur.result, cur.verdict
