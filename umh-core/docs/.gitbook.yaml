@@ -25,5 +25,6 @@ redirects:
   production/deployment/docker-compose/advanced: production/deployment/docker-compose/additional-services/README.md
   production/deployment/docker-compose/advanced/nginx: production/deployment/docker-compose/additional-services/nginx.md
   production/corporate-firewalls: production/security/umh-core/network-configuration.md
-  production/cpu-health: usage/instances/cpu-health/README.md
+  production/cpu-health: usage/instances/container/cpu-health/README.md
+  usage/instances/cpu-health: usage/instances/container/cpu-health/README.md
   production/metrics: usage/instances/agent/metrics.md
