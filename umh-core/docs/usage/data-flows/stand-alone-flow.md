@@ -155,6 +155,23 @@ dataFlow:
           stdout: {}
 ```
 
+## Metrics
+
+[Metrics](../instances/agent/metrics.md) explains how to read umh-core's metrics.
+
+The Management Console shows each flow's message counts. Select **Metrics** in the flow's context menu. The view shows messages received and sent, errors and latency for the flow's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry these counts.
+
+Port 8080 carries the flow's state and error counts. Stand-alone flows run on FSMv1, the older of umh-core's two frameworks. A framework is the part of umh-core that starts and watches components. [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component) explains both. Each flow gets the series described in [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a flow with the `name` `<flow>`, the series carry these labels:
+
+| Part of the flow | `component` | `instance` |
+|---|---|---|
+| The flow | `dataflow_component_instance` | `<flow>` |
+| Its Benthos process | `benthos_instance` | `dataflow-<flow>` |
+
+Benthos is the engine that moves the data. Prometheus can rename the `instance` label to `exported_instance`. [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains when.
+
+For the flow itself, `umh_core_service_current_state` reads 0 when stopped, 1 when starting, 3 when active, 4 when idle and 5 when degraded. -1 means the flow is in a sub-state, such as `starting_failed` (the flow could not start) or `stopping`. Check the state in the Management Console.
+
 ## Next Steps
 
 - Learn about [Bridges](bridges.md) for device connectivity

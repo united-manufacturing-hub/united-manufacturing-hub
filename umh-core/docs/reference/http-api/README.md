@@ -16,5 +16,5 @@
 - [Query Examples](topic-browser-graphql.md#examples)
 
 ## Monitoring
-- **Metrics:** See [Production Metrics](../../production/metrics.md)
+- **Metrics:** See [Metrics](../../usage/instances/agent/metrics.md)
 - **Health:** Via FSM state monitoring 
