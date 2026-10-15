@@ -52,7 +52,7 @@ func failureScrape(v map[string]int64) benthosmonitorservice.Metrics {
 
 // failureLabels is the label each counter's reason shows for a count of 1,
 // written out here so
-// the tests pin the wording rather than read it from failureCounters.
+// the tests pin the wording rather than read it from errorCounters.
 // TestFailureLabelsCoverEveryCounter keeps the two lists in step.
 var failureLabels = map[string]string{
 	"output_error":    "output error",
@@ -70,14 +70,14 @@ func verdictAfterRise(before, after map[string]int64) benthosmonitorservice.Fail
 }
 
 // TestFailureLabelsCoverEveryCounter: failureLabels names exactly the counters
-// in failureCounters, so the loops below cover every counter.
+// in errorCounters, so the loops below cover every counter.
 func TestFailureLabelsCoverEveryCounter(t *testing.T) {
-	if len(failureLabels) != len(failureCounters) {
-		t.Errorf("failureLabels has %d counters, failureCounters has %d", len(failureLabels), len(failureCounters))
+	if len(failureLabels) != len(errorCounters) {
+		t.Errorf("failureLabels has %d counters, errorCounters has %d", len(failureLabels), len(errorCounters))
 	}
-	for _, c := range failureCounters {
+	for _, c := range errorCounters {
 		if failureLabels[c.name] != c.label {
-			t.Errorf("counter %q: failureLabels says %q, failureCounters says %q", c.name, failureLabels[c.name], c.label)
+			t.Errorf("counter %q: failureLabels says %q, errorCounters says %q", c.name, failureLabels[c.name], c.label)
 		}
 	}
 }

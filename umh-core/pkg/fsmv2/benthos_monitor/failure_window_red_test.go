@@ -238,13 +238,9 @@ func (failureFeed) Readable(time.Time) sample {
 		inputReceived: diagnosis.Known(0),
 		outputSent:    diagnosis.Known(0),
 		failures:      map[string]diagnosis.Reading{},
-		connections:   map[string]diagnosis.Reading{},
 	}
-	for _, c := range failureCounters {
+	for _, c := range errorCounters {
 		s.failures[c.name] = diagnosis.Known(0)
-	}
-	for _, c := range connectionSides {
-		s.connections[c.name] = diagnosis.Known(0)
 	}
 
 	return s
@@ -261,13 +257,10 @@ func (failureFeed) Unreadable(time.Time) sample {
 }
 
 // TestTableConformance drives every signal of table() through the generated
-// diagnosis suite. A failure signal's increase reduction needs two readings,
-// so it is first ready on the second tick. A connection signal reads the last
-// value, so it is ready on the first; the suite then documents two cases
-// differently (pkg/diagnosis, Run): the dip after a long outage is Ready, and
-// below the floor no readable tick is driven, so it is AllAbsent.
+// diagnosis suite. An error signal's increase reduction needs two readings,
+// so it is first ready on the second tick.
 func TestTableConformance(t *testing.T) {
-	failureWant := map[diagnosis.Case]diagnosis.Availability{
+	errorWant := map[diagnosis.Case]diagnosis.Availability{
 		diagnosis.CaseLive:          diagnosis.Ready,
 		diagnosis.CaseBriefOutage:   diagnosis.NoneReady,
 		diagnosis.CaseLongOutage:    diagnosis.AllAbsent,
@@ -275,20 +268,9 @@ func TestTableConformance(t *testing.T) {
 		diagnosis.CasePostOutageDip: diagnosis.NoneReady,
 		diagnosis.CaseBelowFloor:    diagnosis.NoneReady,
 	}
-	connectionWant := map[diagnosis.Case]diagnosis.Availability{
-		diagnosis.CaseLive:          diagnosis.Ready,
-		diagnosis.CaseBriefOutage:   diagnosis.NoneReady,
-		diagnosis.CaseLongOutage:    diagnosis.AllAbsent,
-		diagnosis.CaseUnsupported:   diagnosis.Ready,
-		diagnosis.CasePostOutageDip: diagnosis.Ready,
-		diagnosis.CaseBelowFloor:    diagnosis.AllAbsent,
-	}
 	want := map[string]map[diagnosis.Case]diagnosis.Availability{}
-	for _, c := range failureCounters {
-		want[c.name] = failureWant
-	}
-	for _, c := range connectionSides {
-		want[c.name] = connectionWant
+	for _, c := range errorCounters {
+		want[c.name] = errorWant
 	}
 
 	outcomes := diagnosis.Run(table(), diagnosis.NewEnvironment(), failureFeed{})
@@ -300,7 +282,7 @@ func TestTableConformance(t *testing.T) {
 		seen[o.Signal][o.Case] = true
 		w, ok := want[o.Signal]
 		if !ok {
-			t.Errorf("signal %q: not a failureCounters or connectionSides entry", o.Signal)
+			t.Errorf("signal %q: not an errorCounters entry", o.Signal)
 
 			continue
 		}
@@ -310,7 +292,7 @@ func TestTableConformance(t *testing.T) {
 	}
 
 	// A signal table() dropped has no outcome, so the loop above cannot see
-	// it. Every failure counter and connection side must reach every case.
+	// it. Every error counter must reach every case.
 	for name, w := range want {
 		for cs := range w {
 			if !seen[name][cs] {

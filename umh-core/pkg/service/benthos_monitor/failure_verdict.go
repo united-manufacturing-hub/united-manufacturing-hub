@@ -23,13 +23,11 @@ import (
 // signals fired, and when. The zero verdict, with no entry, is the
 // error-free case.
 type FailureVerdict struct {
-	// Fired lists every fired failure signal, most urgent first. An error
-	// signal has fired when its counter rose inside its window and has not
-	// yet cleared. A connection signal holds while a path is not connected.
-	// More urgent means a lower tier, then a larger current value. The tier is
-	// the signal's rank class, errors before connections; the FSMv2 benthos
-	// monitor (pkg/fsmv2/benthos_monitor, failureCounters and
-	// connectionSides) assigns it and sorts Fired.
+	// Fired lists the error entries first, then the connection entries, each
+	// group with the larger Count first. pkg/fsmv2/benthos_monitor
+	// (failureVerdict) sets this order. An error entry is present once its
+	// counter rose and until its Window passed with no further rise. A
+	// connection entry is present while an input or output is not connected.
 	Fired []FailureEntry
 
 	// ObservedAt is the scrape the verdict was computed for.

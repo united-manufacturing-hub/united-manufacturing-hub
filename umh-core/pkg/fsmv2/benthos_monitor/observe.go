@@ -40,9 +40,13 @@ type observation struct {
 	// failures holds the raw failure counters, keyed by the counter's name.
 	failures map[string]int64
 
-	// connections holds the number of paths not connected, keyed by the
-	// connection side's name.
+	// connections holds the number of inputs or outputs not connected, keyed
+	// by the connection check's name.
 	connections map[string]int64
+
+	// notConnectedSince holds, for each connection check whose count is above
+	// 0, the scrape at which that count went above 0 (see notConnectedSince).
+	notConnectedSince map[string]time.Time
 
 	result  throughput
 	verdict benthosmonitorservice.FailureVerdict
@@ -75,7 +79,7 @@ type observation struct {
 //
 // The first scrape on fresh deps is observed alone: failure counters that were
 // already high before it have no older point to rise against, so they are not
-// judged. The connection signals read that scrape alone and are judged at once.
+// judged. The connection checks read that scrape alone and are judged at once.
 func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, at time.Time) (throughput, benthosmonitorservice.FailureVerdict) {
 	cur := observation{
 		at:            at,
@@ -91,6 +95,9 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	// LastIncreaseAt: the previous scrape's, or 0 after a restart, the same
 	// values the engine compares this scrape against.
 	var before map[string]int64
+	// prevNotConnectedSince carries an outage's start forward only from a
+	// scrape of the same benthos with no long gap, as the error signals do.
+	var prevNotConnectedSince map[string]time.Time
 	switch {
 	case prev == nil:
 		d.engine = newEngine()
@@ -103,7 +110,10 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 		rebuild(d, prev.failures, at)
 	default:
 		before = prev.failures
+		prevNotConnectedSince = prev.notConnectedSince
 	}
+
+	cur.notConnectedSince = notConnectedSince(prevNotConnectedSince, cur.connections, at)
 
 	fired, _ := d.engine.Observe(sampleFrom(cur), diagnosis.Environment{}, at)
 
@@ -118,7 +128,7 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 		},
 	}
 	cur.result.IsActive = cur.result.Input.MessagesPerSecond > 0
-	cur.verdict = failureVerdict(d.engine, fired, at)
+	cur.verdict = failureVerdict(d.engine, fired, cur)
 	if prev != nil {
 		cur.verdict.LastIncreaseAt = prev.verdict.LastIncreaseAt
 		if rose(before, cur.failures) {
@@ -180,9 +190,9 @@ func seed(failures map[string]int64) sample {
 	s := sample{
 		inputReceived: diagnosis.Unknown(),
 		outputSent:    diagnosis.Unknown(),
-		failures:      make(map[string]diagnosis.Reading, len(failureCounters)),
+		failures:      make(map[string]diagnosis.Reading, len(errorCounters)),
 	}
-	for _, c := range failureCounters {
+	for _, c := range errorCounters {
 		s.failures[c.name] = diagnosis.Known(float64(failures[c.name]))
 	}
 

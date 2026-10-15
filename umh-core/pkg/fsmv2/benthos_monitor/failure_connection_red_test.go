@@ -341,3 +341,41 @@ func TestObserveDropSoonAfterReconnectIsReported(t *testing.T) {
 		t.Fatalf("drop 4s after the reconnect: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 }
+
+// TestObserveRestartWhileDownReportsFromTheRestart: an input is down, benthos
+// restarts, and the input is still down. The entry's Since is the first scrape
+// after the restart, because the scrapes before it came from another process.
+func TestObserveRestartWhileDownReportsFromTheRestart(t *testing.T) {
+	d := &benthosMonitorDeps{}
+	at := failureT
+	obs := func(m benthosmonitorservice.Metrics) benthosmonitorservice.FailureVerdict {
+		at = at.Add(time.Second)
+		_, v := observe(d, testPort, m, at)
+
+		return v
+	}
+	// restarted is a scrape of the new process: its received counter starts
+	// again below the 10 that connScrape sets.
+	restarted := func(c conn) benthosmonitorservice.Metrics {
+		m := connScrape(in(c), nil)
+		inst := m.Inputs["root.input"]
+		inst.Received = 1
+		m.Inputs["root.input"] = inst
+
+		return m
+	}
+
+	obs(connScrape(in(conn{}), nil))
+	for k := 1; k <= 3; k++ {
+		obs(connScrape(in(conn{failed: int64(k)}), nil))
+	}
+	obs(restarted(conn{failed: 1}))
+	restartAt := at
+	v := obs(restarted(conn{failed: 2}))
+	if len(v.Fired) != 1 {
+		t.Fatalf("still down after the restart: fired entries = %d, want 1", len(v.Fired))
+	}
+	if !v.Fired[0].Since.Equal(restartAt) {
+		t.Fatalf("still down after the restart: entry Since = %v, want the first scrape after the restart at %v", v.Fired[0].Since, restartAt)
+	}
+}
