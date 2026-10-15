@@ -24,11 +24,12 @@ import (
 // rose recently, or an input or output that is not connected. The zero
 // verdict, with no entry, is the error-free case.
 type FailureVerdict struct {
-	// Fired lists the error entries first, then the connection entries, each
-	// group with the larger Count first. pkg/fsmv2/benthos_monitor
-	// (failureVerdict) sets this order. An error entry is present once its
-	// counter rose and until its Window passed with no further rise. A
-	// connection entry is present while an input or output is not connected.
+	// Fired lists the error entries first, then the connection entries. In
+	// each group an entry with BlockedFor set comes first, then the larger
+	// Count. pkg/fsmv2/benthos_monitor (failureVerdict) sets this order. An
+	// error entry is present once its counter rose and until its Window passed
+	// with no further rise. A connection entry is present while an input or
+	// output is not connected.
 	Fired []FailureEntry
 
 	// ObservedAt is the scrape the verdict was computed for.
@@ -69,11 +70,10 @@ type FailureEntry struct {
 	// not connected.
 	Window time.Duration
 
-	// Blocked is set on an output error entry whose output sent nothing for
-	// 2 minutes or more while at least 3 of its writes failed. It is how long
-	// the output has sent nothing. It is zero otherwise, and on every other
-	// entry. blockedFor in pkg/fsmv2/benthos_monitor sets it.
-	Blocked time.Duration
+	// BlockedFor is how long the output has sent nothing, on an output error
+	// entry whose output is blocked. It is zero on every other entry.
+	// blockedFor in pkg/fsmv2/benthos_monitor decides when an output is blocked.
+	BlockedFor time.Duration
 }
 
 // IsConnection reports whether e is a connection entry. A connection entry
@@ -82,17 +82,18 @@ func (e FailureEntry) IsConnection() bool { return e.Window == 0 }
 
 // ErrorFree reports whether the verdict has no entry: no error counter rose
 // inside its window and every input and output is connected. The name matches
-// IBenthosService.IsMetricsErrorFree, which reads it. The reason uses the first
-// entry's current Count. A rise after the entry appeared raises that number,
-// while Since stays at the scrape where the entry first appeared.
+// IBenthosService.IsMetricsErrorFree, which reads it. The reason names the first
+// entry: how long its output has been blocked when BlockedFor is set, or else
+// its current Count. A rise after the entry appeared raises that number, while
+// Since stays at the scrape where the entry first appeared.
 func (v *FailureVerdict) ErrorFree() (bool, string) {
 	if len(v.Fired) == 0 {
 		return true, ""
 	}
 
 	e := v.Fired[0]
-	if e.Blocked > 0 {
-		return false, fmt.Sprintf("benthos output blocked: no message written for %v", e.Blocked.Truncate(time.Minute))
+	if e.BlockedFor > 0 {
+		return false, fmt.Sprintf("benthos output blocked: no message written for %v", e.BlockedFor.Truncate(time.Minute))
 	}
 
 	n := e.Count

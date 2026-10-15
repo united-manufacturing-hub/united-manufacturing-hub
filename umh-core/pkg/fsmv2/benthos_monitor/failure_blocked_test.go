@@ -38,8 +38,9 @@ func (s outputStep) metrics() benthosmonitorservice.Metrics {
 	}
 }
 
-// observeVerdict observes each step in order on fresh deps and returns the
-// verdict at the last one.
+// observeVerdict observes each step in order, starting from a
+// benthosMonitorDeps that has seen no scrape, and returns the verdict at the
+// last one.
 func observeVerdict(steps []outputStep) benthosmonitorservice.FailureVerdict {
 	d := &benthosMonitorDeps{}
 	var v benthosmonitorservice.FailureVerdict
@@ -50,40 +51,40 @@ func observeVerdict(steps []outputStep) benthosmonitorservice.FailureVerdict {
 	return v
 }
 
-// observeSteps is observeVerdict's reason.
-func observeSteps(steps []outputStep) (bool, string) {
+// reasonAfter returns ErrorFree() of the verdict at the last step.
+func reasonAfter(steps []outputStep) (bool, string) {
 	v := observeVerdict(steps)
 
 	return v.ErrorFree()
 }
 
-// outputRun is observeSteps with one scrape per second for n seconds. At
-// second i the output has sent(i) messages and errors(i) errors.
-func outputRun(n int, sent, errors func(i int) int64) (bool, string) {
+// reasonAfterSeconds observes one scrape per second for n seconds. At second i
+// the output has sent sent(i) messages and failed errors(i) writes.
+func reasonAfterSeconds(n int, sent, errors func(i int) int64) (bool, string) {
 	steps := make([]outputStep, 0, n)
 	for i := 0; i < n; i++ {
 		steps = append(steps, outputStep{at: time.Duration(i) * time.Second, sent: sent(i), errors: errors(i)})
 	}
 
-	return observeSteps(steps)
+	return reasonAfter(steps)
 }
 
 func constant(c int64) func(int) int64 { return func(int) int64 { return c } }
-func perSecond(i int) int64            { return int64(i) }
+func onePerSecond(i int) int64         { return int64(i) }
 
 // TestObserveOutputBlocked: writes fail every second and nothing is sent for
 // more than two minutes, so the reason says the output is blocked.
 func TestObserveOutputBlocked(t *testing.T) {
-	ok, reason := outputRun(150, constant(10), perSecond)
+	ok, reason := reasonAfterSeconds(150, constant(10), onePerSecond)
 	if want := "benthos output blocked: no message written for 2m0s"; ok || reason != want {
 		t.Fatalf("errors every second, nothing sent for 149s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 }
 
 // TestObserveBlockedReasonNamesHowLong: the reason names how long nothing was
-// written, in whole minutes, not the 2 minutes it takes to call it blocked.
+// sent, in whole minutes, not the 2 minutes it takes to call it blocked.
 func TestObserveBlockedReasonNamesHowLong(t *testing.T) {
-	ok, reason := outputRun(200, constant(10), perSecond)
+	ok, reason := reasonAfterSeconds(200, constant(10), onePerSecond)
 	if want := "benthos output blocked: no message written for 3m0s"; ok || reason != want {
 		t.Fatalf("errors every second, nothing sent for 199s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
@@ -92,48 +93,50 @@ func TestObserveBlockedReasonNamesHowLong(t *testing.T) {
 // TestObserveOutputErrorsWhileSendingIsNotBlocked: the same errors while
 // messages still go out are output errors, not a blocked output.
 func TestObserveOutputErrorsWhileSendingIsNotBlocked(t *testing.T) {
-	ok, reason := outputRun(150, perSecond, perSecond)
+	ok, reason := reasonAfterSeconds(150, onePerSecond, onePerSecond)
 	if want := "benthos reported 149 output errors in the last 10m0s"; ok || reason != want {
 		t.Fatalf("errors and sends every second: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 }
 
-// TestObserveFailingOutputUnderTwoMinutesIsNotBlocked: 90 seconds after umh-core
-// starts, nothing shows that nothing was written for 2 minutes.
+// TestObserveFailingOutputUnderTwoMinutesIsNotBlocked: after 90 seconds of
+// failed writes, the output has not yet gone 2 minutes without a sent message,
+// so it is not blocked.
 func TestObserveFailingOutputUnderTwoMinutesIsNotBlocked(t *testing.T) {
-	ok, reason := outputRun(90, constant(10), perSecond)
+	ok, reason := reasonAfterSeconds(90, constant(10), onePerSecond)
 	if want := "benthos reported 89 output errors in the last 10m0s"; ok || reason != want {
 		t.Fatalf("errors every second, nothing sent for 89s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 }
 
-// TestObserveQuietOutputAfterOneErrorIsNotBlocked: one error, then a flow with
-// no traffic, is an output error. Nothing written does not mean blocked when
-// writes stopped failing.
+// TestObserveQuietOutputAfterOneErrorIsNotBlocked: the output sent nothing for
+// over 3 minutes, and one write failed at second 196. One error is below the
+// three a blocked output needs.
 func TestObserveQuietOutputAfterOneErrorIsNotBlocked(t *testing.T) {
-	errors := func(i int) int64 { return min(int64(i), 1) }
-	ok, reason := outputRun(200, constant(10), errors)
+	errors := func(i int) int64 { return min(max(int64(i)-195, 0), 1) }
+	ok, reason := reasonAfterSeconds(200, constant(10), errors)
 	if want := "benthos reported 1 output error in the last 10m0s"; ok || reason != want {
-		t.Fatalf("one error, then no traffic for 200s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
+		t.Fatalf("nothing sent for 199s, one error at 196s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 }
 
-// TestObserveQuietOutputAfterTwoErrorsIsNotBlocked: two errors are still below
-// the three a blocked output needs.
+// TestObserveQuietOutputAfterTwoErrorsIsNotBlocked: the output sent nothing for
+// over 3 minutes, and two writes failed at seconds 197 and 198. Two errors are
+// below the three a blocked output needs.
 func TestObserveQuietOutputAfterTwoErrorsIsNotBlocked(t *testing.T) {
-	errors := func(i int) int64 { return min(int64(i), 2) }
-	ok, reason := outputRun(200, constant(10), errors)
+	errors := func(i int) int64 { return min(max(int64(i)-196, 0), 2) }
+	ok, reason := reasonAfterSeconds(200, constant(10), errors)
 	if want := "benthos reported 2 output errors in the last 10m0s"; ok || reason != want {
-		t.Fatalf("two errors, then no traffic for 200s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
+		t.Fatalf("nothing sent for 199s, errors at 197s and 198s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 }
 
 // TestObserveOutputThatStoppedFailingIsNotBlocked: five writes failed, then
-// none for over 2 minutes. Nothing was written, but the output is not failing
+// none for over 2 minutes. Nothing was sent, but the output is not failing
 // now.
 func TestObserveOutputThatStoppedFailingIsNotBlocked(t *testing.T) {
 	errors := func(i int) int64 { return min(int64(i), 5) }
-	ok, reason := outputRun(200, constant(10), errors)
+	ok, reason := reasonAfterSeconds(200, constant(10), errors)
 	if want := "benthos reported 5 output errors in the last 10m0s"; ok || reason != want {
 		t.Fatalf("five errors, then none for 195s: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
@@ -150,7 +153,7 @@ func TestObserveBlockedOutputRecovers(t *testing.T) {
 		return int64(i)
 	}
 	errors := func(i int) int64 { return min(int64(i), 150) }
-	ok, reason := outputRun(155, sent, errors)
+	ok, reason := reasonAfterSeconds(155, sent, errors)
 	if want := "benthos reported 150 output errors in the last 10m0s"; ok || reason != want {
 		t.Fatalf("5s after messages go out again: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
@@ -171,8 +174,8 @@ func TestObserveBlockedOutputComesFirst(t *testing.T) {
 	}
 
 	for _, e := range v.Fired {
-		if e.Signal != outputError && e.Blocked != 0 {
-			t.Fatalf("entry %q: Blocked = %v, want 0 on every entry but the output error entry", e.Signal, e.Blocked)
+		if e.Signal != outputErrorName && e.BlockedFor != 0 {
+			t.Fatalf("entry %q: BlockedFor = %v, want 0 on every entry but the output error entry", e.Signal, e.BlockedFor)
 		}
 	}
 }
@@ -189,16 +192,16 @@ func TestObserveSendDuringScrapePauseIsNotBlocked(t *testing.T) {
 		steps = append(steps, outputStep{at: (240 + time.Duration(k)) * time.Second, sent: 300, errors: k + 1})
 	}
 
-	ok, reason := observeSteps(steps)
+	ok, reason := reasonAfter(steps)
 	if want := "benthos reported 6 output errors in the last 10m0s"; ok || reason != want {
 		t.Fatalf("sent rose during the pause, 6 errors in the 6s after it: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 }
 
-// TestObserveRestartStartsTheBlockedTimeAgain: a quiet flow restarts and its
-// output then fails every write. A minute after the restart it is not blocked,
-// and a little over 2 minutes after it it is.
-func TestObserveRestartStartsTheBlockedTimeAgain(t *testing.T) {
+// TestObserveBlockedCountsFromRestart: after a Benthos restart, the 2 minutes
+// without a sent message count from the restart. The output fails every write
+// after it: at 60s it is not blocked, at 130s it is.
+func TestObserveBlockedCountsFromRestart(t *testing.T) {
 	steps := make([]outputStep, 0, 331)
 	for i := int64(0); i < 200; i++ {
 		steps = append(steps, outputStep{at: time.Duration(i) * time.Second, sent: 10})
@@ -207,12 +210,12 @@ func TestObserveRestartStartsTheBlockedTimeAgain(t *testing.T) {
 		steps = append(steps, outputStep{at: time.Duration(i) * time.Second, errors: i - 199})
 	}
 
-	ok, reason := observeSteps(steps[:261])
+	ok, reason := reasonAfter(steps[:261])
 	if want := "benthos reported 61 output errors in the last 10m0s"; ok || reason != want {
 		t.Fatalf("60s after the restart: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 
-	ok, reason = observeSteps(steps)
+	ok, reason = reasonAfter(steps)
 	if want := "benthos output blocked: no message written for 2m0s"; ok || reason != want {
 		t.Fatalf("130s after the restart: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
@@ -223,7 +226,7 @@ func TestObserveRestartStartsTheBlockedTimeAgain(t *testing.T) {
 // the three a blocked output needs.
 func TestObserveErrorsBeforeFirstScrapeDoNotCountTowardBlocked(t *testing.T) {
 	errors := func(i int) int64 { return 100 + min(max(int64(i)-125, 0), 2) }
-	ok, reason := outputRun(130, constant(10), errors)
+	ok, reason := reasonAfterSeconds(130, constant(10), errors)
 	if want := "benthos reported 2 output errors in the last 10m0s"; ok || reason != want {
 		t.Fatalf("counter at 100 before the first scrape, 2 errors after it: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
@@ -235,7 +238,7 @@ func TestObserveErrorsBeforeFirstScrapeDoNotCountTowardBlocked(t *testing.T) {
 func TestObserveErrorsWhileSendingDoNotCountTowardBlocked(t *testing.T) {
 	sent := func(i int) int64 { return min(int64(i), 99) }
 	errors := func(i int) int64 { return min(int64(i), 99) + min(max(int64(i)-225, 0), 2) }
-	ok, reason := outputRun(230, sent, errors)
+	ok, reason := reasonAfterSeconds(230, sent, errors)
 	if want := "benthos reported 101 output errors in the last 10m0s"; ok || reason != want {
 		t.Fatalf("errors while sending, then 2 after the last send: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
