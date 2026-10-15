@@ -65,16 +65,8 @@ Then re-run the `docker run` command.
 
 For advanced users needing bind mounts (custom data locations), see the [Container Layout reference](../reference/container-layout.md#advanced-custom-data-location).
 
-**Corporate firewall/proxy issues**
-If your corporate network intercepts TLS traffic, see [Network Configuration](../production/security/umh-core/network-configuration.md#tls-inspection-mitm) to add your CA certificate.
-
-For proxy configuration, see [Network Configuration](../production/security/umh-core/network-configuration.md#proxy-configuration) or add these arguments to your docker run:
-
-```bash
--e HTTP_PROXY=http://proxy.company.com:8080 \
--e HTTPS_PROXY=https://proxy.company.com:8080 \
--e NO_PROXY=localhost,127.0.0.1,.local
-```
+**Instance stays offline behind a corporate firewall**
+If your network needs a proxy or inspects TLS traffic, see [Instance Stays Offline Behind a Corporate Firewall](../usage/instances/communicator/instance-offline-behind-corporate-firewall.md).
 
 ---
 
