@@ -37,8 +37,8 @@ type observation struct {
 	inputReceived int
 	outputSent    int
 
-	// failures holds the raw failure counters, keyed by the counter's name.
-	failures map[string]int64
+	// errors holds the raw error counters, keyed by the counter's name.
+	errors map[string]int64
 
 	// connections holds the number of inputs or outputs not connected, keyed
 	// by the connection check's name.
@@ -47,6 +47,9 @@ type observation struct {
 	// notConnectedSince holds, for each connection check whose count is above
 	// 0, the scrape at which that count went above 0 (see notConnectedSince).
 	notConnectedSince map[string]time.Time
+
+	// lastIncreaseAt is the verdict's LastIncreaseAt for this scrape.
+	lastIncreaseAt time.Time
 
 	result  throughput
 	verdict benthosmonitorservice.FailureVerdict
@@ -68,30 +71,30 @@ type observation struct {
 //
 // The engine is also rebuilt when more than constants.BenthosLogWindow passed
 // since the previous scrape with no counter drop. The rebuild drops every fired
-// signal, so a signal that fired before the gap releases unless its counter
+// signal, so a signal that fired before the gap clears unless its counter
 // rose during it. A drop during the gap is a restart, handled as above.
 //
 // A rebuilt engine first observes a seed (see seed). After a restart its
-// failure counters are 0, so errors counted between the restart and this scrape
+// error counters are 0, so errors counted between the restart and this scrape
 // count as new. After a long gap they are the previous scrape's values, so only
 // a rise during the gap counts. The seed's throughput is unknown, so the first
 // rate after a rebuild is 0.
 //
-// The first scrape on fresh deps is observed alone: failure counters that were
-// already high before it have no older point to rise against, so they are not
-// judged. The connection checks read that scrape alone and are judged at once.
+// The worker's first scrape has no earlier scrape to compare with, so error
+// counters that were already high are not judged. Connections are judged on
+// that first scrape.
 func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, at time.Time) (throughput, benthosmonitorservice.FailureVerdict) {
 	cur := observation{
 		at:            at,
 		port:          port,
 		inputReceived: int(m.InputReceivedTotal()),
 		outputSent:    int(m.OutputSentTotal()),
-		failures:      readFailures(m),
+		errors:        readErrors(m),
 		connections:   readConnections(m),
 	}
 
 	prev := d.prev
-	// before holds the failure counters this scrape is compared with for
+	// before holds the error counters this scrape is compared with for
 	// LastIncreaseAt: the previous scrape's, or 0 after a restart, the same
 	// values the engine compares this scrape against.
 	var before map[string]int64
@@ -106,10 +109,10 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	case counterSeriesChanged(prev, &cur):
 		rebuild(d, nil, at)
 	case at.Sub(prev.at) > constants.BenthosLogWindow:
-		before = prev.failures
-		rebuild(d, prev.failures, at)
+		before = prev.errors
+		rebuild(d, prev.errors, at)
 	default:
-		before = prev.failures
+		before = prev.errors
 		prevNotConnectedSince = prev.notConnectedSince
 	}
 
@@ -128,13 +131,13 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 		},
 	}
 	cur.result.IsActive = cur.result.Input.MessagesPerSecond > 0
-	cur.verdict = failureVerdict(d.engine, fired, cur)
 	if prev != nil {
-		cur.verdict.LastIncreaseAt = prev.verdict.LastIncreaseAt
-		if rose(before, cur.failures) {
-			cur.verdict.LastIncreaseAt = at
+		cur.lastIncreaseAt = prev.lastIncreaseAt
+		if rose(before, cur.errors) {
+			cur.lastIncreaseAt = at
 		}
 	}
+	cur.verdict = failureVerdict(d.engine, fired, cur)
 	d.prev = &cur
 
 	return cur.result, cur.verdict
@@ -143,7 +146,7 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 // counterSeriesChanged reports whether cur's counters cannot be compared with
 // prev's: the port changed, or a counter went down because benthos restarted. A
 // drop in the output counter alone counts, because a reconfigured benthos can
-// leave the input counter unchanged. A dropped failure counter counts for the
+// leave the input counter unchanged. A dropped error counter counts for the
 // same reason. A new port always comes with a new benthos process: the port is
 // part of the benthos service config, so changing it restarts benthos.
 func counterSeriesChanged(prev, cur *observation) bool {
@@ -153,8 +156,8 @@ func counterSeriesChanged(prev, cur *observation) bool {
 		return true
 	}
 
-	for name, v := range cur.failures {
-		if v < prev.failures[name] {
+	for name, v := range cur.errors {
+		if v < prev.errors[name] {
 			return true
 		}
 	}
@@ -162,8 +165,9 @@ func counterSeriesChanged(prev, cur *observation) bool {
 	return false
 }
 
-// A counter missing from before counts as 0. before is nil after a restart,
-// so any counter above 0 on the first scrape after it is a rise.
+// rose reports whether any counter in cur is higher than in before. A counter
+// missing from before counts as 0, so after a restart (before is nil) any
+// counter above 0 is a rise.
 func rose(before, cur map[string]int64) bool {
 	for name, v := range cur {
 		if v > before[name] {
@@ -174,26 +178,27 @@ func rose(before, cur map[string]int64) bool {
 	return false
 }
 
-// rebuild replaces d's engine with a new one that has observed seed(failures)
+// rebuild replaces d's engine with a new one that has observed seed(errorCounts)
 // one poll before at. The seed sits one poll before at, not at the previous
 // scrape's time, because the engine empties a window whose newest point is
 // older than its demote span (pkg/diagnosis, SlidingWindow.age); after a long
 // gap the seed would be gone before the real sample arrives.
-func rebuild(d *benthosMonitorDeps, failures map[string]int64, at time.Time) {
+func rebuild(d *benthosMonitorDeps, errorCounts map[string]int64, at time.Time) {
 	d.engine = newEngine()
-	d.engine.Observe(seed(failures), diagnosis.Environment{}, at.Add(-pollInterval))
+	d.engine.Observe(seed(errorCounts), diagnosis.Environment{}, at.Add(-pollInterval))
 }
 
 // seed is the sample a rebuilt engine observes first: unknown throughput, and
-// each failure counter at its value in failures, or 0 when failures has none.
-func seed(failures map[string]int64) sample {
+// each error counter at its value in errorCounts, or 0 when errorCounts has
+// none.
+func seed(errorCounts map[string]int64) sample {
 	s := sample{
 		inputReceived: diagnosis.Unknown(),
 		outputSent:    diagnosis.Unknown(),
-		failures:      make(map[string]diagnosis.Reading, len(errorCounters)),
+		errors:        make(map[string]diagnosis.Reading, len(errorCounters)),
 	}
 	for _, c := range errorCounters {
-		s.failures[c.name] = diagnosis.Known(float64(failures[c.name]))
+		s.errors[c.name] = diagnosis.Known(float64(errorCounts[c.name]))
 	}
 
 	return s

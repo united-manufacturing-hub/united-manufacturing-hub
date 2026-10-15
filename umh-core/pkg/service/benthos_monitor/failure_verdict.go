@@ -19,9 +19,10 @@ import (
 	"time"
 )
 
-// FailureVerdict is the worker's judgement of one scrape: which failure
-// signals fired, and when. The zero verdict, with no entry, is the
-// error-free case.
+// FailureVerdict is the FSMv2 benthos monitor's judgement of one scrape: which
+// failures it reports, and since when. A failure is an error counter that
+// rose recently, or an input or output that is not connected. The zero
+// verdict, with no entry, is the error-free case.
 type FailureVerdict struct {
 	// Fired lists the error entries first, then the connection entries, each
 	// group with the larger Count first. pkg/fsmv2/benthos_monitor
@@ -33,18 +34,20 @@ type FailureVerdict struct {
 	// ObservedAt is the scrape the verdict was computed for.
 	ObservedAt time.Time
 
-	// LastIncreaseAt is the latest scrape at which any failure counter was
-	// higher than at the scrape before it. After a restart the scrape before
-	// counts as 0. It is zero until the first increase, and it is computed from
-	// the raw error counters, not from the fired signals. An error signal
-	// fires only on a rise, so whenever Fired holds an entry with a Window,
-	// LastIncreaseAt is set. Connection entries do not move it.
+	// LastIncreaseAt is the latest scrape at which any error counter was
+	// higher than at the scrape before it. After a restart, each counter is
+	// compared with 0. It is zero until the first increase, and it is computed
+	// from the raw error counters, not from Fired. An error entry appears only
+	// on a rise, so whenever Fired holds an error entry, LastIncreaseAt is
+	// set. Connection entries do not move it.
 	LastIncreaseAt time.Time
 }
 
-// FailureEntry is one fired failure signal as the FSM reads it.
+// FailureEntry is one failure in the verdict: an error counter that rose, or
+// inputs or outputs that are not connected.
 type FailureEntry struct {
-	// Signal is the name the worker's table declared, e.g. "output_error".
+	// Signal names the error counter or connection check, e.g. "output_error"
+	// or "input_connection".
 	Signal string
 
 	// Label is the human wording for one failure, e.g. "output error".
@@ -52,36 +55,43 @@ type FailureEntry struct {
 	Label string
 
 	// Count is the number the reason names, read on every scrape so it is
-	// the current number, not the one at firing: how much an error counter
-	// rose inside its window, or how many paths a connection entry finds not
-	// connected.
-	Count float64
+	// the current number, not the one when the entry appeared: how much an
+	// error counter rose inside its window, or how many inputs or outputs are
+	// not connected.
+	Count int64
 
-	// Since is the scrape the signal fired at.
+	// Since is the scrape at which the entry appeared: the counter's first
+	// rise, or the first scrape that found an input or output not connected.
 	Since time.Time
 
-	// Window is how long after an increase the signal stays fired. It is
-	// zero for a connection entry, which holds only while the path is not
-	// connected.
+	// Window is how long after an increase an error entry stays. It is zero
+	// for a connection entry, which stays only while an input or output is
+	// not connected.
 	Window time.Duration
 }
 
-// ErrorFree reports whether no failure signal fired. The reason names the
-// first entry's current value, so a later rise raises the number even while
-// the entry keeps the Since of the first one.
+// IsConnection reports whether e is a connection entry. A connection entry
+// has no Window: it stays while an input or output is not connected.
+func (e FailureEntry) IsConnection() bool { return e.Window == 0 }
+
+// ErrorFree reports whether the verdict has no entry: no error counter rose
+// inside its window and every input and output is connected. The name matches
+// IBenthosService.IsMetricsErrorFree, which reads it. The reason uses the first
+// entry's current Count. A rise after the entry appeared raises that number,
+// while Since stays at the scrape where the entry first appeared.
 func (v *FailureVerdict) ErrorFree() (bool, string) {
 	if len(v.Fired) == 0 {
 		return true, ""
 	}
 
 	e := v.Fired[0]
-	n := int(e.Count)
+	n := e.Count
 	label := e.Label
 	if n != 1 {
 		label += "s"
 	}
 
-	if e.Window == 0 {
+	if e.IsConnection() {
 		return false, fmt.Sprintf("benthos reports %d %s not connected", n, label)
 	}
 

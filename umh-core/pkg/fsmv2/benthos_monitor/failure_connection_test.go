@@ -27,10 +27,11 @@ import (
 	benthosmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
 
-// conn is one path's connection counters.
+// conn is the connection counters of one input or output.
 type conn struct{ up, lost, failed int64 }
 
-// connScrape returns a scrape with the given input and output paths. Every
+// connScrape returns a scrape with the given inputs and outputs, each keyed by
+// its Benthos path label, such as root.input. Every
 // other counter is fixed, so only the connection counters change between
 // scrapes.
 func connScrape(inputs, outputs map[string]conn) benthosmonitorservice.Metrics {
@@ -152,8 +153,8 @@ func TestObserveTwoPathsDownIsPlural(t *testing.T) {
 	}
 }
 
-// TestObserveErrorOutranksConnection: an output error (tier 0) is named before
-// an input that is not connected (tier 1).
+// TestObserveErrorOutranksConnection: an output error is named before an input
+// that is not connected.
 func TestObserveErrorOutranksConnection(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	first := connScrape(in(conn{}), nil)
@@ -215,8 +216,8 @@ func TestPollJudgesConnectionFromTheWire(t *testing.T) {
 }
 
 // TestObserveReconnectReleasesOnJitteredScrapes: real scrapes are not exactly
-// one second apart. With stamps alternating 993ms and 1007ms apart, the signal
-// still releases within three scrapes of the reconnect.
+// one second apart. With stamps alternating 993ms and 1007ms apart, the verdict
+// is still error-free within three scrapes of the reconnect.
 func TestObserveReconnectReleasesOnJitteredScrapes(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	at := failureT
@@ -247,10 +248,9 @@ func TestObserveReconnectReleasesOnJitteredScrapes(t *testing.T) {
 	}
 }
 
-// TestObserveReconnectReleasesAfterAScrapePause: scrapes pause for 30
-// seconds, longer than the connection window, while the input is down. Once
-// scraping resumes every second and benthos has reconnected, the signal
-// releases within one window.
+// TestObserveReconnectReleasesAfterAScrapePause: scrapes pause for 30 seconds
+// while the input is down. Once scraping resumes every second and benthos has
+// reconnected, the verdict is error-free within 11 scrapes.
 func TestObserveReconnectReleasesAfterAScrapePause(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	at := failureT
@@ -279,8 +279,8 @@ func TestObserveReconnectReleasesAfterAScrapePause(t *testing.T) {
 }
 
 // TestObserveSecondOutageReportsItsOwnStart: on jittered scrapes, an input
-// that reconnects and drops again later is reported from the second drop.
-// The first outage's signal must have released in between.
+// that reconnects and drops again later is reported from the second drop, not
+// from the first.
 func TestObserveSecondOutageReportsItsOwnStart(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	at := failureT
@@ -315,8 +315,7 @@ func TestObserveSecondOutageReportsItsOwnStart(t *testing.T) {
 }
 
 // TestObserveDropSoonAfterReconnectIsReported: an input that drops again a
-// few seconds after it reconnected is reported at once. The signal released
-// on the reconnect, and its cooldown must not hide the new drop.
+// few seconds after it reconnected is reported at once.
 func TestObserveDropSoonAfterReconnectIsReported(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	at := failureT

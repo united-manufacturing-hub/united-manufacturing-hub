@@ -67,13 +67,13 @@ var connectionChecks = []connectionCheck{
 	{name: "output_connection", label: "output", notConnected: outputsNotConnected},
 }
 
-// notConnected reports whether one path's connection counters say it is not
-// connected now. Benthos raises connection_up at the first connect and again
-// after each connection_lost (benthos v4, internal/component/input
-// async_reader.go and internal/component/output async_writer.go), so up not
-// above lost means the path is connecting. A failed or lost connection says an
-// attempt already went wrong; a first connect still in progress has neither
-// and is not reported.
+// notConnected reports whether one Benthos input or output is down now.
+// Benthos raises connection_up on every successful connect, and
+// connection_lost on every drop (benthos v4, internal/component/input
+// async_reader.go and internal/component/output async_writer.go). So up <= lost
+// means the last connect did not succeed. A first connect still in progress
+// also has up == lost == 0. It counts as down only once a connect failed or a
+// connection was lost.
 func notConnected(up, lost, failed int64) bool {
 	return up <= lost && (failed > 0 || lost > 0)
 }
@@ -109,9 +109,8 @@ func readConnections(m benthosmonitorservice.Metrics) map[string]int64 {
 	return out
 }
 
-// increase is the reduction the failure signals judge by: how much a counter
-// rose between the window's oldest and newest sample. Min 2, because a single
-// sample has no rise to read.
+// increase reports how much a counter rose between the oldest and newest
+// reading in the window. It needs at least 2 readings.
 var increase = mustIncrease()
 
 func mustIncrease() diagnosis.Reduction {
@@ -125,7 +124,7 @@ func mustIncrease() diagnosis.Reduction {
 	return r
 }
 
-func readFailures(m benthosmonitorservice.Metrics) map[string]int64 {
+func readErrors(m benthosmonitorservice.Metrics) map[string]int64 {
 	out := make(map[string]int64, len(errorCounters))
 	for _, c := range errorCounters {
 		out[c.name] = c.read(m)
@@ -140,10 +139,10 @@ func sampleFrom(cur observation) sample {
 	s := sample{
 		inputReceived: diagnosis.Known(float64(cur.inputReceived)),
 		outputSent:    diagnosis.Known(float64(cur.outputSent)),
-		failures:      make(map[string]diagnosis.Reading, len(cur.failures)),
+		errors:        make(map[string]diagnosis.Reading, len(cur.errors)),
 	}
-	for name, v := range cur.failures {
-		s.failures[name] = diagnosis.Known(float64(v))
+	for name, v := range cur.errors {
+		s.errors[name] = diagnosis.Known(float64(v))
 	}
 
 	return s
@@ -172,7 +171,7 @@ func notConnectedSince(prev map[string]time.Time, counts map[string]int64, at ti
 // error signals first, then the connection checks whose count is above 0, each
 // group with the larger Count first.
 func failureVerdict(e *diagnosis.Engine[sample], fired []diagnosis.Fired, cur observation) benthosmonitorservice.FailureVerdict {
-	v := benthosmonitorservice.FailureVerdict{ObservedAt: cur.at}
+	v := benthosmonitorservice.FailureVerdict{ObservedAt: cur.at, LastIncreaseAt: cur.lastIncreaseAt}
 	for _, f := range fired {
 		// table() builds Signals[i] from errorCounters[i].
 		c := errorCounters[f.Index]
@@ -180,7 +179,7 @@ func failureVerdict(e *diagnosis.Engine[sample], fired []diagnosis.Fired, cur ob
 		v.Fired = append(v.Fired, benthosmonitorservice.FailureEntry{
 			Signal: c.name,
 			Label:  c.label,
-			Count:  n,
+			Count:  int64(n),
 			Since:  f.Since,
 			Window: constants.BenthosLogWindow,
 		})
@@ -194,7 +193,7 @@ func failureVerdict(e *diagnosis.Engine[sample], fired []diagnosis.Fired, cur ob
 		v.Fired = append(v.Fired, benthosmonitorservice.FailureEntry{
 			Signal: c.name,
 			Label:  c.label,
-			Count:  float64(n),
+			Count:  n,
 			Since:  cur.notConnectedSince[c.name],
 		})
 	}

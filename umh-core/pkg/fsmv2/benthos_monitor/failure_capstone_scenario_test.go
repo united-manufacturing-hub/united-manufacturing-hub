@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 )
 
-// failingBenthosStub serves the endpoints Poll scrapes, with failure counters
+// failingBenthosStub serves the endpoints Poll scrapes, with error counters
 // the test sets and a switch that makes /metrics answer 500.
 type failingBenthosStub struct {
 	server            *httptest.Server
@@ -73,7 +73,7 @@ func newFailingBenthosStub() *failingBenthosStub {
 // status.Result.Failures.ErrorFree() after the framework's JSON round trip.
 // Each observation is one second later on a test clock. How the verdict
 // reaches the Benthos FSM through mapObserved and IsMetricsErrorFree is tested
-// in failure_window_red_test.go and pkg/service/benthos.
+// in failure_window_test.go and pkg/service/benthos.
 func TestScenarioFailureVerdictFromScrapeToFSM(t *testing.T) {
 	stub := newFailingBenthosStub()
 	defer stub.server.Close()
@@ -134,7 +134,7 @@ func TestScenarioFailureVerdictFromScrapeToFSM(t *testing.T) {
 
 	stub.processorErrors.Store(1)
 	if ok, reason := step(); ok || reason != "benthos reported 1 processor error in the last 10m0s" {
-		t.Fatalf("one processor error: ErrorFree() = (%v, %q), want not error-free with 1 processor errors", ok, reason)
+		t.Fatalf("one processor error: ErrorFree() = (%v, %q), want not error-free with 1 processor error", ok, reason)
 	}
 	if ok, reason := stepFor(window + time.Second); !ok {
 		t.Fatalf("one window after the processor error, no new error and no restart: ErrorFree() = (false, %q), want true", reason)

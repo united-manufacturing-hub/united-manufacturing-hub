@@ -9,7 +9,7 @@ This applies to bridges, stand-alone flows and stream processors alike, because 
 umh-core checks each Benthos instance in two ways:
 
 - **The log check** reads the instance's log. An `error` line, or a `warning` line that says "failed to", "connection lost" or "unable to", counts as a failure. The reason reads `found error (clears in 4m12s): <the log line>`.
-- **The metric check** reads the instance's counters in two ways:
+- **The metric check** reads two kinds of counters:
   - **Errors:** output errors and processor errors. The reason names the counter, for example `benthos reported 3 output errors in the last 10m0s`.
   - **Connections:** an input or output that failed to connect, or lost its connection, counts until Benthos reconnects it. The reason reads, for example, `benthos reports 1 input not connected`.
 

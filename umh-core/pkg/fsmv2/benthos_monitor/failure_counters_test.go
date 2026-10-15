@@ -28,9 +28,9 @@ import (
 	benthosmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
 
-// failureScrape returns a scrape whose failure counters hold the values in v,
-// keyed by counter name; a counter missing from v is 0. Each counter sits on
-// one input, one output or one processor path.
+// failureScrape returns a scrape built from v: the error counters, and the
+// failed and lost connection counts of one input and one output, keyed as
+// below. A key missing from v is 0.
 func failureScrape(v map[string]int64) benthosmonitorservice.Metrics {
 	return benthosmonitorservice.Metrics{
 		Inputs: map[string]benthosmonitorservice.InputInstance{"root.input": {
@@ -50,11 +50,10 @@ func failureScrape(v map[string]int64) benthosmonitorservice.Metrics {
 	}
 }
 
-// failureLabels is the label each counter's reason shows for a count of 1,
-// written out here so
-// the tests pin the wording rather than read it from errorCounters.
-// TestFailureLabelsCoverEveryCounter keeps the two lists in step.
-var failureLabels = map[string]string{
+// errorLabels repeats each counter's label so the tests check the wording, not
+// copy it from errorCounters. TestErrorLabelsCoverEveryCounter keeps the two
+// lists in step.
+var errorLabels = map[string]string{
 	"output_error":    "output error",
 	"processor_error": "processor error",
 }
@@ -69,23 +68,23 @@ func verdictAfterRise(before, after map[string]int64) benthosmonitorservice.Fail
 	return v
 }
 
-// TestFailureLabelsCoverEveryCounter: failureLabels names exactly the counters
+// TestErrorLabelsCoverEveryCounter: errorLabels names exactly the counters
 // in errorCounters, so the loops below cover every counter.
-func TestFailureLabelsCoverEveryCounter(t *testing.T) {
-	if len(failureLabels) != len(errorCounters) {
-		t.Errorf("failureLabels has %d counters, errorCounters has %d", len(failureLabels), len(errorCounters))
+func TestErrorLabelsCoverEveryCounter(t *testing.T) {
+	if len(errorLabels) != len(errorCounters) {
+		t.Errorf("errorLabels has %d counters, errorCounters has %d", len(errorLabels), len(errorCounters))
 	}
 	for _, c := range errorCounters {
-		if failureLabels[c.name] != c.label {
-			t.Errorf("counter %q: failureLabels says %q, errorCounters says %q", c.name, failureLabels[c.name], c.label)
+		if errorLabels[c.name] != c.label {
+			t.Errorf("counter %q: errorLabels says %q, errorCounters says %q", c.name, errorLabels[c.name], c.label)
 		}
 	}
 }
 
-// TestObserveEveryFailureCounterDegrades: each counter in failureLabels, raised
+// TestObserveEveryErrorCounterDegrades: each counter in errorLabels, raised
 // alone by 1, makes the metrics not error-free with its own label.
-func TestObserveEveryFailureCounterDegrades(t *testing.T) {
-	for name, label := range failureLabels {
+func TestObserveEveryErrorCounterDegrades(t *testing.T) {
+	for name, label := range errorLabels {
 		t.Run(name, func(t *testing.T) {
 			v := verdictAfterRise(nil, map[string]int64{name: 1})
 			want := fmt.Sprintf("benthos reported 1 %s in the last 10m0s", label)
@@ -99,23 +98,37 @@ func TestObserveEveryFailureCounterDegrades(t *testing.T) {
 	}
 }
 
-// TestObserveTierOrdersReason: a processor error (tier 0; see failureCounter.tier
-// in failures.go) is named before more failed input connections (tier 1). A sort by increase alone would name the
-// connections.
-func TestObserveTierOrdersReason(t *testing.T) {
-	v := verdictAfterRise(nil, map[string]int64{"input_connection_failed": 5, "processor_error": 1})
+// TestObserveErrorNamedBeforeMoreInputsDown: one processor error is named
+// before two inputs that are not connected, although 2 is larger than 1.
+func TestObserveErrorNamedBeforeMoreInputsDown(t *testing.T) {
+	inputs := func(failed int64) map[string]conn {
+		return map[string]conn{"root.input.broker.0": {failed: failed}, "root.input.broker.1": {failed: failed}}
+	}
+	withProcessorError := func(m benthosmonitorservice.Metrics, n int64) benthosmonitorservice.Metrics {
+		m.Process = benthosmonitorservice.ProcessMetrics{Processors: map[string]benthosmonitorservice.ProcessorMetrics{
+			"root.pipeline.processors.0": {Error: n},
+		}}
+
+		return m
+	}
+	d := &benthosMonitorDeps{}
+	observe(d, testPort, withProcessorError(connScrape(inputs(0), nil), 0), failureT.Add(-time.Second))
+	_, v := observe(d, testPort, withProcessorError(connScrape(inputs(1), nil), 1), failureT)
+	if len(v.Fired) == 2 && v.Fired[1].Count != 2 {
+		t.Fatalf("setup: connection entry Count = %d, want 2 inputs down", v.Fired[1].Count)
+	}
 	want := "benthos reported 1 processor error in the last 10m0s"
 	if ok, reason := v.ErrorFree(); ok || reason != want {
-		t.Fatalf("input_connection_failed +5 and processor_error +1: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
+		t.Fatalf("two inputs down and processor_error +1: ErrorFree() = (%v, %q), want (false, %q)", ok, reason, want)
 	}
 	if n := len(v.Fired); n != 2 {
 		t.Errorf("fired entries = %d, want 2", n)
 	}
 }
 
-// TestObserveIncreaseOrdersReasonWithinTier: within tier 0, the larger
-// current increase is named first.
-func TestObserveIncreaseOrdersReasonWithinTier(t *testing.T) {
+// TestObserveLargerIncreaseNamedFirst: of two error counters, the one with the
+// larger current increase is named first.
+func TestObserveLargerIncreaseNamedFirst(t *testing.T) {
 	v := verdictAfterRise(nil, map[string]int64{"output_error": 1, "processor_error": 3})
 	want := "benthos reported 3 processor errors in the last 10m0s"
 	if ok, reason := v.ErrorFree(); ok || reason != want {
@@ -135,11 +148,11 @@ func TestObserveEmptyMetricsIsErrorFree(t *testing.T) {
 	}
 }
 
-// TestObserveDropInAnyFailureCounterIsARestart: for each counter, fire it,
+// TestObserveDropInAnyErrorCounterIsARestart: for each counter, fire it,
 // then drop only that counter. The drop is a restart, so the next verdict is
 // error-free.
-func TestObserveDropInAnyFailureCounterIsARestart(t *testing.T) {
-	for name := range failureLabels {
+func TestObserveDropInAnyErrorCounterIsARestart(t *testing.T) {
+	for name := range errorLabels {
 		t.Run(name, func(t *testing.T) {
 			d := &benthosMonitorDeps{}
 			observe(d, testPort, failureScrape(map[string]int64{name: 3}), failureT.Add(-time.Second))
@@ -155,16 +168,16 @@ func TestObserveDropInAnyFailureCounterIsARestart(t *testing.T) {
 	}
 }
 
-// TestPollJudgesEveryFailureCounterFromTheWire: each failure counter, raised
+// TestPollJudgesEveryErrorCounterFromTheWire: each error counter, raised
 // in a real /metrics body between two polls, reaches the status verdict with
 // its label. This covers the parser's name for each counter.
-func TestPollJudgesEveryFailureCounterFromTheWire(t *testing.T) {
+func TestPollJudgesEveryErrorCounterFromTheWire(t *testing.T) {
 	lines := map[string]string{
 		"output_error":    `output_error{label="",path="root.output"} %d`,
 		"processor_error": `processor_error{label="",path="root.pipeline.processors.0"} %d`,
 	}
 
-	for name, label := range failureLabels {
+	for name, label := range errorLabels {
 		t.Run(name, func(t *testing.T) {
 			var value int64
 

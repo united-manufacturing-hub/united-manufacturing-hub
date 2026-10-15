@@ -77,7 +77,7 @@ func (s *scrapes) wantFailure(when string, n int64) {
 }
 
 // The config is fixed, benthos restarts, and its counter starts again at 0.
-// The test pins that the seed adds no false rise.
+// The seed adds no false rise.
 func TestObserveRestartToZeroClearsAtOnce(t *testing.T) {
 	firedAt(t, 3).at(failureT.Add(time.Second), testPort, 0).wantErrorFree("first scrape after a restart to 0")
 }
@@ -122,7 +122,7 @@ func TestObservePortChangeIsARestart(t *testing.T) {
 
 // A scrape stamped at the same instant as the previous one shows a dropped
 // counter; the next scrape, one second later, shows the same drop.
-func TestObserveDropOnNotNewerScrapeIsDeferred(t *testing.T) {
+func TestObserveDropOnSameInstantScrapeWaitsForNextScrape(t *testing.T) {
 	s := firedAt(t, 3)
 	s.at(failureT, testPort, 0).wantFailure("same-instant scrape with a dropped counter", 3)
 	s.at(failureT.Add(time.Second), testPort, 0).wantErrorFree("next scrape, counter still 0")

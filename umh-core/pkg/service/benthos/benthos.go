@@ -122,10 +122,10 @@ type IBenthosService interface {
 	//	ok    – true when logs look clean, false otherwise.
 	//	entry – zero value when ok is true; otherwise the first offending log line.
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
-	// IsMetricsErrorFree reports true when the metrics show no recent errors:
-	// with a windowed verdict present, no failure signal fired in the last
-	// constants.BenthosLogWindow. Only a nil verdict falls back to the
-	// cumulative counters.
+	// IsMetricsErrorFree reports true when the metrics show no recent failure.
+	// With a failure verdict (metrics.Failures), that means no error counter
+	// rose in the last constants.BenthosLogWindow and every input and output is
+	// connected. With no verdict, it reads the cumulative error counters.
 	//
 	// It returns:
 	//
@@ -1113,10 +1113,10 @@ func (s *BenthosService) IsLogsFine(
 	return true, s6service.LogEntry{}
 }
 
-// IsMetricsErrorFree reports true when the metrics show no recent errors:
-// with a windowed verdict present, no failure signal fired in the last
-// constants.BenthosLogWindow. Only a nil verdict falls back to the cumulative
-// counters.
+// IsMetricsErrorFree reports true when the metrics show no recent failure.
+// With a failure verdict (metrics.Failures), that means no error counter rose
+// in the last constants.BenthosLogWindow and every input and output is
+// connected. With no verdict, it reads the cumulative error counters.
 //
 // It returns:
 //

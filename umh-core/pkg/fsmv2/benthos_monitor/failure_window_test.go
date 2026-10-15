@@ -237,22 +237,22 @@ func (failureFeed) Readable(time.Time) sample {
 	s := sample{
 		inputReceived: diagnosis.Known(0),
 		outputSent:    diagnosis.Known(0),
-		failures:      map[string]diagnosis.Reading{},
+		errors:        map[string]diagnosis.Reading{},
 	}
 	for _, c := range errorCounters {
-		s.failures[c.name] = diagnosis.Known(0)
+		s.errors[c.name] = diagnosis.Known(0)
 	}
 
 	return s
 }
 
-// Unreadable leaves every failure reading out of the map; a missing key reads
+// Unreadable leaves every error reading out of the map; a missing key reads
 // as an unknown reading.
 func (failureFeed) Unreadable(time.Time) sample {
 	return sample{
 		inputReceived: diagnosis.Unknown(),
 		outputSent:    diagnosis.Unknown(),
-		failures:      map[string]diagnosis.Reading{},
+		errors:        map[string]diagnosis.Reading{},
 	}
 }
 

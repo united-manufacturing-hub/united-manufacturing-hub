@@ -37,9 +37,9 @@ type sample struct {
 	inputReceived diagnosis.Reading
 	outputSent    diagnosis.Reading
 
-	// failures holds one reading per errorCounters entry, keyed by the
+	// errors holds one reading per errorCounters entry, keyed by the
 	// counter's name.
-	failures map[string]diagnosis.Reading
+	errors map[string]diagnosis.Reading
 }
 
 // table declares what the engine measures and judges: the input and output
@@ -54,26 +54,28 @@ func table() diagnosis.Table[sample] {
 			Instruments: []diagnosis.Instrument[sample]{{
 				Measurement: diagnosis.Measurement[sample]{
 					Name:    counter.name,
-					Extract: func(s sample) diagnosis.Reading { return s.failures[counter.name] },
-					// Counter false, not true: a drop means benthos
-					// restarted, and observe rebuilds the engine there,
-					// so the window never spans two counter series.
+					Extract: func(s sample) diagnosis.Reading { return s.errors[counter.name] },
+					// Counter is false: observe rebuilds the engine
+					// whenever a counter drops (see counterSeriesChanged),
+					// so this window never sees a counter reset.
 					Reduction: increase,
 					Span:      constants.BenthosLogWindow,
 					Counter:   false,
 				},
 				Marks: diagnosis.Marks{
-					// Fire at the first rise, clear when the window holds no
-					// rise again. An inclusive clear reads a flat window as
-					// error-free.
-					Fire:     diagnosis.Mark{At: 0.5},
-					Clear:    diagnosis.Mark{At: 0, Inclusive: true},
+					// Fire once the counter rose by 1 or more (an increase
+					// above 0.5). Clear once the increase is back to 0.
+					// Inclusive makes exactly 0 count.
+					Fire:  diagnosis.Mark{At: 0.5},
+					Clear: diagnosis.Mark{At: 0, Inclusive: true},
+					// NewEngine requires Worst. Nothing reads the severity
+					// it scales: failureVerdict orders entries by Count.
 					Worst:    100,
 					Polarity: diagnosis.HigherIsWorse,
 				},
 			}},
 			DemoteSpan:   constants.BenthosLogWindow,
-			RefireAtOnce: true, // with the 10-minute window, a failure every 11 minutes would otherwise be hidden for 9 of them
+			RefireAtOnce: true, // a new error right after the signal clears shows at once, not after a 10-minute wait
 		})
 	}
 

@@ -239,10 +239,10 @@ type BenthosMetrics struct {
 	MetricsState *BenthosMetricsState
 	// Metrics contains the metrics of the Benthos service
 	Metrics Metrics
-	// Failures is the scrape's windowed failure verdict, set on every
-	// successful scrape of the fsmv2 monitor and nil when no scrape happened.
-	// A nil Failures makes IsMetricsErrorFree fall back to the cumulative
-	// counters.
+	// Failures is the FSMv2 benthos monitor's failure verdict for this scrape.
+	// It is nil under the FSMv1 monitor and before the first successful FSMv2
+	// scrape. A nil Failures makes IsMetricsErrorFree fall back to the
+	// cumulative counters.
 	Failures *FailureVerdict
 }
 

@@ -27,19 +27,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
 
-// staleMetricMargin is added to the failure window before a fired verdict
-// with no new failure counts as stale. The FSMv2 benthos monitor scrapes once
-// per second (pollInterval in pkg/fsmv2/benthos_monitor). A fired error signal
-// clears on the first scrape after its window (the signal table in that
-// package), so it can clear up to one scrape late. One minute covers that with
+// staleMetricMargin is added to an error entry's Window before the entry,
+// with no new error, counts as stale. The FSMv2 benthos monitor scrapes once
+// per second (pollInterval in pkg/fsmv2/benthos_monitor). An error entry
+// clears on the first scrape after its window (table() in that package), so it
+// can clear up to one scrape late. One minute covers that with
 // room to spare.
 const staleMetricMargin = time.Minute
 
 // staleMetricDegradedInstanceCount counts the Benthos instances embedded in the
-// flow managers and the topic browser whose failure verdict has a fired error
-// signal although no error counter rose for more than that entry's window plus
-// staleMetricMargin. A fired error signal clears within that time, so the count is
-// expected to stay 0; a non-zero count means the verdict keeps flows degraded
+// flow managers and the topic browser whose failure verdict still has an
+// error entry, although no error counter rose for longer than the entry's
+// Window plus staleMetricMargin. An error entry clears within that time, so the
+// count is expected to stay 0; a non-zero count means the verdict keeps flows degraded
 // too long. A new manager that embeds Benthos must be added here.
 func staleMetricDegradedInstanceCount(snapshot fsm.SystemSnapshot) int {
 	var benthos []benthosfsm.BenthosObservedState
@@ -82,16 +82,16 @@ func staleMetricDegradedInstanceCount(snapshot fsm.SystemSnapshot) int {
 	return count
 }
 
-// stale reports whether v holds a fired error entry past its window plus
-// staleMetricMargin. A connection entry has no window: it holds while benthos
-// is not connected, so it is never stale.
+// stale reports whether v holds an error entry past its Window plus
+// staleMetricMargin. A connection entry is never stale: it stays only while an
+// input or output is not connected.
 func stale(v *benthos_monitor.FailureVerdict) bool {
 	if v == nil {
 		return false
 	}
 
 	for _, e := range v.Fired {
-		if e.Window > 0 && v.ObservedAt.Sub(v.LastIncreaseAt) > e.Window+staleMetricMargin {
+		if !e.IsConnection() && v.ObservedAt.Sub(v.LastIncreaseAt) > e.Window+staleMetricMargin {
 			return true
 		}
 	}

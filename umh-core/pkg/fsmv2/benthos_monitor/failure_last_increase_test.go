@@ -29,9 +29,10 @@ func lastIncreaseAfter(d *benthosMonitorDeps, at time.Time, n int64) time.Time {
 	return v.LastIncreaseAt
 }
 
-// LastIncreaseAt is the latest scrape at which a failure counter was higher
-// than at the scrape before. It does not move while the counter stays flat,
-// also after the processor_error signal that fired at T has cleared.
+// TestObserveLastIncreaseAtFollowsRawCounters: LastIncreaseAt is the latest
+// scrape at which an error counter was higher than at the scrape before. It
+// stays put while the counter is flat, both before and after the
+// processor_error signal that fired at T clears.
 func TestObserveLastIncreaseAtFollowsRawCounters(t *testing.T) {
 	d := &benthosMonitorDeps{}
 
@@ -46,7 +47,7 @@ func TestObserveLastIncreaseAtFollowsRawCounters(t *testing.T) {
 	}
 }
 
-// After a restart the previous values
+// TestObserveLastIncreaseAtAfterRestart: after a restart the previous values
 // are 0, so a counter above 0 on the first scrape after it is an increase, and
 // a counter at 0 is not.
 func TestObserveLastIncreaseAtAfterRestart(t *testing.T) {
@@ -67,8 +68,9 @@ func TestObserveLastIncreaseAtAfterRestart(t *testing.T) {
 	}
 }
 
-// After a gap longer than the window the
-// previous values are the last scrape's, so only a rise during the gap counts.
+// TestObserveLastIncreaseAtAfterLongGap: after a gap longer than the window,
+// the previous values are the last scrape's, so only a rise during the gap
+// counts.
 func TestObserveLastIncreaseAtAfterLongGap(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	lastIncreaseAfter(d, failureT.Add(-time.Second), 0)
@@ -82,8 +84,9 @@ func TestObserveLastIncreaseAtAfterLongGap(t *testing.T) {
 	}
 }
 
-// Every rise moves LastIncreaseAt, while a signal is still fired and on any
-// counter: processor_error rises at T and again at T+2m, output_error at T+5m.
+// TestObserveLastIncreaseAtMovesOnEveryRise: every rise moves LastIncreaseAt,
+// while a signal is still fired and on any counter: processor_error rises at T
+// and again at T+2m, output_error at T+5m.
 func TestObserveLastIncreaseAtMovesOnEveryRise(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	scrape := func(at time.Time, processor, output int64) benthosmonitorservice.FailureVerdict {
@@ -102,9 +105,10 @@ func TestObserveLastIncreaseAtMovesOnEveryRise(t *testing.T) {
 	}
 }
 
-// A scrape stamped at the same instant as the previous one returns the
-// previous verdict, LastIncreaseAt included, and the next scrape keeps it.
-func TestObserveLastIncreaseAtSurvivesNotNewerScrape(t *testing.T) {
+// TestObserveLastIncreaseAtKeptOnSameInstantScrape: a scrape stamped at the
+// same instant as the previous one returns the previous verdict,
+// LastIncreaseAt included, and the next scrape keeps it.
+func TestObserveLastIncreaseAtKeptOnSameInstantScrape(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	lastIncreaseAfter(d, failureT.Add(-time.Second), 0)
 	lastIncreaseAfter(d, failureT, 3)
