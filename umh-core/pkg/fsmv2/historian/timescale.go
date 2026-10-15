@@ -241,6 +241,29 @@ func authRejected(err error) bool {
 	return badCredentials || unknownDatabase
 }
 
+func unexpectedQueryFailure(err error) bool {
+	return serverAnswered(err) && !authRejected(err)
+}
+
+type failureTag string
+
+const (
+	tagPoolFailed             failureTag = "historian::pool_failed"
+	tagQueryFailed            failureTag = "historian::query_failed"
+	tagSummaryReadFailed      failureTag = "historian::summary_read_failed"
+	tagDatabaseSizeReadFailed failureTag = "historian::database_size_read_failed"
+)
+
+func (d Deps) report(ctx context.Context, tag failureTag, host string, err error) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	d.GetLogger().SentryWarn(deps.FeatureSupportHistorian, d.GetHierarchyPath(), string(tag),
+		deps.String("host", host),
+		deps.Err(err))
+}
+
 // Poll runs a `SELECT 1` over the shared pool once and logs the outcome. A
 // successful query returns a reachable, auth-valid status with the measured
 // latency. A failed query is an observation, returned with a nil error for
@@ -261,6 +284,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.String("host", host),
 			deps.Bool("reachable", false),
 			deps.Err(err))
+		d.report(ctx, tagPoolFailed, host, err)
 
 		return TimescaleStatus{
 			Host:                      host,
@@ -300,6 +324,10 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.String("auth", string(auth)),
 			deps.Err(err))
 
+		if unexpectedQueryFailure(err) {
+			d.report(ctx, tagQueryFailed, host, err)
+		}
+
 		return TimescaleStatus{
 			Host:                      host,
 			Port:                      port,
@@ -330,9 +358,9 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	}, nil
 }
 
-// The error is logged and discarded: a summary that cannot be read is not a
-// connection fault, and returning it would drive the worker degraded for a
-// database that is answering.
+// The error is logged and reported, not returned: a summary that cannot be
+// read is not a connection fault, and returning it would drive the worker
+// degraded for a database that is answering.
 func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
 	return func() (timescalemetrics.Summary, bool) {
 		summary, err := timescalemetrics.CollectSummary(ctx, pool)
@@ -340,6 +368,7 @@ func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string)
 			d.GetLogger().Debug("timescale summary",
 				deps.String("host", host),
 				deps.Err(err))
+			d.report(ctx, tagSummaryReadFailed, host, err)
 
 			return timescalemetrics.Summary{}, false
 		}
@@ -355,6 +384,7 @@ func databaseSizeReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host st
 			d.GetLogger().Debug("timescale database size",
 				deps.String("host", host),
 				deps.Err(err))
+			d.report(ctx, tagDatabaseSizeReadFailed, host, err)
 
 			return 0, false
 		}
