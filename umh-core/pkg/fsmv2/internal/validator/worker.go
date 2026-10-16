@@ -62,7 +62,7 @@ func checkDeriveDesiredStateMethod(filename string) []Violation {
 			}
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				if selExpr.Sel.Name == "GetDependencies" {
+				if selExpr.Sel.Name == "GetDependencies" || selExpr.Sel.Name == "Deps" {
 					pos := fset.Position(callExpr.Pos())
 					violations = append(violations, Violation{
 						File:    filename,
@@ -672,7 +672,7 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 				switch selExpr.Sel.Name {
-				case "GetDependencies":
+				case "GetDependencies", "Deps":
 					hasGetDependencies = true
 				case "GetFrameworkState":
 					hasGetFrameworkState = true
@@ -697,7 +697,7 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "MISSING_FRAMEWORK_METRICS_COPY",
-				Message: "CollectObservedState() calls GetDependencies() but not GetFrameworkState() - must copy framework metrics from deps",
+				Message: "CollectObservedState() calls GetDependencies() or Deps() but not GetFrameworkState() - must copy framework metrics from deps",
 			})
 		}
 
@@ -931,7 +931,7 @@ func checkActionHistoryCopy(filename string) []Violation {
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 				switch selExpr.Sel.Name {
-				case "GetDependencies":
+				case "GetDependencies", "Deps":
 					hasGetDependencies = true
 				case "GetActionHistory":
 					hasGetActionHistory = true
@@ -956,7 +956,7 @@ func checkActionHistoryCopy(filename string) []Violation {
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "MISSING_ACTION_HISTORY_COPY",
-				Message: "CollectObservedState() calls GetDependencies() but not GetActionHistory() - must copy action history from deps",
+				Message: "CollectObservedState() calls GetDependencies() or Deps() but not GetActionHistory() - must copy action history from deps",
 			})
 		}
 
