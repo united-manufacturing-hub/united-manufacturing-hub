@@ -130,8 +130,8 @@ When troubleshooting connection or data issues, enable debug logging in your bri
 ```yaml
 protocolConverter:
   - name: my-plc-bridge
+    debug_level: true  # Enable detailed logging
     protocolConverterServiceConfig:
-      debug_level: true  # Enable detailed logging
       config:
 ```
 
@@ -161,8 +161,8 @@ Advanced users can edit the YAML directly:
 protocolConverter:
   - name: my-plc-bridge
     desiredState: active
+    debug_level: false  # Next to name and desiredState, not inside protocolConverterServiceConfig
     protocolConverterServiceConfig:
-      debug_level: false  # Direct child (matches standalone flows)
       location:
         2: "production-line"
         3: "plc-01"
