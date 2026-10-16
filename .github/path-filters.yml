@@ -14,10 +14,11 @@
 
 # Shared path filters for umh-core CI workflows.
 # Used by build-umh-core.yml, test-umh-core.yml, and go-analysis.yml.
+# `code` excludes markdown, the changelog and umh-core/docs/, so changes there skip Go analysis, tests and build.
 
 code:
-  - "umh-core/!(CHANGELOG.md|changelog-images)"
-  - "umh-core/!(CHANGELOG.md|changelog-images)/**"
+  - "umh-core/!(*.md)"
+  - "umh-core/!(changelog-images|docs|*.md)/**/!(*.md)"
   - "Makefile"
   - ".github/workflows/pull-request.yml"
   - ".github/workflows/build-umh-core.yml"
