@@ -85,6 +85,33 @@ func GetAsBool(key string, required bool, defaultValue bool) (bool, error) {
 	}
 }
 
+// GetAsBoolStrict retrieves an environment variable as a boolean, returning an
+// error for a value it does not recognise instead of silently returning
+// defaultValue.
+//
+// It behaves like GetAsBool with required=false, plus one difference: when the
+// variable is set to something outside the recognised true/false spellings, it
+// returns an error naming the variable and quoting the value. An unset variable
+// is not an error, because callers use unset as their normal default.
+//
+// The returned value is defaultValue whenever the error is non-nil, so a caller
+// that only logs the error still ends up where GetAsBool would have put it.
+func GetAsBoolStrict(key string, defaultValue bool) (bool, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return defaultValue, nil
+	}
+
+	// required=true makes GetAsBool return an error for an unrecognised value.
+	// Its not-set error cannot occur here, because the empty case returned above.
+	value, err := GetAsBool(key, true, defaultValue)
+	if err != nil {
+		return defaultValue, fmt.Errorf("%w (got %q)", err, raw)
+	}
+
+	return value, nil
+}
+
 // GetAsFloat retrieves an environment variable as a float64.
 // If required is true and the variable is not set or cannot be parsed as float, an error is returned.
 // If not required and not set or invalid, defaultValue is returned.

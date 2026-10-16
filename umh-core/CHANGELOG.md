@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+### Improvements
+
+- Optional lower-CPU collection of bridge metrics, about 0.02 CPU cores less per bridge (roughly a full core on a 50-bridge instance). Set `USE_FSMV2_BENTHOS_MONITOR=true` and restart the container to enable it
+
 ### Fixes
 
 - The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
+- A typo in `USE_FSMV2_BENTHOS_MONITOR` no longer passes unnoticed. An unrecognised value now logs a warning naming the variable and the value it received, instead of silently leaving the instance on the previous bridge metrics collection
 
 ## [0.44.43]
 
