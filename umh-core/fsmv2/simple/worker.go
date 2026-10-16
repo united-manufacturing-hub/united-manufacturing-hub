@@ -59,14 +59,6 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 	return w, nil
 }
 
-// pollDeps returns the value Poll receives. A spec with no NewDeps never binds,
-// and WorkerBase then hands back TDeps' zero value, which is what Poll expects.
-func (w *simpleWorker[TConfig, TStatus, TDeps]) pollDeps() TDeps {
-	d, _ := w.GetDependenciesAny().(TDeps)
-
-	return d
-}
-
 // reasonNoHealthCheck is the verdict reason for a good poll on a worker that
 // declared no Health function.
 const reasonNoHealthCheck = "running (no health check)"
@@ -86,7 +78,7 @@ const reasonNoHealthCheck = "running (no health check)"
 func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 
-	status, err := w.spec.Poll(ctx, w.pollDeps(), cfg)
+	status, err := w.spec.Poll(ctx, w.Deps(), cfg)
 	if err != nil {
 		return fsmv2.NewObservation(Status[TStatus]{
 			// We can use status here as the result, even on error, to preserve
