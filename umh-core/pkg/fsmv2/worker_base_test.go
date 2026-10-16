@@ -245,8 +245,16 @@ var _ = Describe("WorkerBase", func() {
 			Expect(worker.Deps()).To(BeIdenticalTo(bound))
 		})
 
-		It("returns nil before BindDeps", func() {
+		It("panics with a message naming BindDeps before BindDeps", func() {
 			worker.InitBase(id, logger, sr)
+			Expect(func() {
+				worker.Deps()
+			}).To(PanicWith(ContainSubstring("BindDeps")))
+		})
+
+		It("returns a bound zero value without panicking", func() {
+			worker.InitBase(id, logger, sr)
+			worker.BindDeps(nil)
 			Expect(worker.Deps()).To(BeNil())
 		})
 	})

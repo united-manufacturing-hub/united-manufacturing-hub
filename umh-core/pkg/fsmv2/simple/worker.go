@@ -51,9 +51,12 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 
 	bd := w.InitBase(id, logger, sr)
 
+	var workerDeps TDeps
 	if spec.NewDeps != nil {
-		w.BindDeps(spec.NewDeps(id, bd))
+		workerDeps = spec.NewDeps(id, bd)
 	}
+
+	w.BindDeps(workerDeps)
 
 	return w, nil
 }
