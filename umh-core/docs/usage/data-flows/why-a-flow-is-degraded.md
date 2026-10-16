@@ -15,6 +15,10 @@ umh-core checks each Benthos instance in two ways:
 
 When both are present, the reason names errors before connections.
 
+An output is blocked when it has written nothing for 2 minutes, at least 3 of its writes failed in that time, and the last failed write was less than 2 minutes ago. A written message is one that Benthos counts in its `output_sent` counter. The flow then shows degraded with the reason `benthos output blocked: no message written for 2m0s`. The time is how long nothing was written, rounded down to whole minutes: 2m0s, 3m0s, and so on. A blocked output comes before other errors in the reason.
+
+If a write hangs and never returns an error, Benthos counts neither a written message nor an error. umh-core then cannot tell the output is blocked.
+
 ## When a failure stops counting
 
 Both checks stop counting a failure 10 minutes after it happened. A connection is the exception: it counts while it is down and stops as soon as Benthos reconnects. The flow returns to active on its own when no new failure arrived in those 10 minutes; nothing needs to be redeployed. A new failure marks the flow degraded again at once, even if the previous one had just cleared.

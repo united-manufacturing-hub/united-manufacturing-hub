@@ -6,6 +6,7 @@
 
 - Optional lower-CPU collection of bridge metrics, about 0.02 CPU cores less per bridge (roughly a full core on a 50-bridge instance). Set `USE_FSMV2_BENTHOS_MONITOR=true` and restart the container to enable it
 - With `USE_FSMV2_BENTHOS_MONITOR=true`, a data flow whose input or output is not connected now shows degraded, and returns to active as soon as Benthos reconnects
+- With `USE_FSMV2_BENTHOS_MONITOR=true`, a data flow whose output has written nothing for 2 minutes while its writes keep failing now shows the reason `benthos output blocked: no message written for 2m0s`, instead of only a count of output errors
 
 ### Fixes
 

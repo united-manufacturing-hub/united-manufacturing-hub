@@ -35,10 +35,14 @@ type errorCounter struct {
 	read func(benthosmonitorservice.Metrics) int64
 }
 
+// outputErrorName is the output error counter's name. Only its entry can be
+// marked blocked; see blockedFor.
+const outputErrorName = "output_error"
+
 // errorCounters lists the counters the error signals are built from.
 var errorCounters = []errorCounter{
 	{
-		name:  "output_error",
+		name:  outputErrorName,
 		label: "output error",
 		read:  benthosmonitorservice.Metrics.OutputErrorTotal,
 	},
@@ -167,22 +171,67 @@ func notConnectedSince(prev map[string]time.Time, counts map[string]int64, at ti
 	return out
 }
 
+// blockedSpan is how long an output must send nothing before it counts as
+// blocked. It is also the most time since the last failed write of a blocked
+// output, so an output that stopped failing is not blocked.
+const blockedSpan = 2 * time.Minute
+
+// blockedMinErrors is the fewest output errors since the last sent message for
+// the output to count as blocked. A flow that had no traffic for 2 minutes and
+// whose next one or two writes fail stays below it.
+const blockedMinErrors = 3
+
+// outputWrites tracks when the output last sent a message and last failed a
+// write, read from Benthos' output_sent and output_error counters.
+type outputWrites struct {
+	// lastSentAt is the scrape at which output_sent last rose, or the first
+	// scrape since umh-core or Benthos started.
+	lastSentAt time.Time
+	// errorsAtLastSent is output_error at lastSentAt. On umh-core's first
+	// scrape it is output_error at that scrape, so errors from before it do not
+	// count. After a Benthos restart it is 0, because the counters start again
+	// at 0.
+	errorsAtLastSent int64
+	// lastErrorAfter is the scrape before output_error last rose. It is zero
+	// until output_error rises.
+	lastErrorAfter time.Time
+}
+
+// blockedFor returns how long the output has sent nothing if it is blocked,
+// and 0 otherwise. errors is output_error at this scrape.
+func blockedFor(w outputWrites, errors int64, at time.Time) time.Duration {
+	quiet := at.Sub(w.lastSentAt)
+	quietLongEnough := quiet >= blockedSpan
+	enoughErrors := errors-w.errorsAtLastSent >= blockedMinErrors
+	stillFailing := at.Sub(w.lastErrorAfter) < blockedSpan
+	if !quietLongEnough || !enoughErrors || !stillFailing {
+		return 0
+	}
+
+	return quiet
+}
+
 // failureVerdict builds the verdict Poll reports for cur. It lists the fired
-// error signals first, then the connection checks whose count is above 0, each
-// group with the larger Count first.
-func failureVerdict(e *diagnosis.Engine[sample], fired []diagnosis.Fired, cur observation) benthosmonitorservice.FailureVerdict {
+// error signals first, then the connection checks whose count is above 0. In
+// each group a blocked output comes first, then the larger Count.
+// outputBlockedFor is blockedFor's result, and goes on the output error entry.
+func failureVerdict(e *diagnosis.Engine[sample], fired []diagnosis.Fired, cur observation, outputBlockedFor time.Duration) benthosmonitorservice.FailureVerdict {
 	v := benthosmonitorservice.FailureVerdict{ObservedAt: cur.at, LastIncreaseAt: cur.lastIncreaseAt}
 	for _, f := range fired {
 		// table() builds Signals[i] from errorCounters[i].
 		c := errorCounters[f.Index]
 		n, _ := e.Reduction(f.Signal, f.Signal).Get() // 0 until the window holds 2 readings
-		v.Fired = append(v.Fired, benthosmonitorservice.FailureEntry{
+		entry := benthosmonitorservice.FailureEntry{
 			Signal: c.name,
 			Label:  c.label,
 			Count:  int64(n),
 			Since:  f.Since,
 			Window: constants.BenthosLogWindow,
-		})
+		}
+		if c.name == outputErrorName {
+			entry.BlockedFor = outputBlockedFor
+		}
+		v.Fired = append(v.Fired, entry)
 	}
 	errorEntries := len(v.Fired)
 	for _, c := range connectionChecks {
@@ -197,13 +246,20 @@ func failureVerdict(e *diagnosis.Engine[sample], fired []diagnosis.Fired, cur ob
 			Since:  cur.notConnectedSince[c.name],
 		})
 	}
-	byCount(v.Fired[:errorEntries])
-	byCount(v.Fired[errorEntries:])
+	byUrgency(v.Fired[:errorEntries])
+	byUrgency(v.Fired[errorEntries:])
 
 	return v
 }
 
-// byCount orders entries by Count, largest first.
-func byCount(entries []benthosmonitorservice.FailureEntry) {
-	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Count > entries[j].Count })
+// byUrgency puts a blocked output first, then orders the entries by Count,
+// largest first.
+func byUrgency(entries []benthosmonitorservice.FailureEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		if bi, bj := entries[i].BlockedFor > 0, entries[j].BlockedFor > 0; bi != bj {
+			return bi
+		}
+
+		return entries[i].Count > entries[j].Count
+	})
 }

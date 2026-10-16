@@ -66,6 +66,10 @@ type benthosMonitorDeps struct {
 	// observe builds it on first use; observe's doc says when it is rebuilt.
 	engine *diagnosis.Engine[sample]
 
+	// writes tracks the output's last send and last failed write; see
+	// outputWrites.
+	writes outputWrites
+
 	// prev is the previous observed scrape, nil before the first.
 	prev *observation
 

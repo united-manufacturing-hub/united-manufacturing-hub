@@ -94,9 +94,10 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	}
 
 	prev := d.prev
-	// before holds the error counters this scrape is compared with for
-	// LastIncreaseAt: the previous scrape's, or 0 after a restart, the same
-	// values the engine compares this scrape against.
+	// before holds the error counters this scrape is compared with, for
+	// LastIncreaseAt and for d.writes. It is the previous scrape's counters,
+	// the same values the engine compares this scrape against. It is nil on the
+	// first scrape and after a restart, and a counter missing from it reads as 0.
 	var before map[string]int64
 	// prevNotConnectedSince carries an outage's start forward only from a
 	// scrape of the same benthos with no long gap, as the error signals do.
@@ -104,16 +105,31 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 	switch {
 	case prev == nil:
 		d.engine = newEngine()
+		d.writes = outputWrites{lastSentAt: at, errorsAtLastSent: cur.errors[outputErrorName]}
 	case !at.After(prev.at):
 		return prev.result, prev.verdict
 	case counterSeriesChanged(prev, &cur):
 		rebuild(d, nil, at)
+		d.writes = outputWrites{lastSentAt: at}
 	case at.Sub(prev.at) > constants.BenthosLogWindow:
 		before = prev.errors
 		rebuild(d, prev.errors, at)
 	default:
 		before = prev.errors
 		prevNotConnectedSince = prev.notConnectedSince
+	}
+	// The switch reset d.writes on the first scrape and after a restart, where
+	// before is nil.
+	if prev != nil && before != nil {
+		// output_sent is cumulative, so a message sent during a pause in scrapes
+		// still shows as a rise here.
+		if cur.outputSent > prev.outputSent {
+			d.writes.lastSentAt = at
+			d.writes.errorsAtLastSent = cur.errors[outputErrorName]
+		}
+		if cur.errors[outputErrorName] > before[outputErrorName] {
+			d.writes.lastErrorAfter = prev.at
+		}
 	}
 
 	cur.notConnectedSince = notConnectedSince(prevNotConnectedSince, cur.connections, at)
@@ -137,7 +153,7 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 			cur.lastIncreaseAt = at
 		}
 	}
-	cur.verdict = failureVerdict(d.engine, fired, cur)
+	cur.verdict = failureVerdict(d.engine, fired, cur, blockedFor(d.writes, cur.errors[outputErrorName], at))
 	d.prev = &cur
 
 	return cur.result, cur.verdict
