@@ -75,12 +75,8 @@ func InitSentry(appVersion string, debounceErrors bool) {
 
 // SetInstanceUUID sets the tag instance_uuid on the current hub's scope.
 // Every event captured afterwards through sentry.CurrentHub() or a clone of it
-// carries the tag. An empty uuid is ignored.
+// carries the tag.
 func SetInstanceUUID(uuid string) {
-	if uuid == "" {
-		return
-	}
-
 	sentry.CurrentHub().ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTag("instance_uuid", uuid)
 	})

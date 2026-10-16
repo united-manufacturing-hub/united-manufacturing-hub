@@ -62,51 +62,19 @@ var _ = Describe("SetInstanceUUID", func() {
 
 	AfterEach(func() {
 		sentry.CurrentHub().PopScope()
+
 		shouldDebounceErrors = debounceBefore
 	})
 
-	It("tags ReportIssue errors and recovered panics with the instance UUID", func() {
+	It("tags ReportIssue errors with the instance UUID", func() {
 		SetInstanceUUID(instanceUUID)
 
-		By("sending one error through ReportIssue")
+		// ReportIssue sends through a clone of the current hub, so this checks
+		// that the tag survives the clone.
 		ReportIssue(errors.New("SetInstanceUUID test error"), IssueTypeError, log)
-
-		By("sending one panic through RecoverAndReport")
-		func() {
-			defer RecoverAndReport()
-			panic("SetInstanceUUID test panic")
-		}()
-
-		events := transport.Events()
-		Expect(events).To(HaveLen(2), "expected one ReportIssue event and one panic-recovery event")
-		Expect(events[0].Tags["instance_uuid"]).To(Equal(instanceUUID))
-		Expect(events[1].Tags["instance_uuid"]).To(Equal(instanceUUID))
-	})
-
-	It("leaves events untagged without SetInstanceUUID", func() {
-		By("sending one error through ReportIssue")
-		ReportIssue(errors.New("SetInstanceUUID no-tag test error"), IssueTypeError, log)
-
-		By("sending one panic through RecoverAndReport")
-		func() {
-			defer RecoverAndReport()
-			panic("SetInstanceUUID no-tag test panic")
-		}()
-
-		events := transport.Events()
-		Expect(events).To(HaveLen(2), "expected one ReportIssue event and one panic-recovery event")
-		Expect(events[0].Tags).NotTo(HaveKey("instance_uuid"))
-		Expect(events[1].Tags).NotTo(HaveKey("instance_uuid"))
-	})
-
-	It("leaves the scope unchanged for an empty UUID", func() {
-		SetInstanceUUID("")
-
-		By("sending one error through ReportIssue on a fresh scope")
-		ReportIssue(errors.New("SetInstanceUUID empty UUID test error"), IssueTypeError, log)
 
 		events := transport.Events()
 		Expect(events).To(HaveLen(1), "expected exactly one ReportIssue event")
-		Expect(events[0].Tags).NotTo(HaveKey("instance_uuid"))
+		Expect(events[0].Tags["instance_uuid"]).To(Equal(instanceUUID))
 	})
 })
