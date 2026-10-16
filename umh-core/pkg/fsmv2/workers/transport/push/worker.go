@@ -67,19 +67,6 @@ func NewPushWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed PushDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *PushWorker) GetDependencies() *PushDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*PushDependencies)
-	if !ok || d == nil {
-		panic("PushWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState snapshots the current push worker state.
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
@@ -90,7 +77,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, desired fsmv2.Des
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	var cfg snapshot.PushDesiredState
 	if desired != nil {

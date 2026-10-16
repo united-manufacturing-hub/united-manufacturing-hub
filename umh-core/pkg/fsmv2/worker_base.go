@@ -45,6 +45,7 @@ type WorkerBase[TConfig any, TStatus any, TDeps any] struct {
 	mu          sync.RWMutex
 	configReady bool
 	initialized bool
+	depsBound   bool
 }
 
 // InitBase initializes the embedded WorkerBase with the worker's identity and
@@ -199,7 +200,22 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Logger() deps.FSMLogger {
 func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
 	w.mu.Lock()
 	w.typedDeps = d
+	w.depsBound = true
 	w.mu.Unlock()
+}
+
+// Deps returns the deps bound via BindDeps. Panics if BindDeps was not called.
+func (w *WorkerBase[TConfig, TStatus, TDeps]) Deps() TDeps {
+	w.mu.RLock()
+	typedDeps := w.typedDeps
+	depsBound := w.depsBound
+	w.mu.RUnlock()
+
+	if !depsBound {
+		panic("WorkerBase.Deps: BindDeps was not called; call w.BindDeps in your constructor")
+	}
+
+	return typedDeps
 }
 
 // GetDependenciesAny returns the typed deps bound via BindDeps as any.

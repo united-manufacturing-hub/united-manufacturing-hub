@@ -106,19 +106,6 @@ func NewTransportWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed TransportDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *TransportWorker) GetDependencies() *TransportDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*TransportDependencies)
-	if !ok || d == nil {
-		panic("TransportWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState returns the current observed state of the transport worker.
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
@@ -130,7 +117,7 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	failedToken, failedRelay, failedUUID := d.GetFailedAuthConfig()
 	as := d.GetAuthSession()
@@ -233,7 +220,7 @@ func init() {
 				return nil, err
 			}
 
-			register.SetDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
+			register.SetDeps[*TransportDependencies](transportDepsKey, w.Deps())
 
 			return w, nil
 		})

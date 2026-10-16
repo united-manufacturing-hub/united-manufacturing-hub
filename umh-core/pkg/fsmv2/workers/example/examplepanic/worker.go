@@ -56,19 +56,6 @@ func NewExamplepanicWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed ExamplepanicDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *ExamplepanicWorker) GetDependencies() *ExamplepanicDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*ExamplepanicDependencies)
-	if !ok || d == nil {
-		panic("ExamplepanicWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -76,7 +63,7 @@ func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired f
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	// Framework state and action history are injected before COS and consumed by
 	// the collector wrapper after NewObservation returns. Calling them here satisfies

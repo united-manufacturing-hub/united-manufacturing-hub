@@ -428,7 +428,7 @@ var _ = Describe("simpleWorker", func() {
 			}, deps.Identity{ID: "probe", WorkerType: "simpleworker_deps"}, deps.NewNopFSMLogger(), nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(w.pollDeps()).To(Equal(probeDeps{token: "token-for-probe"}),
+			Expect(w.Deps()).To(Equal(probeDeps{token: "token-for-probe"}),
 				"Poll receives the author's own value")
 
 			bound, ok := w.GetDependenciesAny().(probeDeps)

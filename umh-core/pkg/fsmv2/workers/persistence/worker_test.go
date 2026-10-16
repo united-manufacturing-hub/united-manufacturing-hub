@@ -76,7 +76,7 @@ var _ = Describe("PersistenceWorker", func() {
 			w, err := persistence.NewPersistenceWorker(id, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 			pw := getPersistenceWorker(w)
-			Expect(pw.GetDependencies().GetWorkerType()).To(Equal("persistence"))
+			Expect(pw.Deps().GetWorkerType()).To(Equal("persistence"))
 		})
 	})
 
@@ -103,7 +103,7 @@ var _ = Describe("PersistenceWorker", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				worker := getPersistenceWorker(w)
-				d := worker.GetDependencies()
+				d := worker.Deps()
 				d.SetActionHistory([]deps.ActionResult{
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
 				})
@@ -120,7 +120,7 @@ var _ = Describe("PersistenceWorker", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				worker := getPersistenceWorker(w)
-				d := worker.GetDependencies()
+				d := worker.Deps()
 				d.SetActionHistory([]deps.ActionResult{
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
@@ -139,7 +139,7 @@ var _ = Describe("PersistenceWorker", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				worker := getPersistenceWorker(w)
-				d := worker.GetDependencies()
+				d := worker.Deps()
 				d.SetActionHistory([]deps.ActionResult{
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
 				})
@@ -168,7 +168,7 @@ var _ = Describe("PersistenceWorker", func() {
 
 			worker := getPersistenceWorker(w)
 			now := time.Now()
-			d := worker.GetDependencies()
+			d := worker.Deps()
 			d.SetLastCompactionAt(now)
 			d.SetLastMaintenanceAt(now.Add(-time.Hour))
 
@@ -304,7 +304,7 @@ var _ = Describe("PersistenceWorker", func() {
 
 			pw, ok := w.(*persistence.PersistenceWorker)
 			Expect(ok).To(BeTrue())
-			Expect(pw.GetDependencies().GetStore()).To(BeIdenticalTo(store))
+			Expect(pw.Deps().GetStore()).To(BeIdenticalTo(store))
 		})
 	})
 })

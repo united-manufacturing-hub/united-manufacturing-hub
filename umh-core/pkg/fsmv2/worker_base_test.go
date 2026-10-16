@@ -236,6 +236,29 @@ var _ = Describe("WorkerBase", func() {
 		})
 	})
 
+	Describe("Deps", func() {
+		It("returns the bound value as TDeps", func() {
+			worker.InitBase(id, logger, sr)
+
+			bound := &wbTestDeps{Value: 42}
+			worker.BindDeps(bound)
+			Expect(worker.Deps()).To(BeIdenticalTo(bound))
+		})
+
+		It("panics with a message naming BindDeps before BindDeps", func() {
+			worker.InitBase(id, logger, sr)
+			Expect(func() {
+				worker.Deps()
+			}).To(PanicWith(ContainSubstring("BindDeps")))
+		})
+
+		It("returns a bound zero value without panicking", func() {
+			worker.InitBase(id, logger, sr)
+			worker.BindDeps(nil)
+			Expect(worker.Deps()).To(BeNil())
+		})
+	})
+
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
 			worker.InitBase(id, logger, sr)

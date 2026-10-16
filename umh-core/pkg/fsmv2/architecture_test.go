@@ -409,7 +409,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 		})
 
 		Describe("Framework Metrics Copy (Invariant: Workers Copy Metrics from Deps)", func() {
-			It("should call GetFrameworkState() when GetDependencies() is used in CollectObservedState", func() {
+			It("should call GetFrameworkState() when Deps() is used in CollectObservedState", func() {
 				violations := validator.ValidateFrameworkMetricsCopy(getFsmv2Dir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern(
@@ -423,7 +423,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 		})
 
 		Describe("Action History Copy (Invariant: Workers Copy ActionHistory from Deps)", func() {
-			It("should call GetActionHistory() when GetDependencies() is used in CollectObservedState", func() {
+			It("should call GetActionHistory() when Deps() is used in CollectObservedState", func() {
 				violations := validator.ValidateActionHistoryCopy(getFsmv2Dir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern(

@@ -78,19 +78,6 @@ func NewCertFetcherWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed certfetcher dependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *CertFetcherWorker) GetDependencies() *CertFetcherDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*CertFetcherDependencies)
-	if !ok || d == nil {
-		panic("CertFetcherWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState snapshots the cert fetcher state.
 func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
@@ -99,7 +86,7 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 	ch := d.CertHandler()
 	emails := ch.Subscribers()
 

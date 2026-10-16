@@ -96,19 +96,6 @@ func NewCommunicatorWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed CommunicatorDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*CommunicatorDependencies)
-	if !ok || d == nil {
-		panic("CommunicatorWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState returns the current observed state of the communicator.
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
@@ -117,7 +104,7 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.D
 		return nil, err
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	d.MetricsRecorder().SetGauge(depspkg.GaugeConsecutiveErrors, float64(d.GetConsecutiveErrors()))
 
