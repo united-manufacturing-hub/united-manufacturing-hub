@@ -221,6 +221,30 @@ var _ = Describe("Latch", func() {
 		Expect(fired).To(BeTrue(), "a value above the fire mark re-fires once one full window has elapsed since the release")
 	})
 
+	// The same timeline runs with refireAtOnce false and true: fire at t0,
+	// release at t0+1s, then a reading past the fire mark at t0+2s. Only the
+	// latch with refireAtOnce set fires on that last reading.
+	It("should fire again on the first reading past its fire mark after a release only when refireAtOnce is set", func() {
+		t0 := time.Unix(1_000_000, 0)
+		for _, refire := range []bool{false, true} {
+			l := NewLatch(Identity{})
+			l.refireAtOnce = refire
+
+			l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
+			l.Update("march", Reduced{v: 0.01, state: StateValue}, full(), march(), t0.Add(time.Second))
+			_, fired := l.Fired()
+			Expect(fired).To(BeFalse(), "the latch released at t0+1s")
+
+			l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(2*time.Second))
+			_, fired = l.Fired()
+			Expect(fired).To(Equal(refire), "one second after a release, only a latch with refireAtOnce set fires (refire=%t)", refire)
+			if refire {
+				f, _ := l.Fired()
+				Expect(f.Since).To(Equal(t0.Add(2*time.Second)), "Since of the re-fired latch is the re-fire time t0+2s, not the first fire at t0")
+			}
+		}
+	})
+
 	It("should not discard a fired latch merely because a different instrument became usable", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
