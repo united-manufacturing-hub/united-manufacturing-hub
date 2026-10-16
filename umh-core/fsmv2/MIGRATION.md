@@ -261,7 +261,7 @@ func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.Desir
     // Runs in background goroutine managed by supervisor.
     // GetDependencies is the worker's typed accessor over GetDependenciesAny.
     return fsmv2.NewObservation(MyStatus{
-        IsProcessRunning: w.GetDependencies().ProcessManager().IsRunning(),
+        IsProcessRunning: w.Deps().ProcessManager().IsRunning(),
     }), nil
 }
 ```
@@ -544,7 +544,7 @@ if !m.healthCheck() {
 ```go
 // Health is part of ObservedState, collected automatically
 func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-    d := w.GetDependencies()
+    d := w.Deps()
 
     return fsmv2.NewObservation(MyStatus{
         IsHealthy:        d.Client().Ping() == nil,
