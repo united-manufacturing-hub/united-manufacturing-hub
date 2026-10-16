@@ -68,19 +68,6 @@ func NewHelloworldWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed HelloworldDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *HelloworldWorker) GetDependencies() *HelloworldDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*HelloworldDependencies)
-	if !ok || d == nil {
-		panic("HelloworldWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState returns the current observed state.
 //
 // Uses fsmv2.NewObservation which signals the supervisor's collector to perform
@@ -95,7 +82,7 @@ func (w *HelloworldWorker) CollectObservedState(ctx context.Context, desired fsm
 	cfg := fsmv2.ExtractConfig[HelloworldConfig](desired)
 
 	status := HelloworldStatus{
-		HelloSaid: w.GetDependencies().HasSaidHello(),
+		HelloSaid: w.Deps().HasSaidHello(),
 		Mood:      readMoodFile(cfg.MoodFilePath),
 	}
 
