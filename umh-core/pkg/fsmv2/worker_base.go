@@ -202,6 +202,14 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
 	w.mu.Unlock()
 }
 
+// Deps returns the deps bound via BindDeps, or the zero TDeps before BindDeps.
+func (w *WorkerBase[TConfig, TStatus, TDeps]) Deps() TDeps {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	return w.typedDeps
+}
+
 // GetDependenciesAny returns the typed deps bound via BindDeps as any.
 // Satisfies the DependencyProvider interface. The supervisor uses this to pass
 // deps to action Execute calls.

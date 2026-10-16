@@ -236,6 +236,21 @@ var _ = Describe("WorkerBase", func() {
 		})
 	})
 
+	Describe("Deps", func() {
+		It("returns the bound value as TDeps", func() {
+			worker.InitBase(id, logger, sr)
+
+			bound := &wbTestDeps{Value: 42}
+			worker.BindDeps(bound)
+			Expect(worker.Deps()).To(BeIdenticalTo(bound))
+		})
+
+		It("returns nil before BindDeps", func() {
+			worker.InitBase(id, logger, sr)
+			Expect(worker.Deps()).To(BeNil())
+		})
+	})
+
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
 			worker.InitBase(id, logger, sr)
