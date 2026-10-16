@@ -813,14 +813,12 @@ func wireFSMv2Communicator(
 					continue
 				}
 
-				if !uuidSet && observed.Status.AuthSession.InstanceUUID != "" && observed.Status.AuthSession.InstanceUUID != placeholderUUID {
+				realUUID := observed.Status.AuthSession.InstanceUUID
+				if !uuidSet && isAuthenticatedUUID(realUUID, placeholderUUID) {
 					logger.Infow("Detected real UUID from TransportWorker ObservedState, updating LoginResponse",
-						"realUUID", observed.Status.AuthSession.InstanceUUID,
+						"realUUID", realUUID,
 						"placeholderUUID", placeholderUUID)
-					communicationState.SetLoginResponseForFSMv2(observed.Status.AuthSession.InstanceUUID)
-					if communicationState.Gatekeeper != nil {
-						communicationState.Gatekeeper.SetInstanceUUID(observed.Status.AuthSession.InstanceUUID)
-					}
+					applyAuthenticatedUUID(realUUID, communicationState)
 					uuidSet = true
 				}
 
@@ -837,4 +835,20 @@ func wireFSMv2Communicator(
 	<-ctx.Done()
 
 	logger.Info("FSMv2 communicator context cancelled")
+}
+
+// isAuthenticatedUUID reports whether observed is the instance UUID returned by
+// the backend at login, rather than empty or the random placeholder.
+func isAuthenticatedUUID(observed, placeholder string) bool {
+	return observed != "" && observed != placeholder
+}
+
+// applyAuthenticatedUUID hands the backend's instance UUID to the communicator and to Sentry.
+func applyAuthenticatedUUID(uuid string, cs *communication_state.CommunicationState) {
+	cs.SetLoginResponseForFSMv2(uuid)
+	sentry.SetInstanceUUID(uuid)
+
+	if cs.Gatekeeper != nil {
+		cs.Gatekeeper.SetInstanceUUID(uuid)
+	}
 }
