@@ -1,5 +1,7 @@
 # Setup
 
+This is a docs change test
+
 You can run umh-core without the Management Console. But you'll need to edit configuration files directly.
 
 Find the latest version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page and replace `<VERSION>` with your selected version.
