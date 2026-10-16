@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+Test claude.md change
+
 This repository holds two products:
 
 1. **UMH Core** (`umh-core/`): the single-container edge gateway. Most work happens here.
