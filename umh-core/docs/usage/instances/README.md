@@ -59,7 +59,7 @@ The Agent panel shows the instance's identity and its connection to the Manageme
 
 ### Container Panel
 The Container panel shows the resources the container uses:
-- **CPU**: Usage percentage of available cores
+- **CPU**: the CPU status and usage. See [CPU Health](cpu-health/README.md).
 - **Memory**: Usage of available RAM (GiB)
 - **Disk**: Storage usage (GiB)
 - **Architecture**: System architecture (e.g., `amd64`)
