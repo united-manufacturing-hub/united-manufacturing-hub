@@ -70,7 +70,7 @@ jobs:
   fossa:
     name: FOSSA License Scan
     needs: changes
-    if: github.event_name != 'merge_group'
+    if: github.event_name != 'merge_group' && needs.changes.outputs.code == 'true'
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 20
     permissions:
