@@ -232,3 +232,4 @@ connection:
 - Explore [Metadata and Tracing](../unified-namespace/metadata-and-tracing.md) for debugging
 - Use [Stand-alone Flows](stand-alone-flow.md) for custom processing
 - Configure [Stream Processors](stream-processor.md) to transform data
+- Read [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) when a bridge shows degraded

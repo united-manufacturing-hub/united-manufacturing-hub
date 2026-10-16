@@ -71,6 +71,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 )
 
@@ -164,6 +165,10 @@ func main() {
 	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
 
 	cpuMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
+	// NewDefaultBenthosService (pkg/service/benthos) logs a malformed value when
+	// it reads the same flag, so the error is dropped here and the field reads
+	// false, the flag's default.
+	benthosMonitorEnabled, _ := benthossvc.FSMv2BenthosMonitorEnabled()
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
 
 	featureUsage := &models.FeatureUsage{
@@ -172,6 +177,7 @@ func main() {
 		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
 		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
 		FSMv2ProtocolConverterEnabled: protocolConverterEnabled,
+		FSMv2BenthosMonitorEnabled:    benthosMonitorEnabled,
 		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
 		HistorianConfigured:           configData.Historian != nil,
 		HistorianBridgeCount:          countHistorianBridges(configData),

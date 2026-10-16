@@ -73,6 +73,12 @@ const (
 // spellings). Any other value keeps FSMv1.
 const envUseFsmv2BenthosMonitor = "USE_FSMV2_BENTHOS_MONITOR"
 
+// FSMv2BenthosMonitorEnabled reads USE_FSMV2_BENTHOS_MONITOR. A value that is
+// not a boolean returns an error naming the variable, together with false.
+func FSMv2BenthosMonitorEnabled() (bool, error) {
+	return env.GetAsBoolStrict(envUseFsmv2BenthosMonitor, false)
+}
+
 // IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
@@ -116,14 +122,16 @@ type IBenthosService interface {
 	//	ok    – true when logs look clean, false otherwise.
 	//	entry – zero value when ok is true; otherwise the first offending log line.
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
-	// IsMetricsErrorFree reports true when Benthos metrics contain no error
-	// counters.
+	// IsMetricsErrorFree reports true when the metrics show no recent failure.
+	// With a failure verdict (metrics.Failures), that means no error counter
+	// rose in the last constants.BenthosLogWindow and every input and output is
+	// connected. With no verdict, it reads the cumulative error counters.
 	//
 	// It returns:
 	//
 	//	ok     – true when metrics are error‑free, false otherwise.
 	//	reason – empty when ok is true; otherwise a short explanation (e.g.
-	//	         "benthos reported 3 processor errors").
+	//	         "benthos reported 1 output error in the last 10m0s").
 	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string)
 	// HasProcessingActivity reports true when metrics (or other status signals)
 	// indicate the instance is actively processing data.
@@ -322,7 +330,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	}
 
 	if service.benthosMonitorManager == nil {
-		useFsmv2, err := env.GetAsBoolStrict(envUseFsmv2BenthosMonitor, false)
+		useFsmv2, err := FSMv2BenthosMonitorEnabled()
 		if err != nil {
 			log.Warnf("%v; ignoring it and keeping the default bridge metrics collection", err)
 		}
@@ -1105,15 +1113,21 @@ func (s *BenthosService) IsLogsFine(
 	return true, s6service.LogEntry{}
 }
 
-// IsMetricsErrorFree reports true when Benthos metrics contain no error
-// counters.
+// IsMetricsErrorFree reports true when the metrics show no recent failure.
+// With a failure verdict (metrics.Failures), that means no error counter rose
+// in the last constants.BenthosLogWindow and every input and output is
+// connected. With no verdict, it reads the cumulative error counters.
 //
 // It returns:
 //
 //	ok     – true when metrics are error‑free, false otherwise.
 //	reason – empty when ok is true; otherwise a short explanation (e.g.
-//	         "benthos reported 3 processor errors").
+//	         "benthos reported 1 output error in the last 10m0s").
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
+	if metrics.Failures != nil {
+		return metrics.Failures.ErrorFree()
+	}
+
 	// Check output errors. OutputErrorTotal sums across all output paths,
 	// so a switch/broker/fallback config reports the true total instead
 	// of only the last route's error count.

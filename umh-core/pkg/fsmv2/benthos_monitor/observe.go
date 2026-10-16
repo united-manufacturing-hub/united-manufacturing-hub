@@ -17,6 +17,7 @@ package fsmv2benthosmonitor
 import (
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	benthosmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
@@ -35,45 +36,89 @@ type observation struct {
 	port          int
 	inputReceived int
 	outputSent    int
-	result        throughput
+
+	// errors holds the raw error counters, keyed by the counter's name.
+	errors map[string]int64
+
+	// connections holds the number of inputs or outputs not connected, keyed
+	// by the connection check's name.
+	connections map[string]int64
+
+	// notConnectedSince holds, for each connection check whose count is above
+	// 0, the scrape at which that count went above 0 (see notConnectedSince).
+	notConnectedSince map[string]time.Time
+
+	// lastIncreaseAt is the verdict's LastIncreaseAt for this scrape.
+	lastIncreaseAt time.Time
+
+	result  throughput
+	verdict benthosmonitorservice.FailureVerdict
 }
 
 // observe records one successful scrape of the benthos at port, taken at time
 // at, and returns the throughput over the window that ends at the newest
-// observed scrape.
+// observed scrape, and the failure verdict of that scrape.
 //
 // A scrape whose at is not after the previous one's is not observed, and the
-// previous result is returned. The engine's windows must receive points in time
-// order.
+// previous result and verdict are returned. The engine's windows must receive
+// points in time order.
 //
 // The engine is rebuilt when the port changed or when a counter dropped. A new
 // port is a different benthos, and a dropped counter means benthos restarted,
-// so the old points belong to a different counter series. The rebuilt engine
-// holds one point, so the first rate after a rebuild is 0. Without the rebuild,
+// so the old points belong to a different counter series. Without the rebuild,
 // the rate would be the slope from the old count to the new one, a negative
 // number.
-func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, at time.Time) throughput {
+//
+// The engine is also rebuilt when more than constants.BenthosLogWindow passed
+// since the previous scrape with no counter drop. The rebuild drops every fired
+// signal, so a signal that fired before the gap clears unless its counter
+// rose during it. A drop during the gap is a restart, handled as above.
+//
+// A rebuilt engine first observes a seed (see seed). After a restart its
+// error counters are 0, so errors counted between the restart and this scrape
+// count as new. After a long gap they are the previous scrape's values, so only
+// a rise during the gap counts. The seed's throughput is unknown, so the first
+// rate after a rebuild is 0.
+//
+// The worker's first scrape has no earlier scrape to compare with, so error
+// counters that were already high are not judged. Connections are judged on
+// that first scrape.
+func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, at time.Time) (throughput, benthosmonitorservice.FailureVerdict) {
 	cur := observation{
 		at:            at,
 		port:          port,
 		inputReceived: int(m.InputReceivedTotal()),
 		outputSent:    int(m.OutputSentTotal()),
+		errors:        readErrors(m),
+		connections:   readConnections(m),
 	}
 
 	prev := d.prev
+	// before holds the error counters this scrape is compared with for
+	// LastIncreaseAt: the previous scrape's, or 0 after a restart, the same
+	// values the engine compares this scrape against.
+	var before map[string]int64
+	// prevNotConnectedSince carries an outage's start forward only from a
+	// scrape of the same benthos with no long gap, as the error signals do.
+	var prevNotConnectedSince map[string]time.Time
 	switch {
 	case prev == nil:
 		d.engine = newEngine()
 	case !at.After(prev.at):
-		return prev.result
+		return prev.result, prev.verdict
 	case counterSeriesChanged(prev, &cur):
-		d.engine = newEngine()
+		rebuild(d, nil, at)
+	case at.Sub(prev.at) > constants.BenthosLogWindow:
+		before = prev.errors
+		rebuild(d, prev.errors, at)
+	default:
+		before = prev.errors
+		prevNotConnectedSince = prev.notConnectedSince
 	}
 
-	d.engine.Observe(sample{
-		inputReceived: diagnosis.Known(float64(cur.inputReceived)),
-		outputSent:    diagnosis.Known(float64(cur.outputSent)),
-	}, diagnosis.Environment{}, at)
+	cur.notConnectedSince = notConnectedSince(prevNotConnectedSince, cur.connections, at)
+
+	fired, _ := d.engine.Observe(sampleFrom(cur), diagnosis.Environment{}, at)
 
 	cur.result = throughput{
 		Input: ComponentThroughput{
@@ -86,19 +131,77 @@ func observe(d *benthosMonitorDeps, port int, m benthosmonitorservice.Metrics, a
 		},
 	}
 	cur.result.IsActive = cur.result.Input.MessagesPerSecond > 0
+	if prev != nil {
+		cur.lastIncreaseAt = prev.lastIncreaseAt
+		if rose(before, cur.errors) {
+			cur.lastIncreaseAt = at
+		}
+	}
+	cur.verdict = failureVerdict(d.engine, fired, cur)
 	d.prev = &cur
 
-	return cur.result
+	return cur.result, cur.verdict
 }
 
 // counterSeriesChanged reports whether cur's counters cannot be compared with
 // prev's: the port changed, or a counter went down because benthos restarted. A
 // drop in the output counter alone counts, because a reconfigured benthos can
-// leave the input counter unchanged.
+// leave the input counter unchanged. A dropped error counter counts for the
+// same reason. A new port always comes with a new benthos process: the port is
+// part of the benthos service config, so changing it restarts benthos.
 func counterSeriesChanged(prev, cur *observation) bool {
-	return cur.port != prev.port ||
+	if cur.port != prev.port ||
 		cur.inputReceived < prev.inputReceived ||
-		cur.outputSent < prev.outputSent
+		cur.outputSent < prev.outputSent {
+		return true
+	}
+
+	for name, v := range cur.errors {
+		if v < prev.errors[name] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// rose reports whether any counter in cur is higher than in before. A counter
+// missing from before counts as 0, so after a restart (before is nil) any
+// counter above 0 is a rise.
+func rose(before, cur map[string]int64) bool {
+	for name, v := range cur {
+		if v > before[name] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// rebuild replaces d's engine with a new one that has observed seed(errorCounts)
+// one poll before at. The seed sits one poll before at, not at the previous
+// scrape's time, because the engine empties a window whose newest point is
+// older than its demote span (pkg/diagnosis, SlidingWindow.age); after a long
+// gap the seed would be gone before the real sample arrives.
+func rebuild(d *benthosMonitorDeps, errorCounts map[string]int64, at time.Time) {
+	d.engine = newEngine()
+	d.engine.Observe(seed(errorCounts), diagnosis.Environment{}, at.Add(-pollInterval))
+}
+
+// seed is the sample a rebuilt engine observes first: unknown throughput, and
+// each error counter at its value in errorCounts, or 0 when errorCounts has
+// none.
+func seed(errorCounts map[string]int64) sample {
+	s := sample{
+		inputReceived: diagnosis.Unknown(),
+		outputSent:    diagnosis.Unknown(),
+		errors:        make(map[string]diagnosis.Reading, len(errorCounters)),
+	}
+	for _, c := range errorCounters {
+		s.errors[c.name] = diagnosis.Known(float64(errorCounts[c.name]))
+	}
+
+	return s
 }
 
 // rate is a measurement's slope, or 0 while the engine marks it untrusted or

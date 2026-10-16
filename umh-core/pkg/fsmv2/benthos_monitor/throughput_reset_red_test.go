@@ -45,7 +45,7 @@ func TestObserveRebuildsOnCounterReset(t *testing.T) {
 
 	// First tick after the restart: the rebuilt engine holds one sample, so
 	// the rate reads 0, never the cumulative count as a rate.
-	got := observe(d, testPort, counts(5, 5), t0.Add(10*time.Second))
+	got, _ := observe(d, testPort, counts(5, 5), t0.Add(10*time.Second))
 	if r := got.Input.MessagesPerSecond; r != 0 {
 		t.Errorf("first tick after counter drop: MessagesPerSecond = %v, want 0", r)
 	}
@@ -57,7 +57,7 @@ func TestObserveRebuildsOnCounterReset(t *testing.T) {
 	// post-restart baseline only (5 -> 12). Had the pre-restart 100 stayed in
 	// the window, it would be the oldest sample and the rate would read
 	// (12-100)/11 ≈ -8/s.
-	got = observe(d, testPort, counts(12, 12), t0.Add(11*time.Second))
+	got, _ = observe(d, testPort, counts(12, 12), t0.Add(11*time.Second))
 	if r := got.Input.MessagesPerSecond; r < 6 || r > 8 {
 		t.Errorf("post-restart input rate = %v, want ~7/s (5->12 over 1s, not diluted by pre-restart 100)", r)
 	}
@@ -75,7 +75,7 @@ func TestObserveRebuildsOnInputDropWithOutputAtZero(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	observe(d, testPort, counts(100, 0), t0)
 	observe(d, testPort, counts(5, 0), t0.Add(10*time.Second))
-	got := observe(d, testPort, counts(12, 0), t0.Add(11*time.Second))
+	got, _ := observe(d, testPort, counts(12, 0), t0.Add(11*time.Second))
 	if r := got.Input.MessagesPerSecond; r < 6 || r > 8 {
 		t.Errorf("after a one-counter-zero restart: input rate = %v, want ~7/s (an input drop rebuilds even when output was already 0)", r)
 	}
@@ -92,7 +92,7 @@ func TestObserveRebuildsOnOutputDrop(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	observe(d, testPort, counts(100, 200), t0)
 	observe(d, testPort, counts(100, 5), t0.Add(10*time.Second))
-	got := observe(d, testPort, counts(107, 12), t0.Add(11*time.Second))
+	got, _ := observe(d, testPort, counts(107, 12), t0.Add(11*time.Second))
 	if r := got.Output.MessagesPerSecond; r < 6 || r > 8 {
 		t.Errorf("after an output-only drop: output rate = %v, want ~7/s (5->12 over 1s)", r)
 	}
@@ -109,7 +109,7 @@ func TestObserveRebuildsOnPortChange(t *testing.T) {
 
 	d := &benthosMonitorDeps{}
 	observe(d, 4195, counts(100, 100), t0)
-	got := observe(d, 4196, counts(150, 150), t0.Add(10*time.Second))
+	got, _ := observe(d, 4196, counts(150, 150), t0.Add(10*time.Second))
 	if r := got.Input.MessagesPerSecond; r != 0 {
 		t.Errorf("first tick after a port change: MessagesPerSecond = %v, want 0", r)
 	}
@@ -117,7 +117,7 @@ func TestObserveRebuildsOnPortChange(t *testing.T) {
 	// The next new-port sample reads its rate from the new port's first sample.
 	// Had the old port's 100 stayed in the window, the rate would read
 	// (157-100)/11 ≈ 5.2/s.
-	got = observe(d, 4196, counts(157, 157), t0.Add(11*time.Second))
+	got, _ = observe(d, 4196, counts(157, 157), t0.Add(11*time.Second))
 	if r := got.Input.MessagesPerSecond; r < 6.5 || r > 7.5 {
 		t.Errorf("second tick on the new port: input rate = %v, want ~7/s (150->157 over 1s, the old port's 100 dropped)", r)
 	}
@@ -133,7 +133,7 @@ func TestObserveRecoveredAboveBaseline(t *testing.T) {
 	d := &benthosMonitorDeps{}
 	observe(d, testPort, counts(100, 100), t0)
 	observe(d, testPort, counts(0, 0), t0.Add(15*time.Second)) // restart: the input drop rebuilds
-	got := observe(d, testPort, counts(150, 150), t0.Add(30*time.Second))
+	got, _ := observe(d, testPort, counts(150, 150), t0.Add(30*time.Second))
 	if r := got.Input.MessagesPerSecond; r < 9 || r > 11 {
 		t.Errorf("recovered-above-baseline input rate = %v, want ~10/s (0->150 over 15s, not diluted by pre-restart 100)", r)
 	}
@@ -148,8 +148,8 @@ func TestObserveIgnoresScrapeNotNewer(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
 	d := &benthosMonitorDeps{}
-	first := observe(d, testPort, counts(100, 100), t0)
-	got := observe(d, testPort, counts(150, 150), t0)
+	first, _ := observe(d, testPort, counts(100, 100), t0)
+	got, _ := observe(d, testPort, counts(150, 150), t0)
 	if got != first {
 		t.Errorf("equal-timestamp scrape: got %+v, want the previous result %+v", got, first)
 	}

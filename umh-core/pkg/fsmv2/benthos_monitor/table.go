@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
@@ -35,13 +36,52 @@ const (
 type sample struct {
 	inputReceived diagnosis.Reading
 	outputSent    diagnosis.Reading
+
+	// errors holds one reading per errorCounters entry, keyed by the
+	// counter's name.
+	errors map[string]diagnosis.Reading
 }
 
-// table declares what the engine measures: the input and output rates, each
-// the slope of its counter over windowSpan.
+// table declares what the engine measures and judges: the input and output
+// rates, each the slope of its counter over windowSpan, and one error signal
+// per errorCounters entry, firing when its counter rose inside the last
+// constants.BenthosLogWindow.
 func table() diagnosis.Table[sample] {
+	signals := make([]diagnosis.Signal[sample], 0, len(errorCounters))
+	for _, counter := range errorCounters {
+		signals = append(signals, diagnosis.Signal[sample]{
+			Name: counter.name,
+			Instruments: []diagnosis.Instrument[sample]{{
+				Measurement: diagnosis.Measurement[sample]{
+					Name:    counter.name,
+					Extract: func(s sample) diagnosis.Reading { return s.errors[counter.name] },
+					// Counter is false: observe rebuilds the engine
+					// whenever a counter drops (see counterSeriesChanged),
+					// so this window never sees a counter reset.
+					Reduction: increase,
+					Span:      constants.BenthosLogWindow,
+					Counter:   false,
+				},
+				Marks: diagnosis.Marks{
+					// Fire once the counter rose by 1 or more (an increase
+					// above 0.5). Clear once the increase is back to 0.
+					// Inclusive makes exactly 0 count.
+					Fire:  diagnosis.Mark{At: 0.5},
+					Clear: diagnosis.Mark{At: 0, Inclusive: true},
+					// NewEngine requires Worst. Nothing reads the severity
+					// it scales: failureVerdict orders entries by Count.
+					Worst:    100,
+					Polarity: diagnosis.HigherIsWorse,
+				},
+			}},
+			DemoteSpan:   constants.BenthosLogWindow,
+			RefireAtOnce: true, // a new error right after the signal clears shows at once, not after a 10-minute wait
+		})
+	}
+
 	return diagnosis.Table[sample]{
 		Interval: pollInterval,
+		Signals:  signals,
 		Measurements: []diagnosis.Measurement[sample]{
 			{
 				Name:      inputRate,

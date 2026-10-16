@@ -68,6 +68,23 @@ type benthosMonitorDeps struct {
 
 	// prev is the previous observed scrape, nil before the first.
 	prev *observation
+
+	// now stamps each scrape; see scrapeTime.
+	now func() time.Time
+}
+
+// scrapeClock is the clock NewDeps gives each worker. Tests replace it to
+// drive the failure window without waiting one constants.BenthosLogWindow.
+var scrapeClock = time.Now
+
+// scrapeTime falls back to time.Now for deps built without a clock, as tests
+// that construct benthosMonitorDeps directly do.
+func (d *benthosMonitorDeps) scrapeTime() time.Time {
+	if d.now == nil {
+		return time.Now()
+	}
+
+	return d.now()
 }
 
 // ComponentThroughput carries the rate for one direction of the benthos pipeline.
@@ -102,6 +119,9 @@ type BenthosMonitorStatus struct {
 	// IsActive is Input.MessagesPerSecond > 0. Output traffic does not count.
 	IsActive bool
 
+	// Failures is the scrape's failure verdict.
+	Failures *benthosmonitorservice.FailureVerdict
+
 	// PingAlive is whether /ping answered.
 	PingAlive bool
 
@@ -126,7 +146,7 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 
 	base := fmt.Sprintf("http://localhost:%d", cfg.MetricsPort)
-	status := BenthosMonitorStatus{PollStartedAt: time.Now()}
+	status := BenthosMonitorStatus{PollStartedAt: d.scrapeTime()}
 
 	_, err := get(ctx, d.client, base+"/ping")
 	if err == nil {
@@ -172,10 +192,11 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 
 	// The port is passed because a config update can change MetricsPort without
 	// restarting the worker.
-	t := observe(d, int(cfg.MetricsPort), m, status.PollStartedAt)
+	t, verdict := observe(d, int(cfg.MetricsPort), m, status.PollStartedAt)
 	status.Input = t.Input
 	status.Output = t.Output
 	status.IsActive = t.IsActive
+	status.Failures = &verdict
 
 	return status, nil
 }
@@ -239,7 +260,7 @@ func init() {
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		NewDeps: func(_ deps.Identity, _ *deps.BaseDependencies) *benthosMonitorDeps {
-			return &benthosMonitorDeps{client: &http.Client{Timeout: monitorClientTimeout}}
+			return &benthosMonitorDeps{client: &http.Client{Timeout: monitorClientTimeout}, now: scrapeClock}
 		},
 		Poll:   Poll,
 		Health: health,

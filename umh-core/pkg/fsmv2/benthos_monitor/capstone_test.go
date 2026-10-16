@@ -63,7 +63,8 @@ func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
 	// step advances both derivations by one poll and returns their verdicts.
 	step := func(inputCount int) (workerActive, fsmActive bool) {
 		at := t0.Add(time.Duration(tick) * isActiveTickInterval)
-		workerActive = observe(d, testPort, counts(inputCount, 0), at).IsActive
+		got, _ := observe(d, testPort, counts(inputCount, 0), at)
+		workerActive = got.IsActive
 		fsmState.UpdateFromMetrics(benthos_monitor.Metrics{Inputs: map[string]benthos_monitor.InputInstance{
 			"root.input": {Received: int64(inputCount)},
 		}}, uint64(tick))
