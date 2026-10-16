@@ -134,6 +134,33 @@ A bridge counts as a Historian bridge when its write flow's destination protocol
 umh-core then targets the bridge's health check at the shared connection rather than at a host and
 port entered on the bridge, so the check follows the connection whenever you change it.
 
+## Metrics
+
+[Metrics](../instances/agent/metrics.md) explains how to read umh-core's metrics.
+
+umh-core checks the Historian connection once per second. The check runs on FSMv2, the newer of umh-core's two frameworks. A framework is the part of umh-core that starts and watches components. [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component) explains both. The check exists only while `config.yaml` has a `historian:` section. Its series carry this `hierarchy_path` label:
+
+```
+application-fsmv2(application)/timescale-001(historian-timescale)
+```
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_state_duration_seconds` | gauge | Seconds the check has spent in its current state, in the `state` label. The state is `running` while the check succeeds. It is `degraded` while the check fails, for example when TimescaleDB is unreachable or rejects the credentials. |
+| `umh_fsmv2_state_transitions_total` | counter | Changes between states, with `from_state` and `to_state` labels. A rising count shows a connection that keeps dropping. |
+
+This alert fires when the connection has been down for more than a minute:
+
+```promql
+umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(historian-timescale\\)", state="degraded"} > 60
+```
+
+The check also gets the standard series every FSMv2 component gets. [FSMv2 metrics](../instances/agent/metrics.md#fsmv2-metrics) lists them. The database size and job details appear only in the Management Console.
+
+The Historian bridges report like any other bridge. See [Bridges: Metrics](../data-flows/bridges.md#metrics).
+
+The Historian output inside each Historian bridge counts its own writes, for example `historian_value_rows_written` and `historian_rows_poisoned`. The bridge's Benthos process keeps these counters. Benthos is the engine that moves the data. Neither port 8080 nor the Management Console's Metrics view shows them. The [Historian output reference](https://docs.umh.app/benthos-umh/output/historian) describes them.
+
 ## Next steps
 
 - [Save data to the Historian](save-to-historian.md)

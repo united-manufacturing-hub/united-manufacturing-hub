@@ -134,6 +134,24 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 | **Stream Processors** | Transform data WITHIN the UNS | UNS topics | UNS model topics |
 | **Stand-alone Flows** | Custom processing | Any source | Any destination |
 
+## Metrics
+
+[Metrics](../instances/agent/metrics.md) explains how to read umh-core's metrics.
+
+The Management Console shows each stream processor's message counts. Open the stream processor and select **Metrics** on the Monitoring card. The view shows messages received and sent, errors and latency. Port 8080, umh-core's Prometheus endpoint, does not carry message counts.
+
+Port 8080 carries the stream processor's state and error counts. Stream processors run on FSMv1, the older of umh-core's two frameworks. A framework is the part of umh-core that starts and watches components. [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component) explains both. Stream processors get the series described in [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a stream processor named `oee-rollup`, the series carry these labels:
+
+| Part | `component` | `instance` |
+|---|---|---|
+| The stream processor | `stream_processor_instance` | `oee-rollup` |
+| The internal flow that runs it | `dataflow_component_instance` | `dfc-streamprocessor-oee-rollup` |
+| The Benthos process of that flow | `benthos_instance` | `dataflow-dfc-streamprocessor-oee-rollup` |
+
+Benthos is the engine that moves the data. Prometheus can rename the `instance` label to `exported_instance`. [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains when.
+
+For the stream processor itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. -1 means the stream processor is in a sub-state: one of the starting, degraded or stopping steps, such as `starting_dfc` or `degraded_redpanda`. Check the state in the Management Console.
+
 ## Learn More
 
 For comprehensive stream processor configuration and examples, see the [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling documentation.
