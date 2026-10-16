@@ -242,7 +242,7 @@ state: "running"
 		})
 
 		It("should set consecutive errors gauge on MetricsRecorder", func() {
-			d := worker.GetDependencies()
+			d := worker.Deps()
 			d.RecordError()
 			d.RecordError()
 
@@ -254,7 +254,7 @@ state: "running"
 		})
 
 		It("should not drain MetricsRecorder into observation (collector handles accumulation)", func() {
-			d := worker.GetDependencies()
+			d := worker.Deps()
 			d.MetricsRecorder().IncrementCounter(depspkg.CounterPullOps, 1)
 			d.MetricsRecorder().SetGauge(depspkg.GaugeLastPullLatencyMs, 100.0)
 
@@ -268,7 +268,7 @@ state: "running"
 		})
 
 		It("should return DegradedEnteredAt in status when errors recorded", func() {
-			d := worker.GetDependencies()
+			d := worker.Deps()
 			d.RecordError()
 
 			observed, err := worker.CollectObservedState(ctx, nil)

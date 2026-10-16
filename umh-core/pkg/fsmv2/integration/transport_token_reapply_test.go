@@ -145,8 +145,8 @@ var _ = Describe("Transport resident-child JWT re-apply", func() {
 
 		// Publish the parent transport deps the same way the production worker
 		// factory does, so the push/pull deps builders can find them.
-		register.SetDeps[*transport.TransportDependencies]("transport", worker.GetDependencies())
-		transportDep = worker.GetDependencies()
+		register.SetDeps[*transport.TransportDependencies]("transport", worker.Deps())
+		transportDep = worker.Deps()
 
 		Expect(parentSup.AddWorker(identity, worker)).To(Succeed())
 

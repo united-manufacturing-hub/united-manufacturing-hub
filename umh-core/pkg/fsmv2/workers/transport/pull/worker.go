@@ -67,19 +67,6 @@ func NewPullWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed PullDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *PullWorker) GetDependencies() *PullDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*PullDependencies)
-	if !ok || d == nil {
-		panic("PullWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState snapshots the current pull worker state.
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
@@ -90,7 +77,7 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, desired fsmv2.Des
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	var cfg snapshot.PullDesiredState
 	if desired != nil {

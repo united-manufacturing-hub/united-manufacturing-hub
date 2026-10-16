@@ -170,8 +170,8 @@ var _ = Describe("PullWorker", func() {
 		})
 
 		It("should report consecutive errors from child deps", func() {
-			worker.GetDependencies().RecordError()
-			worker.GetDependencies().RecordError()
+			worker.Deps().RecordError()
+			worker.Deps().RecordError()
 
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
@@ -203,7 +203,7 @@ var _ = Describe("PullWorker", func() {
 		})
 
 		It("surfaces last status_code and error_detail from the child deps", func() {
-			worker.GetDependencies().RecordTypedError(types.ErrorTypeServerError, 0, 502, "HTTP 502 (server_error): error code: 502")
+			worker.Deps().RecordTypedError(types.ErrorTypeServerError, 0, 502, "HTTP 502 (server_error): error code: 502")
 
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)

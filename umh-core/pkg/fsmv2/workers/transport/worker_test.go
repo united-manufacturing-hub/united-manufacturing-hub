@@ -111,7 +111,7 @@ var _ = Describe("TransportWorker", func() {
 
 		It("should populate FailedAuthConfig from dependencies", func() {
 			// Set failed auth config on the worker's dependencies
-			workerDeps := worker.GetDependencies()
+			workerDeps := worker.Deps()
 			workerDeps.SetFailedAuthConfig("failed-token", "https://failed-relay.example.com", "failed-uuid")
 
 			ctx := context.Background()
