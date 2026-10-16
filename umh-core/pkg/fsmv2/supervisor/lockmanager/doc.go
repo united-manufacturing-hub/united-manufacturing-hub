@@ -48,11 +48,11 @@
 //
 // FSMv2 uses the following lock levels (lower = acquire first):
 //
-//	Level 0: Supervisor.mu       - Top-level supervisor state
-//	Level 1: ctxMu               - Context map modifications
-//	Level 2: WorkerContext.mu    - Per-worker state
-//	Level 3: Collector.mu        - Per-worker collection
-//	Level 4: ActionExecutor.mu   - Per-worker action execution
+//	Level 1: Supervisor.mu       - Workers map, children and global variables
+//	Level 2: Supervisor.ctxMu    - Supervisor context and its cancel function
+//	Level 3: WorkerContext.mu    - Per-worker current state
+//
+// The levels are the lockLevel constants in supervisor/supervisor.go.
 //
 // Rule: Always acquire locks in ascending level order.
 //
@@ -69,13 +69,10 @@
 // Lock order checking is controlled by ENABLE_LOCK_ORDER_CHECKS=1.
 //
 // Checking lock order requires per-goroutine tracking and runtime stack
-// introspection, adding overhead (microseconds per lock). Enable checks
-// during development and testing to catch ordering violations early.
-// CI runs with checks enabled; any ordering violation fails the build.
-//
-// In production: ENABLE_LOCK_ORDER_CHECKS="" (disabled, no overhead)
-// In development: ENABLE_LOCK_ORDER_CHECKS=1 (enabled, catches violations)
-// In CI: ENABLE_LOCK_ORDER_CHECKS=1 (enabled, enforces ordering)
+// introspection, adding overhead (microseconds per lock). Checks are disabled
+// unless the variable is set, so production runs without the overhead.
+// No Makefile target or CI workflow sets it; only the lockmanager unit tests
+// enable it. Set it yourself to check the supervisor's lock order.
 //
 // # Panic on violation
 //
@@ -104,17 +101,17 @@
 //	manager := lockmanager.NewLockManager()
 //
 //	// Create locks with levels
-//	supervisorMu := manager.NewLock("Supervisor.mu", 0)
-//	workerMu := manager.NewLock("WorkerContext.mu", 2)
+//	supervisorMu := manager.NewLock("Supervisor.mu", 1)
+//	workerMu := manager.NewLock("WorkerContext.mu", 3)
 //
-//	// Correct ordering (level 0 before level 2)
+//	// Correct ordering (level 1 before level 3)
 //	supervisorMu.Lock()
 //	workerMu.Lock()
 //	// ... do work ...
 //	workerMu.Unlock()
 //	supervisorMu.Unlock()
 //
-//	// Incorrect ordering (level 2 before level 0) - panics if checks enabled
+//	// Incorrect ordering (level 3 before level 1) - panics if checks enabled
 //	workerMu.Lock()
 //	supervisorMu.Lock()  // PANIC: lock order violation
 //
@@ -133,10 +130,14 @@
 //
 // The supervisor creates locks at initialization:
 //
+//	lm := lockmanager.NewLockManager()
 //	s := &Supervisor{
-//	    lockManager: lockmanager.NewLockManager(),
+//	    lockManager: lm,
+//	    mu:          lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
+//	    ctxMu:       lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
 //	}
-//	s.mu = s.lockManager.NewLock("Supervisor.mu", 0)
+//
+// Each WorkerContext.mu is created in newWorkerContext with lockLevelWorkerContextMu.
 //
 // All lock operations go through the LockManager for ordering validation.
 package lockmanager
