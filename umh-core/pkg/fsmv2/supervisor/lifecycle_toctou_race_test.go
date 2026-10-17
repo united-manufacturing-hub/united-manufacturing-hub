@@ -157,6 +157,10 @@ var _ = Describe("HandleWorkerRestart TOCTOU Race Conditions", func() {
 						WorkerType: "test",
 						Store:      triangularStore,
 						Logger:     deps.NewNopFSMLogger(),
+						// The replacement worker never honors ShutdownRequested,
+						// so each iteration's Shutdown waits out the whole drain
+						// budget.
+						GracefulShutdownTimeout: 100 * time.Millisecond,
 					})
 
 					identity := deps.Identity{

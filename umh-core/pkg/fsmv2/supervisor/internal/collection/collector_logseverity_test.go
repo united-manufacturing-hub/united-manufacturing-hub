@@ -141,6 +141,29 @@ var _ = Describe("Collector log severity", func() {
 		)
 	})
 
+	Context("CollectFinalObservation() on a not-running collector", func() {
+		// The reap path's IsRunning() check races the observation loop exiting
+		// on supervisor-context cancellation during Shutdown, so a not-running
+		// final observation is the teardown race and must not reach Sentry.
+		It("logs collector_final_observation_skipped at Debug", func() {
+			logger := &severityCapturingLogger{}
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              &supervisor.TestWorker{},
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              logger,
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+			})
+
+			Expect(collector.CollectFinalObservation(context.Background())).ToNot(Succeed())
+
+			Expect(logger.levelFor("collector_final_observation_skipped")).To(Equal("debug"),
+				"a final observation on a stopped collector is the teardown race and must be Debug, not SentryWarn")
+			Expect(logger.has("sentrywarn", "collector_final_observation_skipped")).To(BeFalse())
+		})
+	})
+
 	Context("CollectFinalObservation() that times out", func() {
 		// CollectFinalObservation runs from the reap on every worker
 		// removal (reconciliation.go:1131) with a context whose deadline is
