@@ -4,6 +4,7 @@
 
 ### Fixes
 
+- Bridges that connect to a hostname no longer switch between online and offline every few seconds when DNS answers slowly. The connection check now allows up to 10 seconds for the lookup and the connection
 - The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
 
 ## [0.44.43]
