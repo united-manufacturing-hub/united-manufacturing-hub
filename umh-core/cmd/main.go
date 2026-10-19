@@ -166,9 +166,13 @@ func main() {
 	cpuMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
 
+	memoryMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_MONITOR", false, false)
+	configData.Agent.UseFSMv2MemoryMonitor = memoryMonitorEnabled
+
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
 		FSMv2CPUEnabled:               models.FSMv2CPUEnabled(cpuMonitorEnabled),
+		FSMv2MemoryMonitorEnabled:     models.FSMv2MonitorEnabled(memoryMonitorEnabled),
 		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
 		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
 		FSMv2ProtocolConverterEnabled: protocolConverterEnabled,
@@ -696,6 +700,7 @@ func buildFSMv2Supervisor(
 	// Published before NewApplicationSupervisor, like the keys above: the
 	// config worker reads this key when it is constructed.
 	register.SetDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
+	register.SetDeps[bool](configworker.MemoryMonitorEnabledDepsKey, configData.Agent.UseFSMv2MemoryMonitor)
 
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
@@ -719,9 +724,7 @@ func buildFSMv2Supervisor(
 	})
 	if err != nil {
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		clearConfigworkerDeps()
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -734,9 +737,7 @@ func buildFSMv2Supervisor(
 		// Clear the client and the configworker deps key after the supervisor
 		// has stopped (the caller runs cleanup after appSup.Run returns).
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		clearConfigworkerDeps()
 		fsmv2Hook.Stop()
 	}
 
@@ -851,4 +852,11 @@ func applyAuthenticatedUUID(uuid string, cs *communication_state.CommunicationSt
 	if cs.Gatekeeper != nil {
 		cs.Gatekeeper.SetInstanceUUID(uuid)
 	}
+}
+
+func clearConfigworkerDeps() {
+	register.ClearDeps(configworker.WorkerTypeName)
+	register.ClearDeps(configworker.ConfigManagerDepsKey)
+	register.ClearDeps(configworker.CPUEnabledDepsKey)
+	register.ClearDeps(configworker.MemoryMonitorEnabledDepsKey)
 }
