@@ -172,6 +172,7 @@ func main() {
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
 		FSMv2CPUEnabled:               models.FSMv2CPUEnabled(cpuMonitorEnabled),
+		FSMv2MemoryMonitorEnabled:     models.FSMv2MonitorEnabled(memoryMonitorEnabled),
 		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
 		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
 		FSMv2ProtocolConverterEnabled: protocolConverterEnabled,
