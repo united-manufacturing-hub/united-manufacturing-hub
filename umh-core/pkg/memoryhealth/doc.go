@@ -12,5 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package memoryhealth reads a container's memory usage and limit.
+// Package memoryhealth reads a container's memory usage and limit and judges
+// them with the diagnosis engine.
 package memoryhealth
