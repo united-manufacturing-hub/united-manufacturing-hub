@@ -16,13 +16,22 @@ package memoryhealth_test
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/memoryhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
+
+func cgroupReadErrorOf(err error) *memoryhealth.CgroupReadError {
+	var readErr *memoryhealth.CgroupReadError
+	Expect(errors.As(err, &readErr)).To(BeTrue())
+
+	return readErr
+}
 
 func readCgroupMemory(files map[string]string) (memoryhealth.CgroupMemory, error) {
 	return memoryhealth.ReadCgroupMemory(context.Background(), fixtureFilesystem(files), fixtureCgroupBase)
@@ -67,4 +76,29 @@ var _ = Describe("ReadCgroupMemory", func() {
 		Entry("memory.max", map[string]string{fixtureCgroupBase + "/memory.current": bytesText(twoGiBBytes)}),
 		Entry("memory.current", map[string]string{fixtureCgroupBase + "/memory.max": "max\n"}),
 	)
+
+	DescribeTable("names the file and the outcome of a failed read",
+		func(files map[string]string, expectedFile string, expectedOutcome memoryhealth.ReadOutcome) {
+			_, err := readCgroupMemory(files)
+
+			readErr := cgroupReadErrorOf(err)
+			Expect(readErr.File).To(Equal(expectedFile))
+			Expect(readErr.Outcome).To(Equal(expectedOutcome))
+		},
+		Entry("missing memory.max", map[string]string{}, "memory.max", memoryhealth.ReadMissing),
+		Entry("unparsable memory.max", cgroupFiles("lots\n", bytesText(twoGiBBytes)), "memory.max", memoryhealth.ReadUnparsable),
+		Entry("missing memory.current", map[string]string{fixtureCgroupBase + "/memory.max": "max\n"}, "memory.current", memoryhealth.ReadMissing),
+		Entry("unparsable memory.current", cgroupFiles("max\n", "abc\n"), "memory.current", memoryhealth.ReadUnparsable),
+	)
+
+	It("reports a read that fails for another reason as failed", func() {
+		refusingFileSystem := filesystem.NewMockFileSystem().WithReadFileFunc(func(context.Context, string) ([]byte, error) {
+			return nil, fs.ErrPermission
+		})
+
+		_, err := memoryhealth.ReadCgroupMemory(context.Background(), refusingFileSystem, fixtureCgroupBase)
+
+		Expect(cgroupReadErrorOf(err).Outcome).To(Equal(memoryhealth.ReadFailed))
+		Expect(err).To(MatchError(fs.ErrPermission))
+	})
 })
