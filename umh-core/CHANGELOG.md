@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- When a bridge's connection goes down, the agent log now names the cause, such as a DNS lookup that timed out or a refused connection, and how long the lookup and the connection attempt took
+
 ### Fixes
 
 - The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
