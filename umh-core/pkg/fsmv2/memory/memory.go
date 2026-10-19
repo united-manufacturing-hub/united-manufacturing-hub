@@ -104,6 +104,7 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 	}
 
 	verdict, details := memoryhealth.Decide(d.engine, sample)
+	recordMetrics(d.MetricsRecorder(), sample)
 
 	return MemoryStatus{
 		Source:     sample.Source,
@@ -113,6 +114,15 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 		Details:    details,
 		Message:    memoryhealth.ComposeMessage(verdict, details),
 	}, nil
+}
+
+func recordMetrics(recorder *deps.MetricsRecorder, sample memoryhealth.Sample) {
+	recorder.SetGauge(deps.GaugeMemoryLastSampleUnix, float64(sample.Timestamp.Unix()))
+	recorder.SetGauge(deps.GaugeMemoryUsedBytes, float64(sample.UsedBytes))
+	recorder.SetGauge(deps.GaugeMemoryTotalBytes, float64(sample.TotalBytes))
+	recorder.SetGauge(deps.GaugeMemoryUsedPercent, float64(sample.UsedBytes)*100/float64(sample.TotalBytes))
+	recorder.SetGaugeFlag(deps.GaugeMemoryUsedFromCgroup, sample.Source != memoryhealth.SourceHostFallbackCgroupUnreadable)
+	recorder.SetGaugeFlag(deps.GaugeMemoryTotalIsCgroupLimit, sample.Source == memoryhealth.SourceCgroupLimit)
 }
 
 func healthFromStatus(_ MemoryConfig, status MemoryStatus) simple.Health {
