@@ -31,6 +31,8 @@ type runningState[TConfig, TStatus any] struct {
 // Next stays running while the verdict is healthy and flips to degraded when the
 // worker reports Degraded. The verdict's Reason is emitted via Transition so it
 // reaches logs, heartbeats, and the frontend.
+// While it stays running, it emits the worker type's probe, if one is
+// registered.
 func (s *runningState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[TConfig, Status[TStatus]](snapAny)
 
@@ -43,7 +45,9 @@ func (s *runningState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any,
 		return fsmv2.Transition(&degradedState[TConfig, TStatus]{}, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
+	probe := probeActionIfRegistered(snap.Identity.WorkerType, snap.Config)
+
+	return fsmv2.Transition(s, fsmv2.SignalNone, probe, snap.Status.Reason, nil)
 }
 
 // String returns the observed-state name, derived from the type name.
@@ -60,6 +64,8 @@ type degradedState[TConfig, TStatus any] struct {
 
 // Next returns to running once the verdict clears and otherwise stays degraded,
 // carrying the verdict's Reason on every Transition.
+// While it stays degraded, it emits the worker type's probe, if one is
+// registered, so a degraded worker keeps probing.
 func (s *degradedState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[TConfig, Status[TStatus]](snapAny)
 
@@ -72,7 +78,9 @@ func (s *degradedState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any
 		return fsmv2.Transition(&runningState[TConfig, TStatus]{}, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
+	probe := probeActionIfRegistered(snap.Identity.WorkerType, snap.Config)
+
+	return fsmv2.Transition(s, fsmv2.SignalNone, probe, snap.Status.Reason, nil)
 }
 
 // String returns the observed-state name, derived from the type name.

@@ -42,7 +42,8 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// mutates must sit behind a pointer (use *TDeps, or a pointer field), or the
 	// mutation dies with the copy. Poll is never called concurrently with itself
 	// for one instance (the observation collector serializes it under a mutex),
-	// so that state needs no locking.
+	// so state only Poll touches needs no locking. State Poll shares with Probe
+	// does, because the two run concurrently.
 	//
 	// bd is this instance's framework dependencies: the logger the framework
 	// already enriched with this worker's identity, the state reader, and the
@@ -80,6 +81,18 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// nil, a good poll is healthy with reason "running (no health check)". Never
 	// called on a poll error.
 	Health func(cfg TConfig, status TStatus) Health
+	// Probe tests the target once where that can take longer than the
+	// observation allows, for example a DNS lookup and a TCP connect. Optional;
+	// requires NewDeps. The framework runs it as an FSMv2 action while the
+	// worker is running or degraded, one probe per instance at a time. Probe
+	// records what it saw in TDeps, and Poll reads it: Poll returns an error
+	// while there is no result yet or the result is too old, so the worker
+	// shows degraded. Probe only observes. It must not change the target, and it
+	// closes everything it opened before it returns, because the framework never
+	// releases TDeps. Probe must stop when ctx is cancelled: a probe still
+	// running three times the executor's action timeout after it started is
+	// dropped, and the next one can then overlap with it.
+	Probe func(ctx context.Context, d TDeps, cfg TConfig)
 	// WorkerType is the canonical worker-type name used in config and CSE
 	// storage. Required.
 	WorkerType string
@@ -102,6 +115,10 @@ func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TD
 		panic("simple.Register: Poll must be non-nil")
 	}
 
+	if spec.Probe != nil && spec.NewDeps == nil {
+		panic(fmt.Sprintf("simple.Register(%q): Probe needs NewDeps, where it records its result for Poll", spec.WorkerType))
+	}
+
 	// TStatus must be a struct: Status[TStatus] flattens it to top-level JSON and
 	// round-trips it through CSE. A map would let the verdict keys leak into the
 	// developer's status on Unmarshal, and a scalar would not marshal to an object.
@@ -119,4 +136,8 @@ func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TD
 	// A non-positive Interval is ignored by the registry, so the collector
 	// falls back to its DefaultObservationInterval.
 	fsmv2.RegisterObservationInterval(spec.WorkerType, spec.Interval)
+
+	if spec.Probe != nil {
+		registerProbe(spec.WorkerType, &typedProbe[TConfig, TDeps]{workerType: spec.WorkerType, probe: spec.Probe})
+	}
 }

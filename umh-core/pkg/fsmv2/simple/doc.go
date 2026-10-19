@@ -22,13 +22,14 @@
 //
 // # The MonitorSpec
 //
-// Two fields are required, three are optional:
+// Two fields are required, four are optional:
 //
 //	MonitorSpec[TConfig, TStatus, TDeps]{
 //	    WorkerType string                                                       // required
 //	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)             // required
 //	    Health     func(cfg TConfig, status TStatus) Health                     // optional
 //	    NewDeps    func(id deps.Identity, bd *deps.BaseDependencies) TDeps      // optional (built once per instance)
+//	    Probe      func(ctx, d TDeps, cfg TConfig)                              // optional (requires NewDeps)
 //	    Interval   time.Duration                                               // optional (collector default if 0)
 //	}
 //
@@ -61,6 +62,16 @@
 // entry per distinct key. It never thrashes, and it bounds retention at one
 // resource per key ever configured. Package historian is a worked example of the
 // singleton case.
+//
+// # A probe for checks that outlast an observation
+//
+// Poll runs inside the observation and its timeout. A check that can take longer,
+// such as a DNS lookup and a TCP connect to a slow network, goes into Probe
+// instead. The running and degraded states emit it as an FSMv2 action, and the
+// supervisor runs one per instance at a time. Probe records its result in TDeps;
+// Poll reads that result and returns an error while there is none yet or it is
+// too old. A probe only observes: changing the target, or holding a resource
+// after it returns, needs a full FSMv2 worker.
 //
 // # Framework telemetry follows BaseDependencies
 //

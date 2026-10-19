@@ -15,17 +15,37 @@
 package simple
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
+
+var probedTarget = probeConfig{Target: "plc:502"}
 
 func snapWith(status Status[probeStatus]) fsmv2.Snapshot {
 	return fsmv2.Snapshot{
 		Observed: fsmv2.Observation[Status[probeStatus]]{Status: status},
 		Desired:  &fsmv2.WrappedDesiredState[probeConfig]{},
 	}
+}
+
+func probedSnapWith(workerType string, status Status[probeStatus]) fsmv2.Snapshot {
+	return fsmv2.Snapshot{
+		Observed: fsmv2.Observation[Status[probeStatus]]{Status: status},
+		Desired:  &fsmv2.WrappedDesiredState[probeConfig]{Config: probedTarget},
+		Identity: deps.Identity{ID: "probe", WorkerType: workerType},
+	}
+}
+
+func registerNoopProbe(workerType string) {
+	registerProbe(workerType, &typedProbe[probeConfig, struct{}]{
+		workerType: workerType,
+		probe:      func(context.Context, struct{}, probeConfig) {},
+	})
 }
 
 func stoppingSnap() fsmv2.Snapshot {
@@ -130,6 +150,77 @@ var _ = Describe("state machine", func() {
 			res := s.Next(snapWith(Status[probeStatus]{Degraded: false, Reason: "reachable"}))
 
 			Expect(res.State).To(BeAssignableToTypeOf(&runningState[probeConfig, probeStatus]{}))
+		})
+	})
+
+	Describe("probe emission", func() {
+		It("emits a probe for the snapshot config when running stays running", func() {
+			registerNoopProbe("simplestate_running_probe")
+
+			state := &runningState[probeConfig, probeStatus]{}
+
+			result := state.Next(probedSnapWith("simplestate_running_probe", Status[probeStatus]{Reason: "reachable"}))
+
+			Expect(result.State).To(BeIdenticalTo(state))
+			Expect(result.Action).To(Equal(&probeAction[probeConfig]{workerType: "simplestate_running_probe", cfg: probedTarget}))
+		})
+
+		It("emits a probe when degraded stays degraded, so a degraded worker keeps probing", func() {
+			registerNoopProbe("simplestate_degraded_probe")
+
+			state := &degradedState[probeConfig, probeStatus]{}
+
+			result := state.Next(probedSnapWith("simplestate_degraded_probe", Status[probeStatus]{Degraded: true, Reason: "no result yet"}))
+
+			Expect(result.State).To(BeIdenticalTo(state))
+			Expect(result.Action).To(Equal(&probeAction[probeConfig]{workerType: "simplestate_degraded_probe", cfg: probedTarget}))
+		})
+
+		It("emits nothing for a worker type without a probe", func() {
+			state := &runningState[probeConfig, probeStatus]{}
+
+			result := state.Next(probedSnapWith("simplestate_no_probe", Status[probeStatus]{Reason: "reachable"}))
+
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("emits nothing in the step that switches running to degraded", func() {
+			registerNoopProbe("simplestate_flip_down")
+
+			state := &runningState[probeConfig, probeStatus]{}
+
+			result := state.Next(probedSnapWith("simplestate_flip_down", Status[probeStatus]{Degraded: true, Reason: "stale"}))
+
+			Expect(result.State).To(BeAssignableToTypeOf(&degradedState[probeConfig, probeStatus]{}))
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("emits nothing in the step that switches degraded to running", func() {
+			registerNoopProbe("simplestate_flip_up")
+
+			state := &degradedState[probeConfig, probeStatus]{}
+
+			result := state.Next(probedSnapWith("simplestate_flip_up", Status[probeStatus]{Reason: "reachable"}))
+
+			Expect(result.State).To(BeAssignableToTypeOf(&runningState[probeConfig, probeStatus]{}))
+			Expect(result.Action).To(BeNil())
+		})
+
+		It("emits nothing while stopped", func() {
+			registerNoopProbe("simplestate_stopped")
+
+			desired := &fsmv2.WrappedDesiredState[probeConfig]{Config: probedTarget}
+			desired.SetDisabled(true)
+
+			state := &stoppedState[probeConfig, probeStatus]{}
+
+			result := state.Next(fsmv2.Snapshot{
+				Observed: fsmv2.Observation[Status[probeStatus]]{Status: Status[probeStatus]{}},
+				Desired:  desired,
+				Identity: deps.Identity{ID: "probe", WorkerType: "simplestate_stopped"},
+			})
+
+			Expect(result.Action).To(BeNil())
 		})
 	})
 
