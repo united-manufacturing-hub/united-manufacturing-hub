@@ -29,6 +29,8 @@ import (
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 )
 
+const unresolvableHost = "connection-check.invalid"
+
 // newNmapConfig builds a valid config.NmapConfig pointing Poll at target:port.
 func newNmapConfig(target string, port uint16) config.NmapConfig {
 	return config.NmapConfig{
@@ -181,6 +183,64 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.PortState).To(Equal("closed"))
 		Expect(status.IsRunning).To(BeFalse())
+	})
+
+	It("records no failure when the port is open", func() {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() { _ = listener.Close() }()
+
+		host, port := hostPort(listener.Addr().String())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Failure).To(BeEmpty())
+	})
+
+	It("records a refused connection as refused", func() {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		host, port := hostPort(listener.Addr().String())
+		Expect(listener.Close()).To(Succeed())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Failure).To(Equal(fsmv2nmap.DialFailureRefused))
+	})
+
+	It("records a deadline hit while connecting to an IP address as a connect timeout", func() {
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig("127.0.0.1", 1))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Failure).To(Equal(fsmv2nmap.DialFailureConnectTimeout))
+	})
+
+	It("records a deadline hit while looking up a hostname as a DNS timeout", func() {
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Failure).To(Equal(fsmv2nmap.DialFailureDNSTimeout))
+	})
+
+	It("records a hostname that does not resolve as a DNS error", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Failure).To(Equal(fsmv2nmap.DialFailureDNSError))
 	})
 
 	It("returns quickly with an error when the context is already cancelled", func() {

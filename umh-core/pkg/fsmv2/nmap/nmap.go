@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -41,6 +42,28 @@ const (
 
 	// The dialer sets no timeout: the collector already bounds every Poll with
 	// its ObservationTimeout, which cancels the dial context.
+)
+
+// DialFailure names why a connection check could not open a TCP connection.
+type DialFailure string
+
+const (
+	// DialFailureDNSTimeout means the hostname lookup did not finish before the
+	// check's deadline.
+	DialFailureDNSTimeout DialFailure = "dns_timeout"
+	// DialFailureDNSError means the hostname lookup failed, for example because
+	// the name does not exist.
+	DialFailureDNSError DialFailure = "dns_error"
+	// DialFailureConnectTimeout means the TCP connect did not finish before the
+	// check's deadline.
+	DialFailureConnectTimeout DialFailure = "connect_timeout"
+	// DialFailureRefused means the target host rejected the connection.
+	DialFailureRefused DialFailure = "refused"
+	// DialFailureUnreachable means the network has no route to the target host.
+	DialFailureUnreachable DialFailure = "unreachable"
+	// DialFailureUnknown means the dial failed for a reason none of the other
+	// values names.
+	DialFailureUnknown DialFailure = "unknown"
 )
 
 // NmapStatus is the result of one TCP-dial observation of the target port.
@@ -60,6 +83,8 @@ type NmapStatus struct {
 	// time a config edit was persisted can tell a scan of the new target from a
 	// leftover scan of the previous one, which no other field distinguishes.
 	ScannedAt time.Time `json:"scanned_at"`
+	// Failure is why the dial failed. Empty when the port is open.
+	Failure DialFailure `json:"failure,omitempty"`
 }
 
 // Poll dials the configured target once and reports the port state. A
@@ -95,6 +120,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 			PortState: string(nmapservice.PortStateClosed),
 			Port:      cfg.NmapServiceConfig.Port,
 			ScannedAt: start,
+			Failure:   classifyDialError(err),
 		}, nil
 	}
 
@@ -109,6 +135,32 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 		IsRunning: true,
 		ScannedAt: start,
 	}, nil
+}
+
+func classifyDialError(err error) DialFailure {
+	var dnsError *net.DNSError
+	if errors.As(err, &dnsError) {
+		if dnsError.IsTimeout {
+			return DialFailureDNSTimeout
+		}
+
+		return DialFailureDNSError
+	}
+
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return DialFailureRefused
+	}
+
+	if errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH) {
+		return DialFailureUnreachable
+	}
+
+	var netError net.Error
+	if errors.As(err, &netError) && netError.Timeout() {
+		return DialFailureConnectTimeout
+	}
+
+	return DialFailureUnknown
 }
 
 func init() {
