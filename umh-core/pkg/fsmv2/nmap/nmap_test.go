@@ -243,6 +243,38 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(status.Failure).To(Equal(fsmv2nmap.DialFailureDNSError))
 	})
 
+	It("splits the time of an open dial into the lookup and the connect", func() {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() { _ = listener.Close() }()
+
+		_, port := hostPort(listener.Addr().String())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		before := time.Now()
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig("localhost", port))
+		wallClockMs := float64(time.Since(before).Microseconds()) / 1000.0
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.PortState).To(Equal("open"))
+		Expect(status.ResolveMs).To(BeNumerically(">", 0))
+		Expect(status.ConnectMs).To(BeNumerically(">", 0))
+		Expect(status.ResolveMs + status.ConnectMs).To(BeNumerically("<=", wallClockMs))
+	})
+
+	It("attributes the whole time of a failed lookup to the lookup", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.ResolveMs).To(BeNumerically(">", 0))
+		Expect(status.ConnectMs).To(BeZero())
+	})
+
 	It("returns quickly with an error when the context is already cancelled", func() {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		Expect(err).NotTo(HaveOccurred())

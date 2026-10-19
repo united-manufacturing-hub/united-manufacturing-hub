@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -85,6 +86,12 @@ type NmapStatus struct {
 	ScannedAt time.Time `json:"scanned_at"`
 	// Failure is why the dial failed. Empty when the port is open.
 	Failure DialFailure `json:"failure,omitempty"`
+	// ResolveMs is how long the hostname lookup took, in milliseconds. For a
+	// failed lookup it is the whole time of the dial.
+	ResolveMs float64 `json:"resolve_ms"`
+	// ConnectMs is how long the TCP connect took after the lookup, in
+	// milliseconds. Zero when the lookup failed.
+	ConnectMs float64 `json:"connect_ms"`
 }
 
 // Poll dials the configured target once and reports the port state. A
@@ -98,9 +105,13 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 
 	start := time.Now()
 
-	dialer := net.Dialer{}
+	var timer dialTimer
+
+	dialer := net.Dialer{ControlContext: timer.recordConnectStart}
 
 	conn, err := dialer.DialContext(ctx, "tcp", target)
+	resolveMs, connectMs := timer.split(start, time.Now())
+
 	if err != nil {
 		// Worker shutdown cancels the context; surface it as an error so the
 		// framework does not misreport a shutdown as a port state. This
@@ -121,10 +132,12 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 			Port:      cfg.NmapServiceConfig.Port,
 			ScannedAt: start,
 			Failure:   classifyDialError(err),
+			ResolveMs: resolveMs,
+			ConnectMs: connectMs,
 		}, nil
 	}
 
-	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
+	elapsedMs := milliseconds(time.Since(start))
 	_ = conn.Close()
 
 	return NmapStatus{
@@ -134,7 +147,34 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 		Port:      cfg.NmapServiceConfig.Port,
 		IsRunning: true,
 		ScannedAt: start,
+		ResolveMs: resolveMs,
+		ConnectMs: connectMs,
 	}, nil
+}
+
+type dialTimer struct {
+	connectStartUnixNano atomic.Int64
+}
+
+func (t *dialTimer) recordConnectStart(context.Context, string, string, syscall.RawConn) error {
+	t.connectStartUnixNano.CompareAndSwap(0, time.Now().UnixNano())
+
+	return nil
+}
+
+func (t *dialTimer) split(start, end time.Time) (resolveMs, connectMs float64) {
+	connectStartUnixNano := t.connectStartUnixNano.Load()
+	if connectStartUnixNano == 0 {
+		return milliseconds(end.Sub(start)), 0
+	}
+
+	connectStart := time.Unix(0, connectStartUnixNano)
+
+	return milliseconds(connectStart.Sub(start)), milliseconds(end.Sub(connectStart))
+}
+
+func milliseconds(duration time.Duration) float64 {
+	return float64(duration.Microseconds()) / 1000.0
 }
 
 func classifyDialError(err error) DialFailure {
