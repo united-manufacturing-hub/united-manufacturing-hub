@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Improvements
+
+- A preview of a new container memory reading is available on the `/metrics` endpoint. It says whether each number came from the container or from the machine. Turn it on with `USE_FSMV2_MEMORY_MONITOR=true`, then recreate the container.
+- With the memory preview on, memory counts as degraded once its average use over the last 10 seconds reaches 80%, and healthy again once that average falls below 75%. A short spike no longer changes the memory status, and use that stays close to 80% no longer switches it back and forth.
+- With the memory preview on, memory counts as degraded and bridges are held back whenever no recent memory reading is available. This includes the first seconds after a restart.
+
 ### Fixes
 
 - The instance now reports the state of its historian database on TimescaleDB 2.26 or later. Before, the report failed with `column ch.dropped does not exist`
