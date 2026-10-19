@@ -719,9 +719,7 @@ func buildFSMv2Supervisor(
 	})
 	if err != nil {
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		clearConfigworkerDeps()
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -734,9 +732,7 @@ func buildFSMv2Supervisor(
 		// Clear the client and the configworker deps key after the supervisor
 		// has stopped (the caller runs cleanup after appSup.Run returns).
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		clearConfigworkerDeps()
 		fsmv2Hook.Stop()
 	}
 
@@ -851,4 +847,10 @@ func applyAuthenticatedUUID(uuid string, cs *communication_state.CommunicationSt
 	if cs.Gatekeeper != nil {
 		cs.Gatekeeper.SetInstanceUUID(uuid)
 	}
+}
+
+func clearConfigworkerDeps() {
+	register.ClearDeps(configworker.WorkerTypeName)
+	register.ClearDeps(configworker.ConfigManagerDepsKey)
+	register.ClearDeps(configworker.CPUEnabledDepsKey)
 }

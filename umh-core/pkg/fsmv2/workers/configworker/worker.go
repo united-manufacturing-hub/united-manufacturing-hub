@@ -145,39 +145,31 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 
 	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
 	w.reconcileHistorian(ctx)
-	w.reconcileCPU(ctx)
+	w.reconcileMonitorChild(fsmv2cpu.Ref, w.cpuEnabled, deps.FeatureSupportCPU)
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil
 }
 
-// reconcileCPU upserts or deletes the CPU monitor child. It logs rather than
-// returns the upsert error, so a transient failure never fails the tick.
-func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
-	_ = ctx
-
+func (w *ConfigworkerWorker) reconcileMonitorChild(ref dynamicchildren.Ref, enabled bool, feature deps.Feature) {
 	client := fsmv2client.GetClient()
 	if client == nil {
 		return
 	}
 
-	if err := syncCPU(client, w.cpuEnabled); err != nil {
-		w.Logger().SentryWarn(deps.FeatureSupportCPU, w.Identity().HierarchyPath,
-			"cpu watch: upsert failed", deps.Err(err))
+	if err := syncMonitorChild(client, ref, enabled); err != nil {
+		w.Logger().SentryWarn(feature, w.Identity().HierarchyPath,
+			ref.WorkerType+" watch: upsert failed", deps.Err(err))
 	}
 }
 
-// syncCPU upserts the CPU monitor child when the flag is on and deletes it when
-// off. The flag cannot change mid-run, so today the Delete removes nothing; it
-// is kept so that a change which does let the flag flip cannot leave a CPU child
-// behind.
-func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
+func syncMonitorChild(client *fsmv2client.FSMv2Client, ref dynamicchildren.Ref, enabled bool) error {
 	if !enabled {
-		client.Delete(fsmv2cpu.Ref)
+		client.Delete(ref)
 
 		return nil
 	}
 
-	return client.Upsert(fsmv2cpu.Ref, nil)
+	return client.Upsert(ref, nil)
 }
 
 // reconcileHistorian reads the live config and syncs the historian monitor
