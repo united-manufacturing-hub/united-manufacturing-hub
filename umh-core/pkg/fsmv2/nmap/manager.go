@@ -118,12 +118,17 @@ func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.Obs
 			NmapStatus: nmapservice.NmapServiceInfo{
 				IsRunning: s.Result.IsRunning,
 				LastScan: &nmapservice.NmapScanResult{
-					Timestamp: s.Result.ScannedAt,
-					Target:    s.Result.Target,
+					Timestamp:   s.Result.ScannedAt,
+					Target:      s.Result.Target,
+					DialFailure: string(s.Result.Failure),
 					PortResult: nmapservice.PortResult{
 						State:     s.Result.PortState,
 						LatencyMs: s.Result.LatencyMs,
 						Port:      s.Result.Port,
+					},
+					Metrics: nmapservice.ScanMetrics{
+						ResolveMs: s.Result.ResolveMs,
+						ConnectMs: s.Result.ConnectMs,
 					},
 				},
 			},

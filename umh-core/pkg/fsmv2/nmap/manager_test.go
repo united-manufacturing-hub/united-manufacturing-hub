@@ -170,6 +170,34 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.Port).To(Equal(port))
 	})
 
+	It("carries why a scan failed and how long the lookup and the connect took", func() {
+		stageClient(freshStatus(NmapStatus{
+			Target:    target,
+			PortState: "closed",
+			Port:      port,
+			Failure:   DialFailureDNSTimeout,
+			ResolveMs: 2200,
+		}), nil)
+
+		mgr := NewFsmv2NmapManager("test")
+
+		err, _ := mgr.Reconcile(context.Background(), snapshotWith(nmapConfig("running")), nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		observed, err := mgr.GetLastObservedState(name)
+		Expect(err).NotTo(HaveOccurred())
+
+		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+
+		lastScan := nmapObserved.ServiceInfo.NmapStatus.LastScan
+		Expect(lastScan).NotTo(BeNil())
+		Expect(lastScan.DialFailure).To(Equal(string(DialFailureDNSTimeout)))
+		Expect(lastScan.Metrics.ResolveMs).To(Equal(2200.0))
+		Expect(lastScan.Metrics.ConnectMs).To(BeZero())
+		Expect(lastScan.Error).To(BeEmpty(), "Error means the scan itself failed and marks fsmv1 nmap unhealthy")
+	})
+
 	It("reports the scan's own time, so a leftover scan cannot read as fresh", func() {
 		scannedAt := time.Now().Add(-42 * time.Minute)
 

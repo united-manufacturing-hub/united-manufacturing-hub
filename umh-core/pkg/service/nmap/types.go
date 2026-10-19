@@ -69,6 +69,10 @@ type NmapScanResult struct {
 	RawOutput string `json:"rawOutput"`
 	// Error message if scan failed
 	Error string `json:"error,omitempty"`
+	// DialFailure is why the fsmv2 connection check could not connect, for
+	// example "dns_timeout". Empty when the port is open and on the fsmv1
+	// backend.
+	DialFailure string `json:"dialFailure,omitempty"`
 	// Port result
 	PortResult PortResult `json:"portResult"`
 	// Overall scan metrics
@@ -101,6 +105,12 @@ const (
 type ScanMetrics struct {
 	// Total duration of scan in seconds
 	ScanDuration float64 `json:"scanDuration"`
+	// ResolveMs is how long the fsmv2 connection check's hostname lookup took,
+	// in milliseconds.
+	ResolveMs float64 `json:"resolveMs,omitempty"`
+	// ConnectMs is how long the fsmv2 connection check's TCP connect took after
+	// the lookup, in milliseconds.
+	ConnectMs float64 `json:"connectMs,omitempty"`
 }
 
 // ServiceInfo contains information about an nmap service.
