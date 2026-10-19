@@ -62,6 +62,15 @@ func lookupProbe(workerType string) (registeredProbe, bool) {
 	return probe.(registeredProbe), true
 }
 
+func probeActionIfRegistered[TConfig any](workerType string, cfg TConfig) any {
+	if _, registered := lookupProbe(workerType); !registered {
+		// An untyped nil: a typed nil pointer would reach Transition as an action.
+		return nil
+	}
+
+	return &probeAction[TConfig]{workerType: workerType, cfg: cfg}
+}
+
 type probeAction[TConfig any] struct {
 	cfg        TConfig
 	workerType string
