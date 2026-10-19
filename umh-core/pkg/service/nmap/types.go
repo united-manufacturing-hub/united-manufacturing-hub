@@ -16,6 +16,7 @@ package nmap
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
@@ -77,6 +78,17 @@ type NmapScanResult struct {
 	PortResult PortResult `json:"portResult"`
 	// Overall scan metrics
 	Metrics ScanMetrics `json:"metrics"`
+}
+
+// DescribeDialFailure describes why the connection check could not connect,
+// for example "dns_timeout (lookup 2201 ms, connect 0 ms)". failed is false
+// when the scan recorded no failure.
+func (r NmapScanResult) DescribeDialFailure() (description string, failed bool) {
+	if r.DialFailure == "" {
+		return "", false
+	}
+
+	return fmt.Sprintf("%s (lookup %.0f ms, connect %.0f ms)", r.DialFailure, r.Metrics.ResolveMs, r.Metrics.ConnectMs), true
 }
 
 // PortResult contains the result for a specific port.

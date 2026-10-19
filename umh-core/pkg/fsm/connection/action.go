@@ -274,6 +274,15 @@ func (c *ConnectionInstance) IsConnectionNmapDown() bool {
 	}
 }
 
+func (c *ConnectionInstance) describeLastCheckFailure() (description string, failed bool) {
+	lastScan := c.ObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan
+	if lastScan == nil {
+		return "", false
+	}
+
+	return lastScan.DescribeDialFailure()
+}
+
 // IsConnectionFlaky returns the value of IsFlaky so whether the Nmap-FSM can
 // be considered as flaky if it has 3 different states in a short amount of time.
 func (c *ConnectionInstance) IsConnectionFlaky() bool {

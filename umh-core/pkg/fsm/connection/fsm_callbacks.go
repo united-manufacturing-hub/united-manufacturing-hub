@@ -42,7 +42,14 @@ func (instance *ConnectionInstance) registerCallbacks() {
 
 	// Running phase state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDown, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering down state for %s", instance.baseFSMInstance.GetID())
+		failure, failed := instance.describeLastCheckFailure()
+		if !failed {
+			instance.baseFSMInstance.GetLogger().Infof("Entering down state for %s", instance.baseFSMInstance.GetID())
+
+			return
+		}
+
+		instance.baseFSMInstance.GetLogger().Infof("Entering down state for %s: the connection check failed with %s", instance.baseFSMInstance.GetID(), failure)
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {
