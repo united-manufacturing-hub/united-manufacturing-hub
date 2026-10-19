@@ -16,6 +16,7 @@ package memoryhealth_test
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"strconv"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/memoryhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -32,13 +34,17 @@ func TestMemoryHealth(t *testing.T) {
 }
 
 const (
+	halfGiBBytes  int64 = 536870912
 	oneGiBBytes   int64 = 1073741824
 	twoGiBBytes   int64 = 2147483648
+	threeGiBBytes int64 = 3221225472
 	fourGiBBytes  int64 = 4294967296
 	eightGiBBytes int64 = 8589934592
 
 	fixtureCgroupBase = "/sys/fs/cgroup"
 )
+
+var errHostUnreadable = errors.New("host memory unreadable")
 
 func bytesText(bytes int64) string {
 	return strconv.FormatInt(bytes, 10) + "\n"
@@ -64,4 +70,14 @@ func fixtureFilesystem(files map[string]string) *filesystem.MockFileSystem {
 
 		return []byte(content), nil
 	})
+}
+
+func hostMemoryOf(usedBytes, totalBytes int64) memoryhealth.HostMemoryReader {
+	return func(context.Context) (uint64, uint64, error) {
+		return uint64(usedBytes), uint64(totalBytes), nil
+	}
+}
+
+func unreadableHostMemory(context.Context) (uint64, uint64, error) {
+	return 0, 0, errHostUnreadable
 }
