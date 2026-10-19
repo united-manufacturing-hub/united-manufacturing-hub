@@ -114,8 +114,9 @@ type AgentConfig struct {
 	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"`
 	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`
 
-	UseGatekeeper bool `yaml:"useGatekeeper,omitempty"` // Enable gatekeeper middleware for message validation and encryption
-	UseFSMv2CPU   bool `yaml:"useFSMv2CPU,omitempty"`   // Enable the fsmv2 CPU monitor worker
+	UseGatekeeper         bool `yaml:"useGatekeeper,omitempty"`         // Enable gatekeeper middleware for message validation and encryption
+	UseFSMv2CPU           bool `yaml:"useFSMv2CPU,omitempty"`           // Enable the fsmv2 CPU monitor worker
+	UseFSMv2MemoryMonitor bool `yaml:"useFSMv2MemoryMonitor,omitempty"` // Enable the fsmv2 memory monitor worker
 }
 
 type CommunicatorConfig struct {

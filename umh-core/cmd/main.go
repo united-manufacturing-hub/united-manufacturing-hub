@@ -166,6 +166,9 @@ func main() {
 	cpuMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
 
+	memoryMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_MONITOR", false, false)
+	configData.Agent.UseFSMv2MemoryMonitor = memoryMonitorEnabled
+
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
 		FSMv2CPUEnabled:               models.FSMv2CPUEnabled(cpuMonitorEnabled),
@@ -696,6 +699,7 @@ func buildFSMv2Supervisor(
 	// Published before NewApplicationSupervisor, like the keys above: the
 	// config worker reads this key when it is constructed.
 	register.SetDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
+	register.SetDeps[bool](configworker.MemoryMonitorEnabledDepsKey, configData.Agent.UseFSMv2MemoryMonitor)
 
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
@@ -853,4 +857,5 @@ func clearConfigworkerDeps() {
 	register.ClearDeps(configworker.WorkerTypeName)
 	register.ClearDeps(configworker.ConfigManagerDepsKey)
 	register.ClearDeps(configworker.CPUEnabledDepsKey)
+	register.ClearDeps(configworker.MemoryMonitorEnabledDepsKey)
 }

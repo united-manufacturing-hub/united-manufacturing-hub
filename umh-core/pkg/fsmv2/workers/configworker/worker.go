@@ -45,6 +45,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
+	fsmv2memory "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
@@ -77,6 +78,10 @@ const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 // given there.
 const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
 
+// MemoryMonitorEnabledDepsKey publishes the USE_FSMV2_MEMORY_MONITOR flag, read
+// in cmd/main.go and never persisted, the same way CPUEnabledDepsKey does.
+const MemoryMonitorEnabledDepsKey = WorkerTypeName + ".memorymonitorenabled"
+
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
 // to the shared dynamicchildren registry. See the package doc for why it does
 // nothing else yet.
@@ -93,6 +98,8 @@ type ConfigworkerWorker struct {
 	// set once at construction from CPUEnabledDepsKey (the USE_FSMV2_CPU env
 	// flag, read in cmd/main.go and never persisted).
 	cpuEnabled bool
+
+	memoryMonitorEnabled bool
 }
 
 // NewConfigworkerWorker creates a config worker holding the registry published
@@ -114,11 +121,13 @@ func NewConfigworkerWorker(
 	// nil (mirroring the fsmv2client.GetClient nil guard).
 	configManager := register.GetDeps[config.ConfigManager](ConfigManagerDepsKey)
 	cpuEnabled := register.GetDeps[bool](CPUEnabledDepsKey)
+	memoryMonitorEnabled := register.GetDeps[bool](MemoryMonitorEnabledDepsKey)
 
 	w := &ConfigworkerWorker{
-		registry:      shared,
-		configManager: configManager,
-		cpuEnabled:    cpuEnabled,
+		registry:             shared,
+		configManager:        configManager,
+		cpuEnabled:           cpuEnabled,
+		memoryMonitorEnabled: memoryMonitorEnabled,
 	}
 	w.InitBase(identity, logger, stateReader)
 
@@ -146,6 +155,7 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
 	w.reconcileHistorian(ctx)
 	w.reconcileMonitorChild(fsmv2cpu.Ref, w.cpuEnabled, deps.FeatureSupportCPU)
+	w.reconcileMonitorChild(fsmv2memory.Ref, w.memoryMonitorEnabled, deps.FeatureSupportMemory)
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil
 }
