@@ -16,6 +16,7 @@ package fsmv2memory
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
@@ -56,9 +57,10 @@ type MemoryStatus struct {
 type MemoryDeps struct {
 	*deps.BaseDependencies
 
-	sampler   *memoryhealth.Sampler
-	engine    *diagnosis.Engine[memoryhealth.Sample]
-	engineErr error
+	sampler          *memoryhealth.Sampler
+	engine           *diagnosis.Engine[memoryhealth.Sample]
+	engineErr        error
+	reportedFailures sync.Map
 }
 
 // NewDeps builds the memory deps, reading through the filesystem published under
@@ -86,6 +88,8 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 	}
 
 	sample, err := d.sampler.Read(ctx)
+	d.reportFailedReads(ctx, sample, err)
+
 	if err != nil {
 		return MemoryStatus{}, err
 	}

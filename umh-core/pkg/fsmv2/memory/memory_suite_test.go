@@ -68,6 +68,12 @@ func fixtureFilesystem(files map[string]string) *filesystem.MockFileSystem {
 	})
 }
 
+func hostMemoryOf(usedBytes, totalBytes int64) memoryhealth.HostMemoryReader {
+	return func(context.Context) (uint64, uint64, error) {
+		return uint64(usedBytes), uint64(totalBytes), nil
+	}
+}
+
 func unreadableHostMemory(context.Context) (uint64, uint64, error) {
 	return 0, 0, errHostUnreadable
 }
