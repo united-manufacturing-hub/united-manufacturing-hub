@@ -16,6 +16,7 @@ package connection
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/looplab/fsm"
 )
@@ -55,4 +56,17 @@ func (instance *ConnectionInstance) registerCallbacks() {
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded state for %s", instance.baseFSMInstance.GetID())
 	})
+}
+
+func (instance *ConnectionInstance) describeLastCheckFailure() (description string, failed bool) {
+	lastScan := instance.ObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan
+	if lastScan == nil {
+		return "", false
+	}
+
+	if lastScan.DialFailure == "" {
+		return "", false
+	}
+
+	return fmt.Sprintf("%s (lookup %.0f ms, connect %.0f ms)", lastScan.DialFailure, lastScan.Metrics.ResolveMs, lastScan.Metrics.ConnectMs), true
 }
