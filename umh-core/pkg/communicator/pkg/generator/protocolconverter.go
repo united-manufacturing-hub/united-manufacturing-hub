@@ -116,9 +116,11 @@ func buildProtocolConverterAsDfc(
 
 	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate != nil &&
 		observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
+		lastScan := observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan
+
 		var lastLatencyMs float64
-		if observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan != nil {
-			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
+		if lastScan != nil {
+			lastLatencyMs = lastScan.PortResult.LatencyMs
 		}
 
 		specTarget := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
@@ -146,7 +148,7 @@ func buildProtocolConverterAsDfc(
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
 			URI:  fmt.Sprintf("%s:%s", target, port),
 			Health: &models.Health{
-				Message:       connectionHealthMessage(observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan),
+				Message:       connectionHealthMessage(observed.ServiceInfo.ConnectionFSMState, lastScan),
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
 				DesiredState:  "up", // Connection desired state is typically "up"
 				Category:      getHealthCategoryFromState(observed.ServiceInfo.ConnectionFSMState),
@@ -410,7 +412,6 @@ func getDFCHealthCategory(state string) models.HealthCategory {
 	}
 }
 
-// getHealthCategoryFromState converts a FSM state string to models.HealthCategory.
 func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult) string {
 	if state != connection.OperationalStateDown && state != connection.OperationalStateDegraded {
 		return state
@@ -439,6 +440,7 @@ func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult)
 	}
 }
 
+// getHealthCategoryFromState converts a FSM state string to models.HealthCategory.
 func getHealthCategoryFromState(state string) models.HealthCategory {
 	switch state {
 	case connection.OperationalStateUp:

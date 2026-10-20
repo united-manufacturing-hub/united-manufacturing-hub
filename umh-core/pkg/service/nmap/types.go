@@ -81,22 +81,12 @@ type NmapScanResult struct {
 type DialFailure string
 
 const (
-	// DialFailureDNSTimeout means the hostname lookup did not finish before the
-	// check's deadline.
-	DialFailureDNSTimeout DialFailure = "dns_timeout"
-	// DialFailureDNSError means the hostname lookup failed, for example because
-	// the name does not exist.
-	DialFailureDNSError DialFailure = "dns_error"
-	// DialFailureConnectTimeout means the TCP connect did not finish before the
-	// check's deadline.
+	DialFailureDNSTimeout     DialFailure = "dns_timeout"
+	DialFailureDNSError       DialFailure = "dns_error"
 	DialFailureConnectTimeout DialFailure = "connect_timeout"
-	// DialFailureRefused means the target host rejected the connection.
-	DialFailureRefused DialFailure = "refused"
-	// DialFailureUnreachable means the network has no route to the target host.
-	DialFailureUnreachable DialFailure = "unreachable"
-	// DialFailureUnknown means the dial failed for a reason none of the other
-	// values names.
-	DialFailureUnknown DialFailure = "unknown"
+	DialFailureRefused        DialFailure = "refused"
+	DialFailureUnreachable    DialFailure = "unreachable"
+	DialFailureUnknown        DialFailure = "unknown"
 )
 
 // DialResult is why the fsmv2 connection check's TCP dial failed and how long

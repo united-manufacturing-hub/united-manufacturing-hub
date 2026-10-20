@@ -61,9 +61,8 @@ type NmapStatus struct {
 	// ScannedAt is when the dial started. A consumer comparing it against the
 	// time a config edit was persisted can tell a scan of the new target from a
 	// leftover scan of the previous one, which no other field distinguishes.
-	ScannedAt time.Time `json:"scanned_at"`
-	// Dial is why the dial failed and how long its lookup and connect took.
-	Dial nmapservice.DialResult `json:"dial"`
+	ScannedAt time.Time              `json:"scanned_at"`
+	Dial      nmapservice.DialResult `json:"dial"`
 }
 
 // Poll dials the configured target once and reports the port state. A
