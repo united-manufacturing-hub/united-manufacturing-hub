@@ -422,9 +422,13 @@ func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult)
 	}
 
 	dial := lastScan.Dial
+	if dial.Failure == nil {
+		return state
+	}
+
 	endpoint := net.JoinHostPort(lastScan.Target, strconv.Itoa(int(lastScan.PortResult.Port)))
 
-	switch dial.Failure {
+	switch *dial.Failure {
 	case nmapservice.DialFailureDNSTimeout:
 		return fmt.Sprintf("The DNS lookup for %s timed out after %.0f ms", lastScan.Target, dial.ResolveMs)
 	case nmapservice.DialFailureDNSError:

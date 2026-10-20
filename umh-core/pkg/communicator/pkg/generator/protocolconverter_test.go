@@ -37,7 +37,15 @@ func failedScan(failure nmapservice.DialFailure, resolveMs, connectMs float64) *
 	return &nmapservice.NmapScanResult{
 		Target:     checkedHost,
 		PortResult: nmapservice.PortResult{Port: checkedPort},
-		Dial:       &nmapservice.DialResult{Failure: failure, ResolveMs: resolveMs, ConnectMs: connectMs},
+		Dial:       &nmapservice.DialResult{Failure: new(failure), ResolveMs: resolveMs, ConnectMs: connectMs},
+	}
+}
+
+func openScan() *nmapservice.NmapScanResult {
+	return &nmapservice.NmapScanResult{
+		Target:     checkedHost,
+		PortResult: nmapservice.PortResult{Port: checkedPort},
+		Dial:       &nmapservice.DialResult{ResolveMs: 1, ConnectMs: 1},
 	}
 }
 
@@ -82,7 +90,7 @@ var _ = Describe("connectionHealthMessage", func() {
 		Entry("connection up", connection.OperationalStateUp, failedScan(nmapservice.DialFailureRefused, 1, 0)),
 		Entry("no scan yet", connection.OperationalStateDown, nil),
 		Entry("fsmv1 backend records no dial", connection.OperationalStateDown, &nmapservice.NmapScanResult{Target: checkedHost}),
-		Entry("port open on the last scan", connection.OperationalStateDegraded, failedScan("", 1, 1)),
+		Entry("port open on the last scan", connection.OperationalStateDegraded, openScan()),
 		Entry("unknown failure", connection.OperationalStateDown, failedScan(nmapservice.DialFailureUnknown, 1, 0)),
 	)
 })

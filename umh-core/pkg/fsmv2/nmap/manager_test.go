@@ -177,7 +177,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 			PortState: "closed",
 			Port:      port,
 			Dial: nmapservice.DialResult{
-				Failure:   nmapservice.DialFailureDNSTimeout,
+				Failure:   new(nmapservice.DialFailureDNSTimeout),
 				ResolveMs: 2200,
 			},
 		}), nil)
@@ -196,7 +196,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		lastScan := nmapObserved.ServiceInfo.NmapStatus.LastScan
 		Expect(lastScan).NotTo(BeNil())
 		Expect(lastScan.Dial).NotTo(BeNil())
-		Expect(lastScan.Dial.Failure).To(Equal(nmapservice.DialFailureDNSTimeout))
+		Expect(lastScan.Dial.Failure).To(HaveValue(Equal(nmapservice.DialFailureDNSTimeout)))
 		Expect(lastScan.Dial.ResolveMs).To(Equal(2200.0))
 		Expect(lastScan.Dial.ConnectMs).To(BeZero())
 		Expect(lastScan.Error).To(BeEmpty(), "Error means the scan itself failed and marks fsmv1 nmap unhealthy")

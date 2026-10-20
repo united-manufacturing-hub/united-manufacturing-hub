@@ -92,8 +92,8 @@ const (
 // DialResult is why the fsmv2 connection check's TCP dial failed and how long
 // its hostname lookup and TCP connect took.
 type DialResult struct {
-	// Failure is empty when the port is open.
-	Failure DialFailure `json:"failure,omitempty"`
+	// Failure is nil when the port is open.
+	Failure *DialFailure `json:"failure,omitempty"`
 	// ResolveMs covers the whole dial when the lookup failed.
 	ResolveMs float64 `json:"resolveMs"`
 	ConnectMs float64 `json:"connectMs"`

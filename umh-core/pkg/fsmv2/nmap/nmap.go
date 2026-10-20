@@ -103,7 +103,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 			Port:      cfg.NmapServiceConfig.Port,
 			ScannedAt: start,
 			Dial: nmapservice.DialResult{
-				Failure:   classifyDialError(err),
+				Failure:   new(classifyDialError(err)),
 				ResolveMs: resolveMs,
 				ConnectMs: connectMs,
 			},
