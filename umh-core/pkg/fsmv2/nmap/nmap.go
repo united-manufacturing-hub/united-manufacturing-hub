@@ -81,7 +81,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 	dialer := net.Dialer{ControlContext: timer.recordConnectStart}
 
 	conn, err := dialer.DialContext(ctx, "tcp", target)
-	resolveMs, connectMs := timer.split(start, time.Now())
+	resolveMs, connectMs := timer.resolveAndConnectMs(start, time.Now())
 
 	if err != nil {
 		// Worker shutdown cancels the context; surface it as an error so the
@@ -128,24 +128,27 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 }
 
 type dialTimer struct {
-	connectStartUnixNano atomic.Int64
+	connectStartedAt atomic.Pointer[time.Time]
 }
 
 func (t *dialTimer) recordConnectStart(context.Context, string, string, syscall.RawConn) error {
-	t.connectStartUnixNano.CompareAndSwap(0, time.Now().UnixNano())
+	t.connectStartedAt.CompareAndSwap(nil, new(time.Now()))
 
 	return nil
 }
 
-func (t *dialTimer) split(start, end time.Time) (resolveMs, connectMs float64) {
-	connectStartUnixNano := t.connectStartUnixNano.Load()
-	if connectStartUnixNano == 0 {
-		return milliseconds(end.Sub(start)), 0
+func (t *dialTimer) resolveAndConnectMs(dialStart, dialEnd time.Time) (resolveMs, connectMs float64) {
+	connectStartedAt := t.connectStartedAt.Load()
+
+	connectNeverStarted := connectStartedAt == nil
+	if connectNeverStarted {
+		return milliseconds(dialEnd.Sub(dialStart)), 0
 	}
 
-	connectStart := time.Unix(0, connectStartUnixNano)
+	resolveDuration := connectStartedAt.Sub(dialStart)
+	connectDuration := dialEnd.Sub(*connectStartedAt)
 
-	return milliseconds(connectStart.Sub(start)), milliseconds(end.Sub(connectStart))
+	return milliseconds(resolveDuration), milliseconds(connectDuration)
 }
 
 func milliseconds(duration time.Duration) float64 {
