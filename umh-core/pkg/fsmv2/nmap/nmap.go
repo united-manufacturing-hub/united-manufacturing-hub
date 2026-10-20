@@ -76,7 +76,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 
 	start := time.Now()
 
-	var timer dialTimer
+	var timer resolveAndConnectTimer
 
 	dialer := net.Dialer{ControlContext: timer.recordConnectStart}
 
@@ -127,17 +127,17 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 	}, nil
 }
 
-type dialTimer struct {
+type resolveAndConnectTimer struct {
 	connectStartedAt atomic.Pointer[time.Time]
 }
 
-func (t *dialTimer) recordConnectStart(context.Context, string, string, syscall.RawConn) error {
+func (t *resolveAndConnectTimer) recordConnectStart(context.Context, string, string, syscall.RawConn) error {
 	t.connectStartedAt.CompareAndSwap(nil, new(time.Now()))
 
 	return nil
 }
 
-func (t *dialTimer) resolveAndConnectMs(dialStart, dialEnd time.Time) (resolveMs, connectMs float64) {
+func (t *resolveAndConnectTimer) resolveAndConnectMs(dialStart, dialEnd time.Time) (resolveMs, connectMs float64) {
 	connectStartedAt := t.connectStartedAt.Load()
 
 	connectNeverStarted := connectStartedAt == nil
