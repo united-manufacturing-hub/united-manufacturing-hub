@@ -413,28 +413,25 @@ func getDFCHealthCategory(state string) models.HealthCategory {
 }
 
 func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult) string {
-	if state != connection.OperationalStateDown && state != connection.OperationalStateDegraded {
+	connectionFailing := state == connection.OperationalStateDown || state == connection.OperationalStateDegraded
+	if !connectionFailing {
 		return state
 	}
 
-	if lastScan == nil || lastScan.Dial == nil {
-		return state
-	}
-
-	dial := lastScan.Dial
-	if dial.Failure == nil {
+	failedDial := failedDialOf(lastScan)
+	if failedDial == nil {
 		return state
 	}
 
 	endpoint := net.JoinHostPort(lastScan.Target, strconv.Itoa(int(lastScan.PortResult.Port)))
 
-	switch *dial.Failure {
+	switch *failedDial.Failure {
 	case nmapservice.DialFailureDNSTimeout:
-		return fmt.Sprintf("The DNS lookup for %s timed out after %.0f ms", lastScan.Target, dial.ResolveMs)
+		return fmt.Sprintf("The DNS lookup for %s timed out after %.0f ms", lastScan.Target, failedDial.ResolveMs)
 	case nmapservice.DialFailureDNSError:
 		return lastScan.Target + " could not be resolved"
 	case nmapservice.DialFailureConnectTimeout:
-		return fmt.Sprintf("%s did not answer in time (lookup %.0f ms, connect %.0f ms)", endpoint, dial.ResolveMs, dial.ConnectMs)
+		return fmt.Sprintf("%s did not answer in time (lookup %.0f ms, connect %.0f ms)", endpoint, failedDial.ResolveMs, failedDial.ConnectMs)
 	case nmapservice.DialFailureRefused:
 		return endpoint + " refused the connection"
 	case nmapservice.DialFailureUnreachable:
@@ -442,6 +439,24 @@ func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult)
 	default:
 		return state
 	}
+}
+
+// failedDialOf returns nil when there is no scan yet, when the fsmv1 backend
+// recorded no dial, and when the port was open.
+func failedDialOf(lastScan *nmapservice.NmapScanResult) *nmapservice.DialResult {
+	if lastScan == nil {
+		return nil
+	}
+
+	if lastScan.Dial == nil {
+		return nil
+	}
+
+	if lastScan.Dial.Failure == nil {
+		return nil
+	}
+
+	return lastScan.Dial
 }
 
 // getHealthCategoryFromState converts a FSM state string to models.HealthCategory.
