@@ -418,7 +418,7 @@ func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult)
 		return state
 	}
 
-	failedDial := failedDialOf(lastScan)
+	failedDial := failedDialInScan(lastScan)
 	if failedDial == nil {
 		return state
 	}
@@ -441,9 +441,10 @@ func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult)
 	}
 }
 
-// failedDialOf returns nil when there is no scan yet, when the fsmv1 backend
-// recorded no dial, and when the port was open.
-func failedDialOf(lastScan *nmapservice.NmapScanResult) *nmapservice.DialResult {
+// failedDialInScan returns the scan's dial if it failed. It returns nil when
+// there is no scan yet, when the fsmv1 backend recorded no dial, and when the
+// port was open.
+func failedDialInScan(lastScan *nmapservice.NmapScanResult) *nmapservice.DialResult {
 	if lastScan == nil {
 		return nil
 	}
