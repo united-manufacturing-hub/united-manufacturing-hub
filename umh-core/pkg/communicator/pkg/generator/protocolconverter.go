@@ -16,6 +16,7 @@ package generator
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"go.uber.org/zap"
 )
 
@@ -144,7 +146,7 @@ func buildProtocolConverterAsDfc(
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
 			URI:  fmt.Sprintf("%s:%s", target, port),
 			Health: &models.Health{
-				Message:       observed.ServiceInfo.ConnectionFSMState,
+				Message:       connectionHealthMessage(observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan),
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
 				DesiredState:  "up", // Connection desired state is typically "up"
 				Category:      getHealthCategoryFromState(observed.ServiceInfo.ConnectionFSMState),
@@ -409,6 +411,34 @@ func getDFCHealthCategory(state string) models.HealthCategory {
 }
 
 // getHealthCategoryFromState converts a FSM state string to models.HealthCategory.
+func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult) string {
+	if state != connection.OperationalStateDown && state != connection.OperationalStateDegraded {
+		return state
+	}
+
+	if lastScan == nil || lastScan.Dial == nil {
+		return state
+	}
+
+	dial := lastScan.Dial
+	endpoint := net.JoinHostPort(lastScan.Target, strconv.Itoa(int(lastScan.PortResult.Port)))
+
+	switch dial.Failure {
+	case nmapservice.DialFailureDNSTimeout:
+		return fmt.Sprintf("The DNS lookup for %s timed out after %.0f ms", lastScan.Target, dial.ResolveMs)
+	case nmapservice.DialFailureDNSError:
+		return lastScan.Target + " could not be resolved"
+	case nmapservice.DialFailureConnectTimeout:
+		return fmt.Sprintf("%s did not answer in time (lookup %.0f ms, connect %.0f ms)", endpoint, dial.ResolveMs, dial.ConnectMs)
+	case nmapservice.DialFailureRefused:
+		return endpoint + " refused the connection"
+	case nmapservice.DialFailureUnreachable:
+		return "No network route to " + lastScan.Target
+	default:
+		return state
+	}
+}
+
 func getHealthCategoryFromState(state string) models.HealthCategory {
 	switch state {
 	case connection.OperationalStateUp:

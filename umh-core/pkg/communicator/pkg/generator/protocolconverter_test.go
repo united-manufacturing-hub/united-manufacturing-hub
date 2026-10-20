@@ -20,11 +20,72 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 )
+
+const (
+	checkedHost = "plc.local"
+	checkedPort = 4840
+)
+
+func failedScan(failure nmapservice.DialFailure, resolveMs, connectMs float64) *nmapservice.NmapScanResult {
+	return &nmapservice.NmapScanResult{
+		Target:     checkedHost,
+		PortResult: nmapservice.PortResult{Port: checkedPort},
+		Dial:       &nmapservice.DialResult{Failure: failure, ResolveMs: resolveMs, ConnectMs: connectMs},
+	}
+}
+
+var _ = Describe("connectionHealthMessage", func() {
+	It("names the host and the lookup time when the DNS lookup timed out", func() {
+		message := connectionHealthMessage(connection.OperationalStateDown, failedScan(nmapservice.DialFailureDNSTimeout, 2201.4, 0))
+
+		Expect(message).To(ContainSubstring(checkedHost))
+		Expect(message).To(ContainSubstring("2201 ms"))
+	})
+
+	It("names the endpoint and both times when the connect timed out", func() {
+		message := connectionHealthMessage(connection.OperationalStateDown, failedScan(nmapservice.DialFailureConnectTimeout, 2100, 100))
+
+		Expect(message).To(ContainSubstring("plc.local:4840"))
+		Expect(message).To(ContainSubstring("2100 ms"))
+		Expect(message).To(ContainSubstring("100 ms"))
+	})
+
+	DescribeTable("gives each failure class its own message",
+		func(failure nmapservice.DialFailure) {
+			message := connectionHealthMessage(connection.OperationalStateDown, failedScan(failure, 10, 0))
+
+			Expect(message).To(ContainSubstring(checkedHost))
+			Expect(message).NotTo(Equal(connection.OperationalStateDown))
+		},
+		Entry("dns_error", nmapservice.DialFailureDNSError),
+		Entry("refused", nmapservice.DialFailureRefused),
+		Entry("unreachable", nmapservice.DialFailureUnreachable),
+	)
+
+	It("names the cause on a degraded connection too", func() {
+		message := connectionHealthMessage(connection.OperationalStateDegraded, failedScan(nmapservice.DialFailureRefused, 1, 0))
+
+		Expect(message).To(ContainSubstring(checkedHost))
+	})
+
+	DescribeTable("falls back to the state when there is no cause to name",
+		func(state string, lastScan *nmapservice.NmapScanResult) {
+			Expect(connectionHealthMessage(state, lastScan)).To(Equal(state))
+		},
+		Entry("connection up", connection.OperationalStateUp, failedScan(nmapservice.DialFailureRefused, 1, 0)),
+		Entry("no scan yet", connection.OperationalStateDown, nil),
+		Entry("fsmv1 backend records no dial", connection.OperationalStateDown, &nmapservice.NmapScanResult{Target: checkedHost}),
+		Entry("port open on the last scan", connection.OperationalStateDegraded, failedScan("", 1, 1)),
+		Entry("unknown failure", connection.OperationalStateDown, failedScan(nmapservice.DialFailureUnknown, 1, 0)),
+	)
+})
 
 var _ = Describe("buildProtocolConverterAsDfc", func() {
 	log := zap.NewNop().Sugar()
