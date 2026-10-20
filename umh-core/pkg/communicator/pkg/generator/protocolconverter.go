@@ -449,15 +449,15 @@ func failedDialInScan(lastScan *nmapservice.NmapScanResult) *nmapservice.DialRes
 		return nil
 	}
 
-	if lastScan.Dial == nil {
+	if lastScan.DialResult == nil {
 		return nil
 	}
 
-	if lastScan.Dial.Failure == nil {
+	if lastScan.DialResult.Failure == nil {
 		return nil
 	}
 
-	return lastScan.Dial
+	return lastScan.DialResult
 }
 
 // getHealthCategoryFromState converts a FSM state string to models.HealthCategory.

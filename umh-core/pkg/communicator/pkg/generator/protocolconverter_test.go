@@ -37,7 +37,7 @@ func failedScan(failure nmapservice.DialFailure, resolveMs, connectMs float64) *
 	return &nmapservice.NmapScanResult{
 		Target:     checkedHost,
 		PortResult: nmapservice.PortResult{Port: checkedPort},
-		Dial:       &nmapservice.DialResult{Failure: new(failure), ResolveMs: resolveMs, ConnectMs: connectMs},
+		DialResult: &nmapservice.DialResult{Failure: new(failure), ResolveMs: resolveMs, ConnectMs: connectMs},
 	}
 }
 
@@ -45,7 +45,7 @@ func openScan() *nmapservice.NmapScanResult {
 	return &nmapservice.NmapScanResult{
 		Target:     checkedHost,
 		PortResult: nmapservice.PortResult{Port: checkedPort},
-		Dial:       &nmapservice.DialResult{ResolveMs: 1, ConnectMs: 1},
+		DialResult: &nmapservice.DialResult{ResolveMs: 1, ConnectMs: 1},
 	}
 }
 

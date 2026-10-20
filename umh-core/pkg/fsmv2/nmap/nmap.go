@@ -61,8 +61,8 @@ type NmapStatus struct {
 	// ScannedAt is when the dial started. A consumer comparing it against the
 	// time a config edit was persisted can tell a scan of the new target from a
 	// leftover scan of the previous one, which no other field distinguishes.
-	ScannedAt time.Time              `json:"scanned_at"`
-	Dial      nmapservice.DialResult `json:"dial"`
+	ScannedAt  time.Time              `json:"scanned_at"`
+	DialResult nmapservice.DialResult `json:"dial_result"`
 }
 
 // Poll dials the configured target once and reports the port state. A
@@ -102,7 +102,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 			PortState: string(nmapservice.PortStateClosed),
 			Port:      cfg.NmapServiceConfig.Port,
 			ScannedAt: start,
-			Dial: nmapservice.DialResult{
+			DialResult: nmapservice.DialResult{
 				Failure:   new(classifyDialError(err)),
 				ResolveMs: resolveMs,
 				ConnectMs: connectMs,
@@ -120,7 +120,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 		Port:      cfg.NmapServiceConfig.Port,
 		IsRunning: true,
 		ScannedAt: start,
-		Dial: nmapservice.DialResult{
+		DialResult: nmapservice.DialResult{
 			ResolveMs: resolveMs,
 			ConnectMs: connectMs,
 		},
