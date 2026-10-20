@@ -16,7 +16,6 @@ package connection
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/looplab/fsm"
 )
@@ -43,35 +42,10 @@ func (instance *ConnectionInstance) registerCallbacks() {
 
 	// Running phase state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDown, func(ctx context.Context, e *fsm.Event) {
-		failure, failed := instance.describeLastCheckFailure()
-		if !failed {
-			instance.baseFSMInstance.GetLogger().Infof("Entering down state for %s", instance.baseFSMInstance.GetID())
-
-			return
-		}
-
-		instance.baseFSMInstance.GetLogger().Infof("Entering down state for %s: the connection check failed with %s", instance.baseFSMInstance.GetID(), failure)
+		instance.baseFSMInstance.GetLogger().Infof("Entering down state for %s", instance.baseFSMInstance.GetID())
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded state for %s", instance.baseFSMInstance.GetID())
 	})
-}
-
-func (instance *ConnectionInstance) describeLastCheckFailure() (description string, failed bool) {
-	lastScan := instance.ObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan
-	if lastScan == nil {
-		return "", false
-	}
-
-	dial := lastScan.Dial
-	if dial == nil {
-		return "", false
-	}
-
-	if dial.Failure == "" {
-		return "", false
-	}
-
-	return fmt.Sprintf("%s (lookup %.0f ms, connect %.0f ms)", dial.Failure, dial.ResolveMs, dial.ConnectMs), true
 }
