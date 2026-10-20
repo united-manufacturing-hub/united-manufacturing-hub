@@ -109,6 +109,8 @@ func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 // carries that endpoint and its own start time, so an old poll cannot read as
 // fresh or as evidence about a different endpoint.
 func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
+	dial := s.Result.Dial
+
 	return nmapfsm.NmapObservedState{
 		ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 			Target: s.Result.Target,
@@ -118,18 +120,14 @@ func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.Obs
 			NmapStatus: nmapservice.NmapServiceInfo{
 				IsRunning: s.Result.IsRunning,
 				LastScan: &nmapservice.NmapScanResult{
-					Timestamp:   s.Result.ScannedAt,
-					Target:      s.Result.Target,
-					DialFailure: string(s.Result.Failure),
+					Timestamp: s.Result.ScannedAt,
+					Target:    s.Result.Target,
 					PortResult: nmapservice.PortResult{
 						State:     s.Result.PortState,
 						LatencyMs: s.Result.LatencyMs,
 						Port:      s.Result.Port,
 					},
-					Metrics: nmapservice.ScanMetrics{
-						ResolveMs: s.Result.ResolveMs,
-						ConnectMs: s.Result.ConnectMs,
-					},
+					Dial: &dial,
 				},
 			},
 		},

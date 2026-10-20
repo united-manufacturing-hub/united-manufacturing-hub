@@ -64,9 +64,14 @@ func (instance *ConnectionInstance) describeLastCheckFailure() (description stri
 		return "", false
 	}
 
-	if lastScan.DialFailure == "" {
+	dial := lastScan.Dial
+	if dial == nil {
 		return "", false
 	}
 
-	return fmt.Sprintf("%s (lookup %.0f ms, connect %.0f ms)", lastScan.DialFailure, lastScan.Metrics.ResolveMs, lastScan.Metrics.ConnectMs), true
+	if dial.Failure == "" {
+		return "", false
+	}
+
+	return fmt.Sprintf("%s (lookup %.0f ms, connect %.0f ms)", dial.Failure, dial.ResolveMs, dial.ConnectMs), true
 }

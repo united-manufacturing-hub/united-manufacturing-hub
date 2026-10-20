@@ -69,14 +69,44 @@ type NmapScanResult struct {
 	RawOutput string `json:"rawOutput"`
 	// Error message if scan failed
 	Error string `json:"error,omitempty"`
-	// DialFailure is why the fsmv2 connection check could not connect, for
-	// example "dns_timeout". Empty when the port is open and on the fsmv1
-	// backend.
-	DialFailure string `json:"dialFailure,omitempty"`
 	// Port result
 	PortResult PortResult `json:"portResult"`
 	// Overall scan metrics
 	Metrics ScanMetrics `json:"metrics"`
+	// Dial is nil on the fsmv1 backend, which does not record it.
+	Dial *DialResult `json:"dial,omitempty"`
+}
+
+// DialFailure names why the fsmv2 connection check could not open a TCP connection.
+type DialFailure string
+
+const (
+	// DialFailureDNSTimeout means the hostname lookup did not finish before the
+	// check's deadline.
+	DialFailureDNSTimeout DialFailure = "dns_timeout"
+	// DialFailureDNSError means the hostname lookup failed, for example because
+	// the name does not exist.
+	DialFailureDNSError DialFailure = "dns_error"
+	// DialFailureConnectTimeout means the TCP connect did not finish before the
+	// check's deadline.
+	DialFailureConnectTimeout DialFailure = "connect_timeout"
+	// DialFailureRefused means the target host rejected the connection.
+	DialFailureRefused DialFailure = "refused"
+	// DialFailureUnreachable means the network has no route to the target host.
+	DialFailureUnreachable DialFailure = "unreachable"
+	// DialFailureUnknown means the dial failed for a reason none of the other
+	// values names.
+	DialFailureUnknown DialFailure = "unknown"
+)
+
+// DialResult is why the fsmv2 connection check's TCP dial failed and how long
+// its hostname lookup and TCP connect took.
+type DialResult struct {
+	// Failure is empty when the port is open.
+	Failure DialFailure `json:"failure,omitempty"`
+	// ResolveMs covers the whole dial when the lookup failed.
+	ResolveMs float64 `json:"resolveMs"`
+	ConnectMs float64 `json:"connectMs"`
 }
 
 // PortResult contains the result for a specific port.
@@ -105,12 +135,6 @@ const (
 type ScanMetrics struct {
 	// Total duration of scan in seconds
 	ScanDuration float64 `json:"scanDuration"`
-	// ResolveMs is how long the fsmv2 connection check's hostname lookup took,
-	// in milliseconds.
-	ResolveMs float64 `json:"resolveMs,omitempty"`
-	// ConnectMs is how long the fsmv2 connection check's TCP connect took after
-	// the lookup, in milliseconds.
-	ConnectMs float64 `json:"connectMs,omitempty"`
 }
 
 // ServiceInfo contains information about an nmap service.
