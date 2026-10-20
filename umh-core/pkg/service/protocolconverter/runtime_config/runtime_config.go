@@ -187,8 +187,8 @@ func BuildRuntimeConfig(
 	// Expose historian settings so bridge templates can reference the connection
 	// as `{{ .historian.timescale.host }}`, mirroring the `historian.timescale`
 	// shape in config.yaml. `historian` is a reserved template variable: like
-	// `location` and `location_path` above, it overrides any user variable of the
-	// same name.
+	// `location` and `location_path` above, it replaces any bridge variable of the
+	// same name, and that bridge variable is dropped when no historian is injected.
 	//
 	// A present-but-invalid historian is treated as absent, so injection happens
 	// only when Validate passes. Injecting an invalid historian would render
@@ -199,12 +199,16 @@ func BuildRuntimeConfig(
 	// is unaffected either way.
 	var secrets []string
 
+	_, bridgeDefinesHistorian := vb.User["historian"]
+
 	historianUsable := historian != nil && historian.Validate() == nil
 	if historianUsable {
 		vb.User["historian"] = historian.ToTemplateMap()
 		if historian.Timescale.Password != "" {
 			secrets = append(secrets, historian.Timescale.Password)
 		}
+	} else {
+		delete(vb.User, "historian")
 	}
 
 	if len(globalVars) != 0 {
@@ -232,11 +236,23 @@ func BuildRuntimeConfig(
 
 	runtime, err := renderConfig(spec, scope, secrets) // unexported helper that enforces UNS
 	if err != nil && !historianUsable && referencesMissingHistorian(err) {
-		return runtime, fmt.Errorf(
-			"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", err)
+		return runtime, missingHistorianError(err, bridgeDefinesHistorian)
 	}
 
 	return runtime, err
+}
+
+// missingHistorianError explains a render that references `{{ .historian.* }}`
+// while no valid historian is configured.
+func missingHistorianError(renderErr error, bridgeDefinesHistorian bool) error {
+	if bridgeDefinesHistorian {
+		return fmt.Errorf(
+			"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it; "+
+				"the bridge variable named historian is ignored because the name is reserved: %w", renderErr)
+	}
+
+	return fmt.Errorf(
+		"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", renderErr)
 }
 
 // referencesMissingHistorian reports whether err is the text/template
