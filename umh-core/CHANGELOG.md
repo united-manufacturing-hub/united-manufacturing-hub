@@ -4,7 +4,8 @@
 
 ### Fixes
 
-- A bridge deploy now fails within seconds when benthos's config check rejects a setting, and the error names the setting, for example `retention must be a duration with a unit, like "168h"`. Before, the deploy waited 30 seconds and timed out without a reason. Editing a bridge or stand-alone flow with such a setting now shows the same error instead of "check the component logs"
+- A bridge deploy now fails within seconds when benthos rejects the configuration before it starts, for example a misspelled setting (`field retension not recognised`). Before, the deploy waited 30 seconds and failed without naming the setting
+- Deploying or editing a stand-alone flow, or editing a bridge, with such a configuration now shows the benthos error instead of "check the component logs"
 - The instance now reports the state of its historian database on TimescaleDB 2.26 or later. Before, the report failed with `column ch.dropped does not exist`
 
 ## [0.44.44]
