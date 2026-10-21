@@ -15,6 +15,8 @@
 package actions
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -34,18 +36,53 @@ var ErrBenthosLogLines = []string{
 // abort the startup process rather than waiting for the full timeout period,
 // as these errors require configuration changes to resolve.
 func CheckBenthosLogLinesForConfigErrors(logs []s6.LogEntry) bool {
-	for _, log := range logs {
-		logContent := strings.ToLower(log.Content)
-		if !strings.Contains(logContent, "error") {
-			continue
-		}
+	_, found := FindBenthosConfigError(logs)
 
-		for _, errLine := range ErrBenthosLogLines {
-			if strings.Contains(logContent, strings.ToLower(errLine)) {
-				return true
-			}
+	return found
+}
+
+func FindBenthosConfigError(logs []s6.LogEntry) (string, bool) {
+	for _, log := range logs {
+		if isBenthosConfigErrorLine(log.Content) {
+			return benthosConfigErrorText(log.Content), true
+		}
+	}
+
+	return "", false
+}
+
+func isBenthosConfigErrorLine(content string) bool {
+	lowerContent := strings.ToLower(content)
+	if !strings.Contains(lowerContent, "error") {
+		return false
+	}
+
+	for _, errLine := range ErrBenthosLogLines {
+		if strings.Contains(lowerContent, strings.ToLower(errLine)) {
+			return true
 		}
 	}
 
 	return false
+}
+
+var lintLocationPrefix = regexp.MustCompile(`^\S+\(\d+,\d+\) `)
+
+func benthosConfigErrorText(content string) string {
+	_, afterLintKey, hasLintKey := strings.Cut(content, ` lint=`)
+	if !hasLintKey {
+		return content
+	}
+
+	quotedLint, quoteErr := strconv.QuotedPrefix(afterLintKey)
+	if quoteErr != nil {
+		return content
+	}
+
+	lint, unquoteErr := strconv.Unquote(quotedLint)
+	if unquoteErr != nil {
+		return content
+	}
+
+	return lintLocationPrefix.ReplaceAllString(lint, "")
 }
