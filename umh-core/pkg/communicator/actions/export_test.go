@@ -53,3 +53,11 @@ func (a *EditProtocolConverterAction) CompareProtocolConverterDFCConfig(pcSnapsh
 func (a *EditProtocolConverterAction) LastRenderErr() error {
 	return a.lastRenderErr
 }
+
+func (a *DeployProtocolConverterAction) SetTickInterval(d time.Duration) {
+	a.tickInterval = d
+}
+
+func (a *DeployProtocolConverterAction) SetAwaitTimeout(d time.Duration) {
+	a.awaitTimeout = d
+}
