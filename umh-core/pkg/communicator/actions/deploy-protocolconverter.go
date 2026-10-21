@@ -248,9 +248,16 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				models.DeployProtocolConverter,
 				nil,
 			)
-			a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
-				deps.String("pcConfig", pcConfig.String()),
-				deps.String("desiredState", pcConfig.DesiredFSMState))
+
+			if errCode == models.ErrConfigFileInvalid {
+				a.fsmLogger.SentryWarn(deps.FeatureDeploymentSaveConfig, "", "deploy_protocol_converter_config_error",
+					deps.String("pcConfig", pcConfig.String()),
+					deps.String("configError", err.Error()))
+			} else {
+				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
+					deps.String("pcConfig", pcConfig.String()),
+					deps.String("desiredState", pcConfig.DesiredFSMState))
+			}
 
 			stopCtx, stopCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer stopCancel()

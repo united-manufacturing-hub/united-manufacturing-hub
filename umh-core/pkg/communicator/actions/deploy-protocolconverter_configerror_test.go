@@ -45,11 +45,12 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 	)
 
 	var (
-		mockCfg  *config.MockConfigManager
-		snapMgr  *fsm.SnapshotManager
-		outbound chan *models.UMHMessage
-		msgs     []*models.UMHMessage
-		mu       sync.Mutex
+		mockCfg      *config.MockConfigManager
+		sentryEvents *recordingFSMLogger
+		snapMgr      *fsm.SnapshotManager
+		outbound     chan *models.UMHMessage
+		msgs         []*models.UMHMessage
+		mu           sync.Mutex
 	)
 
 	writeFlowPayload := map[string]any{
@@ -162,6 +163,7 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 
 	deployPayload := func(payload map[string]any) (time.Duration, error) {
 		action := actions.NewDeployProtocolConverterAction("probe@example.com", uuid.New(), uuid.New(), outbound, mockCfg, snapMgr)
+		action.SetFSMLogger(sentryEvents)
 		action.SetTickInterval(100 * time.Millisecond)
 		action.SetAwaitTimeout(awaitTimeout)
 		Expect(action.Parse(payload)).To(Succeed())
@@ -232,6 +234,7 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 			Agent: config.AgentConfig{MetricsPort: 8080},
 		})
 		snapMgr = fsm.NewSnapshotManager()
+		sentryEvents = &recordingFSMLogger{}
 
 		go actions.ConsumeOutboundMessages(outbound, &msgs, &mu, false)
 	})
@@ -291,6 +294,15 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 
 		Expect(err).To(MatchError(ContainSubstring(lintErrorText)))
 		Expect(err).To(MatchError(ContainSubstring(inferErrorLine)))
+	})
+
+	It("reports a rejected setting to Sentry apart from a timeout", func() {
+		publishWriteFlowLogs(lintErrorLine)
+
+		_, _ = deploy()
+
+		Expect(sentryEvents.eventNames()).To(ContainElement("deploy_protocol_converter_config_error"))
+		Expect(sentryEvents.eventNames()).NotTo(ContainElement("deploy_protocol_converter_wait_failed"))
 	})
 
 	It("waits for the timeout when the logs hold no config error", func() {
