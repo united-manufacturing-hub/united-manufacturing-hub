@@ -562,38 +562,8 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 	}
 }
 
-type flowSelection struct {
-	read  bool
-	write bool
-}
-
-type flowConfigError struct {
-	message string
-	flows   flowSelection
-}
-
-func flowBenthosLogs(flow dataflowcomponent.DataflowComponentObservedState) []s6.LogEntry {
-	return flow.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-}
-
 func (a *DeployProtocolConverterAction) sendNewLogs(logs []s6.LogEntry, sentLogs []s6.LogEntry, remainingSeconds int) []s6.LogEntry {
 	return SendLimitedLogs(logs, sentLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
-}
-
-func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry, since time.Time) (flowConfigError, bool) {
-	readMessage, readHasError := findBenthosConfigError(readLogs, since)
-	writeMessage, writeHasError := findBenthosConfigError(writeLogs, since)
-	flows := flowSelection{read: readHasError, write: writeHasError}
-
-	if readHasError {
-		return flowConfigError{message: readMessage, flows: flows}, true
-	}
-
-	if writeHasError {
-		return flowConfigError{message: writeMessage, flows: flows}, true
-	}
-
-	return flowConfigError{}, false
 }
 
 func flowsToStopAfterFailedDeploy(flowsWithConfigError flowSelection, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
