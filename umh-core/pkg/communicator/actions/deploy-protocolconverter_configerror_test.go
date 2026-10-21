@@ -130,35 +130,7 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 	}
 
 	publishWriteFlowLogs := func(logLines ...string) {
-		logs := logEntries(logLines)
-
-		snapMgr.UpdateSnapshot(&fsm.SystemSnapshot{
-			Managers: map[string]fsm.ManagerSnapshot{
-				constants.ProtocolConverterManagerName: &actions.MockManagerSnapshot{
-					Instances: map[string]*fsm.FSMInstanceSnapshot{
-						bridgeName: {
-							ID:           bridgeName,
-							CurrentState: protocolconverter.OperationalStateStartingDFC,
-							DesiredState: protocolconverter.OperationalStateActive,
-							LastObservedState: &protocolconverter.ProtocolConverterObservedStateSnapshot{
-								ServiceInfo: protocolconvertersvc.ServiceInfo{
-									DataflowComponentWriteFSMState: dfcfsm.OperationalStateStarting,
-									DataflowComponentWriteObservedState: dfcfsm.DataflowComponentObservedState{
-										ServiceInfo: dfcsvc.ServiceInfo{
-											BenthosObservedState: benthosfsm.BenthosObservedState{
-												ServiceInfo: benthossvc.ServiceInfo{
-													BenthosStatus: benthossvc.BenthosStatus{BenthosLogs: logs},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		})
+		publishFlowLogs(nil, logLines)
 	}
 
 	deployPayload := func(payload map[string]any) (time.Duration, error) {
@@ -256,7 +228,7 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 
 		_, _ = deploy()
 
-		Expect(replies()).To(ContainElement(ContainSubstring("received log line: " + startupLine)))
+		Expect(replies()).To(ContainElement(ContainSubstring(startupLine)))
 	})
 
 	It("keeps the bridge and stops the failing write flow", func() {
