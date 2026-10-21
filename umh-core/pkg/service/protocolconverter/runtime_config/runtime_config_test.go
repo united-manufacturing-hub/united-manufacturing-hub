@@ -245,6 +245,36 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(err.Error()).To(ContainSubstring("no valid historian: section is configured"))
 		})
 
+		It("should render the configured historian instead of a bridge variable named historian", func() {
+			historian := &config.HistorianConfig{
+				Timescale: config.TimescaleConfig{Host: "timescale.internal", Password: "secret"},
+			}
+			spec := historianRefSpec("{{ .historian.timescale.host }}", "8080")
+			spec.Variables.User = map[string]any{
+				"historian": map[string]any{"timescale": map[string]any{"host": "user-defined-host"}},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(
+				spec, agentLocation, globalVars, historian, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("timescale.internal"))
+		})
+
+		It("should fail the render and name the ignored variable when a bridge variable named historian exists but no historian is configured", func() {
+			specWithoutVariable := historianRefSpec("{{ .historian.timescale.host }}", "8080")
+			specWithVariable := historianRefSpec("{{ .historian.timescale.host }}", "8080")
+			specWithVariable.Variables.User = map[string]any{
+				"historian": map[string]any{"timescale": map[string]any{"host": "user-defined-host"}},
+			}
+
+			_, errWithoutVariable := runtime_config.BuildRuntimeConfig(
+				specWithoutVariable, agentLocation, globalVars, nil, nodeName, pcName)
+			_, errWithVariable := runtime_config.BuildRuntimeConfig(
+				specWithVariable, agentLocation, globalVars, nil, nodeName, pcName)
+			Expect(errWithVariable).To(HaveOccurred())
+			Expect(errWithVariable.Error()).NotTo(Equal(errWithoutVariable.Error()))
+		})
+
 		It("should treat a present-but-invalid historian as absent for a referencing template", func() {
 			// Missing required Password, so Validate fails and it is not injected.
 			invalid := &config.HistorianConfig{Timescale: config.TimescaleConfig{Host: "timescale.internal"}}
