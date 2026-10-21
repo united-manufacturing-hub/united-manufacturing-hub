@@ -27,20 +27,6 @@ var ErrBenthosLogLines = []string{
 	"Config lint error",
 }
 
-// CheckBenthosLogLinesForConfigErrors examines a slice of S6 log entries for
-// Benthos configuration errors. It performs case-insensitive checks for known
-// error patterns combined with the word "error". Returns true if any errors
-// are detected, false otherwise.
-// This function is used to detect fatal configuration errors that would cause
-// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
-// abort the startup process rather than waiting for the full timeout period,
-// as these errors require configuration changes to resolve.
-func CheckBenthosLogLinesForConfigErrors(logs []s6.LogEntry) bool {
-	_, found := FindBenthosConfigError(logs)
-
-	return found
-}
-
 func FindBenthosConfigError(logs []s6.LogEntry) (string, bool) {
 	for _, log := range logs {
 		if isBenthosConfigErrorLine(log.Content) {

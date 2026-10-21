@@ -914,11 +914,12 @@ func (a *EditProtocolConverterAction) awaitRollout(
 					lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
 				}
 
-				// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
+				// FindBenthosConfigError is used to detect fatal configuration errors that would cause
 				// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
 				// abort the startup process rather than waiting for the full timeout period,
 				// as these errors require configuration changes to resolve.
-				if CheckBenthosLogLinesForConfigErrors(logs) {
+				configError, hasConfigError := FindBenthosConfigError(logs)
+				if hasConfigError {
 					SendActionReply(
 						a.instanceUUID,
 						a.userEmail,
@@ -943,7 +944,7 @@ func (a *EditProtocolConverterAction) awaitRollout(
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
 						deps.String("rollbackConfig", rollbackConfig.String()))
 
-					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration: %s", a.name, configError)
 				}
 
 				SendActionReply(

@@ -690,11 +690,12 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 							if len(logs) > len(lastLogs) {
 								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
 							}
-							// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
+							// FindBenthosConfigError is used to detect fatal configuration errors that would cause
 							// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
 							// abort the startup process rather than waiting for the full timeout period,
 							// as these errors require configuration changes to resolve.
-							if CheckBenthosLogLinesForConfigErrors(logs) {
+							configError, hasConfigError := FindBenthosConfigError(logs)
+							if hasConfigError {
 								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
 
 								// Create a fresh context for rollback operation since the original ctx may be expired or close to expiring
@@ -708,7 +709,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 									return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 								}
 
-								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration: %s", a.name, configError)
 							}
 
 							continue
