@@ -73,33 +73,9 @@ type NmapScanResult struct {
 	PortResult PortResult `json:"portResult"`
 	// Overall scan metrics
 	Metrics ScanMetrics `json:"metrics"`
-	// DialResult is nil on the fsmv1 backend, which does not record it.
-	DialResult *DialResult `json:"dialResult,omitempty"`
 	// DialError is the fsmv2 connection check's dial error, empty when the
 	// port is open and on the fsmv1 backend
 	DialError string `json:"dialError,omitempty"`
-}
-
-// DialFailure names why the fsmv2 connection check could not open a TCP connection.
-type DialFailure string
-
-const (
-	DialFailureDNSTimeout     DialFailure = "dns_timeout"
-	DialFailureDNSError       DialFailure = "dns_error"
-	DialFailureConnectTimeout DialFailure = "connect_timeout"
-	DialFailureRefused        DialFailure = "refused"
-	DialFailureUnreachable    DialFailure = "unreachable"
-	DialFailureUnknown        DialFailure = "unknown"
-)
-
-// DialResult is why the fsmv2 connection check's TCP dial failed and how long
-// its hostname lookup and TCP connect took.
-type DialResult struct {
-	// Failure is nil when the port is open.
-	Failure *DialFailure `json:"failure,omitempty"`
-	// ResolveMs covers the whole dial when the lookup failed.
-	ResolveMs float64 `json:"resolveMs"`
-	ConnectMs float64 `json:"connectMs"`
 }
 
 // PortResult contains the result for a specific port.

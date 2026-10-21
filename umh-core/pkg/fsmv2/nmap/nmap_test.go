@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 const unresolvableHost = "connection-check.invalid"
@@ -184,96 +183,6 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.PortState).To(Equal("closed"))
 		Expect(status.IsRunning).To(BeFalse())
-	})
-
-	It("records no failure when the port is open", func() {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		Expect(err).NotTo(HaveOccurred())
-
-		defer func() { _ = listener.Close() }()
-
-		host, port := hostPort(listener.Addr().String())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialResult.Failure).To(BeNil())
-	})
-
-	It("records a refused connection as refused", func() {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		Expect(err).NotTo(HaveOccurred())
-
-		host, port := hostPort(listener.Addr().String())
-		Expect(listener.Close()).To(Succeed())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
-
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialResult.Failure).To(HaveValue(Equal(nmapservice.DialFailureRefused)))
-	})
-
-	It("records a deadline hit while connecting to an IP address as a connect timeout", func() {
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
-		defer cancel()
-
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig("127.0.0.1", 1))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialResult.Failure).To(HaveValue(Equal(nmapservice.DialFailureConnectTimeout)))
-	})
-
-	It("records a deadline hit while looking up a hostname as a DNS timeout", func() {
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
-		defer cancel()
-
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialResult.Failure).To(HaveValue(Equal(nmapservice.DialFailureDNSTimeout)))
-	})
-
-	It("records a hostname that does not resolve as a DNS error", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialResult.Failure).To(HaveValue(Equal(nmapservice.DialFailureDNSError)))
-	})
-
-	It("splits the time of an open dial into the lookup and the connect", func() {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		Expect(err).NotTo(HaveOccurred())
-
-		defer func() { _ = listener.Close() }()
-
-		_, port := hostPort(listener.Addr().String())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		before := time.Now()
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig("localhost", port))
-		wallClockMs := float64(time.Since(before).Microseconds()) / 1000.0
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(status.PortState).To(Equal("open"))
-		Expect(status.DialResult.ResolveMs).To(BeNumerically(">", 0))
-		Expect(status.DialResult.ConnectMs).To(BeNumerically(">", 0))
-		Expect(status.DialResult.ResolveMs + status.DialResult.ConnectMs).To(BeNumerically("<=", wallClockMs))
-	})
-
-	It("attributes the whole time of a failed lookup to the lookup", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialResult.ResolveMs).To(BeNumerically(">", 0))
-		Expect(status.DialResult.ConnectMs).To(BeZero())
 	})
 
 	It("records no dial error when the port is open", func() {

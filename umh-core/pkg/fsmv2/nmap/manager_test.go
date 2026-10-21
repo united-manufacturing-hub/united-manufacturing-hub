@@ -31,7 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // stubManagerReader is a deps.StateReader that returns a fixed
@@ -169,37 +168,6 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.Target).To(Equal(target))
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.State).To(Equal("open"))
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.Port).To(Equal(port))
-	})
-
-	It("carries why a scan failed and how long the lookup and the connect took", func() {
-		stageClient(freshStatus(NmapStatus{
-			Target:    target,
-			PortState: "closed",
-			Port:      port,
-			DialResult: nmapservice.DialResult{
-				Failure:   new(nmapservice.DialFailureDNSTimeout),
-				ResolveMs: 2200,
-			},
-		}), nil)
-
-		mgr := NewFsmv2NmapManager("test")
-
-		err, _ := mgr.Reconcile(context.Background(), snapshotWith(nmapConfig("running")), nil)
-		Expect(err).NotTo(HaveOccurred())
-
-		observed, err := mgr.GetLastObservedState(name)
-		Expect(err).NotTo(HaveOccurred())
-
-		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
-		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
-
-		lastScan := nmapObserved.ServiceInfo.NmapStatus.LastScan
-		Expect(lastScan).NotTo(BeNil())
-		Expect(lastScan.DialResult).NotTo(BeNil())
-		Expect(lastScan.DialResult.Failure).To(HaveValue(Equal(nmapservice.DialFailureDNSTimeout)))
-		Expect(lastScan.DialResult.ResolveMs).To(Equal(2200.0))
-		Expect(lastScan.DialResult.ConnectMs).To(BeZero())
-		Expect(lastScan.Error).To(BeEmpty(), "Error means the scan itself failed and marks fsmv1 nmap unhealthy")
 	})
 
 	It("carries the dial error of a failed scan", func() {

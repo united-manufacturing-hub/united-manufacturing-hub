@@ -25,8 +25,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -61,9 +59,8 @@ type NmapStatus struct {
 	// ScannedAt is when the dial started. A consumer comparing it against the
 	// time a config edit was persisted can tell a scan of the new target from a
 	// leftover scan of the previous one, which no other field distinguishes.
-	ScannedAt  time.Time              `json:"scanned_at"`
-	DialResult nmapservice.DialResult `json:"dial_result"`
-	DialError  string                 `json:"dial_error,omitempty"`
+	ScannedAt time.Time `json:"scanned_at"`
+	DialError string    `json:"dial_error,omitempty"`
 }
 
 // Poll dials the configured target once and reports the port state. A
@@ -77,13 +74,9 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 
 	start := time.Now()
 
-	var timer resolveAndConnectTimer
-
-	dialer := net.Dialer{ControlContext: timer.recordConnectStart}
+	dialer := net.Dialer{}
 
 	conn, err := dialer.DialContext(ctx, "tcp", target)
-	resolveMs, connectMs := timer.resolveAndConnectMs(start, time.Now())
-
 	if err != nil {
 		// Worker shutdown cancels the context; surface it as an error so the
 		// framework does not misreport a shutdown as a port state. This
@@ -103,16 +96,11 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 			PortState: string(nmapservice.PortStateClosed),
 			Port:      cfg.NmapServiceConfig.Port,
 			ScannedAt: start,
-			DialResult: nmapservice.DialResult{
-				Failure:   new(classifyDialError(err)),
-				ResolveMs: resolveMs,
-				ConnectMs: connectMs,
-			},
 			DialError: err.Error(),
 		}, nil
 	}
 
-	elapsedMs := milliseconds(time.Since(start))
+	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
 	_ = conn.Close()
 
 	return NmapStatus{
@@ -122,65 +110,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 		Port:      cfg.NmapServiceConfig.Port,
 		IsRunning: true,
 		ScannedAt: start,
-		DialResult: nmapservice.DialResult{
-			ResolveMs: resolveMs,
-			ConnectMs: connectMs,
-		},
 	}, nil
-}
-
-type resolveAndConnectTimer struct {
-	connectStartedAt atomic.Pointer[time.Time]
-}
-
-func (t *resolveAndConnectTimer) recordConnectStart(context.Context, string, string, syscall.RawConn) error {
-	t.connectStartedAt.CompareAndSwap(nil, new(time.Now()))
-
-	return nil
-}
-
-func (t *resolveAndConnectTimer) resolveAndConnectMs(dialStart, dialEnd time.Time) (resolveMs, connectMs float64) {
-	connectStartedAt := t.connectStartedAt.Load()
-
-	connectNeverStarted := connectStartedAt == nil
-	if connectNeverStarted {
-		return milliseconds(dialEnd.Sub(dialStart)), 0
-	}
-
-	resolveDuration := connectStartedAt.Sub(dialStart)
-	connectDuration := dialEnd.Sub(*connectStartedAt)
-
-	return milliseconds(resolveDuration), milliseconds(connectDuration)
-}
-
-func milliseconds(duration time.Duration) float64 {
-	return float64(duration.Microseconds()) / 1000.0
-}
-
-func classifyDialError(err error) nmapservice.DialFailure {
-	var dnsError *net.DNSError
-	if errors.As(err, &dnsError) {
-		if dnsError.IsTimeout {
-			return nmapservice.DialFailureDNSTimeout
-		}
-
-		return nmapservice.DialFailureDNSError
-	}
-
-	if errors.Is(err, syscall.ECONNREFUSED) {
-		return nmapservice.DialFailureRefused
-	}
-
-	if errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH) {
-		return nmapservice.DialFailureUnreachable
-	}
-
-	var netError net.Error
-	if errors.As(err, &netError) && netError.Timeout() {
-		return nmapservice.DialFailureConnectTimeout
-	}
-
-	return nmapservice.DialFailureUnknown
 }
 
 func init() {
