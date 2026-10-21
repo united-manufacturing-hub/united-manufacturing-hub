@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- When a bridge's connection is down, the tooltip on the bridge's connection status now shows the error of the last connection check, such as a DNS lookup that timed out or a refused connection
+- When a bridge's connection is down, the tooltip on the bridge's connection status now says why, for example that the DNS lookup timed out or the device refused the connection, and what to check
 
 ### Fixes
 

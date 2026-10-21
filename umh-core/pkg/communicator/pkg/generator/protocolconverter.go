@@ -147,7 +147,7 @@ func buildProtocolConverterAsDfc(
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
 			URI:  fmt.Sprintf("%s:%s", target, port),
 			Health: &models.Health{
-				Message:       connectionHealthMessage(observed.ServiceInfo.ConnectionFSMState, lastScan),
+				Message:       connectionHealthMessage(observed.ServiceInfo.ConnectionFSMState, target, port, lastScan),
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
 				DesiredState:  "up", // Connection desired state is typically "up"
 				Category:      getHealthCategoryFromState(observed.ServiceInfo.ConnectionFSMState),
@@ -411,7 +411,7 @@ func getDFCHealthCategory(state string) models.HealthCategory {
 	}
 }
 
-func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult) string {
+func connectionHealthMessage(state string, target string, port string, lastScan *nmapservice.NmapScanResult) string {
 	connectionFailing := state == connection.OperationalStateDown || state == connection.OperationalStateDegraded
 	if !connectionFailing {
 		return state
@@ -421,11 +421,28 @@ func connectionHealthMessage(state string, lastScan *nmapservice.NmapScanResult)
 		return state
 	}
 
-	if lastScan.DialError == "" {
+	if lastScan.DialFailure == nil {
 		return state
 	}
 
-	return state + ": connection check failed: " + lastScan.DialError
+	return dialFailureMessage(*lastScan.DialFailure, target, port, lastScan.DialError)
+}
+
+func dialFailureMessage(failure nmapservice.DialFailure, target string, port string, dialError string) string {
+	switch failure {
+	case nmapservice.DialFailureDNSTimeout:
+		return fmt.Sprintf("The lookup of %s timed out. Check the DNS server this instance uses.", target)
+	case nmapservice.DialFailureDNSError:
+		return target + " could not be found. Check the host name in the bridge's connection, or use the IP address."
+	case nmapservice.DialFailureRefused:
+		return fmt.Sprintf("The device at %s refused the connection on port %s. Check the port and that the device's server is running.", target, port)
+	case nmapservice.DialFailureUnreachable:
+		return fmt.Sprintf("The device at %s can't be reached from this instance. Check the network route and the firewall.", target)
+	case nmapservice.DialFailureConnectTimeout:
+		return fmt.Sprintf("The device at %s isn't responding on port %s. Check if it's powered on and connected to the network.", target, port)
+	default:
+		return fmt.Sprintf("The connection check to %s:%s failed: %s", target, port, dialError)
+	}
 }
 
 // getHealthCategoryFromState converts a FSM state string to models.HealthCategory.
