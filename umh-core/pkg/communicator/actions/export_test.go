@@ -70,3 +70,7 @@ func FindBenthosConfigError(logs []s6.LogEntry, since time.Time) (string, bool) 
 func EditedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) ([]s6.LogEntry, []s6.LogEntry) {
 	return editedFlowLogs(dfcType, snapshot)
 }
+
+func (a *DeployProtocolConverterAction) SetFSMLogger(l deps.FSMLogger) {
+	a.fsmLogger = l
+}
