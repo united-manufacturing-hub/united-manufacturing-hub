@@ -60,28 +60,33 @@ func isBenthosConfigErrorLine(content string) bool {
 }
 
 func benthosConfigErrorText(content string) string {
-	lint, hasLint := lintValue(content)
-	if !hasLint {
-		return content
+	lint, hasLint := quotedFieldValue(content, "lint")
+	if hasLint {
+		return withoutConfigLocation(lint)
 	}
 
-	return withoutConfigLocation(lint)
+	message, hasMessage := quotedFieldValue(content, "msg")
+	if hasMessage {
+		return message
+	}
+
+	return content
 }
 
-func lintValue(content string) (string, bool) {
-	_, afterLintKey, hasLintKey := strings.Cut(content, ` lint=`)
-	if !hasLintKey {
+func quotedFieldValue(content string, key string) (string, bool) {
+	_, afterKey, hasKey := strings.Cut(content, " "+key+"=")
+	if !hasKey {
 		return "", false
 	}
 
-	quotedLint, quoteErr := strconv.QuotedPrefix(afterLintKey)
+	quotedValue, quoteErr := strconv.QuotedPrefix(afterKey)
 	if quoteErr != nil {
 		return "", false
 	}
 
-	lint, unquoteErr := strconv.Unquote(quotedLint)
+	value, unquoteErr := strconv.Unquote(quotedValue)
 
-	return lint, unquoteErr == nil
+	return value, unquoteErr == nil
 }
 
 var configLocationPrefix = regexp.MustCompile(`^\S+\(\d+,\d+\) `)
