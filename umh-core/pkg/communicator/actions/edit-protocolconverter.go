@@ -903,10 +903,6 @@ func (a *EditProtocolConverterAction) awaitRollout(
 				lastReadLogs = SendLimitedLogs(readLogs, lastReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
 				lastWriteLogs = SendLimitedLogs(writeLogs, lastWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
 
-				// findBenthosConfigError is used to detect fatal configuration errors that would cause
-				// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
-				// abort the startup process rather than waiting for the full timeout period,
-				// as these errors require configuration changes to resolve.
 				configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
 				if hasConfigError {
 					SendActionReply(
