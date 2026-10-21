@@ -28,70 +28,31 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-const (
-	checkedHost = "plc.local"
-	checkedPort = 4840
-)
+const refusedDialError = "dial tcp 192.168.1.100:4840: connect: connection refused"
 
-func failedScan(failure nmapservice.DialFailure, resolveMs, connectMs float64) *nmapservice.NmapScanResult {
-	return &nmapservice.NmapScanResult{
-		Target:     checkedHost,
-		PortResult: nmapservice.PortResult{Port: checkedPort},
-		DialResult: &nmapservice.DialResult{Failure: new(failure), ResolveMs: resolveMs, ConnectMs: connectMs},
-	}
-}
-
-func openScan() *nmapservice.NmapScanResult {
-	return &nmapservice.NmapScanResult{
-		Target:     checkedHost,
-		PortResult: nmapservice.PortResult{Port: checkedPort},
-		DialResult: &nmapservice.DialResult{ResolveMs: 1, ConnectMs: 1},
-	}
+func failedScan() *nmapservice.NmapScanResult {
+	return &nmapservice.NmapScanResult{DialError: refusedDialError}
 }
 
 var _ = Describe("connectionHealthMessage", func() {
-	It("names the host and the lookup time when the DNS lookup timed out", func() {
-		message := connectionHealthMessage(connection.OperationalStateDown, failedScan(nmapservice.DialFailureDNSTimeout, 2201.4, 0))
+	DescribeTable("adds the dial error to a failing connection's state",
+		func(state string) {
+			message := connectionHealthMessage(state, failedScan())
 
-		Expect(message).To(ContainSubstring(checkedHost))
-		Expect(message).To(ContainSubstring("2201 ms"))
-	})
-
-	It("names the endpoint and both times when the connect timed out", func() {
-		message := connectionHealthMessage(connection.OperationalStateDown, failedScan(nmapservice.DialFailureConnectTimeout, 2100, 100))
-
-		Expect(message).To(ContainSubstring("plc.local:4840"))
-		Expect(message).To(ContainSubstring("2100 ms"))
-		Expect(message).To(ContainSubstring("100 ms"))
-	})
-
-	DescribeTable("gives each failure class its own message",
-		func(failure nmapservice.DialFailure) {
-			message := connectionHealthMessage(connection.OperationalStateDown, failedScan(failure, 10, 0))
-
-			Expect(message).To(ContainSubstring(checkedHost))
-			Expect(message).NotTo(Equal(connection.OperationalStateDown))
+			Expect(message).To(HavePrefix(state))
+			Expect(message).To(HaveSuffix(refusedDialError))
 		},
-		Entry("dns_error", nmapservice.DialFailureDNSError),
-		Entry("refused", nmapservice.DialFailureRefused),
-		Entry("unreachable", nmapservice.DialFailureUnreachable),
+		Entry("down", connection.OperationalStateDown),
+		Entry("degraded", connection.OperationalStateDegraded),
 	)
 
-	It("names the cause on a degraded connection too", func() {
-		message := connectionHealthMessage(connection.OperationalStateDegraded, failedScan(nmapservice.DialFailureRefused, 1, 0))
-
-		Expect(message).To(ContainSubstring(checkedHost))
-	})
-
-	DescribeTable("falls back to the state when there is no cause to name",
+	DescribeTable("falls back to the state when there is no dial error to show",
 		func(state string, lastScan *nmapservice.NmapScanResult) {
 			Expect(connectionHealthMessage(state, lastScan)).To(Equal(state))
 		},
-		Entry("connection up", connection.OperationalStateUp, failedScan(nmapservice.DialFailureRefused, 1, 0)),
+		Entry("connection up", connection.OperationalStateUp, failedScan()),
 		Entry("no scan yet", connection.OperationalStateDown, nil),
-		Entry("fsmv1 backend records no dial", connection.OperationalStateDown, &nmapservice.NmapScanResult{Target: checkedHost}),
-		Entry("port open on the last scan", connection.OperationalStateDegraded, openScan()),
-		Entry("unknown failure", connection.OperationalStateDown, failedScan(nmapservice.DialFailureUnknown, 1, 0)),
+		Entry("fsmv1 backend or port open on the last scan", connection.OperationalStateDown, &nmapservice.NmapScanResult{}),
 	)
 })
 
