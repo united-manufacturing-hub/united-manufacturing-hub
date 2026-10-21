@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -27,8 +28,12 @@ var benthosConfigErrorPatterns = []string{
 	"Config lint error",
 }
 
-func findBenthosConfigError(logs []s6.LogEntry) (string, bool) {
+func findBenthosConfigError(logs []s6.LogEntry, since time.Time) (string, bool) {
 	for _, log := range logs {
+		if log.Timestamp.Before(since) {
+			continue
+		}
+
 		if isBenthosConfigErrorLine(log.Content) {
 			return benthosConfigErrorText(log.Content), true
 		}
