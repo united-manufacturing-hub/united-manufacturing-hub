@@ -548,8 +548,8 @@ func (a *EditProtocolConverterAction) awaitRollout(
 	timeoutDuration := timeoutInterval
 
 	var (
-		logs     []s6.LogEntry
-		lastLogs []s6.LogEntry
+		lastReadLogs  []s6.LogEntry
+		lastWriteLogs []s6.LogEntry
 
 		// Fail-fast on persistent render failures (ENG-5103): a deterministic
 		// render error repeats identically every tick; abort after a few
@@ -899,26 +899,15 @@ func (a *EditProtocolConverterAction) awaitRollout(
 					currentStateReason = pcSnapshot.ServiceInfo.StatusReason
 				}
 
-				// send the benthos logs to the user; for DFCTypeBoth, prefer write logs since
-				// read logs are also included below via the merged slice.
-
-				switch a.dfcType {
-				case DFCTypeWrite, DFCTypeBoth:
-					logs = pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-				default:
-					logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-				}
-
-				// only send the logs that have not been sent yet
-				if len(logs) > len(lastLogs) {
-					lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
-				}
+				readLogs, writeLogs := editedFlowLogs(a.dfcType, pcSnapshot)
+				lastReadLogs = SendLimitedLogs(readLogs, lastReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
+				lastWriteLogs = SendLimitedLogs(writeLogs, lastWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
 
 				// findBenthosConfigError is used to detect fatal configuration errors that would cause
 				// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
 				// abort the startup process rather than waiting for the full timeout period,
 				// as these errors require configuration changes to resolve.
-				configError, hasConfigError := findBenthosConfigError(logs, startTime)
+				configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
 				if hasConfigError {
 					SendActionReply(
 						a.instanceUUID,
@@ -944,7 +933,7 @@ func (a *EditProtocolConverterAction) awaitRollout(
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
 						deps.String("rollbackConfig", rollbackConfig.String()))
 
-					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration: %s", a.name, configError)
+					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration: %s", a.name, configError.message)
 				}
 
 				SendActionReply(
@@ -970,6 +959,20 @@ func (a *EditProtocolConverterAction) awaitRollout(
 				)
 			}
 		}
+	}
+}
+
+func editedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) ([]s6.LogEntry, []s6.LogEntry) {
+	readLogs := flowBenthosLogs(snapshot.ServiceInfo.DataflowComponentReadObservedState)
+	writeLogs := flowBenthosLogs(snapshot.ServiceInfo.DataflowComponentWriteObservedState)
+
+	switch dfcType {
+	case DFCTypeBoth:
+		return readLogs, writeLogs
+	case DFCTypeWrite:
+		return nil, writeLogs
+	default:
+		return readLogs, nil
 	}
 }
 

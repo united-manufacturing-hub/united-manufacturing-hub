@@ -66,3 +66,7 @@ func (a *DeployProtocolConverterAction) SetAwaitTimeout(d time.Duration) {
 func FindBenthosConfigError(logs []s6.LogEntry, since time.Time) (string, bool) {
 	return findBenthosConfigError(logs, since)
 }
+
+func EditedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) ([]s6.LogEntry, []s6.LogEntry) {
+	return editedFlowLogs(dfcType, snapshot)
+}
