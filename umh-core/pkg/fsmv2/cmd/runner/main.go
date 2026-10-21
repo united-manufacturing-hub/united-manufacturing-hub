@@ -42,6 +42,15 @@ func main() {
 		listFlag     = flag.Bool("list", false, "list available scenarios and exit")
 		traceFlag    = flag.Bool("trace", false, "enable trace logging")
 		dumpStore    = flag.Bool("dump-store", false, "dump store deltas and final state after scenario")
+
+		// transport-load scenario flags. Zero means the scenario picks its own
+		// documented default; see TransportLoadConfig in examples/transport_load_scenario.go.
+		subscribers  = flag.Int("subscribers", 0, "transport-load: number of independent message streams, 0 means the scenario default (1)")
+		topicCount   = flag.Int("topic-count", 0, "transport-load: topic count that derives the payload size, 0 means payload-bytes is used instead")
+		payloadBytes = flag.Int("payload-bytes", 0, "transport-load: payload size in bytes per message when topic-count is 0, 0 means the scenario default (1024)")
+		bandwidth    = flag.Int("bandwidth", 0, "transport-load: uplink bandwidth limit in bytes per second, 0 means unthrottled")
+		burstBytes   = flag.Int("burst-bytes", 0, "transport-load: size in bytes of an oversized message sent on top of the streams, 0 means no burst")
+		burstEvery   = flag.Duration("burst-every", 0, "transport-load: interval between bursts, 0 means send the burst once")
 	)
 
 	flag.Parse()
@@ -190,6 +199,14 @@ func main() {
 		Store:              store,
 		EnableTraceLogging: *traceFlag,
 		DumpStore:          *dumpStore,
+		TransportLoad: examples.TransportLoadConfig{
+			Subscribers:             *subscribers,
+			TopicCount:              *topicCount,
+			PayloadBytes:            *payloadBytes,
+			BandwidthBytesPerSecond: *bandwidth,
+			BurstBytes:              *burstBytes,
+			BurstEvery:              *burstEvery,
+		},
 	})
 	if err != nil {
 		if isCleanInterruptExit(err, ctx.Err()) {
