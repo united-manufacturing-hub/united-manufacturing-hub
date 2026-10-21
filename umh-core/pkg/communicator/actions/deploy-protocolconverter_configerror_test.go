@@ -293,7 +293,7 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 		_, err := deployPayload(bothFlowsPayload)
 
 		Expect(err).To(MatchError(ContainSubstring(lintErrorText)))
-		Expect(err).To(MatchError(ContainSubstring(inferErrorLine)))
+		Expect(err).To(MatchError(ContainSubstring(inferErrorText)))
 	})
 
 	It("reports a rejected setting to Sentry apart from a timeout", func() {
