@@ -535,7 +535,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 						sentReadLogs = a.sendNewLogs(readLogs, sentReadLogs, remainingSeconds)
 						sentWriteLogs = a.sendNewLogs(writeLogs, sentWriteLogs, remainingSeconds)
 
-						configError, hasConfigError := findFlowConfigError(readLogs, writeLogs)
+						configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
 						if hasConfigError {
 							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError.message)
 
@@ -580,9 +580,9 @@ func (a *DeployProtocolConverterAction) sendNewLogs(logs []s6.LogEntry, sentLogs
 	return SendLimitedLogs(logs, sentLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 }
 
-func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry) (flowConfigError, bool) {
-	readMessage, readHasError := findBenthosConfigError(readLogs)
-	writeMessage, writeHasError := findBenthosConfigError(writeLogs)
+func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry, since time.Time) (flowConfigError, bool) {
+	readMessage, readHasError := findBenthosConfigError(readLogs, since)
+	writeMessage, writeHasError := findBenthosConfigError(writeLogs, since)
 	flows := flowSelection{read: readHasError, write: writeHasError}
 
 	if readHasError {

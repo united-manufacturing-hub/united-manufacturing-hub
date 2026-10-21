@@ -63,6 +63,6 @@ func (a *DeployProtocolConverterAction) SetAwaitTimeout(d time.Duration) {
 	a.awaitTimeout = d
 }
 
-func FindBenthosConfigError(logs []s6.LogEntry) (string, bool) {
-	return findBenthosConfigError(logs)
+func FindBenthosConfigError(logs []s6.LogEntry, since time.Time) (string, bool) {
+	return findBenthosConfigError(logs, since)
 }
