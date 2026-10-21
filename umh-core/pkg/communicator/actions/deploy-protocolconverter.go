@@ -426,10 +426,9 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 }
 
 // waitForComponentToAppear polls live FSM state until the new component
-// reaches the desired state or the timeout hits (→ delete unless ignoreHealthCheck).
-// the function returns the error code and the error message via an error object
-// the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
-// the error message is sent to the frontend to allow the user to see the error message.
+// reaches the desired state, a flow logs a benthos config error, or the timeout hits.
+// It returns the error code the frontend uses to decide whether a retry can help,
+// the last snapshot, the flows that logged a config error, and the user-facing error.
 func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, *protocolconverter.ProtocolConverterObservedStateSnapshot, flowSelection, error) {
 	tickInterval := a.tickInterval
 	if tickInterval == 0 {
@@ -585,8 +584,8 @@ func flowsToStopAfterFailedDeploy(flowsWithConfigError flowSelection, snapshot *
 }
 
 // flowsToStop decides which dataflow components to flip to stopped after a failed
-// deploy. A flow is stopped only when it was meant to run (desired active) and did
-// not reach a healthy state.
+// deploy that no config error explains: the active flows that did not reach a
+// healthy state, or every active flow when none is unhealthy or nothing was observed.
 func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
 	// No observed state: can't isolate the failure, so stop every active flow.
 	if snapshot == nil {
