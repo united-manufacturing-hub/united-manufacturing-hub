@@ -125,6 +125,8 @@ func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.Obs
 						LatencyMs: s.Result.LatencyMs,
 						Port:      s.Result.Port,
 					},
+					DialFailure: s.Result.DialFailure,
+					DialError:   s.Result.DialError,
 				},
 			},
 		},

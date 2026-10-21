@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- When a bridge's connection is down, the tooltip on the bridge's connection status now says why, for example that the DNS lookup timed out or the device refused the connection, and what to check
+
 ### Fixes
 
 - The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
