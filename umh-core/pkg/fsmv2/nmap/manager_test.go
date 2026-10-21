@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // stubManagerReader is a deps.StateReader that returns a fixed
@@ -170,14 +171,15 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.Port).To(Equal(port))
 	})
 
-	It("carries the dial error of a failed scan", func() {
+	It("carries the dial failure and the dial error of a failed scan", func() {
 		dialError := "dial tcp: lookup plc.local: i/o timeout"
 
 		stageClient(freshStatus(NmapStatus{
-			Target:    target,
-			PortState: "closed",
-			Port:      port,
-			DialError: dialError,
+			Target:      target,
+			PortState:   "closed",
+			Port:        port,
+			DialFailure: new(nmapservice.DialFailureDNSTimeout),
+			DialError:   dialError,
 		}), nil)
 
 		mgr := NewFsmv2NmapManager("test")
@@ -193,6 +195,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 
 		lastScan := nmapObserved.ServiceInfo.NmapStatus.LastScan
 		Expect(lastScan).NotTo(BeNil())
+		Expect(lastScan.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSTimeout)))
 		Expect(lastScan.DialError).To(Equal(dialError))
 		Expect(lastScan.Error).To(BeEmpty(), "Error means the scan itself failed and marks fsmv1 nmap unhealthy")
 	})

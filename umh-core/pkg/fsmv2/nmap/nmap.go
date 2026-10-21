@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -59,8 +60,9 @@ type NmapStatus struct {
 	// ScannedAt is when the dial started. A consumer comparing it against the
 	// time a config edit was persisted can tell a scan of the new target from a
 	// leftover scan of the previous one, which no other field distinguishes.
-	ScannedAt time.Time `json:"scanned_at"`
-	DialError string    `json:"dial_error,omitempty"`
+	ScannedAt   time.Time                `json:"scanned_at"`
+	DialFailure *nmapservice.DialFailure `json:"dial_failure,omitempty"`
+	DialError   string                   `json:"dial_error,omitempty"`
 }
 
 // Poll dials the configured target once and reports the port state. A
@@ -91,12 +93,15 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 			}, fmt.Errorf("scan cancelled: %w", ctx.Err())
 		}
 
+		failure := classifyDialError(err)
+
 		return NmapStatus{
-			Target:    cfg.NmapServiceConfig.Target,
-			PortState: string(nmapservice.PortStateClosed),
-			Port:      cfg.NmapServiceConfig.Port,
-			ScannedAt: start,
-			DialError: err.Error(),
+			Target:      cfg.NmapServiceConfig.Target,
+			PortState:   string(nmapservice.PortStateClosed),
+			Port:        cfg.NmapServiceConfig.Port,
+			ScannedAt:   start,
+			DialFailure: &failure,
+			DialError:   err.Error(),
 		}, nil
 	}
 
@@ -111,6 +116,32 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 		IsRunning: true,
 		ScannedAt: start,
 	}, nil
+}
+
+func classifyDialError(err error) nmapservice.DialFailure {
+	var dnsError *net.DNSError
+	if errors.As(err, &dnsError) {
+		if dnsError.IsTimeout {
+			return nmapservice.DialFailureDNSTimeout
+		}
+
+		return nmapservice.DialFailureDNSError
+	}
+
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return nmapservice.DialFailureRefused
+	}
+
+	if errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH) {
+		return nmapservice.DialFailureUnreachable
+	}
+
+	var netError net.Error
+	if errors.As(err, &netError) && netError.Timeout() {
+		return nmapservice.DialFailureConnectTimeout
+	}
+
+	return nmapservice.DialFailureUnknown
 }
 
 func init() {
