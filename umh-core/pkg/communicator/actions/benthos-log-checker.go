@@ -52,23 +52,33 @@ func isBenthosConfigErrorLine(content string) bool {
 	return false
 }
 
-var lintLocationPrefix = regexp.MustCompile(`^\S+\(\d+,\d+\) `)
-
 func benthosConfigErrorText(content string) string {
+	lint, hasLint := lintValue(content)
+	if !hasLint {
+		return content
+	}
+
+	return withoutConfigLocation(lint)
+}
+
+func lintValue(content string) (string, bool) {
 	_, afterLintKey, hasLintKey := strings.Cut(content, ` lint=`)
 	if !hasLintKey {
-		return content
+		return "", false
 	}
 
 	quotedLint, quoteErr := strconv.QuotedPrefix(afterLintKey)
 	if quoteErr != nil {
-		return content
+		return "", false
 	}
 
 	lint, unquoteErr := strconv.Unquote(quotedLint)
-	if unquoteErr != nil {
-		return content
-	}
 
-	return lintLocationPrefix.ReplaceAllString(lint, "")
+	return lint, unquoteErr == nil
+}
+
+var configLocationPrefix = regexp.MustCompile(`^\S+\(\d+,\d+\) `)
+
+func withoutConfigLocation(lint string) string {
+	return configLocationPrefix.ReplaceAllString(lint, "")
 }
