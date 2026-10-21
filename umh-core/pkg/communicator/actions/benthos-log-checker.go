@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -86,4 +87,34 @@ var configLocationPrefix = regexp.MustCompile(`^\S+\(\d+,\d+\) `)
 
 func withoutConfigLocation(lint string) string {
 	return configLocationPrefix.ReplaceAllString(lint, "")
+}
+
+type flowSelection struct {
+	read  bool
+	write bool
+}
+
+type flowConfigError struct {
+	message string
+	flows   flowSelection
+}
+
+func flowBenthosLogs(flow dataflowcomponent.DataflowComponentObservedState) []s6.LogEntry {
+	return flow.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+}
+
+func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry, since time.Time) (flowConfigError, bool) {
+	readMessage, readHasError := findBenthosConfigError(readLogs, since)
+	writeMessage, writeHasError := findBenthosConfigError(writeLogs, since)
+	flows := flowSelection{read: readHasError, write: writeHasError}
+
+	if readHasError {
+		return flowConfigError{message: readMessage, flows: flows}, true
+	}
+
+	if writeHasError {
+		return flowConfigError{message: writeMessage, flows: flows}, true
+	}
+
+	return flowConfigError{}, false
 }
