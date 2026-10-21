@@ -26,14 +26,15 @@ var ErrNotSerializable = errors.New("secrets: value cannot be encoded")
 // placeholder is what a Value prints instead of the string it holds.
 const placeholder = "[secret]"
 
-// box holds the string behind a pointer so that fmt, printing a Value kept in
-// an unexported field of another struct, shows an address instead of the string.
+// box holds the string inside a closure, so fmt has no string field to print:
+// it cannot call Format or String through an unexported field of another
+// struct, so what it prints is the closure's function address.
 type box struct {
-	s string
+	reveal func() string
 }
 
 // Value holds a string that must not appear in logs or serialized state.
-// The string sits behind a pointer in an unexported struct, and Format prints
+// The string sits behind a closure in an unexported struct, and Format prints
 // the placeholder for every verb, so no fmt verb or log field can write it.
 type Value struct {
 	p *box
@@ -41,7 +42,7 @@ type Value struct {
 
 // NewValue builds a Value holding s.
 func NewValue(s string) Value {
-	return Value{p: &box{s: s}}
+	return Value{p: &box{reveal: func() string { return s }}}
 }
 
 // Reveal returns the held string.
@@ -49,10 +50,12 @@ func (v Value) Reveal() string {
 	if v.p == nil {
 		return ""
 	}
-	return v.p.s
+	return v.p.reveal()
 }
 
-// Format implements fmt.Formatter and prints the placeholder for every verb.
+// Format prints the placeholder for every verb. fmt calls it for every verb
+// except %T and %p; %T prints the type name and %p an address, and neither
+// writes the string.
 func (v Value) Format(f fmt.State, verb rune) {
 	_, _ = io.WriteString(f, placeholder)
 }

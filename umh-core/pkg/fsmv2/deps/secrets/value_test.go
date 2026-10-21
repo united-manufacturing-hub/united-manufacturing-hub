@@ -26,6 +26,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -35,7 +36,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/secrets"
 )
 
-// planted is the string every assertion below expects to stay out of output.
+// planted is the string the printing and encoding assertions expect to stay
+// out of output; the Reveal assertion checks it comes back unchanged.
 const planted = "p1aNt3d-S3cr3t-Xq9"
 
 var _ = Describe("Value", func() {
@@ -123,11 +125,28 @@ var _ = Describe("Value", func() {
 			v secrets.Value
 		}
 
-		o := withValue{v: secrets.NewValue(planted)}
-		for _, verb := range []string{"%v", "%+v", "%#v"} {
-			out := fmt.Sprintf(verb, o)
-			Expect(out).NotTo(ContainSubstring(planted), "for verb "+verb)
+		type withExported struct {
+			V secrets.Value
 		}
+
+		o := withValue{v: secrets.NewValue(planted)}
+		e := withExported{V: secrets.NewValue(planted)}
+		for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%q", "%x", "%d"} {
+			out := fmt.Sprintf(verb, o)
+			Expect(out).NotTo(ContainSubstring(planted), "unexported field, for verb "+verb)
+			out = fmt.Sprintf(verb, e)
+			Expect(out).NotTo(ContainSubstring(planted), "exported field, for verb "+verb)
+		}
+	})
+
+	It("checks that Gomega's object formatter writes no bytes of the value", func() {
+		v := secrets.NewValue(planted)
+
+		out := format.Object(v, 0)
+		Expect(out).NotTo(ContainSubstring(planted))
+
+		out = format.Object(struct{ v secrets.Value }{v}, 0)
+		Expect(out).NotTo(ContainSubstring(planted))
 	})
 
 	It("checks that Reveal returns the held string", func() {
