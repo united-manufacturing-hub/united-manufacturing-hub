@@ -530,24 +530,16 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 							currentStateReason = pcSnapshot.ServiceInfo.StatusReason
 						}
 
-						readLogs := pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-						writeLogs := pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-						sentReadLogs = SendLimitedLogs(readLogs, sentReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
-						sentWriteLogs = SendLimitedLogs(writeLogs, sentWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
+						readLogs := flowBenthosLogs(pcSnapshot.ServiceInfo.DataflowComponentReadObservedState)
+						writeLogs := flowBenthosLogs(pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState)
+						sentReadLogs = a.sendNewLogs(readLogs, sentReadLogs, remainingSeconds)
+						sentWriteLogs = a.sendNewLogs(writeLogs, sentWriteLogs, remainingSeconds)
 
-						readConfigError, readHasConfigError := FindBenthosConfigError(readLogs)
-						writeConfigError, writeHasConfigError := FindBenthosConfigError(writeLogs)
+						configError, hasConfigError := findFlowConfigError(readLogs, writeLogs)
+						if hasConfigError {
+							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError.message)
 
-						if readHasConfigError || writeHasConfigError {
-							configError := readConfigError
-							if !readHasConfigError {
-								configError = writeConfigError
-							}
-
-							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError)
-							flowsWithConfigError := flowSelection{read: readHasConfigError, write: writeHasConfigError}
-
-							return models.ErrConfigFileInvalid, lastSnapshot, flowsWithConfigError, errors.New(errorMsg)
+							return models.ErrConfigFileInvalid, lastSnapshot, configError.flows, errors.New(errorMsg)
 						}
 					}
 
@@ -573,6 +565,35 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 type flowSelection struct {
 	read  bool
 	write bool
+}
+
+type flowConfigError struct {
+	message string
+	flows   flowSelection
+}
+
+func flowBenthosLogs(flow dataflowcomponent.DataflowComponentObservedState) []s6.LogEntry {
+	return flow.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+}
+
+func (a *DeployProtocolConverterAction) sendNewLogs(logs []s6.LogEntry, sentLogs []s6.LogEntry, remainingSeconds int) []s6.LogEntry {
+	return SendLimitedLogs(logs, sentLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
+}
+
+func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry) (flowConfigError, bool) {
+	readMessage, readHasError := FindBenthosConfigError(readLogs)
+	writeMessage, writeHasError := FindBenthosConfigError(writeLogs)
+	flows := flowSelection{read: readHasError, write: writeHasError}
+
+	if readHasError {
+		return flowConfigError{message: readMessage, flows: flows}, true
+	}
+
+	if writeHasError {
+		return flowConfigError{message: writeMessage, flows: flows}, true
+	}
+
+	return flowConfigError{}, false
 }
 
 func flowsToStopAfterFailedDeploy(flowsWithConfigError flowSelection, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
