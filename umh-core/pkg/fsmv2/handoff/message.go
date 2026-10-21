@@ -14,11 +14,15 @@
 
 package handoff
 
-// Message is what an FSMv2 worker gives to the router: the message bytes as
-// received, the sender the message names, and a trace ID. SenderEmail is not
-// proof of who sent the message.
+// Message carries a received message for the router in pkg/communicator/router
+// to consume.
 type Message struct {
-	Content     []byte
+	// Content holds the message bytes as received. The caller must not modify
+	// Content after handing the Message over.
+	Content []byte
+	// SenderEmail is the sender the message names. SenderEmail is not proof
+	// of who sent the message.
 	SenderEmail string
-	TraceID     string
+	// TraceID is the trace ID.
+	TraceID string
 }
