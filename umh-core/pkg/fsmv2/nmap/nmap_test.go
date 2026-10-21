@@ -26,11 +26,47 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 const unresolvableHost = "connection-check.invalid"
+
+var nmapIdentity = deps.Identity{
+	ID:            "nmap-001",
+	Name:          "nmap",
+	WorkerType:    fsmv2nmap.WorkerType,
+	HierarchyPath: "parent(protocolconverter)/nmap-001(" + fsmv2nmap.WorkerType + ")",
+}
+
+func depsWithLogger(logger deps.FSMLogger) fsmv2nmap.Deps {
+	return fsmv2nmap.Deps{BaseDependencies: deps.NewBaseDependencies(logger, nil, nmapIdentity)}
+}
+
+func nopDeps() fsmv2nmap.Deps {
+	return depsWithLogger(deps.NewNopFSMLogger())
+}
+
+type sentryEvent struct {
+	feature deps.Feature
+	message string
+}
+
+type recordingLogger struct {
+	deps.FSMLogger
+
+	events *[]sentryEvent
+}
+
+func (l recordingLogger) With(fields ...deps.Field) deps.FSMLogger {
+	return recordingLogger{FSMLogger: l.FSMLogger.With(fields...), events: l.events}
+}
+
+func (l recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath, msg string, fields ...deps.Field) {
+	*l.events = append(*l.events, sentryEvent{feature: feature, message: msg})
+	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
+}
 
 // newNmapConfig builds a valid config.NmapConfig pointing Poll at target:port.
 func newNmapConfig(target string, port uint16) config.NmapConfig {
@@ -66,7 +102,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.PortState).To(Equal("open"))
 		Expect(status.Port).To(Equal(port))
@@ -86,7 +122,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		st, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		st, err := fsmv2nmap.Poll(ctx, nopDeps(), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(st.Target).To(Equal(host), "Poll must record the target it dialed")
@@ -112,19 +148,19 @@ var _ = Describe("Nmap Poll", func() {
 		openCtx, cancelOpen := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancelOpen()
 
-		openStatus, err := fsmv2nmap.Poll(openCtx, struct{}{}, newNmapConfig(openHost, openPort))
+		openStatus, err := fsmv2nmap.Poll(openCtx, nopDeps(), newNmapConfig(openHost, openPort))
 		Expect(err).NotTo(HaveOccurred())
 
 		refusedCtx, cancelRefused := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancelRefused()
 
-		refusedStatus, err := fsmv2nmap.Poll(refusedCtx, struct{}{}, newNmapConfig(refusedHost, refusedPort))
+		refusedStatus, err := fsmv2nmap.Poll(refusedCtx, nopDeps(), newNmapConfig(refusedHost, refusedPort))
 		Expect(err).NotTo(HaveOccurred())
 
 		cancelledCtx, cancelNow := context.WithCancel(context.Background())
 		cancelNow()
 
-		cancelledStatus, err := fsmv2nmap.Poll(cancelledCtx, struct{}{}, newNmapConfig(openHost, openPort))
+		cancelledStatus, err := fsmv2nmap.Poll(cancelledCtx, nopDeps(), newNmapConfig(openHost, openPort))
 		Expect(err).To(HaveOccurred())
 
 		after := time.Now()
@@ -158,7 +194,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.PortState).To(Equal("closed"))
 		Expect(status.IsRunning).To(BeFalse())
@@ -180,7 +216,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.PortState).To(Equal("closed"))
 		Expect(status.IsRunning).To(BeFalse())
@@ -197,7 +233,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(host, port))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialError).To(BeEmpty())
 	})
@@ -212,7 +248,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(host, port))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialError).To(ContainSubstring(listener.Addr().String()))
 		Expect(status.DialError).To(ContainSubstring("refused"))
@@ -222,7 +258,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig("127.0.0.1", 1))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig("127.0.0.1", 1))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialError).To(ContainSubstring("127.0.0.1:1"))
 		Expect(status.DialError).NotTo(ContainSubstring("lookup"))
@@ -232,7 +268,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(unresolvableHost, 80))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialError).To(ContainSubstring("lookup " + unresolvableHost))
 	})
@@ -241,7 +277,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(unresolvableHost, 80))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialError).To(ContainSubstring("lookup " + unresolvableHost))
 	})
@@ -257,7 +293,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(host, port))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialFailure).To(BeNil())
 	})
@@ -272,7 +308,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(host, port))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureRefused)))
 	})
@@ -281,7 +317,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig("127.0.0.1", 1))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig("127.0.0.1", 1))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureConnectTimeout)))
 	})
@@ -290,7 +326,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(unresolvableHost, 80))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSTimeout)))
 	})
@@ -299,9 +335,38 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(unresolvableHost, 80))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSError)))
+	})
+
+	It("reports an unclassified dial failure to Sentry under the nmap feature", func() {
+		var events []sentryEvent
+
+		recordingDeps := depsWithLogger(recordingLogger{FSMLogger: deps.NewNopFSMLogger(), events: &events})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, recordingDeps, newNmapConfig("[malformed", 80))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureUnknown)))
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].feature).To(Equal(deps.FeatureForWorker(fsmv2nmap.WorkerType)))
+	})
+
+	It("reports a classified dial failure nowhere", func() {
+		var events []sentryEvent
+
+		recordingDeps := depsWithLogger(recordingLogger{FSMLogger: deps.NewNopFSMLogger(), events: &events})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, recordingDeps, newNmapConfig(unresolvableHost, 80))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSError)))
+		Expect(events).To(BeEmpty())
 	})
 
 	It("returns quickly with an error when the context is already cancelled", func() {
@@ -316,7 +381,7 @@ var _ = Describe("Nmap Poll", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		status, err := fsmv2nmap.Poll(ctx, nopDeps(), cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(status.PortState).NotTo(Equal("open"))
 	})

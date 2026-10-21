@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
@@ -65,13 +66,22 @@ type NmapStatus struct {
 	DialError   string                   `json:"dial_error,omitempty"`
 }
 
+// Deps carries this instance's BaseDependencies, whose logger Poll reports to.
+type Deps struct {
+	*deps.BaseDependencies
+}
+
+func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
+	return Deps{BaseDependencies: bd}
+}
+
 // Poll dials the configured target once and reports the port state. A
 // successful dial yields an open/running status with the measured latency; any
 // dial failure yields a closed port. A closed port is a legitimate scan
 // outcome, not a poll failure, so Poll returns it with a nil error. Poll
 // returns an error only when the context is cancelled (worker shutdown), so the
 // framework does not misreport a shutdown as a port state.
-func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, error) {
+func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error) {
 	target := net.JoinHostPort(cfg.NmapServiceConfig.Target, strconv.Itoa(int(cfg.NmapServiceConfig.Port)))
 
 	start := time.Now()
@@ -94,6 +104,11 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 		}
 
 		failure := classifyDialError(err)
+		if failure == nmapservice.DialFailureUnknown {
+			d.GetLogger().SentryWarn(deps.FeatureForWorker(WorkerType), d.GetHierarchyPath(), "nmap::dial_failure_unknown",
+				deps.String("target", target),
+				deps.Err(err))
+		}
 
 		return NmapStatus{
 			Target:      cfg.NmapServiceConfig.Target,
@@ -145,9 +160,10 @@ func classifyDialError(err error) nmapservice.DialFailure {
 }
 
 func init() {
-	simple.Register(simple.MonitorSpec[config.NmapConfig, NmapStatus, struct{}]{
+	simple.Register(simple.MonitorSpec[config.NmapConfig, NmapStatus, Deps]{
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		Poll:       Poll,
+		NewDeps:    newDeps,
 	})
 }
