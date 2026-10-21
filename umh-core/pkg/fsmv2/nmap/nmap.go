@@ -63,6 +63,7 @@ type NmapStatus struct {
 	// leftover scan of the previous one, which no other field distinguishes.
 	ScannedAt  time.Time              `json:"scanned_at"`
 	DialResult nmapservice.DialResult `json:"dial_result"`
+	DialError  string                 `json:"dial_error,omitempty"`
 }
 
 // Poll dials the configured target once and reports the port state. A
@@ -107,6 +108,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 				ResolveMs: resolveMs,
 				ConnectMs: connectMs,
 			},
+			DialError: err.Error(),
 		}, nil
 	}
 

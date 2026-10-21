@@ -128,6 +128,7 @@ func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.Obs
 						Port:      s.Result.Port,
 					},
 					DialResult: &dialResult,
+					DialError:  s.Result.DialError,
 				},
 			},
 		},

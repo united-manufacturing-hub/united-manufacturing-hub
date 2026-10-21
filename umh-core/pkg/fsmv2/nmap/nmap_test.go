@@ -276,6 +276,66 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(status.DialResult.ConnectMs).To(BeZero())
 	})
 
+	It("records no dial error when the port is open", func() {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() { _ = listener.Close() }()
+
+		host, port := hostPort(listener.Addr().String())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.DialError).To(BeEmpty())
+	})
+
+	It("records the dial error of a refused connection", func() {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		host, port := hostPort(listener.Addr().String())
+		Expect(listener.Close()).To(Succeed())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(host, port))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.DialError).To(ContainSubstring(listener.Addr().String()))
+		Expect(status.DialError).To(ContainSubstring("refused"))
+	})
+
+	It("names the address when the deadline hits while connecting", func() {
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig("127.0.0.1", 1))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.DialError).To(ContainSubstring("127.0.0.1:1"))
+		Expect(status.DialError).NotTo(ContainSubstring("lookup"))
+	})
+
+	It("names the lookup when the deadline hits while resolving the hostname", func() {
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.DialError).To(ContainSubstring("lookup " + unresolvableHost))
+	})
+
+	It("names the lookup when the hostname does not resolve", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, newNmapConfig(unresolvableHost, 80))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.DialError).To(ContainSubstring("lookup " + unresolvableHost))
+	})
+
 	It("returns quickly with an error when the context is already cancelled", func() {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		Expect(err).NotTo(HaveOccurred())

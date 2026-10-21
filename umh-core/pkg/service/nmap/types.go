@@ -75,6 +75,9 @@ type NmapScanResult struct {
 	Metrics ScanMetrics `json:"metrics"`
 	// DialResult is nil on the fsmv1 backend, which does not record it.
 	DialResult *DialResult `json:"dialResult,omitempty"`
+	// DialError is the fsmv2 connection check's dial error, empty when the
+	// port is open and on the fsmv1 backend
+	DialError string `json:"dialError,omitempty"`
 }
 
 // DialFailure names why the fsmv2 connection check could not open a TCP connection.
