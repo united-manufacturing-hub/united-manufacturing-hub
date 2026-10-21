@@ -37,6 +37,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -54,6 +55,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // DeployProtocolConverterAction implements the Action interface for deploying a
@@ -74,6 +76,9 @@ type DeployProtocolConverterAction struct {
 	actionUUID        uuid.UUID
 	instanceUUID      uuid.UUID
 	ignoreHealthCheck bool
+
+	tickInterval time.Duration
+	awaitTimeout time.Duration
 }
 
 // NewDeployProtocolConverterAction returns an un-parsed action instance.
@@ -420,17 +425,28 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
 // the error message is sent to the frontend to allow the user to see the error message.
 func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, *protocolconverter.ProtocolConverterObservedStateSnapshot, error) {
-	ticker := time.NewTicker(constants.ActionTickerTime)
+	tickInterval := a.tickInterval
+	if tickInterval == 0 {
+		tickInterval = constants.ActionTickerTime
+	}
+
+	timeoutDuration := a.awaitTimeout
+	if timeoutDuration == 0 {
+		timeoutDuration = constants.DataflowComponentWaitForActiveTimeout
+	}
+
+	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
-	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	timeout := time.After(timeoutDuration)
 	startTime := time.Now()
-	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
 	// Track last known blocking reason for timeout error message
 	var lastStatusReason string
 
 	var lastSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot
+
+	var sentReadLogs, sentWriteLogs []s6.LogEntry
 
 	for {
 		elapsed := time.Since(startTime)
@@ -513,6 +529,18 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 							// Use the raw status reason from FSM - frontend will handle enhancement
 							lastStatusReason = pcSnapshot.ServiceInfo.StatusReason
 							currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+						}
+
+						readLogs := pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+						writeLogs := pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+						sentReadLogs = SendLimitedLogs(readLogs, sentReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
+						sentWriteLogs = SendLimitedLogs(writeLogs, sentWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
+
+						configError, hasConfigError := FindBenthosConfigError(slices.Concat(readLogs, writeLogs))
+						if hasConfigError {
+							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError)
+
+							return models.ErrConfigFileInvalid, lastSnapshot, errors.New(errorMsg)
 						}
 					}
 
