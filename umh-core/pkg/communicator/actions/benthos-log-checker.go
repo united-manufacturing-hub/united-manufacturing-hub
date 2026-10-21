@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -107,6 +108,12 @@ func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry, since 
 	readMessage, readHasError := findBenthosConfigError(readLogs, since)
 	writeMessage, writeHasError := findBenthosConfigError(writeLogs, since)
 	flows := flowSelection{read: readHasError, write: writeHasError}
+
+	if readHasError && writeHasError {
+		message := fmt.Sprintf("read flow: %s; write flow: %s", readMessage, writeMessage)
+
+		return flowConfigError{message: message, flows: flows}, true
+	}
 
 	if readHasError {
 		return flowConfigError{message: readMessage, flows: flows}, true
