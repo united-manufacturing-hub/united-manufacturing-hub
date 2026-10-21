@@ -62,11 +62,74 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 		},
 	}
 
-	publishWriteFlowLogs := func(logLines ...string) {
+	bothFlowsPayload := map[string]any{
+		"name":       bridgeName,
+		"connection": map[string]any{"ip": "pgbouncer", "port": uint32(5432)},
+		"location":   map[int]string{0: "enterprise"},
+		"readDFC": map[string]any{
+			"inputs": map[string]any{
+				"type": "generate",
+				"data": "generate:\n  count: 0\n  interval: 1s\n  mapping: root = \"hello world\"\n",
+			},
+			"pipeline": map[string]any{
+				"processors": map[string]any{
+					"0": map[string]any{
+						"type": "tag_processor",
+						"data": "tag_processor:\n  defaults: |\n    msg.meta.location_path = \"probe\";\n    msg.meta.data_contract = \"_raw\";\n    return msg;\n",
+					},
+				},
+			},
+		},
+		"writeDFC": writeFlowPayload["writeDFC"],
+	}
+
+	logEntries := func(logLines []string) []s6.LogEntry {
 		logs := make([]s6.LogEntry, 0, len(logLines))
 		for _, line := range logLines {
 			logs = append(logs, s6.LogEntry{Content: line})
 		}
+
+		return logs
+	}
+
+	flowObservedState := func(logLines []string) dfcfsm.DataflowComponentObservedState {
+		return dfcfsm.DataflowComponentObservedState{
+			ServiceInfo: dfcsvc.ServiceInfo{
+				BenthosObservedState: benthosfsm.BenthosObservedState{
+					ServiceInfo: benthossvc.ServiceInfo{
+						BenthosStatus: benthossvc.BenthosStatus{BenthosLogs: logEntries(logLines)},
+					},
+				},
+			},
+		}
+	}
+
+	publishFlowLogs := func(readLogLines []string, writeLogLines []string) {
+		snapMgr.UpdateSnapshot(&fsm.SystemSnapshot{
+			Managers: map[string]fsm.ManagerSnapshot{
+				constants.ProtocolConverterManagerName: &actions.MockManagerSnapshot{
+					Instances: map[string]*fsm.FSMInstanceSnapshot{
+						bridgeName: {
+							ID:           bridgeName,
+							CurrentState: protocolconverter.OperationalStateStartingDFC,
+							DesiredState: protocolconverter.OperationalStateActive,
+							LastObservedState: &protocolconverter.ProtocolConverterObservedStateSnapshot{
+								ServiceInfo: protocolconvertersvc.ServiceInfo{
+									DataflowComponentReadFSMState:       dfcfsm.OperationalStateStarting,
+									DataflowComponentReadObservedState:  flowObservedState(readLogLines),
+									DataflowComponentWriteFSMState:      dfcfsm.OperationalStateStarting,
+									DataflowComponentWriteObservedState: flowObservedState(writeLogLines),
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+
+	publishWriteFlowLogs := func(logLines ...string) {
+		logs := logEntries(logLines)
 
 		snapMgr.UpdateSnapshot(&fsm.SystemSnapshot{
 			Managers: map[string]fsm.ManagerSnapshot{
@@ -97,17 +160,21 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 		})
 	}
 
-	deploy := func() (time.Duration, error) {
+	deployPayload := func(payload map[string]any) (time.Duration, error) {
 		action := actions.NewDeployProtocolConverterAction("probe@example.com", uuid.New(), uuid.New(), outbound, mockCfg, snapMgr)
 		action.SetTickInterval(100 * time.Millisecond)
 		action.SetAwaitTimeout(awaitTimeout)
-		Expect(action.Parse(writeFlowPayload)).To(Succeed())
+		Expect(action.Parse(payload)).To(Succeed())
 		Expect(action.Validate()).To(Succeed())
 
 		start := time.Now()
 		_, _, err := action.Execute()
 
 		return time.Since(start), err
+	}
+
+	deploy := func() (time.Duration, error) {
+		return deployPayload(writeFlowPayload)
 	}
 
 	replies := func() []string {
@@ -140,10 +207,18 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 		return decoded
 	}
 
-	writeFlowDesiredState := func() string {
+	deployedBridge := func() config.ProtocolConverterConfig {
 		Expect(mockCfg.Config.ProtocolConverter).To(HaveLen(1))
 
-		return mockCfg.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState
+		return mockCfg.Config.ProtocolConverter[0]
+	}
+
+	writeFlowDesiredState := func() string {
+		return deployedBridge().ProtocolConverterServiceConfig.WriteDFCDesiredState
+	}
+
+	readFlowDesiredState := func() string {
+		return deployedBridge().ProtocolConverterServiceConfig.ReadDFCDesiredState
 	}
 
 	BeforeEach(func() {
@@ -187,6 +262,16 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 		_, _ = deploy()
 
 		Expect(writeFlowDesiredState()).To(Equal(dfcfsm.OperationalStateStopped))
+	})
+
+	It("stops only the flow whose logs hold the config error", func() {
+		publishFlowLogs([]string{startupLine}, []string{lintErrorLine})
+
+		_, err := deployPayload(bothFlowsPayload)
+
+		Expect(err).To(MatchError(ContainSubstring(lintErrorText)))
+		Expect(writeFlowDesiredState()).To(Equal(dfcfsm.OperationalStateStopped))
+		Expect(readFlowDesiredState()).NotTo(Equal(dfcfsm.OperationalStateStopped))
 	})
 
 	It("waits for the timeout when the logs hold no config error", func() {

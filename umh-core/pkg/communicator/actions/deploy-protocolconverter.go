@@ -37,7 +37,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"time"
 
@@ -231,7 +230,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 	// check against observedState
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, lastSnapshot, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
+		errCode, lastSnapshot, flowsWithConfigError, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
 		if err != nil {
 			// err is already a self-contained user message, so send it as-is
 			// instead of wrapping it again.
@@ -291,7 +290,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 			if !readActive && !writeActive {
 				pcToStop.DesiredFSMState = protocolconverter.OperationalStateStopped
 			} else {
-				stopRead, stopWrite := flowsToStop(lastSnapshot, readActive, writeActive)
+				stopRead, stopWrite := flowsToStopAfterFailedDeploy(flowsWithConfigError, lastSnapshot, readActive, writeActive)
 				if stopRead {
 					pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
 				}
@@ -424,7 +423,7 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 // the function returns the error code and the error message via an error object
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
 // the error message is sent to the frontend to allow the user to see the error message.
-func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, *protocolconverter.ProtocolConverterObservedStateSnapshot, error) {
+func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, *protocolconverter.ProtocolConverterObservedStateSnapshot, flowSelection, error) {
 	tickInterval := a.tickInterval
 	if tickInterval == 0 {
 		tickInterval = constants.ActionTickerTime
@@ -473,7 +472,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 				deps.String("desiredState", desiredState),
 				deps.String("lastStatusReason", lastStatusReason))
 
-			return models.ErrDeployTimeout, lastSnapshot, fmt.Errorf("%s", errorMsg)
+			return models.ErrDeployTimeout, lastSnapshot, flowSelection{}, fmt.Errorf("%s", errorMsg)
 
 		case <-ticker.C:
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
@@ -513,7 +512,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 					for _, acceptedState := range acceptedStates {
 						if instance.CurrentState == acceptedState {
-							return "", lastSnapshot, nil
+							return "", lastSnapshot, flowSelection{}, nil
 						}
 					}
 
@@ -536,11 +535,19 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 						sentReadLogs = SendLimitedLogs(readLogs, sentReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 						sentWriteLogs = SendLimitedLogs(writeLogs, sentWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 
-						configError, hasConfigError := FindBenthosConfigError(slices.Concat(readLogs, writeLogs))
-						if hasConfigError {
-							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError)
+						readConfigError, readHasConfigError := FindBenthosConfigError(readLogs)
+						writeConfigError, writeHasConfigError := FindBenthosConfigError(writeLogs)
 
-							return models.ErrConfigFileInvalid, lastSnapshot, errors.New(errorMsg)
+						if readHasConfigError || writeHasConfigError {
+							configError := readConfigError
+							if !readHasConfigError {
+								configError = writeConfigError
+							}
+
+							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError)
+							flowsWithConfigError := flowSelection{read: readHasConfigError, write: writeHasConfigError}
+
+							return models.ErrConfigFileInvalid, lastSnapshot, flowsWithConfigError, errors.New(errorMsg)
 						}
 					}
 
@@ -561,6 +568,22 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 			}
 		}
 	}
+}
+
+type flowSelection struct {
+	read  bool
+	write bool
+}
+
+func flowsToStopAfterFailedDeploy(flowsWithConfigError flowSelection, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
+	stopRead = readActive && flowsWithConfigError.read
+	stopWrite = writeActive && flowsWithConfigError.write
+
+	if stopRead || stopWrite {
+		return stopRead, stopWrite
+	}
+
+	return flowsToStop(snapshot, readActive, writeActive)
 }
 
 // flowsToStop decides which dataflow components to flip to stopped after a failed
