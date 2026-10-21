@@ -28,6 +28,7 @@ const (
 	lintErrorLine        = `time="2026-10-21T12:58:08Z" level=error msg="Config lint error" @service=benthos lint="/run/service/benthos-dataflow-write-protocolconverter-historian_pump/config/benthos.yaml(14,1) compress_after must be a duration with a unit, like \"168h\", \"30m\" or \"45s\""`
 	lintErrorText        = `compress_after must be a duration with a unit, like "168h", "30m" or "45s"`
 	inferErrorLine       = `level=error msg="unable to infer input type from candidates: [foo]"`
+	inferErrorText       = `unable to infer input type from candidates: [foo]`
 	startupLine          = `level=info msg="Running main config from specified file" @service=benthos`
 	constructorErrorLine = `service closing due to: failed to init output: retention: time: missing unit in duration "168"`
 )
@@ -53,11 +54,11 @@ var _ = Describe("FindBenthosConfigError", func() {
 		Expect(text).To(Equal(lintErrorText))
 	})
 
-	It("returns the whole line for a config error without a lint field", func() {
+	It("returns the msg field for a config error without a lint field", func() {
 		text, found := actions.FindBenthosConfigError(logsAt(loggedAfterWaitStart, inferErrorLine), waitStart)
 
 		Expect(found).To(BeTrue())
-		Expect(text).To(Equal(inferErrorLine))
+		Expect(text).To(Equal(inferErrorText))
 	})
 
 	It("ignores errors that are not config errors", func() {
