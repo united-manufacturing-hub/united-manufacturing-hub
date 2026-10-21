@@ -22,12 +22,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-var ErrBenthosLogLines = []string{
+var benthosConfigErrorPatterns = []string{
 	"unable to infer",
 	"Config lint error",
 }
 
-func FindBenthosConfigError(logs []s6.LogEntry) (string, bool) {
+func findBenthosConfigError(logs []s6.LogEntry) (string, bool) {
 	for _, log := range logs {
 		if isBenthosConfigErrorLine(log.Content) {
 			return benthosConfigErrorText(log.Content), true
@@ -43,7 +43,7 @@ func isBenthosConfigErrorLine(content string) bool {
 		return false
 	}
 
-	for _, errLine := range ErrBenthosLogLines {
+	for _, errLine := range benthosConfigErrorPatterns {
 		if strings.Contains(lowerContent, strings.ToLower(errLine)) {
 			return true
 		}

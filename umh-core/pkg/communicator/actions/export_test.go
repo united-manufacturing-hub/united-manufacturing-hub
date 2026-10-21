@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // SetTickInterval overrides the awaitRollout poll interval so specs do not
@@ -60,4 +61,8 @@ func (a *DeployProtocolConverterAction) SetTickInterval(d time.Duration) {
 
 func (a *DeployProtocolConverterAction) SetAwaitTimeout(d time.Duration) {
 	a.awaitTimeout = d
+}
+
+func FindBenthosConfigError(logs []s6.LogEntry) (string, bool) {
+	return findBenthosConfigError(logs)
 }

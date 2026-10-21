@@ -581,8 +581,8 @@ func (a *DeployProtocolConverterAction) sendNewLogs(logs []s6.LogEntry, sentLogs
 }
 
 func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry) (flowConfigError, bool) {
-	readMessage, readHasError := FindBenthosConfigError(readLogs)
-	writeMessage, writeHasError := FindBenthosConfigError(writeLogs)
+	readMessage, readHasError := findBenthosConfigError(readLogs)
+	writeMessage, writeHasError := findBenthosConfigError(writeLogs)
 	flows := flowSelection{read: readHasError, write: writeHasError}
 
 	if readHasError {

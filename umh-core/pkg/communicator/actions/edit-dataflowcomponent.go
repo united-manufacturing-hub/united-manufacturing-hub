@@ -690,11 +690,11 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 							if len(logs) > len(lastLogs) {
 								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
 							}
-							// FindBenthosConfigError is used to detect fatal configuration errors that would cause
+							// findBenthosConfigError is used to detect fatal configuration errors that would cause
 							// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
 							// abort the startup process rather than waiting for the full timeout period,
 							// as these errors require configuration changes to resolve.
-							configError, hasConfigError := FindBenthosConfigError(logs)
+							configError, hasConfigError := findBenthosConfigError(logs)
 							if hasConfigError {
 								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
 
