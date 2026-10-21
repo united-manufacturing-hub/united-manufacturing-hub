@@ -927,13 +927,13 @@ func (a *EditProtocolConverterAction) awaitRollout(
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
 							deps.String("rollbackConfig", rollbackConfig.String()))
 
-						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has an invalid configuration (%s) but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, configError.message, err)
 					}
 
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
 						deps.String("rollbackConfig", rollbackConfig.String()))
 
-					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration: %s", a.name, configError.message)
+					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration because of a configuration error: %s", a.name, configError.message)
 				}
 
 				SendActionReply(
