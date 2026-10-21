@@ -591,7 +591,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		elapsed, err, _ := runAwaitRolloutRead("dest.example.com")
 
 		Expect(err).To(MatchError(ContainSubstring(lintErrorText)))
-		Expect(err).To(MatchError(ContainSubstring("rolled back")))
+		Expect(err).To(MatchError(ContainSubstring("because of a configuration error")))
 		Expect(elapsed).To(BeNumerically("<", 4*time.Second))
 	})
 
