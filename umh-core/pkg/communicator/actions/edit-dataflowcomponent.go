@@ -706,10 +706,10 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 								if err != nil {
 									a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 
-									return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+									return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has an invalid configuration (%s) but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, configError, err)
 								}
 
-								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration: %s", a.name, configError)
+								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration because of a configuration error: %s", a.name, configError)
 							}
 
 							continue
