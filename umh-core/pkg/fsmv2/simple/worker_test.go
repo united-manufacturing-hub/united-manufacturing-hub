@@ -470,6 +470,52 @@ var _ = Describe("Register", func() {
 		}).To(PanicWith(ContainSubstring("struct")))
 	})
 
+	It("panics when Probe is set without NewDeps, because the probe has nowhere to record its result", func() {
+		Expect(func() {
+			Register(MonitorSpec[probeConfig, probeStatus, struct{}]{
+				WorkerType: "simpleworker_probe_nodeps",
+				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+					return probeStatus{}, nil
+				},
+				Probe: func(context.Context, struct{}, probeConfig) {},
+			})
+		}).To(PanicWith(ContainSubstring("NewDeps")))
+	})
+
+	It("registers the probe, so the probe action runs it with the deps NewDeps built", func() {
+		var probedConfigs []probeConfig
+
+		spec := MonitorSpec[probeConfig, probeStatus, probeRecordingDeps]{
+			WorkerType: "simpleworker_probe_registered",
+			NewDeps: func(deps.Identity, *deps.BaseDependencies) probeRecordingDeps {
+				return probeRecordingDeps{probedConfigs: &probedConfigs}
+			},
+			Poll: func(_ context.Context, _ probeRecordingDeps, _ probeConfig) (probeStatus, error) {
+				return probeStatus{}, nil
+			},
+			Probe: recordProbedConfig,
+		}
+		Register(spec)
+
+		workerDeps := spec.NewDeps(deps.Identity{WorkerType: spec.WorkerType}, nil)
+		action := &probeAction[probeConfig]{workerType: spec.WorkerType, cfg: probedTarget}
+
+		Expect(action.Execute(context.Background(), workerDeps)).To(Succeed())
+		Expect(probedConfigs).To(Equal([]probeConfig{probedTarget}))
+	})
+
+	It("registers no probe for a spec without Probe", func() {
+		Register(MonitorSpec[probeConfig, probeStatus, struct{}]{
+			WorkerType: "simpleworker_no_probe",
+			Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+				return probeStatus{}, nil
+			},
+		})
+
+		_, registered := lookupProbe("simpleworker_no_probe")
+		Expect(registered).To(BeFalse())
+	})
+
 	It("registers an initial state for the worker type", func() {
 		Register(MonitorSpec[probeConfig, probeStatus, struct{}]{
 			WorkerType: "simpleworker_register",
