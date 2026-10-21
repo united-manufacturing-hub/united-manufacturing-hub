@@ -586,13 +586,23 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 
 	It("rolls back a read-DFC edit that benthos rejects and names the lint message", func() {
 		stageReadDFCSnapshotWithLogs("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingDFC, string(nmapservice.PortStateOpen),
-			[]s6.LogEntry{{Content: startupLine}, {Content: lintErrorLine}})
+			[]s6.LogEntry{{Timestamp: time.Now().Add(time.Minute), Content: startupLine}, {Timestamp: time.Now().Add(time.Minute), Content: lintErrorLine}})
 
 		elapsed, err, _ := runAwaitRolloutRead("dest.example.com")
 
 		Expect(err).To(MatchError(ContainSubstring(lintErrorText)))
 		Expect(err).To(MatchError(ContainSubstring("rolled back")))
 		Expect(elapsed).To(BeNumerically("<", 4*time.Second))
+	})
+
+	It("does not roll back a starting read-DFC edit on a config error logged before the edit", func() {
+		stageReadDFCSnapshotWithLogs("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingDFC, string(nmapservice.PortStateOpen),
+			[]s6.LogEntry{{Timestamp: time.Now().Add(-time.Minute), Content: lintErrorLine}})
+
+		_, err, _ := runAwaitRolloutRead("dest.example.com")
+
+		Expect(err).NotTo(MatchError(ContainSubstring("rolled back")))
+		Expect(err).NotTo(MatchError(ContainSubstring(lintErrorText)))
 	})
 
 	It("does not accept a read-DFC edit while the scan still shows the previous target", func() {

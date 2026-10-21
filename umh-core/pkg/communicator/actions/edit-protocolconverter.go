@@ -918,7 +918,7 @@ func (a *EditProtocolConverterAction) awaitRollout(
 				// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
 				// abort the startup process rather than waiting for the full timeout period,
 				// as these errors require configuration changes to resolve.
-				configError, hasConfigError := findBenthosConfigError(logs)
+				configError, hasConfigError := findBenthosConfigError(logs, startTime)
 				if hasConfigError {
 					SendActionReply(
 						a.instanceUUID,

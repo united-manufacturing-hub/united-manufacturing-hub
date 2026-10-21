@@ -15,6 +15,8 @@
 package actions_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -31,31 +33,41 @@ const (
 )
 
 var _ = Describe("FindBenthosConfigError", func() {
-	logsOf := func(contents ...string) []s6.LogEntry {
+	waitStart := time.Date(2026, 10, 21, 12, 58, 0, 0, time.UTC)
+	loggedAfterWaitStart := waitStart.Add(time.Second)
+	loggedBeforeWaitStart := waitStart.Add(-time.Second)
+
+	logsAt := func(timestamp time.Time, contents ...string) []s6.LogEntry {
 		logs := make([]s6.LogEntry, 0, len(contents))
 		for _, content := range contents {
-			logs = append(logs, s6.LogEntry{Content: content})
+			logs = append(logs, s6.LogEntry{Timestamp: timestamp, Content: content})
 		}
 
 		return logs
 	}
 
 	It("returns the lint message without the config file location", func() {
-		text, found := actions.FindBenthosConfigError(logsOf(startupLine, lintErrorLine))
+		text, found := actions.FindBenthosConfigError(logsAt(loggedAfterWaitStart, startupLine, lintErrorLine), waitStart)
 
 		Expect(found).To(BeTrue())
 		Expect(text).To(Equal(lintErrorText))
 	})
 
 	It("returns the whole line for a config error without a lint field", func() {
-		text, found := actions.FindBenthosConfigError(logsOf(inferErrorLine))
+		text, found := actions.FindBenthosConfigError(logsAt(loggedAfterWaitStart, inferErrorLine), waitStart)
 
 		Expect(found).To(BeTrue())
 		Expect(text).To(Equal(inferErrorLine))
 	})
 
 	It("ignores errors that are not config errors", func() {
-		_, found := actions.FindBenthosConfigError(logsOf(startupLine, constructorErrorLine))
+		_, found := actions.FindBenthosConfigError(logsAt(loggedAfterWaitStart, startupLine, constructorErrorLine), waitStart)
+
+		Expect(found).To(BeFalse())
+	})
+
+	It("ignores config errors logged before the wait started", func() {
+		_, found := actions.FindBenthosConfigError(logsAt(loggedBeforeWaitStart, lintErrorLine), waitStart)
 
 		Expect(found).To(BeFalse())
 	})

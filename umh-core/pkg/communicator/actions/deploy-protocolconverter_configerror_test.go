@@ -86,7 +86,7 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 	logEntries := func(logLines []string) []s6.LogEntry {
 		logs := make([]s6.LogEntry, 0, len(logLines))
 		for _, line := range logLines {
-			logs = append(logs, s6.LogEntry{Content: line})
+			logs = append(logs, s6.LogEntry{Timestamp: time.Now().Add(time.Minute), Content: line})
 		}
 
 		return logs

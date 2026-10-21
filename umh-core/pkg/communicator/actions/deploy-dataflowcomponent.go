@@ -389,7 +389,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 					// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
 					// abort the startup process rather than waiting for the full timeout period,
 					// as these errors require configuration changes to resolve.
-					configError, hasConfigError := findBenthosConfigError(logs)
+					configError, hasConfigError := findBenthosConfigError(logs, startTime)
 					if hasConfigError {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration error detected. Removing component...", a.outboundChannel, models.DeployDataFlowComponent)
 						// Create a fresh context for cleanup operation since the original ctx may be expired or close to expiring
