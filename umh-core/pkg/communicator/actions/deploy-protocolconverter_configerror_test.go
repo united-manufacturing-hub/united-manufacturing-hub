@@ -274,6 +274,25 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 		Expect(readFlowDesiredState()).NotTo(Equal(dfcfsm.OperationalStateStopped))
 	})
 
+	It("stops only the read flow when its logs hold the config error", func() {
+		publishFlowLogs([]string{lintErrorLine}, []string{startupLine})
+
+		_, err := deployPayload(bothFlowsPayload)
+
+		Expect(err).To(MatchError(ContainSubstring(lintErrorText)))
+		Expect(readFlowDesiredState()).To(Equal(dfcfsm.OperationalStateStopped))
+		Expect(writeFlowDesiredState()).NotTo(Equal(dfcfsm.OperationalStateStopped))
+	})
+
+	It("names the errors of both flows when both are rejected", func() {
+		publishFlowLogs([]string{lintErrorLine}, []string{inferErrorLine})
+
+		_, err := deployPayload(bothFlowsPayload)
+
+		Expect(err).To(MatchError(ContainSubstring(lintErrorText)))
+		Expect(err).To(MatchError(ContainSubstring(inferErrorLine)))
+	})
+
 	It("waits for the timeout when the logs hold no config error", func() {
 		publishWriteFlowLogs(startupLine, constructorErrorLine)
 
