@@ -195,7 +195,7 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 				case errors.As(err, &cfgErr):
 					// The config error was already logged once at Info and
 					// stays out of Sentry. The debug line shows it on every
-					// tick. See config_error.go.
+					// tick. See "Config errors" in the package doc.
 					s.logger.Debug("tick_suppressed_config_error",
 						deps.HierarchyPath(s.GetHierarchyPath()),
 						deps.Err(err))
@@ -820,8 +820,7 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReAdds(ctx context.Context
 	}
 
 	if err := s.AddWorker(identity, newWorker); err != nil {
-		// A config error is logged once at Info, outside Sentry. See
-		// config_error.go.
+		// A config error is logged once at Info, outside Sentry.
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
 			s.logConfigErrorOnce(cfgErr)
@@ -941,7 +940,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
 			// A config error is the user's mistake: log it once at Info and
-			// keep it out of Sentry. See config_error.go.
+			// keep it out of Sentry.
 			s.logConfigErrorOnce(cfgErr)
 
 			return nil

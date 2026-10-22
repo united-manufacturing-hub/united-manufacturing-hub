@@ -121,7 +121,7 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 
 	if err != nil {
 		// A config error is the user's mistake and stays out of Sentry; the
-		// caller decides how to log it. See config_error.go.
+		// caller decides how to log it. See "Config errors" in the package doc.
 		var cfgErr *config.ConfigError
 		if !errors.As(err, &cfgErr) {
 			s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")

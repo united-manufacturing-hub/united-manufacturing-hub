@@ -190,8 +190,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	forceExit                <-chan struct{}
 	noStateMachineLoggedOnce sync.Map
 	// lastConfigErrorLogged is the last "config_error" message logged for
-	// this supervisor's own worker (see config_error.go). A successful derive
-	// clears it.
+	// this supervisor's own worker. A successful derive clears it.
 	lastConfigErrorLogged string
 	// childConfigErrorLogged maps a child name to the last "config_error"
 	// message logged for it. Creating the child clears its entry.

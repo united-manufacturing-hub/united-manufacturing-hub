@@ -24,33 +24,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// Config errors
-//
-// A config error (*config.ConfigError) is a mistake in the user's config,
-// such as YAML that does not parse or an unknown desired state value. It is
-// the user's mistake, not a fault in the code. The supervisor handles it as
-// follows:
-//
-//   - A worker or child whose config has an error does not start. A running
-//     worker does not take the broken config. It keeps ticking on the desired
-//     state derived from its last good config, so shutdown, removal and its
-//     children keep working. A shutdown or disable requested meanwhile is
-//     read from the stored desired state (loadStoredLifecycleFlags).
-//   - The error is logged once at Info as "config_error" and is never sent to
-//     Sentry. The same message is logged again only after a recovery: a
-//     successful derive, or a successful child create.
-//   - Later ticks retry. The derive runs again on every tick, a failed child
-//     create is retried on every reconcile, and a worker re-add a restart
-//     left pending is retried on every tick (retryPendingReAdds). The first
-//     attempt that succeeds applies the new config.
-//
-// A worker whose first derive fails has no last good config, so it is not
-// ticked. When its supervisor shuts down, its children are dropped rather
-// than recreated from cached specs.
-//
-// Sentry is for faults in the code that engineering can fix. A config error
-// is fixed by the user, and the config_error log line tells them what to
-// change.
+// This file holds the supervisor's config-error helpers. The "Config errors"
+// section of the package doc explains how the supervisor handles a config
+// error.
 
 // loadStoredLifecycleFlags returns a document holding only the lifecycle
 // flags (ShutdownRequested, Disabled) of the desired state stored for

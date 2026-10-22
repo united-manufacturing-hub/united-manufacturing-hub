@@ -487,7 +487,8 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
 			// A config error is the user's mistake: the restart path already
-			// logged it at Info, and it stays out of Sentry. See config_error.go.
+			// logged it at Info, and it stays out of Sentry. See "Config errors"
+			// in the package doc.
 			return fmt.Errorf("signal processing failed: %w", err)
 		}
 
@@ -937,7 +938,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	for _, child := range childrenToTick {
 		if err := child.tick(ctx); err != nil {
 			// A child's config error was logged at Info by the child and stays
-			// out of Sentry. See config_error.go.
+			// out of Sentry.
 			var cfgErr *config.ConfigError
 			if !errors.As(err, &cfgErr) {
 				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "child_tick_failed")
@@ -992,7 +993,7 @@ func (s *Supervisor[TObserved, TDesired]) deriveDesiredStateCached(
 			isConfigErr := errors.As(deriveErr, &cfgErr)
 
 			// A config error is the user's mistake: log it once at Info and keep
-			// it out of Sentry. See config_error.go.
+			// it out of Sentry. See "Config errors" in the package doc.
 			if isConfigErr {
 				s.logConfigErrorOnce(cfgErr)
 			} else {
@@ -1009,7 +1010,7 @@ func (s *Supervisor[TObserved, TDesired]) deriveDesiredStateCached(
 				return nil, nil, fmt.Errorf("failed to derive desired state: %w", deriveErr)
 			}
 
-			// Keep running on the last good config. See config_error.go.
+			// Keep running on the last good config.
 			desired = cachedState
 			configErr = deriveErr
 		}
@@ -1732,7 +1733,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// Add worker to child supervisor
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
 				// A config error holds the child back and is logged once at
-				// Info, outside Sentry. See config_error.go.
+				// Info, outside Sentry. See "Config errors" in the package doc.
 				var cfgErr *config.ConfigError
 				if errors.As(err, &cfgErr) {
 					s.markChildCreateConfigError(spec.Name)
@@ -1939,7 +1940,7 @@ func (s *Supervisor[TObserved, TDesired]) applyDisableMapping(ctx context.Contex
 				if spec.Enabled && s.childHeldBackByConfigError(spec.Name) {
 					// The child is missing because its config error holds it
 					// back. That error was already logged, so this stays out of
-					// Sentry. See config_error.go.
+					// Sentry.
 					s.logger.Debug("reducer_child_not_found_config_error",
 						deps.String("child_name", spec.Name))
 
