@@ -14,8 +14,8 @@
 
 package handoff
 
-// Message is a received message for the router in pkg/communicator/router
-// to consume.
+// Message is one received message: its bytes, the sender it names and its
+// trace ID.
 type Message struct {
 	// Content is the message bytes as received. The caller must not modify
 	// Content after handing the Message over.
