@@ -282,7 +282,7 @@
 //   - workers map (workerID -> WorkerContext)
 //   - children map (childName -> SupervisorInterface)
 //   - userSpec, globalVars, cachedDesiredState
-//   - pendingRestart, restartRequestedAt maps
+//   - pendingRemoval, pendingRestart, restartRequestedAt, removing
 //
 // Read lock: Accessing workers/children without modification
 // Write lock: Adding/removing workers/children, updating configuration

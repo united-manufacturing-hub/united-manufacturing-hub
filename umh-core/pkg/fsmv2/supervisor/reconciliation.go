@@ -1228,6 +1228,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// AddWorker refuses an id in s.workers, so a worker added again with
 		// this id clears the tombstone only after this write.
 		s.tombstoneWorker(ctx, workerID, workerCtx.identity.HierarchyPath)
+
+		removalDone := make(chan struct{})
+		s.removing[workerID] = removalDone
 		s.mu.Unlock()
 
 		// Clean up children outside parent lock to avoid deadlock with GetChildren/calculateHierarchySize.
@@ -1266,7 +1269,9 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// only after its final observation, so that cancel cannot skip it.
 		s.mu.Lock()
 		delete(s.workers, workerID)
+		delete(s.removing, workerID)
 		s.mu.Unlock()
+		close(removalDone)
 
 		s.logger.Debug("worker_removed_successfully",
 			deps.Int("children_cleaned", childCount))

@@ -416,5 +416,76 @@ var _ = Describe("Shutdown drain regression", func() {
 			Expect(findLogEvents(buf.String(), "collector_final_observation_completed")).To(HaveLen(1),
 				"expected exactly one final observation for the removed worker")
 		})
+
+		It("lets a worker with the same id be added again while the old one takes its final observation", func() {
+			store := &tombstoneHookStore{TriangularStoreInterface: newStore()}
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:              workerType,
+				Store:                   store,
+				Logger:                  logger,
+				TickInterval:            50 * time.Millisecond,
+				GracefulShutdownTimeout: 1 * time.Second,
+			})
+			defer s.Shutdown()
+
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Re-added Worker",
+				WorkerType: workerType,
+			}
+
+			// The supervisor tombstones a removed worker just before its final
+			// observation, so every collection after the tombstone runs while
+			// the old worker is still being removed.
+			var removing atomic.Bool
+			store.beforeTombstone = func() { removing.Store(true) }
+
+			var addOnce sync.Once
+
+			addDone := make(chan error, 1)
+
+			worker := &supervisor.TestWorker{
+				InitialState: shutdownHonoringState{},
+				CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
+					if removing.Load() {
+						addOnce.Do(func() {
+							go func() {
+								addDone <- s.AddWorker(identity, &supervisor.TestWorker{InitialState: shutdownHonoringState{}})
+							}()
+
+							// Give AddWorker time to take the supervisor lock
+							// while the old worker is still registered.
+							time.Sleep(200 * time.Millisecond)
+						})
+					}
+
+					return &supervisor.TestObservedState{
+						ID:          workerID,
+						CollectedAt: time.Now(),
+						Desired:     &supervisor.TestDesiredState{},
+					}, nil
+				},
+			}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			Expect(s.TestSaveDesired(ctx, workerType, workerID, persistence.Document{
+				supervisor.FieldID:  workerID,
+				"ShutdownRequested": true,
+				"state":             "running",
+			})).To(Succeed())
+
+			Eventually(addDone, 3*time.Second).Should(Receive(BeNil()),
+				"AddWorker must wait for the removal to finish instead of failing with \"worker already exists\"")
+		})
 	})
 })
