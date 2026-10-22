@@ -66,8 +66,8 @@ func TestShutdownExitCode(t *testing.T) {
 // that duration routing and signal/exit routing are decidable without os.Exit
 // or real OS signals:
 //
-//   - routeDuration:      a v2 scenario gets RunConfig.Duration (a post-driver
-//     settle window) while a v1 scenario routes its --duration into a ctx
+//   - routeDuration:      a v2 scenario gets RunConfig.Duration (a settle
+//     window after Run returns) while a v1 scenario routes its --duration into a ctx
 //     timeout that bounds the whole run; --duration 0 stays endless on both.
 //   - isCleanInterruptExit: a run error that wraps an interrupt-induced
 //     ctx.Err() is a clean exit, not a fatal "Failed to start scenario" exit-1.
@@ -77,7 +77,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 	t.Run("duration routing v2 takes RunConfig.Duration", func(t *testing.T) {
 		runDuration, applyCtxTimeout := routeDuration(true, 5*time.Second)
 		if applyCtxTimeout {
-			t.Error("a v2 scenario must not bound its run with a ctx timeout; the duration is a post-driver settle window")
+			t.Error("a v2 scenario must not bound its run with a ctx timeout; the duration is a settle window after Run returns")
 		}
 
 		if runDuration != 5*time.Second {
@@ -115,7 +115,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 		// The runner wraps Run's error; an interrupt that cancelled ctx
 		// surfaces as a ctx.Err()-wrapping error and must read as clean, not
 		// as a fatal startup failure.
-		runErr := fmt.Errorf("scenario %q driver failed: %w", "noop", ctx.Err())
+		runErr := fmt.Errorf("scenario %q failed: %w", "noop", ctx.Err())
 		if !isCleanInterruptExit(runErr, ctx.Err()) {
 			t.Error("an interrupt-induced ctx.Err() must be reported as a clean exit, not a fatal exit-1")
 		}

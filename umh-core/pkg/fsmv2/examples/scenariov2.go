@@ -21,51 +21,59 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 )
 
-// Env carries exactly the user-facing API a ScenarioV2 driver may touch: the
-// client and a logger. The driver plays the role FSMv1 plays in production:
-// it drives the system but must not assert on it. Correctness is judged
-// after the run by log checks and store checks, which is why Env
-// deliberately has no store handle and no supervisor handle.
+// Env is what a scenario's Run receives. It has no store handle and no
+// supervisor handle, so a check reads only what a user of the client could read.
 type Env struct {
 	// Client is the migration-API client wired to the run's dynamicchildren
-	// Writer and store, so drivers can Upsert/Delete child specs and read
-	// observed state.
+	// Writer and store.
 	Client *fsmv2client.FSMv2Client
 
 	// Logger is the run's logger (the same logger RunConfig.Logger carries),
-	// so drivers log into the same stream the post-run log checks read.
+	// so Run logs into the same stream the post-run log checks read.
 	Logger deps.FSMLogger
+
+	// Dependencies is the map the scenario's Dependencies returned, or nil when
+	// the scenario declares none. The supervisor reads the same map while it
+	// builds workers, so Run must not write to it: Run reads a mock out with
+	// config.LookupDependency and changes the mock itself.
+	Dependencies map[string]any
 }
 
-// ScenarioV2 defines a driver-based scenario. Instead of declaring children
-// via YAMLConfig, a v2 scenario receives an Env and drives the running
-// kernel-only supervisor through the fsmv2client. The Driver only simulates
-// the user; correctness is judged after the run by log checks and store
-// checks, so the Driver gets no handle that could assert on internals.
+// ScenarioV2 is a scenario that drives the kernel-only supervisor.
 type ScenarioV2 struct {
-	// Driver runs against the started supervisor. After a nil return, the
-	// runner waits RunConfig.Duration (or until ctx is cancelled; 0 means
-	// ctx-only), then shuts the supervisor down. Drivers must honor ctx
-	// cancellation: a cancelled ctx is the only stop signal a driver
-	// receives, and teardown cannot start until the Driver returns.
-	Driver func(ctx context.Context, env Env) error
+	// Run creates workers through env.Client, changes the mocks, and checks the
+	// result. When a check fails, Run returns an error that names the check.
+	// After a nil return, the runner waits RunConfig.Duration, then shuts the
+	// supervisor down. Run must honor ctx cancellation: teardown cannot start
+	// until Run returns.
+	Run func(ctx context.Context, env Env) error
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
 	Name string
 
 	// Description explains what this scenario tests (shown in CLI output).
 	Description string
+
+	// Dependencies optionally builds the scenario's mocks. Every worker Run
+	// upserts through env.Client receives the map in its constructor. Write and
+	// read it with config.SetDependency and config.LookupDependency.
+	//
+	// On error, Dependencies must release what it built, and the runner starts
+	// nothing. On success, the runner calls cleanup once if it is non-nil: after
+	// the supervisor stops, or at once if the supervisor fails to build.
+	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 
 // NoopScenarioV2 starts the kernel-only supervisor and drives nothing: the
 // application worker spawns only its config worker kernel child.
 //
 // This scenario is kept permanently as the copy-paste template for scenario
-// authors: copy it, rename it, and put your driving logic in Driver.
+// authors: copy it, rename it, put your mocks in Dependencies, and put the
+// steps and checks in Run.
 var NoopScenarioV2 = ScenarioV2{
 	Name:        "noop",
-	Description: "Runs the kernel-only supervisor with no driver actions (v2)",
-	Driver: func(_ context.Context, _ Env) error {
+	Description: "Runs the kernel-only supervisor and changes nothing (v2)",
+	Run: func(_ context.Context, _ Env) error {
 		return nil
 	},
 }
