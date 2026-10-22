@@ -23,6 +23,7 @@ type Message struct {
 	// SenderEmail is the sender the message names. SenderEmail is not proof
 	// of who sent the message.
 	SenderEmail string
-	// TraceID is the trace ID.
+	// TraceID is the trace ID as a UUID in string form, where an empty or
+	// unparseable value means no trace.
 	TraceID string
 }
