@@ -260,7 +260,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		panic(fmt.Sprintf("supervisor config error: staleThreshold (%v) must be less than collectorTimeout (%v)", staleThreshold, timeout))
 	}
 
-	cfg.Logger.Info("timeout_configuration",
+	cfg.Logger.Debug("timeout_configuration",
 		deps.String("worker", cfg.WorkerType),
 		deps.Duration("observation_timeout", observationTimeout),
 		deps.Duration("stale_threshold", staleThreshold),
