@@ -57,12 +57,9 @@ var _ = Describe("ENG-5023: the upstream 502 reaches the logged Running->Degrade
 		buf := new(bytes.Buffer)
 		logger := newUnsampledJSONLogger(buf)
 
-		transportpkg.SetChannelProvider(newTestChannelProvider())
-		defer transportpkg.ClearChannelProvider()
-
 		realHTTP := httptransport.NewHTTPTransport(server.URL, 5*time.Second)
 		parentIdentity := deps.Identity{ID: "log-detail-parent", WorkerType: "transport"}
-		parentDeps := transportpkg.NewTransportDependencies(realHTTP, deps.NewBaseDependencies(logger, nil, parentIdentity))
+		parentDeps := transportpkg.NewTransportDependencies(realHTTP, deps.NewBaseDependencies(logger, nil, parentIdentity), newTestChannelProvider())
 
 		pullIdentity := deps.Identity{ID: "log-detail-pull", WorkerType: "pull"}
 		pullDeps, err := pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, pullIdentity))

@@ -36,21 +36,18 @@ import (
 
 var _ = Describe("TransportWorker", func() {
 	var (
-		worker   *transport.TransportWorker
-		logger   deps.FSMLogger
-		identity deps.Identity
+		worker               *transport.TransportWorker
+		logger               deps.FSMLogger
+		identity             deps.Identity
+		depsWithMockProvider map[string]any
 	)
 
 	BeforeEach(func() {
 		logger = deps.NewNopFSMLogger()
 		identity = deps.Identity{ID: "test-transport", Name: "Test Transport"}
 
-		// Set up mock channel provider using helper from dependencies_test.go
-		transport.SetChannelProvider(newTestChannelProvider())
-	})
-
-	AfterEach(func() {
-		transport.ClearChannelProvider()
+		depsWithMockProvider = map[string]any{}
+		fsmv2types.SetDependency(depsWithMockProvider, transport.ChannelProviderKey, transport.ChannelProvider(newTestChannelProvider()))
 	})
 
 	Describe("Compile-time interface check", func() {
@@ -63,7 +60,8 @@ var _ = Describe("TransportWorker", func() {
 		Context("dependency validation", func() {
 			It("should create a worker with valid dependencies", func() {
 				var err error
-				worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
+
+				worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(worker).NotTo(BeNil())
 			})
@@ -73,13 +71,39 @@ var _ = Describe("TransportWorker", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("logger"))
 			})
+
+			It("returns an error naming the key when the dependency map holds no channel provider", func() {
+				worker, err := transport.NewTransportWorker(identity, logger, nil, map[string]any{})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("transport.channel_provider"))
+				Expect(worker).To(BeNil())
+			})
+
+			It("returns the map's provider through its dependencies", func() {
+				provider := newRecordingChannelProvider(7, 3)
+
+				dependencyMap := map[string]any{}
+				fsmv2types.SetDependency(dependencyMap, transport.ChannelProviderKey, transport.ChannelProvider(provider))
+
+				worker, err := transport.NewTransportWorker(identity, logger, nil, dependencyMap)
+				Expect(err).NotTo(HaveOccurred())
+
+				workerDeps := worker.GetDependencies()
+				Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(provider.inbound))
+				Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(provider.outbound))
+
+				capacity, length := workerDeps.GetInboundChanStats()
+				Expect(capacity).To(Equal(7))
+				Expect(length).To(Equal(3))
+			})
 		})
 	})
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
+
+			worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -140,7 +164,8 @@ var _ = Describe("TransportWorker", func() {
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
+
+			worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -357,7 +382,8 @@ authToken: "test-token"`,
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
+
+			worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -384,7 +410,8 @@ authToken: "test-token"`,
 	Describe("Pointer receivers", func() {
 		It("should use pointer receiver for all Worker methods", func() {
 			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil, nil)
+
+			worker, err = transport.NewTransportWorker(identity, logger, nil, depsWithMockProvider)
 			Expect(err).ToNot(HaveOccurred())
 
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -436,12 +463,8 @@ func (p *recordingChannelProvider) GetInboundStats(workerID string) (capacity in
 }
 
 var _ = Describe("TransportWorker channel provider dependency", func() {
-	It("uses the provider from the dependency map over the global one", func() {
-		globalProvider := newRecordingChannelProvider(100, 0)
+	It("uses the provider from the dependency map when built through the factory", func() {
 		mapProvider := newRecordingChannelProvider(7, 3)
-
-		transport.SetChannelProvider(globalProvider)
-		DeferCleanup(transport.ClearChannelProvider)
 
 		dependencyMap := map[string]any{}
 		fsmv2types.SetDependency[transport.ChannelProvider](dependencyMap, transport.ChannelProviderKey, mapProvider)
@@ -455,7 +478,6 @@ var _ = Describe("TransportWorker channel provider dependency", func() {
 		workerDeps := transportWorker.GetDependencies()
 
 		Expect(mapProvider.getChannelsIDs).To(ContainElement("map-provider-worker"))
-		Expect(globalProvider.getChannelsIDs).To(BeEmpty())
 		Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(mapProvider.inbound))
 		Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(mapProvider.outbound))
 
@@ -463,30 +485,5 @@ var _ = Describe("TransportWorker channel provider dependency", func() {
 		Expect(capacity).To(Equal(7))
 		Expect(length).To(Equal(3))
 		Expect(mapProvider.getInboundStatsIDs).To(ContainElement("map-provider-worker"))
-		Expect(globalProvider.getInboundStatsIDs).To(BeEmpty())
-
-		Expect(transport.GetChannelProvider()).To(BeIdenticalTo(globalProvider))
-	})
-
-	It("falls back to the global provider when the dependency map holds none", func() {
-		globalProvider := newRecordingChannelProvider(50, 4)
-
-		transport.SetChannelProvider(globalProvider)
-		DeferCleanup(transport.ClearChannelProvider)
-
-		identity := deps.Identity{ID: "global-provider-worker", WorkerType: "transport"}
-		built, err := factory.NewWorkerByType("transport", identity, deps.NewNopFSMLogger(), nil, nil)
-		Expect(err).NotTo(HaveOccurred())
-
-		transportWorker, ok := built.(*transport.TransportWorker)
-		Expect(ok).To(BeTrue(), "expected *transport.TransportWorker, got %T", built)
-		workerDeps := transportWorker.GetDependencies()
-
-		Expect(globalProvider.getChannelsIDs).To(ContainElement("global-provider-worker"))
-
-		capacity, length := workerDeps.GetInboundChanStats()
-		Expect(capacity).To(Equal(50))
-		Expect(length).To(Equal(4))
-		Expect(globalProvider.getInboundStatsIDs).To(ContainElement("global-provider-worker"))
 	})
 })

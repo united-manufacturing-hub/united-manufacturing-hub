@@ -296,6 +296,10 @@ type RunConfig struct {
 	ScenarioV2   ScenarioV2    // When ScenarioV2.Run is set, examples.Run takes the v2 kernel-only path
 	Duration     time.Duration // 0 means run forever (until context cancelled)
 	TickInterval time.Duration
+	// Dependencies is the dependency map Run passes to the application
+	// supervisor for a v1 scenario without a CustomRunner. v2 scenarios build
+	// theirs in ScenarioV2.Dependencies.
+	Dependencies map[string]any
 	// GracefulShutdownTimeout is the per-level drain base propagated to the
 	// supervisor subtree. Zero falls back to the supervisor default (5s). A
 	// tiny value forces a degraded drain, which is how tests exercise the

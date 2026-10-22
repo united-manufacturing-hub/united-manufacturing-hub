@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
@@ -91,21 +92,21 @@ type CommunicatorRunConfig struct {
 	Logger                  deps.FSMLogger
 	MockServer              *testutil.MockRelayServer // If nil, creates and manages internally; caller closes if provided
 	AuthToken               string                    // Defaults to "test-auth-token"
-	InitialPullMessages     []*types.UMHMessage   // Messages queued for communicator to pull
-	InitialOutboundMessages []*types.UMHMessage   // Messages queued for worker to push
+	InitialPullMessages     []*types.UMHMessage       // Messages queued for communicator to pull
+	InitialOutboundMessages []*types.UMHMessage       // Messages queued for worker to push
 	Duration                time.Duration             // 0 = run until context cancelled; negative = error
 	TickInterval            time.Duration             // Defaults to 100ms
 }
 
 // CommunicatorRunResult contains observable results after scenario completion (populated after Done closes).
 type CommunicatorRunResult struct {
-	Error             error                   // Non-nil if scenario setup failed
-	Done              <-chan struct{}         // Closes when scenario completes
-	Shutdown          func()                  // Triggers graceful shutdown
+	Error             error               // Non-nil if scenario setup failed
+	Done              <-chan struct{}     // Closes when scenario completes
+	Shutdown          func()              // Triggers graceful shutdown
 	ReceivedMessages  []*types.UMHMessage // Messages pulled from HTTP (nil for HTTP-only tests)
 	PushedMessages    []*types.UMHMessage // Messages pushed to HTTP
-	ConsecutiveErrors int                     // Final consecutive error count from mock server
-	AuthCallCount     int                     // Auth endpoint calls (>1 indicates re-auth)
+	ConsecutiveErrors int                 // Final consecutive error count from mock server
+	AuthCallCount     int                 // Auth endpoint calls (>1 indicates re-auth)
 }
 
 // RunCommunicatorScenario runs the FSMv2 communicator worker via ApplicationSupervisor with a mock relay server.
@@ -163,7 +164,9 @@ func RunCommunicatorScenario(ctx context.Context, cfg CommunicatorRunConfig) *Co
 
 	channelProvider := NewTestChannelProvider(100)
 	communicator.SetChannelProvider(channelProvider)
-	transportWorker.SetChannelProvider(channelProvider)
+
+	scenarioDeps := map[string]any{}
+	config.SetDependency(scenarioDeps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelProvider))
 
 	for _, msg := range cfg.InitialOutboundMessages {
 		channelProvider.QueueOutbound(msg)
@@ -210,11 +213,11 @@ children:
 		TickInterval: tickInterval,
 		Logger:       logger,
 		Store:        store,
+		Dependencies: scenarioDeps,
 	})
 	if err != nil {
 		if channelProvider != nil {
 			communicator.ClearChannelProvider()
-			transportWorker.ClearChannelProvider()
 		}
 
 		if ownsMockServer {
@@ -264,7 +267,6 @@ children:
 
 		if channelProvider != nil {
 			communicator.ClearChannelProvider()
-			transportWorker.ClearChannelProvider()
 		}
 
 		if ownsMockServer {
