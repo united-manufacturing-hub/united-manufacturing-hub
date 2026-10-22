@@ -200,7 +200,7 @@ func main() {
 			return
 		}
 
-		logger.Fatal("Failed to start scenario", zap.Error(err))
+		logger.Fatal(fatalMessage(err), zap.Error(err))
 	}
 
 	<-result.Done
@@ -215,20 +215,44 @@ func main() {
 	// normally so the deferred teardown (logger.Sync, cancels, close(runDone))
 	// still runs; os.Exit would skip those.
 	if code := shutdownExitCode(result); code != 0 {
-		logger.Sugar().Warnw("scenario_shutdown_unclean",
-			"scenario", *scenarioName,
-			"exit_code", code)
+		if !result.ShutdownClean {
+			logger.Sugar().Warnw("scenario_shutdown_unclean",
+				"scenario", *scenarioName,
+				"exit_code", code)
+		}
+
+		if result.Err != nil {
+			logger.Sugar().Warnw("scenario_run_failed",
+				"scenario", *scenarioName,
+				"error", result.Err,
+				"exit_code", code)
+		}
+
 		_ = logger.Sync()
-		//nolint:gocritic // exitAfterDefer is intentional here: the degraded-shutdown path must exit non-zero, logger.Sync is flushed above, and the remaining defers (cancel, close(runDone)) are moot once the process exits.
+		//nolint:gocritic // exitAfterDefer: logger.Sync ran above, and the other defers do not matter once the process exits.
 		os.Exit(code)
 	}
 }
 
+func fatalMessage(runErr error) string {
+	if errors.Is(runErr, examples.ErrScenarioFailed) {
+		return "Scenario failed"
+	}
+
+	return "Failed to start scenario"
+}
+
 // shutdownExitCode returns the process exit code for a completed scenario run.
-// A scenario whose supervisor did not drain cleanly within its budget exits
-// non-zero so an outer harness/CI can detect a degraded shutdown.
 func shutdownExitCode(result *examples.RunResult) int {
-	if result != nil && !result.ShutdownClean {
+	if result == nil {
+		return 0
+	}
+
+	if result.Err != nil {
+		return 1
+	}
+
+	if !result.ShutdownClean {
 		return 1
 	}
 

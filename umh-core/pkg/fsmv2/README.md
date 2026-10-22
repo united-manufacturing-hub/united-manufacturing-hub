@@ -11,7 +11,7 @@ Type-safe state machine framework for managing worker lifecycles with compile-ti
 ```bash
 # Run the existing examples
 go run pkg/fsmv2/cmd/runner/main.go --list          # List all scenarios
-go run pkg/fsmv2/cmd/runner/main.go --scenario=helloworld --duration=5s  # Minimal single worker
+go run pkg/fsmv2/cmd/runner/main.go --scenario=helloworld --duration=5s  # Runs the helloworld worker against a mock filesystem
 go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=5s      # Parent with 2 children
 ```
 

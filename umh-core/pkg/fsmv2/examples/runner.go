@@ -72,6 +72,18 @@ type RunResult struct {
 	// graceful_shutdown_timeout or graceful_shutdown_budget_exhausted. Read it
 	// after Done closes.
 	ShutdownClean bool
+
+	// Err is nil, or the first failure postRunFailure found once teardown
+	// finished. Only the v2 path sets it; read it after Done closes.
+	Err error
+}
+
+// ErrScenarioFailed marks an error from Run for a v2 scenario that started and
+// then failed. An error that kept the scenario from starting does not wrap it.
+var ErrScenarioFailed = errors.New("failed")
+
+func scenarioFailed(name string, err error) error {
+	return fmt.Errorf("scenario %q %w: %w", name, ErrScenarioFailed, err)
 }
 
 // Run executes a scenario with the given configuration.
@@ -282,11 +294,20 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	writer := dynamicchildren.NewWriter()
 	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
 
+	// Built before the supervisor, so an error a worker logs on its first
+	// tick also fails the run.
+	recorder := &runRecorder{
+		scenario:         cfg.ScenarioV2.Name,
+		expectedErrors:   cfg.ScenarioV2.ExpectedErrors,
+		expectedWarnings: cfg.ScenarioV2.ExpectedWarnings,
+	}
+	runLogger := &recordingLogger{FSMLogger: cfg.Logger, recorder: recorder}
+
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:                      "scenariov2-" + cfg.ScenarioV2.Name,
 		Name:                    cfg.ScenarioV2.Name,
 		Store:                   cfg.Store,
-		Logger:                  cfg.Logger,
+		Logger:                  runLogger,
 		TickInterval:            cfg.TickInterval,
 		Dependencies:            scenarioDeps,
 		EnableTraceLogging:      cfg.EnableTraceLogging,
@@ -341,8 +362,13 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}()
 
 	client := fsmv2client.NewFSMv2Client(writer, cfg.Store)
-	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: cfg.Logger, Dependencies: scenarioDeps}); err != nil {
-		return nil, fmt.Errorf("scenario %q failed: %w", cfg.ScenarioV2.Name, err)
+	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: runLogger, Dependencies: scenarioDeps, recorder: recorder}); err != nil {
+		return nil, scenarioFailed(cfg.ScenarioV2.Name, err)
+	}
+
+	// Checked again: a Run that swallows a failed wait must still fail.
+	if logged := recorder.loggedError(); logged != nil {
+		return nil, scenarioFailed(cfg.ScenarioV2.Name, logged)
 	}
 
 	teardownOwnedByGoroutine = true
@@ -381,6 +407,9 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			deps.String("wake_reason", wakeReason))
 
 		teardown()
+
+		result.Err = postRunFailure(ctx, recorder, cfg.Store, cfg.Logger)
+
 		close(done)
 	}()
 
@@ -392,6 +421,24 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	return result, nil
+}
+
+const storedStateCheckTimeout = 10 * time.Second
+
+func postRunFailure(ctx context.Context, recorder *runRecorder, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
+	if err := recorder.loggedError(); err != nil {
+		return err
+	}
+
+	if warn := recorder.loggedWarning(); warn != nil {
+		return warn
+	}
+
+	// WithoutCancel: a Ctrl+C after Run returned is not a failed store read.
+	checkCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storedStateCheckTimeout)
+	defer cancel()
+
+	return checkStoredWorkerStates(checkCtx, store, logger)
 }
 
 // SetupStore creates an in-memory TriangularStore for testing and CLI usage.

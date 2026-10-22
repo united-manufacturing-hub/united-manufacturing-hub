@@ -30,13 +30,19 @@ package hello_world
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
+
+// FilesystemKey names the filesystem.Service this worker reads its mood file
+// through. When the dependency map holds nothing under it, the worker reads
+// the file through filesystem.NewDefaultService().
+var FilesystemKey = config.NewDependencyKey[filesystem.Service]("helloworld.filesystem")
 
 // HelloworldWorker implements the FSMv2 Worker interface.
 //
@@ -48,6 +54,8 @@ import (
 // The supervisor drives the state machine by calling these methods each tick.
 type HelloworldWorker struct {
 	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]
+
+	moodFS filesystem.Service
 }
 
 // NewHelloworldWorker creates a new helloworld worker.
@@ -60,7 +68,7 @@ func NewHelloworldWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	w := &HelloworldWorker{}
+	w := &HelloworldWorker{moodFS: filesystem.NewDefaultService()}
 	bd := w.InitBase(identity, logger, stateReader)
 	workerDeps := NewHelloworldDependencies(bd)
 	w.BindDeps(workerDeps)
@@ -96,7 +104,7 @@ func (w *HelloworldWorker) CollectObservedState(ctx context.Context, desired fsm
 
 	status := HelloworldStatus{
 		HelloSaid: w.GetDependencies().HasSaidHello(),
-		Mood:      readMoodFile(cfg.MoodFilePath),
+		Mood:      w.readMoodFile(ctx, cfg.MoodFilePath),
 	}
 
 	return fsmv2.NewObservation(status), nil
@@ -110,13 +118,12 @@ func (w *HelloworldWorker) Actions() map[string]fsmv2.Action[any] {
 	}
 }
 
-// readMoodFile reads the mood from a file path. Returns empty string on error or empty path.
-func readMoodFile(path string) string {
+func (w *HelloworldWorker) readMoodFile(ctx context.Context, path string) string {
 	if path == "" {
 		return ""
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := w.moodFS.ReadFile(ctx, path)
 	if err != nil {
 		return ""
 	}
@@ -126,8 +133,17 @@ func readMoodFile(path string) string {
 
 func init() {
 	register.Worker[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]("helloworld",
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
-			return NewHelloworldWorker(id, logger, sr)
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
+			w, err := NewHelloworldWorker(id, logger, sr)
+			if err != nil {
+				return nil, err
+			}
+
+			if moodFS, ok := config.LookupDependency(m, FilesystemKey); ok {
+				w.moodFS = moodFS
+			}
+
+			return w, nil
 		})
 }
 
