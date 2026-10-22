@@ -38,8 +38,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/topicpattern"
 )
 
 const unsTopicPrefix = "umh.v1."
@@ -278,7 +276,7 @@ func (s writeTopicState) violation() topicViolation {
 
 // check returns why a write flow may not subscribe to pattern, or topicAllowed.
 func (g writeTopicGrammar) check(pattern string) topicViolation {
-	analysis, err := topicpattern.Analyze(pattern, g)
+	analysis, err := analyzeTopicPattern(pattern, g)
 	if err != nil {
 		return topicInvalidRegex
 	}

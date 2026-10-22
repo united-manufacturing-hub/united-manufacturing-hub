@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package topicpattern finds out which topics a benthos-umh topic regex can match,
-// by running the compiled regex together with a topic grammar over every path the
-// regex can take.
-package topicpattern
+package dataflowcomponentserviceconfig
 
 import (
 	"regexp/syntax"
@@ -23,8 +20,8 @@ import (
 	"unicode"
 )
 
-// Grammar is a deterministic automaton over the runes of a UNS topic.
-type Grammar[S comparable] interface {
+// topicGrammar is a deterministic automaton over the runes of a UNS topic.
+type topicGrammar[S comparable] interface {
 	// Start is the state before the first rune of a topic.
 	Start() S
 	// Step is the state after reading r in state.
@@ -34,8 +31,8 @@ type Grammar[S comparable] interface {
 	Significant() []rune
 }
 
-// Analysis describes every topic a pattern can match.
-type Analysis[S comparable] struct {
+// topicAnalysis describes every topic a pattern can match.
+type topicAnalysis[S comparable] struct {
 	// EndStates are the grammar states after every topic prefix the pattern matches.
 	// The topic may continue past that prefix, because the match is not anchored at
 	// the end.
@@ -45,43 +42,43 @@ type Analysis[S comparable] struct {
 	MatchesMidTopic bool
 }
 
-// Analyze returns what pattern can match, read against grammar.
-func Analyze[S comparable](pattern string, grammar Grammar[S]) (Analysis[S], error) {
+// analyzeTopicPattern returns what pattern can match, read against grammar.
+func analyzeTopicPattern[S comparable](pattern string, grammar topicGrammar[S]) (topicAnalysis[S], error) {
 	parsed, err := syntax.Parse(pattern, syntax.Perl)
 	if err != nil {
-		return Analysis[S]{}, err
+		return topicAnalysis[S]{}, err
 	}
 
 	program, err := syntax.Compile(parsed.Simplify())
 	if err != nil {
-		return Analysis[S]{}, err
+		return topicAnalysis[S]{}, err
 	}
 
-	alphabet := newAlphabet(grammar.Significant())
+	alphabet := newRuneAlphabet(grammar.Significant())
 
-	return Analysis[S]{
-		EndStates:       walk(program, alphabet, grammar, true),
-		MatchesMidTopic: len(walk(program, alphabet, anyTopic{}, false)) > 0,
+	return topicAnalysis[S]{
+		EndStates:       walkPattern(program, alphabet, grammar, true),
+		MatchesMidTopic: len(walkPattern(program, alphabet, anyTopicGrammar{}, false)) > 0,
 	}, nil
 }
 
-// position is one point of the search: an instruction of the regex program, the grammar
+// patternPosition is one point of the search: an instruction of the regex program, the grammar
 // state, and the empty-width assertions that hold there.
-type position[S comparable] struct {
+type patternPosition[S comparable] struct {
 	instruction uint32
 	state       S
 	atTextStart bool
 	atTextEnd   bool
 }
 
-// walk follows every path through program and returns the grammar state at each match.
-func walk[S comparable](program *syntax.Prog, alphabet alphabet, grammar Grammar[S], atTextStart bool) []S {
-	pending := []position[S]{{
+// walkPattern follows every path through program and returns the grammar state at each match.
+func walkPattern[S comparable](program *syntax.Prog, alphabet runeAlphabet, grammar topicGrammar[S], atTextStart bool) []S {
+	pending := []patternPosition[S]{{
 		instruction: uint32(program.Start),
 		state:       grammar.Start(),
 		atTextStart: atTextStart,
 	}}
-	visited := map[position[S]]bool{}
+	visited := map[patternPosition[S]]bool{}
 	var endStates []S
 
 	for len(pending) > 0 {
@@ -108,12 +105,12 @@ func walk[S comparable](program *syntax.Prog, alphabet alphabet, grammar Grammar
 }
 
 // successors returns the positions reachable from current in one instruction.
-func successors[S comparable](current position[S], instruction *syntax.Inst, alphabet alphabet, grammar Grammar[S]) []position[S] {
+func successors[S comparable](current patternPosition[S], instruction *syntax.Inst, alphabet runeAlphabet, grammar topicGrammar[S]) []patternPosition[S] {
 	switch instruction.Op {
 	case syntax.InstAlt, syntax.InstAltMatch:
-		return []position[S]{current.at(instruction.Out), current.at(instruction.Arg)}
+		return []patternPosition[S]{current.at(instruction.Out), current.at(instruction.Arg)}
 	case syntax.InstCapture, syntax.InstNop:
-		return []position[S]{current.at(instruction.Out)}
+		return []patternPosition[S]{current.at(instruction.Out)}
 	case syntax.InstEmptyWidth:
 		return passAssertion(current, instruction)
 	case syntax.InstRune, syntax.InstRune1, syntax.InstRuneAny, syntax.InstRuneAnyNotNL:
@@ -123,7 +120,7 @@ func successors[S comparable](current position[S], instruction *syntax.Inst, alp
 	}
 }
 
-func (p position[S]) at(instruction uint32) position[S] {
+func (p patternPosition[S]) at(instruction uint32) patternPosition[S] {
 	p.instruction = instruction
 
 	return p
@@ -131,7 +128,7 @@ func (p position[S]) at(instruction uint32) position[S] {
 
 // passAssertion handles ^, $ and their multi-line forms. Other assertions such as \b
 // are treated as always true, so the search covers more paths than the regex takes.
-func passAssertion[S comparable](current position[S], instruction *syntax.Inst) []position[S] {
+func passAssertion[S comparable](current patternPosition[S], instruction *syntax.Inst) []patternPosition[S] {
 	assertion := syntax.EmptyOp(instruction.Arg)
 
 	// topics contain no newline, so ^ and $ in multi-line mode hold only at the ends
@@ -144,18 +141,18 @@ func passAssertion[S comparable](current position[S], instruction *syntax.Inst) 
 		next.atTextEnd = true
 	}
 
-	return []position[S]{next}
+	return []patternPosition[S]{next}
 }
 
-func consumeRune[S comparable](current position[S], instruction *syntax.Inst, alphabet alphabet, grammar Grammar[S]) []position[S] {
+func consumeRune[S comparable](current patternPosition[S], instruction *syntax.Inst, alphabet runeAlphabet, grammar topicGrammar[S]) []patternPosition[S] {
 	if current.atTextEnd {
 		return nil
 	}
 
-	var next []position[S]
+	var next []patternPosition[S]
 
 	for _, r := range alphabet.representatives(instruction) {
-		next = append(next, position[S]{
+		next = append(next, patternPosition[S]{
 			instruction: instruction.Out,
 			state:       grammar.Step(current.state, r),
 		})
@@ -164,23 +161,23 @@ func consumeRune[S comparable](current position[S], instruction *syntax.Inst, al
 	return next
 }
 
-// alphabet reduces the runes an instruction accepts to the ones the grammar tells apart,
+// runeAlphabet reduces the runes an instruction accepts to the ones the grammar tells apart,
 // plus one stand-in for all the others.
-type alphabet struct {
+type runeAlphabet struct {
 	significant []rune
 }
 
-func newAlphabet(significant []rune) alphabet {
-	return alphabet{significant: significant}
+func newRuneAlphabet(significant []rune) runeAlphabet {
+	return runeAlphabet{significant: significant}
 }
 
-func (a alphabet) isSignificant(r rune) bool {
+func (a runeAlphabet) isSignificant(r rune) bool {
 	return slices.Contains(a.significant, r)
 }
 
 // representatives returns every significant rune instruction accepts, plus one
 // insignificant rune when it accepts any. Topics contain no newline, so none is returned.
-func (a alphabet) representatives(instruction *syntax.Inst) []rune {
+func (a runeAlphabet) representatives(instruction *syntax.Inst) []rune {
 	var out []rune
 
 	for _, r := range a.significant {
@@ -197,7 +194,7 @@ func (a alphabet) representatives(instruction *syntax.Inst) []rune {
 	return out
 }
 
-func (a alphabet) insignificantStandIn(instruction *syntax.Inst) (rune, bool) {
+func (a runeAlphabet) insignificantStandIn(instruction *syntax.Inst) (rune, bool) {
 	switch {
 	case instruction.Op == syntax.InstRune1:
 		return a.firstInsignificant([]rune{instruction.Rune[0]})
@@ -218,7 +215,7 @@ func (a alphabet) insignificantStandIn(instruction *syntax.Inst) (rune, bool) {
 	return 0, false
 }
 
-func (a alphabet) firstInsignificant(runes []rune) (rune, bool) {
+func (a runeAlphabet) firstInsignificant(runes []rune) (rune, bool) {
 	for _, r := range runes {
 		if r != '\n' && !a.isSignificant(r) {
 			return r, true
@@ -229,7 +226,7 @@ func (a alphabet) firstInsignificant(runes []rune) (rune, bool) {
 }
 
 // firstInsignificantInRange stops after at most len(a.significant)+2 runes.
-func (a alphabet) firstInsignificantInRange(low, high rune) (rune, bool) {
+func (a runeAlphabet) firstInsignificantInRange(low, high rune) (rune, bool) {
 	for r := low; r <= high; r++ {
 		if r != '\n' && !a.isSignificant(r) {
 			return r, true
@@ -248,12 +245,12 @@ func caseVariants(r rune) []rune {
 	return variants
 }
 
-// anyTopic is the grammar with one state, used to ask only whether a match exists.
-type anyTopic struct{}
+// anyTopicGrammar is the grammar with one state, used to ask only whether a match exists.
+type anyTopicGrammar struct{}
 
-func (anyTopic) Start() struct{}              { return struct{}{} }
-func (anyTopic) Step(struct{}, rune) struct{} { return struct{}{} }
-func (anyTopic) Significant() []rune          { return nil }
+func (anyTopicGrammar) Start() struct{}              { return struct{}{} }
+func (anyTopicGrammar) Step(struct{}, rune) struct{} { return struct{}{} }
+func (anyTopicGrammar) Significant() []rune          { return nil }
 
 func appendUnique[S comparable](states []S, state S) []S {
 	if slices.Contains(states, state) {

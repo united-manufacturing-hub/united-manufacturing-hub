@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package topicpattern_test
+package dataflowcomponentserviceconfig
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/topicpattern"
 )
 
 // containsUpperX is a grammar whose state reports whether the topic read so far contains an X.
@@ -30,9 +28,9 @@ func (containsUpperX) Step(seenX bool, r rune) bool { return seenX || r == 'X' }
 
 func (containsUpperX) Significant() []rune { return []rune{'X'} }
 
-var _ = Describe("Analyze", func() {
-	analyze := func(pattern string) topicpattern.Analysis[bool] {
-		analysis, err := topicpattern.Analyze[bool](pattern, containsUpperX{})
+var _ = Describe("analyzeTopicPattern", func() {
+	analyze := func(pattern string) topicAnalysis[bool] {
+		analysis, err := analyzeTopicPattern[bool](pattern, containsUpperX{})
 		Expect(err).NotTo(HaveOccurred())
 
 		return analysis
@@ -64,7 +62,7 @@ var _ = Describe("Analyze", func() {
 	)
 
 	It("rejects an invalid regular expression", func() {
-		_, err := topicpattern.Analyze[bool](`^a(`, containsUpperX{})
+		_, err := analyzeTopicPattern[bool](`^a(`, containsUpperX{})
 		Expect(err).To(HaveOccurred())
 	})
 })
