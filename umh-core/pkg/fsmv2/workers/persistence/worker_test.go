@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -305,6 +306,74 @@ var _ = Describe("PersistenceWorker", func() {
 			pw, ok := w.(*persistence.PersistenceWorker)
 			Expect(ok).To(BeTrue())
 			Expect(pw.GetDependencies().GetStore()).To(BeIdenticalTo(store))
+		})
+
+		It("uses the store from the dependency map over the global one", func() {
+			globalStore := &mockTriangularStore{}
+			mapStore := &mockTriangularStore{}
+
+			register.SetGlobalDeps[*persistence.PersistenceDependencies](
+				persistence.WorkerTypeName,
+				persistence.NewStoreOnlyDependencies(globalStore))
+			DeferCleanup(register.ClearGlobalDeps, persistence.WorkerTypeName)
+
+			m := map[string]any{}
+
+			var mapStoreAsStore storage.TriangularStoreInterface = mapStore
+			fsmv2config.SetDependency(m, persistence.StoreKey, mapStoreAsStore)
+			Expect(m).To(HaveKey("persistence.store"))
+
+			factoryIdentity := deps.Identity{ID: "factory-persistence-map", Name: "Factory Persistence Map", WorkerType: "persistence"}
+			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, m)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(w).NotTo(BeNil())
+
+			pw, ok := w.(*persistence.PersistenceWorker)
+			Expect(ok).To(BeTrue())
+			Expect(pw.GetDependencies().GetStore()).To(BeIdenticalTo(mapStore))
+		})
+
+		It("builds from the dependency map alone when the global seed is absent", func() {
+			mapStore := &mockTriangularStore{}
+
+			// examples.PersistenceScenarioV2 supplies its store this way.
+			register.ClearGlobalDeps(persistence.WorkerTypeName)
+
+			m := map[string]any{}
+
+			var mapStoreAsStore storage.TriangularStoreInterface = mapStore
+			fsmv2config.SetDependency(m, persistence.StoreKey, mapStoreAsStore)
+
+			factoryIdentity := deps.Identity{ID: "factory-persistence-map-only", Name: "Factory Persistence Map Only", WorkerType: "persistence"}
+			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, m)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(w).NotTo(BeNil())
+
+			pw, ok := w.(*persistence.PersistenceWorker)
+			Expect(ok).To(BeTrue())
+			Expect(pw.GetDependencies().GetStore()).To(BeIdenticalTo(mapStore))
+		})
+
+		It("uses the global store when a non-nil map lacks the key", func() {
+			globalStore := &mockTriangularStore{}
+
+			register.SetGlobalDeps[*persistence.PersistenceDependencies](
+				persistence.WorkerTypeName,
+				persistence.NewStoreOnlyDependencies(globalStore))
+			DeferCleanup(register.ClearGlobalDeps, persistence.WorkerTypeName)
+
+			// The supervisor never passes a nil map (ensureNonNilDeps), so this
+			// is the production shape when nothing sets persistence.store.
+			m := map[string]any{}
+
+			factoryIdentity := deps.Identity{ID: "factory-persistence-no-key", Name: "Factory Persistence No Key", WorkerType: "persistence"}
+			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, m)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(w).NotTo(BeNil())
+
+			pw, ok := w.(*persistence.PersistenceWorker)
+			Expect(ok).To(BeTrue())
+			Expect(pw.GetDependencies().GetStore()).To(BeIdenticalTo(globalStore))
 		})
 	})
 })

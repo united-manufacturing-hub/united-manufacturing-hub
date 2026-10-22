@@ -22,6 +22,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -48,6 +49,10 @@ const (
 	DefaultRetentionWindow     = snapshot.DefaultRetentionWindow
 	DefaultMaintenanceInterval = snapshot.DefaultMaintenanceInterval
 )
+
+// StoreKey names the store in a worker's dependency map. When set, the
+// worker uses it instead of register.GlobalDeps, which cmd/main.go sets.
+var StoreKey = fsmv2config.NewDependencyKey[storage.TriangularStoreInterface]("persistence.store")
 
 // Compile-time interface check: PersistenceWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*PersistenceWorker)(nil)
@@ -230,8 +235,12 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 
 func init() {
 	register.Worker[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies](WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
 			d := register.GlobalDeps[*PersistenceDependencies](WorkerTypeName)
+
+			if store, ok := fsmv2config.LookupDependency(m, StoreKey); ok {
+				d = NewStoreOnlyDependencies(store)
+			}
 
 			return NewPersistenceWorker(id, logger, sr, d)
 		})
