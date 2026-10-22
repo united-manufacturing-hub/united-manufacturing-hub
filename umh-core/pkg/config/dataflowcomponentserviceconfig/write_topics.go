@@ -12,6 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Each write flow topic is a Go regular expression that the benthos-umh `uns` input
+// matches unanchored against the full UNS topic name. The rules apply to every topic the
+// expression can match, not to how it reads:
+//
+//   - It starts with `^`. Without it, the expression also matches any topic that merely
+//     contains it.
+//   - It matches only topics strictly beneath the bridge location, so a write flow
+//     consumes only its own branch of the UNS tree. An unescaped `.` matches any
+//     character, so the dots between levels must be escaped.
+//   - The first `_`-prefixed segment beneath the location is `_raw`, `_historian` or a
+//     versioned name (`_<name>_v<N>`) from `dataContracts:`, followed by a dot. All
+//     matched topics name versions of one contract: `_pump_v[1-2]\.` is valid when
+//     `_pump_v1` and `_pump_v2` are declared, while `_pump_v\d+\.` reaches undeclared
+//     versions and a wildcard in place of the contract reaches every contract.
+//
+// Anything may follow the contract segment. Topics must already be rendered, with every
+// variable rendered as an escaped literal; an unrendered `{{ }}` action is read as literal
+// text and reported.
+
 package dataflowcomponentserviceconfig
 
 import (
@@ -23,43 +42,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/topicpattern"
 )
 
-// UNSTopicPrefix is the fixed prefix of every UNS topic. The segments after it are the
-// location path, followed by the data contract and any virtual path.
-const UNSTopicPrefix = "umh.v1."
+const unsTopicPrefix = "umh.v1."
 
-// BuiltinDataContracts are the data contracts that exist without being declared in the
-// `dataContracts:` section of config.yaml: `_raw` carries no validation rules and
-// `_historian` is the built-in timeseries contract. Both are unversioned, so the UNS
-// output bypasses schema validation for them.
-var BuiltinDataContracts = []string{"_raw", "_historian"}
+var builtinDataContracts = []string{"_raw", "_historian"}
 
-// dataContractVersionSuffix matches the `_v<N>` version suffix of a data contract name.
 var dataContractVersionSuffix = regexp.MustCompile(`_v\d+$`)
 
-// ValidateTopics reports the topics a write flow may not subscribe to.
-//
-// Each topic is a Go regular expression that the benthos-umh `uns` input matches unanchored
-// against the full UNS topic name. The rules apply to every topic the expression can match,
-// not to how it reads:
-//
-//   - It starts with `^`. Without it, the expression also matches any topic that merely
-//     contains it.
-//   - It matches only topics strictly beneath locationPath, so a write flow consumes only
-//     its own branch of the UNS tree. An unescaped `.` matches any character, so the dots
-//     between levels must be escaped.
-//   - The first `_`-prefixed segment beneath locationPath is a data contract out of
-//     BuiltinDataContracts and the versioned names (`_<name>_v<N>`) in dataContracts,
-//     followed by a dot. All matched topics name versions of one contract: `_pump_v[1-2]\.`
-//     is valid when `_pump_v1` and `_pump_v2` are declared, while `_pump_v\d+\.` reaches
-//     undeclared versions and a wildcard in place of the contract reaches every contract.
-//
-// Anything may follow the contract segment.
-//
-// Topics must already be rendered, with every variable rendered as an escaped literal; an
-// unrendered `{{ }}` action is read as literal text and reported.
+// ValidateTopics reports the topics a write flow at locationPath may not subscribe to.
 func (c DataflowComponentWriteConfig) ValidateTopics(locationPath string, dataContracts []string) error {
 	versioned, unversioned := splitByVersion(dataContracts)
-	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(BuiltinDataContracts), versioned...))
+	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(builtinDataContracts), versioned...))
 
 	rejected := classifyTopics(c.Topics, grammar)
 	if len(rejected) == 0 {
@@ -177,13 +169,13 @@ type writeTopicState struct {
 // writeTopicGrammar accepts topics beneath a bridge location whose first `_` segment is
 // one of a fixed list of data contracts.
 type writeTopicGrammar struct {
-	contractPrefixes map[string]bool
 	locationPrefix   []rune
 	contracts        []string
+	contractPrefixes map[string]bool
 }
 
 func newWriteTopicGrammar(locationPath string, contracts []string) writeTopicGrammar {
-	prefix := UNSTopicPrefix
+	prefix := unsTopicPrefix
 	if locationPath != "" {
 		prefix += locationPath + "."
 	}
