@@ -77,7 +77,7 @@ var CommunicatorScenarioV2 = ScenarioV2{
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[communicator.CommunicatorStatus](ctx, env.Client, ref)
 				if err != nil {
-					if errors.Is(err, fsmv2client.ErrNotObserved) {
+					if errors.Is(err, fsmv2client.ErrNotFound) {
 						return false, "the communicator child has not published an observation yet", nil
 					}
 
