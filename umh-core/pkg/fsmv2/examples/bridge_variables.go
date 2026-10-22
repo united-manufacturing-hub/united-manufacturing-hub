@@ -139,7 +139,7 @@ ns=3;s="DB"."X"
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_flow.ExampleflowStatus](ctx, env.Client, ref)
 					if err != nil {
-						if errors.Is(err, fsmv2client.ErrNotObserved) {
+						if errors.Is(err, fsmv2client.ErrNotFound) {
 							return false, "the flow has not published an observation yet", nil
 						}
 
@@ -285,7 +285,7 @@ ns=3;s="DB2"."X"
 				for _, ref := range refs {
 					if _, err := fsmv2client.Get[example_flow.ExampleflowStatus](ctx, env.Client, ref); err == nil {
 						return fmt.Errorf("the child %s exists but must not", ref.Name)
-					} else if !errors.Is(err, fsmv2client.ErrNotObserved) {
+					} else if !errors.Is(err, fsmv2client.ErrNotFound) {
 						return err
 					}
 				}
