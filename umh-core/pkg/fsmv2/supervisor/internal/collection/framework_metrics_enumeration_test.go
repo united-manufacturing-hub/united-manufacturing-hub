@@ -232,7 +232,7 @@ var _ = Describe("Framework metrics on every registered worker type", func() {
 		// one line of setup: a published dynamic-children registry. Without it
 		// the constructor fails (wrapped in a panic). Its ConfigManager is
 		// optional, so nil is fine.
-		register.SetDeps[*dynamicchildren.Registry]("configworker", &dynamicchildren.Registry{})
+		register.SetGlobalDeps[*dynamicchildren.Registry]("configworker", &dynamicchildren.Registry{})
 
 		types := factory.ListRegisteredTypes()
 		Expect(types).To(HaveLen(registeredFloor))

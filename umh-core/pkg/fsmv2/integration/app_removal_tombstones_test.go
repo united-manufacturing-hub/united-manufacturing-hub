@@ -33,7 +33,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 	const configWorkerKey = "configworker"
 
 	AfterEach(func() {
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	storedRoleDocuments := func(ctx context.Context, store *storage.TriangularStore, workerType, id string) map[string]persistence.Document {
@@ -64,7 +64,7 @@ var _ = Describe("Application supervisor records a removed worker in the store",
 		logger := deps.NewNopFSMLogger()
 
 		w := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
 		childID := config.ChildID(ref.Name)

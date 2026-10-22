@@ -34,10 +34,10 @@ func newCPUConstructedWorker(t *testing.T, cpuEnabled bool) (*configworker.Confi
 	t.Helper()
 
 	shared := dynamicchildren.NewWriter().Registry()
-	register.SetDeps[*dynamicchildren.Registry](workerType, shared)
-	t.Cleanup(func() { register.ClearDeps(workerType) })
-	register.SetDeps[bool](configworker.CPUEnabledDepsKey, cpuEnabled)
-	t.Cleanup(func() { register.ClearDeps(configworker.CPUEnabledDepsKey) })
+	register.SetGlobalDeps[*dynamicchildren.Registry](workerType, shared)
+	t.Cleanup(func() { register.ClearGlobalDeps(workerType) })
+	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, cpuEnabled)
+	t.Cleanup(func() { register.ClearGlobalDeps(configworker.CPUEnabledDepsKey) })
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
 

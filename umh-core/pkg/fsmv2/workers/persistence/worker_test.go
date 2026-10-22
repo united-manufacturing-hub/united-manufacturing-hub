@@ -292,11 +292,11 @@ var _ = Describe("PersistenceWorker", func() {
 			Expect(supervisorOnly).NotTo(ContainElement("persistence"))
 		})
 
-		It("should create worker via factory with store published through register.SetDeps", func() {
+		It("should create worker via factory with store published through register.SetGlobalDeps", func() {
 			factoryIdentity := deps.Identity{ID: "factory-persistence", Name: "Factory Persistence", WorkerType: "persistence"}
 			d := persistence.NewStoreOnlyDependencies(store)
-			register.SetDeps[*persistence.PersistenceDependencies](persistence.WorkerTypeName, d)
-			DeferCleanup(func() { register.ClearDeps(persistence.WorkerTypeName) })
+			register.SetGlobalDeps[*persistence.PersistenceDependencies](persistence.WorkerTypeName, d)
+			DeferCleanup(func() { register.ClearGlobalDeps(persistence.WorkerTypeName) })
 
 			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, nil)
 			Expect(err).NotTo(HaveOccurred())
