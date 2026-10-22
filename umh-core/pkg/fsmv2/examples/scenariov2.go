@@ -65,6 +65,13 @@ type runRecorder struct {
 	lastStep            string
 	firstUnexpectedErr  error
 	firstUnexpectedWarn error
+
+	// teardownStarted records that the runner's teardown has begun. Teardown
+	// cancels the supervisor, and an in-flight action that fails with
+	// context.Canceled from that point on is the teardown itself working,
+	// not a scenario defect. Before teardown it stays a defect,
+	// so the flag is what recordLoggedError reads to tell the two apart.
+	teardownStarted bool
 }
 
 // alwaysAllowedMessages are logged by the collector in normal operation, so
@@ -76,12 +83,18 @@ var alwaysAllowedMessages = []string{
 }
 
 // recordLoggedError keeps the first error the scenario does not expect.
+// Once teardown has started, a context.Canceled error is expected: teardown
+// cancels the supervisor, and an in-flight action fails with exactly that.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
 	if r.messageAllowed(msg, r.expectedErrors) {
 		return
 	}
 
 	if r.errorCauseAllowed(err) {
+		return
+	}
+
+	if r.teardownHasStarted() && errors.Is(err, context.Canceled) {
 		return
 	}
 
@@ -147,6 +160,24 @@ func (r *runRecorder) loggedError() error {
 	defer r.mu.Unlock()
 
 	return r.firstUnexpectedErr
+}
+
+// markTeardownStarted records that teardown has started. The runner calls it
+// before it cancels the supervisor, so every context.Canceled error logged
+// after that point reads as teardown and not as a scenario defect.
+func (r *runRecorder) markTeardownStarted() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.teardownStarted = true
+}
+
+// teardownHasStarted reports whether teardown has started.
+func (r *runRecorder) teardownHasStarted() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.teardownStarted
 }
 
 func (r *runRecorder) setLastStep(description string) {

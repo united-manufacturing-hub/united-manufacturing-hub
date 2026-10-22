@@ -336,8 +336,12 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 	// teardown is the single cleanup path: Shutdown is idempotent, so every
 	// exit calls it unconditionally rather than guessing whether the
-	// supervisor already stopped.
+	// supervisor already stopped. Marking teardown first means a
+	// context.Canceled error the supervisor's cancellation logs from an
+	// in-flight action is recorded as expected teardown, not a run defect.
 	teardown := func() {
+		recorder.markTeardownStarted()
+
 		appSup.Shutdown()
 		<-supDone
 		// DrainOutcomeClean is valid only after supDone: the drain budget is

@@ -212,4 +212,45 @@ var _ = Describe("ScenarioV2 run end", func() {
 		Expect(entriesWithMsg(parseLogEntries(logBuf.String()), "scenario_run_finished")).To(BeEmpty(),
 			"a run whose logged-error check fails must not log a scenario_run_finished line")
 	})
+
+	It("fails a run whose Run logs a context.Canceled error before teardown", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logBuf := &v2LogBuffer{}
+		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
+		store := examples.SetupStore(logger)
+
+		// A cancellation the SCENARIO itself logs mid-Run is a defect: teardown
+		// has not started, so nothing of the runner's has been cancelled yet.
+		// The run must fail on it, so the harness's teardown allowance (a
+		// context.Canceled recorded as expected once teardown begins) cannot
+		// swallow a genuine pre-teardown cancellation.
+		cancelling := examples.ScenarioV2{
+			Name:        "run-precancel-logging",
+			Description: "test-local Run that logs a context.Canceled error and still returns nil",
+			Run: func(_ context.Context, env examples.Env) error {
+				env.Logger.SentryError(deps.FeatureExamples, "",
+					context.Canceled, "probe_run_precancelled")
+
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   cancelling,
+			Duration:     50 * time.Millisecond,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).To(HaveOccurred(),
+			"a Run that logs a context.Canceled error before teardown must fail examples.Run")
+		Expect(errors.Is(err, examples.ErrScenarioFailed)).To(BeTrue(),
+			"the failure must wrap ErrScenarioFailed, so the CLI reports a failed scenario and not a failed start")
+		Expect(err.Error()).To(ContainSubstring("probe_run_precancelled"),
+			"the failure must name the pre-teardown cancellation the scenario logged")
+	})
 })
