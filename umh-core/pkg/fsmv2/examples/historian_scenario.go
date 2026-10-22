@@ -90,7 +90,7 @@ var HistorianScenarioV2 = ScenarioV2{
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[simple.Status[fsmv2timescale.TimescaleStatus]](ctx, env.Client, fsmv2timescale.Ref)
 					if err != nil {
-						if errors.Is(err, fsmv2client.ErrNotObserved) {
+						if errors.Is(err, fsmv2client.ErrNotFound) {
 							return false, "the monitor has not published an observation yet", nil
 						}
 
