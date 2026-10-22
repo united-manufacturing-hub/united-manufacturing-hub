@@ -20,6 +20,7 @@ package deps
 type ChannelProvider[T any] interface {
 	GetChannels(workerID string) (inbound chan<- T, outbound <-chan T)
 	// GetInboundStats returns the capacity and current length of the inbound
-	// channel. It lets a reader check for backpressure before it reads.
+	// channel. A worker sending into the inbound channel checks this first,
+	// so it can stop pulling while the channel is nearly full.
 	GetInboundStats(workerID string) (capacity int, length int)
 }
