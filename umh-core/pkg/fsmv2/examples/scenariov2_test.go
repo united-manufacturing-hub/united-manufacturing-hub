@@ -143,6 +143,15 @@ var _ = Describe("ScenarioV2 framework", func() {
 			Expect(examples.Registry).NotTo(HaveKey(name),
 				"scenario name %q is registered in both Registry and RegistryV2", name)
 		}
+
+		// LiveRegistryV2 joins the same listing, so the same collision rules
+		// hold against both other registries.
+		for name := range examples.LiveRegistryV2 {
+			Expect(examples.Registry).NotTo(HaveKey(name),
+				"scenario name %q is registered in both Registry and LiveRegistryV2", name)
+			Expect(examples.RegistryV2).NotTo(HaveKey(name),
+				"scenario name %q is registered in both RegistryV2 and LiveRegistryV2", name)
+		}
 	})
 
 	It("rejects a RunConfig with both a v1 and a v2 scenario set", func() {

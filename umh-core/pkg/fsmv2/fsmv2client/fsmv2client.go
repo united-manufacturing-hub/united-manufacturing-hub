@@ -222,6 +222,22 @@ const (
 	Fresh
 )
 
+// String names f, so a log or error line reads "stale" rather than 3.
+func (f Freshness) String() string {
+	switch f {
+	case Deleted:
+		return "deleted"
+	case NotFound:
+		return "not-found"
+	case Stale:
+		return "stale"
+	case Fresh:
+		return "fresh"
+	default:
+		return "unknown"
+	}
+}
+
 // freshnessAt classifies a Get result. now is a parameter so tests can hit the
 // age boundary exactly.
 func freshnessAt[TStatus any](obs fsmv2.Observation[TStatus], err error, maxAge time.Duration, now time.Time) (Freshness, error) {

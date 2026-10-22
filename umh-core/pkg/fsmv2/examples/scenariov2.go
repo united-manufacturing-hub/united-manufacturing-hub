@@ -331,4 +331,17 @@ var RegistryV2 = map[string]ScenarioV2{
 	"certfetcher-degraded":       CertFetcherDegradedScenarioV2,
 	"certfetcher-no-subscribers": CertFetcherNoSubscribersScenarioV2,
 	"historian":                  HistorianScenarioV2,
+
+	"cpu-pressure": CPUPressureScenarioV2,
+	"cpu-blind":    CPUBlindScenarioV2,
+	"cpu-stall":    CPUStallScenarioV2,
+	"cpu-filling":  CPUFillingScenarioV2,
+	"cpu-latch":    CPULatchScenarioV2,
+}
+
+// LiveRegistryV2 holds scenarios that read the real machine the runner runs
+// on, so their result depends on that machine's CPU load and cgroup files. The
+// CLI runs them. The registry spec does not, because CI does not control those.
+var LiveRegistryV2 = map[string]ScenarioV2{
+	"cpu-host": CPUHostScenarioV2,
 }

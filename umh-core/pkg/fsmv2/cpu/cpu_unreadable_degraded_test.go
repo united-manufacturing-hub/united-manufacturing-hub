@@ -57,20 +57,20 @@ func (fileMap) ReadDir(context.Context, string) ([]os.DirEntry, error) {
 
 func cgroupV2LimitedTo2Cores() map[string]string {
 	return map[string]string{
-		cgroupBase + "/cgroup.controllers":    "cpuset cpu io memory pids\n",
+		CgroupBase + "/cgroup.controllers":    "cpuset cpu io memory pids\n",
 		"/proc/self/cgroup":                   "0::/\n",
-		cgroupBase + "/cpu.pressure":          "some avg10=0.00 avg60=0.00 avg300=0.00 total=0\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n",
-		cgroupBase + "/cpu.stat":              "usage_usec 1000\nuser_usec 600\nsystem_usec 400\nnr_periods 10\nnr_throttled 0\nthrottled_usec 0\n",
+		CgroupBase + "/cpu.pressure":          "some avg10=0.00 avg60=0.00 avg300=0.00 total=0\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n",
+		CgroupBase + "/cpu.stat":              "usage_usec 1000\nuser_usec 600\nsystem_usec 400\nnr_periods 10\nnr_throttled 0\nthrottled_usec 0\n",
 		"/proc/stat":                          "cpu  1000 0 500 10000 0 0 0 0 0 0\ncpu0 250 0 125 2500 0 0 0 0 0 0\ncpu1 250 0 125 2500 0 0 0 0 0 0\ncpu2 250 0 125 2500 0 0 0 0 0 0\ncpu3 250 0 125 2500 0 0 0 0 0 0\n",
-		cgroupBase + "/cpuset.cpus.effective": "0-3\n",
+		CgroupBase + "/cpuset.cpus.effective": "0-3\n",
 		"/proc/cpuinfo":                       "processor\t: 0\nmodel name\t: test\n\n",
-		cgroupBase + "/cpu.max":               "200000 100000\n",
+		CgroupBase + "/cpu.max":               "200000 100000\n",
 	}
 }
 
 func cgroupV2UnlimitedOn4Cores() map[string]string {
 	files := cgroupV2LimitedTo2Cores()
-	files[cgroupBase+"/cpu.max"] = "max 100000\n"
+	files[CgroupBase+"/cpu.max"] = "max 100000\n"
 
 	return files
 }
@@ -122,7 +122,7 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 				}
 			}
 		},
-		Entry("cpu.stat missing with a CPU limit", without(cgroupV2LimitedTo2Cores(), cgroupBase+"/cpu.stat"), true),
+		Entry("cpu.stat missing with a CPU limit", without(cgroupV2LimitedTo2Cores(), CgroupBase+"/cpu.stat"), true),
 		Entry("every file present", cgroupV2LimitedTo2Cores(), false),
 	)
 
@@ -134,13 +134,13 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 			Expect(err.Error()).To(ContainSubstring(file))
 		},
 		Entry("cpu.stat missing on a container with a CPU limit",
-			without(cgroupV2LimitedTo2Cores(), cgroupBase+"/cpu.stat"), cgroupBase+"/cpu.stat"),
+			without(cgroupV2LimitedTo2Cores(), CgroupBase+"/cpu.stat"), CgroupBase+"/cpu.stat"),
 		Entry("/proc/stat missing on a container without a CPU limit",
 			without(cgroupV2UnlimitedOn4Cores(), "/proc/stat"), "/proc/stat"),
 		Entry("cpuset.cpus.effective missing on a container without a CPU limit: only this file gives the core count",
-			without(cgroupV2UnlimitedOn4Cores(), cgroupBase+"/cpuset.cpus.effective"), cgroupBase+"/cpuset.cpus.effective"),
+			without(cgroupV2UnlimitedOn4Cores(), CgroupBase+"/cpuset.cpus.effective"), CgroupBase+"/cpuset.cpus.effective"),
 		Entry("cpuset.cpus.effective and /proc/stat missing on a container without a CPU limit: the error names /proc/stat, the first read that failed",
-			without(cgroupV2UnlimitedOn4Cores(), cgroupBase+"/cpuset.cpus.effective", "/proc/stat"), "/proc/stat"),
+			without(cgroupV2UnlimitedOn4Cores(), CgroupBase+"/cpuset.cpus.effective", "/proc/stat"), "/proc/stat"),
 	)
 
 	DescribeTable("stays healthy when every file it needs was read",
@@ -151,8 +151,8 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 			Expect(status.Verdict.State).To(Equal(cpuhealth.StateHealthy))
 		},
 		Entry("every file present, on the first poll after a start", cgroupV2LimitedTo2Cores()),
-		Entry("cpu.pressure missing: pressure is not judged", without(cgroupV2LimitedTo2Cores(), cgroupBase+"/cpu.pressure")),
+		Entry("cpu.pressure missing: pressure is not judged", without(cgroupV2LimitedTo2Cores(), CgroupBase+"/cpu.pressure")),
 		Entry("cpu.stat missing without a CPU limit: /proc/stat measures the machine",
-			without(cgroupV2UnlimitedOn4Cores(), cgroupBase+"/cpu.stat")),
+			without(cgroupV2UnlimitedOn4Cores(), CgroupBase+"/cpu.stat")),
 	)
 })
