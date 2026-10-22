@@ -21,9 +21,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 
 	// Blank-import the state packages so their init() registrations exist before
 	// the supervisor ticks.
@@ -44,11 +44,11 @@ var _ = Describe("Dynamic Scenario: migration-API lifecycle real proof", func() 
 		// The dynamic scenario must be registered beside noop and reachable
 		// through the same merged listing the CLI reads. A missing entry here is
 		// the first thing this rung adds.
-		listing := examples.ListScenarios()
+		listing := scenarios.ListScenarios()
 		Expect(listing).To(HaveKey("dynamic"),
 			"merged ListScenarios must contain the dynamic scenario")
 
-		dynamic, ok := examples.Registry["dynamic"]
+		dynamic, ok := scenarios.Registry["dynamic"]
 		Expect(ok).To(BeTrue(),
 			"Registry must register the dynamic scenario beside noop")
 		Expect(dynamic.Run).NotTo(BeNil(),
@@ -64,7 +64,7 @@ var _ = Describe("Dynamic Scenario: migration-API lifecycle real proof", func() 
 
 		// The runner builds an fsmv2client over this same store, so Run reads
 		// observed state from the store verifyStateFieldsAreValid inspects afterward.
-		result, err := examples.Run(ctx, examples.RunConfig{
+		result, err := scenarios.Run(ctx, scenarios.RunConfig{
 			Scenario:     dynamic,
 			Duration:     2 * time.Second,
 			TickInterval: 100 * time.Millisecond,

@@ -238,9 +238,9 @@ UNIT_LABEL_FILTER := !integration && !redpanda-extended && !tls && !live
 # Explicit list: excludes integration/ (requires Docker; has its own make target)
 UNIT_TEST_PKGS := ./cmd/... ./internal/... ./pkg/... ./test/...
 # Package that runs its Ginkgo suite in parallel (--procs); must be kept separate
-UNIT_TEST_PKGS_PARALLEL := ./pkg/fsmv2/examples/...
+UNIT_TEST_PKGS_PARALLEL := ./pkg/fsmv2/scenarios/...
 # All unit-test packages except the parallel ones (evaluated on first use)
-UNIT_TEST_PKGS_SERIAL = $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/examples' | tr '\n' ' ')
+UNIT_TEST_PKGS_SERIAL = $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/scenarios' | tr '\n' ' ')
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true

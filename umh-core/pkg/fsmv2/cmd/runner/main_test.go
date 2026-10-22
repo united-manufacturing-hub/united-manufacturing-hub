@@ -29,13 +29,13 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 )
 
 func TestShutdownExitCode(t *testing.T) {
 	tests := []struct {
 		name   string
-		result *examples.RunResult
+		result *scenarios.RunResult
 		want   int
 	}{
 		{
@@ -45,12 +45,12 @@ func TestShutdownExitCode(t *testing.T) {
 		},
 		{
 			name:   "clean drain exits zero",
-			result: &examples.RunResult{ShutdownClean: true},
+			result: &scenarios.RunResult{ShutdownClean: true},
 			want:   0,
 		},
 		{
 			name: "clean drain with Err exits non-zero",
-			result: &examples.RunResult{
+			result: &scenarios.RunResult{
 				ShutdownClean: true,
 				Err:           errors.New("the scenario does not expect this warning: probe"),
 			},
@@ -58,7 +58,7 @@ func TestShutdownExitCode(t *testing.T) {
 		},
 		{
 			name:   "unclean drain exits non-zero",
-			result: &examples.RunResult{ShutdownClean: false},
+			result: &scenarios.RunResult{ShutdownClean: false},
 			want:   1,
 		},
 	}
@@ -73,16 +73,16 @@ func TestShutdownExitCode(t *testing.T) {
 }
 
 func TestFatalMessage(t *testing.T) {
-	failedRun := fmt.Errorf("scenario %q %w: %w", "probe", examples.ErrScenarioFailed, errors.New("the mood file is corrupt"))
+	failedRun := fmt.Errorf("scenario %q %w: %w", "probe", scenarios.ErrScenarioFailed, errors.New("the mood file is corrupt"))
 	if got := fatalMessage(failedRun); got != "Scenario failed" {
 		t.Errorf("fatalMessage(%v) = %q, want %q", failedRun, got, "Scenario failed")
 	}
 
-	_, notStarted := examples.Run(context.Background(), examples.RunConfig{
-		Scenario: examples.Scenario{Name: "probe"},
+	_, notStarted := scenarios.Run(context.Background(), scenarios.RunConfig{
+		Scenario: scenarios.Scenario{Name: "probe"},
 	})
 	if notStarted == nil {
-		t.Fatal("examples.Run must reject a scenario whose Run is nil")
+		t.Fatal("scenarios.Run must reject a scenario whose Run is nil")
 	}
 
 	if got := fatalMessage(notStarted); got != "Failed to start scenario" {
@@ -259,7 +259,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 
 func TestExpectedFields(t *testing.T) {
 	t.Run("a scenario declaring all three kinds gets one field per kind", func(t *testing.T) {
-		full := examples.Scenario{
+		full := scenarios.Scenario{
 			ExpectedErrors:      []string{"action_failed"},
 			ExpectedErrorCauses: []error{errors.New("boom")},
 			ExpectedWarnings:    []string{"slow"},
@@ -298,7 +298,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario declaring only warnings gets only the warnings field", func(t *testing.T) {
-		fields := expectedFields(examples.Scenario{ExpectedWarnings: []string{"slow"}})
+		fields := expectedFields(scenarios.Scenario{ExpectedWarnings: []string{"slow"}})
 
 		if len(fields) != 1 || fields[0].Key != "expected_warnings" {
 			t.Fatalf("expectedFields must return only expected_warnings, got %v", fields)
@@ -306,7 +306,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a nil expected cause matches nothing and yields no entry", func(t *testing.T) {
-		fields := expectedFields(examples.Scenario{
+		fields := expectedFields(scenarios.Scenario{
 			ExpectedErrorCauses: []error{errors.New("boom"), nil},
 		})
 
@@ -321,7 +321,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario whose expected causes are all nil gets no causes field", func(t *testing.T) {
-		fields := expectedFields(examples.Scenario{ExpectedErrorCauses: []error{nil}})
+		fields := expectedFields(scenarios.Scenario{ExpectedErrorCauses: []error{nil}})
 
 		if len(fields) != 0 {
 			t.Errorf("expectedFields must return no field when every expected cause is nil, got %v", fields)
@@ -329,7 +329,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario declaring nothing gets no field", func(t *testing.T) {
-		if got := expectedFields(examples.Scenario{}); len(got) != 0 {
+		if got := expectedFields(scenarios.Scenario{}); len(got) != 0 {
 			t.Errorf("expectedFields must return no field for a scenario declaring nothing, got %d", len(got))
 		}
 	})
@@ -339,7 +339,7 @@ func TestStartingScenarioFields(t *testing.T) {
 	obsCore, logs := observer.New(zapcore.InfoLevel)
 	logger := zap.New(obsCore)
 
-	full := examples.Scenario{
+	full := scenarios.Scenario{
 		ExpectedErrors:      []string{"action_failed"},
 		ExpectedErrorCauses: []error{errors.New("boom"), nil},
 		ExpectedWarnings:    []string{"slow"},
@@ -378,7 +378,7 @@ func TestStartingScenarioFields(t *testing.T) {
 
 	logger.Info("Starting scenario",
 		startingScenarioFields("probe", "a probe", "endless (until Ctrl+C)", time.Second,
-			examples.Scenario{ExpectedWarnings: []string{"slow"}})...)
+			scenarios.Scenario{ExpectedWarnings: []string{"slow"}})...)
 
 	entries = logs.TakeAll()
 	if len(entries) != 1 {
