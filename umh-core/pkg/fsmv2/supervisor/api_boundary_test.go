@@ -75,18 +75,6 @@ var _ = Describe("Supervisor API Boundary", func() {
 			}
 		})
 
-		It("should export configuration methods", func() {
-			publicMethods := []string{
-				"SetGlobalVariables",
-			}
-
-			for _, methodName := range publicMethods {
-				method, exists := supervisorType.MethodByName(methodName)
-				Expect(exists).To(BeTrue(), "Public method %s should exist", methodName)
-				Expect(method.IsExported()).To(BeTrue(), "Method %s should be exported", methodName)
-			}
-		})
-
 		It("should export testing support methods", func() {
 			publicMethods := []string{
 				"GetChildren",
