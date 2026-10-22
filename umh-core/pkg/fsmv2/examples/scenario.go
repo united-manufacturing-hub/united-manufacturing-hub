@@ -34,13 +34,6 @@
 //	})
 //
 // CLI uses the same scenarios via pkg/fsmv2/cmd/runner.
-//
-// # Adding New Scenarios
-//
-// To add a new scenario:
-//  1. Create a new file (e.g., stress.go) with your Scenario definition
-//  2. Register it in the Registry map in this file
-//  3. Reference simple.go for documentation on available options
 package examples
 
 import (
@@ -174,8 +167,8 @@ type Scenario struct {
 	YAMLConfig string
 }
 
-// Registry contains all available scenarios.
-// Add new scenarios here to make them available in both tests and CLI.
+// Registry holds the v1 scenarios not yet moved to v2 (ENG-5114). New
+// scenarios go in RegistryV2; see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 var Registry = map[string]Scenario{
 	"simple":       SimpleScenario,
 	"failing":      FailingScenario,
