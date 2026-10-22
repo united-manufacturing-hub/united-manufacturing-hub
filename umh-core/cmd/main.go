@@ -634,11 +634,6 @@ func buildFSMv2Supervisor(
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to render FSMv2 supervisor children: %w", err)
 	}
 
-	if configData.Agent.UseGatekeeper {
-		register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
-			certfetcher.NewCertHandlerSeedDependencies(communicationState.Gatekeeper.CertificateHandler()))
-	}
-
 	// The historian monitor is a dynamic child, upserted and deleted at runtime
 	// by the config worker's per-tick reconcile so live config edits apply
 	// without restarting umh-core.
@@ -668,6 +663,13 @@ func buildFSMv2Supervisor(
 	// its worker however deep it sits.
 	fsmv2config.SetDependency(fsmv2Deps, communicator.ChannelProviderKey, communicator.ChannelProvider(channelAdapter))
 	fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
+
+	// The certfetcher worker reads its cert handler from the same map. The
+	// handler is created only when gatekeeper is enabled, and
+	// renderSupervisorChildrenYAML adds the certfetcher child only then.
+	if configData.Agent.UseGatekeeper {
+		fsmv2config.SetDependency(fsmv2Deps, certfetcher.CertHandlerKey, communicationState.Gatekeeper.CertificateHandler())
+	}
 
 	register.SetGlobalDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 
