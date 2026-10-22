@@ -48,21 +48,21 @@ func (d *DefaultConnectionPool) HealthCheck(_ Connection) error {
 
 // FailingDependencies provides access to tools needed by failing worker actions.
 type FailingDependencies struct {
-	*deps.BaseDependencies                // Embedded pointer (8 bytes)
-	connectionPool         ConnectionPool // Interface (16 bytes)
-	lastFailureTime        time.Time      // When the last failure occurred - kept for metrics (24 bytes)
-	mu                     sync.RWMutex   // Protects mutable fields below (24 bytes)
-	maxFailures            int
-	attempts               int
-	restartAfterFailures   int
-	failureCycles          int // Total number of failure cycles to perform
-	currentCycle           int // Current failure cycle (0-indexed)
-	ticksInConnectedState  int // Number of ticks spent in Connected state
-	recoveryDelayMs        int // Time to wait after failure before retrying (ms) - kept for backward compat
+	*deps.BaseDependencies                   // Embedded pointer (8 bytes)
+	connectionPool            ConnectionPool // Interface (16 bytes)
+	lastFailureTime           time.Time      // When the last connect failure occurred (24 bytes)
+	mu                        sync.RWMutex   // Protects mutable fields below (24 bytes)
+	maxFailures               int
+	attempts                  int
+	restartAfterFailures      int
+	failureCycles             int // Total number of failure cycles to perform
+	currentCycle              int // Current failure cycle (0-indexed)
+	ticksInConnectedState     int // Number of ticks spent in Connected state
+	recoveryDelayMs           int // Wait after the last failure before retrying
 	recoveryDelayObservations int // Number of observations to wait after failure before retrying
 	observationsSinceFailure  int // Counter incremented each time CollectObservedState is called
-	shouldFail             bool
-	connected              bool
+	shouldFail                bool
+	connected                 bool
 }
 
 // NewFailingDependencies creates dependencies for the failing worker.
@@ -252,10 +252,13 @@ func (d *FailingDependencies) GetLastFailureTime() time.Time {
 
 // ShouldDelayRecovery returns true if we should wait before retrying after a failure.
 // This keeps the worker in the unhealthy state long enough for parents to observe.
-// Uses observation-based counting to avoid race conditions with time-based delays.
 func (d *FailingDependencies) ShouldDelayRecovery() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
+	if d.recoveryDelayMs > 0 && time.Since(d.lastFailureTime) < time.Duration(d.recoveryDelayMs)*time.Millisecond {
+		return true
+	}
 
 	if d.recoveryDelayObservations == 0 {
 		return false
