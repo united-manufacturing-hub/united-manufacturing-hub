@@ -566,13 +566,19 @@ var _ = Describe("Graceful drain budget cascading", func() {
 		Expect(spent).To(BeNumerically(">=", 3*cascadeTruncationBase),
 			"expected child_drain_elapsed to show the Phase-2 child drains spent at least the root's whole 3×base budget")
 
-		// Total wall clock = sum of the sibling subtree budgets (2×base each)
-		// plus an immediate root break-out — bounded, not stalled by a fresh
-		// root window on top. Slop covers the five sequentially-torn-down
-		// supervisors (root, two mids, two leafs).
-		Expect(elapsed).To(BeNumerically("<=", 4*cascadeTruncationBase+5*perLevelTeardownSlop),
-			"Shutdown took %v; two sequential 2×base sibling drains plus an immediate root break-out must stay within 4×base = %v (+%v teardown slop for 5 supervisors)",
-			elapsed, 4*cascadeTruncationBase, 5*perLevelTeardownSlop)
+		// The root's own drain phase — from its sibling drains ending
+		// (childDrainElapsed, carried by the warn above) to Shutdown
+		// returning — is the claim's whole timing content: a spent budget
+		// arms a non-positive timer that fires immediately, so this stays at
+		// one supervisor's Phase-3/4 teardown cost, far below one base
+		// budget. The total wall clock is NOT the claim: it is dominated by
+		// the two sequential 2×base mid drains, which stretch on a loaded
+		// box, and bounding it here flakes exactly there (run 39825992428:
+		// 9.007s against the old 4×base+5×slop bound).
+		ownDrainPhase := elapsed - spent
+		Expect(ownDrainPhase).To(BeNumerically("<=", perLevelTeardownSlop),
+			"the root's own drain phase took %v (total %v, child drains %v); a budget the sibling drains pre-spent must arm a non-positive timer that breaks out immediately, not a fresh 3×base window",
+			ownDrainPhase, elapsed, spent)
 	})
 
 	// Zero-worker exhaustion (supervisor/doc.go, "Graceful shutdown budget":
