@@ -336,8 +336,8 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 			// Both the worker and its child go: the child must be dropped on
 			// the shutdown of a broken parent, not respawned from the cached
 			// children specs. Removing a parent drains its child first, so the
-			// wait allows the 15s that pkg/fsmv2/CLAUDE.md gives a two-level
-			// shutdown.
+			// wait allows 15s, more than the 2 × 5s budget that the "Graceful
+			// shutdown budget" section of supervisor/doc.go gives two levels.
 			Eventually(func() bool {
 				children := s.GetChildren()
 
