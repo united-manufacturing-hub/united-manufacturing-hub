@@ -1270,10 +1270,13 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		s.mu.Lock()
 		delete(s.workers, workerID)
 		delete(s.removing, workerID)
+		// Once the lock is released, an AddWorker can register a worker and
+		// replace s.logger, so read it while the lock is held.
+		logger := s.logger
 		s.mu.Unlock()
 		close(removalDone)
 
-		s.logger.Debug("worker_removed_successfully",
+		logger.Debug("worker_removed_successfully",
 			deps.Int("children_cleaned", childCount))
 
 		return nil
