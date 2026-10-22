@@ -36,7 +36,7 @@ func main() {
 	// Command-line flags
 	var (
 		scenarioName = flag.String("scenario", "simple", "scenario name from registry")
-		duration     = flag.Duration("duration", 0, "run duration, 0 means endless until Ctrl+C")
+		duration     = flag.Duration("duration", 0, fmt.Sprintf("v2: settle window after the scenario ends (default %s when unset); v1: bounds the whole run; 0 means endless until Ctrl+C", defaultSettle))
 		logLevel     = flag.String("log-level", "info", "debug, info, warn, error")
 		tickInterval = flag.Duration("tick", 100*time.Millisecond, "tick interval")
 		listFlag     = flag.Bool("list", false, "list available scenarios and exit")
@@ -45,6 +45,8 @@ func main() {
 	)
 
 	flag.Parse()
+
+	durationSet := durationWasSet(flag.CommandLine)
 
 	// Validate tick interval and duration to prevent runtime panics
 	if *tickInterval <= 0 {
@@ -134,11 +136,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	runDuration, applyCtxTimeout := routeDuration(isV2, *duration)
+	effectiveDuration, defaulted := defaultDuration(isV2, durationSet, *duration)
+
+	settleWindow, applyCtxTimeout := routeDuration(isV2, effectiveDuration)
 	if applyCtxTimeout {
 		var timeoutCancel context.CancelFunc
 
-		ctx, timeoutCancel = context.WithTimeout(ctx, *duration)
+		ctx, timeoutCancel = context.WithTimeout(ctx, effectiveDuration)
 		defer timeoutCancel()
 	}
 
@@ -167,26 +171,27 @@ func main() {
 		},
 	)
 
-	store := examples.SetupStore(deps.NewFSMLogger(logger.Sugar()))
+	store := examples.SetupStore(newRunLogger(logger))
 
 	durationStr := "endless (until Ctrl+C)"
-	if *duration > 0 {
-		durationStr = duration.String()
+
+	switch {
+	case defaulted:
+		durationStr = fmt.Sprintf("%s after the scenario ends", defaultSettle)
+	case effectiveDuration > 0:
+		durationStr = effectiveDuration.String()
 	}
 
 	logger.Info("Starting scenario",
-		zap.String("name", *scenarioName),
-		zap.String("description", description),
-		zap.String("duration", durationStr),
-		zap.Duration("tick", *tickInterval),
+		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, v2Scenario)...,
 	)
 
 	result, err := examples.Run(ctx, examples.RunConfig{
 		Scenario:           v1Scenario,
 		ScenarioV2:         v2Scenario,
-		Duration:           runDuration,
+		Duration:           settleWindow,
 		TickInterval:       *tickInterval,
-		Logger:             deps.NewFSMLogger(logger.Sugar()),
+		Logger:             newRunLogger(logger),
 		Store:              store,
 		EnableTraceLogging: *traceFlag,
 		DumpStore:          *dumpStore,
@@ -259,12 +264,11 @@ func shutdownExitCode(result *examples.RunResult) int {
 	return 0
 }
 
-// routeDuration decides how a --duration flag binds to a run. A v2 scenario
-// treats the duration as a settle window after ScenarioV2.Run returns, so it
-// flows into RunConfig.Duration and never bounds the run with a ctx timeout. A
-// v1 scenario has no settle window, so the duration bounds the whole run via a
-// ctx timeout.
-// A zero duration stays endless on both paths.
+// routeDuration decides how a duration binds to a run. A v2 scenario treats
+// it as the time the run keeps going after Run returns, so it flows into
+// RunConfig.Duration and never bounds the run with a ctx timeout. A v1
+// scenario has no end of its own, so the duration bounds the whole run via a
+// ctx timeout. A zero duration stays endless on both paths.
 func routeDuration(isV2 bool, duration time.Duration) (runDuration time.Duration, applyCtxTimeout bool) {
 	if duration <= 0 {
 		return 0, false
@@ -275,6 +279,34 @@ func routeDuration(isV2 bool, duration time.Duration) (runDuration time.Duration
 	}
 
 	return 0, true
+}
+
+// defaultSettle is how long a v2 run without --duration keeps going after the
+// scenario's Run returns.
+const defaultSettle = time.Second
+
+// defaultDuration returns the duration a run uses. A v2 scenario given no
+// --duration keeps going defaultSettle after its Run returns; defaulted
+// reports that case.
+func defaultDuration(isV2, durationSet bool, duration time.Duration) (effective time.Duration, defaulted bool) {
+	if isV2 && !durationSet {
+		return defaultSettle, true
+	}
+
+	return duration, false
+}
+
+// durationWasSet tells an explicit --duration=0 apart from no --duration.
+func durationWasSet(fs *flag.FlagSet) bool {
+	set := false
+
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "duration" {
+			set = true
+		}
+	})
+
+	return set
 }
 
 // isCleanInterruptExit reports whether a run error is an interrupt-induced
@@ -297,6 +329,52 @@ func handleSignals(sigCh <-chan os.Signal, done <-chan struct{}, onFirstSignal f
 		forceExit()
 	case <-done:
 	}
+}
+
+// newRunLogger is unsampled, so the CLI prints every line a run logs.
+func newRunLogger(logger *zap.Logger) deps.FSMLogger {
+	return deps.NewUnsampledFSMLogger(logger.Sugar())
+}
+
+func startingScenarioFields(name, description, duration string, tick time.Duration, s examples.ScenarioV2) []zap.Field {
+	return append([]zap.Field{
+		zap.String("name", name),
+		zap.String("description", description),
+		zap.String("duration", duration),
+		zap.Duration("tick", tick),
+	}, expectedFields(s)...)
+}
+
+// expectedFields returns one field per expectation list the scenario fills.
+func expectedFields(s examples.ScenarioV2) []zap.Field {
+	var fields []zap.Field
+
+	if len(s.ExpectedErrors) > 0 {
+		fields = append(fields, zap.Reflect("expected_errors", s.ExpectedErrors))
+	}
+
+	if causes := nonNilCauseMessages(s.ExpectedErrorCauses); len(causes) > 0 {
+		fields = append(fields, zap.Reflect("expected_error_causes", causes))
+	}
+
+	if len(s.ExpectedWarnings) > 0 {
+		fields = append(fields, zap.Reflect("expected_warnings", s.ExpectedWarnings))
+	}
+
+	return fields
+}
+
+// nonNilCauseMessages skips nil causes: runRecorder.errorCauseAllowed never matches one.
+func nonNilCauseMessages(causes []error) []string {
+	messages := make([]string, 0, len(causes))
+
+	for _, cause := range causes {
+		if cause != nil {
+			messages = append(messages, cause.Error())
+		}
+	}
+
+	return messages
 }
 
 // parseLogLevel converts string log level to zap level using zap's built-in parser.

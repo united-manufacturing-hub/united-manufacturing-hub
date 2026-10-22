@@ -136,6 +136,83 @@ var _ = Describe("ScenarioV2 steps and waits", func() {
 			"the step line must name the scenario that announced the change")
 	})
 
+	It("logs one scenario_wait_passed line per wait that passes, and none for a wait that never passes", func() {
+		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
+
+		logBuf := &v2LogBuffer{}
+		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
+		store := examples.SetupStore(logger)
+
+		var firstPolls atomic.Int32
+
+		waiting := examples.ScenarioV2{
+			Name:        "wait-passed-logging",
+			Description: "test-local Run for the wait-passed log line",
+			Run: func(ctx context.Context, env examples.Env) error {
+				// Done on the second poll, so a pass line quoting the first poll's value fails the seen assertion.
+				if err := env.WaitFor(ctx, "first check",
+					func(_ context.Context) (bool, string, error) {
+						if firstPolls.Add(1) < 2 {
+							return false, "seen=not-yet", nil
+						}
+
+						return true, "seen=one", nil
+					}); err != nil {
+					return err
+				}
+
+				if err := env.WaitFor(ctx, "second check",
+					func(_ context.Context) (bool, string, error) {
+						return true, "seen=two", nil
+					}); err != nil {
+					return err
+				}
+
+				return env.WaitFor(ctx, "never check",
+					func(_ context.Context) (bool, string, error) {
+						return false, "seen=never", nil
+					})
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		_, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   waiting,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).To(HaveOccurred(),
+			"the never-passing wait must fail the run once the short ctx ends")
+
+		entries := entriesWithMsg(parseLogEntries(logBuf.String()), "scenario_wait_passed")
+
+		Expect(entries).To(HaveLen(2),
+			"each of the two passing waits must log exactly one scenario_wait_passed line")
+
+		for _, entry := range entries {
+			Expect(entry.Level).To(Equal("info"),
+				"the line must be logged at info, the runner CLI's default level, or it disappears from run output")
+			Expect(entry.Scenario).To(Equal("wait-passed-logging"),
+				"the line must name the scenario that ran the wait")
+		}
+
+		seenByCheck := make(map[string]string, len(entries))
+
+		for _, entry := range entries {
+			seenByCheck[entry.Check] = entry.Seen
+		}
+
+		Expect(seenByCheck).NotTo(HaveKey("never check"),
+			"a wait that never passes must not log a scenario_wait_passed line")
+		Expect(seenByCheck).To(Equal(map[string]string{
+			"first check":  "seen=one",
+			"second check": "seen=two",
+		}), "each line must pair its own check with the value that check's passing poll saw")
+	})
+
 	It("fails a wait whose poll errors, naming the last step, the check and the poll's error", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)

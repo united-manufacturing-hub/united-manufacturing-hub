@@ -372,6 +372,9 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		return nil, scenarioFailed(cfg.ScenarioV2.Name, logged)
 	}
 
+	cfg.Logger.Info("scenario_run_finished",
+		deps.String("scenario", cfg.ScenarioV2.Name))
+
 	teardownOwnedByGoroutine = true
 
 	done := make(chan struct{})
