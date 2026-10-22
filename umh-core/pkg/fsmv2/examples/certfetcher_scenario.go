@@ -145,7 +145,7 @@ func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.R
 		func(ctx context.Context) (bool, string, error) {
 			obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
 			if err != nil {
-				if errors.Is(err, fsmv2client.ErrNotObserved) {
+				if errors.Is(err, fsmv2client.ErrNotFound) {
 					return false, "the worker has not published an observation yet", nil
 				}
 
@@ -180,7 +180,7 @@ var CertFetcherHealthyScenarioV2 = ScenarioV2{
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, certFetcherRef)
 				if err != nil {
-					if errors.Is(err, fsmv2client.ErrNotObserved) {
+					if errors.Is(err, fsmv2client.ErrNotFound) {
 						return false, "the worker has not published an observation yet", nil
 					}
 
@@ -241,7 +241,7 @@ var CertFetcherNoSubscribersScenarioV2 = ScenarioV2{
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, certFetcherRef)
 				if err != nil {
-					if errors.Is(err, fsmv2client.ErrNotObserved) {
+					if errors.Is(err, fsmv2client.ErrNotFound) {
 						return false, "the worker has not published an observation yet", nil
 					}
 
