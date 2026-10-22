@@ -19,6 +19,7 @@ import (
 	"errors"
 	"net"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -35,7 +36,7 @@ type mockDialer struct {
 
 func (m *mockDialer) DialContext(_ context.Context, _, _ string) (net.Conn, error) {
 	if !m.open.Load() {
-		return nil, errors.New("connection refused")
+		return nil, &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}
 	}
 
 	remote, local := net.Pipe()
