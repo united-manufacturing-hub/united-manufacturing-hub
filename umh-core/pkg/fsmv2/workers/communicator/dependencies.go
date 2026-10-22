@@ -31,22 +31,10 @@ type CommunicatorDependencies struct {
 	outboundChan    <-chan *types.UMHMessage
 }
 
-// NewCommunicatorDependencies creates dependencies for the communicator worker,
-// acquiring channels from the global channel provider set with SetChannelProvider.
-// Panics when that global is unset.
+// NewCommunicatorDependencies creates dependencies for the communicator worker
+// from provider.
 // bd is the shared BaseDependencies returned by WorkerBase.InitBase.
-func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies) *CommunicatorDependencies {
-	return newCommunicatorDependenciesWithProvider(t, bd, GetChannelProvider())
-}
-
-// newCommunicatorDependenciesWithProvider is NewCommunicatorDependencies with
-// an explicit provider in place of the global one.
-func newCommunicatorDependenciesWithProvider(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *CommunicatorDependencies {
-	if provider == nil {
-		panic("ChannelProvider must be set before creating communicator dependencies. " +
-			"Call SetChannelProvider() in main.go before starting the FSMv2 supervisor.")
-	}
-
+func NewCommunicatorDependencies(t types.Transport, bd *deps.BaseDependencies, provider ChannelProvider) *CommunicatorDependencies {
 	inbound, outbound := provider.GetChannels(bd.GetWorkerID())
 
 	return &CommunicatorDependencies{
