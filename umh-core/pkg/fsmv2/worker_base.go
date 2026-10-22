@@ -133,7 +133,9 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 	var cfg TConfig
 	if renderedConfig != "" {
 		if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
-			return nil, fmt.Errorf("config unmarshal failed: %w", err)
+			// A YAML syntax error or a value of the wrong type is the user's
+			// config mistake, so the supervisor logs it as config_error.
+			return nil, &config.ConfigError{Err: fmt.Errorf("config unmarshal failed: %w", err)}
 		}
 	}
 
