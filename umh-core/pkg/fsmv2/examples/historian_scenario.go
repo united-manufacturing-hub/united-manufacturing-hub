@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	pkgconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -141,7 +140,7 @@ var HistorianScenarioV2 = ScenarioV2{
 					obs.Status.Degraded &&
 					!obs.Status.Result.Reachable &&
 					obs.Status.Result.Auth == models.TimescaleAuthUnknown &&
-					strings.Contains(obs.Status.Reason, "connection refused")
+					obs.Status.Reason == "TimescaleDB is unreachable"
 			}); err != nil {
 			return err
 		}
@@ -159,7 +158,7 @@ var HistorianScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("the database accepts the password again; the monitor declares no Health function, so it returns to running with reason \"running (no health check)\"")
+		env.Step("the database accepts the password again; the monitor returns to running with reason \"connected to TimescaleDB\"")
 		fake.SetErr(nil)
 
 		return waitForHistorian("store shows running again",
@@ -167,7 +166,8 @@ var HistorianScenarioV2 = ScenarioV2{
 				return obs.State == "running" &&
 					!obs.Status.Degraded &&
 					obs.Status.Result.Reachable &&
-					obs.Status.Result.Auth == models.TimescaleAuthValid
+					obs.Status.Result.Auth == models.TimescaleAuthValid &&
+					obs.Status.Reason == "connected to TimescaleDB"
 			})
 	},
 }
