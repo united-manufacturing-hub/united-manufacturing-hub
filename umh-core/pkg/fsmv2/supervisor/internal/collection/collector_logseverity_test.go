@@ -54,8 +54,6 @@ func (l *severityCapturingLogger) Debug(msg string, _ ...deps.Field) { l.record(
 
 func (l *severityCapturingLogger) Info(msg string, _ ...deps.Field) { l.record("info", msg) }
 
-func (l *severityCapturingLogger) Warn(msg string, _ ...deps.Field) { l.record("warn", msg) }
-
 func (l *severityCapturingLogger) SentryWarn(_ deps.Feature, _ string, msg string, _ ...deps.Field) {
 	l.record("sentrywarn", msg)
 }

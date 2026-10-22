@@ -48,13 +48,6 @@ type Env struct {
 	recorder *runRecorder
 }
 
-// recordedWarning is one Warn call a scenario logged, kept so a wait can match
-// on the message and the field values.
-type recordedWarning struct {
-	msg    string
-	fields map[string]string
-}
-
 // runRecorder is the per-run state that Step and WaitFor share across copies
 // of Env. The fields above mu are set before the supervisor starts and never change.
 type runRecorder struct {
@@ -72,7 +65,6 @@ type runRecorder struct {
 	lastStep            string
 	firstUnexpectedErr  error
 	firstUnexpectedWarn error
-	warns               []recordedWarning
 }
 
 // alwaysAllowedMessages are logged by the collector in normal operation, so
@@ -143,45 +135,6 @@ func (r *runRecorder) recordLoggedWarning(msg string) {
 	}
 }
 
-// recordWarn keeps one Warn call for WaitForWarning and runs the same
-// ExpectedWarnings check recordLoggedWarning runs, so an unexpected Warn
-// message fails the run like an unexpected SentryWarn does.
-func (r *runRecorder) recordWarn(msg string, fields []deps.Field) {
-	r.recordLoggedWarning(msg)
-
-	values := make(map[string]string, len(fields))
-
-	for _, f := range fields {
-		values[f.Key] = fmt.Sprint(f.Value)
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.warns = append(r.warns, recordedWarning{msg: msg, fields: values})
-}
-
-// warningRecorded reports whether a Warn with message msg was logged whose
-// fields carry contains in any value.
-func (r *runRecorder) warningRecorded(msg string, contains string) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	for _, w := range r.warns {
-		if w.msg != msg {
-			continue
-		}
-
-		for _, v := range w.fields {
-			if strings.Contains(v, contains) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 func (r *runRecorder) loggedWarning() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -227,12 +180,6 @@ func (l *recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath string,
 	l.recorder.recordLoggedWarning(msg)
 
 	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
-}
-
-func (l *recordingLogger) Warn(msg string, fields ...deps.Field) {
-	l.recorder.recordWarn(msg, fields)
-
-	l.FSMLogger.Warn(msg, fields...)
 }
 
 // With wraps again, so a logger carrying context fields records too.
@@ -295,37 +242,6 @@ func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Co
 
 			return fmt.Errorf("wait %q after step %q timed out after %s: last seen %q",
 				check, e.recorder.lastStepDescription(), waitForTimeout, lastSeen)
-		case <-time.After(waitForPollInterval):
-		}
-	}
-}
-
-// WaitForWarning waits until a Warn with message msg was logged and one of
-// its field values contains contains. It polls at WaitFor's interval and
-// times out after WaitFor's timeout, and an error names msg and contains.
-func (e Env) WaitForWarning(ctx context.Context, msg string, contains string) error {
-	waitCtx, cancel := context.WithTimeout(ctx, waitForTimeout)
-	defer cancel()
-
-	for {
-		if e.recorder.warningRecorded(msg, contains) {
-			e.Logger.Info("scenario_wait_passed",
-				deps.String("scenario", e.recorder.scenario),
-				deps.String("check", "warning "+msg),
-				deps.String("seen", contains))
-
-			return nil
-		}
-
-		select {
-		case <-waitCtx.Done():
-			if ctx.Err() != nil {
-				return fmt.Errorf("wait for warning %q containing %q after step %q did not complete before ctx ended: %w",
-					msg, contains, e.recorder.lastStepDescription(), ctx.Err())
-			}
-
-			return fmt.Errorf("wait for warning %q containing %q after step %q timed out after %s",
-				msg, contains, e.recorder.lastStepDescription(), waitForTimeout)
 		case <-time.After(waitForPollInterval):
 		}
 	}

@@ -170,11 +170,11 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 		goodDoc, err := store.LoadDesired(ctx, "test", "test-worker") //nolint:staticcheck // the raw document is the comparison
 		Expect(err).NotTo(HaveOccurred())
 
-		// Break the spec and wait until a tick derived it and warned the
+		// Break the spec and wait until a tick derived it and logged the
 		// config mistake, so the checks below run while the error lasts.
 		s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
 		Eventually(func() int {
-			return recorder.warnCount("config_error")
+			return recorder.infoCount("config_error")
 		}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 		// The worker must stay listed while the spec is broken: a regression
@@ -201,9 +201,9 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 		}, 5*time.Second, 10*time.Millisecond).Should(BeEmpty(),
 			"a worker with a config mistake must still be ticked on the desired state derived from its last good config, so it reaches removal after RequestShutdown")
 
-		// One warning and no Sentry event across the broken window: the
-		// config mistake is a user mistake, warned once, never escalated.
-		Expect(recorder.warnCount("config_error")).To(Equal(1))
+		// One Info line and no Sentry event across the broken window: the
+		// config mistake is a user mistake, logged once, never escalated.
+		Expect(recorder.infoCount("config_error")).To(Equal(1))
 		Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 		Expect(recorder.sentryWarnEvents()).To(BeEmpty())
 	})
@@ -227,7 +227,7 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 
 		s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
 		Eventually(func() int {
-			return recorder.warnCount("config_error")
+			return recorder.infoCount("config_error")
 		}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 		// The spec-hash cache is not updated on the config error, so every
@@ -285,7 +285,7 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 			// mistake, its cached desired state still names the child.
 			s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
 			Eventually(func() int {
-				return recorder.warnCount("config_error")
+				return recorder.infoCount("config_error")
 			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 			// The child's Next keeps being called while the parent's spec is
@@ -328,7 +328,7 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 
 			s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
 			Eventually(func() int {
-				return recorder.warnCount("config_error")
+				return recorder.infoCount("config_error")
 			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 			Expect(s.RequestShutdown(ctx, "test shutdown")).To(Succeed())
@@ -380,7 +380,7 @@ var _ = Describe("Supervisor shutdown with a config mistake", func() {
 			// Break the spec while the worker is disabled.
 			s.TestUpdateUserSpec(config.UserSpec{Config: "{{ broken"})
 			Eventually(func() int {
-				return recorder.warnCount("config_error")
+				return recorder.infoCount("config_error")
 			}, 5*time.Second, 10*time.Millisecond).Should(BeNumerically(">=", 1))
 
 			// The stored Disabled bit survives the broken window: a tick that

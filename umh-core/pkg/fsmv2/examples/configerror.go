@@ -33,7 +33,7 @@ var ConfigErrorScenario = Scenario{
 	Description: "Workers with a bad config are rejected and never start; beside them a valid parent reaches Running and an empty-config parent stays in TryingToStart",
 
 	// This run expects no logged errors.
-	ExpectedWarnings: []string{"reducer_error", "config_error"},
+	ExpectedWarnings: []string{"reducer_error"},
 
 	Run: func(ctx context.Context, env Env) error {
 		validRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-valid"}

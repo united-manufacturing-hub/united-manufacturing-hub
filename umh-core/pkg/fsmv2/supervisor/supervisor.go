@@ -190,14 +190,15 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// Config so all supervisors observe the same close. See types.go Config.ForceExit.
 	forceExit                <-chan struct{}
 	noStateMachineLoggedOnce sync.Map
-	// lastConfigErrorWarned suppresses repeat "config_error" warns for this
-	// supervisor's own worker: it holds the last message warned, is cleared
-	// when a derive succeeds, so a re-occurring message warns again.
-	lastConfigErrorWarned string
-	// childConfigErrorWarned suppresses repeat "config_error" warns per child
-	// name (child name → last message warned); the entry is cleared when the
-	// child is created, so a child that fails again warns again.
-	childConfigErrorWarned map[string]string
+	// lastConfigErrorLogged suppresses repeat "config_error" logs for this
+	// supervisor's own worker. It holds the last message logged and is
+	// cleared when a derive succeeds, so a message that comes back is logged
+	// again.
+	lastConfigErrorLogged string
+	// childConfigErrorLogged suppresses repeat "config_error" logs per child
+	// name (child name → last message logged). The entry is cleared when the
+	// child is created, so a child that fails again is logged again.
+	childConfigErrorLogged map[string]string
 	// childCreateConfigError holds the name of every child whose latest
 	// create attempt failed with a *config.ConfigError. The entry is written
 	// on that failure and cleared both when the child is later created and

@@ -27,15 +27,11 @@ import (
 	"github.com/DataDog/gostackparse"
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap/zapcore"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var sentryEventsDropped atomic.Int64
 
-// SentryHook wraps a zapcore.Core and sends warn- and error-level logs to
-// Sentry, except warn-level entries marked sentry_skip (logs-only warnings
-// from FSMLogger.Warn).
+// SentryHook wraps a zapcore.Core and sends warn- and error-level logs to Sentry.
 type SentryHook struct {
 	zapcore.Core
 	debouncer *FingerprintDebouncer
@@ -114,17 +110,7 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 
 	fieldMap := FieldsToMap(fields)
 
-	// Warn-level entries marked NoSentryKey are logs-only by design; never
-	// capture them. Only WARN level honors the marker, so no field can
-	// suppress an error-level entry. See FSMLogger.Warn for the contract.
-	if entry.Level == zapcore.WarnLevel {
-		if skip, ok := fieldMap[deps.NoSentryKey].(bool); ok && skip {
-
-			return
-		}
-	}
-
-	// Extract feature field; falls back to "unknown" as a safety net (SentryWarn and SentryError inject feature; Warn does not)
+	// Extract feature field; falls back to "unknown" as a safety net (all FSMLogger warn/error methods inject feature)
 	feature := ExtractFeature(fieldMap)
 
 	// Extract error DIRECTLY from fields (FieldsToMap converts errors to strings)

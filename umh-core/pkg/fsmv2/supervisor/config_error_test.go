@@ -40,11 +40,11 @@ type recordedLogCall struct {
 	Fields []deps.Field
 }
 
-// recordingSentryLogger records every logger call at warn level or above; a
-// recording method added to it records too.
+// recordingSentryLogger records every Info call and every call at warn level
+// or above.
 type recordingSentryLogger struct {
 	mu           sync.Mutex
-	warns        []recordedLogCall
+	infos        []recordedLogCall
 	sentryWarns  []recordedLogCall
 	sentryErrors []recordedLogCall
 }
@@ -55,13 +55,11 @@ func newRecordingSentryLogger() *recordingSentryLogger {
 
 func (r *recordingSentryLogger) Debug(string, ...deps.Field) {}
 
-func (r *recordingSentryLogger) Info(string, ...deps.Field) {}
-
-func (r *recordingSentryLogger) Warn(event string, fields ...deps.Field) {
+func (r *recordingSentryLogger) Info(event string, fields ...deps.Field) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.warns = append(r.warns, recordedLogCall{Event: event, Fields: fields})
+	r.infos = append(r.infos, recordedLogCall{Event: event, Fields: fields})
 }
 
 func (r *recordingSentryLogger) SentryWarn(_ deps.Feature, _ string, event string, fields ...deps.Field) {
@@ -82,18 +80,34 @@ func (r *recordingSentryLogger) SentryError(_ deps.Feature, _ string, err error,
 // built from its base logger record into the same list.
 func (r *recordingSentryLogger) With(...deps.Field) deps.FSMLogger { return r }
 
-func (r *recordingSentryLogger) warnCount(event string) int {
+// infoCalls returns the recorded Info calls named event, in call order.
+func (r *recordingSentryLogger) infoCalls(event string) []recordedLogCall {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	count := 0
-	for _, call := range r.warns {
+	var calls []recordedLogCall
+	for _, call := range r.infos {
 		if call.Event == event {
-			count++
+			calls = append(calls, call)
 		}
 	}
 
-	return count
+	return calls
+}
+
+func (r *recordingSentryLogger) infoCount(event string) int {
+	return len(r.infoCalls(event))
+}
+
+// expectNoConfigErrorWarning fails when "config_error" was logged at warn
+// level or above. A config mistake is the user's, so it is logged at Info.
+func expectNoConfigErrorWarning(r *recordingSentryLogger) {
+	GinkgoHelper()
+
+	Expect(r.sentryWarnEvents()).NotTo(ContainElement("config_error"),
+		"a config mistake must not be logged as a warning")
+	Expect(r.sentryErrorEvents()).NotTo(ContainElement("config_error"),
+		"a config mistake must not be logged as an error")
 }
 
 func (r *recordingSentryLogger) sentryErrorEvents() []string {
@@ -120,8 +134,8 @@ func (r *recordingSentryLogger) sentryWarnEvents() []string {
 	return events
 }
 
-// warnFieldMap turns one recorded Warn call into a map of its field values.
-func warnFieldMap(call recordedLogCall) map[string]any {
+// logFieldMap turns one recorded logger call into a map of its field values.
+func logFieldMap(call recordedLogCall) map[string]any {
 	fields := make(map[string]any, len(call.Fields))
 
 	for _, f := range call.Fields {
@@ -306,7 +320,7 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(s.ListWorkers()).To(BeEmpty())
 
 			Expect(recorder.sentryErrorEvents()).To(ConsistOf("worker_add_derive_desired_failed"))
-			Expect(recorder.warnCount("config_error")).To(Equal(0))
+			Expect(recorder.infoCount("config_error")).To(Equal(0))
 		})
 	})
 
@@ -352,12 +366,12 @@ var _ = Describe("Supervisor config errors", func() {
 			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: brokenChildConfig})
 		})
 
-		It("warns once per distinct message, creates the child once fixed, and stays out of Sentry", func() {
+		It("logs once per distinct message at Info, creates the child once fixed, and stays out of Sentry", func() {
 			for i := 0; i < 5; i++ {
 				Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 			}
 
-			Expect(recorder.warnCount("config_error")).To(Equal(1))
+			Expect(recorder.infoCount("config_error")).To(Equal(1))
 			Expect(parentSuper.GetChildren()).To(BeEmpty())
 
 			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: validChildConfig})
@@ -368,11 +382,12 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 			Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 
-			Expect(recorder.warnCount("config_error")).To(Equal(2))
+			Expect(recorder.infoCount("config_error")).To(Equal(2))
 			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 			Expect(recorder.sentryWarnEvents()).To(BeEmpty())
+			expectNoConfigErrorWarning(recorder)
 
-			// Creating the child clears its dedup entry, so the same message warns again.
+			// Creating the child clears its dedup entry, so the same message is logged again.
 			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: validChildConfig})
 			Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 			Expect(parentSuper.GetChildren()).To(HaveKey("cfgerr-child"))
@@ -381,12 +396,12 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 			Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 
-			Expect(recorder.warnCount("config_error")).To(Equal(3))
+			Expect(recorder.infoCount("config_error")).To(Equal(3))
 		})
 	})
 
 	Describe("A parent whose two children share a config error", func() {
-		It("warns once per child even for the same message", func() {
+		It("logs once per child even for the same message", func() {
 			recorder := newRecordingSentryLogger()
 
 			err := factory.RegisterFactoryByType("configerrorchild",
@@ -418,7 +433,7 @@ var _ = Describe("Supervisor config errors", func() {
 				Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 			}
 
-			Expect(recorder.warnCount("config_error")).To(Equal(2))
+			Expect(recorder.infoCount("config_error")).To(Equal(2))
 			Expect(parentSuper.GetChildren()).To(BeEmpty())
 			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 			Expect(recorder.sentryWarnEvents()).To(BeEmpty())
@@ -472,12 +487,12 @@ var _ = Describe("Supervisor config errors", func() {
 				"worker_add_derive_desired_failed",
 				"child_supervisor_add_worker_failed",
 			))
-			Expect(recorder.warnCount("config_error")).To(Equal(0))
+			Expect(recorder.infoCount("config_error")).To(Equal(0))
 		})
 	})
 
 	Describe("A running worker whose spec breaks", func() {
-		It("warns once, stays out of Sentry and keeps the stored desired state", func() {
+		It("logs once at Info, stays out of Sentry and keeps the stored desired state", func() {
 			recorder := newRecordingSentryLogger()
 			store := newMockTriangularStore()
 			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
@@ -499,17 +514,18 @@ var _ = Describe("Supervisor config errors", func() {
 				Expect(s.TestTick(ctx)).To(HaveOccurred())
 			}
 
-			Expect(recorder.warnCount("config_error")).To(Equal(1))
+			Expect(recorder.infoCount("config_error")).To(Equal(1))
 			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
+			expectNoConfigErrorWarning(recorder)
 
-			ownWarnFields := warnFieldMap(recorder.warns[0])
-			Expect(ownWarnFields["field"]).To(Equal("config"),
-				"the warning names the config error's field")
-			Expect(fmt.Sprint(ownWarnFields["error"])).To(ContainSubstring("misspelled"),
-				"the warning carries the underlying error")
-			Expect(ownWarnFields["message"]).To(ContainSubstring("misspelled"))
-			Expect(ownWarnFields["hierarchy_path"]).To(ContainSubstring("test-worker"),
-				"the warning names the worker it is about")
+			ownLogFields := logFieldMap(recorder.infoCalls("config_error")[0])
+			Expect(ownLogFields["field"]).To(Equal("config"),
+				"the log line names the config error's field")
+			Expect(fmt.Sprint(ownLogFields["error"])).To(ContainSubstring("misspelled"),
+				"the log line carries the underlying error")
+			Expect(ownLogFields["message"]).To(ContainSubstring("misspelled"))
+			Expect(ownLogFields["hierarchy_path"]).To(ContainSubstring("test-worker"),
+				"the log line names the worker it is about")
 
 			desiredAfter, err := store.LoadDesired(ctx, "test", "test-worker")
 			Expect(err).NotTo(HaveOccurred())
@@ -520,7 +536,7 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(afterJSON)).To(Equal(string(beforeJSON)))
 
-			// A successful derive clears the memory, so the same message warns again.
+			// A successful derive clears the memory, so the same message is logged again.
 			s.TestUpdateUserSpec(config.UserSpec{Config: "valid"})
 			Expect(s.TestTick(ctx)).NotTo(HaveOccurred())
 
@@ -529,7 +545,7 @@ var _ = Describe("Supervisor config errors", func() {
 				Expect(s.TestTick(ctx)).To(HaveOccurred())
 			}
 
-			Expect(recorder.warnCount("config_error")).To(Equal(2))
+			Expect(recorder.infoCount("config_error")).To(Equal(2))
 			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 		})
 	})
@@ -550,7 +566,7 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(s.TestTick(ctx)).To(HaveOccurred())
 
 			Expect(recorder.sentryErrorEvents()).To(ConsistOf("derive_desired_state_failed"))
-			Expect(recorder.warnCount("config_error")).To(Equal(0))
+			Expect(recorder.infoCount("config_error")).To(Equal(0))
 		})
 	})
 
@@ -558,7 +574,7 @@ var _ = Describe("Supervisor config errors", func() {
 		// The value is the user's typo, so misspell must not flag it.
 		const brokenStateConfig = "state: runing\nname: b1" //nolint:misspell
 
-		It("warns once with a config error naming the value and stays out of Sentry", func() {
+		It("logs once with a config error naming the value and stays out of Sentry", func() {
 			recorder := newRecordingSentryLogger()
 
 			err := factory.RegisterFactoryByType("statetypochild",
@@ -591,16 +607,16 @@ var _ = Describe("Supervisor config errors", func() {
 				Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 			}
 
-			Expect(recorder.warnCount("config_error")).To(Equal(1))
+			Expect(recorder.infoCount("config_error")).To(Equal(1))
 
-			childWarnFields := warnFieldMap(recorder.warns[0])
-			Expect(childWarnFields["child_name"]).To(Equal("cfgerr-child"))
-			Expect(childWarnFields["field"]).To(Equal("state"),
-				"the child warning names the config error's field")
-			Expect(fmt.Sprint(childWarnFields["error"])).To(ContainSubstring("runing"), //nolint:misspell
-				"the child warning carries the underlying error")
-			Expect(childWarnFields["hierarchy_path"]).To(ContainSubstring("parent-worker"),
-				"the child warning names the parent whose child failed")
+			childLogFields := logFieldMap(recorder.infoCalls("config_error")[0])
+			Expect(childLogFields["child_name"]).To(Equal("cfgerr-child"))
+			Expect(childLogFields["field"]).To(Equal("state"),
+				"the child log line names the config error's field")
+			Expect(fmt.Sprint(childLogFields["error"])).To(ContainSubstring("runing"), //nolint:misspell
+				"the child log line carries the underlying error")
+			Expect(childLogFields["hierarchy_path"]).To(ContainSubstring("parent-worker"),
+				"the child log line names the parent whose child failed")
 
 			Expect(parentSuper.GetChildren()).To(BeEmpty(),
 				"a worker with a config mistake must not start")
@@ -608,9 +624,9 @@ var _ = Describe("Supervisor config errors", func() {
 			Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 			Expect(recorder.sentryWarnEvents()).To(BeEmpty())
 
-			Expect(recorder.warns[0].Fields).To(ContainElement(
+			Expect(recorder.infoCalls("config_error")[0].Fields).To(ContainElement(
 				WithTransform(func(f deps.Field) any { return f.Value }, ContainSubstring("runing"))), //nolint:misspell
-				"the warning must name the rejected state value")
+				"the log line must name the rejected state value")
 		})
 	})
 })

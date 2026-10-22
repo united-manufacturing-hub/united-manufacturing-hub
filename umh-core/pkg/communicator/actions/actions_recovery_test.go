@@ -296,7 +296,6 @@ type countingPanickingFSMLogger struct {
 
 func (l *countingPanickingFSMLogger) Debug(string, ...deps.Field)                            {}
 func (l *countingPanickingFSMLogger) Info(string, ...deps.Field)                             {}
-func (l *countingPanickingFSMLogger) Warn(string, ...deps.Field)                             {}
 func (l *countingPanickingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
 func (l *countingPanickingFSMLogger) SentryError(feature deps.Feature, hp string, err error, msg string, fields ...deps.Field) {
 	l.calls = append(l.calls, capturedSentryError{feature, hp, err, msg, fields})
@@ -377,7 +376,6 @@ type capturedSentryError struct {
 
 func (l *capturingFSMLogger) Debug(string, ...deps.Field)                            {}
 func (l *capturingFSMLogger) Info(string, ...deps.Field)                             {}
-func (l *capturingFSMLogger) Warn(string, ...deps.Field)                             {}
 func (l *capturingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
 func (l *capturingFSMLogger) SentryError(feature deps.Feature, hp string, err error, msg string, fields ...deps.Field) {
 	l.calls = append(l.calls, capturedSentryError{feature, hp, err, msg, fields})
@@ -451,7 +449,6 @@ type panickingFSMLogger struct{}
 
 func (panickingFSMLogger) Debug(string, ...deps.Field)                            {}
 func (panickingFSMLogger) Info(string, ...deps.Field)                             {}
-func (panickingFSMLogger) Warn(string, ...deps.Field)                             {}
 func (panickingFSMLogger) SentryWarn(deps.Feature, string, string, ...deps.Field) {}
 func (panickingFSMLogger) SentryError(deps.Feature, string, error, string, ...deps.Field) {
 	panic("logger boom")

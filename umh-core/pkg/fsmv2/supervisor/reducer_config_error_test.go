@@ -123,7 +123,7 @@ var _ = Describe("The reducer's not-found warning and config mistakes", func() {
 		}
 
 		Expect(parentSuper.GetChildren()).To(BeEmpty())
-		Expect(recorder.warnCount("config_error")).To(Equal(1))
+		Expect(recorder.infoCount("config_error")).To(Equal(1))
 		Expect(recorder.sentryWarnEvents()).NotTo(ContainElement("reducer_error"))
 		Expect(recorder.sentryErrorEvents()).To(BeEmpty())
 	})
@@ -140,7 +140,7 @@ var _ = Describe("The reducer's not-found warning and config mistakes", func() {
 
 		Expect(parentSuper.TestTick(ctx)).NotTo(HaveOccurred())
 		Expect(parentSuper.GetChildren()).To(BeEmpty())
-		Expect(recorder.warnCount("config_error")).To(Equal(1))
+		Expect(recorder.infoCount("config_error")).To(Equal(1))
 
 		By("fixing the config and creating the child")
 

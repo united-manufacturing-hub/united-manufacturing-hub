@@ -49,8 +49,6 @@ func (l *recordingFSMLogger) Debug(_ string, _ ...deps.Field) {}
 
 func (l *recordingFSMLogger) Info(_ string, _ ...deps.Field) {}
 
-func (l *recordingFSMLogger) Warn(_ string, _ ...deps.Field) {}
-
 func (l *recordingFSMLogger) SentryError(_ deps.Feature, _ string, _ error, _ string, _ ...deps.Field) {
 }
 

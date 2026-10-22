@@ -72,7 +72,7 @@ var _ = Describe("Supervisor root tick loop logging", func() {
 		defer cancel()
 
 		// The root worker's config mistake must not reach Sentry from the
-		// tick loop: warnConfigErrorOnce in the derive path already reported
+		// tick loop: logConfigErrorOnce in the derive path already reported
 		// it.
 		configRecorder := newRecordingSentryLogger()
 		configSuper := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
@@ -90,27 +90,27 @@ var _ = Describe("Supervisor root tick loop logging", func() {
 		configSuper.Start(ctx)
 		defer configSuper.Shutdown()
 
-		// The warn count stays >= 1 once set, so wait for it rather than
+		// The config_error count stays >= 1 once set, so wait for it rather than
 		// sleeping a fixed interval and checking once.
 		Eventually(func() int {
-			return configRecorder.warnCount("config_error")
+			return configRecorder.infoCount("config_error")
 		}, 5*time.Second).Should(BeNumerically(">=", 1))
 
 		// Then wait more tick intervals by counting derive calls. Every tick
 		// of this supervisor derives: the derive cache stores only successful
 		// derives, so a failed derive is retried next tick.
-		afterWarn := configWorker.deriveCalls.Load()
+		afterLog := configWorker.deriveCalls.Load()
 
 		Eventually(func() int64 {
 			return configWorker.deriveCalls.Load()
-		}, 5*time.Second).Should(BeNumerically(">=", afterWarn+5))
+		}, 5*time.Second).Should(BeNumerically(">=", afterLog+5))
 
 		Expect(sentryErrorCount(configRecorder, "tick_error")).To(Equal(0),
 			"a config mistake must not reach Sentry from the root tick loop")
 		Expect(configRecorder.sentryWarnEvents()).To(BeEmpty(),
 			"a config mistake must not reach Sentry as a warning either")
-		Expect(configRecorder.warnCount("config_error")).To(Equal(1),
-			"the config mistake is warned exactly once")
+		Expect(configRecorder.infoCount("config_error")).To(Equal(1),
+			"the config mistake is logged exactly once")
 
 		// A plain derive error is not a config mistake, so the root tick loop
 		// still sends it to Sentry.
@@ -140,7 +140,7 @@ var _ = Describe("Supervisor root tick loop logging", func() {
 })
 
 var _ = Describe("Supervisor worker restart logging", func() {
-	It("warns a config mistake that breaks a restart re-creation exactly once", func() {
+	It("logs a config mistake that breaks a restart re-creation exactly once", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -192,8 +192,8 @@ var _ = Describe("Supervisor worker restart logging", func() {
 		Expect(super.ListWorkers()).To(BeEmpty(),
 			"the old worker is removed and the re-add waits for the config to render")
 
-		Expect(recorder.warnCount("config_error")).To(Equal(1),
-			"the restart warns the config mistake exactly once")
+		Expect(recorder.infoCount("config_error")).To(Equal(1),
+			"the restart logs the config mistake exactly once")
 		Expect(sentryErrorCount(recorder, "worker_add_derive_desired_failed")).To(Equal(0),
 			"the restart's derive failure must not also reach Sentry as a worker_add_derive_desired_failed error")
 		Expect(recorder.sentryWarnEvents()).To(BeEmpty())

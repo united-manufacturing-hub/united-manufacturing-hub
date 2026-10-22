@@ -159,8 +159,8 @@ var _ = Describe("Supervisor restart with a broken config", func() {
 			"the restart's config error must not reach Sentry")
 		Expect(recorder.sentryWarnEvents()).To(BeEmpty())
 
-		// The config mistake warned exactly once.
-		Expect(recorder.warnCount("config_error")).To(Equal(1))
+		// The config mistake was logged exactly once.
+		Expect(recorder.infoCount("config_error")).To(Equal(1))
 
 		// Fixing the config brings the worker back: the supervisor retries
 		// the pending re-add on a later tick and ticks the worker again.

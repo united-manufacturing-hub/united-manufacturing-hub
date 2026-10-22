@@ -85,17 +85,8 @@ func (l *zapLogger) Info(msg string, fields ...Field) {
 	l.sugar.Infow(msg, fieldsToArgs(l.baseFields, fields)...)
 }
 
-func (l *zapLogger) Warn(msg string, fields ...Field) {
-	// The NoSentryKey marker goes after the caller's fields: the last write
-	// of a key wins in the field map, so a caller cannot turn the marker off.
-	allFields := make([]Field, 0, 1+len(fields))
-	allFields = append(allFields, fields...)
-	allFields = append(allFields, Bool(NoSentryKey, true))
-	l.sugar.Warnw(msg, fieldsToArgs(l.baseFields, allFields)...)
-}
-
 func (l *zapLogger) SentryWarn(feature Feature, hierarchyPath string, msg string, fields ...Field) {
-	allFields := make([]Field, 0, 3+len(fields))
+	allFields := make([]Field, 0, 2+len(fields))
 	allFields = append(allFields, Field{Key: "feature", Value: string(feature)})
 
 	if hierarchyPath != "" {
@@ -103,10 +94,6 @@ func (l *zapLogger) SentryWarn(feature Feature, hierarchyPath string, msg string
 	}
 
 	allFields = append(allFields, fields...)
-
-	// An explicit false after the caller's fields, so a caller passing
-	// NoSentryKey=true cannot suppress the Sentry capture of a SentryWarn.
-	allFields = append(allFields, Bool(NoSentryKey, false))
 	l.sugar.Warnw(msg, fieldsToArgs(l.baseFields, allFields)...)
 }
 

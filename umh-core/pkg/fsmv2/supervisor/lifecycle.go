@@ -193,9 +193,9 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 						deps.HierarchyPath(s.GetHierarchyPath()),
 						deps.Err(err))
 				case errors.As(err, &cfgErr):
-					// warnConfigErrorOnce (own-worker derive and worker restart)
-					// and warnChildConfigErrorOnce (child creation) already
-					// warned this config mistake once; a per-tick Sentry error
+					// logConfigErrorOnce (own-worker derive and worker restart)
+					// and logChildConfigErrorOnce (child creation) already
+					// logged this config mistake once; a per-tick Sentry error
 					// would duplicate it. The debug line keeps the mistake
 					// visible per tick, the way the circuit-open branch does.
 					s.logger.Debug("tick_suppressed_config_error",
@@ -829,7 +829,7 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context
 	if err := s.AddWorker(identity, newWorker); err != nil {
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
-			s.warnConfigErrorOnce(cfgErr)
+			s.logConfigErrorOnce(cfgErr)
 		} else {
 			s.reportPendingReaddFailure(workerID, "worker_restart_retry_add_failed", err)
 		}
@@ -945,9 +945,9 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
-			// A config error was already warned once; failing the restart
-			// again would only duplicate the warning.
-			s.warnConfigErrorOnce(cfgErr)
+			// A config error was already logged once; failing the restart
+			// again would only duplicate that log line.
+			s.logConfigErrorOnce(cfgErr)
 
 			return nil
 		}

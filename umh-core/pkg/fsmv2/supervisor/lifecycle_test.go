@@ -666,7 +666,6 @@ type sentryWarn struct {
 
 func (r *sentryWarnRecorder) Debug(_ string, _ ...deps.Field) {}
 func (r *sentryWarnRecorder) Info(_ string, _ ...deps.Field)  {}
-func (r *sentryWarnRecorder) Warn(_ string, _ ...deps.Field)  {}
 
 func (r *sentryWarnRecorder) SentryWarn(_ deps.Feature, _ string, msg string, fields ...deps.Field) {
 	r.mu.Lock()
