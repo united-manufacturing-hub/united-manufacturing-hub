@@ -80,7 +80,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, validRef)
 				if err != nil {
-					if errors.Is(err, fsmv2client.ErrNotObserved) {
+					if errors.Is(err, fsmv2client.ErrNotFound) {
 						return false, "the parent has not published an observation yet", nil
 					}
 
@@ -99,7 +99,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 				func(ctx context.Context) (bool, string, error) {
 					obs, err := fsmv2client.Get[example_child.ExamplechildStatus](ctx, env.Client, childRef)
 					if err != nil {
-						if errors.Is(err, fsmv2client.ErrNotObserved) {
+						if errors.Is(err, fsmv2client.ErrNotFound) {
 							return false, "the child has not published an observation yet", nil
 						}
 
@@ -117,7 +117,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 			func(ctx context.Context) (bool, string, error) {
 				obs, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, emptyRef)
 				if err != nil {
-					if errors.Is(err, fsmv2client.ErrNotObserved) {
+					if errors.Is(err, fsmv2client.ErrNotFound) {
 						return false, "the parent has not published an observation yet", nil
 					}
 
@@ -139,13 +139,13 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 			func(ctx context.Context) (bool, string, error) {
 				if _, err := fsmv2client.Get[example_parent.ExampleparentStatus](ctx, env.Client, mismatchRef); err == nil {
 					return false, "", errors.New("the type-mismatch parent was observed, although its children_count is not a number")
-				} else if !errors.Is(err, fsmv2client.ErrNotObserved) {
+				} else if !errors.Is(err, fsmv2client.ErrNotFound) {
 					return false, "", err
 				}
 
 				if _, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, defaultsRef); err == nil {
 					return false, "", errors.New("the bad-max-failures worker was observed, although its max_failures is not a number")
-				} else if !errors.Is(err, fsmv2client.ErrNotObserved) {
+				} else if !errors.Is(err, fsmv2client.ErrNotFound) {
 					return false, "", err
 				}
 
