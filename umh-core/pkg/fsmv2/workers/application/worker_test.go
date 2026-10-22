@@ -247,7 +247,7 @@ children:
 			// Without the fix, supervisor's userSpec was empty, so DeriveDesiredState
 			// received empty config, resulting in zero children (added=0 in logs).
 			//
-			// Full integration coverage is the "simple" scenario in pkg/fsmv2/scenarios/simple.go.
+			// Full integration test is in pkg/fsmv2/examples/simple/main.go
 
 			yamlConfig := `
 children:
