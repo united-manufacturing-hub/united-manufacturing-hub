@@ -246,7 +246,7 @@ func BuildRuntimeConfig(
 }
 
 // dataContractNames lists the names of the configured data contracts, the set a write flow
-// topic may name on top of dataflowcomponentserviceconfig.BuiltinDataContracts.
+// topic may name on top of the built-in _raw and _historian.
 func dataContractNames(dataContracts []config.DataContractsConfig) []string {
 	names := make([]string, 0, len(dataContracts))
 	for _, dataContract := range dataContracts {

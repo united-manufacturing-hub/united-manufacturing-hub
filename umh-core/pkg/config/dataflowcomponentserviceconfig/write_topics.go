@@ -12,102 +12,91 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Each write flow topic is a Go regular expression that the benthos-umh `uns` input
+// matches unanchored against the full UNS topic name. The rules apply to every topic the
+// expression can match, not to how it reads:
+//
+//   - It starts with `^`. Without it, the expression also matches any topic that merely
+//     contains it.
+//   - It matches only topics strictly beneath the bridge location, so a write flow
+//     consumes only its own branch of the UNS tree. An unescaped `.` matches any
+//     character, so the dots between levels must be escaped.
+//   - The first `_`-prefixed segment beneath the location is `_raw`, `_historian` or a
+//     versioned name (`_<name>_v<N>`) from `dataContracts:`, followed by a dot. All
+//     matched topics name versions of one contract: `_pump_v[1-2]\.` is valid when
+//     `_pump_v1` and `_pump_v2` are declared, while `_pump_v\d+\.` reaches undeclared
+//     versions and a wildcard in place of the contract reaches every contract.
+//
+// Anything may follow the contract segment. Topics must already be rendered, with every
+// variable rendered as an escaped literal; an unrendered `{{ }}` action is read as literal
+// text and reported.
+
 package dataflowcomponentserviceconfig
 
 import (
 	"fmt"
 	"regexp"
-	"regexp/syntax"
 	"slices"
 	"strings"
-	"unicode"
 )
 
-// UNSTopicPrefix is the fixed prefix of every UNS topic. The segments after it are the
-// location path, followed by the data contract and any virtual path.
-const UNSTopicPrefix = "umh.v1."
+const unsTopicPrefix = "umh.v1."
 
-// BuiltinDataContracts are the data contracts that exist without being declared in the
-// `dataContracts:` section of config.yaml: `_raw` carries no validation rules and
-// `_historian` is the built-in timeseries contract. Both are unversioned, so the UNS
-// output bypasses schema validation for them.
-var BuiltinDataContracts = []string{"_raw", "_historian"}
+var builtinDataContracts = []string{"_raw", "_historian"}
 
-// dataContractVersionSuffix matches the `_v<N>` version suffix of a data contract name.
 var dataContractVersionSuffix = regexp.MustCompile(`_v\d+$`)
 
-// ValidateTopics reports the topics a write flow may not subscribe to.
-//
-// Each topic is a Go regular expression that the benthos-umh `uns` input matches unanchored
-// against the full UNS topic name. The rules apply to every topic the expression can match,
-// not to how it reads:
-//
-//   - It starts with `^`. Without it, the expression also matches any topic that merely
-//     contains it.
-//   - It matches only topics strictly beneath locationPath, so a write flow consumes only
-//     its own branch of the UNS tree. An unescaped `.` matches any character, so the dots
-//     between levels must be escaped.
-//   - The first `_`-prefixed segment beneath locationPath is a data contract out of
-//     BuiltinDataContracts and the versioned names (`_<name>_v<N>`) in dataContracts,
-//     followed by a dot. All matched topics name versions of one contract: `_pump_v[1-2]\.`
-//     is valid when `_pump_v1` and `_pump_v2` are declared, while `_pump_v\d+\.` reaches
-//     undeclared versions and a wildcard in place of the contract reaches every contract.
-//
-// Anything may follow the contract segment.
-//
-// Topics must already be rendered, with every variable rendered as an escaped literal; an
-// unrendered `{{ }}` action is read as literal text and reported.
+// ValidateTopics reports the topics a write flow at locationPath may not subscribe to.
 func (c DataflowComponentWriteConfig) ValidateTopics(locationPath string, dataContracts []string) error {
-	contracts := slices.Clone(BuiltinDataContracts)
+	versioned, unversioned := splitByVersion(dataContracts)
+	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(builtinDataContracts), versioned...))
 
-	var unversioned []string
+	rejected := classifyTopics(c.Topics, grammar)
+	if len(rejected) == 0 {
+		return nil
+	}
 
+	return topicError(rejected, grammar, unversioned)
+}
+
+// splitByVersion separates declared data contracts with a `_v<N>` suffix from those
+// without, which a write flow cannot use.
+func splitByVersion(dataContracts []string) (versioned, unversioned []string) {
 	for _, contract := range dataContracts {
 		if dataContractVersionSuffix.MatchString(contract) {
-			contracts = append(contracts, contract)
+			versioned = append(versioned, contract)
 		} else {
 			unversioned = append(unversioned, contract)
 		}
 	}
 
-	prefix := UNSTopicPrefix
-	if locationPath != "" {
-		prefix += locationPath + "."
-	}
+	return versioned, unversioned
+}
 
-	grammar := newTopicGrammar(prefix, contracts)
+func classifyTopics(topics []string, grammar writeTopicGrammar) map[topicViolation][]string {
 	rejected := map[topicViolation][]string{}
 
-	for _, topic := range c.Topics {
+	for _, topic := range topics {
 		if topic == PlaceholderUMHTopicUnset {
 			continue
 		}
 
-		if violation := grammar.check(topic); violation != topicAllowed {
+		violation := grammar.check(topic)
+		if violation != topicAllowed {
 			rejected[violation] = append(rejected[violation], topic)
 		}
 	}
 
+	return rejected
+}
+
+func topicError(rejected map[topicViolation][]string, grammar writeTopicGrammar, unversioned []string) error {
 	var problems []string
 
-	for _, group := range []struct {
-		problem   string
-		violation topicViolation
-	}{
-		{violation: topicInvalidRegex, problem: "must be valid regular expressions"},
-		{violation: topicUnanchored, problem: "must start with ^"},
-		{violation: topicOutsideLocation, problem: "must be beneath the bridge location, starting with ^" + regexp.QuoteMeta(prefix)},
-		{violation: topicNoDataContract, problem: fmt.Sprintf(
-			"must each name one existing data contract followed by \\., listing versions explicitly (%s)",
-			strings.Join(contracts, ", "))},
-	} {
-		if topics := rejected[group.violation]; len(topics) > 0 {
-			problems = append(problems, group.problem+": "+strings.Join(topics, ", "))
+	for _, violation := range reportedViolations {
+		if topics := rejected[violation]; len(topics) > 0 {
+			problems = append(problems, violation.problem(grammar)+": "+strings.Join(topics, ", "))
 		}
-	}
-
-	if len(problems) == 0 {
-		return nil
 	}
 
 	if len(rejected[topicNoDataContract]) > 0 && len(unversioned) > 0 {
@@ -119,8 +108,7 @@ func (c DataflowComponentWriteConfig) ValidateTopics(locationPath string, dataCo
 	return fmt.Errorf("write flow topics %s", strings.Join(problems, "; "))
 }
 
-// topicViolation is the reason a write flow topic is rejected, ordered from most to least
-// fundamental: a topic is reported under the first one it violates.
+// topicViolation is the reason a write flow topic is rejected.
 type topicViolation int
 
 const (
@@ -131,269 +119,195 @@ const (
 	topicNoDataContract
 )
 
-// topicSection is the part of a UNS topic the runes read so far end in.
-type topicSection int
+// reportedViolations is the order in which violations appear in the error.
+var reportedViolations = []topicViolation{topicInvalidRegex, topicUnanchored, topicOutsideLocation, topicNoDataContract}
+
+func (v topicViolation) problem(grammar writeTopicGrammar) string {
+	switch v {
+	case topicInvalidRegex:
+		return "must be valid regular expressions"
+	case topicUnanchored:
+		return "must start with ^"
+	case topicOutsideLocation:
+		return "must be beneath the bridge location, starting with ^" + regexp.QuoteMeta(string(grammar.locationPrefix))
+	case topicNoDataContract:
+		return fmt.Sprintf("must each name one existing data contract followed by \\., listing versions explicitly (%s)",
+			strings.Join(grammar.contracts, ", "))
+	default:
+		return ""
+	}
+}
+
+// writeTopicPhase is the part of a UNS topic the grammar is reading.
+type writeTopicPhase int
 
 const (
-	// sectionUnanchored is a match that began past the first rune of the topic.
-	sectionUnanchored topicSection = iota
-	// sectionLocation is inside `umh.v1.` and the bridge location.
-	sectionLocation
-	// sectionLevelStart is at the start of a segment beneath the bridge location.
-	sectionLevelStart
-	// sectionLevel is inside a location level beneath the bridge location.
-	sectionLevel
-	// sectionContract is inside the data contract segment.
-	sectionContract
-	// sectionVirtualPath is past a valid data contract segment and its dot.
-	sectionVirtualPath
-	// sectionOutside has left the bridge location.
-	sectionOutside
-	// sectionInvalidContract has a contract segment that is no existing contract.
-	sectionInvalidContract
+	// phaseLocationPrefix reads `umh.v1.` and the bridge location, followed by a dot.
+	phaseLocationPrefix writeTopicPhase = iota
+	phaseLevelStart
+	phaseLevel
+	// phaseContract reads a segment starting with `_`, the data contract.
+	phaseContract
+	// phaseAccepted, phaseOutsideLocation and phaseNoContract are final: no later rune
+	// changes them.
+	phaseAccepted
+	phaseOutsideLocation
+	phaseNoContract
 )
 
-// topicPosition is a state of the topic grammar.
-type topicPosition struct {
-	// contract is the contract segment read so far, in sectionContract and
-	// sectionVirtualPath.
+type writeTopicState struct {
+	phase writeTopicPhase
+	// prefixRead counts the runes of the location prefix read, in phaseLocationPrefix.
+	prefixRead int
+	// contract is the contract name read so far in phaseContract, and the accepted
+	// contract in phaseAccepted.
 	contract string
-	section  topicSection
-	// read counts the runes of the location prefix read, in sectionLocation.
-	read int
 }
 
-// violation reports why a pattern matching up to p is rejected, given that any topic
-// continues from there.
-func (p topicPosition) violation() topicViolation {
-	switch p.section {
-	case sectionUnanchored:
-		return topicUnanchored
-	case sectionLocation, sectionOutside:
-		return topicOutsideLocation
-	case sectionVirtualPath:
+// writeTopicGrammar accepts topics beneath a bridge location whose first `_` segment is
+// one of a fixed list of data contracts.
+type writeTopicGrammar struct {
+	locationPrefix   []rune
+	contracts        []string
+	contractPrefixes map[string]bool
+}
+
+func newWriteTopicGrammar(locationPath string, contracts []string) writeTopicGrammar {
+	prefix := unsTopicPrefix
+	if locationPath != "" {
+		prefix += locationPath + "."
+	}
+
+	contractPrefixes := map[string]bool{}
+	for _, contract := range contracts {
+		for end := 1; end <= len(contract); end++ {
+			contractPrefixes[contract[:end]] = true
+		}
+	}
+
+	return writeTopicGrammar{
+		locationPrefix:   []rune(prefix),
+		contracts:        contracts,
+		contractPrefixes: contractPrefixes,
+	}
+}
+
+func (g writeTopicGrammar) Start() writeTopicState {
+	return writeTopicState{phase: phaseLocationPrefix}
+}
+
+func (g writeTopicGrammar) Significant() []rune {
+	significant := []rune{'.', '_'}
+	significant = append(significant, g.locationPrefix...)
+	significant = append(significant, []rune(strings.Join(g.contracts, ""))...)
+
+	return significant
+}
+
+func (g writeTopicGrammar) Step(state writeTopicState, r rune) writeTopicState {
+	switch state.phase {
+	case phaseLocationPrefix:
+		return g.stepLocationPrefix(state, r)
+	case phaseLevelStart:
+		return stepLevelStart(r)
+	case phaseLevel:
+		return stepLevel(state, r)
+	case phaseContract:
+		return g.stepContract(state, r)
+	default:
+		return state
+	}
+}
+
+func (g writeTopicGrammar) stepLocationPrefix(state writeTopicState, r rune) writeTopicState {
+	if r != g.locationPrefix[state.prefixRead] {
+		return writeTopicState{phase: phaseOutsideLocation}
+	}
+
+	if state.prefixRead+1 == len(g.locationPrefix) {
+		return writeTopicState{phase: phaseLevelStart}
+	}
+
+	return writeTopicState{phase: phaseLocationPrefix, prefixRead: state.prefixRead + 1}
+}
+
+func stepLevelStart(r rune) writeTopicState {
+	switch r {
+	case '_':
+		return writeTopicState{phase: phaseContract, contract: "_"}
+	case '.':
+		return writeTopicState{phase: phaseNoContract}
+	default:
+		return writeTopicState{phase: phaseLevel}
+	}
+}
+
+func stepLevel(state writeTopicState, r rune) writeTopicState {
+	if r == '.' {
+		return writeTopicState{phase: phaseLevelStart}
+	}
+
+	return state
+}
+
+func (g writeTopicGrammar) stepContract(state writeTopicState, r rune) writeTopicState {
+	if r == '.' && slices.Contains(g.contracts, state.contract) {
+		return writeTopicState{phase: phaseAccepted, contract: state.contract}
+	}
+
+	next := state.contract + string(r)
+	if !g.contractPrefixes[next] {
+		return writeTopicState{phase: phaseNoContract}
+	}
+
+	return writeTopicState{phase: phaseContract, contract: next}
+}
+
+func (s writeTopicState) violation() topicViolation {
+	switch s.phase {
+	case phaseAccepted:
 		return topicAllowed
+	case phaseLocationPrefix, phaseOutsideLocation:
+		return topicOutsideLocation
 	default:
 		return topicNoDataContract
 	}
 }
 
-// topicGrammar is an automaton over the runes of a UNS topic that tracks whether the topic
-// is one a write flow may consume.
-type topicGrammar struct {
-	// significant holds every rune the grammar tells apart from the others. All remaining
-	// runes take the same transitions, so one of them stands in for all.
-	significant map[rune]bool
-	prefix      []rune
-	contracts   []string
-}
-
-func newTopicGrammar(prefix string, contracts []string) topicGrammar {
-	g := topicGrammar{
-		prefix:      []rune(prefix),
-		contracts:   contracts,
-		significant: map[rune]bool{'.': true, '_': true},
-	}
-
-	for _, r := range prefix + strings.Join(contracts, "") {
-		g.significant[r] = true
-	}
-
-	return g
-}
-
-func (g topicGrammar) step(p topicPosition, r rune) topicPosition {
-	switch p.section {
-	case sectionLocation:
-		if r != g.prefix[p.read] {
-			return topicPosition{section: sectionOutside}
-		}
-
-		if p.read+1 == len(g.prefix) {
-			return topicPosition{section: sectionLevelStart}
-		}
-
-		return topicPosition{section: sectionLocation, read: p.read + 1}
-	case sectionLevelStart:
-		switch r {
-		case '_':
-			return topicPosition{section: sectionContract, contract: "_"}
-		case '.':
-			return topicPosition{section: sectionInvalidContract}
-		default:
-			return topicPosition{section: sectionLevel}
-		}
-	case sectionLevel:
-		if r == '.' {
-			return topicPosition{section: sectionLevelStart}
-		}
-
-		return p
-	case sectionContract:
-		if r == '.' {
-			if slices.Contains(g.contracts, p.contract) {
-				return topicPosition{section: sectionVirtualPath, contract: p.contract}
-			}
-
-			return topicPosition{section: sectionInvalidContract}
-		}
-
-		next := p.contract + string(r)
-		if slices.ContainsFunc(g.contracts, func(c string) bool { return strings.HasPrefix(c, next) }) {
-			return topicPosition{section: sectionContract, contract: next}
-		}
-
-		return topicPosition{section: sectionInvalidContract}
-	default:
-		return p
-	}
-}
-
-// check reports whether pattern matches only topics the grammar accepts. It walks the
-// compiled pattern and the grammar in lockstep, feeding each rune instruction every
-// significant rune it accepts plus one insignificant stand-in, so every topic the pattern
-// can match is covered. Topics never contain a newline, so none is fed.
-func (g topicGrammar) check(pattern string) topicViolation {
-	re, err := syntax.Parse(pattern, syntax.Perl)
+// check returns why a write flow may not subscribe to pattern, or topicAllowed.
+func (g writeTopicGrammar) check(pattern string) topicViolation {
+	analysis, err := analyzeTopicPattern(pattern, g)
 	if err != nil {
 		return topicInvalidRegex
 	}
 
-	prog, err := syntax.Compile(re.Simplify())
-	if err != nil {
-		return topicInvalidRegex
+	if analysis.MatchesMidTopic {
+		return topicUnanchored
 	}
 
-	type thread struct {
-		at        topicPosition
-		pc        uint32
-		textStart bool
-		textEnd   bool
+	violations := map[topicViolation]bool{}
+	for _, state := range analysis.EndStates {
+		violations[state.violation()] = true
 	}
 
-	// The second thread is a match beginning past the first rune, where `^` cannot hold.
-	pending := []thread{
-		{pc: uint32(prog.Start), at: topicPosition{section: sectionLocation}, textStart: true},
-		{pc: uint32(prog.Start), at: topicPosition{section: sectionUnanchored}},
-	}
-	seen := map[thread]bool{}
-	found := map[topicViolation]bool{}
-	contracts := map[string]bool{}
-
-	for len(pending) > 0 {
-		t := pending[len(pending)-1]
-		pending = pending[:len(pending)-1]
-
-		if seen[t] {
-			continue
-		}
-
-		seen[t] = true
-		inst := &prog.Inst[t.pc]
-
-		follow := func(pc uint32) {
-			next := t
-			next.pc = pc
-			pending = append(pending, next)
-		}
-
-		switch inst.Op {
-		case syntax.InstAlt, syntax.InstAltMatch:
-			follow(inst.Out)
-			follow(inst.Arg)
-		case syntax.InstCapture, syntax.InstNop:
-			follow(inst.Out)
-		case syntax.InstEmptyWidth:
-			op := syntax.EmptyOp(inst.Arg)
-			if op&(syntax.EmptyBeginText|syntax.EmptyBeginLine) != 0 && !t.textStart {
-				continue
-			}
-
-			if op&(syntax.EmptyEndText|syntax.EmptyEndLine) != 0 {
-				t.textEnd = true
-			}
-
-			follow(inst.Out)
-		case syntax.InstMatch:
-			found[t.at.violation()] = true
-		case syntax.InstRune, syntax.InstRune1, syntax.InstRuneAny, syntax.InstRuneAnyNotNL:
-			if t.textEnd {
-				continue
-			}
-
-			for _, r := range g.candidates(inst) {
-				at := g.step(t.at, r)
-				if at.section == sectionVirtualPath {
-					contracts[at.contract] = true
-
-					continue
-				}
-
-				pending = append(pending, thread{pc: inst.Out, at: at})
-			}
-		case syntax.InstFail:
-		}
+	if violations[topicOutsideLocation] {
+		return topicOutsideLocation
 	}
 
+	if violations[topicNoDataContract] || !namesOneContract(analysis.EndStates) {
+		return topicNoDataContract
+	}
+
+	return topicAllowed
+}
+
+// namesOneContract reports whether every accepted state names a version of the same
+// data contract, such as _pump_v1 and _pump_v2.
+func namesOneContract(states []writeTopicState) bool {
 	bases := map[string]bool{}
-	for contract := range contracts {
-		bases[dataContractVersionSuffix.ReplaceAllString(contract, "")] = true
+	for _, state := range states {
+		bases[dataContractVersionSuffix.ReplaceAllString(state.contract, "")] = true
 	}
 
-	switch {
-	case found[topicUnanchored]:
-		return topicUnanchored
-	case found[topicOutsideLocation]:
-		return topicOutsideLocation
-	case found[topicNoDataContract], len(bases) > 1:
-		return topicNoDataContract
-	default:
-		return topicAllowed
-	}
-}
-
-// candidates returns the runes inst consumes that the grammar tells apart: every
-// significant rune it accepts plus one insignificant rune per accepted range.
-func (g topicGrammar) candidates(inst *syntax.Inst) []rune {
-	ranges := []rune{0, unicode.MaxRune}
-	accepts := func(rune) bool { return true }
-
-	switch inst.Op {
-	case syntax.InstRune1:
-		return []rune{inst.Rune[0]}
-	case syntax.InstRune:
-		ranges = inst.Rune
-		if len(ranges) == 1 {
-			ranges = []rune{ranges[0], ranges[0]}
-		}
-
-		accepts = inst.MatchRune
-	}
-
-	var out []rune
-
-	for r := range g.significant {
-		if r != '\n' && accepts(r) {
-			out = append(out, r)
-		}
-	}
-
-	for i := 0; i+1 < len(ranges); i += 2 {
-		for r := ranges[i]; r <= ranges[i+1]; r++ {
-			if r != '\n' && !g.significant[r] {
-				out = append(out, r)
-
-				break
-			}
-		}
-	}
-
-	// A case-folded single rune also accepts the other runes of its folding orbit.
-	if inst.Op == syntax.InstRune && len(inst.Rune) == 1 && syntax.Flags(inst.Arg)&syntax.FoldCase != 0 {
-		for r := unicode.SimpleFold(inst.Rune[0]); r != inst.Rune[0]; r = unicode.SimpleFold(r) {
-			out = append(out, r)
-		}
-	}
-
-	return out
+	return len(bases) <= 1
 }
