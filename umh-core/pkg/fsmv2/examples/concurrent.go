@@ -58,7 +58,7 @@ var ConcurrentScenarioV2 = ScenarioV2{
 
 				for _, ref := range refs {
 					obs, err := fsmv2client.Get[hello_world.HelloworldStatus](ctx, env.Client, ref)
-					if errors.Is(err, fsmv2client.ErrNotObserved) {
+					if errors.Is(err, fsmv2client.ErrNotFound) {
 						continue
 					}
 
