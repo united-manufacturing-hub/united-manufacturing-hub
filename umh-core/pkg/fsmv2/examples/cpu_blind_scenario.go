@@ -44,21 +44,17 @@ const (
 	// readings without cpu.stat, not only the one the Set produced.
 	cpuBlindHold = 5 * time.Second
 
-	// cpuBlindUnavailableMessage is what the worker reports once no machine
-	// CPU count can be read: CapacityCores is zero, and composeHealthy renders
-	// this instead of a budget headline.
-	cpuBlindUnavailableMessage = "CPU monitoring unavailable: cgroup read failed. Defaulting to healthy."
+	// cpuBlindNotMeasured starts the reason the worker reports when a file it
+	// needs cannot be read.
+	cpuBlindNotMeasured = "CPU not measured"
 )
 
 // CPUBlindScenarioV2 drives the real CPU monitor over a fake machine and then
 // takes away, one at a time, the two files it reads its numbers from.
 //
-// The story is that neither outage changes the worker's state. It stays
-// running, healthy and Fresh through both, and its message becomes "CPU
-// monitoring unavailable". The worker still reports a machine it cannot
-// measure as healthy. ENG-6319 (unreadable cgroup files are reported as
-// healthy) will report it as degraded, and this scenario will then expect
-// degraded.
+// The story is that each outage turns the worker degraded, because a machine
+// it cannot measure is not proven healthy. Its reading stays Fresh through
+// both outages, and its reason says the CPU was not measured.
 //
 // The second outage keeps the first, so the story tests the two failures
 // rather than a recovery.
@@ -93,8 +89,8 @@ var CPUBlindScenarioV2 = ScenarioV2{
 		}
 
 		// A headline naming the machine's usage proves the worker described the
-		// readable machine, so the unavailable message the later waits look
-		// for is a change.
+		// readable machine, so the degraded reason the later waits look for is
+		// a change.
 		if err := waitCPUFirstReading(ctx, env, "first reading healthy", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
 			healthy := !st.Degraded && st.Result.Verdict.State == cpuhealth.StateHealthy
 			done := healthy && strings.Contains(st.Result.Message, "The machine is using 1.2 of 4 cores")
@@ -104,28 +100,28 @@ var CPUBlindScenarioV2 = ScenarioV2{
 			return err
 		}
 
-		env.Step("take /proc/stat away; expect one cpu::read_failed warning, and the worker stays running and healthy")
+		env.Step("take /proc/stat away; the worker turns degraded because the CPU is not measured")
 		machine.box.Set(cpuBlindMachine(cpuBlindHostStat))
 
-		if err := waitCPUFresh(ctx, env, "healthy with \"CPU monitoring unavailable\" without /proc/stat", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
-			healthy := !st.Degraded && st.Result.Message == cpuBlindUnavailableMessage
+		if err := waitCPUFresh(ctx, env, "degraded with \"CPU not measured\" without /proc/stat", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
+			degraded := st.Degraded && strings.Contains(st.Reason, cpuBlindNotMeasured)
 
-			return healthy, cpuStatusSeen(st)
+			return degraded, cpuStatusSeen(st)
 		}); err != nil {
 			return err
 		}
 
-		env.Step("take cpu.stat away as well; expect a second cpu::read_failed warning, and the worker stays running and healthy")
+		env.Step("take cpu.stat away as well; the worker stays degraded")
 		setAt := machine.box.MachineNow()
 		machine.box.Set(cpuBlindMachine(cpuBlindHostStat, cpuBlindCgroupStat))
 
-		return waitCPUFresh(ctx, env, "healthy without cpu.stat for 5 seconds of machine time", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
-			healthy := !st.Degraded && st.Result.Message == cpuBlindUnavailableMessage
+		return waitCPUFresh(ctx, env, "degraded without cpu.stat for 5 seconds of machine time", func(st simple.Status[fsmv2cpu.CPUStatus]) (bool, string) {
+			degraded := st.Degraded && strings.Contains(st.Reason, cpuBlindNotMeasured)
 			held := machine.box.MachineNow().Sub(setAt) >= cpuBlindHold
 
 			seen := fmt.Sprintf("%s held=%s", cpuStatusSeen(st), machine.box.MachineNow().Sub(setAt))
 
-			return healthy && held, seen
+			return degraded && held, seen
 		})
 	},
 }
