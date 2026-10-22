@@ -16,16 +16,14 @@ package communicator
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-// ChannelProvider supplies inbound/outbound channels for communicator workers.
-type ChannelProvider interface {
-	GetChannels(workerID string) (inbound chan<- *types.UMHMessage, outbound <-chan *types.UMHMessage)
-	// GetInboundStats returns the capacity and current length of the inbound channel.
-	// Used by PullWorker to detect backpressure before pulling messages.
-	GetInboundStats(workerID string) (capacity int, length int)
-}
+// ChannelProvider supplies inbound/outbound channels for communicator
+// workers. It is the shared provider declared in the deps package,
+// deps.ChannelProvider, instantiated for this worker's message type.
+type ChannelProvider = deps.ChannelProvider[*types.UMHMessage]
 
 // ChannelProviderKey names the ChannelProvider a CommunicatorWorker acquires its
 // inbound and outbound channels through. The worker looks the key up in its
