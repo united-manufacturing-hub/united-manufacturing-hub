@@ -812,8 +812,13 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		templateDuration := time.Since(templateStart)
 
 		if err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "template_rendering_failed",
-				deps.DurationMs(templateDuration.Milliseconds()))
+			var cfgErr *config.ConfigError
+			if errors.As(err, &cfgErr) {
+				s.warnConfigErrorOnce(cfgErr.Error())
+			} else {
+				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "derive_desired_state_failed",
+					deps.DurationMs(templateDuration.Milliseconds()))
+			}
 			metrics.RecordTemplateRenderingDuration(firstWorkerPath, "error", templateDuration)
 			metrics.RecordTemplateRenderingError(firstWorkerPath, "derivation_failed")
 
@@ -832,6 +837,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			deps.DurationMs(templateDuration.Milliseconds()))
 		metrics.RecordTemplateRenderingDuration(firstWorkerPath, "success", templateDuration)
 	}
+
+	// The derive succeeded, computed or cached, so a config error that
+	// returns later warns again.
+	s.mu.Lock()
+	s.lastConfigErrorWarned = ""
+	s.mu.Unlock()
 
 	// Save before tickWorker, which loads the freshest desired state from snapshot
 	desiredDoc, err := s.toDocument(desired, firstWorkerID, "", documentConversion{
@@ -1010,7 +1021,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	for _, child := range childrenToTick {
 		if err := child.tick(ctx); err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "child_tick_failed")
+			var cfgErr *config.ConfigError
+			if !errors.As(err, &cfgErr) {
+				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "child_tick_failed")
+			}
 			// Continue with other children
 		}
 	}
@@ -1633,8 +1647,13 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Add worker to child supervisor
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_supervisor_add_worker_failed",
-					deps.String("child_name", spec.Name))
+				var cfgErr *config.ConfigError
+				if errors.As(err, &cfgErr) {
+					s.warnChildConfigErrorOnce(spec.Name, cfgErr.Error())
+				} else {
+					s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_supervisor_add_worker_failed",
+						deps.String("child_name", spec.Name))
+				}
 
 				continue
 			}
@@ -1655,6 +1674,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			cancel()
 
 			s.children[spec.Name] = childSupervisor
+			// The child was created, so a later config error for it warns again.
+			// reconcileChildren holds s.mu, so the map is already protected.
+			delete(s.childConfigErrorWarned, spec.Name)
 
 			s.logTrace("lifecycle",
 				deps.String("lifecycle_event", "child_add_complete"),
@@ -1887,4 +1909,39 @@ func (s *Supervisor[TObserved, TDesired]) classifyDisableMappingError(err error)
 	}
 
 	return "other"
+}
+
+// warnConfigErrorOnce warns "config_error" when the message differs from the
+// last one warned for this supervisor's own worker, and remembers it. A
+// successful derive clears the memory, so a message that returns after a
+// recovery warns again. A config error is a user mistake, not a system fault,
+// so this is a warning, never Sentry.
+func (s *Supervisor[TObserved, TDesired]) warnConfigErrorOnce(message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.lastConfigErrorWarned == message {
+		return
+	}
+
+	s.lastConfigErrorWarned = message
+	s.logger.Warn("config_error", deps.String("message", message))
+}
+
+// warnChildConfigErrorOnce warns "config_error" for a child the parent could
+// not create, once per child name and message. The child supervisor is
+// rebuilt every tick, so the memory lives on the parent; creating the child
+// clears its entry, so a child that fails again warns again. The caller must
+// hold s.mu, as reconcileChildren does.
+func (s *Supervisor[TObserved, TDesired]) warnChildConfigErrorOnce(childName, message string) {
+	if s.childConfigErrorWarned == nil {
+		s.childConfigErrorWarned = make(map[string]string)
+	}
+
+	if last, warned := s.childConfigErrorWarned[childName]; warned && last == message {
+		return
+	}
+
+	s.childConfigErrorWarned[childName] = message
+	s.logger.Warn("config_error", deps.String("child_name", childName), deps.String("message", message))
 }

@@ -185,17 +185,25 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// Config so all supervisors observe the same close. See types.go Config.ForceExit.
 	forceExit                <-chan struct{}
 	noStateMachineLoggedOnce sync.Map
-	userSpec                 config.UserSpec
-	workerType               string
-	parentID                 string
-	lastUserSpecHash         string
-	collectorHealth          CollectorHealth
-	metricsWg                sync.WaitGroup
-	tickInterval             time.Duration
-	tickCount                uint64
-	gracefulShutdownTimeout  time.Duration
-	metricsReportInterval    time.Duration
-	childShutdownTimeout     time.Duration
+	// lastConfigErrorWarned suppresses repeat "config_error" warns for this
+	// supervisor's own worker: it holds the last message warned, is cleared
+	// when a derive succeeds, so a re-occurring message warns again.
+	lastConfigErrorWarned string
+	// childConfigErrorWarned suppresses repeat "config_error" warns per child
+	// name (child name → last message warned); the entry is cleared when the
+	// child is created, so a child that fails again warns again.
+	childConfigErrorWarned  map[string]string
+	userSpec                config.UserSpec
+	workerType              string
+	parentID                string
+	lastUserSpecHash        string
+	collectorHealth         CollectorHealth
+	metricsWg               sync.WaitGroup
+	tickInterval            time.Duration
+	tickCount               uint64
+	gracefulShutdownTimeout time.Duration
+	metricsReportInterval   time.Duration
+	childShutdownTimeout    time.Duration
 	// lifecycleFlagMu serializes the read-modify-write of the lifecycle flags
 	// (ShutdownRequested, Disabled) in the desired-state document. The per-tick
 	// derive carries these flags forward across re-derivation by loading the

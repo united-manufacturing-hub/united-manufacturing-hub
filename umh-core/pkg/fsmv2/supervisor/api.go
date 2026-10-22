@@ -120,7 +120,10 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 	}
 
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
+		var cfgErr *config.ConfigError
+		if !errors.As(err, &cfgErr) {
+			s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
+		}
 
 		return nil, fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
