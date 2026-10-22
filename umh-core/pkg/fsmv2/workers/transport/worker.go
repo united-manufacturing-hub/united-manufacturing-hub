@@ -80,13 +80,15 @@ type TransportWorker struct {
 }
 
 // NewTransportWorker creates a new Transport worker in Stopped state.
-// Returns an error if required dependencies are missing.
+// It takes its channel provider from dependencies under ChannelProviderKey,
+// or from SetChannelProvider when the key is absent.
+// Returns an error if logger is nil. Panics if neither source holds a provider.
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
+	dependencies map[string]any,
 ) (*TransportWorker, error) {
-	// Dependency validation: reject nil logger (architecture requirement)
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
@@ -99,9 +101,14 @@ func NewTransportWorker(
 	w := &TransportWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	// Create dependencies (will panic if ChannelProvider not set)
-	dependencies := NewTransportDependencies(nil, bd)
-	w.BindDeps(dependencies)
+	var workerDeps *TransportDependencies
+	if provider, ok := config.LookupDependency(dependencies, ChannelProviderKey); ok {
+		workerDeps = newTransportDependenciesWithProvider(nil, bd, provider)
+	} else {
+		workerDeps = NewTransportDependencies(nil, bd)
+	}
+
+	w.BindDeps(workerDeps)
 
 	return w, nil
 }
@@ -226,8 +233,8 @@ func init() {
 	fsmv2.RegisterObservationInterval(WorkerTypeName, channelusage.SampleInterval)
 
 	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
-			w, err := NewTransportWorker(id, logger, sr)
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
+			w, err := NewTransportWorker(id, logger, sr, m)
 			if err != nil {
 				return nil, err
 			}

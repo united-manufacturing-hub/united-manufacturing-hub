@@ -140,7 +140,7 @@ var _ = Describe("Transport resident-child JWT re-apply", func() {
 			WorkerType: "transport",
 		}
 
-		worker, err := transport.NewTransportWorker(identity, deps.NewNopFSMLogger(), nil)
+		worker, err := transport.NewTransportWorker(identity, deps.NewNopFSMLogger(), nil, nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Publish the parent transport deps the same way the production worker
