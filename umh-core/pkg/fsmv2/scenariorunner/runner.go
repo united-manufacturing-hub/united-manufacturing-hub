@@ -78,9 +78,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // runScenario keeps the root's registry published for exactly the
 // supervisor's lifetime: Root.Publish runs before the supervisor starts, and
 // Root.Clear runs on EVERY exit path, including a Scenario.Run panic,
-// strictly after the supervisor has stopped. Clearing earlier changes what
-// the root's workers observe mid-shutdown; a registry that is never cleared
-// makes every later runScenario in the same process fail Root.CheckIdle.
+// strictly after the supervisor has stopped.
 //
 // The supervisor runs on a context detached from the caller's ctx. The
 // caller's ctx drives Scenario.Run, the Duration wait, and the teardown
@@ -88,11 +86,9 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // ctx, cancelling it would stop ticking before Shutdown runs, and the
 // graceful drain would wait out its full timeout against a stopped loop.
 //
-// Runs that share a Root must not overlap within a process. Root.CheckIdle
-// catches sequential overlap (a previous run whose teardown has not
-// finished); it does not catch truly concurrent runScenario calls, because
-// the check and the publish are two separate steps. Concurrent runScenario
-// calls are not supported.
+// Root.CheckIdle catches sequential overlap (a previous run whose teardown
+// has not finished); it does not catch concurrent runScenario calls, because
+// the check and the publish are two separate steps.
 func runScenario(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	if err := cfg.Root.CheckIdle(cfg.Scenario.Name); err != nil {
 		return nil, err

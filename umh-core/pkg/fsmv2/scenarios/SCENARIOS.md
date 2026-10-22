@@ -2,7 +2,7 @@
 
 A scenario runs the real supervisor and real workers against mocks, and checks
 what the store shows. It is a `Scenario` registered in `Registry`
-(`scenariorunner/env.go`), and `scenarios/registry_run_test.go` runs every
+(`scenarios/registry.go`), and `scenarios/registry_run_test.go` runs every
 registered one. The example to copy is `HelloworldScenario` in
 `scenarios/helloworld.go`.
 
@@ -77,7 +77,7 @@ run ends, `RunResult.Err` holds the first of these that applies:
 
 The CLI exits 1 on a set `Err`, and `scenarios/registry_run_test.go` fails on it.
 Valid states per worker type are in `validWorkerStates`
-(`scenarios/state_check.go`). Add a new worker type there, or its states go
+(`scenarios/valid_worker_states.go`). Add a new worker type there, or its states go
 unchecked.
 
 ## Running it
