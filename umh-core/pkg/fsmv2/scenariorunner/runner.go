@@ -72,8 +72,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	return runScenario(ctx, cfg)
 }
 
-// runScenario executes a scenario on the kernel-only application supervisor (no
-// YAML children, so the config worker kernel is the only child).
+// runScenario executes a scenario on the root supervisor that cfg.Root builds.
 //
 // runScenario keeps the root's registry published for exactly the
 // supervisor's lifetime: Root.Publish runs before the supervisor starts, and

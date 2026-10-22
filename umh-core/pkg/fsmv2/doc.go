@@ -36,7 +36,7 @@
 //   - workers/example/examplechild/state/ - State definitions and transitions
 //   - workers/example/examplechild/action/ - Idempotent actions
 //   - workers/example/exampleparent/worker.go - Parent with child management
-//   - scenarios/cascade.go - Runnable example with YAML config
+//   - scenarios/cascade.go - Runnable scenario: a parent whose children fail and reconnect
 //
 // # Key Concepts
 //
