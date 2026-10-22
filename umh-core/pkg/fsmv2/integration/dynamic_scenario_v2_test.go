@@ -27,6 +27,7 @@ import (
 
 	// Blank-import the state packages so their init() registrations exist before
 	// the supervisor ticks.
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/state"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
@@ -64,7 +65,7 @@ var _ = Describe("Dynamic Scenario: migration-API lifecycle real proof", func() 
 
 		// The runner builds an fsmv2client over this same store, so Run reads
 		// observed state from the store verifyStateFieldsAreValid inspects afterward.
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     dynamic,
 			Duration:     2 * time.Second,
 			TickInterval: 100 * time.Millisecond,

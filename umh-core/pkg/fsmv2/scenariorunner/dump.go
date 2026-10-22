@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package scenarios
+package scenariorunner
 
 import (
 	"context"
@@ -99,7 +99,7 @@ func DumpScenario(ctx context.Context, store storage.TriangularStoreInterface, s
 	}, nil
 }
 
-// convertStorageWorkers converts storage.WorkerSnapshot to scenarios.WorkerSnapshot.
+// convertStorageWorkers converts storage.WorkerSnapshot to WorkerSnapshot.
 func convertStorageWorkers(storageWorkers []storage.WorkerSnapshot) []WorkerSnapshot {
 	workers := make([]WorkerSnapshot, len(storageWorkers))
 

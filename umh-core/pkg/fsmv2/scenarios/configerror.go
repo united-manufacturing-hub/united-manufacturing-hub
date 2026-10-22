@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	example_failing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
@@ -28,11 +29,11 @@ import (
 
 // ConfigErrorScenario runs a valid parent beside workers whose config the
 // supervisor rejects when it derives their desired state.
-var ConfigErrorScenario = Scenario{
+var ConfigErrorScenario = scenariorunner.Scenario{
 	Name:        "configerror",
 	Description: "Workers with a bad config are rejected and never start; beside them a valid parent reaches Running and an empty-config parent stays in TryingToStart",
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		validRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-valid"}
 		mismatchRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-type-mismatch"}
 		emptyRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-empty"}

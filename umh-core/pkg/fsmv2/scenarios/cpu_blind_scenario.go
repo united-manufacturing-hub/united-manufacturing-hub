@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
@@ -58,7 +59,7 @@ const (
 //
 // The second outage keeps the first, so the story tests the two failures
 // rather than a recovery.
-var CPUBlindScenario = Scenario{
+var CPUBlindScenario = scenariorunner.Scenario{
 	Name:        "cpu-blind",
 	Description: "Takes away the two files the CPU monitor reads, one at a time",
 
@@ -76,7 +77,7 @@ var CPUBlindScenario = Scenario{
 		return m, box.Stop, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		machine, err := cpuMachineFromDeps(env)
 		if err != nil {
 			return err

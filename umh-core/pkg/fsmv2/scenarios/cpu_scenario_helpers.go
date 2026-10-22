@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -65,7 +66,7 @@ func cpuMachineDeps(box *tickingBox) map[string]any {
 
 // cpuMachineFromDeps reads the scenario's fake machine back out of the
 // dependency map, the same map the supervisor builds the worker from.
-func cpuMachineFromDeps(env Env) (*cpuMachine, error) {
+func cpuMachineFromDeps(env scenariorunner.Env) (*cpuMachine, error) {
 	raw, ok := config.LookupDependency(env.Dependencies, fsmv2cpu.FilesystemKey)
 	if !ok {
 		return nil, errors.New("the cpu scenario's dependency map holds no filesystem under fsmv2cpu.FilesystemKey")
@@ -82,7 +83,7 @@ func cpuMachineFromDeps(env Env) (*cpuMachine, error) {
 // cpuReading reads the CPU worker's last observation through the monitor's
 // exact call: GetFresh under the shared staleness limit, so a scenario asserts
 // the same freshness the container monitor depends on.
-func cpuReading(ctx context.Context, env Env) (simple.Status[fsmv2cpu.CPUStatus], fsmv2client.Freshness, error) {
+func cpuReading(ctx context.Context, env scenariorunner.Env) (simple.Status[fsmv2cpu.CPUStatus], fsmv2client.Freshness, error) {
 	obs, fresh, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, env.Client, fsmv2cpu.Ref, fsmv2cpu.MaxObservationAge)
 
 	return obs.Status, fresh, err
@@ -111,7 +112,7 @@ func cpuStatusSeen(st simple.Status[fsmv2cpu.CPUStatus]) string {
 
 // waitCPUFirstReading waits for a Fresh reading on which pass holds. pass must
 // name a condition that lasts once reached, as waitCPUFresh says.
-func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
+func waitCPUFirstReading(ctx context.Context, env scenariorunner.Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
 	return env.WaitFor(ctx, check, func(ctx context.Context) (bool, string, error) {
 		st, fresh, err := cpuReading(ctx, env)
 		if err != nil {
@@ -139,7 +140,7 @@ func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(s
 // fails the wait at once: the container monitor's judgeWorkerCPU reports any
 // reading that is not Fresh as degraded. The wait polls, so pass must name a
 // condition that lasts once reached; a short-lived one can be missed.
-func waitCPUFresh(ctx context.Context, env Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
+func waitCPUFresh(ctx context.Context, env scenariorunner.Env, check string, pass func(simple.Status[fsmv2cpu.CPUStatus]) (bool, string)) error {
 	return env.WaitFor(ctx, check, func(ctx context.Context) (bool, string, error) {
 		st, fresh, err := cpuReading(ctx, env)
 		if err != nil {

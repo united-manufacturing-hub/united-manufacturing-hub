@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -52,7 +53,7 @@ var historianScenarioDatabase = timescalemetrics.FakeContents{
 type historianObservation = fsmv2.Observation[simple.Status[fsmv2timescale.TimescaleStatus]]
 
 // HistorianScenario runs the historian monitor against a FakeDatabase stored under DatabaseKey.
-var HistorianScenario = Scenario{
+var HistorianScenario = scenariorunner.Scenario{
 	Name:        "historian",
 	Description: "Timescale monitor against a fake database: running, then unreachable, then password rejected, then running again",
 
@@ -66,7 +67,7 @@ var HistorianScenario = Scenario{
 		return deps, nil, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		database, ok := config.LookupDependency(env.Dependencies, fsmv2timescale.DatabaseKey)
 		if !ok {
 			return errors.New("the historian scenario's dependency map holds no database under fsmv2timescale.DatabaseKey")

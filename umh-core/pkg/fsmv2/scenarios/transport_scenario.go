@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
@@ -90,7 +91,7 @@ drainLoop:
 var relayServerKey = config.NewDependencyKey[*testutil.MockRelayServer]("examples.relay_server")
 
 // TransportScenario runs a transport child against a mock relay server.
-var TransportScenario = Scenario{
+var TransportScenario = scenariorunner.Scenario{
 	Name:        "transport",
 	Description: "Transport worker: authenticates against a mock relay server and pushes queued messages",
 
@@ -113,7 +114,7 @@ var TransportScenario = Scenario{
 		return deps, func() { server.Close() }, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		server, ok := config.LookupDependency(env.Dependencies, relayServerKey)
 		if !ok {
 			return errors.New("the transport scenario's dependency map holds no relay server under relayServerKey")

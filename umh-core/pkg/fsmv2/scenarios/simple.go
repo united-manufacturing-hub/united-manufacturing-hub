@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
@@ -27,11 +28,11 @@ import (
 )
 
 // SimpleScenario runs one exampleparent with two examplechild children through start and stop.
-var SimpleScenario = Scenario{
+var SimpleScenario = scenariorunner.Scenario{
 	Name:        "simple",
 	Description: "One exampleparent starts two examplechild workers, reports both healthy, then stops them and reaches Stopped",
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		parentRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "parent-1"}
 
 		env.Step(fmt.Sprintf("create the parent with two children; the parent waits %s in Stopped before it creates them", parentstate.StoppedWaitDuration))

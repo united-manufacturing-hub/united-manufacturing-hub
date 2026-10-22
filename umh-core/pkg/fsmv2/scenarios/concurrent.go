@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
@@ -27,11 +28,11 @@ import (
 const concurrentWorkerCount = 5
 
 // ConcurrentScenario creates several helloworld workers without waiting between them; each must reach Running.
-var ConcurrentScenario = Scenario{
+var ConcurrentScenario = scenariorunner.Scenario{
 	Name:        "concurrent",
 	Description: "Helloworld workers created without waiting between them; each one reaches Running",
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		refs := make([]dynamicchildren.Ref, 0, concurrentWorkerCount)
 
 		for i := 1; i <= concurrentWorkerCount; i++ {

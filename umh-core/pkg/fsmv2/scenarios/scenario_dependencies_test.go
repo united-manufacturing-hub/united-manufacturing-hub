@@ -25,6 +25,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
@@ -33,17 +34,17 @@ import (
 var _ = Describe("Scenario Dependencies failure", func() {
 	It("fails the run before the supervisor starts when Dependencies returns an error, naming the scenario", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		depsErr := errors.New("dependency setup failed")
 		runRan := false
-		failing := scenarios.Scenario{
+		failing := scenariorunner.Scenario{
 			Name:        "deps-error",
 			Description: "test-local Run for the Dependencies error path",
 			Dependencies: func() (map[string]any, func(), error) {
 				return nil, nil, depsErr
 			},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				runRan = true
 
 				// Returning an error makes the runner tear down at once. If a
@@ -54,7 +55,7 @@ var _ = Describe("Scenario Dependencies failure", func() {
 
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
-		result, err := scenarios.Run(context.Background(), scenarios.RunConfig{
+		result, err := scenarios.Run(context.Background(), scenariorunner.RunConfig{
 			Scenario:     failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -76,11 +77,11 @@ var _ = Describe("Scenario Dependencies failure", func() {
 var _ = Describe("Scenario Dependencies cleanup", func() {
 	It("calls the cleanup exactly once after the supervisor stopped following a normal run", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		var cleanupCalls atomic.Int32
 
-		normal := scenarios.Scenario{
+		normal := scenariorunner.Scenario{
 			Name:        "cleanup-normal",
 			Description: "test-local Run for the cleanup path after a normal run",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -88,7 +89,7 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 					cleanupCalls.Add(1)
 				}, nil
 			},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -96,7 +97,7 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     normal,
 			Duration:     10 * time.Second,
 			TickInterval: 50 * time.Millisecond,
@@ -117,13 +118,13 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 
 	It("calls the cleanup exactly once when Run returns an error", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		runErr := errors.New("boom")
 
 		var cleanupCalls atomic.Int32
 
-		failing := scenarios.Scenario{
+		failing := scenariorunner.Scenario{
 			Name:        "cleanup-error",
 			Description: "test-local Run for the cleanup path after a failing Run",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -131,7 +132,7 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 					cleanupCalls.Add(1)
 				}, nil
 			},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return runErr
 			},
 		}
@@ -139,7 +140,7 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		_, err := scenarios.Run(ctx, scenarios.RunConfig{
+		_, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -154,11 +155,11 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 
 	It("calls the cleanup exactly once when Run panics", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		var cleanupCalls atomic.Int32
 
-		panicking := scenarios.Scenario{
+		panicking := scenariorunner.Scenario{
 			Name:        "cleanup-panic",
 			Description: "test-local Run for the cleanup path after a panicking Run",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -166,7 +167,7 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 					cleanupCalls.Add(1)
 				}, nil
 			},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				panic("Run exploded")
 			},
 		}
@@ -175,7 +176,7 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 		defer cancel()
 
 		Expect(func() {
-			_, _ = scenarios.Run(ctx, scenarios.RunConfig{
+			_, _ = scenarios.Run(ctx, scenariorunner.RunConfig{
 				Scenario:     panicking,
 				TickInterval: 50 * time.Millisecond,
 				Logger:       logger,
@@ -190,15 +191,15 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 
 	It("runs a scenario whose Dependencies returns no cleanup", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		cleanupFree := scenarios.Scenario{
+		cleanupFree := scenariorunner.Scenario{
 			Name:        "nil-cleanup",
 			Description: "test-local Run for the nil-cleanup path",
 			Dependencies: func() (map[string]any, func(), error) {
 				return nil, nil, nil
 			},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -206,7 +207,7 @@ var _ = Describe("Scenario Dependencies cleanup", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     cleanupFree,
 			Duration:     time.Second,
 			TickInterval: 50 * time.Millisecond,

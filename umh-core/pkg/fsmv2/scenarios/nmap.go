@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
@@ -51,7 +52,7 @@ func (m *mockDialer) DialContext(_ context.Context, _, _ string) (net.Conn, erro
 // fsmv1 connection worker decides that means down
 // (ConnectionInstance.IsConnectionNmapDown in pkg/fsm/connection). So the
 // scenario waits for port_state, not for degraded.
-var NmapScenario = Scenario{
+var NmapScenario = scenariorunner.Scenario{
 	Name:        "nmap",
 	Description: "Port monitor: dials a target through a mock dialer, reports the port open then closed",
 
@@ -69,7 +70,7 @@ var NmapScenario = Scenario{
 		return deps, nil, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		d, ok := config.LookupDependency(env.Dependencies, fsmv2nmap.DialerKey)
 		if !ok {
 			return errors.New("the nmap scenario's dependency map holds no dialer under fsmv2nmap.DialerKey")

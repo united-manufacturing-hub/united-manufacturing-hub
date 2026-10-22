@@ -26,6 +26,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
@@ -50,15 +51,15 @@ var _ = Describe("Scenario steps and waits", func() {
 	It("logs each step once, and fails a never-done wait naming the last step, the check and the last value seen", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		var waitErr error
 		var firstWaitPolls atomic.Int32
 
-		stepping := scenarios.Scenario{
+		stepping := scenariorunner.Scenario{
 			Name:        "step-and-wait",
 			Description: "test-local Run for Step logging and WaitFor polling",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				env.Step("change the mood file to grumpy")
 
 				if err := env.WaitFor(ctx, "store shows the grumpy mood",
@@ -89,7 +90,7 @@ var _ = Describe("Scenario steps and waits", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     stepping,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -141,14 +142,14 @@ var _ = Describe("Scenario steps and waits", func() {
 
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		var firstPolls atomic.Int32
 
-		waiting := scenarios.Scenario{
+		waiting := scenariorunner.Scenario{
 			Name:        "wait-passed-logging",
 			Description: "test-local Run for the wait-passed log line",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				// Done on the second poll, so a pass line quoting the first poll's value fails the seen assertion.
 				if err := env.WaitFor(ctx, "first check",
 					func(_ context.Context) (bool, string, error) {
@@ -178,7 +179,7 @@ var _ = Describe("Scenario steps and waits", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		_, err := scenarios.Run(ctx, scenarios.RunConfig{
+		_, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     waiting,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -215,14 +216,14 @@ var _ = Describe("Scenario steps and waits", func() {
 
 	It("fails a wait whose poll errors, naming the last step, the check and the poll's error", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		pollErr := errors.New("store read broke")
 
-		erroring := scenarios.Scenario{
+		erroring := scenariorunner.Scenario{
 			Name:        "wait-poll-error",
 			Description: "test-local Run for the poll-error wait",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				env.Step("probe step")
 
 				return env.WaitFor(ctx, "store read works",
@@ -235,7 +236,7 @@ var _ = Describe("Scenario steps and waits", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     erroring,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -251,21 +252,21 @@ var _ = Describe("Scenario steps and waits", func() {
 			"the error must carry the poll's own error")
 		Expect(errors.Is(err, pollErr)).To(BeTrue(),
 			"the poll's error must stay findable through the wrapping")
-		Expect(errors.Is(err, scenarios.ErrScenarioFailed)).To(BeTrue(),
+		Expect(errors.Is(err, scenariorunner.ErrScenarioFailed)).To(BeTrue(),
 			"a Run that returned an error must wrap ErrScenarioFailed, so the CLI reports a failed scenario and not a failed start")
 		Expect(result).To(BeNil())
 	})
 
 	It("lets a goroutine the scenario starts call Step while Run waits", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		var polls atomic.Int32
 
-		concurrent := scenarios.Scenario{
+		concurrent := scenariorunner.Scenario{
 			Name:        "step-from-goroutine",
 			Description: "test-local Run that calls Step from a second goroutine",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				stop := make(chan struct{})
 				stopped := make(chan struct{})
 
@@ -304,7 +305,7 @@ var _ = Describe("Scenario steps and waits", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_, err := scenarios.Run(ctx, scenarios.RunConfig{
+		_, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     concurrent,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -317,14 +318,14 @@ var _ = Describe("Scenario steps and waits", func() {
 
 	It("returns nil from a wait whose check reports done on its third poll", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		var polls atomic.Int32
 
-		counting := scenarios.Scenario{
+		counting := scenariorunner.Scenario{
 			Name:        "wait-third-poll",
 			Description: "test-local Run for the done-on-third-poll wait",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				return env.WaitFor(ctx, "store shows the grumpy mood",
 					func(_ context.Context) (bool, string, error) {
 						n := polls.Add(1)
@@ -340,7 +341,7 @@ var _ = Describe("Scenario steps and waits", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     counting,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -357,16 +358,13 @@ var _ = Describe("Scenario steps and waits", func() {
 	})
 
 	It("fails a wait that never completes within its own timeout, with no deadline on the caller's ctx", func() {
-		restore := scenarios.SetWaitForTimeoutForTest(300 * time.Millisecond)
-		defer restore()
-
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		neverDone := scenarios.Scenario{
+		neverDone := scenariorunner.Scenario{
 			Name:        "wait-never-done",
 			Description: "test-local Run for the wait timeout",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				env.Step("wait for a check that never passes")
 
 				return env.WaitFor(ctx, "store shows the grumpy mood",
@@ -377,7 +375,7 @@ var _ = Describe("Scenario steps and waits", func() {
 		}
 
 		type runOutcome struct {
-			result *scenarios.RunResult
+			result *scenariorunner.RunResult
 			err    error
 		}
 
@@ -385,7 +383,7 @@ var _ = Describe("Scenario steps and waits", func() {
 
 		// In a goroutine, so a hung wait fails the spec through Eventually.
 		go func() {
-			result, err := scenarios.Run(context.Background(), scenarios.RunConfig{
+			result, err := scenarios.Run(context.Background(), scenariorunner.RunConfig{
 				Scenario:     neverDone,
 				TickInterval: 50 * time.Millisecond,
 				Logger:       logger,
@@ -395,14 +393,14 @@ var _ = Describe("Scenario steps and waits", func() {
 		}()
 
 		var done runOutcome
-		Eventually(outcome, "10s").Should(Receive(&done),
+		Eventually(outcome, "60s").Should(Receive(&done),
 			"a wait whose check never passes must end its run on its own, not hang forever")
 
 		Expect(done.err).To(HaveOccurred(),
 			"a wait that never completes must fail the run")
 		Expect(done.err.Error()).To(ContainSubstring("store shows the grumpy mood"),
 			"the failure must name the check that never completed")
-		Expect(done.err.Error()).To(ContainSubstring("timed out after 300ms"),
+		Expect(done.err.Error()).To(ContainSubstring("timed out after 30s"),
 			"the failure must name the wait's own timeout")
 	})
 })
@@ -414,14 +412,14 @@ var _ = Describe("Scenario wait context", func() {
 
 	It("keeps ctx.Err in a wait the caller's ctx cancelled", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		var waitErr error
 
-		cancelled := scenarios.Scenario{
+		cancelled := scenariorunner.Scenario{
 			Name:        "wait-ctx-cancelled",
 			Description: "test-local Run for the ctx-cancelled wait",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				env.Step("wait on a check that never passes")
 
 				waitErr = env.WaitFor(ctx, "store shows the grumpy mood",
@@ -440,7 +438,7 @@ var _ = Describe("Scenario wait context", func() {
 			cancel()
 		}()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     cancelled,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,

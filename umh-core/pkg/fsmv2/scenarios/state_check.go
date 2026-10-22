@@ -14,14 +14,6 @@
 
 package scenarios
 
-import (
-	"context"
-	"fmt"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-)
-
 // validWorkerStates lists the state names each worker type the runner runs may
 // report. No registry of a type's states exists to read instead. "unknown"
 // is allowed for every type, because the supervisor reports it until a
@@ -102,37 +94,4 @@ var validWorkerStates = map[string]map[string]bool{
 		"Running": true, "Degraded": true, "Stopped": true, "Stopping": true,
 		"unknown": true,
 	},
-}
-
-// checkStoredWorkerStates returns an error for the first stored worker whose
-// type is in validWorkerStates and whose state is not. Call it only after the
-// supervisor stopped, so no supervisor write races the read.
-func checkStoredWorkerStates(ctx context.Context, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
-	dump, err := DumpScenario(ctx, store, 0)
-	if err != nil {
-		return fmt.Errorf("read stored workers for the state check: %w", err)
-	}
-
-	for _, w := range dump.Workers {
-		if w.Observed == nil {
-			continue
-		}
-
-		state, ok := w.Observed["state"].(string)
-		if !ok || state == "" {
-			continue
-		}
-
-		validStates, known := validWorkerStates[w.WorkerType]
-		if !known {
-			continue
-		}
-
-		if !validStates[state] {
-			return fmt.Errorf("worker %s (type %s) holds stored state %q, which is not a state name its worker type may report",
-				w.WorkerID, w.WorkerType, state)
-		}
-	}
-
-	return nil
 }

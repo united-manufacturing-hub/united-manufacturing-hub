@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
@@ -50,7 +51,7 @@ const (
 // The story is that pressure alone degrades the machine: tasks are queueing
 // for a free core. The scenario does not check the capacity signal, which
 // reports 0.6 cores of headroom throughout.
-var CPUPressureScenario = Scenario{
+var CPUPressureScenario = scenariorunner.Scenario{
 	Name:        "cpu-pressure",
 	Description: "Raises a fake machine's CPU pressure from 19% to 25%, over the 20% at which the monitor degrades",
 
@@ -63,7 +64,7 @@ var CPUPressureScenario = Scenario{
 		return m, box.Stop, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		machine, err := cpuMachineFromDeps(env)
 		if err != nil {
 			return err

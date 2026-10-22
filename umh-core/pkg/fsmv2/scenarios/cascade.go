@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_failing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
@@ -28,7 +29,7 @@ import (
 )
 
 // CascadeScenario runs one exampleparent whose examplefailing children fail their connects in repeated cycles.
-var CascadeScenario = Scenario{
+var CascadeScenario = scenariorunner.Scenario{
 	Name:        "cascade",
 	Description: "A parent goes Degraded while its failing children reconnect, and returns to Running when both are Connected",
 
@@ -36,7 +37,7 @@ var CascadeScenario = Scenario{
 
 	ExpectedErrorCauses: []error{example_failing_action.ErrSimulatedFailure},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		parentRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "cascade-parent"}
 
 		const (

@@ -2,7 +2,7 @@
 
 A scenario runs the real supervisor and real workers against mocks, and checks
 what the store shows. It is a `Scenario` registered in `Registry`
-(`scenarios/env.go`), and `scenarios/registry_run_test.go` runs every
+(`scenariorunner/env.go`), and `scenarios/registry_run_test.go` runs every
 registered one. The example to copy is `HelloworldScenario` in
 `scenarios/helloworld.go`.
 
@@ -46,14 +46,14 @@ Before each change, call `env.Step` with a short description of the change.
 After the change, call `env.WaitFor` with a check that reads the store through
 the client and returns what it saw. A check that has not seen the worker yet
 reports that it is not done. Each wait fails after `waitForTimeout`
-(`scenarios/env.go`). A check that ignores its context can hold the wait
+(`scenariorunner/env.go`). A check that ignores its context can hold the wait
 past that timeout.
 
 ## What fails a run
 
 A logged error is unexpected unless its message contains an entry of
 `ExpectedErrors` or of `alwaysAllowedMessages`, or its value carries a cause
-listed in `ExpectedErrorCauses` (`scenarios/env.go`). A
+listed in `ExpectedErrorCauses` (`scenariorunner/env.go`). A
 logged warning is checked the same way against `ExpectedWarnings`.
 
 An entry of `ExpectedErrors`, `ExpectedErrorCauses` or `ExpectedWarnings`

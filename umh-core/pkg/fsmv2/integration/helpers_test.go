@@ -27,7 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
@@ -314,7 +314,7 @@ func setupTestStoreForScenario(logger deps.FSMLogger) storage.TriangularStoreInt
 	return storage.NewTriangularStore(basicStore, logger)
 }
 
-func getWorkersFromStore(store storage.TriangularStoreInterface) []scenarios.WorkerSnapshot {
+func getWorkersFromStore(store storage.TriangularStoreInterface) []scenariorunner.WorkerSnapshot {
 	ctx := context.Background()
 
 	resp, err := store.GetDeltas(ctx, storage.Subscription{LastSyncID: 0})
@@ -324,7 +324,7 @@ func getWorkersFromStore(store storage.TriangularStoreInterface) []scenarios.Wor
 
 	seen := make(map[string]bool)
 
-	var workers []scenarios.WorkerSnapshot
+	var workers []scenariorunner.WorkerSnapshot
 
 	for _, delta := range resp.Deltas {
 		key := delta.WorkerType + "/" + delta.WorkerID
@@ -344,7 +344,7 @@ func getWorkersFromStore(store storage.TriangularStoreInterface) []scenarios.Wor
 			observedDoc = doc
 		}
 
-		workers = append(workers, scenarios.WorkerSnapshot{
+		workers = append(workers, scenariorunner.WorkerSnapshot{
 			WorkerType: delta.WorkerType,
 			WorkerID:   delta.WorkerID,
 			Identity:   snapshot.Identity,

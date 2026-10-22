@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
@@ -52,7 +53,7 @@ const (
 // composes the messages a v2 machine in the same condition gets. v1 has no
 // cpu.pressure, so the pressure line reads "not measured" and no warning is
 // raised for it.
-var CPUV1Scenario = Scenario{
+var CPUV1Scenario = scenariorunner.Scenario{
 	Name:        "cpu-v1",
 	Description: "Runs the CPU monitor over a fake cgroup v1 machine and throttles it at its CPU limit",
 
@@ -65,7 +66,7 @@ var CPUV1Scenario = Scenario{
 		return m, box.Stop, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		machine, err := cpuMachineFromDeps(env)
 		if err != nil {
 			return err

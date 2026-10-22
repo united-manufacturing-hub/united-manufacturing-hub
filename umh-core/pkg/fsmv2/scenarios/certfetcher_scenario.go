@@ -27,6 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	certfetcher "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
@@ -140,7 +141,7 @@ func certFetcherDependencies(emails []string, fetchErr error) (map[string]any, f
 
 var certFetcherRef = dynamicchildren.Ref{WorkerType: certfetcher.WorkerTypeName, Name: "certfetcher-1"}
 
-func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.Ref, want string) error {
+func waitForCertFetcherState(ctx context.Context, env scenariorunner.Env, ref dynamicchildren.Ref, want string) error {
 	return env.WaitFor(ctx, "store shows state "+want,
 		func(ctx context.Context) (bool, string, error) {
 			obs, err := fsmv2client.Get[certfetcher.CertFetcherStatus](ctx, env.Client, ref)
@@ -157,7 +158,7 @@ func waitForCertFetcherState(ctx context.Context, env Env, ref dynamicchildren.R
 }
 
 // CertFetcherHealthyScenario runs a certfetcher that has a subscriber and fetches successfully.
-var CertFetcherHealthyScenario = Scenario{
+var CertFetcherHealthyScenario = scenariorunner.Scenario{
 	Name:        "certfetcher-healthy",
 	Description: "Cert fetcher with a subscriber: reaches Running and fetches",
 
@@ -165,7 +166,7 @@ var CertFetcherHealthyScenario = Scenario{
 		return certFetcherDependencies([]string{"alice@example.com"}, nil)
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		env.Step("create certfetcher; its mock handler lists one subscriber, alice@example.com")
 
 		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {
@@ -194,7 +195,7 @@ var CertFetcherHealthyScenario = Scenario{
 }
 
 // CertFetcherDegradedScenario runs a certfetcher whose every fetch fails, so it ends in Degraded.
-var CertFetcherDegradedScenario = Scenario{
+var CertFetcherDegradedScenario = scenariorunner.Scenario{
 	Name:        "certfetcher-degraded",
 	Description: "Cert fetcher whose fetches fail: enters Degraded after DegradedThreshold (certfetcher/state) failed fetches in a row",
 
@@ -204,7 +205,7 @@ var CertFetcherDegradedScenario = Scenario{
 		return certFetcherDependencies([]string{"alice@example.com"}, errCertFetchSimulated)
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		env.Step("create certfetcher whose every fetch fails; each failure logs an expected action_failed error")
 
 		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {
@@ -220,7 +221,7 @@ const pollsStoppedBeforePass = 20
 // CertFetcherNoSubscribersScenario runs a certfetcher whose cert handler has no
 // subscriber handler (the SubHandler that lists active subscribers). StoppedState
 // starts the worker only once one exists (certfetcher/state/state_stopped.go).
-var CertFetcherNoSubscribersScenario = Scenario{
+var CertFetcherNoSubscribersScenario = scenariorunner.Scenario{
 	Name:        "certfetcher-no-subscribers",
 	Description: "Cert fetcher with no subscriber handler: stays in Stopped",
 
@@ -228,7 +229,7 @@ var CertFetcherNoSubscribersScenario = Scenario{
 		return certFetcherDependencies(nil, nil)
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		env.Step("create certfetcher with no subscriber handler; it stays Stopped, so no state change appears for it")
 
 		if err := env.Client.Upsert(certFetcherRef, nil); err != nil {

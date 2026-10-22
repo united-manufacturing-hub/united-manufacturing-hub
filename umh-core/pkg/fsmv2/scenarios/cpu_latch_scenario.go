@@ -25,6 +25,7 @@ import (
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
@@ -53,7 +54,7 @@ const (
 // comes back, the report is late: a released signal cannot fire again for 60
 // machine seconds, so the machine sits over its fire mark while reported
 // healthy.
-var CPULatchScenario = Scenario{
+var CPULatchScenario = scenariorunner.Scenario{
 	Name:        "cpu-latch",
 	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and shows the bar on re-firing",
 
@@ -66,7 +67,7 @@ var CPULatchScenario = Scenario{
 		return m, box.Stop, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		machine, err := cpuMachineFromDeps(env)
 		if err != nil {
 			return err

@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
@@ -65,11 +66,11 @@ var _ = Describe("Scenario error checks", func() {
 
 	// loggedErrorRun runs scenario with a Run that logs msg as an error and,
 	// when waitFor is set, waits on a check that is done at once.
-	loggedErrorRun := func(scenario scenarios.Scenario, msg string, waitFor bool) (result *scenarios.RunResult, runErr, waitErr error) {
+	loggedErrorRun := func(scenario scenariorunner.Scenario, msg string, waitFor bool) (result *scenariorunner.RunResult, runErr, waitErr error) {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario.Run = func(ctx context.Context, env scenarios.Env) error {
+		scenario.Run = func(ctx context.Context, env scenariorunner.Env) error {
 			env.Step("change the mood file to grumpy")
 
 			// With, as the supervisor's worker loggers do.
@@ -92,7 +93,7 @@ var _ = Describe("Scenario error checks", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		result, runErr = scenarios.Run(ctx, scenarios.RunConfig{
+		result, runErr = scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -103,7 +104,7 @@ var _ = Describe("Scenario error checks", func() {
 	}
 
 	It("fails the next wait and the run when Run logs an error the scenario does not expect", func() {
-		_, runErr, waitErr := loggedErrorRun(scenarios.Scenario{
+		_, runErr, waitErr := loggedErrorRun(scenariorunner.Scenario{
 			Name:        "unexpected-error",
 			Description: "test-local Run for the unexpected-error check",
 		}, "probe_unexpected_error", true)
@@ -127,7 +128,7 @@ var _ = Describe("Scenario error checks", func() {
 	})
 
 	It("fails the run when Run logs an unexpected error and returns without waiting", func() {
-		_, runErr, waitErr := loggedErrorRun(scenarios.Scenario{
+		_, runErr, waitErr := loggedErrorRun(scenariorunner.Scenario{
 			Name:        "unexpected-error-no-wait",
 			Description: "test-local Run for the post-Run error check",
 		}, "probe_unexpected_error", false)
@@ -138,7 +139,7 @@ var _ = Describe("Scenario error checks", func() {
 			"an error logged during a run must fail the run even when Run never waits")
 		Expect(runErr.Error()).To(ContainSubstring("probe_unexpected_error"),
 			"the run's failure must name the error that was logged")
-		Expect(errors.Is(runErr, scenarios.ErrScenarioFailed)).To(BeTrue(),
+		Expect(errors.Is(runErr, scenariorunner.ErrScenarioFailed)).To(BeTrue(),
 			"a run that failed on a logged error must wrap ErrScenarioFailed, so the CLI reports a failed scenario and not a failed start")
 
 		Expect(register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)).To(BeNil(),
@@ -146,7 +147,7 @@ var _ = Describe("Scenario error checks", func() {
 	})
 
 	It("does not fail the run when the logged error matches ExpectedErrors", func() {
-		result, runErr, waitErr := loggedErrorRun(scenarios.Scenario{
+		result, runErr, waitErr := loggedErrorRun(scenariorunner.Scenario{
 			Name:           "expected-error",
 			Description:    "test-local Run for the ExpectedErrors check",
 			ExpectedErrors: []string{"probe_unexpected"},
@@ -163,7 +164,7 @@ var _ = Describe("Scenario error checks", func() {
 	})
 
 	It("does not fail the run when the logged error is one every run allows", func() {
-		result, runErr, waitErr := loggedErrorRun(scenarios.Scenario{
+		result, runErr, waitErr := loggedErrorRun(scenariorunner.Scenario{
 			Name:        "allowed-error",
 			Description: "test-local Run for the always-allowed error check",
 		}, "probe_data_stale", true)
@@ -180,12 +181,12 @@ var _ = Describe("Scenario error checks", func() {
 
 	It("fails the run when a worker it creates logs an error the scenario does not expect", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		workerError := scenarios.Scenario{
+		workerError := scenariorunner.Scenario{
 			Name:        "worker-error",
 			Description: "test-local Run for the worker-logged error check",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				ref := dynamicchildren.Ref{WorkerType: scenarioErrorProbeType, Name: "error-probe"}
 				if err := env.Client.Upsert(ref, nil); err != nil {
 					return err
@@ -203,7 +204,7 @@ var _ = Describe("Scenario error checks", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     workerError,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -224,19 +225,19 @@ var _ = Describe("Scenario stored-state check", func() {
 
 	It("sets RunResult.Err when the store holds a state that is not a valid state name for its worker type", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		const badStateName = "NotAValidState"
 		const probeWorkerID = "bad-state-probe"
 
-		storingBadState := scenarios.Scenario{
+		storingBadState := scenariorunner.Scenario{
 			Name:        "invalid-stored-state",
 			Description: "test-local Run for the stored-state check",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				// So the stored-state check also meets a valid state it must not flag.
 				if err := env.WaitFor(ctx, "the kernel config worker reports Running",
 					func(ctx context.Context) (bool, string, error) {
-						dump, err := scenarios.DumpScenario(ctx, store, 0)
+						dump, err := scenariorunner.DumpScenario(ctx, store, 0)
 						if err != nil {
 							return false, "", err
 						}
@@ -278,7 +279,7 @@ var _ = Describe("Scenario stored-state check", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     storingBadState,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -301,12 +302,12 @@ var _ = Describe("Scenario stored-state check", func() {
 
 	It("leaves RunResult.Err nil after a run that stores only valid states", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		noop := scenarios.Scenario{
+		noop := scenariorunner.Scenario{
 			Name:        "valid-stored-state",
 			Description: "test-local Run for the clean stored-state check",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -314,7 +315,7 @@ var _ = Describe("Scenario stored-state check", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     noop,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -347,13 +348,13 @@ var _ = Describe("Scenario store-read failure", func() {
 
 	It("sets RunResult.Err when the stored-state check cannot read the store", func() {
 		logger := deps.NewNopFSMLogger()
-		inner := scenarios.SetupStore(logger)
+		inner := scenariorunner.SetupStore(logger)
 		store := failingDeltasStore{TriangularStoreInterface: inner}
 
-		noop := scenarios.Scenario{
+		noop := scenariorunner.Scenario{
 			Name:        "store-read-fails",
 			Description: "test-local Run for the store-read failure check",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -361,7 +362,7 @@ var _ = Describe("Scenario store-read failure", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     noop,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -388,13 +389,13 @@ var _ = Describe("Scenario missing expected warnings", func() {
 
 	It("sets RunResult.Err when a warning the scenario expects is never logged", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:             "missing-expected-warning",
 			Description:      "test-local Run for the missing expected warning check",
 			ExpectedWarnings: []string{"probe_never_logged"},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -402,7 +403,7 @@ var _ = Describe("Scenario missing expected warnings", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -423,13 +424,13 @@ var _ = Describe("Scenario missing expected warnings", func() {
 
 	It("keeps RunResult.Err nil when the run logs a listed warning", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		talking := scenarios.Scenario{
+		talking := scenariorunner.Scenario{
 			Name:             "matched-expected-warning",
 			Description:      "test-local Run for the matched expected warning check",
 			ExpectedWarnings: []string{"probe_logged"},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_logged")
 
 				return nil
@@ -439,7 +440,7 @@ var _ = Describe("Scenario missing expected warnings", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     talking,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -464,13 +465,13 @@ var _ = Describe("Scenario missing expected errors", func() {
 
 	It("sets RunResult.Err when an error the scenario expects is never logged", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:           "missing-expected-error",
 			Description:    "test-local Run for the missing expected error check",
 			ExpectedErrors: []string{"probe_never_logged"},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -478,7 +479,7 @@ var _ = Describe("Scenario missing expected errors", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -499,13 +500,13 @@ var _ = Describe("Scenario missing expected errors", func() {
 
 	It("keeps RunResult.Err nil when the run logs a listed error", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		talking := scenarios.Scenario{
+		talking := scenariorunner.Scenario{
 			Name:           "matched-expected-error",
 			Description:    "test-local Run for the matched expected error check",
 			ExpectedErrors: []string{"probe_logged"},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "",
 					errors.New("the logged probe failed"), "probe_logged")
 
@@ -516,7 +517,7 @@ var _ = Describe("Scenario missing expected errors", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     talking,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -535,13 +536,13 @@ var _ = Describe("Scenario missing expected errors", func() {
 
 	It("sets RunResult.Err when the run logs only one of two listed errors", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		partiallyTalking := scenarios.Scenario{
+		partiallyTalking := scenariorunner.Scenario{
 			Name:           "partially-matched-expected-error",
 			Description:    "test-local Run for the per-entry expected error check",
 			ExpectedErrors: []string{"probe_logged", "probe_never_logged"},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "",
 					errors.New("the logged probe failed"), "probe_logged")
 
@@ -552,7 +553,7 @@ var _ = Describe("Scenario missing expected errors", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     partiallyTalking,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -579,15 +580,15 @@ var _ = Describe("Scenario missing expected error causes", func() {
 
 	It("sets RunResult.Err when an error cause the scenario expects is never logged", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		errUnloggedCause := errors.New("probe cause")
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:                "missing-expected-error-cause",
 			Description:         "test-local Run for the missing expected error cause check",
 			ExpectedErrorCauses: []error{errUnloggedCause},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -595,7 +596,7 @@ var _ = Describe("Scenario missing expected error causes", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -618,16 +619,16 @@ var _ = Describe("Scenario missing expected error causes", func() {
 
 	It("sets RunResult.Err when the run logs an error wrapping only one of two listed causes", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		errWrappedCause := errors.New("the first probe cause")
 		errUnwrappedCause := errors.New("the second probe cause")
 
-		partiallyWrapping := scenarios.Scenario{
+		partiallyWrapping := scenariorunner.Scenario{
 			Name:                "partially-matched-expected-cause",
 			Description:         "test-local Run for the per-entry expected error cause check",
 			ExpectedErrorCauses: []error{errWrappedCause, errUnwrappedCause},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "",
 					fmt.Errorf("wrap: %w", errWrappedCause), "action_failed")
 
@@ -638,7 +639,7 @@ var _ = Describe("Scenario missing expected error causes", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     partiallyWrapping,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -659,13 +660,13 @@ var _ = Describe("Scenario missing expected error causes", func() {
 
 	It("keeps RunResult.Err nil when the only expected cause entry is nil", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:                "nil-expected-cause",
 			Description:         "test-local Run for the nil expected error cause check",
 			ExpectedErrorCauses: []error{nil},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -673,7 +674,7 @@ var _ = Describe("Scenario missing expected error causes", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -719,14 +720,14 @@ var _ = Describe("Scenario missing several expected entries", func() {
 
 	It("names every never-logged entry in one error, errors before warnings, and a duplicated entry once", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:             "several-missing-entries",
 			Description:      "test-local Run for the missing entries across fields check",
 			ExpectedErrors:   []string{"probe_err_a"},
 			ExpectedWarnings: []string{"probe_warn_b", "probe_warn_c", "probe_warn_b"},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -734,7 +735,7 @@ var _ = Describe("Scenario missing several expected entries", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -778,17 +779,17 @@ var _ = Describe("Scenario missing several expected entries", func() {
 
 	It("names a never-logged cause between the errors and the warnings, and a duplicated cause value once", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		errRepeatedCause := errors.New("probe cause")
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:                "several-missing-entries-with-causes",
 			Description:         "test-local Run for the missing entries with causes check",
 			ExpectedErrors:      []string{"probe_err_a"},
 			ExpectedErrorCauses: []error{errRepeatedCause, errRepeatedCause},
 			ExpectedWarnings:    []string{"probe_warn_b"},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -796,7 +797,7 @@ var _ = Describe("Scenario missing several expected entries", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -840,15 +841,15 @@ var _ = Describe("Scenario missing several expected entries", func() {
 
 	It("names a never-logged cause whose type is not comparable once per listed entry", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		notComparableCause := probeNonComparableCause{words: []string{"probe", "non", "comparable", "cause"}}
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:                "repeated-not-comparable-cause",
 			Description:         "test-local Run for the not comparable expected error cause check",
 			ExpectedErrorCauses: []error{notComparableCause, notComparableCause},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -856,7 +857,7 @@ var _ = Describe("Scenario missing several expected entries", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -879,15 +880,15 @@ var _ = Describe("Scenario missing several expected entries", func() {
 
 	It("ends the run without panicking when a listed cause only looks comparable", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		cause := structCause{inner: []int{1}}
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:                "comparable-looking-cause",
 			Description:         "test-local Run for a listed cause whose comparison panics",
 			ExpectedErrorCauses: []error{cause, cause},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -895,7 +896,7 @@ var _ = Describe("Scenario missing several expected entries", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -922,13 +923,13 @@ var _ = Describe("Scenario empty expected entries", func() {
 
 	It("fails the run when an expected entry is the empty string", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		emptyExpectation := scenarios.Scenario{
+		emptyExpectation := scenariorunner.Scenario{
 			Name:           "empty-expected",
 			Description:    "test-local Run for the empty expected entry check",
 			ExpectedErrors: []string{""},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "",
 					errors.New("the mood file is corrupt"), "probe_unexpected_error")
 
@@ -939,7 +940,7 @@ var _ = Describe("Scenario empty expected entries", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     emptyExpectation,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -975,12 +976,12 @@ var _ = Describe("Scenario cancelled after Run returned", func() {
 
 	It("ends with no stored-state failure when the caller cancels after Run returned", func() {
 		logger := deps.NewNopFSMLogger()
-		store := ctxHonouringStore{scenarios.SetupStore(logger)}
+		store := ctxHonouringStore{scenariorunner.SetupStore(logger)}
 
-		returning := scenarios.Scenario{
+		returning := scenariorunner.Scenario{
 			Name:        "cancel-after-return",
 			Description: "test-local Run for the post-return cancellation",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -988,7 +989,7 @@ var _ = Describe("Scenario cancelled after Run returned", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		// No Duration: the run ends only when the caller cancels.
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     returning,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -1008,13 +1009,13 @@ var _ = Describe("Scenario cancelled after Run returned", func() {
 
 	It("still names a missing entry when the caller cancels after Run returned", func() {
 		logger := deps.NewNopFSMLogger()
-		store := ctxHonouringStore{scenarios.SetupStore(logger)}
+		store := ctxHonouringStore{scenariorunner.SetupStore(logger)}
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:             "cancel-names-missing-entry",
 			Description:      "test-local Run for the missing-entry check after cancellation",
 			ExpectedWarnings: []string{"probe_never_logged"},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -1022,7 +1023,7 @@ var _ = Describe("Scenario cancelled after Run returned", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		// Duration 0: the run ends only when the caller cancels.
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     0,
 			TickInterval: 50 * time.Millisecond,
@@ -1046,15 +1047,15 @@ var _ = Describe("Scenario cancelled after Run returned", func() {
 
 var _ = Describe("Scenario expected error causes", func() {
 	// causeRun returns a nil result when the logged error fails the run.
-	causeRun := func(name string, errValue error, causes []error) (*scenarios.RunResult, error) {
+	causeRun := func(name string, errValue error, causes []error) (*scenariorunner.RunResult, error) {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:                name,
 			Description:         "test-local Run for the expected-error-cause check",
 			ExpectedErrorCauses: causes,
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "", errValue, "action_failed")
 
 				return nil
@@ -1064,7 +1065,7 @@ var _ = Describe("Scenario expected error causes", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		return scenarios.Run(ctx, scenarios.RunConfig{
+		return scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1117,16 +1118,16 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("keeps RunResult.Err nil when one error matches both a listed entry and a listed cause", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		errProbe := errors.New("probe cause")
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:                "edge-entry-and-cause",
 			Description:         "test-local Run for one error matching an entry and a cause",
 			ExpectedErrors:      []string{"probe_logged"},
 			ExpectedErrorCauses: []error{errProbe},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "",
 					fmt.Errorf("probe failed: %w", errProbe), "probe_logged")
 
@@ -1137,7 +1138,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1156,13 +1157,13 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("keeps RunResult.Err nil when one warning matches two overlapping listed entries", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:             "edge-overlapping-entries",
 			Description:      "test-local Run for one warning matching two overlapping entries",
 			ExpectedWarnings: []string{"probe_overlap", "probe_overlap_long"},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_overlap_long")
 
 				return nil
@@ -1172,7 +1173,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1191,16 +1192,16 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("keeps RunResult.Err nil when one error wraps two listed causes", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		causeA := errors.New("probe cause a")
 		causeB := errors.New("probe cause b")
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:                "edge-two-causes",
 			Description:         "test-local Run for one error wrapping two listed causes",
 			ExpectedErrorCauses: []error{causeA, causeB},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "",
 					errors.Join(causeA, causeB), "probe both causes")
 
@@ -1211,7 +1212,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1231,12 +1232,12 @@ var _ = Describe("Scenario run-check edge cases", func() {
 	It("keeps RunResult.Err nil when the only listed entry is empty", func() {
 		logger := deps.NewNopFSMLogger()
 
-		edgeScenarios := []scenarios.Scenario{
+		edgeScenarios := []scenariorunner.Scenario{
 			{
 				Name:             "edge-empty-warning-entry",
 				Description:      "test-local Run for an empty expected warning entry",
 				ExpectedWarnings: []string{""},
-				Run: func(_ context.Context, _ scenarios.Env) error {
+				Run: func(_ context.Context, _ scenariorunner.Env) error {
 					return nil
 				},
 			},
@@ -1244,7 +1245,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 				Name:           "edge-empty-error-entry",
 				Description:    "test-local Run for an empty expected error entry",
 				ExpectedErrors: []string{""},
-				Run: func(_ context.Context, _ scenarios.Env) error {
+				Run: func(_ context.Context, _ scenariorunner.Env) error {
 					return nil
 				},
 			},
@@ -1253,12 +1254,12 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		for _, scenario := range edgeScenarios {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-			result, err := scenarios.Run(ctx, scenarios.RunConfig{
+			result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 				Scenario:     scenario,
 				Duration:     300 * time.Millisecond,
 				TickInterval: 50 * time.Millisecond,
 				Logger:       logger,
-				Store:        scenarios.SetupStore(logger),
+				Store:        scenariorunner.SetupStore(logger),
 			})
 			Expect(err).NotTo(HaveOccurred(),
 				"a run whose Run returned nil and logged nothing must succeed")
@@ -1275,13 +1276,13 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("keeps RunResult.Err nil when only an always-allowed message matches a listed warning", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:             "edge-allowed-message-match",
 			Description:      "test-local Run for a listed warning matched by an always-allowed message",
 			ExpectedWarnings: []string{"data_stale"},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryWarn(deps.FeatureExamples, "", "data_stale")
 
 				return nil
@@ -1291,7 +1292,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1310,13 +1311,13 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("names an unexpected warning before a missing entry", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:             "edge-unexpected-before-missing",
 			Description:      "test-local Run for an unexpected warning and a missing entry",
 			ExpectedWarnings: []string{"probe_missing"},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_unlisted")
 
 				return nil
@@ -1326,7 +1327,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1349,14 +1350,14 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("names a listed warning an error log cannot satisfy", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:             "edge-kind-error-only",
 			Description:      "test-local Run for an error log not satisfying a listed warning",
 			ExpectedErrors:   []string{"probe_kind"},
 			ExpectedWarnings: []string{"probe_kind"},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "",
 					errors.New("probe kind failed"), "probe_kind")
 
@@ -1367,7 +1368,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1390,14 +1391,14 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("names a listed error a warning log cannot satisfy", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:             "edge-kind-warning-only",
 			Description:      "test-local Run for a warning log not satisfying a listed error",
 			ExpectedErrors:   []string{"probe_kind"},
 			ExpectedWarnings: []string{"probe_kind"},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_kind")
 
 				return nil
@@ -1407,7 +1408,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1430,16 +1431,16 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("names two listed causes with the same text separately", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		causeA := errors.New("probe same text cause")
 		causeB := errors.New("probe same text cause")
 
-		silent := scenarios.Scenario{
+		silent := scenariorunner.Scenario{
 			Name:                "edge-same-text-causes",
 			Description:         "test-local Run for two different causes with the same text",
 			ExpectedErrorCauses: []error{causeA, causeB},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -1447,7 +1448,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     silent,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -1467,13 +1468,13 @@ var _ = Describe("Scenario run-check edge cases", func() {
 
 	It("returns Run's error before any missing entry", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:             "edge-run-error-before-missing",
 			Description:      "test-local Run for Run's error with a missing entry",
 			ExpectedWarnings: []string{"probe_never_logged"},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return errors.New("the run's own check failed")
 			},
 		}
@@ -1481,7 +1482,7 @@ var _ = Describe("Scenario run-check edge cases", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     300 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,

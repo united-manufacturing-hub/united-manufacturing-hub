@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	persistenceworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	persistencesnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
@@ -31,13 +32,13 @@ import (
 
 // PersistenceScenario runs one persistence worker against an in-memory
 // store held in the dependency map.
-var PersistenceScenario = Scenario{
+var PersistenceScenario = scenariorunner.Scenario{
 	Name:        "persistence",
 	Description: "Compacts and maintains an in-memory store through the dependency map",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		// The collector writes observations to RunConfig.Store, not to this store.
-		var maintainedStore storage.TriangularStoreInterface = SetupStore(deps.NewNopFSMLogger())
+		var maintainedStore storage.TriangularStoreInterface = scenariorunner.SetupStore(deps.NewNopFSMLogger())
 
 		m := map[string]any{}
 
@@ -46,7 +47,7 @@ var PersistenceScenario = Scenario{
 		return m, nil, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		ref := dynamicchildren.Ref{WorkerType: "persistence", Name: "persistence-1"}
 
 		env.Step("create the persistence worker")

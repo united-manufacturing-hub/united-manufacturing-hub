@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
@@ -41,7 +42,7 @@ import (
 // data_stale, which every run allows; at 20 seconds it logs the timeout and
 // restart warnings this scenario does not expect. The stale wait ends at about
 // three seconds and the release step follows it at once.
-var CPUStallScenario = Scenario{
+var CPUStallScenario = scenariorunner.Scenario{
 	Name:        "cpu-stall",
 	Description: "Hangs the cpu.stat read mid-poll, and watches the reading go stale and then recover",
 
@@ -57,7 +58,7 @@ var CPUStallScenario = Scenario{
 		return m, box.Stop, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		machine, err := cpuMachineFromDeps(env)
 		if err != nil {
 			return err

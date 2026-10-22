@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
@@ -31,11 +32,11 @@ const (
 
 // SlowScenario checks that a slow worker spends its connect delay in
 // TryingToConnect.
-var SlowScenario = Scenario{
+var SlowScenario = scenariorunner.Scenario{
 	Name:        "slow",
 	Description: "A worker whose connect takes two seconds; checks that it spent them in TryingToConnect",
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		slowRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "slow-worker-1"}
 
 		env.Step(fmt.Sprintf("create the slow worker with a %d-second connect delay", slowConnectDelaySeconds))

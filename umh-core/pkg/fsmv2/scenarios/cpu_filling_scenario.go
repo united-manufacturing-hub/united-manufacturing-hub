@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
@@ -46,7 +47,7 @@ const (
 // advice is to reduce this instance's load. The machine is 80% busy in both,
 // its pressure is the same, and this instance stays under its own limit in
 // both. The one difference is how much of the busy time is ours.
-var CPUFillingScenario = Scenario{
+var CPUFillingScenario = scenariorunner.Scenario{
 	Name:        "cpu-filling",
 	Description: "Fills a fake machine from outside, then from this instance, and shows the remedy change",
 
@@ -59,7 +60,7 @@ var CPUFillingScenario = Scenario{
 		return m, box.Stop, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		machine, err := cpuMachineFromDeps(env)
 		if err != nil {
 			return err

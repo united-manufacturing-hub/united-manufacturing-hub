@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
@@ -28,7 +29,7 @@ import (
 )
 
 // CommunicatorScenario runs one communicator child against a mock relay server.
-var CommunicatorScenario = Scenario{
+var CommunicatorScenario = scenariorunner.Scenario{
 	Name:        "communicator",
 	Description: "Communicator worker: reaches Syncing once its transport child authenticates against a mock relay server",
 
@@ -53,7 +54,7 @@ var CommunicatorScenario = Scenario{
 		return deps, func() { server.Close() }, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		server, ok := config.LookupDependency(env.Dependencies, relayServerKey)
 		if !ok {
 			return errors.New("the communicator scenario's dependency map holds no relay server under relayServerKey")

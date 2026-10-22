@@ -20,6 +20,7 @@ import (
 	"os"
 
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
@@ -29,10 +30,10 @@ import (
 // wait asserts only that a fresh reading arrived, nothing about the verdict.
 // On a host without /proc/stat, such as a developer Mac, Run refuses with an
 // error that names tools/cpu-host.
-var CPUHostScenario = Scenario{
+var CPUHostScenario = scenariorunner.Scenario{
 	Name:        "cpu-host",
 	Description: "Runs the CPU monitor against the machine it is running on, unmodified",
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		if _, err := os.Stat("/proc/stat"); err != nil {
 			return fmt.Errorf("this host publishes no Linux CPU files, so no reading can describe the machine: %w; run it under tools/cpu-host, which puts it in a Linux container", err)
 		}

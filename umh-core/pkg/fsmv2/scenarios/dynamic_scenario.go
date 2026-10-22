@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
@@ -54,7 +55,7 @@ const (
 // client: create it to Running, Upsert an observable config change (a new
 // moodFilePath whose file contents land in observed status), then Delete it.
 // Run does not wait for the child to stop after the delete.
-var DynamicScenario = Scenario{
+var DynamicScenario = scenariorunner.Scenario{
 	Name:        "dynamic",
 	Description: "Creates a helloworld child, points it at a second mood file, then deletes it, all through the fsmv2 client",
 	Run:         runDynamicHello,
@@ -63,7 +64,7 @@ var DynamicScenario = Scenario{
 // runDynamicHello is DynamicScenario's Run. The UPDATE leg points
 // moodFilePath at a different file, so the observed mood changes only when
 // the Upsert reached the child.
-func runDynamicHello(ctx context.Context, env Env) error {
+func runDynamicHello(ctx context.Context, env scenariorunner.Env) error {
 	ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: dynamicHelloChildName}
 
 	dir, err := os.MkdirTemp("", "dynamic-hello-mood")

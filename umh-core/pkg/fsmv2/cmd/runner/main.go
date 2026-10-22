@@ -29,6 +29,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 )
 
@@ -166,7 +167,7 @@ func main() {
 		},
 	)
 
-	store := scenarios.SetupStore(newRunLogger(logger))
+	store := scenariorunner.SetupStore(newRunLogger(logger))
 
 	durationStr := "endless (until Ctrl+C)"
 
@@ -181,7 +182,7 @@ func main() {
 		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, scenario)...,
 	)
 
-	result, err := scenarios.Run(ctx, scenarios.RunConfig{
+	result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 		Scenario:           scenario,
 		Duration:           settleWindow,
 		TickInterval:       *tickInterval,
@@ -234,7 +235,7 @@ func main() {
 }
 
 func fatalMessage(runErr error) string {
-	if errors.Is(runErr, scenarios.ErrScenarioFailed) {
+	if errors.Is(runErr, scenariorunner.ErrScenarioFailed) {
 		return "Scenario failed"
 	}
 
@@ -242,7 +243,7 @@ func fatalMessage(runErr error) string {
 }
 
 // shutdownExitCode returns the process exit code for a completed scenario run.
-func shutdownExitCode(result *scenarios.RunResult) int {
+func shutdownExitCode(result *scenariorunner.RunResult) int {
 	if result == nil {
 		return 0
 	}
@@ -310,7 +311,7 @@ func newRunLogger(logger *zap.Logger) deps.FSMLogger {
 	return deps.NewUnsampledFSMLogger(logger.Sugar())
 }
 
-func startingScenarioFields(name, description, duration string, tick time.Duration, s scenarios.Scenario) []zap.Field {
+func startingScenarioFields(name, description, duration string, tick time.Duration, s scenariorunner.Scenario) []zap.Field {
 	return append([]zap.Field{
 		zap.String("name", name),
 		zap.String("description", description),
@@ -320,7 +321,7 @@ func startingScenarioFields(name, description, duration string, tick time.Durati
 }
 
 // expectedFields returns one field per expectation list the scenario fills.
-func expectedFields(s scenarios.Scenario) []zap.Field {
+func expectedFields(s scenariorunner.Scenario) []zap.Field {
 	var fields []zap.Field
 
 	if len(s.ExpectedErrors) > 0 {

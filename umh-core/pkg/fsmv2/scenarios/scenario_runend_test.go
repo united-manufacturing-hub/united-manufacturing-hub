@@ -26,6 +26,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
@@ -84,12 +85,12 @@ var _ = Describe("Scenario run end", func() {
 
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		finishing := scenarios.Scenario{
+		finishing := scenariorunner.Scenario{
 			Name:        "run-finished-logging",
 			Description: "test-local Run for the run-finished log line",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				return env.WaitFor(ctx, "one check",
 					func(_ context.Context) (bool, string, error) {
 						return true, "seen=one", nil
@@ -100,7 +101,7 @@ var _ = Describe("Scenario run end", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     finishing,
 			Duration:     50 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -141,12 +142,12 @@ var _ = Describe("Scenario run end", func() {
 
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		refusing := scenarios.Scenario{
+		refusing := scenariorunner.Scenario{
 			Name:        "run-refused-logging",
 			Description: "test-local Run for the missing run-finished line",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return errors.New("scenario says no")
 			},
 		}
@@ -154,7 +155,7 @@ var _ = Describe("Scenario run end", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_, err := scenarios.Run(ctx, scenarios.RunConfig{
+		_, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     refusing,
 			Duration:     50 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -177,12 +178,12 @@ var _ = Describe("Scenario run end", func() {
 
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		swallowing := scenarios.Scenario{
+		swallowing := scenariorunner.Scenario{
 			Name:        "run-swallowed-error",
 			Description: "test-local Run that logs an error and still returns nil",
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Logger.SentryError(deps.FeatureExamples, "",
 					errors.New("the mood file is corrupt"), "probe_run_error")
 
@@ -193,7 +194,7 @@ var _ = Describe("Scenario run end", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_, err := scenarios.Run(ctx, scenarios.RunConfig{
+		_, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     swallowing,
 			Duration:     50 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
@@ -202,7 +203,7 @@ var _ = Describe("Scenario run end", func() {
 		})
 		Expect(err).To(HaveOccurred(),
 			"a Run whose logged-error check fails must fail scenarios.Run")
-		Expect(errors.Is(err, scenarios.ErrScenarioFailed)).To(BeTrue(),
+		Expect(errors.Is(err, scenariorunner.ErrScenarioFailed)).To(BeTrue(),
 			"the failure must wrap ErrScenarioFailed, so the CLI reports a failed scenario and not a failed start")
 		Expect(err.Error()).To(ContainSubstring("probe_run_error"),
 			"the failure must name the error the scenario logged")

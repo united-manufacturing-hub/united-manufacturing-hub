@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_failing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
@@ -29,7 +30,7 @@ const failureLimitNeverReached = 999999
 
 // FailingScenario runs three examplefailing workers whose connect fails in
 // different ways. Each Step line says what its worker is configured to do.
-var FailingScenario = Scenario{
+var FailingScenario = scenariorunner.Scenario{
 	Name:        "failing",
 	Description: "Three workers whose connect fails: one connects after three failures, one never connects, one is restarted after every five failures",
 
@@ -37,7 +38,7 @@ var FailingScenario = Scenario{
 
 	ExpectedErrorCauses: []error{example_failing_action.ErrSimulatedFailure},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		recoveryRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "failing-worker-recovery"}
 		permanentRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "failing-worker-permanent"}
 		restartRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "failing-worker-restart"}
@@ -143,7 +144,7 @@ var FailingScenario = Scenario{
 // Connected with AllCyclesComplete set. The worker sets the flag when it
 // disconnects after healthyDurationMsBeforeNextCycle (examplefailing/state) in
 // Connected, and the flag stays set after the reconnect.
-func waitReconnectedAfterFailureCycle(ctx context.Context, env Env, ref dynamicchildren.Ref) error {
+func waitReconnectedAfterFailureCycle(ctx context.Context, env scenariorunner.Env, ref dynamicchildren.Ref) error {
 	return env.WaitFor(ctx, "the worker "+ref.Name+" is connected again after its one disconnect",
 		func(ctx context.Context) (bool, string, error) {
 			obs, err := fsmv2client.Get[example_failing.ExamplefailingStatus](ctx, env.Client, ref)

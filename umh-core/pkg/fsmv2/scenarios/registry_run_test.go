@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
@@ -48,12 +49,12 @@ var _ = Describe("Registry scenarios", func() {
 	for _, name := range names {
 		It("runs the registered scenario "+name+" from start to a clean end", func() {
 			logger := deps.NewNopFSMLogger()
-			store := scenarios.SetupStore(logger)
+			store := scenariorunner.SetupStore(logger)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			result, err := scenarios.Run(ctx, scenarios.RunConfig{
+			result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 				Scenario:     scenarios.Registry[name],
 				Duration:     time.Second,
 				TickInterval: 50 * time.Millisecond,

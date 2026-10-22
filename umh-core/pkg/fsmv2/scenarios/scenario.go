@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package scenarios provides scenario definitions and a shared runner for FSM v2 integration testing.
+// Package scenarios provides the scenario definitions for FSM v2 integration testing.
 //
 // # Architecture
 //
@@ -25,7 +25,7 @@
 //
 // Tests use scenarios via the Run function:
 //
-//	result, err := scenarios.Run(ctx, scenarios.RunConfig{
+//	result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 //	    Scenario:   scenarios.Registry["helloworld"],
 //	    Duration:     10 * time.Second,
 //	    TickInterval: 100 * time.Millisecond,
@@ -34,31 +34,11 @@
 //	})
 //
 // CLI uses the same scenarios via pkg/fsmv2/cmd/runner.
+//
+// The runner, Env and Scenario live in package scenariorunner, which imports no
+// worker. This package holds the scenario list, the application supervisor
+// the runner drives, and the states each worker type may report.
 package scenarios
-
-import (
-	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-)
-
-// RunConfig configures how a scenario is executed.
-type RunConfig struct {
-	Store        storage.TriangularStoreInterface
-	Logger       deps.FSMLogger
-	Scenario     Scenario      // Required: scenarios.Run rejects a Scenario with no Run func or no Name
-	Duration     time.Duration // 0 means run forever (until context cancelled)
-	TickInterval time.Duration
-	// GracefulShutdownTimeout is the per-level drain base propagated to the
-	// supervisor subtree. Zero falls back to the supervisor default (5s). A
-	// tiny value forces a degraded drain, which is how tests exercise the
-	// ShutdownClean=false path deterministically.
-	GracefulShutdownTimeout time.Duration
-	EnableTraceLogging      bool
-	// DumpStore prints the store's changes and final state to stdout after the run.
-	DumpStore bool
-}
 
 // ListScenarios returns all registered scenario names and descriptions,
 // merging every registry into one listing.

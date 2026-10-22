@@ -20,6 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -30,7 +31,7 @@ const mockMoodPath = "mood"
 // HelloworldScenario runs one helloworld child against a mock filesystem in
 // the dependency map. It waits for the mood in the observation, not for a
 // state: only the mood "sad" moves the child out of Running.
-var HelloworldScenario = Scenario{
+var HelloworldScenario = scenariorunner.Scenario{
 	Name:        "helloworld",
 	Description: "A helloworld child reads its mood from a file. The scenario changes the file twice and checks that the observed mood follows each time",
 
@@ -49,7 +50,7 @@ var HelloworldScenario = Scenario{
 		return deps, nil, nil
 	},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		moodFS, ok := config.LookupDependency(env.Dependencies, hello_world.FilesystemKey)
 		if !ok {
 			return errors.New("the helloworld scenario's dependency map holds no filesystem under hello_world.FilesystemKey")

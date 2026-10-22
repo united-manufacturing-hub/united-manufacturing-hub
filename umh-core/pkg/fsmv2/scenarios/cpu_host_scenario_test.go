@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 )
 
@@ -40,7 +41,7 @@ var _ = Describe("CPU host scenario", func() {
 		Expect(ok).To(BeTrue())
 
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		_, statErr := os.Stat("/proc/stat")
 
@@ -49,7 +50,7 @@ var _ = Describe("CPU host scenario", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     time.Second,
 			TickInterval: 100 * time.Millisecond,

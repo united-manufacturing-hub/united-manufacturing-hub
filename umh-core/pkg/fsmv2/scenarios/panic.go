@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_panic "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 )
@@ -28,7 +29,7 @@ import (
 // PanicScenario runs a worker whose connect action panics on every attempt.
 // ActionExecutor (supervisor/internal/execution) recovers each panic and logs
 // it as action_panic.
-var PanicScenario = Scenario{
+var PanicScenario = scenariorunner.Scenario{
 	Name:        "panic",
 	Description: "A worker whose connect panics every time: the supervisor recovers each panic, and the worker stays in TryingToConnect",
 
@@ -36,7 +37,7 @@ var PanicScenario = Scenario{
 
 	ExpectedErrors: []string{"action_panic"},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		ref := dynamicchildren.Ref{WorkerType: "examplepanic", Name: "panic-worker-1"}
 
 		env.Step("create the panic worker, whose every connect panics")

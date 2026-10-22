@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	example_failing_action "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
@@ -28,7 +29,7 @@ import (
 // TimeoutScenario runs four workers that connect at different speeds. Its
 // longest action, the two-second delay, stays far below the 30 s action
 // timeout (defaultActionTimeout in supervisor/internal/execution).
-var TimeoutScenario = Scenario{
+var TimeoutScenario = scenariorunner.Scenario{
 	Name:        "timeout",
 	Description: "Four workers that connect at different speeds; the longest action takes 2 s, far below the 30 s action timeout",
 
@@ -36,7 +37,7 @@ var TimeoutScenario = Scenario{
 
 	ExpectedErrorCauses: []error{example_failing_action.ErrSimulatedFailure},
 
-	Run: func(ctx context.Context, env Env) error {
+	Run: func(ctx context.Context, env scenariorunner.Env) error {
 		quickRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "timeout-quick"}
 		slowRef := dynamicchildren.Ref{WorkerType: "exampleslow", Name: "timeout-slow"}
 		retryRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "timeout-retry"}

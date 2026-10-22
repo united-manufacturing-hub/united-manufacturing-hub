@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
@@ -185,10 +186,10 @@ var _ = Describe("Scenario framework", func() {
 
 	It("rejects a Scenario with a Name but no Run, naming the scenario", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		result, err := scenarios.Run(context.Background(), scenarios.RunConfig{
-			Scenario: scenarios.Scenario{Name: "no-run"},
+		result, err := scenarios.Run(context.Background(), scenariorunner.RunConfig{
+			Scenario: scenariorunner.Scenario{Name: "no-run"},
 			Logger:   logger,
 			Store:    store,
 		})
@@ -198,15 +199,15 @@ var _ = Describe("Scenario framework", func() {
 
 	It("rejects a Scenario with a Run but no Name", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		// An anonymous run would produce the supervisor ID "scenario-" and
 		// log lines naming an empty scenario, which post-run log checks
 		// cannot attribute.
 		runRan := false
-		result, err := scenarios.Run(context.Background(), scenarios.RunConfig{
-			Scenario: scenarios.Scenario{
-				Run: func(_ context.Context, _ scenarios.Env) error {
+		result, err := scenarios.Run(context.Background(), scenariorunner.RunConfig{
+			Scenario: scenariorunner.Scenario{
+				Run: func(_ context.Context, _ scenariorunner.Env) error {
 					runRan = true
 
 					return nil
@@ -223,7 +224,7 @@ var _ = Describe("Scenario framework", func() {
 
 	It("fails loudly when the configworker deps key is already published by an overlapping run", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		// Simulate a first run that has not finished teardown: its
 		// registry is still published under the process-global key. The
@@ -233,7 +234,7 @@ var _ = Describe("Scenario framework", func() {
 
 		var depsCalled atomic.Bool
 		runRan := false
-		overlapping := scenarios.Scenario{
+		overlapping := scenariorunner.Scenario{
 			Name:        "overlapping",
 			Description: "test-local Run that must never run",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -241,14 +242,14 @@ var _ = Describe("Scenario framework", func() {
 
 				return nil, nil, nil
 			},
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				runRan = true
 
 				return nil
 			},
 		}
 
-		result, err := scenarios.Run(context.Background(), scenarios.RunConfig{
+		result, err := scenarios.Run(context.Background(), scenariorunner.RunConfig{
 			Scenario:     overlapping,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -274,12 +275,12 @@ var _ = Describe("Scenario framework", func() {
 	It("prints the store dump when a scenario's Run fails", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		failing := scenarios.Scenario{
+		failing := scenariorunner.Scenario{
 			Name:        "dump-after-failure",
 			Description: "test-local Run that creates a worker and then fails",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "dump-failed-hello"}
 
 				env.Step("create a helloworld child")
@@ -313,7 +314,7 @@ var _ = Describe("Scenario framework", func() {
 
 		stop := captureStdout()
 
-		_, err := scenarios.Run(ctx, scenarios.RunConfig{
+		_, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -332,12 +333,12 @@ var _ = Describe("Scenario framework", func() {
 
 	It("prints the store dump after a scenario run", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		dumpRequested := scenarios.Scenario{
+		dumpRequested := scenariorunner.Scenario{
 			Name:        "dump-requested",
 			Description: "test-local Run for the DumpStore print path",
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "dump-hello"}
 
 				env.Step("create a helloworld child")
@@ -367,7 +368,7 @@ var _ = Describe("Scenario framework", func() {
 
 		stop := captureStdout()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     dumpRequested,
 			Duration:     time.Second,
 			TickInterval: 50 * time.Millisecond,
@@ -392,12 +393,12 @@ var _ = Describe("Scenario framework", func() {
 	It("tears down gracefully on a live tick loop when the caller ctx is cancelled mid-run", func() {
 		logBuf := &v2LogBuffer{}
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		cancelMidRun := scenarios.Scenario{
+		cancelMidRun := scenariorunner.Scenario{
 			Name:        "cancel-mid-run",
 			Description: "test-local Run for the caller-ctx cancellation path",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -405,7 +406,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     cancelMidRun,
 			Duration:     5 * time.Minute,
 			TickInterval: 50 * time.Millisecond,
@@ -420,7 +421,7 @@ var _ = Describe("Scenario framework", func() {
 		// mid-spawn child intermittently cannot finish draining within one
 		// graceful-shutdown phase budget.
 		Eventually(func(g Gomega) {
-			dump, err := scenarios.DumpScenario(context.Background(), store, 0)
+			dump, err := scenariorunner.DumpScenario(context.Background(), store, 0)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			observedStates := map[string]interface{}{}
@@ -457,15 +458,15 @@ var _ = Describe("Scenario framework", func() {
 		// The sentinel bool proves the runner invoked Run; noop's own Run
 		// returns nil at once, so it cannot.
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		runRan := false
 		clientWasSet := false
 		loggerWasSet := false
-		sentinel := scenarios.Scenario{
+		sentinel := scenariorunner.Scenario{
 			Name:        "sentinel",
 			Description: "test-local Run that records execution",
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				runRan = true
 				// Upsert through the running supervisor is covered by the
 				// dynamic-children scenario, not this test.
@@ -479,7 +480,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     sentinel,
 			Duration:     2 * time.Second,
 			TickInterval: 50 * time.Millisecond,
@@ -500,7 +501,7 @@ var _ = Describe("Scenario framework", func() {
 		// Store check: with no YAML children declared, the only child the
 		// application supervisor spawns is the config worker kernel, so the
 		// store must contain exactly the application and configworker types.
-		dump, err := scenarios.DumpScenario(context.Background(), store, 0)
+		dump, err := scenariorunner.DumpScenario(context.Background(), store, 0)
 		Expect(err).NotTo(HaveOccurred())
 
 		workerTypes := map[string]bool{}
@@ -526,12 +527,12 @@ var _ = Describe("Scenario framework", func() {
 		// true and never the zero-value false, which would prove the field
 		// is unwired rather than genuinely clean.
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		cleanRun := scenarios.Scenario{
+		cleanRun := scenariorunner.Scenario{
 			Name:        "clean-shutdown",
 			Description: "test-local Run for the ShutdownClean plumbing",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -539,7 +540,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     cleanRun,
 			Duration:     2 * time.Second,
 			TickInterval: 50 * time.Millisecond,
@@ -555,9 +556,9 @@ var _ = Describe("Scenario framework", func() {
 
 	It("reports ShutdownClean=false when a run's drain budget is exhausted", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		degradedDrain := scenarios.Scenario{
+		degradedDrain := scenariorunner.Scenario{
 			Name:        "degraded-drain",
 			Description: "test-local Run that leaves a helloworld worker running, so the drain has a worker to stop",
 			// The 10ms GracefulShutdownTimeout below makes the drain log both warnings on every run.
@@ -569,7 +570,7 @@ var _ = Describe("Scenario framework", func() {
 				"graceful_shutdown_timeout",
 				"graceful_shutdown_budget_exhausted",
 			},
-			Run: func(ctx context.Context, env scenarios.Env) error {
+			Run: func(ctx context.Context, env scenariorunner.Env) error {
 				ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
 
 				env.Step("create a helloworld child")
@@ -597,7 +598,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     degradedDrain,
 			Duration:     time.Second,
 			TickInterval: 50 * time.Millisecond,
@@ -617,13 +618,13 @@ var _ = Describe("Scenario framework", func() {
 
 	It("tears down and clears the deps key when Run fails", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		runErr := errors.New("boom")
-		failing := scenarios.Scenario{
+		failing := scenariorunner.Scenario{
 			Name:        "failing-run",
 			Description: "test-local Run that returns an error",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return runErr
 			},
 		}
@@ -631,7 +632,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     failing,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -651,12 +652,12 @@ var _ = Describe("Scenario framework", func() {
 
 	It("runs forever with Duration=0 and tears down on context cancellation", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		runForever := scenarios.Scenario{
+		runForever := scenariorunner.Scenario{
 			Name:        "run-forever",
 			Description: "test-local Run for the Duration=0 ctx-cancel path",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -664,7 +665,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     runForever,
 			Duration:     0,
 			TickInterval: 50 * time.Millisecond,
@@ -691,12 +692,12 @@ var _ = Describe("Scenario framework", func() {
 
 	It("tears down and clears the deps key when Run panics", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		panicking := scenarios.Scenario{
+		panicking := scenariorunner.Scenario{
 			Name:        "panicking-run",
 			Description: "test-local Run that panics",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				panic("Run exploded")
 			},
 		}
@@ -705,7 +706,7 @@ var _ = Describe("Scenario framework", func() {
 		defer cancel()
 
 		Expect(func() {
-			_, _ = scenarios.Run(ctx, scenarios.RunConfig{
+			_, _ = scenarios.Run(ctx, scenariorunner.RunConfig{
 				Scenario:     panicking,
 				TickInterval: 50 * time.Millisecond,
 				Logger:       logger,
@@ -722,12 +723,12 @@ var _ = Describe("Scenario framework", func() {
 
 	It("blocks a mid-Duration Shutdown until the deps key is cleared", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		longRun := scenarios.Scenario{
+		longRun := scenariorunner.Scenario{
 			Name:        "long-run",
 			Description: "test-local Run for the mid-Duration Shutdown path",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -735,7 +736,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     longRun,
 			Duration:     5 * time.Minute,
 			TickInterval: 50 * time.Millisecond,
@@ -756,12 +757,12 @@ var _ = Describe("Scenario framework", func() {
 
 	It("supports back-to-back sequential runs in one process", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		scenario := scenarios.Scenario{
+		scenario := scenariorunner.Scenario{
 			Name:        "back-to-back",
 			Description: "test-local Run for sequential runs",
-			Run: func(_ context.Context, _ scenarios.Env) error {
+			Run: func(_ context.Context, _ scenariorunner.Env) error {
 				return nil
 			},
 		}
@@ -772,7 +773,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx1, cancel1 := context.WithCancel(context.Background())
 		defer cancel1()
 
-		result1, err := scenarios.Run(ctx1, scenarios.RunConfig{
+		result1, err := scenarios.Run(ctx1, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     5 * time.Minute,
 			TickInterval: 50 * time.Millisecond,
@@ -790,7 +791,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx2, cancel2 := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel2()
 
-		result2, err := scenarios.Run(ctx2, scenarios.RunConfig{
+		result2, err := scenarios.Run(ctx2, scenariorunner.RunConfig{
 			Scenario:     scenario,
 			Duration:     time.Second,
 			TickInterval: 50 * time.Millisecond,
@@ -810,9 +811,9 @@ var _ = Describe("Scenario framework", func() {
 		scenarioDepsProbeSeen.Store(nil)
 
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
-		delivering := scenarios.Scenario{
+		delivering := scenariorunner.Scenario{
 			Name:        "deps-delivery",
 			Description: "test-local Run for the dependency-delivery path",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -821,7 +822,7 @@ var _ = Describe("Scenario framework", func() {
 
 				return scenarioDeps, nil, nil
 			},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				ref := dynamicchildren.Ref{WorkerType: scenarioDepsProbeType, Name: "probe"}
 				return env.Client.Upsert(ref, nil)
 			},
@@ -830,7 +831,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     delivering,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -853,14 +854,14 @@ var _ = Describe("Scenario framework", func() {
 
 	It("hands Run the map Dependencies returned, so Run can reach and change its mocks", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		// The runner calls Dependencies and Run on the caller's goroutine, so the
 		// spec reads mock.touched without synchronization.
 		returnedDeps := map[string]any{}
 		mock := &scenarioEnvMock{}
 
-		reaching := scenarios.Scenario{
+		reaching := scenariorunner.Scenario{
 			Name:        "env-deps-reach",
 			Description: "test-local Run for the Env.Dependencies handoff",
 			Dependencies: func() (map[string]any, func(), error) {
@@ -868,7 +869,7 @@ var _ = Describe("Scenario framework", func() {
 
 				return returnedDeps, nil, nil
 			},
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				if env.Dependencies == nil {
 					return errors.New("env.Dependencies is nil")
 				}
@@ -887,7 +888,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     reaching,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -904,14 +905,14 @@ var _ = Describe("Scenario framework", func() {
 
 	It("hands Run a nil map when the scenario declares no Dependencies", func() {
 		logger := deps.NewNopFSMLogger()
-		store := scenarios.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		var recordedDeps map[string]any
 
-		envNone := scenarios.Scenario{
+		envNone := scenariorunner.Scenario{
 			Name:        "env-deps-none",
 			Description: "test-local Run for the nil-Dependencies handoff",
-			Run: func(_ context.Context, env scenarios.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				recordedDeps = env.Dependencies
 
 				return nil
@@ -921,7 +922,7 @@ var _ = Describe("Scenario framework", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		result, err := scenarios.Run(ctx, scenarios.RunConfig{
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 			Scenario:     envNone,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
