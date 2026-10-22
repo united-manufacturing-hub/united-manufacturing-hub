@@ -83,7 +83,9 @@ func cpuMachineFromDeps(env Env) (*cpuMachine, error) {
 // exact call: GetFresh under the shared staleness limit, so a scenario asserts
 // the same freshness the container monitor depends on.
 func cpuReading(ctx context.Context, env Env) (simple.Status[fsmv2cpu.CPUStatus], fsmv2client.Freshness, error) {
-	return fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, env.Client, fsmv2cpu.Ref, fsmv2cpu.MaxObservationAge)
+	obs, fresh, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, env.Client, fsmv2cpu.Ref, fsmv2cpu.MaxObservationAge)
+
+	return obs.Status, fresh, err
 }
 
 func firstLine(msg string) string {
@@ -117,10 +119,10 @@ func waitCPUFirstReading(ctx context.Context, env Env, check string, pass func(s
 		}
 
 		switch fresh {
-		case fsmv2client.NeverObserved:
-			return false, "never-observed", nil
-		case fsmv2client.Unregistered:
-			return false, "", fmt.Errorf("the cpu worker is not registered; the Upsert should have registered it synchronously")
+		case fsmv2client.NotFound:
+			return false, "not-found", nil
+		case fsmv2client.Deleted:
+			return false, "", fmt.Errorf("the cpu worker was removed; the scenario never deletes it")
 		case fsmv2client.Stale:
 			return false, "", fmt.Errorf("the cpu worker's reading is stale before the scenario's first wait passed")
 		case fsmv2client.Fresh:

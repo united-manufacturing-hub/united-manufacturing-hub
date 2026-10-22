@@ -147,7 +147,7 @@ var CPULatchScenarioV2 = ScenarioV2{
 		return env.WaitFor(ctx, "degraded again at 25%, no earlier than 60 machine seconds after the release", func(ctx context.Context) (bool, string, error) {
 			obs, err := fsmv2client.Get[simple.Status[fsmv2cpu.CPUStatus]](ctx, env.Client, fsmv2cpu.Ref)
 			if err != nil {
-				if errors.Is(err, fsmv2client.ErrNotObserved) {
+				if errors.Is(err, fsmv2client.ErrNotFound) {
 					return false, "", fmt.Errorf("the cpu worker has no observation after it was observed: %w", err)
 				}
 
