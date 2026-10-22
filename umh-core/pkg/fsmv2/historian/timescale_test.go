@@ -137,8 +137,8 @@ func baseUnder(parent string) *deps.BaseDependencies {
 
 var _ = Describe("newDeps, the helper", func() {
 	It("hands every instance the same pool holder", func() {
-		a := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
-		b := newDeps(idUnder("parent-b"), baseUnder("parent-b"))
+		a := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
+		b := newDeps(idUnder("parent-b"), baseUnder("parent-b"), nil)
 
 		Expect(a.pool).NotTo(BeNil(), "the holder exists, so the comparison below is not vacuous")
 		Expect(a.pool).To(BeIdenticalTo(b.pool),
@@ -148,7 +148,7 @@ var _ = Describe("newDeps, the helper", func() {
 	It("keeps the BaseDependencies it was handed rather than building its own logger", func() {
 		bd := baseUnder("parent-a")
 
-		d := newDeps(idUnder("parent-a"), bd)
+		d := newDeps(idUnder("parent-a"), bd, nil)
 
 		Expect(d.BaseDependencies).To(BeIdenticalTo(bd),
 			"the deps carry the framework's own BaseDependencies, so Poll's logger is the one enriched with this worker's identity, not a package global")
@@ -207,7 +207,7 @@ var _ = Describe("Poll", func() {
 		}}
 
 		status, err := Poll(context.Background(),
-			newDeps(idUnder("parent-a"), baseUnder("parent-a")), cfg)
+			newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil), cfg)
 
 		Expect(err).NotTo(HaveOccurred(), "the DSN parsed, so the failed dial is an observation")
 		Expect(status.Reachable).To(BeFalse(), "no server answered, so the endpoint is not proven reachable")
@@ -236,7 +236,7 @@ var _ = Describe("Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
 
 		status, err := Poll(ctx, d, cfg)
 		Expect(err).NotTo(HaveOccurred(), "a refused SELECT 1 is an observation, not a failure to observe")
@@ -263,7 +263,7 @@ var _ = Describe("Poll on a connection fault", func() {
 			SSLMode: config.HistorianSSLModeDisable,
 		}}
 
-		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
 		dsn := cfg.WithDefaults().Timescale.ToDSN()
 		d.summary = &readCache[timescalemetrics.Summary]{
 			interval: time.Minute,
@@ -302,7 +302,7 @@ var _ = Describe("Poll during shutdown", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := Poll(ctx, newDeps(idUnder("parent-a"), baseUnder("parent-a")), cfg)
+		_, err := Poll(ctx, newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil), cfg)
 
 		Expect(err).To(MatchError(context.Canceled))
 	})
@@ -450,7 +450,7 @@ var _ = Describe("Sentry reporting", func() {
 	BeforeEach(func() {
 		events = nil
 		logger := recordingLogger{FSMLogger: deps.NewNopFSMLogger(), events: &events}
-		d = newDeps(idUnder("parent-a"), deps.NewBaseDependencies(logger, nil, idUnder("parent-a")))
+		d = newDeps(idUnder("parent-a"), deps.NewBaseDependencies(logger, nil, idUnder("parent-a")), nil)
 	})
 
 	unreachableConfig := func() config.HistorianConfig {

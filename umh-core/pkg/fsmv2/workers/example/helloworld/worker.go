@@ -126,7 +126,7 @@ func readMoodFile(path string) string {
 
 func init() {
 	register.Worker[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]("helloworld",
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewHelloworldWorker(id, logger, sr)
 		})
 }

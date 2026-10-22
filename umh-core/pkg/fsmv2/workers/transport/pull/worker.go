@@ -155,7 +155,7 @@ func (w *PullWorker) GetInitialState() fsmv2.State[any, any] {
 
 func init() {
 	register.Worker[snapshot.PullDesiredState, snapshot.PullStatus, *PullDependencies]("pull",
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			builder, ok := register.GlobalDepsBuilder("pull")
 			if !ok {
 				return nil, errors.New("pull worker requires deps builder; transport worker must initialise before pull instantiation")

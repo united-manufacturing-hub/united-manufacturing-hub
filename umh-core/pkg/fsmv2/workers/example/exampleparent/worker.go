@@ -115,7 +115,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 
 func init() {
 	register.Worker[ExampleparentConfig, ExampleparentStatus, *ParentDependencies](workerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewParentWorker(id, logger, sr)
 		})
 }

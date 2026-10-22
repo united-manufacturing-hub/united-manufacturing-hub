@@ -40,7 +40,7 @@ type probeStatus struct {
 func newProbeWorker(spec MonitorSpec[probeConfig, probeStatus, struct{}]) (*simpleWorker[probeConfig, probeStatus, struct{}], error) {
 	return newSimpleWorker(spec,
 		deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
-		deps.NewNopFSMLogger(), nil)
+		deps.NewNopFSMLogger(), nil, nil)
 }
 
 var _ = Describe("simpleWorker", func() {
@@ -179,7 +179,7 @@ var _ = Describe("simpleWorker", func() {
 
 			spec := MonitorSpec[probeConfig, probeStatus, probeDeps]{
 				WorkerType: "simpleworker_newdeps",
-				NewDeps: func(id deps.Identity, _ *deps.BaseDependencies) probeDeps {
+				NewDeps: func(id deps.Identity, _ *deps.BaseDependencies, _ map[string]any) probeDeps {
 					gotID = id
 
 					return probeDeps{token: "token-for-" + id.ID}
@@ -193,7 +193,7 @@ var _ = Describe("simpleWorker", func() {
 
 			w, err := newSimpleWorker(spec,
 				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
-				deps.NewNopFSMLogger(), nil)
+				deps.NewNopFSMLogger(), nil, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
@@ -216,7 +216,7 @@ var _ = Describe("simpleWorker", func() {
 
 			spec := MonitorSpec[probeConfig, probeStatus, *mutableDeps]{
 				WorkerType: "simpleworker_newdeps_persist",
-				NewDeps: func(deps.Identity, *deps.BaseDependencies) *mutableDeps {
+				NewDeps: func(deps.Identity, *deps.BaseDependencies, map[string]any) *mutableDeps {
 					calls++
 					held = &mutableDeps{}
 
@@ -231,7 +231,7 @@ var _ = Describe("simpleWorker", func() {
 
 			w, err := newSimpleWorker(spec,
 				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
-				deps.NewNopFSMLogger(), nil)
+				deps.NewNopFSMLogger(), nil, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(calls).To(Equal(1),
 				"NewDeps runs at construction, before any tick")
@@ -266,7 +266,7 @@ var _ = Describe("simpleWorker", func() {
 
 			w, err := newSimpleWorker(spec,
 				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
-				deps.NewNopFSMLogger(), nil)
+				deps.NewNopFSMLogger(), nil, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
@@ -295,7 +295,7 @@ var _ = Describe("simpleWorker", func() {
 
 			spec := MonitorSpec[probeConfig, windowStatus, *window]{
 				WorkerType: "simpleworker_newdeps_isolation",
-				NewDeps: func(deps.Identity, *deps.BaseDependencies) *window {
+				NewDeps: func(deps.Identity, *deps.BaseDependencies, map[string]any) *window {
 					w := &window{}
 					built = append(built, w)
 
@@ -309,7 +309,7 @@ var _ = Describe("simpleWorker", func() {
 			}
 
 			newInstance := func(id deps.Identity) *simpleWorker[probeConfig, windowStatus, *window] {
-				w, err := newSimpleWorker(spec, id, deps.NewNopFSMLogger(), nil)
+				w, err := newSimpleWorker(spec, id, deps.NewNopFSMLogger(), nil, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				return w
@@ -382,7 +382,7 @@ var _ = Describe("simpleWorker", func() {
 			// framework handed NewDeps is also the value Poll receives.
 			spec := MonitorSpec[probeConfig, probeStatus, *deps.BaseDependencies]{
 				WorkerType: id.WorkerType,
-				NewDeps: func(_ deps.Identity, bd *deps.BaseDependencies) *deps.BaseDependencies {
+				NewDeps: func(_ deps.Identity, bd *deps.BaseDependencies, _ map[string]any) *deps.BaseDependencies {
 					gotBD = bd
 
 					return bd
@@ -392,7 +392,7 @@ var _ = Describe("simpleWorker", func() {
 				},
 			}
 
-			w, err := newSimpleWorker(spec, id, deps.NewNopFSMLogger(), nil)
+			w, err := newSimpleWorker(spec, id, deps.NewNopFSMLogger(), nil, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(gotBD).NotTo(BeNil(),
@@ -419,13 +419,13 @@ var _ = Describe("simpleWorker", func() {
 
 			w, err := newSimpleWorker(MonitorSpec[probeConfig, probeStatus, probeDeps]{
 				WorkerType: "simpleworker_deps",
-				NewDeps: func(id deps.Identity, _ *deps.BaseDependencies) probeDeps {
+				NewDeps: func(id deps.Identity, _ *deps.BaseDependencies, _ map[string]any) probeDeps {
 					return probeDeps{token: "token-for-" + id.ID}
 				},
 				Poll: func(_ context.Context, _ probeDeps, _ probeConfig) (probeStatus, error) {
 					return probeStatus{}, nil
 				},
-			}, deps.Identity{ID: "probe", WorkerType: "simpleworker_deps"}, deps.NewNopFSMLogger(), nil)
+			}, deps.Identity{ID: "probe", WorkerType: "simpleworker_deps"}, deps.NewNopFSMLogger(), nil, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(w.pollDeps()).To(Equal(probeDeps{token: "token-for-probe"}),
@@ -567,7 +567,7 @@ var _ = Describe("Register", func() {
 
 		Register(MonitorSpec[probeConfig, probeStatus, *window]{
 			WorkerType: workerType,
-			NewDeps: func(deps.Identity, *deps.BaseDependencies) *window {
+			NewDeps: func(deps.Identity, *deps.BaseDependencies, map[string]any) *window {
 				w := &window{}
 				built = append(built, w)
 

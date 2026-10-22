@@ -90,7 +90,7 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 
 		id := deps.Identity{ID: "cpu-unreadable", WorkerType: WorkerType}
 
-		return Poll(context.Background(), NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)), CPUConfig{})
+		return Poll(context.Background(), NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id), nil), CPUConfig{})
 	}
 
 	It("reads the fixtures as a container limited to 2 cores and one without a limit on 4 cores", func() {
@@ -111,7 +111,7 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 			DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 			id := deps.Identity{ID: "cpu-unreadable-ticks", WorkerType: WorkerType}
-			d := NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id))
+			d := NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id), nil)
 
 			for tick := 1; tick <= 4; tick++ {
 				_, err := Poll(context.Background(), d, CPUConfig{})
