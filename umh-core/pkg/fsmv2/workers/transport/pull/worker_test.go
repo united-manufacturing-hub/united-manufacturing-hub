@@ -16,6 +16,7 @@ package pull_test
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -232,7 +233,7 @@ var _ = Describe("PullWorker", func() {
 		It("parses a valid spec into a PullDesiredState wrapper without error", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    `state: stopped`,
-				Variables: fsmv2config.VariableBundle{},
+				Variables: nil,
 			}
 
 			desired, err := worker.DeriveDesiredState(spec)
@@ -245,7 +246,7 @@ var _ = Describe("PullWorker", func() {
 		It("parses empty config into a PullDesiredState wrapper without error", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    "",
-				Variables: fsmv2config.VariableBundle{},
+				Variables: nil,
 			}
 
 			desired, err := worker.DeriveDesiredState(spec)
@@ -258,7 +259,7 @@ var _ = Describe("PullWorker", func() {
 		It("should be deterministic", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    `state: running`,
-				Variables: fsmv2config.VariableBundle{},
+				Variables: nil,
 			}
 
 			desired1, err1 := worker.DeriveDesiredState(spec)
@@ -283,7 +284,7 @@ var _ = Describe("PullWorker", func() {
 		It("should return error for malformed YAML", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    "state: [invalid yaml: {",
-				Variables: fsmv2config.VariableBundle{},
+				Variables: nil,
 			}
 
 			_, err := worker.DeriveDesiredState(spec)
@@ -301,7 +302,7 @@ var _ = Describe("PullWorker", func() {
 
 			spec := fsmv2config.UserSpec{
 				Config:    string(raw),
-				Variables: fsmv2config.VariableBundle{},
+				Variables: nil,
 			}
 
 			desired, err := worker.DeriveDesiredState(spec)
@@ -310,6 +311,38 @@ var _ = Describe("PullWorker", func() {
 			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
 			Expect(ok).To(BeTrue())
 			Expect(typed.Config.AuthSession.Token).To(Equal("test-token-pull"))
+		})
+
+		Context("placeholder and dollar-sign values", func() {
+			It("rejects a placeholder in a plain field with a ConfigError naming the field", func() {
+				spec := fsmv2config.UserSpec{
+					Config:    `state: "{{ .x }}"`,
+					Variables: nil,
+				}
+
+				_, err := worker.DeriveDesiredState(spec)
+				Expect(err).To(HaveOccurred())
+
+				var cfgErr *fsmv2config.ConfigError
+				Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *fsmv2config.ConfigError, got %T", err)
+				Expect(cfgErr.Field).To(Equal("state"))
+			})
+
+			It("decodes a dollar-sign value unchanged", func() {
+				spec := fsmv2config.UserSpec{
+					Config: `authSession:
+  token: "${DB_PASS}"
+`,
+					Variables: nil,
+				}
+
+				desired, err := worker.DeriveDesiredState(spec)
+				Expect(err).ToNot(HaveOccurred())
+
+				typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
+				Expect(ok).To(BeTrue())
+				Expect(typed.Config.AuthSession.Token).To(Equal("${DB_PASS}"))
+			})
 		})
 	})
 

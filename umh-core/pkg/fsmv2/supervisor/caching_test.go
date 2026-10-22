@@ -98,10 +98,8 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 					TickInterval: 10 * time.Millisecond,
 					UserSpec: config.UserSpec{
 						Config: "test config that stays the same",
-						Variables: config.VariableBundle{
-							User: map[string]any{
-								"key": "value",
-							},
+						Variables: map[string]any{
+							"key": "value",
 						},
 					},
 				},
@@ -197,10 +195,8 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 					Logger:       logger,
 					TickInterval: 10 * time.Millisecond,
 					UserSpec: config.UserSpec{
-						Config: "same config",
-						Variables: config.VariableBundle{
-							User: map[string]any{"IP": "192.168.1.100"},
-						},
+						Config:    "same config",
+						Variables: map[string]any{"IP": "192.168.1.100"},
 					},
 				},
 			)
@@ -222,10 +218,8 @@ var _ = Describe("DeriveDesiredState Caching", func() {
 
 			// Change Variables only (Config stays the same)
 			sup.TestUpdateUserSpec(config.UserSpec{
-				Config: "same config",
-				Variables: config.VariableBundle{
-					User: map[string]any{"IP": "192.168.1.200"}, // Different IP
-				},
+				Config:    "same config",
+				Variables: map[string]any{"IP": "192.168.1.200"}, // Different IP
 			})
 
 			// Wait for cache invalidation

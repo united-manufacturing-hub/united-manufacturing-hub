@@ -123,22 +123,7 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		return &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{}, nil
 	}
 
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
-	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	renderedSpec := config.UserSpec{
-		Config:    renderedConfig,
-		Variables: userSpec.Variables,
-	}
-
-	parsed, err := config.ParseUserSpec[PullUserSpec](renderedSpec)
+	parsed, err := config.LoadUserSpec[PullUserSpec](spec)
 	if err != nil {
 		return nil, err
 	}

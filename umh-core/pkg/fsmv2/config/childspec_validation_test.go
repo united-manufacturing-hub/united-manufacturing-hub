@@ -163,11 +163,9 @@ var _ = Describe("ChildSpec Validation", func() {
 				WorkerType: "communicator",
 				UserSpec: config.UserSpec{
 					Config: `{"host": "localhost", "port": 8080}`,
-					Variables: config.VariableBundle{
-						User: map[string]any{
-							"IP":   "192.168.1.100",
-							"PORT": 502,
-						},
+					Variables: map[string]any{
+						"IP":   "192.168.1.100",
+						"PORT": 502,
 					},
 				},
 			}
@@ -529,15 +527,11 @@ var _ = Describe("NextResult.Children scaffold", func() {
 	})
 })
 
-// createUnmarshalableVariables creates a VariableBundle that cannot be marshaled to JSON.
+// createUnmarshalableVariables creates a variables map that cannot be marshaled to JSON.
 // This simulates invalid configuration that should be caught during validation.
-func createUnmarshalableVariables() config.VariableBundle {
+func createUnmarshalableVariables() map[string]any {
 	// Create a channel which is not JSON serializable
-	bundle := config.VariableBundle{
-		User: map[string]any{
-			"invalid": make(chan int),
-		},
+	return map[string]any{
+		"invalid": make(chan int),
 	}
-
-	return bundle
 }

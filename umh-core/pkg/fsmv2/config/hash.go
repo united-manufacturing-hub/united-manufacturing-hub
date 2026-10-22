@@ -17,6 +17,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"hash"
 	"hash/fnv"
 )
 
@@ -24,16 +25,13 @@ import (
 // This is used by the supervisor to detect when a UserSpec has changed,
 // enabling it to skip DeriveDesiredState calls when inputs are unchanged.
 //
-// The hash is computed from:
-//   - Config string (hashed directly)
-//   - Variables.User and Variables.Global (serialized as sorted JSON for determinism)
+// The hash is computed from every UserSpec field. The Config string is
+// hashed directly; the Variables, ConfigValues and Names maps are
+// serialized as JSON for determinism. Each map part is written through
+// writeHashedJSON.
 //
-// Variables.Internal is excluded (via json:"-" tag) because Internal contains
-// only supervisor-assigned constants (workerID, parentID) that are set once
-// at supervisor creation and never change.
-//
-// Cache behavior: DeriveDesiredState is called when Config or Variables change.
-// If neither changes, the cached result is reused.
+// Cache behavior: DeriveDesiredState is called when any hashed part of the
+// UserSpec changes. If none changes, the cached result is reused.
 //
 // Map key ordering does not affect the hash because JSON marshaling
 // in Go produces sorted keys for maps.
@@ -42,11 +40,27 @@ import (
 func ComputeUserSpecHash(spec UserSpec) string {
 	h := fnv.New64a()
 	h.Write([]byte(spec.Config))
+	h.Write([]byte{0}) // separator
 
-	// Marshal failure falls back to Config-only hash; Variables from YAML are always serializable.
-	if varsBytes, err := json.Marshal(spec.Variables); err == nil {
-		h.Write(varsBytes)
-	}
+	writeHashedJSON(h, spec.Variables)
+	h.Write([]byte{0}) // separator
+
+	writeHashedJSON(h, spec.ConfigValues)
+	h.Write([]byte{0}) // separator
+
+	writeHashedJSON(h, spec.Names)
 
 	return fmt.Sprintf("%016x", h.Sum64())
+}
+
+// writeHashedJSON writes v to h as JSON, after normalize. A part that still
+// cannot be marshaled hashes as its error text, so it never drops out of
+// the hash. Two failing parts with the same error text hash the same.
+func writeHashedJSON(h hash.Hash, v any) {
+	b, err := json.Marshal(normalize(v))
+	if err != nil {
+		b = []byte(err.Error())
+	}
+
+	h.Write(b)
 }

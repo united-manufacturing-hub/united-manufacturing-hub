@@ -16,7 +16,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"hash/fnv"
 
@@ -103,7 +102,8 @@ func (b *BaseDesiredState) SetDisabled(v bool) {
 // with a default of "running" if not specified by the user.
 type BaseUserSpec struct {
 	// State specifies the desired lifecycle state: "running" or "stopped".
-	// Defaults to "running" if empty. Validated in the supervisor after DeriveDesiredState.
+	// Defaults to "running" if empty. Validated by WorkerBase.DeriveDesiredState;
+	// a worker that overrides it validates its own state.
 	State string `json:"state,omitempty" yaml:"state,omitempty"`
 }
 
@@ -132,16 +132,22 @@ func (b *BaseUserSpec) GetState() string {
 //	        ↓ DeriveDesiredState()
 //	DesiredState{Host: "192.168.1.100", Port: 502}
 type UserSpec struct {
-	Variables VariableBundle `json:"variables" yaml:"variables"` // Variable bundle (User, Global, Internal namespaces)
-	Config    string         `json:"config"    yaml:"config"`    // Raw user-provided configuration (YAML, JSON, or other format)
+	Variables    map[string]any `json:"variables"               yaml:"variables"` // Variables the parent sets for this entry, or the YAML variables key next to config
+	Config       string         `json:"config"                  yaml:"config"`    // Raw user-provided configuration (YAML, JSON, or other format)
+	ConfigValues map[string]any `json:"config_values,omitempty" yaml:"-"`         // Config.yaml values a parent hands down
+	Names        map[string]any `json:"names,omitempty"         yaml:"-"`         // Template names a parent hands a child; see WorkerBase.DeriveDesiredState for when they replace the built names
 }
 
 // Clone creates a deep copy of the UserSpec.
-// The Config string is copied by value, Variables maps are deep-copied.
+// The Config string is copied by value; the Variables, Names and
+// ConfigValues maps are deep-copied. A spec handed to another goroutine
+// must not share map storage with the spec the supervisor keeps.
 func (u UserSpec) Clone() UserSpec {
 	return UserSpec{
-		Config:    u.Config,
-		Variables: u.Variables.Clone(),
+		Config:       u.Config,
+		Variables:    DeepCloneMap(u.Variables),
+		Names:        DeepCloneMap(u.Names),
+		ConfigValues: DeepCloneMap(u.ConfigValues),
 	}
 }
 
@@ -262,11 +268,11 @@ func (c ChildSpec) Clone() ChildSpec {
 // This is used by the supervisor to detect when a ChildSpec has changed,
 // enabling incremental validation (only re-validate specs whose hash changed).
 //
-// The hash is computed from all relevant fields: Name, WorkerType, UserSpec,
-// Enabled, and Dependencies (excluding any unexported fields).
+// The hash is computed from every UserSpec field, and every ChildSpec field
+// except Dependencies.
 //
-// Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
-// if Variables cannot be marshaled to JSON.
+// Returns a hex-encoded FNV-1a 64-bit hash string (16 characters). Each map
+// part of the UserSpec is written through writeHashedJSON.
 func (c ChildSpec) Hash() (string, error) {
 	h := fnv.New64a()
 
@@ -278,16 +284,16 @@ func (c ChildSpec) Hash() (string, error) {
 	h.Write([]byte(c.WorkerType))
 	h.Write([]byte{0}) // separator
 
-	// Hash UserSpec (config string + variables)
 	h.Write([]byte(c.UserSpec.Config))
 	h.Write([]byte{0}) // separator
 
-	varsBytes, err := json.Marshal(c.UserSpec.Variables)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal Variables for hashing: %w", err)
-	}
+	writeHashedJSON(h, c.UserSpec.Variables)
+	h.Write([]byte{0}) // separator
 
-	h.Write(varsBytes)
+	writeHashedJSON(h, c.UserSpec.Names)
+	h.Write([]byte{0}) // separator
+
+	writeHashedJSON(h, c.UserSpec.ConfigValues)
 	h.Write([]byte{0}) // separator
 
 	if c.Enabled {

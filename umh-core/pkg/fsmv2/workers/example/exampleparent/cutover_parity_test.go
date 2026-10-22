@@ -29,10 +29,8 @@ import (
 //  2. Per-child DEVICE_ID is "device-N" (index-based).
 //  3. Empty cfg.ChildConfig produces empty child Config — no fallback template.
 //
-// Item 3 is deliberate: legacy DeriveDesiredState injected an "address:..."
-// template that was never parsed (ExamplechildConfig has no typed address field).
-// The shipped scenarios (simple, configerror) don't set child_config, so dropping
-// the template changes no observed behavior.
+// Item 3 is deliberate: cfg.ChildConfig is the only source of a child's
+// config, so an empty ChildConfig gives the child an empty Config.
 var _ = Describe("exampleparent RenderChildren ChildConfig equivalence", func() {
 	It("RenderChildren threads cfg.ChildConfig to child UserSpec.Config", func() {
 		cfg := exampleparent.ExampleparentConfig{
@@ -58,7 +56,7 @@ var _ = Describe("exampleparent RenderChildren ChildConfig equivalence", func() 
 		Expect(specs).To(HaveLen(3))
 
 		for i, spec := range specs {
-			deviceID, ok := spec.UserSpec.Variables.User["DEVICE_ID"]
+			deviceID, ok := spec.UserSpec.Variables["DEVICE_ID"]
 			Expect(ok).To(BeTrue(),
 				fmt.Sprintf("child-%d must have DEVICE_ID variable", i))
 			Expect(deviceID).To(Equal(fmt.Sprintf("device-%d", i)),
@@ -67,7 +65,6 @@ var _ = Describe("exampleparent RenderChildren ChildConfig equivalence", func() 
 	})
 
 	It("empty cfg.ChildConfig produces empty child Config — no fallback template", func() {
-		// See file header: legacy fallback template was never parsed and is intentionally dropped.
 		cfg := exampleparent.ExampleparentConfig{ChildrenCount: 1}
 
 		specs, err := exampleparent.RenderChildren(cfg, true)

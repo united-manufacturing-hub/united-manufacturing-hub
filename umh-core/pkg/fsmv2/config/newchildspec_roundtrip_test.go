@@ -23,17 +23,17 @@ import (
 
 // NewChildSpec[T] round-trip guard.
 //
-// Ensures that NewChildSpec marshals T into UserSpec.Config and that ParseUserSpec[T]
+// Ensures that NewChildSpec marshals T into UserSpec.Config and that LoadUserSpec[T]
 // recovers exactly the same fields. Catches two silent failure modes:
 //   - marshalling the wrong thing (empty struct, wrong type)
 //   - field name mismatch between marshal and unmarshal tags
-var _ = Describe("NewChildSpec round-trip (P2-2)", func() {
+var _ = Describe("NewChildSpec round-trip", func() {
 	type sampleSpec struct {
 		Host string `yaml:"host"`
 		Port int    `yaml:"port"`
 	}
 
-	It("round-trips a typed struct through NewChildSpec → ParseUserSpec", func() {
+	It("round-trips a typed struct through NewChildSpec → LoadUserSpec", func() {
 		original := sampleSpec{Host: "relay.example.com", Port: 8443}
 
 		spec, err := config.NewChildSpec("myworker", "mytype", original, true)
@@ -42,8 +42,8 @@ var _ = Describe("NewChildSpec round-trip (P2-2)", func() {
 		// Config string must be non-empty (marshalling actually happened)
 		Expect(spec.UserSpec.Config).ToNot(BeEmpty())
 
-		// ParseUserSpec must recover the same field values
-		recovered, err := config.ParseUserSpec[sampleSpec](spec.UserSpec)
+		// LoadUserSpec must recover the same field values
+		recovered, err := config.LoadUserSpec[sampleSpec](spec.UserSpec)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(recovered.Host).To(Equal("relay.example.com"))
 		Expect(recovered.Port).To(Equal(8443))

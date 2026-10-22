@@ -15,10 +15,9 @@
 package fsmv2
 
 import (
+	"errors"
 	"fmt"
 	"sync"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -71,10 +70,11 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) InitBase(
 
 // Config returns the TConfig cached from the last DeriveDesiredState call.
 //
-// Deprecated: scheduled for deletion in L3 (see L2b_SCOPE_MANIFEST). Production
-// workers override DeriveDesiredState and never populate this cache, so Config()
-// returns zero-value TConfig forever. Read config via fsmv2.ExtractConfig[T](desired)
-// inside CollectObservedState instead.
+// Deprecated: read config via fsmv2.ExtractConfig[T](desired) inside
+// CollectObservedState instead. Only the base DeriveDesiredState writes this
+// cache. An override that calls the base first still fills it; an override
+// that parses the spec on its own leaves it empty, and Config() then returns
+// the zero value. No production code calls Config().
 func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -82,10 +82,12 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 	return w.config
 }
 
-// ConfigReady reports whether DeriveDesiredState has been called at least once.
+// ConfigReady reports whether DeriveDesiredState has filled the config cache
+// at least once.
 //
-// Deprecated: scheduled for deletion in L3 alongside Config(). Returns false
-// forever for any worker that overrides DeriveDesiredState. See Config() godoc.
+// Deprecated: see Config(). The cache is filled the same way, so
+// ConfigReady() stays false only for a worker whose override never calls the
+// base DeriveDesiredState. No production code calls ConfigReady().
 func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -95,9 +97,15 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 
 // DeriveDesiredState parses spec into a *WrappedDesiredState[TConfig].
 // When spec is nil, returns a default desired state with an empty TConfig.
-// When spec is a config.UserSpec, renders template variables, unmarshals
-// YAML into TConfig, validates the lifecycle state when TConfig embeds
-// config.BaseUserSpec (or implements GetState() string), and caches the config.
+// When spec is a config.UserSpec, loads the YAML into TConfig without
+// rendering it, renders every config.Template field, validates the lifecycle
+// state when TConfig embeds config.BaseUserSpec (or implements GetState()
+// string), and caches the config. Templates render against the names a
+// parent hands down when UserSpec.Names carries at least one entry; with a
+// nil or empty Names, DeriveDesiredState builds the names from the config's
+// own fields, the config values a parent hands down, the user variables, and
+// whatever names the config type's ReadyMade and Shortcuts methods supply
+// when it has them.
 //
 // Workers that need children specs must override this method in their own struct
 // and either call w.WorkerBase.DeriveDesiredState(spec) first (then read the
@@ -122,32 +130,68 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		return nil, fmt.Errorf("invalid spec type: expected config.UserSpec, got %T", spec)
 	}
 
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	cfg, err := config.LoadUserSpec[TConfig](spec)
 	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
+		return nil, fmt.Errorf("failed to load user spec: %w", err)
 	}
 
-	var cfg TConfig
-	if renderedConfig != "" {
-		if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
-			return nil, fmt.Errorf("config unmarshal failed: %w", err)
+	fields, err := config.EntryFields(userSpec.Config, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the config fields: %w", err)
+	}
+
+	// One channel for the variables a template reads as {{ .variables.<key> }}:
+	// the spec's UserSpec.Variables when the spec carries them, otherwise
+	// the config's variables section, which EntryFields drops from the
+	// fields. Both carrying variables is a config error, because the two
+	// would silently hide each other.
+	entryVariables, entryHasVariables, err := config.EntryVariables(userSpec.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the entry's variables: %w", err)
+	}
+
+	variables := userSpec.Variables
+
+	switch {
+	case entryHasVariables && len(variables) > 0:
+		return nil, &config.ConfigError{
+			Field: "variables",
+			Err:   errors.New("variables is set both inside the config and on the spec; set it in one place"),
+		}
+	case entryHasVariables:
+		variables = entryVariables
+	}
+
+	names := userSpec.Names
+	if len(names) == 0 {
+		names, err = config.BuildWorkerNames(cfg, fields, variables, userSpec.ConfigValues)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build the template names: %w", err)
 		}
 	}
 
-	// Duck-type: validate the desired lifecycle state when TConfig embeds
-	// config.BaseUserSpec or implements GetState() string. Validation rejects
-	// illegal user-supplied state values; lifecycle itself is driven by the FSM.
-	wds := &WrappedDesiredState[TConfig]{
-		Config: cfg,
+	if err := config.RenderTemplates(&cfg, names); err != nil {
+		return nil, fmt.Errorf("failed to render the template fields: %w", err)
 	}
 
+	// The state is read by duck-typing, so this works for any TConfig that
+	// embeds config.BaseUserSpec or implements GetState() string. Validation
+	// rejects illegal user-supplied state values; lifecycle itself is driven
+	// by the FSM.
 	if g, ok := any(&cfg).(interface{ GetState() string }); ok {
 		state := g.GetState()
 		if state != "" {
 			if err := config.ValidateDesiredState(state); err != nil {
-				return nil, fmt.Errorf("invalid desired state: %w", err)
+				return nil, &config.ConfigError{
+					Field: "state",
+					Err:   fmt.Errorf("unknown value %q: %w", state, err),
+				}
 			}
 		}
+	}
+
+	wds := &WrappedDesiredState[TConfig]{
+		Config: cfg,
 	}
 
 	w.mu.Lock()

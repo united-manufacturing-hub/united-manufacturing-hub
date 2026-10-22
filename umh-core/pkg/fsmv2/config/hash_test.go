@@ -25,10 +25,8 @@ var _ = Describe("ComputeUserSpecHash", func() {
 	Describe("determinism", func() {
 		It("produces same hash for same UserSpec", func() {
 			spec := config.UserSpec{
-				Config: "test config",
-				Variables: config.VariableBundle{
-					User: map[string]any{"IP": "192.168.1.100"},
-				},
+				Config:    "test config",
+				Variables: map[string]any{"IP": "192.168.1.100"},
 			}
 
 			hash1 := config.ComputeUserSpecHash(spec)
@@ -40,27 +38,19 @@ var _ = Describe("ComputeUserSpecHash", func() {
 		It("produces same hash for identical UserSpecs created separately", func() {
 			spec1 := config.UserSpec{
 				Config: "mqtt:\n  url: tcp://localhost:1883",
-				Variables: config.VariableBundle{
-					User: map[string]any{
-						"IP":   "10.0.0.1",
-						"PORT": 502,
-					},
-					Global: map[string]any{
-						"cluster_id": "test-cluster",
-					},
+				Variables: map[string]any{
+					"IP":         "10.0.0.1",
+					"PORT":       502,
+					"cluster_id": "test-cluster",
 				},
 			}
 
 			spec2 := config.UserSpec{
 				Config: "mqtt:\n  url: tcp://localhost:1883",
-				Variables: config.VariableBundle{
-					User: map[string]any{
-						"IP":   "10.0.0.1",
-						"PORT": 502,
-					},
-					Global: map[string]any{
-						"cluster_id": "test-cluster",
-					},
+				Variables: map[string]any{
+					"IP":         "10.0.0.1",
+					"PORT":       502,
+					"cluster_id": "test-cluster",
 				},
 			}
 
@@ -74,17 +64,13 @@ var _ = Describe("ComputeUserSpecHash", func() {
 	Describe("different inputs produce different hashes", func() {
 		It("produces different hash when Config differs", func() {
 			spec1 := config.UserSpec{
-				Config: "config version 1",
-				Variables: config.VariableBundle{
-					User: map[string]any{"key": "value"},
-				},
+				Config:    "config version 1",
+				Variables: map[string]any{"key": "value"},
 			}
 
 			spec2 := config.UserSpec{
-				Config: "config version 2",
-				Variables: config.VariableBundle{
-					User: map[string]any{"key": "value"},
-				},
+				Config:    "config version 2",
+				Variables: map[string]any{"key": "value"},
 			}
 
 			hash1 := config.ComputeUserSpecHash(spec1)
@@ -93,19 +79,15 @@ var _ = Describe("ComputeUserSpecHash", func() {
 			Expect(hash1).ToNot(Equal(hash2))
 		})
 
-		It("produces different hash when Variables.User differs", func() {
+		It("produces different hash when Variables differs", func() {
 			spec1 := config.UserSpec{
-				Config: "same config",
-				Variables: config.VariableBundle{
-					User: map[string]any{"IP": "192.168.1.100"},
-				},
+				Config:    "same config",
+				Variables: map[string]any{"IP": "192.168.1.100"},
 			}
 
 			spec2 := config.UserSpec{
-				Config: "same config",
-				Variables: config.VariableBundle{
-					User: map[string]any{"IP": "192.168.1.200"},
-				},
+				Config:    "same config",
+				Variables: map[string]any{"IP": "192.168.1.200"},
 			}
 
 			hash1 := config.ComputeUserSpecHash(spec1)
@@ -114,21 +96,15 @@ var _ = Describe("ComputeUserSpecHash", func() {
 			Expect(hash1).ToNot(Equal(hash2))
 		})
 
-		It("produces different hash when Variables.Global differs", func() {
+		It("produces different hash when a second Variables key differs", func() {
 			spec1 := config.UserSpec{
-				Config: "same config",
-				Variables: config.VariableBundle{
-					User:   map[string]any{"IP": "192.168.1.100"},
-					Global: map[string]any{"env": "production"},
-				},
+				Config:    "same config",
+				Variables: map[string]any{"IP": "192.168.1.100", "env": "production"},
 			}
 
 			spec2 := config.UserSpec{
-				Config: "same config",
-				Variables: config.VariableBundle{
-					User:   map[string]any{"IP": "192.168.1.100"},
-					Global: map[string]any{"env": "staging"},
-				},
+				Config:    "same config",
+				Variables: map[string]any{"IP": "192.168.1.100", "env": "staging"},
 			}
 
 			hash1 := config.ComputeUserSpecHash(spec1)
@@ -150,10 +126,8 @@ var _ = Describe("ComputeUserSpecHash", func() {
 
 		It("produces consistent hash for UserSpec with empty Config", func() {
 			spec := config.UserSpec{
-				Config: "",
-				Variables: config.VariableBundle{
-					User: map[string]any{"key": "value"},
-				},
+				Config:    "",
+				Variables: map[string]any{"key": "value"},
 			}
 
 			hash1 := config.ComputeUserSpecHash(spec)
@@ -164,11 +138,8 @@ var _ = Describe("ComputeUserSpecHash", func() {
 
 		It("produces consistent hash for UserSpec with nil Variables maps", func() {
 			spec := config.UserSpec{
-				Config: "some config",
-				Variables: config.VariableBundle{
-					User:   nil,
-					Global: nil,
-				},
+				Config:    "some config",
+				Variables: nil,
 			}
 
 			hash1 := config.ComputeUserSpecHash(spec)
@@ -183,27 +154,23 @@ var _ = Describe("ComputeUserSpecHash", func() {
 			// Create first spec with keys added in one order
 			spec1 := config.UserSpec{
 				Config: "test config",
-				Variables: config.VariableBundle{
-					User: map[string]any{
-						"alpha": "first",
-						"beta":  "second",
-						"gamma": "third",
-					},
+				Variables: map[string]any{
+					"alpha": "first",
+					"beta":  "second",
+					"gamma": "third",
 				},
 			}
 
 			// Create second spec with keys added in different order
 			// (Go maps don't guarantee order, but we explicitly construct differently)
-			user2 := make(map[string]any)
-			user2["gamma"] = "third"
-			user2["alpha"] = "first"
-			user2["beta"] = "second"
+			variables2 := make(map[string]any)
+			variables2["gamma"] = "third"
+			variables2["alpha"] = "first"
+			variables2["beta"] = "second"
 
 			spec2 := config.UserSpec{
-				Config: "test config",
-				Variables: config.VariableBundle{
-					User: user2,
-				},
+				Config:    "test config",
+				Variables: variables2,
 			}
 
 			hash1 := config.ComputeUserSpecHash(spec1)
@@ -215,13 +182,11 @@ var _ = Describe("ComputeUserSpecHash", func() {
 		It("produces same hash for nested maps regardless of key order", func() {
 			spec1 := config.UserSpec{
 				Config: "nested config",
-				Variables: config.VariableBundle{
-					User: map[string]any{
-						"outer": map[string]any{
-							"a": 1,
-							"b": 2,
-							"c": 3,
-						},
+				Variables: map[string]any{
+					"outer": map[string]any{
+						"a": 1,
+						"b": 2,
+						"c": 3,
 					},
 				},
 			}
@@ -234,10 +199,8 @@ var _ = Describe("ComputeUserSpecHash", func() {
 
 			spec2 := config.UserSpec{
 				Config: "nested config",
-				Variables: config.VariableBundle{
-					User: map[string]any{
-						"outer": inner2,
-					},
+				Variables: map[string]any{
+					"outer": inner2,
 				},
 			}
 
@@ -261,10 +224,8 @@ var _ = Describe("ComputeUserSpecHash", func() {
 
 		It("returns a hash of reasonable length", func() {
 			spec := config.UserSpec{
-				Config: "test config with some content",
-				Variables: config.VariableBundle{
-					User: map[string]any{"key": "value"},
-				},
+				Config:    "test config with some content",
+				Variables: map[string]any{"key": "value"},
 			}
 
 			hash := config.ComputeUserSpecHash(spec)
@@ -273,5 +234,60 @@ var _ = Describe("ComputeUserSpecHash", func() {
 			// Ensure it's at least 8 chars for reasonable uniqueness
 			Expect(len(hash)).To(BeNumerically(">=", 8))
 		})
+	})
+})
+
+var _ = Describe("ComputeUserSpecHash handed-down fields", func() {
+	baseSpec := func() config.UserSpec {
+		return config.UserSpec{
+			Config: "topic: sensors",
+			Variables: map[string]any{
+				"IP":   "192.168.1.100",
+				"site": "factory",
+			},
+			Names: map[string]any{"x": "from-parent"},
+		}
+	}
+
+	It("produces a different hash when only ConfigValues differs", func() {
+		spec1 := baseSpec()
+		spec1.ConfigValues = map[string]any{"historian": "timescale"}
+
+		spec2 := baseSpec()
+		spec2.ConfigValues = map[string]any{"historian": "kafka"}
+
+		Expect(config.ComputeUserSpecHash(spec1)).ToNot(Equal(config.ComputeUserSpecHash(spec2)))
+	})
+
+	It("produces a different hash when only Names differs", func() {
+		spec1 := baseSpec()
+		spec1.Names = map[string]any{"x": "one"}
+
+		spec2 := baseSpec()
+		spec2.Names = map[string]any{"x": "two"}
+
+		Expect(config.ComputeUserSpecHash(spec1)).ToNot(Equal(config.ComputeUserSpecHash(spec2)))
+	})
+
+	It("produces the same hash for equal input across 50 calls", func() {
+		spec := baseSpec()
+		spec.ConfigValues = map[string]any{"historian": "timescale"}
+
+		hashes := make(map[string]bool)
+		for range 50 {
+			hashes[config.ComputeUserSpecHash(spec)] = true
+		}
+
+		Expect(hashes).To(HaveLen(1))
+	})
+
+	It("gives ConfigValues holding a map with non-string keys a different hash from nil ConfigValues", func() {
+		spec1 := baseSpec()
+		spec1.ConfigValues = map[string]any{"m": map[any]any{1: "a"}}
+
+		spec2 := baseSpec()
+		spec2.ConfigValues = nil
+
+		Expect(config.ComputeUserSpecHash(spec1)).ToNot(Equal(config.ComputeUserSpecHash(spec2)))
 	})
 })

@@ -17,6 +17,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -89,7 +90,7 @@ children:
 		})
 	})
 
-	Describe("CollectObservedState with the registry's variable bundle", func() {
+	Describe("CollectObservedState with the registry's config values", func() {
 		var w *dynamicchildren.Writer
 
 		BeforeEach(func() {
@@ -105,31 +106,29 @@ children:
 			return obs.(fsmv2.Observation[snapshot.ApplicationStatus]).Status
 		}
 
-		It("reports the variable bundle the registry holds", func() {
-			vars := config.VariableBundle{
-				User:   map[string]any{"IP": "10.0.0.1"},
-				Global: map[string]any{"cluster_id": "c1"},
+		It("reports the config values the registry holds", func() {
+			values := map[string]any{
+				"historian": map[string]any{"timescale": map[string]any{"host": "db"}},
 			}
-			w.SetVariables(vars)
+			Expect(w.SetConfigVariables(values)).To(Succeed())
 
 			status := collectStatus()
-			Expect(status.Variables).NotTo(BeNil())
-			Expect(*status.Variables).To(Equal(vars))
+			Expect(status.ConfigValues).To(Equal(values))
 		})
 
-		It("leaves Variables out of the observation when the registry holds none", func() {
+		It("leaves ConfigValues out of the observation when the registry holds none", func() {
 			status := collectStatus()
 			Expect(status.RegistryConfigured).To(BeTrue())
-			Expect(status.Variables).To(BeNil())
+			Expect(status.ConfigValues).To(BeNil())
 
-			// A dynamic child's spec also serialises a "variables" key, so the
-			// check must look at the observation's own top-level keys.
+			// A dynamic child's spec also serialises a "config_values" key, so
+			// the check must look at the observation's own top-level keys.
 			raw, err := json.Marshal(status)
 			Expect(err).ToNot(HaveOccurred())
 
 			var m map[string]any
 			Expect(json.Unmarshal(raw, &m)).To(Succeed())
-			Expect(m).NotTo(HaveKey("variables"))
+			Expect(m).NotTo(HaveKey("config_values"))
 		})
 	})
 
@@ -223,7 +222,43 @@ children:
 
 			_, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse children config"))
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *config.ConfigError, got %T", err)
+		})
+
+		It("rejects a placeholder in a child's plain field with a ConfigError naming the field", func() {
+			userSpec := config.UserSpec{
+				Config: `
+children:
+  - name: "{{ .x }}"
+    workerType: "example-child"
+`,
+			}
+
+			_, err := worker.DeriveDesiredState(userSpec)
+			Expect(err).To(HaveOccurred())
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue(), "expected a *config.ConfigError, got %T", err)
+			Expect(cfgErr.Field).To(Equal("children.0.name"))
+		})
+
+		It("decodes a dollar-sign value in a child's plain field unchanged", func() {
+			userSpec := config.UserSpec{
+				Config: `
+children:
+  - name: "${DB_PASS}"
+    workerType: "example-child"
+`,
+			}
+
+			desiredIface, err := worker.DeriveDesiredState(userSpec)
+			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
+
+			Expect(desired.ChildrenSpecs).To(HaveLen(1))
+			Expect(desired.ChildrenSpecs[0].Name).To(Equal("${DB_PASS}"))
 		})
 
 		It("should return error for invalid spec type", func() {

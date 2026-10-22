@@ -20,6 +20,7 @@ package fsmv2_test
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -298,7 +299,10 @@ var _ = Describe("WorkerBase", func() {
 			spec := config.UserSpec{Config: "port: [not, an, int]"}
 			_, err := worker.DeriveDesiredState(spec)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("config unmarshal failed"))
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("cannot unmarshal"))
 		})
 
 		It("invalid desired state (e.g. 'invalid_state') returns error", func() {
@@ -306,6 +310,19 @@ var _ = Describe("WorkerBase", func() {
 			_, err := worker.DeriveDesiredState(spec)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid desired state"))
+		})
+
+		It("an unknown state value is a config error naming the field", func() {
+			// The value is the user's typo, so misspell must not flag it.
+			spec := config.UserSpec{Config: "state: runing"} //nolint:misspell
+			_, err := worker.DeriveDesiredState(spec)
+			Expect(err).To(HaveOccurred())
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue(),
+				"a state typo is the user's mistake, so it must be a *config.ConfigError, got %T", err)
+			Expect(cfgErr.Field).To(Equal("state"))
+			Expect(err.Error()).To(ContainSubstring("runing")) //nolint:misspell
 		})
 
 		It("nil spec returns a default WrappedDesiredState with empty config", func() {
@@ -468,3 +485,254 @@ func (s *wbMockState) String() string { return "wb_mock_state" }
 func (s *wbMockState) LifecyclePhase() config.LifecyclePhase {
 	return config.PhaseStopped
 }
+
+// wbTplConfig pairs a Template field with a plain field, so tests can tell the
+// rendered field from the field the loader must reject.
+type wbTplConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+	Name                string          `yaml:"name"`
+	Read                config.Template `yaml:"read"`
+}
+
+// TplTestWorker embeds WorkerBase the same way a production worker with a
+// Template field would.
+type TplTestWorker struct {
+	fsmv2.WorkerBase[wbTplConfig, wbTestStatus, *wbTestDeps]
+}
+
+// CollectObservedState satisfies the Worker interface (no-op for testing).
+func (w *TplTestWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return nil, nil
+}
+
+var _ = Describe("WorkerBase template fields", func() {
+	var (
+		id     deps.Identity
+		logger deps.FSMLogger
+		sr     deps.StateReader
+		worker *TplTestWorker
+	)
+
+	BeforeEach(func() {
+		id = wbMakeIdentity("tpl-test-worker-type")
+		logger = deps.NewNopFSMLogger()
+		sr = wbMakeStateReader()
+		worker = &TplTestWorker{}
+		worker.InitBase(id, logger, sr)
+	})
+
+	It("renders a Template field against the config's own fields", func() {
+		spec := config.UserSpec{Config: "name: b1\nread: \"{{ .name }}-x\""}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Name).To(Equal("b1"))
+		Expect(wds.Config.Read).To(Equal(config.Template("b1-x")))
+	})
+
+	It("renders a Template field against the entry's own variables section", func() {
+		entry := map[string]any{
+			"variables": map[string]any{"X": "a"},
+			"read":      "{{ .variables.X }}",
+		}
+
+		spec, err := config.NewChildSpec[map[string]any]("b1", "tpl-test-worker-type", entry, true)
+		Expect(err).NotTo(HaveOccurred())
+
+		ds, err := worker.DeriveDesiredState(spec.UserSpec)
+
+		Expect(err).NotTo(HaveOccurred())
+
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("a")))
+	})
+
+	It("rejects an entry variables section when the spec also carries a variables bundle", func() {
+		spec, err := config.NewChildSpec[map[string]any]("b1", "tpl-test-worker-type", map[string]any{
+			"variables": map[string]any{"X": "a"},
+			"read":      "{{ .name }}",
+		}, true)
+		Expect(err).NotTo(HaveOccurred())
+
+		userSpec := spec.UserSpec
+		userSpec.Variables = map[string]any{"X": "b"}
+
+		_, err = worker.DeriveDesiredState(userSpec)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("variables"))
+	})
+
+	It("wraps a render error in a ConfigError naming the field", func() {
+		spec := config.UserSpec{Config: "read: \"{{ .nope }}\""}
+
+		_, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(HavePrefix("failed to render the template fields"))
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("read"))
+	})
+
+	It("rejects a placeholder in a plain field", func() {
+		spec := config.UserSpec{Config: "name: \"{{ .x }}\""}
+
+		_, err := worker.DeriveDesiredState(spec)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("name"))
+	})
+
+	It("rejects a placeholder under a config key that no field declares", func() {
+		spec := config.UserSpec{Config: "name: b1\nfoo: \"{{ .IP }}\"\nread: \"{{ .name }}\""}
+
+		_, err := worker.DeriveDesiredState(spec)
+
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("foo"))
+	})
+
+	It("keeps a config key that no field declares when it carries no placeholder", func() {
+		spec := config.UserSpec{Config: "name: b1\nfoo: bar\nread: \"{{ .foo }}\""}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+
+		Expect(wds.Config.Read).To(Equal(config.Template("bar")),
+			"the undeclared key must survive into the names, so a template can use it")
+	})
+
+	It("renders with the Names a parent hands down, and with ConfigValues when it hands down none", func() {
+		namesSpec := config.UserSpec{
+			Config: `read: "{{ .x }}"`,
+			Names:  map[string]any{"x": "from-parent"},
+		}
+
+		ds, err := worker.DeriveDesiredState(namesSpec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("from-parent")))
+
+		valuesSpec := config.UserSpec{
+			Config:       `read: "{{ .config.historian.timescale.host }}"`,
+			ConfigValues: map[string]any{"historian": map[string]any{"timescale": map[string]any{"host": "db"}}},
+		}
+
+		ds, err = worker.DeriveDesiredState(valuesSpec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok = ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("db")))
+	})
+
+	It("builds the names when a parent hands down an empty Names map", func() {
+		spec := config.UserSpec{
+			Config: "name: b1\nread: \"{{ .name }}-x\"",
+			Names:  map[string]any{},
+		}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("b1-x")))
+	})
+
+	It("renders a variable through the variables section", func() {
+		spec := config.UserSpec{
+			Config:    `read: "{{ .variables.A }}"`,
+			Variables: map[string]any{"A": "1"},
+		}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTplConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("1")))
+	})
+
+	It("errors naming the top-level name when the worker declares no shortcut for it", func() {
+		// wbTplConfig declares no shortcuts, so {{ .A }} has no top-level name.
+		spec := config.UserSpec{
+			Config:    `read: "{{ .variables.A }}-{{ .A }}"`,
+			Variables: map[string]any{"A": "1"},
+		}
+
+		_, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).To(HaveOccurred())
+		var cfgErr *config.ConfigError
+		Expect(errors.As(err, &cfgErr)).To(BeTrue())
+		Expect(cfgErr.Field).To(Equal("read"))
+		Expect(err.Error()).To(ContainSubstring(`"A"`),
+			"the render error must name the top-level name the worker declares no shortcut for")
+	})
+})
+
+// wbHookConfig is a config type with a Template field and both optional name
+// methods.
+type wbHookConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+	Read                config.Template `yaml:"read"`
+}
+
+func (c wbHookConfig) ReadyMade(cfgValues map[string]any) (map[string]any, error) {
+	return map[string]any{"ready": cfgValues["ready-from"]}, nil
+}
+
+func (c wbHookConfig) Shortcuts(cfgValues map[string]any) (map[string]any, error) {
+	return map[string]any{"short": cfgValues["short-from"]}, nil
+}
+
+// HookTestWorker embeds WorkerBase with a config type that implements the
+// optional name methods.
+type HookTestWorker struct {
+	fsmv2.WorkerBase[wbHookConfig, wbTestStatus, *wbTestDeps]
+}
+
+func (w *HookTestWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return nil, nil
+}
+
+var _ = Describe("WorkerBase config-type name methods", func() {
+	It("renders the value ReadyMade returns and the value Shortcuts returns", func() {
+		worker := &HookTestWorker{}
+		worker.InitBase(
+			wbMakeIdentity("hook-test-worker-type"),
+			deps.NewNopFSMLogger(),
+			wbMakeStateReader(),
+		)
+
+		spec := config.UserSpec{
+			Config: `read: "{{ .ready }} {{ .short }}"`,
+			ConfigValues: map[string]any{
+				"ready-from": "ready-value",
+				"short-from": "short-value",
+			},
+		}
+
+		ds, err := worker.DeriveDesiredState(spec)
+
+		Expect(err).NotTo(HaveOccurred())
+		wds, ok := ds.(*fsmv2.WrappedDesiredState[wbHookConfig])
+		Expect(ok).To(BeTrue())
+		Expect(wds.Config.Read).To(Equal(config.Template("ready-value short-value")))
+	})
+})

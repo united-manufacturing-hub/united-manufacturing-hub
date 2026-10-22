@@ -17,72 +17,27 @@
 // # Overview
 //
 // The config package defines:
-//   - VariableBundle: Three-tier variable namespace (User, Global, Internal)
+//   - UserSpec: The raw user configuration for one worker entry
 //   - ChildSpec: Declaration of child workers for hierarchical composition
 //   - DesiredState: Target state with shutdown control
 //   - Template utilities for variable expansion
 //
-// # Variable tiers
+// # Variables
 //
-// Variables are organized into three namespaces:
+// A template reads a worker entry's variables as {{ .variables.<key> }}.
+// They come from one of two places: UserSpec.Variables (map[string]any),
+// which a parent sets on the entry, or a `variables:` section inside the
+// entry's config text, which DeriveDesiredState reads with EntryVariables.
+// Setting both is a config error. A parent that wants a child to have a value writes it into the child's
+// UserSpec.Variables (see workers/example/exampleparent/children.go,
+// RenderChildren), and the config.yaml values the registry hands down reach a
+// child as UserSpec.ConfigValues, which a template reads as
+// {{ .config.<key> }}.
 //
-// User Namespace:
-//   - Contains: Worker-specific configuration (IP addresses, ports, URLs)
-//   - Template access: Top-level {{ .IP }}, {{ .PORT }}
-//   - Serialization: YES (persisted in config files)
-//   - Use case: Most common variables, no prefix needed
-//
-// Global Namespace:
-//   - Contains: Fleet-wide settings (cluster ID, environment, API endpoints)
-//   - Template access: Prefixed {{ .global.cluster_id }}
-//   - Serialization: YES (persisted in config files)
-//   - Use case: Shared settings across all workers
-//
-// Internal Namespace:
-//   - Contains: Supervisor-injected identity (worker ID, parent ID,
-//     creation timestamp, bridge-source label)
-//   - Template access: Prefixed {{ .internal.id }}, {{ .internal.parent_id }},
-//     {{ .internal._created_at }}, {{ .internal.bridged_by }}
-//   - Serialization: NO (runtime-only; supervisor regenerates per-worker)
-//   - Use case: identity / structural desired state injected by the system,
-//     not user-authored.
-//
-// # User variable flattening
-//
-// User variables are flattened to top-level in templates because they
-// represent 80%+ of template variables. {{ .IP }} is cleaner than {{ .user.IP }}.
-//
-// Flattening example:
-//
-//	bundle := VariableBundle{
-//	    User:     map[string]any{"IP": "192.168.1.100"},
-//	    Global:   map[string]any{"cluster": "prod"},
-//	    Internal: map[string]any{"id": "worker-42", "_created_at": time.Now()},
-//	}
-//
-//	flat := bundle.Flatten()
-//	// flat["IP"] = "192.168.1.100"                  (top-level)
-//	// flat["global"]["cluster"] = "prod"            (nested)
-//	// flat["internal"]["id"] = "worker-42"          (nested)
-//	// flat["internal"]["_created_at"] = time.Time   (nested)
-//
-// Template usage:
-//
-//	{{ .IP }}                      // User variable (flattened)
-//	{{ .global.cluster }}          // Global variable (nested)
-//	{{ .internal.id }}             // Internal identity field
-//	{{ .internal._created_at }}    // Internal creation time
-//
-// # map[string]any design
-//
-// VariableBundle.User and VariableBundle.Global use map[string]any because
-// users define arbitrary config fields in YAML. A typed struct would
-// require code changes for each new variable. Go templates validate
-// variable existence and type at render time.
-//
-// VariableBundle.Internal also uses map[string]any. It is runtime-only
-// (json:"-" yaml:"-") and populated by the supervisor at reconciliation
-// time with snake_case keys matching the template vocabulary.
+// UserSpec.Variables uses map[string]any because users define arbitrary
+// config fields in YAML. A typed struct would require code changes for each
+// new variable. Go templates validate variable existence and type at
+// render time.
 //
 // # ChildSpec and hierarchical composition
 //
@@ -92,9 +47,9 @@
 //	    {
 //	        Name:       "mqtt-connection",
 //	        WorkerType: "mqtt_client",
-//	        UserSpec:   config.UserSpec{Config: "url: tcp://..."},
-//	        Variables: config.VariableBundle{
-//	            User: map[string]any{"URL": "tcp://localhost:1883"},
+//	        UserSpec: config.UserSpec{
+//	            Config:    "url: tcp://...",
+//	            Variables: map[string]any{"URL": "tcp://localhost:1883"},
 //	        },
 //	        Enabled: true,
 //	    },
@@ -111,8 +66,6 @@
 // Disabled bit, and state files route lifecycle through snap.ShouldStop().
 // Setting Enabled=false leaves the child resident in Stopped; flipping it back
 // to true resumes the child on the next tick.
-//
-// Use VariableBundle to pass data from parent to child.
 //
 // # DesiredState and shutdown control
 //
@@ -131,15 +84,10 @@
 //
 // # Template expansion
 //
-// The config package provides template utilities for variable expansion:
-//
-//	config := `
-//	    address: "{{ .IP }}:{{ .PORT }}"
-//	    cluster: "{{ .global.cluster_id }}"
-//	`
-//
-//	result, err := config.ExpandTemplate(config, bundle.Flatten())
-//	// result: "address: \"192.168.1.100:502\"\ncluster: \"prod\""
+// A worker renders its Template fields in strict mode (a missing name
+// fails): LoadUserSpec decodes UserSpec.Config into the worker's config
+// type, BuildNames assembles the names a template runs against, and
+// RenderTemplates renders every Template field with those names.
 //
 // Template expansion happens during DeriveDesiredState(), transforming user
 // configuration into concrete desired state.
@@ -149,7 +97,6 @@
 // ChildSpec validation checks:
 //   - Name is non-empty
 //   - WorkerType is registered in factory
-//   - Variables are valid (no nil maps)
 //
 // See childspec_validation.go for validation details.
 package config

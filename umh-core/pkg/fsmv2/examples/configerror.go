@@ -26,20 +26,13 @@ import (
 	example_parent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// ConfigErrorScenarioV2 runs a valid parent beside workers whose config the
+// ConfigErrorScenario runs a valid parent beside workers whose config the
 // supervisor rejects when it derives their desired state.
-var ConfigErrorScenarioV2 = ScenarioV2{
+var ConfigErrorScenario = Scenario{
 	Name:        "configerror",
 	Description: "Workers with a bad config are rejected and never start; beside them a valid parent reaches Running and an empty-config parent stays in TryingToStart",
 
-	// The underlying error is a yaml type error with no sentinel value, so
-	// ExpectedErrorCauses cannot name it.
-	ExpectedErrors: []string{
-		"worker_add_derive_desired_failed",
-		"child_supervisor_add_worker_failed",
-	},
-
-	ExpectedWarnings: []string{"reducer_error"},
+	ExpectedWarnings: []string{"reducer_error", "config_error"},
 
 	Run: func(ctx context.Context, env Env) error {
 		validRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-valid"}
@@ -47,7 +40,7 @@ var ConfigErrorScenarioV2 = ScenarioV2{
 		emptyRef := dynamicchildren.Ref{WorkerType: "exampleparent", Name: "config-empty"}
 		defaultsRef := dynamicchildren.Ref{WorkerType: "examplefailing", Name: "config-bad-max-failures"}
 
-		env.Step("create a valid parent, an empty-config parent, and two workers whose config has a string where a number belongs; the two are rejected with an error on every tick")
+		env.Step("create a valid parent, an empty-config parent, and two workers whose config has a string where a number belongs; the two are rejected, and each is logged once as a config_error warning")
 
 		if err := env.Client.Upsert(validRef, map[string]any{
 			"state":          "running",

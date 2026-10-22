@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -42,122 +41,15 @@ func generateLargeConfig(sizeBytes int) string {
 	return sb.String()
 }
 
-// generateConfigWithTemplates creates a config with template variables.
-func generateConfigWithTemplates(sizeBytes int) string {
-	lineTemplate := "  - name: sensor_{{ .DEVICE_ID }}_%d\n    address: {{ .IP }}:{{ .PORT }}\n"
-
-	var sb strings.Builder
-
-	sb.WriteString("sensors:\n")
-
-	for i := 0; sb.Len() < sizeBytes; i++ {
-		sb.WriteString(fmt.Sprintf(lineTemplate, i))
-	}
-
-	return sb.String()
-}
-
 var _ = Describe("ComputeUserSpecHash Performance", func() {
-	// Ratio-based performance assertions
-	// Uses ratios instead of absolute times because:
-	// - Absolute times vary 2-3x across different CI runners
-	// - Ratios remain consistent because both operations run on same host
-	// - Conservative 5x threshold gives 10x margin (actual is ~50x)
-
-	Describe("hash vs render performance ratio", func() {
-		const (
-			minimumSpeedupRatio = 5.0 // Conservative: actual is ~50x
-		)
-
-		// iterationsForSize returns warmup and measure counts scaled down for
-		// large configs to avoid multi-minute test runs. Parsing a 1MB template
-		// ~1100 times (100 warmup + 1000 measure) is the sole cause of slowness;
-		// even 5–10 iterations produce a stable ratio because both operations are
-		// deterministic with low variance.
-		iterationsForSize := func(sizeBytes int) (warmup, measure int) {
-			switch {
-			case sizeBytes >= 1024*1024: // ≥ 1 MB
-				return 2, 5
-			case sizeBytes >= 100*1024: // ≥ 100 KB
-				return 10, 50
-			default:
-				return 100, 1000
-			}
-		}
-
-		measurePerformance := func(configSize int, description string) {
-			It(fmt.Sprintf("hash is at least %.0fx faster than render for %s configs", minimumSpeedupRatio, description), func() {
-				warmupIterations, measureIterations := iterationsForSize(configSize)
-
-				// Create test data
-				configTemplate := generateConfigWithTemplates(configSize)
-				spec := config.UserSpec{
-					Config: configTemplate,
-					Variables: config.VariableBundle{
-						User: map[string]any{
-							"IP":        "192.168.1.100",
-							"PORT":      502,
-							"DEVICE_ID": "plc-01",
-						},
-						Global: map[string]any{
-							"cluster_id": "test-cluster",
-							"region":     "us-west-2",
-						},
-					},
-				}
-
-				// Warmup both operations
-				for range warmupIterations {
-					config.ComputeUserSpecHash(spec)
-				}
-				for range warmupIterations {
-					_, _ = config.RenderConfigTemplate(spec.Config, spec.Variables)
-				}
-
-				// Measure hash time
-				hashStart := time.Now()
-				for range measureIterations {
-					config.ComputeUserSpecHash(spec)
-				}
-				hashDuration := time.Since(hashStart)
-
-				// Measure render time
-				renderStart := time.Now()
-				for range measureIterations {
-					_, _ = config.RenderConfigTemplate(spec.Config, spec.Variables)
-				}
-				renderDuration := time.Since(renderStart)
-
-				// Compute speedup ratio
-				speedup := float64(renderDuration) / float64(hashDuration)
-
-				// Log actual ratio for monitoring
-				GinkgoWriter.Printf(
-					"Performance for %s (%d bytes): hash=%v render=%v speedup=%.1fx\n",
-					description, len(configTemplate), hashDuration, renderDuration, speedup,
-				)
-
-				// Assert minimum speedup (ratio-based, not absolute time)
-				Expect(speedup).To(BeNumerically(">=", minimumSpeedupRatio),
-					fmt.Sprintf("Hash should be at least %.0fx faster than render, got %.1fx", minimumSpeedupRatio, speedup))
-			})
-		}
-
-		measurePerformance(1024, "1KB")       // Small config
-		measurePerformance(100*1024, "100KB") // Medium config
-		measurePerformance(1024*1024, "1MB")  // Large config
-	})
-
 	Describe("hash consistency under load", func() {
 		It("produces identical hashes across many iterations", func() {
 			spec := config.UserSpec{
 				Config: generateLargeConfig(10 * 1024), // 10KB config
-				Variables: config.VariableBundle{
-					User: map[string]any{
-						"IP":        "10.0.0.1",
-						"PORT":      502,
-						"DEVICE_ID": "sensor-array-1",
-					},
+				Variables: map[string]any{
+					"IP":        "10.0.0.1",
+					"PORT":      502,
+					"DEVICE_ID": "sensor-array-1",
 				},
 			}
 
@@ -190,15 +82,10 @@ func BenchmarkComputeUserSpecHash(b *testing.B) {
 	for _, s := range sizes {
 		spec := config.UserSpec{
 			Config: generateLargeConfig(s.size),
-			Variables: config.VariableBundle{
-				User: map[string]any{
-					"IP":        "192.168.1.100",
-					"PORT":      502,
-					"DEVICE_ID": "plc-01",
-				},
-				Global: map[string]any{
-					"cluster_id": "test-cluster",
-				},
+			Variables: map[string]any{
+				"IP":        "192.168.1.100",
+				"PORT":      502,
+				"DEVICE_ID": "plc-01",
 			},
 		}
 
@@ -210,69 +97,4 @@ func BenchmarkComputeUserSpecHash(b *testing.B) {
 			}
 		})
 	}
-}
-
-func BenchmarkRenderConfigTemplate(b *testing.B) {
-	sizes := []struct {
-		name string
-		size int
-	}{
-		{"1KB", 1024},
-		{"10KB", 10 * 1024},
-		{"100KB", 100 * 1024},
-		{"1MB", 1024 * 1024},
-	}
-
-	for _, s := range sizes {
-		configTemplate := generateConfigWithTemplates(s.size)
-		variables := config.VariableBundle{
-			User: map[string]any{
-				"IP":        "192.168.1.100",
-				"PORT":      502,
-				"DEVICE_ID": "plc-01",
-			},
-			Global: map[string]any{
-				"cluster_id": "test-cluster",
-			},
-		}
-
-		b.Run(s.name, func(b *testing.B) {
-			b.ReportAllocs()
-
-			for range b.N {
-				_, _ = config.RenderConfigTemplate(configTemplate, variables)
-			}
-		})
-	}
-}
-
-// BenchmarkHashVsRender provides a direct comparison for benchstat.
-func BenchmarkHashVsRender(b *testing.B) {
-	configTemplate := generateConfigWithTemplates(100 * 1024) // 100KB
-	spec := config.UserSpec{
-		Config: configTemplate,
-		Variables: config.VariableBundle{
-			User: map[string]any{
-				"IP":        "192.168.1.100",
-				"PORT":      502,
-				"DEVICE_ID": "plc-01",
-			},
-		},
-	}
-
-	b.Run("Hash", func(b *testing.B) {
-		b.ReportAllocs()
-
-		for range b.N {
-			config.ComputeUserSpecHash(spec)
-		}
-	})
-
-	b.Run("Render", func(b *testing.B) {
-		b.ReportAllocs()
-
-		for range b.N {
-			_, _ = config.RenderConfigTemplate(spec.Config, spec.Variables)
-		}
-	})
 }

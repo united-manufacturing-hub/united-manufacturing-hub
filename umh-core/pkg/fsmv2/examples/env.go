@@ -48,6 +48,13 @@ type Env struct {
 	recorder *runRecorder
 }
 
+// recordedWarning is one Warn call a scenario logged, kept so a wait can match
+// on the message and the field values.
+type recordedWarning struct {
+	msg    string
+	fields map[string]string
+}
+
 // runRecorder is the per-run state that Step and WaitFor share across copies
 // of Env. The fields above mu are set before the supervisor starts and never change.
 type runRecorder struct {
@@ -65,6 +72,7 @@ type runRecorder struct {
 	lastStep            string
 	firstUnexpectedErr  error
 	firstUnexpectedWarn error
+	warns               []recordedWarning
 }
 
 // alwaysAllowedMessages are logged by the collector in normal operation, so
@@ -135,6 +143,45 @@ func (r *runRecorder) recordLoggedWarning(msg string) {
 	}
 }
 
+// recordWarn keeps one Warn call for WaitForWarning and runs the same
+// ExpectedWarnings check recordLoggedWarning runs, so an unexpected Warn
+// message fails the run like an unexpected SentryWarn does.
+func (r *runRecorder) recordWarn(msg string, fields []deps.Field) {
+	r.recordLoggedWarning(msg)
+
+	values := make(map[string]string, len(fields))
+
+	for _, f := range fields {
+		values[f.Key] = fmt.Sprint(f.Value)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.warns = append(r.warns, recordedWarning{msg: msg, fields: values})
+}
+
+// warningRecorded reports whether a Warn with message msg was logged whose
+// fields carry contains in any value.
+func (r *runRecorder) warningRecorded(msg string, contains string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, w := range r.warns {
+		if w.msg != msg {
+			continue
+		}
+
+		for _, v := range w.fields {
+			if strings.Contains(v, contains) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (r *runRecorder) loggedWarning() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -180,6 +227,12 @@ func (l *recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath string,
 	l.recorder.recordLoggedWarning(msg)
 
 	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
+}
+
+func (l *recordingLogger) Warn(msg string, fields ...deps.Field) {
+	l.recorder.recordWarn(msg, fields)
+
+	l.FSMLogger.Warn(msg, fields...)
 }
 
 // With wraps again, so a logger carrying context fields records too.
@@ -247,6 +300,37 @@ func (e Env) WaitFor(ctx context.Context, check string, poll func(ctx context.Co
 	}
 }
 
+// WaitForWarning waits until a Warn with message msg was logged and one of
+// its field values contains contains. It polls at WaitFor's interval and
+// times out after WaitFor's timeout, and an error names msg and contains.
+func (e Env) WaitForWarning(ctx context.Context, msg string, contains string) error {
+	waitCtx, cancel := context.WithTimeout(ctx, waitForTimeout)
+	defer cancel()
+
+	for {
+		if e.recorder.warningRecorded(msg, contains) {
+			e.Logger.Info("scenario_wait_passed",
+				deps.String("scenario", e.recorder.scenario),
+				deps.String("check", "warning "+msg),
+				deps.String("seen", contains))
+
+			return nil
+		}
+
+		select {
+		case <-waitCtx.Done():
+			if ctx.Err() != nil {
+				return fmt.Errorf("wait for warning %q containing %q after step %q did not complete before ctx ended: %w",
+					msg, contains, e.recorder.lastStepDescription(), ctx.Err())
+			}
+
+			return fmt.Errorf("wait for warning %q containing %q after step %q timed out after %s",
+				msg, contains, e.recorder.lastStepDescription(), waitForTimeout)
+		case <-time.After(waitForPollInterval):
+		}
+	}
+}
+
 // timesEntered returns how many times the worker has entered state. The count
 // keeps its value after the worker leaves the state, so a wait still sees a
 // state the worker has already left.
@@ -254,8 +338,8 @@ func timesEntered[TStatus any](obs fsmv2.Observation[TStatus], state string) int
 	return obs.Metrics.Framework.TransitionsByState[state]
 }
 
-// ScenarioV2 is a scenario that drives the kernel-only supervisor.
-type ScenarioV2 struct {
+// Scenario is a scenario that drives the kernel-only supervisor.
+type Scenario struct {
 	// Run creates workers through env.Client, changes the mocks, and checks the
 	// result. When a check fails, Run returns an error that names the check.
 	// After a nil return, the runner waits RunConfig.Duration, then shuts the
@@ -296,52 +380,52 @@ type ScenarioV2 struct {
 	Dependencies func() (depsMap map[string]any, cleanup func(), err error)
 }
 
-// NoopScenarioV2 changes nothing, so the application worker spawns only its
+// NoopScenario changes nothing, so the application worker spawns only its
 // config worker kernel child.
-var NoopScenarioV2 = ScenarioV2{
+var NoopScenario = Scenario{
 	Name:        "noop",
-	Description: "Runs the kernel-only supervisor and changes nothing (v2)",
+	Description: "Runs the kernel-only supervisor and changes nothing",
 	Run: func(_ context.Context, _ Env) error {
 		return nil
 	},
 }
 
-// RegistryV2 contains all available v2 scenarios, merged into ListScenarios
-// alongside the v1 Registry. Names must not collide with v1 Registry names
-// (enforced by the disjointness test in scenariov2_test.go, which documents
-// what breaks on a collision).
-var RegistryV2 = map[string]ScenarioV2{
-	"noop":         NoopScenarioV2,
-	"helloworld":   HelloworldScenarioV2,
-	"failing":      FailingScenarioV2,
-	"slow":         SlowScenarioV2,
-	"timeout":      TimeoutScenarioV2,
-	"panic":        PanicScenarioV2,
-	"dynamic":      DynamicScenarioV2,
-	"nmap":         NmapScenarioV2,
-	"transport":    TransportScenarioV2,
-	"concurrent":   ConcurrentScenarioV2,
-	"simple":       SimpleScenarioV2,
-	"cascade":      CascadeScenarioV2,
-	"configerror":  ConfigErrorScenarioV2,
-	"communicator": CommunicatorScenarioV2,
-	"persistence":  PersistenceScenarioV2,
+// Registry contains all available scenarios, merged into ListScenarios
+// alongside LiveRegistry. A name may be in only one of the two; the spec
+// "keeps the registries' names disjoint" in scenario_test.go says why.
+var Registry = map[string]Scenario{
+	"noop":             NoopScenario,
+	"helloworld":       HelloworldScenario,
+	"failing":          FailingScenario,
+	"slow":             SlowScenario,
+	"timeout":          TimeoutScenario,
+	"panic":            PanicScenario,
+	"dynamic":          DynamicScenario,
+	"nmap":             NmapScenario,
+	"transport":        TransportScenario,
+	"concurrent":       ConcurrentScenario,
+	"simple":           SimpleScenario,
+	"cascade":          CascadeScenario,
+	"configerror":      ConfigErrorScenario,
+	"bridge-variables": BridgeVariablesScenario,
+	"communicator":     CommunicatorScenario,
+	"persistence":      PersistenceScenario,
 
-	"certfetcher-healthy":        CertFetcherHealthyScenarioV2,
-	"certfetcher-degraded":       CertFetcherDegradedScenarioV2,
-	"certfetcher-no-subscribers": CertFetcherNoSubscribersScenarioV2,
-	"historian":                  HistorianScenarioV2,
+	"certfetcher-healthy":        CertFetcherHealthyScenario,
+	"certfetcher-degraded":       CertFetcherDegradedScenario,
+	"certfetcher-no-subscribers": CertFetcherNoSubscribersScenario,
+	"historian":                  HistorianScenario,
 
-	"cpu-pressure": CPUPressureScenarioV2,
-	"cpu-blind":    CPUBlindScenarioV2,
-	"cpu-stall":    CPUStallScenarioV2,
-	"cpu-filling":  CPUFillingScenarioV2,
-	"cpu-latch":    CPULatchScenarioV2,
+	"cpu-pressure": CPUPressureScenario,
+	"cpu-blind":    CPUBlindScenario,
+	"cpu-stall":    CPUStallScenario,
+	"cpu-filling":  CPUFillingScenario,
+	"cpu-latch":    CPULatchScenario,
 }
 
-// LiveRegistryV2 holds scenarios that read the real machine the runner runs
+// LiveRegistry holds scenarios that read the real machine the runner runs
 // on, so their result depends on that machine's CPU load and cgroup files. The
 // CLI runs them. The registry spec does not, because CI does not control those.
-var LiveRegistryV2 = map[string]ScenarioV2{
-	"cpu-host": CPUHostScenarioV2,
+var LiveRegistry = map[string]Scenario{
+	"cpu-host": CPUHostScenario,
 }

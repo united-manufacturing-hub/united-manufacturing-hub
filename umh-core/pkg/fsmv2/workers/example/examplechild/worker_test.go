@@ -16,6 +16,7 @@ package example_child_test
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -75,7 +76,7 @@ var _ = Describe("ChildWorker", func() {
 
 			spec := config.UserSpec{
 				Config:    "",
-				Variables: config.VariableBundle{},
+				Variables: nil,
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)
@@ -84,6 +85,39 @@ var _ = Describe("ChildWorker", func() {
 
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[example_child.ExamplechildConfig])
 			Expect(desired).NotTo(BeNil())
+		})
+
+		It("rejects a placeholder in a plain field with a ConfigError naming the field", func() {
+			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec := config.UserSpec{
+				Config:    "address: \"{{ .IP }}\"",
+				Variables: map[string]any{"IP": "192.168.1.100"},
+			}
+
+			_, err = worker.DeriveDesiredState(spec)
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue())
+			Expect(cfgErr.Field).To(Equal("address"))
+		})
+
+		It("decodes the state field through the inline base spec", func() {
+			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec := config.UserSpec{
+				Config:    "state: stopped",
+				Variables: nil,
+			}
+
+			desiredIface, err := worker.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[example_child.ExamplechildConfig])
+			Expect(ok).To(BeTrue())
+			Expect(desired.Config.State).To(Equal("stopped"))
 		})
 	})
 })

@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -484,6 +483,13 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	workerCtx.mu.RUnlock()
 
 	if err := s.processSignal(ctx, workerID, result.Signal); err != nil {
+		var cfgErr *config.ConfigError
+		if errors.As(err, &cfgErr) {
+			// A config error from a signal was already warned once by the
+			// restart or re-add path; a Sentry error would duplicate it.
+			return fmt.Errorf("signal processing failed: %w", err)
+		}
+
 		s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "signal_processing_failed",
 			deps.Int("signal", int(result.Signal)))
 
@@ -507,11 +513,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 //   - Child restart handled with exponential backoff (managed by health checker)
 //   - Non-blocking: health check completes in <1ms
 //
-// PHASE 0.5: Variable Injection (from Phase 0.5)
-//   - Global variables from the supervisor's spec, as they are
-//   - Internal variables (supervisorID, createdAt, bridgedBy)
-//   - User variables from UserSpec (preserved, not overwritten)
-//   - Variables available for template expansion in DeriveDesiredState
+// PHASE 0.5: User spec fetch
+//   - Reads this tick's UserSpec with getUserSpec and passes it to
+//     DeriveDesiredState unchanged; templates read its variables as
+//     {{ .variables.<key> }}
 //
 // PHASE 0: Hierarchical Composition (from Phase 0)
 //   - DeriveDesiredState from worker implementation
@@ -731,8 +736,18 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			return nil
 		}
 
-		// Zero workers on a started supervisor is a transient state (e.g., during child
-		// restart). The supervisor self-heals on the next reconcileChildren cycle.
+		// A restart whose re-add failed on a config error leaves the worker
+		// gone and the re-add pending. Retry it here, on every tick while the
+		// config is broken: the retry itself derives again and fails with
+		// the same config error until the config renders.
+		if s.retryPendingReadds(ctx) {
+			return nil
+		}
+
+		// With zero workers the tick returns here, and nothing reconciles or
+		// ticks this supervisor's children until it has a worker again or is
+		// shut down. A pending re-add that fails on a config error keeps it
+		// here for as long as the config stays broken. Tracked in ENG-6527.
 		// Log at Info, not Warn/Error, to avoid Sentry noise.
 		if s.noWorkersWarnedOnce.CompareAndSwap(false, true) {
 			s.logger.Info("tick_skipped_no_workers",
@@ -746,32 +761,19 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		return errors.New("worker is nil")
 	}
 
-	// PHASE 0.5: Variable Injection
-	// Inject variables BEFORE DeriveDesiredState() so they're available for template expansion
+	// PHASE 0.5: fetch the user spec for this tick.
 	// Use getUserSpec() to avoid race with parent calling updateUserSpec()
-	userSpecWithVars := s.getUserSpec()
+	userSpec := s.getUserSpec()
 
-	if userSpecWithVars.Variables.User == nil {
-		userSpecWithVars.Variables.User = make(map[string]any)
-	}
-
-	userSpecWithVars.Variables.Internal = map[string]any{
-		FieldID:                firstWorkerID,
-		storage.FieldCreatedAt: s.createdAt,
-		FieldParentID:          s.parentID,
-	}
-
-	userVarCount := len(userSpecWithVars.Variables.User)
 	// Per-tick log moved to TRACE for scalability
 	s.logTrace("variables_propagated",
-		deps.Int("user_vars", userVarCount),
-		deps.Int("global_vars", len(userSpecWithVars.Variables.Global)))
+		deps.Int("user_vars", len(userSpec.Variables)))
 	metrics.RecordVariablePropagation(firstWorkerPath)
 
 	// PHASE 0: Hierarchical Composition
 	// 1. DeriveDesiredState (with caching)
 
-	currentHash := config.ComputeUserSpecHash(userSpecWithVars)
+	currentHash := config.ComputeUserSpecHash(userSpec)
 
 	s.mu.RLock()
 	lastHash := s.lastUserSpecHash
@@ -780,6 +782,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	// desired is fsmv2.DesiredState interface - workers return their typed DesiredState
 	var desired fsmv2.DesiredState
+
+	// deriveConfigErr is set when the derive failed with a config error and
+	// the tick continues below on the desired state derived from the last
+	// good config. It is returned after the tick's work, so the caller still
+	// receives the derive's config error.
+	var deriveConfigErr error
 
 	if lastHash == currentHash && cachedState != nil {
 		// Cache hit - reuse previous result
@@ -793,94 +801,169 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 		var err error
 
-		desired, err = worker.DeriveDesiredState(userSpecWithVars)
+		desired, err = worker.DeriveDesiredState(userSpec)
 		templateDuration := time.Since(templateStart)
 
 		if err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "template_rendering_failed",
-				deps.DurationMs(templateDuration.Milliseconds()))
+			var cfgErr *config.ConfigError
+
+			isConfigErr := errors.As(err, &cfgErr)
+
+			if isConfigErr {
+				s.warnConfigErrorOnce(cfgErr)
+			} else {
+				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "derive_desired_state_failed",
+					deps.DurationMs(templateDuration.Milliseconds()))
+			}
+
 			metrics.RecordTemplateRenderingDuration(firstWorkerPath, "error", templateDuration)
 			metrics.RecordTemplateRenderingError(firstWorkerPath, "derivation_failed")
 
-			// Don't cache errors - will retry next tick
-			return fmt.Errorf("failed to derive desired state: %w", err)
+			if !isConfigErr || cachedState == nil {
+				// A worker that never derived successfully has no last good
+				// config to run on. Don't cache errors - will retry next tick.
+				return fmt.Errorf("failed to derive desired state: %w", err)
+			}
+
+			// A config error keeps the worker ticking on the desired state
+			// derived from its last good config, so shutdown, removal and
+			// the worker's children all keep working; see supervisor/doc.go
+			// (Phase 0) for the rule.
+			desired = cachedState
+			deriveConfigErr = err
 		}
 
-		// Update cache
+		if deriveConfigErr == nil {
+			// Update cache
+			s.mu.Lock()
+			s.lastUserSpecHash = currentHash
+			s.cachedDesiredState = desired
+			s.mu.Unlock()
+
+			s.logTrace("derive_desired_state_computed",
+				deps.String("hash", currentHash[:8]+"..."),
+				deps.DurationMs(templateDuration.Milliseconds()))
+			metrics.RecordTemplateRenderingDuration(firstWorkerPath, "success", templateDuration)
+		}
+	}
+
+	if deriveConfigErr == nil {
+		// The derive succeeded, so re-arm the warn-once memory; see
+		// warnConfigErrorOnce.
 		s.mu.Lock()
-		s.lastUserSpecHash = currentHash
-		s.cachedDesiredState = desired
+		s.lastConfigErrorWarned = ""
 		s.mu.Unlock()
-
-		s.logTrace("derive_desired_state_computed",
-			deps.String("hash", currentHash[:8]+"..."),
-			deps.DurationMs(templateDuration.Milliseconds()))
-		metrics.RecordTemplateRenderingDuration(firstWorkerPath, "success", templateDuration)
 	}
 
-	// Save before tickWorker, which loads the freshest desired state from snapshot
-	desiredDoc, err := s.toDocument(desired, firstWorkerID, "", documentConversion{
-		what: "derived desired state",
-	})
-	if err != nil {
-		return err
-	}
+	// A successful derive saves its desired state below, with the lifecycle
+	// flags preserved. A tick that continues after a config error saves
+	// nothing: it reloads only the lifecycle flags from the document an
+	// earlier tick stored.
+	var desiredDoc persistence.Document
 
-	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
-	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
-		userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
-		if marshalErr != nil {
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
-				deps.Err(marshalErr))
-		} else {
-			var userSpecMap map[string]any
-			if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_unmarshal_failed",
-					deps.Err(unmarshalErr))
+	if deriveConfigErr == nil {
+		// Save before tickWorker, which loads the freshest desired state from snapshot
+		var err error
+
+		desiredDoc, err = s.toDocument(desired, firstWorkerID, "", documentConversion{
+			what: "derived desired state",
+		})
+		if err != nil {
+			return err
+		}
+
+		// Store the worker's own user spec as originalUserSpec, so an
+		// observer can read the entry's config and variables as they were
+		// before the worker interpreted them.
+		if userSpec.Config != "" || len(userSpec.Variables) > 0 {
+			userSpecBytes, marshalErr := json.Marshal(userSpec)
+			if marshalErr != nil {
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
+					deps.Err(marshalErr))
 			} else {
-				desiredDoc["originalUserSpec"] = userSpecMap
+				var userSpecMap map[string]any
+				if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr != nil {
+					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_unmarshal_failed",
+						deps.Err(unmarshalErr))
+				} else {
+					desiredDoc["originalUserSpec"] = userSpecMap
+				}
 			}
 		}
-	}
 
-	// Preserve ShutdownRequested and Disabled: both are supervisor operations
-	// (shutdown request and the disable-mapping pass) that override DeriveDesiredState.
-	// Workers always re-derive these as false, so the persisted value must be carried
-	// forward or the disable bit would be clobbered every tick.
-	//
-	// The store full-replaces on write, so this load-and-rewrite races the
-	// explicit setters (requestShutdown / clearShutdownRequested / setDisabled).
-	// lifecycleFlagMu serializes them: held across the load and the save, a setter
-	// that commits in between is observed by the load on the next tick instead of
-	// being overwritten by a stale value (ENG-4971).
-	s.lifecycleFlagMu.Lock()
+		// Preserve ShutdownRequested and Disabled: both are supervisor operations
+		// (shutdown request and the disable-mapping pass) that override DeriveDesiredState.
+		// Workers always re-derive these as false, so the persisted value must be carried
+		// forward or the disable bit would be clobbered every tick.
+		//
+		// The store full-replaces on write, so this load-and-rewrite races the
+		// explicit setters (requestShutdown / clearShutdownRequested / setDisabled).
+		// lifecycleFlagMu serializes them: held across the load and the save, a setter
+		// that commits in between is observed by the load on the next tick instead of
+		// being overwritten by a stale value (ENG-4971).
+		s.lifecycleFlagMu.Lock()
 
-	var existingDesiredTyped TDesired
-	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
-		// Check the existing state's lifecycle flags via interface.
-		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
-			if ds.IsShutdownRequested() {
-				desiredDoc[FieldShutdownRequested] = true
-			}
+		var existingDesiredTyped TDesired
+		if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
+			// Check the existing state's lifecycle flags via interface.
+			if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
+				if ds.IsShutdownRequested() {
+					desiredDoc[FieldShutdownRequested] = true
+				}
 
-			if ds.IsDisabled() {
-				desiredDoc[FieldDisabled] = true
+				if ds.IsDisabled() {
+					desiredDoc[FieldDisabled] = true
+				}
 			}
 		}
-	}
 
-	_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
+		_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
 
-	s.lifecycleFlagMu.Unlock()
+		s.lifecycleFlagMu.Unlock()
 
-	if err != nil {
-		// Log the error but continue with the tick - the system can recover on the next tick
-		// The tickWorker will use the previously saved desired state
-		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "derived_desired_state_save_failed",
-			deps.Err(err))
+		if err != nil {
+			// Log the error but continue with the tick - the system can recover on the next tick
+			// The tickWorker will use the previously saved desired state
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "derived_desired_state_save_failed",
+				deps.Err(err))
+		} else {
+			// Per-tick log moved to TRACE for scalability
+			s.logTrace("derived_desired_state_saved")
+		}
 	} else {
-		// Per-tick log moved to TRACE for scalability
-		s.logTrace("derived_desired_state_saved")
+		// After a config error the tick runs the worker on the stored desired
+		// state, so the desiredDoc[FieldShutdownRequested] check before
+		// reconcileChildren must read the lifecycle flags from that stored
+		// document. Load it read-only under the same lock the save path holds
+		// around its load, so a concurrent setter's flag write is visible here
+		// rather than being skipped; do NOT save, or the broken config's own
+		// content would reach the store.
+		s.lifecycleFlagMu.Lock()
+
+		var existingDesiredTyped TDesired
+
+		loadErr := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped)
+		s.lifecycleFlagMu.Unlock()
+
+		if loadErr == nil {
+			if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
+				desiredDoc = make(persistence.Document)
+
+				if ds.IsShutdownRequested() {
+					desiredDoc[FieldShutdownRequested] = true
+				}
+
+				if ds.IsDisabled() {
+					desiredDoc[FieldDisabled] = true
+				}
+			}
+		} else if !errors.Is(loadErr, persistence.ErrNotFound) {
+			// The gate reads what loaded; a failed load leaves it reading a
+			// nil document, same as a worker that never derived.
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "stored_desired_state_load_failed",
+				deps.Err(loadErr),
+				deps.String("worker_id", firstWorkerID))
+		}
 	}
 
 	// Tick the worker first so its state machine progresses before child reconciliation.
@@ -995,9 +1078,16 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	for _, child := range childrenToTick {
 		if err := child.tick(ctx); err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "child_tick_failed")
+			var cfgErr *config.ConfigError
+			if !errors.As(err, &cfgErr) {
+				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "child_tick_failed")
+			}
 			// Continue with other children
 		}
+	}
+
+	if deriveConfigErr != nil {
+		return fmt.Errorf("failed to derive desired state: %w", deriveConfigErr)
 	}
 
 	return nil
@@ -1508,11 +1598,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				delete(s.pendingRemoval, spec.Name)
 			}
 
-			// Merge parent User variables with child's (child overrides parent)
-			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
-			childUserSpec := spec.UserSpec
-			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
-			child.updateUserSpec(childUserSpec)
+			child.updateUserSpec(spec.UserSpec)
 
 			updatedCount++
 		} else {
@@ -1571,16 +1657,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				continue
 			}
 
-			// Merge parent User variables with child's (child overrides parent)
-			// Direct access is safe here - reconcileChildren holds s.mu.Lock()
-			childUserSpec := spec.UserSpec
-			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
-			childSupervisor.updateUserSpec(childUserSpec)
+			childSupervisor.updateUserSpec(spec.UserSpec)
 			childSupervisor.setParent(s, s.workerType)
 
 			// Compute child's hierarchy path: parent path + child segment
 			// Format: "parentID(parentType)/childID(childType)"
-			childID := spec.Name + "-001"
+			childID := config.ChildID(spec.Name)
 
 			// Get parent's full hierarchy path from first worker's stored identity
 			// (uses stored identity for consistency with how paths are assigned)
@@ -1618,8 +1700,18 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Add worker to child supervisor
 			if err := childSupervisor.AddWorker(childIdentity, childWorker); err != nil {
-				s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_supervisor_add_worker_failed",
-					deps.String("child_name", spec.Name))
+				var cfgErr *config.ConfigError
+				if errors.As(err, &cfgErr) {
+					s.markChildCreateConfigError(spec.Name)
+					s.warnChildConfigErrorOnce(spec.Name, cfgErr)
+				} else {
+					// A later attempt failing for another reason ends the
+					// config-error hold: the latest attempt, not history,
+					// decides whether the child counts as held back.
+					s.clearChildCreateConfigError(spec.Name)
+					s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_supervisor_add_worker_failed",
+						deps.String("child_name", spec.Name))
+				}
 
 				continue
 			}
@@ -1640,6 +1732,12 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			cancel()
 
 			s.children[spec.Name] = childSupervisor
+			// The child was created, so a later config error for it warns again.
+			// reconcileChildren holds s.mu, so the map is already protected.
+			delete(s.childConfigErrorWarned, spec.Name)
+			// A created child is no longer held back, so applyDisableMapping's
+			// not-found warning (reducer_error) fires if it goes missing again.
+			delete(s.childCreateConfigError, spec.Name)
 
 			s.logTrace("lifecycle",
 				deps.String("lifecycle_event", "child_add_complete"),
@@ -1807,6 +1905,17 @@ func (s *Supervisor[TObserved, TDesired]) applyDisableMapping(ctx context.Contex
 
 			child, exists := s.children[spec.Name]
 			if !exists {
+				if spec.Enabled && s.childHeldBackByConfigError(spec.Name) {
+					// The child's latest create attempt failed with a config
+					// error: the user's config holds it back, and that failure
+					// already warned as config_error. Missing here is the
+					// expected consequence, so it stays out of Sentry.
+					s.logger.Debug("reducer_child_not_found_config_error",
+						deps.String("child_name", spec.Name))
+
+					return
+				}
+
 				if spec.Enabled {
 					// Enabled=true + not found = unexpected (WARN).
 					s.handleDisableMappingError(spec, persistence.ErrNotFound)
@@ -1872,4 +1981,79 @@ func (s *Supervisor[TObserved, TDesired]) classifyDisableMappingError(err error)
 	}
 
 	return "other"
+}
+
+// warnConfigErrorOnce warns "config_error" when the message differs from the
+// last one warned for this supervisor's own worker, and remembers it. A
+// successful derive clears the memory, so a message that returns after a
+// recovery warns again. A config error is a user mistake, not a system fault,
+// so this is a warning, never Sentry.
+func (s *Supervisor[TObserved, TDesired]) warnConfigErrorOnce(cfgErr *config.ConfigError) {
+	message := cfgErr.Error()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.lastConfigErrorWarned == message {
+		return
+	}
+
+	s.lastConfigErrorWarned = message
+	s.logger.Warn("config_error",
+		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
+		deps.String("field", cfgErr.Field),
+		deps.Err(cfgErr.Err),
+		deps.String("message", message))
+}
+
+// warnChildConfigErrorOnce warns "config_error" for a child the parent could
+// not create, once per child name and message. A child whose create keeps
+// failing gets a new child supervisor on every tick, so the memory lives on
+// the parent; creating the child clears its entry, so a child that fails
+// again warns again. The caller must hold s.mu, as reconcileChildren does.
+func (s *Supervisor[TObserved, TDesired]) warnChildConfigErrorOnce(childName string, cfgErr *config.ConfigError) {
+	message := cfgErr.Error()
+
+	if s.childConfigErrorWarned == nil {
+		s.childConfigErrorWarned = make(map[string]string)
+	}
+
+	if last, warned := s.childConfigErrorWarned[childName]; warned && last == message {
+		return
+	}
+
+	s.childConfigErrorWarned[childName] = message
+	s.logger.Warn("config_error",
+		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
+		deps.String("child_name", childName),
+		deps.String("field", cfgErr.Field),
+		deps.Err(cfgErr.Err),
+		deps.String("message", message))
+}
+
+// markChildCreateConfigError records that the child's latest create attempt
+// failed with a config error, which holds the child back. The caller must
+// hold s.mu, as reconcileChildren does.
+func (s *Supervisor[TObserved, TDesired]) markChildCreateConfigError(childName string) {
+	if s.childCreateConfigError == nil {
+		s.childCreateConfigError = make(map[string]struct{})
+	}
+
+	s.childCreateConfigError[childName] = struct{}{}
+}
+
+// clearChildCreateConfigError ends the config-error hold on the child, so a
+// later absence warns again. The caller must hold s.mu, as reconcileChildren
+// does.
+func (s *Supervisor[TObserved, TDesired]) clearChildCreateConfigError(childName string) {
+	delete(s.childCreateConfigError, childName)
+}
+
+// childHeldBackByConfigError reports whether the child's latest create
+// attempt failed with a config error. The caller must hold s.mu, as
+// reconcileChildren does.
+func (s *Supervisor[TObserved, TDesired]) childHeldBackByConfigError(childName string) bool {
+	_, held := s.childCreateConfigError[childName]
+
+	return held
 }

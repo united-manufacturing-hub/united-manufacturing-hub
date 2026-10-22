@@ -60,27 +60,13 @@
 //
 // See infrastructure_health.go for implementation details.
 //
-// ## Phase 0.5: Variable injection
+// ## Phase 0.5: User spec fetch
 //
-// Injects variables into UserSpec before template expansion:
-//
-// Global variables:
-//   - Taken from the supervisor's spec as they are
-//   - Available as {{ .global.key }} in templates
-//
-// Internal variables:
-//   - supervisorID: Supervisor's worker ID
-//   - createdAt: Worker creation timestamp
-//   - bridgedBy: Parent worker ID (if applicable)
-//   - Available as {{ .internal.key }} in templates
-//
-// User variables:
-//   - From UserSpec.Variables.User (preserved, not overwritten)
-//   - Available as {{ .key }} in templates (flattened namespace)
-//
-// Variables are available for template expansion in DeriveDesiredState().
-//
-// See config/variables.go for the VariableBundle struct definition.
+// Fetches this tick's UserSpec with getUserSpec (avoiding a race with a
+// parent calling updateUserSpec) and hands it to DeriveDesiredState
+// unchanged. A child derives from exactly the UserSpec its parent's
+// ChildSpec set; templates read its `variables:` section as
+// {{ .variables.<key> }}.
 //
 // ## Phase 0: Hierarchical composition
 //
@@ -88,9 +74,23 @@
 //
 // DeriveDesiredState:
 //   - Worker implementation returns DesiredState with ChildrenSpecs
-//   - Template expansion using injected variables
+//   - Template expansion using the spec's own variables
 //   - Result cached based on UserSpec hash
 //   - Cache invalidated when UserSpec changes
+//
+// When the derive fails with a config error and a cached desired state from
+// an earlier good config exists, the supervisor keeps ticking the worker,
+// because the worker must still read a shutdown request and be removable,
+// and its children must keep being reconciled and ticked. The worker runs
+// on the desired state stored from that good config. When the state machine
+// renders no children, the cached state supplies the children specs. The stored state carries the lifecycle
+// flags (ShutdownRequested, Disabled), so a shutdown or disable requested
+// during the broken window still takes effect. The spec-hash cache is not
+// updated on the error, so every tick retries the derive and the new config
+// reaches the worker on the first derive that succeeds. A worker whose
+// first derive fails has no cached state and is not ticked. When a
+// supervisor shuts down during a config error, its children are dropped,
+// not recreated from the cached children specs.
 //
 // Reconcile children:
 //   - Creates child supervisors for new ChildrenSpecs
@@ -451,7 +451,7 @@
 //   - Check ShouldStop() as first condition in state.Next()
 //   - Make all actions idempotent (check if work already done)
 //   - Use ChildSpec.Enabled to coordinate child lifecycle (not data passing)
-//   - Pass data to children via VariableBundle, not direct method calls
+//   - Pass data to children via their ChildSpec's UserSpec, not direct method calls
 //   - Release locks before calling child methods (prevent deadlock)
 //   - Handle context cancellation in all async operations
 //   - Log state transitions at INFO level

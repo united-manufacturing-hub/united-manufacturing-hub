@@ -16,18 +16,29 @@ package deps
 
 import "time"
 
+// NoSentryKey is the log field that marks an entry as logs-only. The Sentry
+// hook reads it and skips capture; see FSMLogger.Warn for when to use it.
+const NoSentryKey = "sentry_skip"
+
 // FSMLogger provides structured logging with compile-time enforcement of Sentry fields.
 //
-// Debug and Info are general-purpose. All warn/error level logs require Feature
-// and hierarchyPath parameters for Sentry routing  -  the compiler rejects any call
-// missing these. This ensures every warning and error reaches Sentry with proper
-// feature and hierarchy context.
+// Debug and Info are general-purpose. SentryWarn and SentryError route to
+// Sentry and require Feature and hierarchyPath parameters for that routing;
+// the compiler rejects any call missing these. Repeats of the same
+// SentryWarn/SentryError with one fingerprint are dropped inside the hook's
+// debounce window (5 minutes in production); see sentry.FingerprintDebouncer.
 type FSMLogger interface {
 	// Debug logs at DEBUG level with structured fields.
 	Debug(msg string, fields ...Field)
 
 	// Info logs at INFO level with structured fields.
 	Info(msg string, fields ...Field)
+
+	// Warn logs at WARN level without Sentry routing. The entry carries a
+	// NoSentryKey marker so the Sentry hook never captures it. Use this for
+	// warnings a Sentry issue cannot help with, such as a user's config
+	// error.
+	Warn(msg string, fields ...Field)
 
 	// SentryWarn logs at WARN level with required Feature and hierarchyPath for Sentry routing.
 	// Pass empty string for hierarchyPath when no worker hierarchy exists (e.g., runner-level code).

@@ -158,14 +158,12 @@
 //
 // See factory/README.md for worker type derivation and registration patterns.
 //
-// ## Variable namespaces
+// ## Variables
 //
-// VariableBundle provides three namespaces:
-//   - User: Top-level template access (flattened, e.g., {{ .IP }})
-//   - Global: Fleet-wide settings (nested, e.g., {{ .global.cluster_id }})
-//   - Internal: Runtime metadata (nested), not serialized
-//
-// See config/variables.go for the VariableBundle struct definition.
+// A template reads a worker entry's own `variables:` section as
+// {{ .variables.<key> }}. The section arrives in UserSpec.Variables or as a
+// top-level `variables:` mapping in UserSpec.Config; WorkerBase rejects an
+// entry that sets both. See config/childspec.go for the UserSpec definition.
 //
 // ## Parent-child workers
 //
@@ -184,9 +182,9 @@
 //     Stopped state without resuming, preserving dependency state (e.g.,
 //     the transport push worker's buffer).
 //
-// Per-child variables (e.g., DEVICE_ID, INDEX) are passed via UserSpec.Variables;
-// see VariableBundle. See config/childspec.go for the field-level definitions
-// of ChildSpec, Enabled, IsShutdownRequested, and IsDisabled.
+// Per-child values (e.g., DEVICE_ID, INDEX) are passed via UserSpec.Variables
+// on the child's ChildSpec. See config/childspec.go for the field-level
+// definitions of ChildSpec, Enabled, IsShutdownRequested, and IsDisabled.
 //
 // See workers/example/exampleparent/children.go for the despawn variant
 // (children are stateless, so the empty slice is correct in stop states).
@@ -198,11 +196,11 @@
 //
 // The config package provides helpers to reduce boilerplate in DeriveDesiredState():
 //
-//	// ParseUserSpec[T] - type-safe parsing of UserSpec.Config
-//	parsed, err := config.ParseUserSpec[MyConfig](spec)
+//	// LoadUserSpec[T] - loads UserSpec.Config into T, without rendering it
+//	parsed, err := config.LoadUserSpec[MyConfig](spec)
 //	if err != nil { return config.DesiredState{}, err }
 //
-// See config/helpers.go for documentation.
+// See config/load.go for documentation.
 //
 // ## Factory registration
 //
@@ -275,7 +273,6 @@
 //   - internal/helpers/ - Convenience helpers (base state types: RunningHealthyBase, DegradedBase, etc.)
 //   - supervisor/supervisor.go - Orchestration and lifecycle management
 //   - config/childspec.go - Hierarchical composition
-//   - config/variables.go - Variable namespaces
 //
 // # Architecture validation
 //

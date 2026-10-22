@@ -18,9 +18,9 @@ import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pk
 
 // ExamplepanicConfig is the typed configuration for the panic worker.
 type ExamplepanicConfig struct {
-	config.BaseUserSpec
-	ShouldRun   bool `json:"should_run"   yaml:"should_run"`
-	ShouldPanic bool `json:"should_panic" yaml:"should_panic"`
+	config.BaseUserSpec `yaml:",inline"`
+	ShouldRun           bool `json:"should_run"   yaml:"should_run"`
+	ShouldPanic         bool `json:"should_panic" yaml:"should_panic"`
 }
 
 // ExamplepanicStatus is the observed status for the panic worker.

@@ -49,8 +49,6 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -141,19 +139,9 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		}, nil
 	}
 
-	userSpec, ok := spec.(fsmv2types.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	renderedConfig, err := fsmv2types.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	commSpec, err := fsmv2types.LoadUserSpec[CommunicatorConfig](spec)
 	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	var commSpec CommunicatorConfig
-	if err := yaml.Unmarshal([]byte(renderedConfig), &commSpec); err != nil {
-		return nil, fmt.Errorf("config parse failed: %w", err)
+		return nil, err
 	}
 
 	if commSpec.Timeout == 0 {

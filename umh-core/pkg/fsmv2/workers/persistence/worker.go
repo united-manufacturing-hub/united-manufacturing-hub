@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -181,21 +179,9 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		}, nil
 	}
 
-	userSpec, ok := spec.(fsmv2config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	renderedConfig, err := fsmv2config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	cfg, err := fsmv2config.LoadUserSpec[snapshot.PersistenceConfig](spec)
 	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	var cfg snapshot.PersistenceConfig
-	if renderedConfig != "" {
-		if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
-			return nil, fmt.Errorf("failed to parse persistence config: %w", err)
-		}
+		return nil, err
 	}
 
 	if cfg.CompactionInterval == 0 {

@@ -16,6 +16,7 @@ package exampleparent_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -68,7 +69,7 @@ var _ = Describe("ParentWorker", func() {
 		It("should return running state with empty config", func() {
 			spec := fsmv2types.UserSpec{
 				Config:    "children_count: 0",
-				Variables: fsmv2types.VariableBundle{},
+				Variables: nil,
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)
@@ -81,7 +82,7 @@ var _ = Describe("ParentWorker", func() {
 		It("should not populate ChildrenSpecs — children are declared in RenderChildren", func() {
 			spec := fsmv2types.UserSpec{
 				Config:    "children_count: 3",
-				Variables: fsmv2types.VariableBundle{},
+				Variables: nil,
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)
@@ -93,6 +94,19 @@ var _ = Describe("ParentWorker", func() {
 			Expect(desired.ChildrenSpecs).To(BeNil())
 			// Config carries the count so states can pass it to RenderChildren.
 			Expect(desired.Config.ChildrenCount).To(Equal(3))
+		})
+
+		It("rejects a placeholder in a plain field", func() {
+			spec := fsmv2types.UserSpec{
+				Config:    "child_config: \"{{ .x }}\"",
+				Variables: nil,
+			}
+
+			_, err := worker.DeriveDesiredState(spec)
+
+			var cfgErr *fsmv2types.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue())
+			Expect(cfgErr.Field).To(Equal("child_config"))
 		})
 	})
 

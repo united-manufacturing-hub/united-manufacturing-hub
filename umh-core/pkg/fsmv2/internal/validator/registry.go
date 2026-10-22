@@ -578,8 +578,7 @@ userSpec, ok := spec.(config.UserSpec)
 if !ok {
     return nil, fmt.Errorf("invalid spec type: %T", spec)
 }
-var mySpec MyUserSpec
-yaml.Unmarshal([]byte(userSpec.Config), &mySpec)
+mySpec, err := config.LoadUserSpec[MyUserSpec](userSpec)
 
 // WRONG: discard with blank identifier
 _, ok := spec.(config.UserSpec)  // spec is validated but never used!`,

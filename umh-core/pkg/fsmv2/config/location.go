@@ -24,7 +24,8 @@
 //
 //	ACME.Factory-1.Line-A.Cell-5
 //
-// Empty levels are filled but skipped in the path computation to avoid double dots.
+// ComputeLocationPath (named ISA-95 tiers) and MergeAgentLocation (numeric
+// level indexes) follow different empty-level rules; see MergeAgentLocation.
 package config
 
 import (

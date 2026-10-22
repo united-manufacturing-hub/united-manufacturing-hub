@@ -16,6 +16,7 @@ package config_test
 
 import (
 	"encoding/json"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -104,10 +105,8 @@ var _ = Describe("ChildSpec Clone", func() {
 				WorkerType: "mqtt_connection",
 				UserSpec: config.UserSpec{
 					Config: "original-config",
-					Variables: config.VariableBundle{
-						User: map[string]interface{}{
-							"key1": "value1",
-						},
+					Variables: map[string]any{
+						"key1": "value1",
 					},
 				},
 				Enabled: true,
@@ -123,10 +122,10 @@ var _ = Describe("ChildSpec Clone", func() {
 			Expect(cloned.Enabled).To(Equal(original.Enabled))
 
 			// Modify the clone's deep-copied UserSpec variables
-			cloned.UserSpec.Variables.User["key1"] = "modified"
+			cloned.UserSpec.Variables["key1"] = "modified"
 
 			// Verify the original is NOT affected
-			Expect(original.UserSpec.Variables.User["key1"]).To(Equal("value1"))
+			Expect(original.UserSpec.Variables["key1"]).To(Equal("value1"))
 		})
 	})
 })
@@ -139,10 +138,8 @@ var _ = Describe("ChildSpec Hash", func() {
 				WorkerType: "mqtt_connection",
 				UserSpec: config.UserSpec{
 					Config: "test-config",
-					Variables: config.VariableBundle{
-						User: map[string]interface{}{
-							"key": "value",
-						},
+					Variables: map[string]interface{}{
+						"key": "value",
 					},
 				},
 				Enabled: true,
@@ -153,10 +150,8 @@ var _ = Describe("ChildSpec Hash", func() {
 				WorkerType: "mqtt_connection",
 				UserSpec: config.UserSpec{
 					Config: "test-config",
-					Variables: config.VariableBundle{
-						User: map[string]interface{}{
-							"key": "value",
-						},
+					Variables: map[string]interface{}{
+						"key": "value",
 					},
 				},
 				Enabled: true,
@@ -184,6 +179,88 @@ var _ = Describe("ChildSpec Hash", func() {
 
 			hash1, err1 := spec1.Hash()
 			Expect(err1).NotTo(HaveOccurred())
+
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
+		})
+
+		It("should produce different hashes when only UserSpec.Variables changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config:    "config",
+					Variables: map[string]any{"X": "a"},
+				},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config:    "config",
+					Variables: map[string]any{"X": "b"},
+				},
+			}
+
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
+		})
+
+		It("should produce different hashes when only UserSpec.Names changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config: "config",
+					Names:  map[string]any{"from": "parent-one"},
+				},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config: "config",
+					Names:  map[string]any{"from": "parent-two"},
+				},
+			}
+
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+
+			hash2, err2 := spec2.Hash()
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(hash1).NotTo(Equal(hash2))
+		})
+
+		It("should produce different hashes when only UserSpec.ConfigValues changes", func() {
+			spec1 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config:       "config",
+					ConfigValues: map[string]any{"historian": "timescale"},
+				},
+			}
+
+			spec2 := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec: config.UserSpec{
+					Config:       "config",
+					ConfigValues: map[string]any{"historian": "kafka"},
+				},
+			}
+
+			hash1, err1 := spec1.Hash()
+			Expect(err1).NotTo(HaveOccurred())
+
 			hash2, err2 := spec2.Hash()
 			Expect(err2).NotTo(HaveOccurred())
 			Expect(hash1).NotTo(Equal(hash2))
@@ -204,6 +281,7 @@ var _ = Describe("ChildSpec Hash", func() {
 
 			hash1, err1 := spec1.Hash()
 			Expect(err1).NotTo(HaveOccurred())
+
 			hash2, err2 := spec2.Hash()
 			Expect(err2).NotTo(HaveOccurred())
 			Expect(hash1).NotTo(Equal(hash2))
@@ -224,6 +302,7 @@ var _ = Describe("ChildSpec Hash", func() {
 
 			hash1, err1 := spec1.Hash()
 			Expect(err1).NotTo(HaveOccurred())
+
 			hash2, err2 := spec2.Hash()
 			Expect(err2).NotTo(HaveOccurred())
 			Expect(hash1).NotTo(Equal(hash2))
@@ -246,6 +325,7 @@ var _ = Describe("ChildSpec Hash", func() {
 
 			hash1, err1 := spec1.Hash()
 			Expect(err1).NotTo(HaveOccurred())
+
 			hash2, err2 := spec2.Hash()
 			Expect(err2).NotTo(HaveOccurred())
 			Expect(hash1).NotTo(Equal(hash2))
@@ -266,6 +346,87 @@ var _ = Describe("ChildSpec Hash", func() {
 				Expect(string(c)).To(MatchRegexp("[0-9a-f]"))
 			}
 		})
+	})
+})
+
+var _ = Describe("UserSpec Clone", func() {
+	It("should copy every field deeply, and keep the original when the clone changes", func() {
+		spec := config.UserSpec{
+			Variables:    map[string]any{"vars": map[string]any{"nested": "original"}},
+			Config:       "config: {{ .x }}",
+			ConfigValues: map[string]any{"historian": map[string]any{"host": "original"}},
+			Names:        map[string]any{"x": map[string]any{"nested": "original"}},
+		}
+
+		// Every field of the spec must be non-zero, so a field added to
+		// UserSpec later fails this test until the test sets it.
+		rv := reflect.ValueOf(spec)
+		for i := range rv.NumField() {
+			field := rv.Type().Field(i)
+			Expect(rv.Field(i).IsZero()).To(BeFalse(),
+				"UserSpec field %s must be non-zero so the test keeps covering it", field.Name)
+		}
+
+		clone := spec.Clone()
+
+		clone.Variables["vars"].(map[string]any)["nested"] = "changed"
+		clone.ConfigValues["historian"].(map[string]any)["host"] = "changed"
+		clone.Names["x"].(map[string]any)["nested"] = "changed"
+
+		Expect(spec.Variables["vars"].(map[string]any)["nested"]).To(Equal("original"))
+		Expect(spec.ConfigValues["historian"].(map[string]any)["host"]).To(Equal("original"))
+		Expect(spec.Names["x"].(map[string]any)["nested"]).To(Equal("original"))
+	})
+})
+
+var _ = Describe("UserSpec serialization", func() {
+	It("should keep the handed-down maps through a JSON round trip", func() {
+		spec := config.UserSpec{
+			Variables:    map[string]any{"a": "b"},
+			Config:       "config",
+			ConfigValues: map[string]any{"historian": map[string]any{"host": "db"}},
+			Names:        map[string]any{"x": "from-parent"},
+		}
+
+		data, err := json.Marshal(spec)
+		Expect(err).ToNot(HaveOccurred())
+
+		var back config.UserSpec
+		err = json.Unmarshal(data, &back)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(back.ConfigValues).To(Equal(map[string]any{"historian": map[string]any{"host": "db"}}))
+		Expect(back.Names).To(Equal(map[string]any{"x": "from-parent"}))
+	})
+
+	It("should leave the handed-down maps nil when a user sets their keys in YAML", func() {
+		yamlData := `
+config: "user config"
+config_values:
+  a: 1
+names:
+  a: 1
+`
+
+		var spec config.UserSpec
+		err := yaml.Unmarshal([]byte(yamlData), &spec)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(spec.Config).To(Equal("user config"))
+		Expect(spec.ConfigValues).To(BeNil())
+		Expect(spec.Names).To(BeNil())
+	})
+
+	It("should decode a user's variables section straight into Variables", func() {
+		yamlData := `
+variables:
+  IP: 10.0.0.1
+`
+
+		var spec config.UserSpec
+		err := yaml.Unmarshal([]byte(yamlData), &spec)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(spec.Variables).To(Equal(map[string]any{"IP": "10.0.0.1"}))
 	})
 })
 
@@ -305,6 +466,7 @@ childrenSpecs:
     userSpec:
       config: "processor config"
 `
+
 			var desired config.DesiredState
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
 

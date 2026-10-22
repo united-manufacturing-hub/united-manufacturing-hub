@@ -14,9 +14,8 @@
 
 package connection
 
-// RED-phase (TDD) specs for the NMAP_BACKEND=fsmv2 wiring inside the
-// connection service. These describe NOT-YET-BUILT behavior and MUST fail to
-// compile/run until GREEN implements the assumed production symbols:
+// Specs for the NMAP_BACKEND=fsmv2 wiring inside the
+// connection service. They rely on these production symbols:
 //
 //   - constants.NmapBackendFSMv2          == "fsmv2"
 //   - (*ConnectionService).UsesFsmv2Backend() bool
@@ -49,6 +48,7 @@ import (
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -223,4 +223,9 @@ func (s *stubStateReader) LoadObservedTyped(_ context.Context, _, _ string, resu
 	*out = *s.obs
 
 	return nil
+}
+
+// LoadDesiredTyped reports that no desired state is saved.
+func (*stubStateReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
 }
