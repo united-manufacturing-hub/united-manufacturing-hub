@@ -159,11 +159,10 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	pendingRestart     map[string]bool
 	restartRequestedAt map[string]time.Time
 	globalVars         map[string]any
-	pendingReadds      map[string]deps.Identity
-	// pendingReaddSentrySent remembers which pending re-adds already sent
-	// their one Sentry error, so later retries of the same entry log at
-	// Debug instead of spamming Sentry every tick.
-	pendingReaddSentrySent map[string]bool
+	pendingReAdds      map[string]deps.Identity
+	// pendingReAddSentrySent holds the worker IDs whose pending re-add has
+	// already sent its one Sentry error. Later retries log at Debug.
+	pendingReAddSentrySent map[string]bool
 	healthChecker          *InfrastructureHealthChecker
 	panicTracker           *panicRecovery
 	actionExecutor         *execution.ActionExecutor
@@ -190,22 +189,17 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// Config so all supervisors observe the same close. See types.go Config.ForceExit.
 	forceExit                <-chan struct{}
 	noStateMachineLoggedOnce sync.Map
-	// lastConfigErrorLogged suppresses repeat "config_error" logs for this
-	// supervisor's own worker. It holds the last message logged and is
-	// cleared when a derive succeeds, so a message that comes back is logged
-	// again.
+	// lastConfigErrorLogged is the last "config_error" message logged for
+	// this supervisor's own worker (see config_error.go). A successful derive
+	// clears it.
 	lastConfigErrorLogged string
-	// childConfigErrorLogged suppresses repeat "config_error" logs per child
-	// name (child name → last message logged). The entry is cleared when the
-	// child is created, so a child that fails again is logged again.
+	// childConfigErrorLogged maps a child name to the last "config_error"
+	// message logged for it. Creating the child clears its entry.
 	childConfigErrorLogged map[string]string
 	// childCreateConfigError holds the name of every child whose latest
-	// create attempt failed with a *config.ConfigError. The entry is written
-	// on that failure and cleared both when the child is later created and
-	// when a later create attempt fails for another reason, so it always
-	// means "the latest attempt failed with a config error" and never hides a
-	// child that goes missing for a real reason. The caller must hold s.mu,
-	// as reconcileChildren does.
+	// create attempt failed with a *config.ConfigError. A later successful
+	// create, or a later failure for another reason, removes the name.
+	// Guarded by s.mu.
 	childCreateConfigError  map[string]struct{}
 	userSpec                config.UserSpec
 	workerType              string
@@ -322,8 +316,8 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		pendingRemoval:         make(map[string]bool),
 		pendingRestart:         make(map[string]bool),
 		restartRequestedAt:     make(map[string]time.Time),
-		pendingReadds:          make(map[string]deps.Identity),
-		pendingReaddSentrySent: make(map[string]bool),
+		pendingReAdds:          make(map[string]deps.Identity),
+		pendingReAddSentrySent: make(map[string]bool),
 		createdAt:              time.Now(),
 		parentID:               "",
 		healthChecker:          NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),

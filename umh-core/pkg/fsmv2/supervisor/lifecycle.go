@@ -193,11 +193,9 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 						deps.HierarchyPath(s.GetHierarchyPath()),
 						deps.Err(err))
 				case errors.As(err, &cfgErr):
-					// logConfigErrorOnce (own-worker derive and worker restart)
-					// and logChildConfigErrorOnce (child creation) already
-					// logged this config mistake once; a per-tick Sentry error
-					// would duplicate it. The debug line keeps the mistake
-					// visible per tick, the way the circuit-open branch does.
+					// The config error was already logged once at Info and
+					// stays out of Sentry. The debug line shows it on every
+					// tick. See config_error.go.
 					s.logger.Debug("tick_suppressed_config_error",
 						deps.HierarchyPath(s.GetHierarchyPath()),
 						deps.Err(err))
@@ -728,15 +726,15 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 	return nil
 }
 
-// reportPendingReaddFailure sends a pending re-add's failure to Sentry once
-// per pending entry; later retries of the same entry log at Debug, because
-// every tick retries a still-failing entry and one Sentry event is enough.
-func (s *Supervisor[TObserved, TDesired]) reportPendingReaddFailure(workerID, event string, err error) {
+// reportPendingReAddFailure sends a pending re-add's failure to Sentry the
+// first time and logs it at Debug on every later retry of the same entry.
+// Every tick retries a failing entry, and one Sentry event per entry is enough.
+func (s *Supervisor[TObserved, TDesired]) reportPendingReAddFailure(workerID, event string, err error) {
 	s.mu.Lock()
 
-	_, sent := s.pendingReaddSentrySent[workerID]
+	_, sent := s.pendingReAddSentrySent[workerID]
 	if !sent {
-		s.pendingReaddSentrySent[workerID] = true
+		s.pendingReAddSentrySent[workerID] = true
 	}
 
 	s.mu.Unlock()
@@ -791,56 +789,54 @@ func (s *Supervisor[TObserved, TDesired]) startWorkerProcesses(workerID string, 
 	}
 }
 
-// retryPendingReadds retries the re-adds a restart left pending on a failed
-// add, once per tick. It creates a fresh worker through the factory and adds
-// it; while the add keeps failing, the entry stays pending and every tick
-// retries it. On the first successful add the worker is back and the pending
-// entry is dropped. The caller must have observed zero workers first: a
-// retry while a worker exists would race the tick loop's own work. Returns
-// true when it re-added a worker.
-func (s *Supervisor[TObserved, TDesired]) retryPendingReadds(ctx context.Context) bool {
+// nextPendingReAdd returns one re-add that a restart left pending, and false
+// when none is pending. It takes s.mu itself.
+func (s *Supervisor[TObserved, TDesired]) nextPendingReAdd() (string, deps.Identity, bool) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if len(s.pendingReadds) == 0 {
-		s.mu.Unlock()
+	for workerID, identity := range s.pendingReAdds {
+		return workerID, identity, true
+	}
 
+	return "", deps.Identity{}, false
+}
+
+// retryPendingReAdds creates a fresh worker for one pending re-add and adds
+// it, and returns true when the worker is back. The caller must have seen
+// zero workers: a retry while a worker exists would race the tick loop's own
+// work.
+func (s *Supervisor[TObserved, TDesired]) retryPendingReAdds(ctx context.Context) bool {
+	workerID, identity, pending := s.nextPendingReAdd()
+	if !pending {
 		return false
 	}
 
-	var workerID string
-
-	var identity deps.Identity
-
-	for id, idty := range s.pendingReadds {
-		workerID, identity = id, idty
-
-		break
-	}
-
-	s.mu.Unlock()
-
 	newWorker, err := factory.NewWorkerByType(s.workerType, identity, s.baseLogger, s.store, s.deps)
 	if err != nil {
-		s.reportPendingReaddFailure(workerID, "worker_restart_retry_create_failed", err)
+		s.reportPendingReAddFailure(workerID, "worker_restart_retry_create_failed", err)
 
 		return false
 	}
 
 	if err := s.AddWorker(identity, newWorker); err != nil {
+		// A config error is logged once at Info, outside Sentry. See
+		// config_error.go.
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
 			s.logConfigErrorOnce(cfgErr)
 		} else {
-			s.reportPendingReaddFailure(workerID, "worker_restart_retry_add_failed", err)
+			s.reportPendingReAddFailure(workerID, "worker_restart_retry_add_failed", err)
 		}
 
-		// The entry stays, so the next tick retries the re-add.
+		// The entry stays pending, so the next tick retries the re-add.
 		return false
 	}
 
+	// The worker is back: drop the pending entry and its Sentry memory.
 	s.mu.Lock()
-	delete(s.pendingReadds, workerID)
-	delete(s.pendingReaddSentrySent, workerID)
+	delete(s.pendingReAdds, workerID)
+	delete(s.pendingReAddSentrySent, workerID)
 	s.mu.Unlock()
 
 	s.startWorkerProcesses(workerID, identity)
@@ -936,17 +932,16 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	// 4. Add new worker to supervisor (registers worker in the workers map)
 	if err := s.AddWorker(identity, newWorker); err != nil {
-		// The old worker is gone and the re-add failed, so the worker would
-		// be lost. Remember the re-add and retry it on every tick until it
-		// succeeds.
+		// The old worker is gone and the re-add failed. Remember the re-add,
+		// so the tick retries it until it succeeds (retryPendingReAdds).
 		s.mu.Lock()
-		s.pendingReadds[workerID] = identity
+		s.pendingReAdds[workerID] = identity
 		s.mu.Unlock()
 
 		var cfgErr *config.ConfigError
 		if errors.As(err, &cfgErr) {
-			// A config error was already logged once; failing the restart
-			// again would only duplicate that log line.
+			// A config error is the user's mistake: log it once at Info and
+			// keep it out of Sentry. See config_error.go.
 			s.logConfigErrorOnce(cfgErr)
 
 			return nil
