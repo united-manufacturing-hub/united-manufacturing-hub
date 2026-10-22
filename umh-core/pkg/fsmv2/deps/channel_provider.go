@@ -14,13 +14,13 @@
 
 package deps
 
-// ChannelProvider gives a worker, by worker ID, the channel it sends
-// received messages into (inbound) and the channel it reads messages to
-// send from (outbound).
+// ChannelProvider gives a worker the channel it sends received messages into
+// (inbound) and the channel it reads messages to send from (outbound). Today's
+// implementations return one shared pair and ignore the worker ID.
 type ChannelProvider[T any] interface {
 	GetChannels(workerID string) (inbound chan<- T, outbound <-chan T)
 	// GetInboundStats returns the capacity and current length of the inbound
-	// channel. A worker sending into the inbound channel checks this first,
-	// so it can stop pulling while the channel is nearly full.
+	// channel. A worker reads it before it pulls more messages, and stops pulling
+	// while the channel has too little free space.
 	GetInboundStats(workerID string) (capacity int, length int)
 }
