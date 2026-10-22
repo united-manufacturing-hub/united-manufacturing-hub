@@ -849,9 +849,17 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		} else if provider, ok := desired.(config.ChildSpecProvider); ok {
 			childrenSpecs = provider.GetChildrenSpecs()
 		}
-	} else if provider, ok := desired.(config.ChildSpecProvider); ok {
-		childrenSpecs = provider.GetChildrenSpecs()
+	} else if s.reAddPending(firstWorkerID) {
+		// A restart removed the worker and its re-add failed. The children
+		// keep running on the cached specs until the re-add succeeds.
+		if provider, ok := desired.(config.ChildSpecProvider); ok {
+			childrenSpecs = provider.GetChildrenSpecs()
+		}
 	}
+	// Otherwise this tick removed the worker for good, and the removal shut
+	// its children down. childrenSpecs stays nil, so they are not created
+	// again. The shutdown check below cannot catch this case: desiredDoc was
+	// read before the tick, and RequestShutdown can land in between.
 
 	// Validate only changed/new ChildrenSpecs before reconciliation (incremental validation)
 	if len(childrenSpecs) > 0 {

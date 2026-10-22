@@ -802,6 +802,17 @@ func (s *Supervisor[TObserved, TDesired]) nextPendingReAdd() (string, deps.Ident
 	return "", deps.Identity{}, false
 }
 
+// reAddPending reports whether a restart left the re-add of workerID
+// pending. It takes s.mu itself.
+func (s *Supervisor[TObserved, TDesired]) reAddPending(workerID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, pending := s.pendingReAdds[workerID]
+
+	return pending
+}
+
 // retryPendingReAdds creates a fresh worker for one pending re-add and adds
 // it, and returns true when the worker is back. The caller must have seen
 // zero workers: a retry while a worker exists would race the tick loop's own
