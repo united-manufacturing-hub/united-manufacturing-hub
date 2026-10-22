@@ -14,10 +14,10 @@
 
 package handoff
 
-// Message carries a received message for the router in pkg/communicator/router
+// Message is a received message for the router in pkg/communicator/router
 // to consume.
 type Message struct {
-	// Content holds the message bytes as received. The caller must not modify
+	// Content is the message bytes as received. The caller must not modify
 	// Content after handing the Message over.
 	Content []byte
 	// SenderEmail is the sender the message names. SenderEmail is not proof
