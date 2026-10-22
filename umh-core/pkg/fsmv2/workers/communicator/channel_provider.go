@@ -20,9 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-// ChannelProvider supplies inbound/outbound channels for communicator
-// workers. It is the shared provider declared in the deps package,
-// deps.ChannelProvider, instantiated for this worker's message type.
+// ChannelProvider supplies inbound/outbound channels for communicator workers.
 type ChannelProvider = deps.ChannelProvider[*types.UMHMessage]
 
 // ChannelProviderKey names the ChannelProvider a CommunicatorWorker acquires its

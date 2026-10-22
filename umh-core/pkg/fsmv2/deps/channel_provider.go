@@ -15,8 +15,8 @@
 package deps
 
 // ChannelProvider gives a worker the channel it sends received messages into
-// (inbound) and the channel it reads messages to send from (outbound). Today's
-// implementations return one shared pair and ignore the worker ID.
+// (inbound) and the channel it reads messages to send from (outbound). The
+// implementations in umh-core return one shared pair and ignore the worker ID.
 type ChannelProvider[T any] interface {
 	GetChannels(workerID string) (inbound chan<- T, outbound <-chan T)
 	// GetInboundStats returns the capacity and current length of the inbound

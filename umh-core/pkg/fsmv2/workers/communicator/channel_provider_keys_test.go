@@ -24,8 +24,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-// dualChannelProvider implements the two channel provider interfaces, which
-// today are declared separately by the transport and communicator workers.
+// dualChannelProvider is a minimal channel provider. Both workers'
+// ChannelProvider types are deps.ChannelProvider[*types.UMHMessage], so it can
+// be stored under either worker's key.
 type dualChannelProvider struct{}
 
 func (p *dualChannelProvider) GetChannels(_ string) (inbound chan<- *types.UMHMessage, outbound <-chan *types.UMHMessage) {
