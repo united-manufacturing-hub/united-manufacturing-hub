@@ -50,6 +50,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -596,12 +597,6 @@ func buildFSMv2Supervisor(
 		channelAdapter.Start(ctx)
 	}
 
-	// Set the global ChannelProvider singleton BEFORE creating the supervisor.
-	// Phase 1 architecture: singleton is THE ONLY way to provide channels to the communicator.
-	// The factory will panic if this is not set.
-	communicator.SetChannelProvider(channelAdapter)
-	transportWorker.SetChannelProvider(channelAdapter)
-
 	var certHandler *certificatehandler.CertHandler
 
 	// Gatekeeper setup (behind feature flag)
@@ -640,7 +635,7 @@ func buildFSMv2Supervisor(
 	}
 
 	if configData.Agent.UseGatekeeper {
-		register.SetDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
+		register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
 			certfetcher.NewCertHandlerSeedDependencies(communicationState.Gatekeeper.CertificateHandler()))
 	}
 
@@ -669,7 +664,12 @@ func buildFSMv2Supervisor(
 
 	fsmv2Deps := map[string]any{}
 
-	register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
+	// The supervisor merges this map into every child, so each provider reaches
+	// its worker however deep it sits.
+	fsmv2config.SetDependency(fsmv2Deps, communicator.ChannelProviderKey, communicator.ChannelProvider(channelAdapter))
+	fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
+
+	register.SetGlobalDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 
 	// Publish the dynamicchildren registry under the configworker deps key and
 	// the process-scoped fsmv2client before constructing the supervisor, so the
@@ -681,7 +681,7 @@ func buildFSMv2Supervisor(
 	// registry; the cleanup clears both and must run after the supervisor has
 	// stopped (the caller runs cleanup after appSup.Run returns).
 	dynWriter := dynamicchildren.NewWriter()
-	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
+	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
 	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
 
 	// Publish the config manager the config worker polls each tick to reconcile
@@ -691,11 +691,11 @@ func buildFSMv2Supervisor(
 	// error path below alongside the other deps keys.
 	// TODO(ENG-4400): remove this wiring once the config worker reads
 	// config.yaml directly instead of polling the manager.
-	register.SetDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
+	register.SetGlobalDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
 
 	// Published before NewApplicationSupervisor, like the keys above: the
 	// config worker reads this key when it is constructed.
-	register.SetDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
+	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
 
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
@@ -719,9 +719,9 @@ func buildFSMv2Supervisor(
 	})
 	if err != nil {
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
+		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -734,9 +734,9 @@ func buildFSMv2Supervisor(
 		// Clear the client and the configworker deps key after the supervisor
 		// has stopped (the caller runs cleanup after appSup.Run returns).
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
-		register.ClearDeps(configworker.ConfigManagerDepsKey)
-		register.ClearDeps(configworker.CPUEnabledDepsKey)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
+		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
 		fsmv2Hook.Stop()
 	}
 

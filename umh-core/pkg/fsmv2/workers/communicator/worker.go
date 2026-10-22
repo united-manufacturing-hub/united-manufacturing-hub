@@ -21,10 +21,7 @@
 // TransportWorker handles authentication, push, pull, backoff, and transport reset.
 // CommunicatorWorker monitors child health and manages lifecycle transitions.
 //
-// Channel sharing: Both communicator and transport packages use a ChannelProvider
-// singleton to supply inbound and outbound message channels. Call
-// communicator.SetChannelProvider() and transport.SetChannelProvider() before
-// starting the supervisor.
+// Channel sharing: ChannelProviderKey's doc says where the worker finds its ChannelProvider.
 //
 // # FSM v2 Pattern
 //
@@ -70,14 +67,16 @@ type CommunicatorWorker struct {
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
+// The dependency map must hold a ChannelProvider under ChannelProviderKey;
+// otherwise it returns an error naming the key.
 // The supervisor sets HierarchyPath on identity before instantiation; tests inject a
-// transport via transportParam (the factory path passes nil  -  transport is owned by
-// the TransportWorker child, ENG-4264).
+// transport via transportParam.
 func NewCommunicatorWorker(
 	identity depspkg.Identity,
 	transportParam types.Transport,
 	logger depspkg.FSMLogger,
 	stateReader depspkg.StateReader,
+	dependencies map[string]any,
 ) (*CommunicatorWorker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
@@ -87,11 +86,15 @@ func NewCommunicatorWorker(
 		identity.WorkerType = workerTypeName
 	}
 
+	provider, ok := fsmv2types.LookupDependency(dependencies, ChannelProviderKey)
+	if !ok {
+		return nil, fmt.Errorf("communicator: no channel provider under %q in the dependency map", ChannelProviderKey.Name())
+	}
+
 	w := &CommunicatorWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	dependencies := NewCommunicatorDependencies(transportParam, bd)
-	w.BindDeps(dependencies)
+	w.BindDeps(NewCommunicatorDependencies(transportParam, bd, provider))
 
 	return w, nil
 }
@@ -164,9 +167,8 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 
 func init() {
 	register.Worker[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies](workerTypeName,
-		func(id depspkg.Identity, logger depspkg.FSMLogger, sr depspkg.StateReader) (fsmv2.Worker, error) {
-			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
-			// Transport creation and auth are handled by TransportWorker (ENG-4264).
-			return NewCommunicatorWorker(id, nil, logger, sr)
+		func(id depspkg.Identity, logger depspkg.FSMLogger, sr depspkg.StateReader, m map[string]any) (fsmv2.Worker, error) {
+			// transport is nil because the TransportWorker child owns it (ENG-4264).
+			return NewCommunicatorWorker(id, nil, logger, sr, m)
 		})
 }

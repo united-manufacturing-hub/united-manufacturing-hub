@@ -85,12 +85,12 @@ func without(files map[string]string, paths ...string) map[string]string {
 
 var _ = Describe("a CPU file the worker cannot read", func() {
 	poll := func(files map[string]string) (CPUStatus, error) {
-		register.SetDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
-		DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+		register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
+		DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 		id := deps.Identity{ID: "cpu-unreadable", WorkerType: WorkerType}
 
-		return Poll(context.Background(), NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)), CPUConfig{})
+		return Poll(context.Background(), NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id), nil), CPUConfig{})
 	}
 
 	It("reads the fixtures as a container limited to 2 cores and one without a limit on 4 cores", func() {
@@ -107,11 +107,11 @@ var _ = Describe("a CPU file the worker cannot read", func() {
 
 	DescribeTable("returns the same result on four polls in a row",
 		func(files map[string]string, wantErr bool) {
-			register.SetDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
-			DeferCleanup(register.ClearDeps, FilesystemDepsKey)
+			register.SetGlobalDeps[filesystem.Service](FilesystemDepsKey, fileMap{files: files})
+			DeferCleanup(register.ClearGlobalDeps, FilesystemDepsKey)
 
 			id := deps.Identity{ID: "cpu-unreadable-ticks", WorkerType: WorkerType}
-			d := NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id))
+			d := NewDeps(id, deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id), nil)
 
 			for tick := 1; tick <= 4; tick++ {
 				_, err := Poll(context.Background(), d, CPUConfig{})

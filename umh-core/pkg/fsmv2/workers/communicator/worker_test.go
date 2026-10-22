@@ -27,9 +27,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // MockStateReader implements deps.StateReader for testing.
@@ -81,6 +83,7 @@ var _ = Describe("CommunicatorWorker", func() {
 		ctx           context.Context
 		mockTransport *MockTransport
 		logger        depspkg.FSMLogger
+		providerDeps  map[string]any
 	)
 
 	BeforeEach(func() {
@@ -88,7 +91,8 @@ var _ = Describe("CommunicatorWorker", func() {
 		logger = depspkg.NewNopFSMLogger()
 		mockTransport = NewMockTransport()
 
-		communicator.SetChannelProvider(NewMockChannelProvider())
+		providerDeps = map[string]any{}
+		fsmv2types.SetDependency(providerDeps, communicator.ChannelProviderKey, communicator.ChannelProvider(NewMockChannelProvider()))
 
 		var err error
 		worker, err = communicator.NewCommunicatorWorker(
@@ -96,12 +100,9 @@ var _ = Describe("CommunicatorWorker", func() {
 			mockTransport,
 			logger,
 			nil,
+			providerDeps,
 		)
 		Expect(err).ToNot(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		communicator.ClearChannelProvider()
 	})
 
 	Describe("Worker interface implementation", func() {
@@ -279,5 +280,121 @@ state: "running"
 			Expect(communicatorObserved.Status.DegradedEnteredAt).NotTo(BeZero(),
 				"DegradedEnteredAt should be set once errors are recorded")
 		})
+	})
+})
+
+var _ communicator.ChannelProvider = (*recordingChannelProvider)(nil)
+
+type recordingChannelProvider struct {
+	getChannelsIDs     []string
+	getInboundStatsIDs []string
+	inboundCapacity    int
+	inboundLength      int
+	inbound            chan<- *types.UMHMessage
+	outbound           <-chan *types.UMHMessage
+}
+
+func newRecordingChannelProvider(capacity int, length int) *recordingChannelProvider {
+	return &recordingChannelProvider{
+		inboundCapacity: capacity,
+		inboundLength:   length,
+	}
+}
+
+func (p *recordingChannelProvider) GetChannels(workerID string) (
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
+) {
+	p.getChannelsIDs = append(p.getChannelsIDs, workerID)
+	p.inbound = make(chan *types.UMHMessage, 1)
+	p.outbound = make(chan *types.UMHMessage, 1)
+
+	return p.inbound, p.outbound
+}
+
+func (p *recordingChannelProvider) GetInboundStats(workerID string) (capacity int, length int) {
+	p.getInboundStatsIDs = append(p.getInboundStatsIDs, workerID)
+
+	return p.inboundCapacity, p.inboundLength
+}
+
+var _ = Describe("CommunicatorWorker channel provider dependency", func() {
+	It("uses the provider from the dependency map", func() {
+		mapProvider := newRecordingChannelProvider(7, 3)
+
+		dependencyMap := map[string]any{}
+
+		var mapProviderAsProvider communicator.ChannelProvider = mapProvider
+		fsmv2types.SetDependency(dependencyMap, communicator.ChannelProviderKey, mapProviderAsProvider)
+
+		Expect(dependencyMap).To(HaveKey("communicator.channel_provider"),
+			"the wrongly typed map spec below builds its map with this literal key")
+
+		identity := depspkg.Identity{ID: "map-provider-worker", WorkerType: "communicator"}
+		built, err := factory.NewWorkerByType("communicator", identity, depspkg.NewNopFSMLogger(), nil, dependencyMap)
+		Expect(err).NotTo(HaveOccurred())
+
+		commWorker, ok := built.(*communicator.CommunicatorWorker)
+		Expect(ok).To(BeTrue(), "expected *communicator.CommunicatorWorker, got %T", built)
+
+		workerDeps := commWorker.GetDependencies()
+
+		Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(mapProvider.inbound),
+			"GetChannels at construction must wire the worker to the map provider's inbound channel")
+		Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(mapProvider.outbound),
+			"GetChannels at construction must wire the worker to the map provider's outbound channel")
+
+		capacity, length := workerDeps.GetInboundChanStats()
+		Expect(capacity).To(Equal(7))
+		Expect(length).To(Equal(3))
+
+		Expect(mapProvider.getChannelsIDs).To(ContainElement("map-provider-worker"),
+			"GetChannels must run at construction against the map's provider")
+		Expect(mapProvider.getInboundStatsIDs).To(ContainElement("map-provider-worker"),
+			"GetInboundStats must read through the map's provider")
+	})
+
+	It("returns an error naming the key when the dependency map holds no channel provider", func() {
+		identity := depspkg.Identity{ID: "no-provider-worker", WorkerType: "communicator"}
+
+		worker, err := communicator.NewCommunicatorWorker(identity, nil, depspkg.NewNopFSMLogger(), nil, map[string]any{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("communicator.channel_provider"))
+		Expect(worker).To(BeNil())
+	})
+
+	It("returns the same error when the key holds a value that is not a ChannelProvider", func() {
+		identity := depspkg.Identity{ID: "no-provider-worker", WorkerType: "communicator"}
+		wronglyTypedMap := map[string]any{"communicator.channel_provider": "not a provider"}
+
+		worker, err := communicator.NewCommunicatorWorker(identity, nil, depspkg.NewNopFSMLogger(), nil, wronglyTypedMap)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("communicator.channel_provider"))
+		Expect(worker).To(BeNil())
+	})
+
+	It("returns the map's provider through its dependencies", func() {
+		provider := newRecordingChannelProvider(7, 3)
+
+		dependencyMap := map[string]any{}
+		var providerAsChannelProvider communicator.ChannelProvider = provider
+		fsmv2types.SetDependency(dependencyMap, communicator.ChannelProviderKey, providerAsChannelProvider)
+
+		worker, err := communicator.NewCommunicatorWorker(
+			depspkg.Identity{ID: "provider-return-worker", WorkerType: "communicator"},
+			nil,
+			depspkg.NewNopFSMLogger(),
+			nil,
+			dependencyMap,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		workerDeps := worker.GetDependencies()
+		Expect(workerDeps.GetInboundChan()).To(BeIdenticalTo(provider.inbound))
+		Expect(workerDeps.GetOutboundChan()).To(BeIdenticalTo(provider.outbound))
+
+		capacity, length := workerDeps.GetInboundChanStats()
+		Expect(capacity).To(Equal(7))
+		Expect(length).To(Equal(3))
 	})
 })

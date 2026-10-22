@@ -80,28 +80,32 @@ type TransportWorker struct {
 }
 
 // NewTransportWorker creates a new Transport worker in Stopped state.
-// Returns an error if required dependencies are missing.
+// It reads its ChannelProvider from dependencies under ChannelProviderKey.
+// It returns an error when the provider or the logger is missing.
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
+	dependencies map[string]any,
 ) (*TransportWorker, error) {
-	// Dependency validation: reject nil logger (architecture requirement)
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
 	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
 	if identity.WorkerType == "" {
-		identity.WorkerType = "transport"
+		identity.WorkerType = WorkerTypeName
+	}
+
+	provider, ok := config.LookupDependency(dependencies, ChannelProviderKey)
+	if !ok {
+		return nil, fmt.Errorf("transport: no channel provider under %q in the dependency map; set one with config.SetDependency(m, transport.ChannelProviderKey, p)", ChannelProviderKey.Name())
 	}
 
 	w := &TransportWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	// Create dependencies (will panic if ChannelProvider not set)
-	dependencies := NewTransportDependencies(nil, bd)
-	w.BindDeps(dependencies)
+	w.BindDeps(NewTransportDependencies(nil, bd, provider))
 
 	return w, nil
 }
@@ -219,21 +223,20 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
 
-// Children retrieve transport dependencies through register.GetDeps keyed on
-// this constant. Defined here so push/pull stay in sync with the publisher.
-const transportDepsKey = "transport"
+// WorkerTypeName is the transport worker's type and its register.SetGlobalDeps key.
+const WorkerTypeName = "transport"
 
 func init() {
-	fsmv2.RegisterObservationInterval(transportDepsKey, channelusage.SampleInterval)
+	fsmv2.RegisterObservationInterval(WorkerTypeName, channelusage.SampleInterval)
 
-	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](transportDepsKey,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
-			w, err := NewTransportWorker(id, logger, sr)
+	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](WorkerTypeName,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, m map[string]any) (fsmv2.Worker, error) {
+			w, err := NewTransportWorker(id, logger, sr, m)
 			if err != nil {
 				return nil, err
 			}
 
-			register.SetDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
+			register.SetGlobalDeps[*TransportDependencies](WorkerTypeName, w.GetDependencies())
 
 			return w, nil
 		})

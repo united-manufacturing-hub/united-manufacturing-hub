@@ -125,7 +125,8 @@ var _ = Describe("Transport resident-child JWT re-apply", func() {
 
 		store = setupTestStoreForScenario(deps.NewNopFSMLogger())
 
-		transport.SetChannelProvider(newTokenReapplyChannelProvider())
+		workerDeps := map[string]any{}
+		fsmconfig.SetDependency(workerDeps, transport.ChannelProviderKey, transport.ChannelProvider(newTokenReapplyChannelProvider()))
 
 		parentSup = supervisor.NewSupervisor[fsmv2.Observation[snapshot.TransportStatus], *fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]](supervisor.Config{
 			WorkerType:              "transport",
@@ -140,12 +141,12 @@ var _ = Describe("Transport resident-child JWT re-apply", func() {
 			WorkerType: "transport",
 		}
 
-		worker, err := transport.NewTransportWorker(identity, deps.NewNopFSMLogger(), nil)
+		worker, err := transport.NewTransportWorker(identity, deps.NewNopFSMLogger(), nil, workerDeps)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Publish the parent transport deps the same way the production worker
 		// factory does, so the push/pull deps builders can find them.
-		register.SetDeps[*transport.TransportDependencies]("transport", worker.GetDependencies())
+		register.SetGlobalDeps[*transport.TransportDependencies](transport.WorkerTypeName, worker.GetDependencies())
 		transportDep = worker.GetDependencies()
 
 		Expect(parentSup.AddWorker(identity, worker)).To(Succeed())
@@ -169,7 +170,6 @@ timeout: "5s"
 
 	AfterEach(func() {
 		cancel()
-		transport.ClearChannelProvider()
 	})
 
 	It("re-applies a rotated JWT to resident push and pull children without despawn", func() {

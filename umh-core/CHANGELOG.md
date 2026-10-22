@@ -5,6 +5,7 @@
 ### Improvements
 
 - When a bridge's connection is down, the tooltip on the bridge's connection status now says why, for example that the DNS lookup timed out or the device refused the connection, and what to check
+- Routine start-up and restart messages from umh-core's internal components are now DEBUG instead of INFO, which makes state changes, warnings and errors easier to spot
 
 ### Fixes
 

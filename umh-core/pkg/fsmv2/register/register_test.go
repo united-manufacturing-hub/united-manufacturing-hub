@@ -53,7 +53,7 @@ type regTestWorker struct {
 	fsmv2.WorkerBase[regTestConfig, regTestStatus, register.NoDeps]
 }
 
-func newRegTestWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+func newRegTestWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 	w := &regTestWorker{}
 	w.InitBase(id, logger, sr)
 
@@ -103,7 +103,7 @@ var _ = Describe("register.Worker", func() {
 
 	It("panics on field name collision", func() {
 		Expect(func() {
-			register.Worker[regTestConfig, collidingStatus, register.NoDeps]("regtest-collision", func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			register.Worker[regTestConfig, collidingStatus, register.NoDeps]("regtest-collision", func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 				return nil, nil
 			})
 		}).To(PanicWith(ContainSubstring("collide")))
@@ -132,7 +132,7 @@ var _ = Describe("register.Worker", func() {
 	It("panics when constructor returns an error at factory call time", func() {
 		constructorErr := errors.New("device unreachable")
 		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-errconstructor",
-			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) (fsmv2.Worker, error) {
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 				return nil, constructorErr
 			},
 		)
@@ -152,7 +152,7 @@ var _ = Describe("register.Worker", func() {
 
 	It("panics when constructor returns nil worker without error", func() {
 		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-nilworker",
-			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) (fsmv2.Worker, error) {
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 				return nil, nil
 			},
 		)
@@ -175,17 +175,17 @@ type setDepsBuilderTestDeps struct {
 	Value int
 }
 
-var _ = Describe("register.SetDepsBuilder", func() {
+var _ = Describe("register.SetGlobalDepsBuilder", func() {
 	BeforeEach(func() {
 		register.ResetDepsBuilderRegistry()
 	})
 
 	It("stores and retrieves a typed deps builder", func() {
-		register.SetDepsBuilder("sdbt-worker", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
+		register.SetGlobalDepsBuilder("sdbt-worker", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
 			return &setDepsBuilderTestDeps{Value: 42}
 		})
 
-		builder, ok := register.GetDepsBuilder("sdbt-worker")
+		builder, ok := register.GlobalDepsBuilder("sdbt-worker")
 		Expect(ok).To(BeTrue())
 		Expect(builder).NotTo(BeNil())
 
@@ -196,19 +196,19 @@ var _ = Describe("register.SetDepsBuilder", func() {
 	})
 
 	It("returns false for unregistered worker type", func() {
-		_, ok := register.GetDepsBuilder("no-such-worker")
+		_, ok := register.GlobalDepsBuilder("no-such-worker")
 		Expect(ok).To(BeFalse())
 	})
 
 	It("last registration wins for duplicate worker type", func() {
-		register.SetDepsBuilder("sdbt-dup", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
+		register.SetGlobalDepsBuilder("sdbt-dup", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
 			return &setDepsBuilderTestDeps{Value: 1}
 		})
-		register.SetDepsBuilder("sdbt-dup", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
+		register.SetGlobalDepsBuilder("sdbt-dup", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
 			return &setDepsBuilderTestDeps{Value: 99}
 		})
 
-		builder, ok := register.GetDepsBuilder("sdbt-dup")
+		builder, ok := register.GlobalDepsBuilder("sdbt-dup")
 		Expect(ok).To(BeTrue())
 		result := builder(deps.Identity{}, nil, nil).(*setDepsBuilderTestDeps)
 		Expect(result.Value).To(Equal(99))
@@ -216,7 +216,7 @@ var _ = Describe("register.SetDepsBuilder", func() {
 
 	It("panics on empty workerType", func() {
 		Expect(func() {
-			register.SetDepsBuilder("", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
+			register.SetGlobalDepsBuilder("", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
 				return &setDepsBuilderTestDeps{}
 			})
 		}).To(PanicWith(ContainSubstring("non-empty")))
@@ -224,7 +224,7 @@ var _ = Describe("register.SetDepsBuilder", func() {
 
 	It("panics on nil builderFn", func() {
 		Expect(func() {
-			register.SetDepsBuilder[*setDepsBuilderTestDeps]("sdbt-nil-fn", nil)
+			register.SetGlobalDepsBuilder[*setDepsBuilderTestDeps]("sdbt-nil-fn", nil)
 		}).To(PanicWith(ContainSubstring("non-nil")))
 	})
 })

@@ -96,7 +96,7 @@ children:
     workerType: "persistence"
 `
 
-	register.SetDeps[*persistenceworker.PersistenceDependencies](persistenceworker.WorkerTypeName, persistenceworker.NewStoreOnlyDependencies(store))
+	register.SetGlobalDeps[*persistenceworker.PersistenceDependencies](persistenceworker.WorkerTypeName, persistenceworker.NewStoreOnlyDependencies(store))
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "scenario-persistence",
@@ -108,7 +108,7 @@ children:
 		Dependencies: map[string]any{},
 	})
 	if err != nil {
-		register.ClearDeps(persistenceworker.WorkerTypeName)
+		register.ClearGlobalDeps(persistenceworker.WorkerTypeName)
 		close(done)
 
 		return &PersistenceRunResult{
@@ -165,7 +165,7 @@ children:
 			result.Healthy = observed.Status.IsHealthy()
 		}
 
-		register.ClearDeps(persistenceworker.WorkerTypeName)
+		register.ClearGlobalDeps(persistenceworker.WorkerTypeName)
 		close(done)
 	}()
 

@@ -76,16 +76,17 @@ import (
 // registered historian type is "historian-timescale", not "historian".
 const registeredFloor = 16
 
-// panicOnConstruction names the five types that panic rather than error when
+// panicOnConstruction names the types that panic rather than error when
 // built via factory.NewWorkerByType in this isolated test process, because
-// register.Worker wraps constructor failure in a panic. Each constructor's
-// dependency is published by a parent or the transport channel singleton that
-// this test does not wire up. They are skipped below with the stated reason, and
+// register.Worker wraps constructor failure in a panic. Each needs a dependency
+// that cmd/main.go or a parent worker supplies, through the dependency map or
+// register.GlobalDeps. This test supplies none of them.
+// These types are skipped below with the stated reason, and
 // the recovered panic is asserted to match that reason, so a skip cannot hide a
 // constructor regression inside one of them.
 var panicOnConstruction = map[string]string{
-	"communicator": "ChannelProvider must be set",
-	"transport":    "ChannelProvider must be set",
+	"communicator": `no channel provider under "communicator.channel_provider"`,
+	"transport":    `no channel provider under "transport.channel_provider"`,
 	"persistence":  "requires a store",
 	"pull":         "deps builder returned",
 	"push":         "deps builder returned",
@@ -232,7 +233,7 @@ var _ = Describe("Framework metrics on every registered worker type", func() {
 		// one line of setup: a published dynamic-children registry. Without it
 		// the constructor fails (wrapped in a panic). Its ConfigManager is
 		// optional, so nil is fine.
-		register.SetDeps[*dynamicchildren.Registry]("configworker", &dynamicchildren.Registry{})
+		register.SetGlobalDeps[*dynamicchildren.Registry]("configworker", &dynamicchildren.Registry{})
 
 		types := factory.ListRegisteredTypes()
 		Expect(types).To(HaveLen(registeredFloor))

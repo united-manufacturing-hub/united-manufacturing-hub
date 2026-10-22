@@ -28,27 +28,6 @@ import (
 
 // Test suite is registered in worker_test.go to avoid duplicate RunSpecs
 
-// =============================================================================
-// Phase 1 Architecture Verification Tests - ChannelProvider Singleton
-// =============================================================================
-//
-// These tests verify the Phase 1 FSMv2 Communicator Architecture:
-// 1. ChannelProvider MUST be set via global singleton BEFORE creating dependencies
-// 2. deps.SetChannelProvider() method should NOT exist (removed in Phase 1)
-// 3. factory deps["channelProvider"] path should NOT exist (removed in Phase 1)
-//
-// Compile-time verification:
-// The removal of deps.SetChannelProvider() is verified at compile time - if this
-// code compiles, the method does not exist on CommunicatorDependencies:
-//
-//     var _ interface{ SetChannelProvider(ChannelProvider) } = (*communicator.CommunicatorDependencies)(nil)
-//     // ^ This line would fail to compile if the method still exists
-//
-// The above is NOT included because it would FAIL compilation after Phase 1 is complete.
-// Instead, if someone accidentally adds the method back, the architecture tests
-// will catch it at runtime.
-// =============================================================================
-
 type mockTransport struct{}
 
 func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
@@ -102,31 +81,25 @@ var _ = Describe("CommunicatorDependencies", func() {
 	BeforeEach(func() {
 		mt = &mockTransport{}
 		logger = depspkg.NewNopFSMLogger()
-		// Phase 1: Set up singleton for ALL tests (except Phase 1 architecture tests)
-		communicator.SetChannelProvider(newTestChannelProvider())
-	})
-
-	AfterEach(func() {
-		communicator.ClearChannelProvider()
 	})
 
 	Describe("NewCommunicatorDependencies", func() {
 		Context("when creating a new dependencies", func() {
 			It("should return a non-nil dependencies", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 				Expect(deps).NotTo(BeNil())
 			})
 
 			It("should store the transport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 				Expect(deps.GetTransport()).To(Equal(mt))
 			})
 
 			It("should store the logger", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 				Expect(deps.GetLogger()).NotTo(BeNil())
 			})
 		})
@@ -135,7 +108,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("GetTransport", func() {
 		It("should return the transport passed to the constructor", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 			Expect(deps.GetTransport()).To(Equal(mt))
 		})
 	})
@@ -143,7 +116,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("GetLogger", func() {
 		It("should return the logger inherited from BaseDependencies", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 			// Logger is enriched with worker context
 			Expect(deps.GetLogger()).NotTo(BeNil())
 		})
@@ -152,7 +125,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("Dependencies interface implementation", func() {
 		It("should implement deps.Dependencies interface", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 			var _ depspkg.Dependencies = deps
 			Expect(deps).To(Satisfy(func(d interface{}) bool {
 				_, ok := d.(depspkg.Dependencies)
@@ -167,7 +140,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 		})
 
 		Describe("GetConsecutiveErrors", func() {
@@ -256,7 +229,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 		BeforeEach(func() {
 			mockTrans = NewMockTransport()
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mockTrans, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps = communicator.NewCommunicatorDependencies(mockTrans, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 		})
 
 		Context("when errors are below threshold", func() {
@@ -294,7 +267,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 		Context("when transport is nil", func() {
 			It("should not panic when recording errors without transport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, depspkg.NewBaseDependencies(logger, nil, identity))
+				depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 
 				Expect(func() {
 					for range 10 {
@@ -330,7 +303,7 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
+			deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), newTestChannelProvider())
 		})
 
 		Describe("GetDegradedEnteredAt", func() {
@@ -416,62 +389,22 @@ var _ = Describe("CommunicatorDependencies", func() {
 		})
 	})
 
-	// =============================================================================
-	// Phase 1: ChannelProvider Singleton Architecture Tests
-	// =============================================================================
-	//
-	// After Phase 1, the ChannelProvider MUST be set via global singleton ONLY.
-	// These tests verify:
-	// 1. NewCommunicatorDependencies panics if singleton is nil
-	// 2. deps.SetChannelProvider() method no longer exists (verified at runtime)
-	//
-	// See comment block at top of file for compile-time verification notes.
-	// =============================================================================
-	Describe("Phase 1: ChannelProvider Singleton Architecture", func() {
-		BeforeEach(func() {
-			// Ensure singleton is cleared before each test
-			communicator.ClearChannelProvider()
-		})
+	Describe("NewCommunicatorDependencies", func() {
+		Context("when the provider is given", func() {
+			It("should create dependencies with the provider's channels", func() {
+				inbound := make(chan<- *types.UMHMessage, 10)
+				outbound := make(<-chan *types.UMHMessage, 10)
+				mockProvider := &mockChannelProvider{
+					inbound:  inbound,
+					outbound: outbound,
+				}
 
-		AfterEach(func() {
-			// Clean up singleton after each test
-			communicator.ClearChannelProvider()
-		})
+				identity := depspkg.Identity{ID: "test-provider-id", WorkerType: "communicator"}
+				deps := communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity), mockProvider)
 
-		Describe("NewCommunicatorDependencies", func() {
-			Context("when ChannelProvider singleton is NOT set", func() {
-				It("should panic with clear error message", func() {
-					// Ensure singleton is nil
-					Expect(communicator.GetChannelProvider()).To(BeNil())
-
-					// Creating dependencies without singleton should panic
-					identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-					Expect(func() {
-						communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
-					}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
-				})
-			})
-
-			Context("when ChannelProvider singleton IS set", func() {
-				It("should NOT panic and create dependencies with channels from singleton", func() {
-					inbound := make(chan<- *types.UMHMessage, 10)
-					outbound := make(<-chan *types.UMHMessage, 10)
-					mockProvider := &mockChannelProvider{
-						inbound:  inbound,
-						outbound: outbound,
-					}
-					communicator.SetChannelProvider(mockProvider)
-
-					identity := depspkg.Identity{ID: "test-singleton-id", WorkerType: "communicator"}
-					var deps *communicator.CommunicatorDependencies
-					Expect(func() {
-						deps = communicator.NewCommunicatorDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
-					}).NotTo(Panic())
-
-					Expect(deps).NotTo(BeNil())
-					Expect(deps.GetInboundChan()).To(Equal(inbound))
-					Expect(deps.GetOutboundChan()).To(Equal(outbound))
-				})
+				Expect(deps).NotTo(BeNil())
+				Expect(deps.GetInboundChan()).To(Equal(inbound))
+				Expect(deps.GetOutboundChan()).To(Equal(outbound))
 			})
 		})
 	})

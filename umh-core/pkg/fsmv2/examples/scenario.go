@@ -26,7 +26,7 @@
 // Tests use scenarios via the Run function:
 //
 //	done, err := examples.Run(ctx, examples.RunConfig{
-//	    Scenario:     examples.SimpleScenario,
+//	    Scenario:     examples.InheritanceScenario,
 //	    Duration:     10 * time.Second,
 //	    TickInterval: 100 * time.Millisecond,
 //	    Logger:       testLogger,
@@ -34,13 +34,6 @@
 //	})
 //
 // CLI uses the same scenarios via pkg/fsmv2/cmd/runner.
-//
-// # Adding New Scenarios
-//
-// To add a new scenario:
-//  1. Create a new file (e.g., stress.go) with your Scenario definition
-//  2. Register it in the Registry map in this file
-//  3. Reference simple.go for documentation on available options
 package examples
 
 import (
@@ -49,7 +42,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // ScenarioRunner executes scenarios that need infrastructure setup beyond
@@ -73,10 +65,6 @@ import (
 //	    defer mockServer.Close()
 //	    return RunScenarioThatUsesApplicationSupervisor(ctx, cfg)
 //	}
-//
-// Example: CommunicatorScenarioEntry uses this pattern - it wraps
-// RunCommunicatorScenario which creates a mock server but still runs
-// the communicator worker via ApplicationSupervisor.
 //
 // ## Pattern 2: Full Custom Execution (USE SPARINGLY)
 //
@@ -141,7 +129,7 @@ type ScenarioRunner func(ctx context.Context, cfg RunConfig) (*RunResult, error)
 // When you set CustomRunner, Run() delegates to your function. CustomRunner
 // can still use ApplicationSupervisor internally (preferred), or implement
 // custom execution when necessary. Use this for scenarios that need:
-//   - Embedded mock servers with dynamic URLs (CommunicatorScenario)
+//   - Embedded mock servers with dynamic URLs
 //   - Test fixtures that must exist before workers start
 //   - External resource lifecycle management
 //
@@ -174,81 +162,11 @@ type Scenario struct {
 	YAMLConfig string
 }
 
-// Registry contains all available scenarios.
-// Add new scenarios here to make them available in both tests and CLI.
+// Registry holds the v1 scenarios not yet moved to v2 (ENG-5114). New
+// scenarios go in RegistryV2; see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 var Registry = map[string]Scenario{
-	"helloworld":   HelloworldScenario,
-	"simple":       SimpleScenario,
-	"failing":      FailingScenario,
-	"panic":        PanicScenario,
-	"slow":         SlowScenario,
-	"cascade":      CascadeScenario,
-	"timeout":      TimeoutScenario,
-	"configerror":  ConfigErrorScenario,
-	"inheritance":  InheritanceScenario,
-	"communicator": CommunicatorScenarioEntry,
-	"concurrent":   ConcurrentScenario,
-	"persistence":  PersistenceScenarioEntry,
-}
-
-// CommunicatorScenarioEntry registers the communicator scenario for CLI access.
-//
-// Uses a CustomRunner that wraps RunCommunicatorScenario:
-//  1. Creates an embedded mock relay server
-//  2. Builds dynamic YAMLConfig with the mock server URL
-//  3. Runs via ApplicationSupervisor
-//
-// # CLI Usage
-//
-//	go run pkg/fsmv2/cmd/runner/main.go --scenario communicator --duration 5s
-//
-// # What Gets Tested
-//
-//   - FSMv2 communicator worker state machine (Stopped -> Authenticating -> Syncing)
-//   - Authentication with relay server via HTTPTransport
-//   - Message pulling (backend -> edge) and pushing (edge -> backend) via TransportWorker
-//   - Metrics collection and observability
-var CommunicatorScenarioEntry = Scenario{
-	Name:        "communicator",
-	Description: "Tests FSMv2 communicator worker with embedded mock server (uses ApplicationSupervisor)",
-	YAMLConfig:  "", // Config built dynamically by RunCommunicatorScenario with mock server URL
-	CustomRunner: func(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-		result := RunCommunicatorScenario(ctx, CommunicatorRunConfig{
-			Duration:     cfg.Duration,
-			TickInterval: cfg.TickInterval,
-			Logger:       cfg.Logger,
-			// Add test messages for metrics visibility in CLI scenario
-			InitialPullMessages: []*types.UMHMessage{
-				{InstanceUUID: "test-instance-uuid", Content: "test-action-1"},
-				{InstanceUUID: "test-instance-uuid", Content: "test-action-2"},
-				{InstanceUUID: "test-instance-uuid", Content: "test-action-3"},
-			},
-			InitialOutboundMessages: []*types.UMHMessage{
-				{InstanceUUID: "test-instance-uuid", Content: "test-status-1"},
-				{InstanceUUID: "test-instance-uuid", Content: "test-status-2"},
-			},
-		})
-
-		if result.Error != nil {
-			return nil, result.Error
-		}
-
-		if cfg.Logger != nil {
-			go func() {
-				<-result.Done
-				cfg.Logger.Info("scenario_complete",
-					deps.Int("auth_calls", result.AuthCallCount),
-					deps.Int("pushed_messages", len(result.PushedMessages)),
-					deps.Int("received_messages", len(result.ReceivedMessages)),
-				)
-			}()
-		}
-
-		return &RunResult{
-			Done:     result.Done,
-			Shutdown: result.Shutdown, // Delegate to RunCommunicatorScenario's Shutdown
-		}, nil
-	},
+	"inheritance": InheritanceScenario,
+	"persistence": PersistenceScenarioEntry,
 }
 
 // PersistenceScenarioEntry registers the persistence scenario for CLI access.
@@ -305,9 +223,13 @@ type RunConfig struct {
 	Store        storage.TriangularStoreInterface
 	Logger       deps.FSMLogger
 	Scenario     Scenario
-	ScenarioV2   ScenarioV2    // When Driver is set, Run takes the v2 kernel-only path
+	ScenarioV2   ScenarioV2    // When ScenarioV2.Run is set, examples.Run takes the v2 kernel-only path
 	Duration     time.Duration // 0 means run forever (until context cancelled)
 	TickInterval time.Duration
+	// Dependencies is the dependency map Run passes to the application
+	// supervisor for a v1 scenario without a CustomRunner. v2 scenarios build
+	// theirs in ScenarioV2.Dependencies.
+	Dependencies map[string]any
 	// GracefulShutdownTimeout is the per-level drain base propagated to the
 	// supervisor subtree. Zero falls back to the supervisor default (5s). A
 	// tiny value forces a degraded drain, which is how tests exercise the

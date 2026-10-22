@@ -46,10 +46,10 @@ type NoDeps = struct{}
 // verify that TDeps here matches the TDeps in the concrete WorkerBase[TConfig, TStatus, TDeps]
 // embed inside the worker struct. By convention, callers pass the same TDeps in both places.
 //
-// Constructor receives the standard framework dependencies (identity, logger, stateReader).
-// Workers that need parent-injected deps fetch them via register.GetDeps inside the
-// constructor closure. Workers with custom ObservedState types must use
-// factory.RegisterWorkerType directly.
+// Read dependencies with config.LookupDependency. The constructor must not write
+// to it: on a restart it is the supervisor's own map, so a write reaches every
+// worker the supervisor builds afterwards.
+// Workers with custom ObservedState types must use factory.RegisterWorkerType directly.
 //
 // Panics at init time when:
 //   - workerType is the empty string,
@@ -62,7 +62,7 @@ type NoDeps = struct{}
 // an error or a nil worker.
 func Worker[TConfig any, TStatus any, TDeps any](
 	workerType string,
-	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader) (fsmv2.Worker, error),
+	constructor func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, dependencies map[string]any) (fsmv2.Worker, error),
 ) {
 	if workerType == "" {
 		panic("register.Worker: workerType must be non-empty")
@@ -76,8 +76,8 @@ func Worker[TConfig any, TStatus any, TDeps any](
 		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
 	}
 
-	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) fsmv2.Worker {
-		w, err := constructor(id, logger, sr)
+	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, dependencies map[string]any) fsmv2.Worker {
+		w, err := constructor(id, logger, sr, dependencies)
 		if err != nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}
@@ -109,25 +109,23 @@ func Worker[TConfig any, TStatus any, TDeps any](
 	}
 }
 
-// SetDepsBuilder registers a typed deps builder function for workerType.
-// The builder receives the standard framework deps so workers can wire per-instance
-// resources (metrics recorders keyed by identity, loggers, state readers).
-// T is the concrete deps type (e.g., *MyDeps).
+// SetGlobalDepsBuilder registers a typed deps builder function for workerType.
+// The builder runs once per child instance, so it can build per-instance resources.
 //
 // The builder runs when a worker of this type is instantiated, not at init().
-// A child's builder can therefore read its parent's deps with GetDeps: the
-// parent's constructor publishes them with SetDeps, and the supervisor
+// A child's builder can therefore read its parent's deps with GlobalDeps: the
+// parent's constructor publishes them with SetGlobalDeps, and the supervisor
 // instantiates the parent before its children. workers/transport/push/worker.go
 // is an example.
 //
 // Panics if workerType is empty or builderFn is nil (fail-fast at init time).
-func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {
+func SetGlobalDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {
 	if workerType == "" {
-		panic("register.SetDepsBuilder: workerType must be non-empty")
+		panic("register.SetGlobalDepsBuilder: workerType must be non-empty")
 	}
 
 	if builderFn == nil {
-		panic("register.SetDepsBuilder: builderFn must be non-nil")
+		panic("register.SetGlobalDepsBuilder: builderFn must be non-nil")
 	}
 
 	wrapped := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) any {
@@ -136,9 +134,8 @@ func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps
 	depsBuilderRegistry.Store(workerType, wrapped)
 }
 
-// GetDepsBuilder retrieves the deps builder function for workerType.
-// Returns (nil, false) if no builder was registered for this worker type.
-func GetDepsBuilder(workerType string) (func(deps.Identity, deps.FSMLogger, deps.StateReader) any, bool) {
+// GlobalDepsBuilder returns the builder stored under workerType, and false when there is none.
+func GlobalDepsBuilder(workerType string) (func(deps.Identity, deps.FSMLogger, deps.StateReader) any, bool) {
 	v, ok := depsBuilderRegistry.Load(workerType)
 	if !ok {
 		return nil, false

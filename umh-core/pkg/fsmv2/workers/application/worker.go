@@ -94,7 +94,7 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	// one publisher; same pattern as pull/push reading the transport deps). When
 	// nothing publishes it, RegistryConfigured stays false and the application
 	// renders only its declared children: dynamic spawning is off, not broken.
-	if reg := register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName); reg != nil {
+	if reg := register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName); reg != nil {
 		status.RegistryConfigured = true
 		status.DynamicChildren = reg.Specs()
 	}
@@ -220,7 +220,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[fsmv
 
 func init() {
 	register.Worker[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps](WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewApplicationWorker(id, logger, sr), nil
 		})
 }

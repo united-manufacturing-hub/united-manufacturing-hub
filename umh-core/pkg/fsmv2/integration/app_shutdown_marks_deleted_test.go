@@ -36,7 +36,7 @@ var _ = Describe("Application supervisor shutdown", func() {
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	It("leaves a worker removed in the shutdown drain reading as Deleted", func() {
@@ -44,7 +44,7 @@ var _ = Describe("Application supervisor shutdown", func() {
 		logger := deps.NewNopFSMLogger()
 
 		w := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
 		Expect(w.Upsert(ref, map[string]any{"state": "running"})).To(Succeed())

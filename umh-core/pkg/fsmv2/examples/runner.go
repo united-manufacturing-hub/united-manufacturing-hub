@@ -72,12 +72,24 @@ type RunResult struct {
 	// graceful_shutdown_timeout or graceful_shutdown_budget_exhausted. Read it
 	// after Done closes.
 	ShutdownClean bool
+
+	// Err is nil, or the first failure postRunFailure found once teardown
+	// finished. Only the v2 path sets it; read it after Done closes.
+	Err error
+}
+
+// ErrScenarioFailed marks an error from Run for a v2 scenario that started and
+// then failed. An error that kept the scenario from starting does not wrap it.
+var ErrScenarioFailed = errors.New("failed")
+
+func scenarioFailed(name string, err error) error {
+	return fmt.Errorf("scenario %q %w: %w", name, ErrScenarioFailed, err)
 }
 
 // Run executes a scenario with the given configuration.
 //
 // For a v1 Scenario, creates an ApplicationSupervisor with the scenario's
-// YAML config, or delegates to CustomRunner if set. For a ScenarioV2 (Driver
+// YAML config, or delegates to CustomRunner if set. For a ScenarioV2 (ScenarioV2.Run
 // set), takes the kernel-only v2 path (see runV2). Exactly one of Scenario
 // and ScenarioV2 may be populated; setting both is an error.
 //
@@ -94,24 +106,24 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	hasYAML := cfg.Scenario.YAMLConfig != ""
 	hasCustom := cfg.Scenario.CustomRunner != nil
 	hasV1 := hasYAML || hasCustom
-	hasV2 := cfg.ScenarioV2.Driver != nil || cfg.ScenarioV2.Name != ""
+	hasV2 := cfg.ScenarioV2.Run != nil || cfg.ScenarioV2.Name != ""
 
 	if hasV1 && hasV2 {
 		return nil, fmt.Errorf("conflicting configuration: both Scenario %q and ScenarioV2 %q are set (only one allowed)",
 			cfg.Scenario.Name, cfg.ScenarioV2.Name)
 	}
 
-	if hasV2 && cfg.ScenarioV2.Driver == nil {
-		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Name is set but Driver is nil",
+	if hasV2 && cfg.ScenarioV2.Run == nil {
+		return nil, fmt.Errorf("v2 scenario %q is not properly configured: Name is set but Run is nil",
 			cfg.ScenarioV2.Name)
 	}
 
-	if cfg.ScenarioV2.Driver != nil && cfg.ScenarioV2.Name == "" {
+	if cfg.ScenarioV2.Run != nil && cfg.ScenarioV2.Name == "" {
 		return nil, errors.New("v2 scenario is not properly configured: " +
-			"Driver is set but Name is empty, so logs and the supervisor ID could not name the scenario")
+			"Run is set but Name is empty, so logs and the supervisor ID could not name the scenario")
 	}
 
-	if cfg.ScenarioV2.Driver != nil {
+	if cfg.ScenarioV2.Run != nil {
 		return runV2(ctx, cfg)
 	}
 
@@ -149,6 +161,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		Logger:                  cfg.Logger,
 		TickInterval:            cfg.TickInterval,
 		YAMLConfig:              cfg.Scenario.YAMLConfig,
+		Dependencies:            cfg.Dependencies,
 		EnableTraceLogging:      cfg.EnableTraceLogging,
 		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
@@ -232,20 +245,17 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // runV2 keeps the process-global configworker deps key published for exactly
 // the supervisor's lifetime: the dynamicchildren registry is published under
 // the key before the supervisor starts (the application worker reads it every
-// tick), and the key is cleared on EVERY exit path, including a Driver panic,
-// strictly after the supervisor has stopped. Clearing the key earlier flips
+// tick), and the key is cleared on EVERY exit path, including a
+// ScenarioV2.Run panic, strictly after the supervisor has stopped. Clearing the key earlier flips
 // the application worker's RegistryConfigured observation mid-shutdown; a key
 // that is never cleared makes every later runV2 in the same process fail its
 // already-published check below.
 //
 // The supervisor runs on a context detached from the caller's ctx. The
-// caller's ctx drives the Driver, the Duration wait, and the teardown
+// caller's ctx drives ScenarioV2.Run, the Duration wait, and the teardown
 // trigger, but never the tick loop: if the tick loop shared the caller's
 // ctx, cancelling it would stop ticking before Shutdown runs, and the
 // graceful drain would wait out its full timeout against a stopped loop.
-//
-// After the Driver returns nil, the runner waits RunConfig.Duration (or
-// until ctx is cancelled; 0 means ctx-only), then shuts the supervisor down.
 //
 // Because the deps key is process-global, v2 runs must not overlap within a
 // process. The already-published check below catches sequential overlap (a
@@ -253,7 +263,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 // concurrent runV2 calls, because the check and the publish are two separate
 // lock acquisitions. Concurrent runV2 calls are not supported.
 func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
-	if register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName) != nil {
+	if register.GlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName) != nil {
 		return nil, fmt.Errorf("v2 scenario %q cannot start: the configworker deps key is already published, "+
 			"so another v2 run is still active in this process", cfg.ScenarioV2.Name)
 	}
@@ -264,20 +274,50 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			deps.String("impact", "no_store_dump_printed"))
 	}
 
+	// Call Dependencies before publishing the deps key, so a Dependencies error has nothing to clear.
+	var scenarioDeps map[string]any
+
+	releaseScenarioDeps := func() {}
+
+	if cfg.ScenarioV2.Dependencies != nil {
+		depsMap, cleanup, err := cfg.ScenarioV2.Dependencies()
+		if err != nil {
+			return nil, fmt.Errorf("scenario %q dependencies: %w", cfg.ScenarioV2.Name, err)
+		}
+
+		scenarioDeps = depsMap
+
+		if cleanup != nil {
+			releaseScenarioDeps = cleanup
+		}
+	}
+
 	writer := dynamicchildren.NewWriter()
-	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
+	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
+
+	// Built before the supervisor, so an error a worker logs on its first
+	// tick also fails the run.
+	recorder := &runRecorder{
+		scenario:            cfg.ScenarioV2.Name,
+		expectedErrors:      cfg.ScenarioV2.ExpectedErrors,
+		expectedErrorCauses: cfg.ScenarioV2.ExpectedErrorCauses,
+		expectedWarnings:    cfg.ScenarioV2.ExpectedWarnings,
+	}
+	runLogger := &recordingLogger{FSMLogger: cfg.Logger, recorder: recorder}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:                      "scenariov2-" + cfg.ScenarioV2.Name,
 		Name:                    cfg.ScenarioV2.Name,
 		Store:                   cfg.Store,
-		Logger:                  cfg.Logger,
+		Logger:                  runLogger,
 		TickInterval:            cfg.TickInterval,
+		Dependencies:            scenarioDeps,
 		EnableTraceLogging:      cfg.EnableTraceLogging,
 		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
 	if err != nil {
-		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
+		releaseScenarioDeps()
 
 		return nil, err
 	}
@@ -304,12 +344,13 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		// spent during Shutdown's synchronous phases, which complete before
 		// the tick loop signals supDone.
 		result.ShutdownClean = appSup.DrainOutcomeClean()
-		// ClearDeps strictly after supDone: clearing earlier flips the
+		// ClearGlobalDeps strictly after supDone: clearing earlier flips the
 		// application worker's RegistryConfigured observation mid-shutdown.
-		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
+		releaseScenarioDeps()
 	}
 
-	// The Driver is user-authored code, so it may return an error or panic.
+	// ScenarioV2.Run is user-authored code, so it may return an error or panic.
 	// Either way the supervisor must stop and the deps key must be cleared
 	// before runV2's frame unwinds, otherwise every later runV2 in this
 	// process fails its already-published check. The flag stays false until
@@ -323,9 +364,17 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}()
 
 	client := fsmv2client.NewFSMv2Client(writer, cfg.Store)
-	if err := cfg.ScenarioV2.Driver(ctx, Env{Client: client, Logger: cfg.Logger}); err != nil {
-		return nil, fmt.Errorf("scenario %q driver failed: %w", cfg.ScenarioV2.Name, err)
+	if err := cfg.ScenarioV2.Run(ctx, Env{Client: client, Logger: runLogger, Dependencies: scenarioDeps, recorder: recorder}); err != nil {
+		return nil, scenarioFailed(cfg.ScenarioV2.Name, err)
 	}
+
+	// Checked again: a Run that swallows a failed wait must still fail.
+	if logged := recorder.loggedError(); logged != nil {
+		return nil, scenarioFailed(cfg.ScenarioV2.Name, logged)
+	}
+
+	cfg.Logger.Info("scenario_run_finished",
+		deps.String("scenario", cfg.ScenarioV2.Name))
 
 	teardownOwnedByGoroutine = true
 
@@ -363,18 +412,38 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			deps.String("wake_reason", wakeReason))
 
 		teardown()
+
+		result.Err = postRunFailure(ctx, recorder, cfg.Store, cfg.Logger)
+
 		close(done)
 	}()
 
-	// Shutdown waits for Done so the deps key is already cleared when the
-	// caller starts the next v2 run; returning earlier would let this run's
-	// late ClearDeps delete the next run's freshly published key.
+	// Shutdown waits for Done: returning earlier would let this run's late
+	// ClearGlobalDeps delete the key the next v2 run has just stored.
 	result.Shutdown = func() {
 		appSup.Shutdown()
 		<-done
 	}
 
 	return result, nil
+}
+
+const storedStateCheckTimeout = 10 * time.Second
+
+func postRunFailure(ctx context.Context, recorder *runRecorder, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
+	if err := recorder.loggedError(); err != nil {
+		return err
+	}
+
+	if warn := recorder.loggedWarning(); warn != nil {
+		return warn
+	}
+
+	// WithoutCancel: a Ctrl+C after Run returned is not a failed store read.
+	checkCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storedStateCheckTimeout)
+	defer cancel()
+
+	return checkStoredWorkerStates(checkCtx, store, logger)
 }
 
 // SetupStore creates an in-memory TriangularStore for testing and CLI usage.

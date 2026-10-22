@@ -60,8 +60,8 @@ var _ = Describe("ApplicationWorker", func() {
 			// Negative wiring test: when no registry is published under
 			// configworker.WorkerTypeName, the collector must not panic and must
 			// report dynamic spawning as off, leaving declared children untouched.
-			register.ClearDeps(configworker.WorkerTypeName)
-			DeferCleanup(func() { register.ClearDeps(configworker.WorkerTypeName) })
+			register.ClearGlobalDeps(configworker.WorkerTypeName)
+			DeferCleanup(func() { register.ClearGlobalDeps(configworker.WorkerTypeName) })
 
 			ctx := context.Background()
 			obs, err := worker.CollectObservedState(ctx, nil)
