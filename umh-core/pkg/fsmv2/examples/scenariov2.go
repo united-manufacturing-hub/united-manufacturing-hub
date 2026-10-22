@@ -16,6 +16,7 @@ package examples
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -53,8 +54,9 @@ type runRecorder struct {
 	// attributed when several scenarios run in one process.
 	scenario string
 
-	expectedErrors   []string
-	expectedWarnings []string
+	expectedErrors      []string
+	expectedErrorCauses []error
+	expectedWarnings    []string
 
 	// mu guards the fields below. Step may run on a goroutine the scenario
 	// starts, and any goroutine that logs writes the first unexpected values.
@@ -72,8 +74,13 @@ var alwaysAllowedMessages = []string{
 	"collector_stop_skipped",
 }
 
+// recordLoggedError keeps the first error the scenario does not expect.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
 	if r.messageAllowed(msg, r.expectedErrors) {
+		return
+	}
+
+	if r.errorCauseAllowed(err) {
 		return
 	}
 
@@ -95,6 +102,18 @@ func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 
 	for _, substr := range alwaysAllowedMessages {
 		if strings.Contains(msg, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// errorCauseAllowed reports whether err is or wraps one of the scenario's
+// expected causes. A nil entry matches nothing.
+func (r *runRecorder) errorCauseAllowed(err error) bool {
+	for _, cause := range r.expectedErrorCauses {
+		if cause != nil && errors.Is(err, cause) {
 			return true
 		}
 	}
@@ -236,6 +255,13 @@ type ScenarioV2 struct {
 	// RunResult.Err when it is logged after Run returned.
 	ExpectedErrors []string
 
+	// ExpectedErrorCauses lists error values this scenario expects, matched
+	// with errors.Is. Use it when the message is generic: ActionExecutor
+	// (supervisor/internal/execution) logs every failed action as
+	// action_failed, so expecting that message would let any failed action
+	// pass.
+	ExpectedErrorCauses []error
+
 	// ExpectedWarnings lists substrings of warning log messages this
 	// scenario expects. Any other warning logged during the run sets
 	// RunResult.Err once the run has ended.
@@ -274,5 +300,9 @@ var NoopScenarioV2 = ScenarioV2{
 var RegistryV2 = map[string]ScenarioV2{
 	"noop":       NoopScenarioV2,
 	"helloworld": HelloworldScenarioV2,
+	"failing":    FailingScenarioV2,
+	"slow":       SlowScenarioV2,
+	"timeout":    TimeoutScenarioV2,
+	"panic":      PanicScenarioV2,
 	"dynamic":    DynamicScenarioV2,
 }

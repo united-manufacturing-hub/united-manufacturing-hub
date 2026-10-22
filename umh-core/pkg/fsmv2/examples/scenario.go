@@ -171,11 +171,7 @@ type Scenario struct {
 // scenarios go in RegistryV2; see pkg/fsmv2/CLAUDE.md, "Writing a scenario".
 var Registry = map[string]Scenario{
 	"simple":       SimpleScenario,
-	"failing":      FailingScenario,
-	"panic":        PanicScenario,
-	"slow":         SlowScenario,
 	"cascade":      CascadeScenario,
-	"timeout":      TimeoutScenario,
 	"configerror":  ConfigErrorScenario,
 	"inheritance":  InheritanceScenario,
 	"communicator": CommunicatorScenarioEntry,
