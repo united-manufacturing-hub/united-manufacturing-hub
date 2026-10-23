@@ -33,8 +33,9 @@ import (
 )
 
 const (
-	timescaleImage = "timescale/timescaledb:2.24.0-pg17"
-	postgresImage  = "postgres:17-alpine"
+	timescaleImage                     = "timescale/timescaledb:2.24.0-pg17"
+	timescaleImageWithoutDroppedColumn = "timescale/timescaledb:2.26.0-pg17"
+	postgresImage                      = "postgres:17-alpine"
 )
 
 // historianSchemaDDL mirrors the shape benthos-umh's historian output creates: two
@@ -71,6 +72,23 @@ SELECT add_retention_policy('umh.value_bench', INTERVAL '720h');
 const driftedPolicyDDL = `
 SELECT remove_compression_policy('umh.attribute_bench');
 SELECT add_compression_policy('umh.attribute_bench', INTERVAL '336h');
+`
+
+const preservedDroppedChunksDDL = `
+SET timescaledb.restoring = on;
+DO $$
+DECLARE target record;
+BEGIN
+  FOR target IN SELECT ch.id, ch.schema_name, ch.table_name FROM _timescaledb_catalog.chunk ch
+                  JOIN _timescaledb_catalog.hypertable h ON h.id = ch.hypertable_id
+                 WHERE h.schema_name = 'umh' AND h.table_name = 'value_bench'
+                 ORDER BY ch.id LIMIT 3 LOOP
+    DELETE FROM _timescaledb_catalog.compression_chunk_size WHERE chunk_id = target.id;
+    UPDATE _timescaledb_catalog.chunk SET dropped = true, compressed_chunk_id = NULL, status = 0 WHERE id = target.id;
+    EXECUTE format('DROP TABLE %I.%I', target.schema_name, target.table_name);
+  END LOOP;
+END $$;
+RESET timescaledb.restoring;
 `
 
 // startDatabase runs image as a throwaway Postgres and returns a pool pointed at it
@@ -880,5 +898,40 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(summary.TableNames).NotTo(ContainElement("customer_export"))
+	})
+})
+
+var _ = Describe("TimescaleDB versions", Label("integration"), func() {
+	ctx := context.Background()
+
+	It("reads a TimescaleDB whose chunk catalog has no dropped column", func() {
+		pool := startDatabase(timescaleImageWithoutDroppedColumn)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.Tables).To(HaveLen(2))
+
+		summary, err := CollectSummary(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
+	})
+
+	It("leaves out the chunks an older TimescaleDB marked dropped and kept in its catalog", func() {
+		pool := startDatabase(timescaleImage)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = pool.Exec(ctx, preservedDroppedChunksDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		var liveChunks int
+		Expect(pool.QueryRow(ctx, `SELECT count(*) FROM timescaledb_information.chunks
+			WHERE hypertable_schema = 'umh' AND hypertable_name = 'value_bench'`).Scan(&liveChunks)).To(Succeed())
+
+		metrics, err := Collect(ctx, pool)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(tableNamed(metrics.Tables, "value_bench").Chunks).To(Equal(liveChunks))
 	})
 })
