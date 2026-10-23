@@ -16,9 +16,7 @@ package supervisor
 
 import (
 	"context"
-	"errors"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -31,42 +29,34 @@ import (
 // loadStoredLifecycleFlags returns a document holding only the lifecycle
 // flags (ShutdownRequested, Disabled) of the desired state stored for
 // workerID, for a tick that runs on the last good config. It returns nil when
-// nothing is stored or the load fails. It never writes to the store.
+// the load fails. It never writes to the store.
 func (s *Supervisor[TObserved, TDesired]) loadStoredLifecycleFlags(ctx context.Context, workerID string) persistence.Document {
 	// Load under lifecycleFlagMu, the lock the flag setters and
 	// saveDerivedDesiredState hold around their load and save, so a flag a
 	// setter has committed is the flag read here.
 	s.lifecycleFlagMu.Lock()
 
-	var existingDesiredTyped TDesired
+	shutdown, disabled, flagErr := s.storedLifecycleFlags(ctx, workerID)
 
-	loadErr := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &existingDesiredTyped)
 	s.lifecycleFlagMu.Unlock()
 
-	if loadErr != nil {
-		if !errors.Is(loadErr, persistence.ErrNotFound) {
-			// The caller then reads no flags, the same as for a worker that
-			// never derived.
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "stored_desired_state_load_failed",
-				deps.Err(loadErr),
-				deps.String("worker_id", workerID))
-		}
+	if flagErr != nil {
+		// The caller then reads no flags, the same as for a worker that
+		// never derived.
+		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "stored_desired_state_load_failed",
+			deps.Err(flagErr),
+			deps.String("worker_id", workerID))
 
-		return nil
-	}
-
-	ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState)
-	if !ok {
 		return nil
 	}
 
 	desiredDoc := make(persistence.Document)
 
-	if ds.IsShutdownRequested() {
+	if shutdown {
 		desiredDoc[FieldShutdownRequested] = true
 	}
 
-	if ds.IsDisabled() {
+	if disabled {
 		desiredDoc[FieldDisabled] = true
 	}
 
