@@ -239,8 +239,12 @@ UNIT_LABEL_FILTER := !integration && !redpanda-extended && !tls && !live
 UNIT_TEST_PKGS := ./cmd/... ./internal/... ./pkg/... ./test/...
 # Package that runs its Ginkgo suite in parallel (--procs); must be kept separate
 UNIT_TEST_PKGS_PARALLEL := ./pkg/fsmv2/examples/...
-# All unit-test packages except the parallel ones (evaluated on first use)
-UNIT_TEST_PKGS_SERIAL = $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/examples' | tr '\n' ' ')
+# Slowest unit-test package. go test starts test binaries in the order the
+# packages are listed, so listing it first lets the others run beside it
+# instead of after it.
+UNIT_TEST_PKG_SLOWEST := ./pkg/fsmv2/integration
+# All unit-test packages except the parallel ones, slowest first (evaluated on first use)
+UNIT_TEST_PKGS_SERIAL = $(UNIT_TEST_PKG_SLOWEST) $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/examples' | grep -v '/pkg/fsmv2/integration$$' | tr '\n' ' ')
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true

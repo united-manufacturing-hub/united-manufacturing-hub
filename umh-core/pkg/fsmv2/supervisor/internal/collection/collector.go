@@ -304,7 +304,12 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 		currentState := c.state.String()
 		c.mu.RUnlock()
 
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_skipped",
+		// The reap path checks IsRunning() before calling this, but the
+		// observation loop exits on its own once Shutdown cancels the supervisor
+		// context, so the collector can stop between that check and this one.
+		// Like collector_stop_skipped, this is the teardown race, so log it at
+		// Debug.
+		c.config.Logger.Debug("collector_final_observation_skipped",
 			deps.Reason("not_running"),
 			deps.String("current_state", currentState))
 
