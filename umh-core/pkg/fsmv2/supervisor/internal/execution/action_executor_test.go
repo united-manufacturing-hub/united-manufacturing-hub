@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -574,25 +575,12 @@ var _ = Describe("ActionExecutor", func() {
 
 		Context("HasActionInProgress non-blocking behavior", func() {
 			It("should never block when checking action status", func() {
-				// Proof by blocked action, not by wall clock: an action blocks
-				// in Execute on a channel this test controls, and a
-				// HasActionInProgress call must return from its own goroutine
-				// while that action is still blocked. A blocking read (one
-				// that waits on the executor's lock, which a running action
-				// holds) cannot return before the channel is released.
 				enteredExecute := make(chan struct{})
 				releaseBlocked := make(chan struct{})
 				completed := make(chan struct{})
-				// A failed Expect below panics out of the spec; releasing the
-				// blocked action anyway keeps AfterEach's Shutdown from
-				// reaping a worker that is still parked on the channel.
-				released := false
-				release := func() {
-					if !released {
-						released = true
-						close(releaseBlocked)
-					}
-				}
+				release := sync.OnceFunc(func() { close(releaseBlocked) })
+				// Also releases on a failed Expect, so AfterEach's Shutdown
+				// finds no worker parked on the channel.
 				defer release()
 
 				Expect(executor.EnqueueAction("blocked-action", &testAction{
@@ -609,6 +597,8 @@ var _ = Describe("ActionExecutor", func() {
 				Eventually(enteredExecute, 5*time.Second, 10*time.Millisecond).Should(BeClosed(),
 					"the blocked action must reach Execute before the read is probed")
 
+				// A read that waited on the executor's lock, which the running
+				// action holds, could not return before releaseBlocked closes.
 				readReturned := make(chan struct{})
 				go func() {
 					defer close(readReturned)

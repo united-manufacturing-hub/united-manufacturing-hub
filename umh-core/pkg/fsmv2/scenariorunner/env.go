@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -48,9 +49,9 @@ type Env struct {
 }
 
 // runRecorder is the per-run state that Step and WaitFor share across copies
-// of Env. The fields above mu are set before the supervisor starts and never
-// change. The matched maps exist so postRunFailure can name every expected
-// entry the run never logged.
+// of Env. The scenario and expected fields are set before the supervisor
+// starts and never change. The matched maps exist so postRunFailure can name
+// every expected entry the run never logged.
 type runRecorder struct {
 	// scenario is the name of the run's scenario, so a step line can be
 	// attributed when several scenarios run in one process.
@@ -59,6 +60,10 @@ type runRecorder struct {
 	expectedErrors      []string
 	expectedErrorCauses []error
 	expectedWarnings    []string
+
+	// teardownStarted is set before the runner shuts the supervisor down. It
+	// is atomic because recordLoggedError reads it before taking mu.
+	teardownStarted atomic.Bool
 
 	// mu guards the fields below. Step may run on a goroutine the scenario
 	// starts, and any goroutine that logs writes the first unexpected values.
@@ -79,13 +84,6 @@ type runRecorder struct {
 	// logged error has wrapped. Keyed by index because an error value is
 	// not always comparable, so it is not a safe map key.
 	matchedCauses map[int]bool
-
-	// teardownStarted records that the runner's teardown has begun. Teardown
-	// cancels the supervisor, and an in-flight action that fails with
-	// context.Canceled from that point on is the teardown itself working,
-	// not a scenario defect. Before teardown it stays a defect,
-	// so the flag is what recordLoggedError reads to tell the two apart.
-	teardownStarted bool
 }
 
 // alwaysAllowedMessages are logged by the collector in normal operation, so
@@ -98,14 +96,13 @@ var alwaysAllowedMessages = []string{
 
 // recordLoggedError keeps the first error the scenario does not expect. The
 // matchers run before the lock, because errors.Is calls user code that may
-// log again. Once teardown has started, a context.Canceled error is expected:
-// teardown cancels the supervisor, and an in-flight action fails with exactly
-// that.
+// log again.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
 	matched := matchedEntries(r.expectedErrors, msg)
 	caused := matchedCauseIndices(err, r.expectedErrorCauses)
-	unexpected := !r.messageAllowed(msg, r.expectedErrors) && !r.errorCauseAllowed(err) &&
-		!(r.teardownHasStarted() && errors.Is(err, context.Canceled))
+	unexpected := !r.messageAllowed(msg, r.expectedErrors) &&
+		!r.errorCauseAllowed(err) &&
+		!r.isTeardownCancellation(err)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -308,22 +305,15 @@ func (r *runRecorder) loggedError() error {
 	return r.firstUnexpectedErr
 }
 
-// markTeardownStarted records that teardown has started. The runner calls it
-// before it cancels the supervisor, so every context.Canceled error logged
-// after that point reads as teardown and not as a scenario defect.
-func (r *runRecorder) markTeardownStarted() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// isTeardownCancellation reports whether err is an in-flight action failing
+// because teardown cancelled the supervisor. Before teardown, the same
+// context.Canceled is a scenario defect.
+func (r *runRecorder) isTeardownCancellation(err error) bool {
+	if !r.teardownStarted.Load() {
+		return false
+	}
 
-	r.teardownStarted = true
-}
-
-// teardownHasStarted reports whether teardown has started.
-func (r *runRecorder) teardownHasStarted() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	return r.teardownStarted
+	return errors.Is(err, context.Canceled)
 }
 
 func (r *runRecorder) setLastStep(description string) {

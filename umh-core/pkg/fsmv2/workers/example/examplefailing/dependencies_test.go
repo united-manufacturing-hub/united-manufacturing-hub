@@ -84,9 +84,8 @@ var _ = Describe("FailingDependencies Observation-Based Recovery", func() {
 
 	Describe("ShouldDelayRecovery (time-based)", func() {
 		It("should delay while the configured milliseconds since the failure have not passed", func() {
-			// 10000, not 50: the assertion runs once, however slow a loaded
-			// CI box makes this spec's own statements, and 50 ms has failed
-			// there. The sibling spec below still waits out a real 50 ms.
+			// Far longer than this spec takes on a loaded runner. The next
+			// spec covers a delay that expires.
 			failDeps.SetRecoveryDelayMs(10000)
 			failDeps.SetLastFailureTime(time.Now())
 

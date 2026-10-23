@@ -221,11 +221,8 @@ var _ = Describe("Scenario run end", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := scenariorunner.SetupStore(logger)
 
-		// A cancellation the SCENARIO itself logs mid-Run is a defect: teardown
-		// has not started, so nothing of the runner's has been cancelled yet.
-		// The run must fail on it, so the harness's teardown allowance (a
-		// context.Canceled recorded as expected once teardown begins) cannot
-		// swallow a genuine pre-teardown cancellation.
+		// Teardown has not started while Run executes, so the runner has
+		// cancelled nothing and this context.Canceled is a defect.
 		cancelling := scenariorunner.Scenario{
 			Name:        "run-precancel-logging",
 			Description: "test-local Run that logs a context.Canceled error and still returns nil",
