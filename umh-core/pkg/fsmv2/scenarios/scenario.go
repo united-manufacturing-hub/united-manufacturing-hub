@@ -39,19 +39,3 @@
 // worker. This package holds the scenario list, the application supervisor
 // the runner drives, and the states each worker type may report.
 package scenarios
-
-// ListScenarios returns all registered scenario names and descriptions,
-// merging every registry into one listing.
-func ListScenarios() map[string]string {
-	result := make(map[string]string, len(Registry)+len(LiveRegistry))
-
-	for name, scenario := range Registry {
-		result[name] = scenario.Description
-	}
-
-	for name, scenario := range LiveRegistry {
-		result[name] = scenario.Description
-	}
-
-	return result
-}

@@ -15,28 +15,8 @@
 package scenarios
 
 import (
-	"context"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
 )
-
-// timesEntered returns how many times the worker has entered state. The count
-// keeps its value after the worker leaves the state, so a wait still sees a
-// state the worker has already left.
-func timesEntered[TStatus any](obs fsmv2.Observation[TStatus], state string) int64 {
-	return obs.Metrics.Framework.TransitionsByState[state]
-}
-
-// NoopScenario changes nothing, so the application worker spawns only its
-// config worker kernel child.
-var NoopScenario = scenariorunner.Scenario{
-	Name:        "noop",
-	Description: "Runs the kernel-only supervisor and changes nothing",
-	Run: func(_ context.Context, _ scenariorunner.Env) error {
-		return nil
-	},
-}
 
 // Registry contains all available scenarios, merged into ListScenarios
 // alongside LiveRegistry. A name may be in only one of the two; the spec
@@ -76,4 +56,20 @@ var Registry = map[string]scenariorunner.Scenario{
 // CLI runs them. The registry spec does not, because CI does not control those.
 var LiveRegistry = map[string]scenariorunner.Scenario{
 	"cpu-host": CPUHostScenario,
+}
+
+// ListScenarios returns all registered scenario names and descriptions,
+// merging every registry into one listing.
+func ListScenarios() map[string]string {
+	result := make(map[string]string, len(Registry)+len(LiveRegistry))
+
+	for name, scenario := range Registry {
+		result[name] = scenario.Description
+	}
+
+	for name, scenario := range LiveRegistry {
+		result[name] = scenario.Description
+	}
+
+	return result
 }
