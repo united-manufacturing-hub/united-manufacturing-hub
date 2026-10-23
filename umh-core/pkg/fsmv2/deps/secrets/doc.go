@@ -42,21 +42,27 @@
 // Get returns ErrNotFound when nothing is stored under the key yet.
 //
 // The store keeps a worker's entries until the process exits or the worker
-// deletes them. Nothing removes them when the worker is removed or restarted,
-// so a worker that needs its entries gone when it stops deletes them itself.
+// deletes them. Nothing removes them when the worker is removed or restarted.
+// A restart builds a new worker with the same hierarchy path, and that worker
+// sees the entries written before the restart. A worker that must not read old
+// entries deletes them in its constructor, and deletes them again when it
+// stops.
 //
-// A child reaches its parent's entries through the parent's dependencies, not
-// through a scope of its own. Actions receive their worker's dependencies, and
-// the push worker's dependency builder (register.SetGlobalDepsBuilder)
-// receives the transport dependencies from register.GlobalDeps. With a Secrets
-// method on TransportDependencies that returns the scope, the token would
-// travel like this:
+// A child reads its parent's entries through the parent's dependencies, not
+// through a scope of its own. For example, the push worker
+// (workers/transport/push) is a child of the transport worker and sends
+// outbound messages with transport's JWT. Its dependency builder gets
+// transport's dependencies from register.GlobalDeps. With a Secrets method on
+// TransportDependencies, the token would travel like this:
 //
-//	// AuthenticateAction, on the transport dependencies it receives
+//	// AuthenticateAction, in the transport worker
 //	err := deps.Secrets().Put(transport.JWTKey, secrets.NewValue(authResp.Token))
 //
-//	// push, on the transport dependencies its dependency builder received
-//	jwt, err := parentDeps.Secrets().Get(transport.JWTKey)
+//	// push worker; transportDeps is the *TransportDependencies from register.GlobalDeps
+//	jwt, err := transportDeps.Secrets().Get(transport.JWTKey)
+//
+// Push only reads the token, so PushDependencies should keep only Get, behind
+// an interface such as SecretReader, not the whole Scope.
 //
 // ForWorker does not check who calls it. Code that passes another worker's
 // dependencies, or builds its own PathSource, gets that path's scope.

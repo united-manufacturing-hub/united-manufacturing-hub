@@ -16,12 +16,11 @@ package secrets
 
 import "errors"
 
-// ErrInvalidName is returned by Get, Put and Delete for a Key that NewKey did
-// not build.
-var ErrInvalidName = errors.New("secrets: key not built with NewKey")
+// ErrZeroKey is returned by Get, Put and Delete for a zero Key, one that NewKey
+// did not build.
+var ErrZeroKey = errors.New("secrets: zero Key; declare keys with NewKey")
 
-// ForWorker returns an error wrapping ErrInvalidPath when the hierarchy path
-// is empty or malformed.
+// ForWorker returns ErrInvalidPath when the hierarchy path is empty.
 var ErrInvalidPath = errors.New("secrets: invalid hierarchy path")
 
 // ErrNotFound is returned by Get when nothing is stored under the key in the

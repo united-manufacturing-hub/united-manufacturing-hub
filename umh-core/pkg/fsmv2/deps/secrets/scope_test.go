@@ -117,19 +117,27 @@ var _ = Describe("Scope", func() {
 		Expect(value.Reveal()).To(Equal("v1"))
 	})
 
-	It("refuses an empty or malformed path in ForWorker with ErrInvalidPath, and the store stays empty", func() {
+	It("refuses an empty path in ForWorker with ErrInvalidPath, and the store stays empty", func() {
 		store := secrets.NewStore()
-		handle := store.Handle()
 
-		for _, malformed := range []string{"", "/a(x)", "a(x)/", "a(x)//b(y)", "a(x)/../b(y)", "a(x)/./b(y)", "."} {
-			scope, err := handle.ForWorker(fakeDeps{malformed})
-			Expect(errors.Is(err, secrets.ErrInvalidPath)).To(BeTrue(), "ForWorker(%q)", malformed)
+		scope, err := store.Handle().ForWorker(fakeDeps{""})
+		Expect(errors.Is(err, secrets.ErrInvalidPath)).To(BeTrue(), "ForWorker(\"\")")
 
-			err = scope.Put(tokenKey, secrets.NewValue("v"))
-			Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue(), "Put on the scope from ForWorker(%q)", malformed)
-		}
+		err = scope.Put(tokenKey, secrets.NewValue("v"))
+		Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue(), "Put on the scope from ForWorker(\"\")")
 
 		Expect(secrets.EntryCount(store)).To(Equal(0))
+	})
+
+	It("keeps a path with \"..\" apart from the path it would resolve to", func() {
+		handle := secrets.NewStore().Handle()
+		dotted := open(handle, "a(x)/../"+transportPath)
+		transport := open(handle, transportPath)
+
+		Expect(dotted.Put(tokenKey, secrets.NewValue("v1"))).To(Succeed())
+
+		_, err := transport.Get(tokenKey)
+		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue())
 	})
 
 	It("returns ErrNoStore from ForWorker for a handle with no store behind it", func() {
@@ -148,16 +156,16 @@ var _ = Describe("Scope", func() {
 		Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue(), "Delete")
 	})
 
-	It("returns ErrInvalidName from Get, Put and Delete for a Key that NewKey did not build, writes nothing, and accepts a key from NewKey", func() {
+	It("returns ErrZeroKey from Get, Put and Delete for a Key that NewKey did not build, writes nothing, and accepts a key from NewKey", func() {
 		store := secrets.NewStore()
 		scope := open(store.Handle(), transportPath)
 
 		_, err := scope.Get(secrets.Key{})
-		Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Get")
+		Expect(errors.Is(err, secrets.ErrZeroKey)).To(BeTrue(), "Get")
 		err = scope.Put(secrets.Key{}, secrets.NewValue("v"))
-		Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Put")
+		Expect(errors.Is(err, secrets.ErrZeroKey)).To(BeTrue(), "Put")
 		err = scope.Delete(secrets.Key{})
-		Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Delete")
+		Expect(errors.Is(err, secrets.ErrZeroKey)).To(BeTrue(), "Delete")
 
 		Expect(secrets.EntryCount(store)).To(Equal(0))
 
@@ -264,10 +272,8 @@ var _ = Describe("Scope", func() {
 })
 
 var _ = Describe("NewKey", func() {
-	It("panics on an empty name, a name with \"/\", \".\" and \"..\"", func() {
-		for _, name := range []string{"", "a/b", ".", ".."} {
-			Expect(func() { secrets.NewKey(name) }).To(Panic(), "NewKey(%q)", name)
-		}
+	It("panics on an empty name", func() {
+		Expect(func() { secrets.NewKey("") }).To(Panic())
 	})
 
 	It("accepts a plain name, and the key it returns stores and reads an entry", func() {

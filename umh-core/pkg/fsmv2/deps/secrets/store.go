@@ -30,6 +30,9 @@ type Store struct {
 }
 
 // entryID identifies one entry by its owner's hierarchy path and its name.
+// The two stay separate fields, so a "/", "." or ".." in either cannot reach
+// another path's entry. A store that joins them into one string, such as a
+// file path, must check both again.
 type entryID struct {
 	path string
 	name string
