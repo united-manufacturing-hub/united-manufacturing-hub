@@ -52,6 +52,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/secrets"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
@@ -675,6 +676,11 @@ func buildFSMv2Supervisor(
 	}
 
 	fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
+
+	// The process has one secrets store. Its handle goes into the root
+	// dependencies so that every worker can open its own scope with secrets.ScopeOf.
+	secretsStore := secrets.NewMemoryStore()
+	fsmv2config.SetDependency(fsmv2Deps, secrets.StoreKey, secretsStore.Handle())
 
 	// Publish the dynamicchildren registry under the configworker deps key and
 	// the process-scoped fsmv2client before constructing the supervisor, so the
