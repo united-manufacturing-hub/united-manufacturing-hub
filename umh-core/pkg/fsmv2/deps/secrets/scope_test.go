@@ -177,13 +177,13 @@ var _ = Describe("Scope", func() {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				_ = putter.Put(tokenKey, secrets.NewValue("v"))
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				_, _ = getter.Get(tokenKey)
 			}
 		}()

@@ -45,11 +45,11 @@ var _ = Describe("Value", func() {
 		v := secrets.NewValue(planted)
 
 		_, err := json.Marshal(v)
-		Expect(err).NotTo(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(errors.Is(err, secrets.ErrNotSerializable)).To(BeTrue())
 
 		_, err = json.Marshal(struct{ S secrets.Value }{v})
-		Expect(err).NotTo(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(errors.Is(err, secrets.ErrNotSerializable)).To(BeTrue())
 	})
 
@@ -57,14 +57,14 @@ var _ = Describe("Value", func() {
 		v := secrets.NewValue(planted)
 
 		_, err := yaml.Marshal(v)
-		Expect(err).NotTo(BeNil())
+		Expect(err).To(HaveOccurred())
 
 		_, err = v.MarshalText()
-		Expect(err).NotTo(BeNil())
+		Expect(err).To(HaveOccurred())
 
 		var buf bytes.Buffer
 		err = gob.NewEncoder(&buf).Encode(v)
-		Expect(err).NotTo(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(buf.String()).NotTo(ContainSubstring(planted))
 	})
 

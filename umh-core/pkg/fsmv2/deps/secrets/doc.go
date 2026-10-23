@@ -48,8 +48,9 @@
 // A child reaches its parent's entries through the parent's dependencies, not
 // through a scope of its own. Actions receive their worker's dependencies, and
 // the push worker's dependency builder (register.SetGlobalDepsBuilder)
-// receives the transport dependencies from register.GlobalDeps. With a Secrets method on TransportDependencies that
-// returns the scope, the token would travel like this:
+// receives the transport dependencies from register.GlobalDeps. With a Secrets
+// method on TransportDependencies that returns the scope, the token would
+// travel like this:
 //
 //	// AuthenticateAction, on the transport dependencies it receives
 //	err := deps.Secrets().Put(transport.JWTKey, secrets.NewValue(authResp.Token))
