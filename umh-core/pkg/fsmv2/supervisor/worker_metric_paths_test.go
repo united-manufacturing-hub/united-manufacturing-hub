@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -77,6 +78,21 @@ func fsmv2SeriesFor(hierarchyPath string) map[string]float64 {
 	}
 
 	return series
+}
+
+// expectNoMetricsAfterSpec fails the current spec if anything still records a
+// metric under hierarchyPath after the spec body returns. A worker left
+// running keeps saving observations every observation interval. Its metrics
+// are process-wide, so it would change the numbers other specs read.
+func expectNoMetricsAfterSpec(hierarchyPath string) {
+	DeferCleanup(func() {
+		atEnd := fsmv2SeriesFor(hierarchyPath)
+
+		Consistently(func() map[string]float64 {
+			return fsmv2SeriesFor(hierarchyPath)
+		}, 2*supervisor.DefaultObservationInterval, 100*time.Millisecond).Should(Equal(atEnd),
+			"a worker is still recording metrics under %s after the spec ended", hierarchyPath)
+	})
 }
 
 // twoWorkerSupervisor returns a supervisor running the mockIdentity worker
