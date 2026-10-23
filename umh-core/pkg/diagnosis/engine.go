@@ -209,12 +209,15 @@ func buildSignalState[S any](path string, s Signal[S], index int) signalState[S]
 	st := signalState[S]{
 		instruments: instruments,
 		path:        path,
-		latch: Latch{identity: Identity{
-			Signal:      s.Name,
-			Tier:        s.Tier,
-			Attribution: s.Attribution,
-			Index:       index,
-		}},
+		latch: Latch{
+			identity: Identity{
+				Signal:      s.Name,
+				Tier:        s.Tier,
+				Attribution: s.Attribution,
+				Index:       index,
+			},
+			refireAtOnce: s.RefireAtOnce,
+		},
 		refinements:     make([]signalState[S], 0, len(s.Refinements)),
 		demoteSpan:      s.DemoteSpan,
 		releaseOnAbsent: s.ReleaseOnAbsent,

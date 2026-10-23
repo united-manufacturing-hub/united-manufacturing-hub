@@ -112,6 +112,15 @@ type Signal[S any] struct {
 	// ReleaseOnAbsent stops reporting the signal the moment nothing can answer
 	// it at all, rather than waiting out DemoteSpan.
 	ReleaseOnAbsent bool
+	// RefireAtOnce lets a released signal fire again on the next reading past
+	// its fire mark. Without it, a released signal waits one window span (the
+	// Span of the instrument judging it) before it may fire again. That wait,
+	// the cooldown, keeps a reading that moves back and forth across the fire
+	// and clear marks from firing and releasing every few ticks. Set
+	// RefireAtOnce when each new crossing of the fire mark is a separate
+	// failure that must be reported at once, such as a failure counter with a
+	// ten-minute span.
+	RefireAtOnce bool
 }
 
 // CapableInstruments returns the instruments the environment satisfies, in
