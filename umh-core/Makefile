@@ -241,6 +241,9 @@ UNIT_TEST_PKGS := ./cmd/... ./internal/... ./pkg/... ./test/...
 UNIT_TEST_PKGS_PARALLEL := ./pkg/fsmv2/scenarios/...
 # All unit-test packages except the parallel ones (evaluated on first use)
 UNIT_TEST_PKGS_SERIAL = $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/scenarios' | tr '\n' ' ')
+# The fsmv2 module (./fsmv2) is its own Go module, so umh-core's ./... does not
+# reach it. vet, lint, nilaway and unit-test also run there.
+FSMV2_DIR := fsmv2
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
@@ -338,9 +341,11 @@ cleanup-all: cleanup-ci cleanup-tmp cleanup-data
 
 vet:
 	go vet -tags=test ./...
+	cd $(FSMV2_DIR) && go vet -tags=test ./...
 
 lint:
 	golangci-lint run --fix ./...
+	cd $(FSMV2_DIR) && golangci-lint run --fix ./...
 
 nilaway:
 	# See lefthook.yaml for more details
@@ -348,6 +353,9 @@ nilaway:
 		-include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" \
 		-exclude-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" \
 		-exclude-errors-in-files="integration/" \
+		./...
+	cd $(FSMV2_DIR) && nilaway \
+		-include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" \
 		./...
 
 # Meta target for vet, nilaway and lint
@@ -362,6 +370,9 @@ ifeq ($(CI), true)
 	gotestsum --junitfile unit-test-report.xml -- -race -v -tags=test -count=1 -failfast -p 4 \
 		$(UNIT_TEST_PKGS_SERIAL) \
 		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)' -ginkgo.no-color || FAILED=1; \
+	(cd $(FSMV2_DIR) && gotestsum --junitfile ../unit-test-report-fsmv2.xml -- -race -v -tags=test -count=1 -failfast -p 4 \
+		./... \
+		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)' -ginkgo.no-color) || FAILED=1; \
 	go run github.com/onsi/ginkgo/v2/ginkgo run --procs=30 --race --tags=test \
 		--label-filter='$(UNIT_LABEL_FILTER)' --junit-report=unit-test-report-parallel.xml \
 		--no-color \
@@ -370,6 +381,8 @@ ifeq ($(CI), true)
 else
 	go test -race -v -tags=test -count=1 -failfast -p 4 \
 		$(UNIT_TEST_PKGS_SERIAL) \
+		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
+	cd $(FSMV2_DIR) && go test -race -v -tags=test -count=1 -failfast -p 4 ./... \
 		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
 	go run github.com/onsi/ginkgo/v2/ginkgo run --procs=30 --race --tags=test \
 		--label-filter='$(UNIT_LABEL_FILTER)' \
