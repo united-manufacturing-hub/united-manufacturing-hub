@@ -745,10 +745,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			return nil
 		}
 
-		// Zero workers on a started supervisor is a transient state (e.g., during child
-		// restart). The tick returns here, so this supervisor's children are not
-		// reconciled or ticked until it has a worker again or shuts down. A child
-		// dropped in the removal tick goes with it, so the window is short.
+		// Zero workers on a started supervisor: a restart is in progress, or its
+		// re-add failed and is pending. The tick returns here, so the children are
+		// not reconciled or ticked until a worker is back, which after a config
+		// error lasts until the config is fixed (ENG-6527).
 		// Log at Info, not Warn/Error, to avoid Sentry noise.
 		if s.noWorkersWarnedOnce.CompareAndSwap(false, true) {
 			s.logger.Info("tick_skipped_no_workers",
@@ -850,8 +850,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			childrenSpecs = provider.GetChildrenSpecs()
 		}
 	} else if s.reAddPending(firstWorkerID) {
-		// A restart removed the worker and its re-add failed. The children
-		// keep running on the cached specs until the re-add succeeds.
+		// A restart removed the worker and its re-add failed. This tick still
+		// reconciles the children from the cached specs. Later ticks return at the
+		// zero-worker check until the re-add succeeds (ENG-6527).
 		if provider, ok := desired.(config.ChildSpecProvider); ok {
 			childrenSpecs = provider.GetChildrenSpecs()
 		}
