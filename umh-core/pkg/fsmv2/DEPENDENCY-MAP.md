@@ -22,12 +22,13 @@ supply a mock provider under the same keys, as "Mocks" in
 The push and pull children read the transport worker's channels through its
 dependencies, so they share its channels without a provider of their own.
 
-## Cert Handler and Store via the Dependency Map
+## Cert Handler and Stores via the Dependency Map
 
 | Worker | Key | Value type | `cmd/main.go` sets it |
 |---|---|---|---|
 | certfetcher | `certfetcher.CertHandlerKey` | `certificatehandler.Handler` | only with the gatekeeper enabled; the comment above that call says why |
 | persistence | `persistence.StoreKey` | `storage.TriangularStoreInterface` | always |
+| none yet | `secrets.StoreKey` | `secrets.Handle` | always |
 
 Like the channel providers, `NewCertFetcherWorker` and `NewPersistenceWorker`
 return an error naming the key when the map holds none.
