@@ -33,8 +33,9 @@ import (
 )
 
 const (
-	timescaleImage = "timescale/timescaledb:2.24.0-pg17"
-	postgresImage  = "postgres:17-alpine"
+	timescaleImage                     = "timescale/timescaledb:2.24.0-pg17"
+	timescaleImageWithoutDroppedColumn = "timescale/timescaledb:2.26.0-pg17"
+	postgresImage                      = "postgres:17-alpine"
 )
 
 // historianSchemaDDL mirrors the shape benthos-umh's historian output creates: two
@@ -902,6 +903,20 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 
 var _ = Describe("TimescaleDB versions", Label("integration"), func() {
 	ctx := context.Background()
+
+	It("reads a TimescaleDB whose chunk catalog has no dropped column", func() {
+		pool := startDatabase(timescaleImageWithoutDroppedColumn)
+		_, err := pool.Exec(ctx, historianSchemaDDL)
+		Expect(err).NotTo(HaveOccurred())
+
+		metrics, err := Collect(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(metrics.Tables).To(HaveLen(2))
+
+		summary, err := CollectSummary(ctx, pool)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
+	})
 
 	It("leaves out the chunks an older TimescaleDB marked dropped and kept in its catalog", func() {
 		pool := startDatabase(timescaleImage)
