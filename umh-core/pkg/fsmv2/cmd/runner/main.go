@@ -29,7 +29,8 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 )
 
 func main() {
@@ -62,17 +63,17 @@ func main() {
 	if *listFlag {
 		fmt.Println("Available scenarios:")
 
-		scenarios := examples.ListScenarios()
+		listed := scenarios.ListScenarios()
 
-		names := make([]string, 0, len(scenarios))
-		for name := range scenarios {
+		names := make([]string, 0, len(listed))
+		for name := range listed {
 			names = append(names, name)
 		}
 
 		sort.Strings(names)
 
 		for _, name := range names {
-			fmt.Printf("  %-15s - %s\n", name, scenarios[name])
+			fmt.Printf("  %-15s - %s\n", name, listed[name])
 		}
 
 		return
@@ -113,10 +114,10 @@ func main() {
 
 	defer func() { _ = logger.Sync() }()
 
-	scenario, found := examples.Registry[*scenarioName]
+	scenario, found := scenarios.Registry[*scenarioName]
 
 	if !found {
-		liveScenario, isLive := examples.LiveRegistry[*scenarioName]
+		liveScenario, isLive := scenarios.LiveRegistry[*scenarioName]
 		if isLive {
 			scenario, found = liveScenario, true
 		}
@@ -132,7 +133,7 @@ func main() {
 	description := scenario.Description
 
 	// One signal owner: the CLI creates the cancellable ctx and is the only
-	// signal.Notify site, installed BEFORE examples.Run so a SIGINT during a
+	// signal.Notify site, installed BEFORE scenarios.Run so a SIGINT during a
 	// running scenario cannot kill the process without teardown. The first
 	// SIGINT cancels the ctx (a scenario sees it, the runner tears down
 	// gracefully); a second SIGINT force-exits.
@@ -166,7 +167,7 @@ func main() {
 		},
 	)
 
-	store := examples.SetupStore(newRunLogger(logger))
+	store := scenariorunner.SetupStore(newRunLogger(logger))
 
 	durationStr := "endless (until Ctrl+C)"
 
@@ -181,7 +182,7 @@ func main() {
 		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, scenario)...,
 	)
 
-	result, err := examples.Run(ctx, examples.RunConfig{
+	result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
 		Scenario:           scenario,
 		Duration:           settleWindow,
 		TickInterval:       *tickInterval,
@@ -234,7 +235,7 @@ func main() {
 }
 
 func fatalMessage(runErr error) string {
-	if errors.Is(runErr, examples.ErrScenarioFailed) {
+	if errors.Is(runErr, scenariorunner.ErrScenarioFailed) {
 		return "Scenario failed"
 	}
 
@@ -242,7 +243,7 @@ func fatalMessage(runErr error) string {
 }
 
 // shutdownExitCode returns the process exit code for a completed scenario run.
-func shutdownExitCode(result *examples.RunResult) int {
+func shutdownExitCode(result *scenariorunner.RunResult) int {
 	if result == nil {
 		return 0
 	}
@@ -310,7 +311,7 @@ func newRunLogger(logger *zap.Logger) deps.FSMLogger {
 	return deps.NewUnsampledFSMLogger(logger.Sugar())
 }
 
-func startingScenarioFields(name, description, duration string, tick time.Duration, s examples.Scenario) []zap.Field {
+func startingScenarioFields(name, description, duration string, tick time.Duration, s scenariorunner.Scenario) []zap.Field {
 	return append([]zap.Field{
 		zap.String("name", name),
 		zap.String("description", description),
@@ -320,7 +321,7 @@ func startingScenarioFields(name, description, duration string, tick time.Durati
 }
 
 // expectedFields returns one field per expectation list the scenario fills.
-func expectedFields(s examples.Scenario) []zap.Field {
+func expectedFields(s scenariorunner.Scenario) []zap.Field {
 	var fields []zap.Field
 
 	if len(s.ExpectedErrors) > 0 {
