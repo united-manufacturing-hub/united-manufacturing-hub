@@ -63,6 +63,7 @@ var _ = Describe("Value", func() {
 		Expect(err).To(HaveOccurred())
 
 		var buf bytes.Buffer
+
 		err = gob.NewEncoder(&buf).Encode(v)
 		Expect(err).To(HaveOccurred())
 		Expect(buf.String()).NotTo(ContainSubstring(planted))
@@ -86,7 +87,9 @@ var _ = Describe("Value", func() {
 
 	It("checks that zap logging writes neither the value nor its encoded forms", func() {
 		obsCore, logs := observer.New(zapcore.DebugLevel)
+
 		var buf bytes.Buffer
+
 		jsonCore := zapcore.NewCore(
 			zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
 			zapcore.AddSync(&buf),
@@ -131,6 +134,7 @@ var _ = Describe("Value", func() {
 
 		o := withValue{v: secrets.NewValue(planted)}
 		e := withExported{V: secrets.NewValue(planted)}
+
 		for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%q", "%x", "%d"} {
 			out := fmt.Sprintf(verb, o)
 			Expect(out).NotTo(ContainSubstring(planted), "unexported field, for verb "+verb)

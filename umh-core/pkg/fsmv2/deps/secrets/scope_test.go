@@ -175,19 +175,23 @@ var _ = Describe("Scope", func() {
 		getter := open(handle, transportPath)
 
 		var wg sync.WaitGroup
+
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
+
 			for range 1000 {
 				_ = putter.Put(tokenKey, secrets.NewValue("v"))
 			}
 		}()
 		go func() {
 			defer wg.Done()
+
 			for range 1000 {
 				_, _ = getter.Get(tokenKey)
 			}
 		}()
+
 		wg.Wait()
 	})
 
@@ -198,6 +202,7 @@ var _ = Describe("Scope", func() {
 
 		root := map[string]any{}
 		config.SetDependency(root, secrets.StoreKey, store.Handle())
+
 		child := map[string]any{"other": 1}
 		merged := config.MergeDependencies(root, child)
 
@@ -267,6 +272,7 @@ var _ = Describe("NewKey", func() {
 
 	It("accepts a plain name, and the key it returns stores and reads an entry", func() {
 		var key secrets.Key
+
 		Expect(func() { key = secrets.NewKey("transport.jwt") }).NotTo(Panic())
 
 		scope := open(secrets.NewStore().Handle(), transportPath)

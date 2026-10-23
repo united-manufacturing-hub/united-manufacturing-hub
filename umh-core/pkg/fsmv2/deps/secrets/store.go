@@ -53,6 +53,7 @@ func (s *Store) Handle() Handle {
 func (s *Store) get(key entryID) (Value, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	value, found := s.entries[key]
 
 	return value, found
@@ -61,11 +62,13 @@ func (s *Store) get(key entryID) (Value, bool) {
 func (s *Store) put(key entryID, value Value) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.entries[key] = value
 }
 
 func (s *Store) delete(key entryID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	delete(s.entries, key)
 }

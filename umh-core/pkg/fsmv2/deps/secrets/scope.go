@@ -59,6 +59,7 @@ func (h Handle) ForWorker(d PathSource) (Scope, error) {
 	if h.store == nil {
 		return Scope{}, ErrNoStore
 	}
+
 	path := d.GetHierarchyPath()
 	if err := checkPath(path); err != nil {
 		return Scope{}, err
@@ -74,6 +75,7 @@ func (s Scope) Get(key Key) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
+
 	value, found := s.store.get(entry)
 	if !found {
 		return Value{}, ErrNotFound
@@ -88,6 +90,7 @@ func (s Scope) Put(key Key, value Value) error {
 	if err != nil {
 		return err
 	}
+
 	s.store.put(entry, value)
 
 	return nil
@@ -99,6 +102,7 @@ func (s Scope) Delete(key Key) error {
 	if err != nil {
 		return err
 	}
+
 	s.store.delete(entry)
 
 	return nil
@@ -109,6 +113,7 @@ func (s Scope) entryFor(key Key) (entryID, error) {
 	if s.store == nil {
 		return entryID{}, ErrNoStore
 	}
+
 	if key.name == "" {
 		return entryID{}, ErrInvalidName
 	}
