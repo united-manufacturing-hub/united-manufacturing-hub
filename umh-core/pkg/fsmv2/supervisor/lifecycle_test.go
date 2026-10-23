@@ -214,10 +214,12 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 		It("does not tombstone the documents on restart", func() {
 			identity := mockIdentity()
+			expectNoMetricsAfterSpec(identity.HierarchyPath)
 			store := newMockTriangularStore()
 			s := newRemovalSupervisor(store, deps.NewNopFSMLogger())
 			s.TestSetPendingRestart(identity.ID)
 			s.TestMarkAsStarted()
+			defer s.Shutdown()
 
 			Expect(s.TestTick(context.Background())).To(Succeed())
 			Expect(s.ListWorkers()).To(HaveLen(1))
@@ -381,6 +383,8 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 		Context("when SignalNeedsRemoval received for worker in pendingRestart", func() {
 			It("should restart worker instead of removing", func() {
+				identity := mockIdentity()
+				expectNoMetricsAfterSpec(identity.HierarchyPath)
 				store := newMockTriangularStore()
 
 				initialState := &mockState{}
@@ -395,11 +399,11 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 				s := newSupervisorWithWorker(worker, store, supervisor.CollectorHealthConfig{})
 
-				identity := mockIdentity()
 				s.TestSetPendingRestart(identity.ID)
 
 				// processSignal only restarts when started=true; set it before the tick.
 				s.TestMarkAsStarted()
+				defer s.Shutdown()
 
 				workersBefore := s.ListWorkers()
 				Expect(workersBefore).To(HaveLen(1))

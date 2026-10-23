@@ -16,16 +16,12 @@ package transport
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // ChannelProvider supplies inbound/outbound channels for transport child workers (PushWorker, PullWorker).
-type ChannelProvider interface {
-	GetChannels(workerID string) (inbound chan<- *types.UMHMessage, outbound <-chan *types.UMHMessage)
-	// GetInboundStats returns the capacity and current length of the inbound channel.
-	// Used by PullWorker to detect backpressure before pulling messages.
-	GetInboundStats(workerID string) (capacity int, length int)
-}
+type ChannelProvider = deps.ChannelProvider[*types.UMHMessage]
 
 // ChannelProviderKey is the dependency-map key for the transport worker's ChannelProvider.
 var ChannelProviderKey = config.NewDependencyKey[ChannelProvider]("transport.channel_provider")

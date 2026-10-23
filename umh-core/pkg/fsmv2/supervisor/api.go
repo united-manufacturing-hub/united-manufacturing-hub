@@ -54,6 +54,20 @@ import (
 //   - Layer 4: Logical validation (dependencies compatible?)
 func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, worker fsmv2.Worker) error {
 	s.mu.Lock()
+
+	// A worker being removed stays in s.workers until its final observation.
+	// Wait for that removal, so the same id can be added again.
+	for {
+		removalDone, removing := s.removing[identity.ID]
+		if !removing {
+			break
+		}
+
+		s.mu.Unlock()
+		<-removalDone
+		s.mu.Lock()
+	}
+
 	defer s.mu.Unlock()
 
 	if _, exists := s.workers[identity.ID]; exists {
@@ -120,7 +134,12 @@ func (s *Supervisor[TObserved, TDesired]) deriveInitialDesired(worker fsmv2.Work
 	}
 
 	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
+		// A config error is the user's mistake and stays out of Sentry; the
+		// caller decides how to log it. See "Config errors" in the package doc.
+		var cfgErr *config.ConfigError
+		if !errors.As(err, &cfgErr) {
+			s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
+		}
 
 		return nil, fmt.Errorf("failed to derive initial desired state: %w", err)
 	}

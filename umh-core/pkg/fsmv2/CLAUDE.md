@@ -27,4 +27,6 @@ Do not filter with `-run Architecture`. The whole Ginkgo suite is one Go test, `
 | Observations and worker metrics | `NewObservation` in `observation.go`, `wrapNewObservation` in `supervisor/internal/collection/collector.go` |
 | Supervisor, tick loop, graceful shutdown budget | `supervisor/doc.go` |
 | Dependencies | `DEPENDENCIES.md` |
+| The dependency map: the keys production sets in `cmd/main.go` | `DEPENDENCY-MAP.md` |
+| Writing a scenario: mocks, `Run`, what fails a run, running it | `scenarios/SCENARIOS.md` |
 | Porting an FSMv1 component | `MIGRATION.md` |

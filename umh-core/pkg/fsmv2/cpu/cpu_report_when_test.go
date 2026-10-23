@@ -27,7 +27,7 @@ import (
 // reconfiguration, a failure that recovers. Construction-only reporting leaves
 // all of it silent.
 var _ = Describe("a read that starts failing later is reported too", func() {
-	cpuset := cgroupBase + "/cpuset.cpus.effective"
+	cpuset := CgroupBase + "/cpuset.cpus.effective"
 	ctx := context.Background()
 
 	missing := func(p string) error {

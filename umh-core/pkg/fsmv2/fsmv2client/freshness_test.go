@@ -63,6 +63,11 @@ func (s *stubStateReader) LoadObservedTyped(_ context.Context, _, _ string, resu
 	return nil
 }
 
+// LoadDesiredTyped reports that no desired state is saved.
+func (*stubStateReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 func TestGetFresh_ClassifiesEachReadResult(t *testing.T) {
 	const maxAge = 10 * time.Second
 
@@ -155,6 +160,11 @@ func (p *partialDecodeReader) LoadObservedTyped(_ context.Context, _, _ string, 
 	return p.err
 }
 
+// LoadDesiredTyped reports that no desired state is saved.
+func (*partialDecodeReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 func TestGetFresh_UnknownReturnsTheZeroObservation(t *testing.T) {
 	decodeErr := errors.New("decode failed half-way")
 	reader := &partialDecodeReader{
@@ -216,5 +226,22 @@ func TestSetClientGetClient_ProcessScopedAccessor(t *testing.T) {
 
 	if got := fsmv2client.GetClient(); got != nil {
 		t.Fatalf("GetClient after SetClient(nil) = %v, want nil", got)
+	}
+}
+
+func TestFreshnessString_NamesEachReason(t *testing.T) {
+	cases := map[fsmv2client.Freshness]string{
+		fsmv2client.Unknown:       "unknown",
+		fsmv2client.Deleted:       "deleted",
+		fsmv2client.NotFound:      "not-found",
+		fsmv2client.Stale:         "stale",
+		fsmv2client.Fresh:         "fresh",
+		fsmv2client.Freshness(99): "unknown",
+	}
+
+	for f, want := range cases {
+		if got := f.String(); got != want {
+			t.Errorf("Freshness(%d).String() = %q, want %q", int(f), got, want)
+		}
 	}
 }

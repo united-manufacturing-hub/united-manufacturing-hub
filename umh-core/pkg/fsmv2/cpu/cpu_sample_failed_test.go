@@ -28,7 +28,7 @@ import (
 // measurement usable. The verb says which, so the issue title tells a reader
 // whether any measurement exists.
 var _ = Describe("cpu.stat reports under a verb that says what its failure cost", func() {
-	statPath := cgroupBase + "/cpu.stat"
+	statPath := CgroupBase + "/cpu.stat"
 
 	It("uses sample_failed when the file would not parse", func() {
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec abc\n")})
@@ -52,7 +52,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 		// Only cpu.stat can void the sample. A cpu.pressure that fails in the same
 		// tick cost one signal, so its own event must not claim the sample died
 		// with it: the verb belongs to the read it is reported under.
-		pressurePath := cgroupBase + "/cpu.pressure"
+		pressurePath := CgroupBase + "/cpu.pressure"
 		events := buildReportEvents(
 			map[string]error{pressurePath: &fs.PathError{Op: "open", Path: pressurePath, Err: syscall.EACCES}},
 			map[string][]byte{statPath: []byte("usage_usec abc\n")},
@@ -115,7 +115,7 @@ var _ = Describe("cpu.stat reports under a verb that says what its failure cost"
 // command on the machine.
 var _ = Describe("one event is enough to diagnose the machine", func() {
 	It("names the failure and rules out every alternative cause", func() {
-		cpuset := cgroupBase + "/cpuset.cpus.effective"
+		cpuset := CgroupBase + "/cpuset.cpus.effective"
 		events, _, _ := build(map[string]error{
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
@@ -135,7 +135,7 @@ var _ = Describe("one event is enough to diagnose the machine", func() {
 		Expect(e.Fields).To(HaveKeyWithValue("proc_self_cgroup_raw", "0::/\n"),
 			"the v2-only path shape rules out cgroup v1")
 		Expect(e.Fields).To(HaveKey("cgroup_base_dir_entry_count"))
-		Expect(e.Fields).To(HaveKeyWithValue("cgroup_base", cgroupBase))
+		Expect(e.Fields).To(HaveKeyWithValue("cgroup_base", CgroupBase))
 
 		By("carrying the controller list, which is the conclusion")
 		// A missing cpuset token is the delegation finding. It ships raw because

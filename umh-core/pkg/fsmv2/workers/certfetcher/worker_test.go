@@ -22,8 +22,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
@@ -43,106 +41,30 @@ func (h *recordingCertHandler) FetchAllCerts(ctx context.Context) error {
 }
 
 var _ = Describe("CertFetcherWorker cert handler dependency", func() {
-	It("uses the handler from the dependency map over the global one", func() {
-		globalHandler := &recordingCertHandler{}
-		mapHandler := &recordingCertHandler{}
+	It("returns an error naming the key when the dependency map holds no cert handler", func() {
+		identity := deps.Identity{ID: "missing-handler-worker", WorkerType: "certfetcher"}
 
-		register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
-			certfetcher.NewCertHandlerSeedDependencies(globalHandler))
-		DeferCleanup(register.ClearGlobalDeps, certfetcher.WorkerTypeName)
+		worker, err := certfetcher.NewCertFetcherWorker(identity, deps.NewNopFSMLogger(), nil, map[string]any{})
+		Expect(err).To(MatchError(`certfetcher: no cert handler under "certfetcher.cert_handler" in the dependency map`))
+		Expect(worker).To(BeNil())
+
+		worker, err = certfetcher.NewCertFetcherWorker(identity, deps.NewNopFSMLogger(), nil, nil)
+		Expect(err).To(MatchError(`certfetcher: no cert handler under "certfetcher.cert_handler" in the dependency map`))
+		Expect(worker).To(BeNil())
+	})
+
+	It("uses the handler from the dependency map", func() {
+		mapHandler := &recordingCertHandler{}
 
 		dependencyMap := map[string]any{}
 
-		var mapHandlerAsHandler certificatehandler.Handler = mapHandler
-		config.SetDependency(dependencyMap, certfetcher.CertHandlerKey, mapHandlerAsHandler)
+		config.SetDependency[certificatehandler.Handler](dependencyMap, certfetcher.CertHandlerKey, mapHandler)
 
 		identity := deps.Identity{ID: "map-handler-worker", WorkerType: "certfetcher"}
-		built, err := factory.NewWorkerByType("certfetcher", identity, deps.NewNopFSMLogger(), nil, dependencyMap)
+		built, err := certfetcher.NewCertFetcherWorker(identity, deps.NewNopFSMLogger(), nil, dependencyMap)
 		Expect(err).NotTo(HaveOccurred())
 
-		certFetcherWorker, ok := built.(*certfetcher.CertFetcherWorker)
-		Expect(ok).To(BeTrue(), "expected *certfetcher.CertFetcherWorker, got %T", built)
-
-		workerDeps := certFetcherWorker.GetDependencies()
-
-		Expect(workerDeps.CertHandler()).To(BeIdenticalTo(mapHandler))
-
-		err = workerDeps.FetchAllCerts(context.Background())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(mapHandler.fetchAllCertsCalls).To(Equal(1))
-		Expect(globalHandler.fetchAllCertsCalls).To(BeZero())
-	})
-
-	It("uses the global handler when the dependency map is nil", func() {
-		globalHandler := &recordingCertHandler{}
-
-		register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
-			certfetcher.NewCertHandlerSeedDependencies(globalHandler))
-		DeferCleanup(register.ClearGlobalDeps, certfetcher.WorkerTypeName)
-
-		identity := deps.Identity{ID: "global-handler-worker", WorkerType: "certfetcher"}
-		built, err := factory.NewWorkerByType("certfetcher", identity, deps.NewNopFSMLogger(), nil, nil)
-		Expect(err).NotTo(HaveOccurred())
-
-		certFetcherWorker, ok := built.(*certfetcher.CertFetcherWorker)
-		Expect(ok).To(BeTrue(), "expected *certfetcher.CertFetcherWorker, got %T", built)
-
-		workerDeps := certFetcherWorker.GetDependencies()
-
-		Expect(workerDeps.CertHandler()).To(BeIdenticalTo(globalHandler))
-
-		err = workerDeps.FetchAllCerts(context.Background())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(globalHandler.fetchAllCertsCalls).To(Equal(1))
-	})
-
-	It("uses the global handler when a non-nil dependency map lacks the key", func() {
-		globalHandler := &recordingCertHandler{}
-
-		register.SetGlobalDeps[*certfetcher.CertFetcherDependencies](certfetcher.WorkerTypeName,
-			certfetcher.NewCertHandlerSeedDependencies(globalHandler))
-		DeferCleanup(register.ClearGlobalDeps, certfetcher.WorkerTypeName)
-
-		// The production shape: cmd/main.go passes the application supervisor
-		// an empty dependency map, and publishes the cert handler only through
-		// register.SetGlobalDeps when agent.UseGatekeeper is enabled.
-		dependencyMap := map[string]any{}
-
-		identity := deps.Identity{ID: "global-handler-empty-map-worker", WorkerType: "certfetcher"}
-		built, err := factory.NewWorkerByType("certfetcher", identity, deps.NewNopFSMLogger(), nil, dependencyMap)
-		Expect(err).NotTo(HaveOccurred())
-
-		certFetcherWorker, ok := built.(*certfetcher.CertFetcherWorker)
-		Expect(ok).To(BeTrue(), "expected *certfetcher.CertFetcherWorker, got %T", built)
-
-		workerDeps := certFetcherWorker.GetDependencies()
-
-		Expect(workerDeps.CertHandler()).To(BeIdenticalTo(globalHandler))
-
-		err = workerDeps.FetchAllCerts(context.Background())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(globalHandler.fetchAllCertsCalls).To(Equal(1))
-	})
-
-	It("builds from the dependency map alone when the global seed is absent", func() {
-		mapHandler := &recordingCertHandler{}
-
-		// The v2 certfetcher scenarios inject the handler this way.
-		register.ClearGlobalDeps(certfetcher.WorkerTypeName)
-
-		dependencyMap := map[string]any{}
-
-		var mapHandlerAsHandler certificatehandler.Handler = mapHandler
-		config.SetDependency(dependencyMap, certfetcher.CertHandlerKey, mapHandlerAsHandler)
-
-		identity := deps.Identity{ID: "map-only-handler-worker", WorkerType: "certfetcher"}
-		built, err := factory.NewWorkerByType("certfetcher", identity, deps.NewNopFSMLogger(), nil, dependencyMap)
-		Expect(err).NotTo(HaveOccurred())
-
-		certFetcherWorker, ok := built.(*certfetcher.CertFetcherWorker)
-		Expect(ok).To(BeTrue(), "expected *certfetcher.CertFetcherWorker, got %T", built)
-
-		workerDeps := certFetcherWorker.GetDependencies()
+		workerDeps := built.GetDependencies()
 
 		Expect(workerDeps.CertHandler()).To(BeIdenticalTo(mapHandler))
 

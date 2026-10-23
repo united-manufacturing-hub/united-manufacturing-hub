@@ -51,17 +51,6 @@ func NewCertFetcherDependencies(
 	}, nil
 }
 
-// NewCertHandlerSeedDependencies builds seed dependencies holding only the cert
-// handler, to store with register.SetGlobalDeps before the worker is constructed.
-// NewCertFetcherWorker describes how it completes a seed.
-func NewCertHandlerSeedDependencies(certHandler certificatehandler.Handler) *CertFetcherDependencies {
-	if certHandler == nil {
-		panic("NewCertHandlerSeedDependencies: certHandler cannot be nil")
-	}
-
-	return &CertFetcherDependencies{certHandler: certHandler}
-}
-
 // CertHandler returns the certificate handler.
 func (d *CertFetcherDependencies) CertHandler() certificatehandler.Handler {
 	return d.certHandler

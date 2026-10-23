@@ -452,6 +452,10 @@ This mirrors `FrameworkMetrics` exactly. The supervisor owns the data. The colle
 | Parent access | Direct struct access | StateReader.LoadObservedTyped() |
 | Health checks | String matching | Typed ObservedState fields |
 
+## Secrets
+
+The secrets store travels through the dependency map under the key `secrets.store` (`secrets.StoreKey`). How a worker opens and uses its scope: [deps/secrets/doc.go](deps/secrets/doc.go).
+
 ## Related Documentation
 
 - [doc.go](doc.go) - FSMv2 framework overview

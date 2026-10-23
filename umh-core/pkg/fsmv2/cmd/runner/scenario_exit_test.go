@@ -23,8 +23,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
@@ -34,15 +35,15 @@ var _ = Describe("Scenario warnings and late errors", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
 
-	runScenario := func(scenario examples.ScenarioV2, settle time.Duration) *examples.RunResult {
+	runScenario := func(scenario scenariorunner.Scenario, settle time.Duration) *scenariorunner.RunResult {
 		logger := deps.NewNopFSMLogger()
-		store := examples.SetupStore(logger)
+		store := scenariorunner.SetupStore(logger)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   scenario,
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
+			Scenario:     scenario,
 			Duration:     settle,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -58,10 +59,10 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	}
 
 	It("sets RunResult.Err on an unexpected warning, and the exit code follows Err", func() {
-		warning := examples.ScenarioV2{
+		warning := scenariorunner.Scenario{
 			Name:        "unexpected-warning",
 			Description: "test-local Run for the unexpected-warning check",
-			Run: func(_ context.Context, env examples.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Step("log a warning the scenario does not expect")
 
 				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_unexpected_warning")
@@ -80,11 +81,11 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("does not set RunResult.Err on a warning the scenario expects", func() {
-		expected := examples.ScenarioV2{
+		expected := scenariorunner.Scenario{
 			Name:             "expected-warning",
 			Description:      "test-local Run for the ExpectedWarnings check",
 			ExpectedWarnings: []string{"probe_unexpected"},
-			Run: func(_ context.Context, env examples.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Step("log a warning the scenario expects")
 
 				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_unexpected_warning")
@@ -99,10 +100,10 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("does not set RunResult.Err on a warning every run allows", func() {
-		allowed := examples.ScenarioV2{
+		allowed := scenariorunner.Scenario{
 			Name:        "allowed-warning",
 			Description: "test-local Run for the always-allowed warning check",
-			Run: func(_ context.Context, env examples.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Step("log a warning every run allows")
 
 				env.Logger.SentryWarn(deps.FeatureExamples, "", "probe_data_stale")
@@ -117,10 +118,10 @@ var _ = Describe("Scenario warnings and late errors", func() {
 	})
 
 	It("sets RunResult.Err on an error logged after Run returned, and the exit code follows Err", func() {
-		lateError := examples.ScenarioV2{
+		lateError := scenariorunner.Scenario{
 			Name:        "late-error",
 			Description: "test-local Run for the late-error check",
-			Run: func(_ context.Context, env examples.Env) error {
+			Run: func(_ context.Context, env scenariorunner.Env) error {
 				env.Step("return, then let a goroutine log an error inside the settle window")
 
 				go func() {
