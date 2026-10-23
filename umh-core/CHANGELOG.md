@@ -11,6 +11,7 @@
 
 - The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
 - A bridge variable named `historian` is now always ignored, like `location`. Before, `{{ .historian.* }}` rendered that variable when no valid `historian:` section was configured. The bridge now fails with the error to add or fix the `historian:` section, which also says the variable was ignored
+- The instance now reports the state of its historian database on TimescaleDB 2.26 or later. Before, the report failed with `column ch.dropped does not exist`
 
 ## [0.44.43]
 

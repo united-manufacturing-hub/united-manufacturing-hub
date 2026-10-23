@@ -144,6 +144,8 @@ func readVersions(ctx context.Context, db Database) (string, string, error) {
 	return postgresVersion, *timescaleVersion, nil
 }
 
+const chunkRelation = `to_regclass(format('%I.%I', ch.schema_name, ch.table_name))`
+
 // Sizes come from the catalog rather than timescaledb_information's size
 // functions, which stat every chunk's files and cost two orders of magnitude more
 // at a few thousand chunks. An uncompressed chunk has no catalog row, and a partial
@@ -152,7 +154,7 @@ func readVersions(ctx context.Context, db Database) (string, string, error) {
 const chunkOccupiedDiskBytes = `CASE WHEN ch.id IS NULL THEN 0
             WHEN ch.compressed_chunk_id IS NULL OR ch.status & 8 = 8
             THEN coalesce(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size, 0)
-               + coalesce(pg_total_relation_size(to_regclass(format('%I.%I', ch.schema_name, ch.table_name))), 0)
+               + coalesce(pg_total_relation_size(` + chunkRelation + `), 0)
             ELSE s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size END`
 
 const tablesQuery = `WITH sizes AS (
@@ -163,7 +165,7 @@ const tablesQuery = `WITH sizes AS (
          count(ch.id) AS chunks,
          count(ch.compressed_chunk_id) AS compressed_chunks
     FROM _timescaledb_catalog.hypertable h
-    LEFT JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND NOT ch.dropped
+    LEFT JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND ` + chunkRelation + ` IS NOT NULL
     LEFT JOIN _timescaledb_catalog.compression_chunk_size s ON s.chunk_id = ch.id
    WHERE h.schema_name = $1
    GROUP BY h.id
@@ -271,7 +273,7 @@ const tableRowsQuery = `SELECT h.table_name,
                          THEN greatest(coalesce(st.n_live_tup, 0), greatest(c.reltuples, 0)::bigint)
                          ELSE 0 END), 0)
   FROM _timescaledb_catalog.hypertable h
-  JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND NOT ch.dropped
+  JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND ` + chunkRelation + ` IS NOT NULL
   LEFT JOIN _timescaledb_catalog.compression_chunk_size s ON s.chunk_id = ch.id
   LEFT JOIN pg_namespace n ON n.nspname = ch.schema_name
   LEFT JOIN pg_class c ON c.relname = ch.table_name AND c.relnamespace = n.oid
@@ -357,7 +359,7 @@ func dataSpanSeconds(spans map[string]rowSpan) int64 {
 const chunksQuery = `SELECT h.table_name, ch.schema_name, ch.table_name
   FROM _timescaledb_catalog.hypertable h
   JOIN _timescaledb_catalog.dimension d ON d.hypertable_id = h.id AND d.column_name = 'ts'
-  JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND NOT ch.dropped
+  JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND ` + chunkRelation + ` IS NOT NULL
   JOIN _timescaledb_catalog.chunk_constraint cc ON cc.chunk_id = ch.id
   JOIN _timescaledb_catalog.dimension_slice ds ON ds.id = cc.dimension_slice_id AND ds.dimension_id = d.id
  WHERE h.schema_name = $1
