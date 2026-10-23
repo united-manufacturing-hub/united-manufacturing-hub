@@ -159,10 +159,14 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	pendingRestart     map[string]bool
 	restartRequestedAt map[string]time.Time
 	globalVars         map[string]any
-	healthChecker      *InfrastructureHealthChecker
-	panicTracker       *panicRecovery
-	actionExecutor     *execution.ActionExecutor
-	ctxCancel          context.CancelFunc
+	pendingReAdds      map[string]deps.Identity
+	// pendingReAddSentrySent holds the worker IDs whose pending re-add has
+	// already sent its one Sentry error. Later retries log at Debug.
+	pendingReAddSentrySent map[string]bool
+	healthChecker          *InfrastructureHealthChecker
+	panicTracker           *panicRecovery
+	actionExecutor         *execution.ActionExecutor
+	ctxCancel              context.CancelFunc
 	// tickLoopDone is closed when the tickLoop goroutine exits. Stored here so
 	// Shutdown() can wait for tickLoop to fully exit in Phase 4 after ctxCancel().
 	// Nil when Start() has not been called (StartAsChild supervisors have no tickLoop).
@@ -185,17 +189,28 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// Config so all supervisors observe the same close. See types.go Config.ForceExit.
 	forceExit                <-chan struct{}
 	noStateMachineLoggedOnce sync.Map
-	userSpec                 config.UserSpec
-	workerType               string
-	parentID                 string
-	lastUserSpecHash         string
-	collectorHealth          CollectorHealth
-	metricsWg                sync.WaitGroup
-	tickInterval             time.Duration
-	tickCount                uint64
-	gracefulShutdownTimeout  time.Duration
-	metricsReportInterval    time.Duration
-	childShutdownTimeout     time.Duration
+	// lastConfigErrorLogged is the last "config_error" message logged for
+	// this supervisor's own worker. A successful derive clears it.
+	lastConfigErrorLogged string
+	// childConfigErrorLogged maps a child name to the last "config_error"
+	// message logged for it. Creating the child clears its entry.
+	childConfigErrorLogged map[string]string
+	// childCreateConfigError holds the name of every child whose latest
+	// create attempt failed with a *config.ConfigError. A later successful
+	// create, or a later failure for another reason, removes the name.
+	// Guarded by s.mu.
+	childCreateConfigError  map[string]struct{}
+	userSpec                config.UserSpec
+	workerType              string
+	parentID                string
+	lastUserSpecHash        string
+	collectorHealth         CollectorHealth
+	metricsWg               sync.WaitGroup
+	tickInterval            time.Duration
+	tickCount               uint64
+	gracefulShutdownTimeout time.Duration
+	metricsReportInterval   time.Duration
+	childShutdownTimeout    time.Duration
 	// lifecycleFlagMu serializes the read-modify-write of the lifecycle flags
 	// (ShutdownRequested, Disabled) in the desired-state document. The per-tick
 	// derive carries these flags forward across re-derivation by loading the
@@ -286,25 +301,27 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 	}
 
 	return &Supervisor[TObserved, TDesired]{
-		workerType:         cfg.WorkerType,
-		workers:            make(map[string]*WorkerContext[TObserved, TDesired]),
-		lockManager:        lm,
-		mu:                 lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
-		ctxMu:              lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
-		store:              cfg.Store,
-		logger:             cfg.Logger,
-		baseLogger:         cfg.Logger,
-		tickInterval:       tickInterval,
-		freshnessChecker:   freshnessChecker,
-		children:           make(map[string]SupervisorInterface),
-		pendingRemoval:     make(map[string]bool),
-		pendingRestart:     make(map[string]bool),
-		restartRequestedAt: make(map[string]time.Time),
-		createdAt:          time.Now(),
-		parentID:           "",
-		healthChecker:      NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
-		panicTracker:       newPanicRecovery(DefaultPanicEscalationWindow, DefaultMaxTickPanics),
-		actionExecutor:     execution.NewActionExecutor(10, cfg.WorkerType, deps.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
+		workerType:             cfg.WorkerType,
+		workers:                make(map[string]*WorkerContext[TObserved, TDesired]),
+		lockManager:            lm,
+		mu:                     lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
+		ctxMu:                  lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
+		store:                  cfg.Store,
+		logger:                 cfg.Logger,
+		baseLogger:             cfg.Logger,
+		tickInterval:           tickInterval,
+		freshnessChecker:       freshnessChecker,
+		children:               make(map[string]SupervisorInterface),
+		pendingRemoval:         make(map[string]bool),
+		pendingRestart:         make(map[string]bool),
+		restartRequestedAt:     make(map[string]time.Time),
+		pendingReAdds:          make(map[string]deps.Identity),
+		pendingReAddSentrySent: make(map[string]bool),
+		createdAt:              time.Now(),
+		parentID:               "",
+		healthChecker:          NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
+		panicTracker:           newPanicRecovery(DefaultPanicEscalationWindow, DefaultMaxTickPanics),
+		actionExecutor:         execution.NewActionExecutor(10, cfg.WorkerType, deps.Identity{WorkerType: cfg.WorkerType}, cfg.Logger),
 		collectorHealth: CollectorHealth{
 			observationTimeout: observationTimeout,
 			staleThreshold:     staleThreshold,

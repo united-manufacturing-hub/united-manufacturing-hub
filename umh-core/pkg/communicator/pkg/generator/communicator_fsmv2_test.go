@@ -47,6 +47,11 @@ type communicatorStore struct {
 	err       error
 }
 
+// LoadDesiredTyped reports that no desired state is saved.
+func (*communicatorStore) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 func (s *communicatorStore) LoadObservedTyped(_ context.Context, workerType, id string, result interface{}) error {
 	switch out := result.(type) {
 	case *fsmv2.Observation[snapshot.TransportStatus]:

@@ -79,10 +79,10 @@ func TestFatalMessage(t *testing.T) {
 	}
 
 	_, notStarted := examples.Run(context.Background(), examples.RunConfig{
-		ScenarioV2: examples.ScenarioV2{Name: "probe"},
+		Scenario: examples.Scenario{Name: "probe"},
 	})
 	if notStarted == nil {
-		t.Fatal("examples.Run must reject a v2 scenario whose Run is nil")
+		t.Fatal("examples.Run must reject a scenario whose Run is nil")
 	}
 
 	if got := fatalMessage(notStarted); got != "Failed to start scenario" {
@@ -91,53 +91,19 @@ func TestFatalMessage(t *testing.T) {
 }
 
 func TestRunnerCLIRouting(t *testing.T) {
-	t.Run("duration routing v2 takes RunConfig.Duration", func(t *testing.T) {
-		runDuration, applyCtxTimeout := routeDuration(true, 5*time.Second)
-		if applyCtxTimeout {
-			t.Error("a v2 scenario must not bound its run with a ctx timeout; the duration is a settle window after Run returns")
-		}
-
-		if runDuration != 5*time.Second {
-			t.Errorf("a v2 scenario must route --duration into RunConfig.Duration, got %v", runDuration)
-		}
-	})
-
-	t.Run("duration routing v1 takes a ctx timeout", func(t *testing.T) {
-		runDuration, applyCtxTimeout := routeDuration(false, 5*time.Second)
-		if !applyCtxTimeout {
-			t.Error("a v1 scenario must bound the whole run via a ctx timeout")
-		}
-
-		if runDuration != 0 {
-			t.Errorf("a v1 scenario must not set RunConfig.Duration, got %v", runDuration)
-		}
-	})
-
-	t.Run("duration routing zero stays endless on both paths", func(t *testing.T) {
-		v1Duration, v1Timeout := routeDuration(false, 0)
-		if v1Timeout || v1Duration != 0 {
-			t.Errorf("v1 --duration 0 must stay endless: timeout=%t duration=%v", v1Timeout, v1Duration)
-		}
-
-		v2Duration, v2Timeout := routeDuration(true, 0)
-		if v2Timeout || v2Duration != 0 {
-			t.Errorf("v2 --duration 0 must stay endless: timeout=%t duration=%v", v2Timeout, v2Duration)
-		}
-	})
-
-	t.Run("duration default: v2 without --duration settles 1s", func(t *testing.T) {
-		got, defaulted := defaultDuration(true, false, 0)
-		if got != defaultSettle {
-			t.Errorf("a v2 scenario given no --duration must settle %s after Run returns, got %v", defaultSettle, got)
+	t.Run("duration default: without --duration settles 1s", func(t *testing.T) {
+		got, defaulted := resolveDuration(false, 0)
+		if got != defaultSettleWindow {
+			t.Errorf("a run given no --duration must settle %s after Run returns, got %v", defaultSettleWindow, got)
 		}
 
 		if !defaulted {
-			t.Error("a v2 scenario given no --duration must report the default as applied")
+			t.Error("a run given no --duration must report the default as applied")
 		}
 	})
 
 	t.Run("duration default: explicit --duration 0 stays endless", func(t *testing.T) {
-		got, defaulted := defaultDuration(true, true, 0)
+		got, defaulted := resolveDuration(true, 0)
 		if got != 0 {
 			t.Errorf("an explicit --duration 0 must stay endless, got %v", got)
 		}
@@ -148,47 +114,13 @@ func TestRunnerCLIRouting(t *testing.T) {
 	})
 
 	t.Run("duration default: explicit --duration is kept", func(t *testing.T) {
-		got, defaulted := defaultDuration(true, true, 5*time.Second)
+		got, defaulted := resolveDuration(true, 5*time.Second)
 		if got != 5*time.Second {
 			t.Errorf("an explicit --duration must be kept as given, got %v", got)
 		}
 
 		if defaulted {
 			t.Error("an explicit --duration must not report the default as applied")
-		}
-	})
-
-	t.Run("duration default: v1 is unchanged", func(t *testing.T) {
-		got, defaulted := defaultDuration(false, false, 0)
-		if got != 0 {
-			t.Errorf("a v1 scenario given no --duration must stay endless, got %v", got)
-		}
-
-		if defaulted {
-			t.Error("a v1 scenario must never report the default as applied")
-		}
-	})
-
-	t.Run("duration default and routing compose: a defaulted v2 run settles via RunConfig, explicit values pass through", func(t *testing.T) {
-		effective, _ := defaultDuration(true, false, 0)
-
-		runDuration, applyCtxTimeout := routeDuration(true, effective)
-		if runDuration != defaultSettle || applyCtxTimeout {
-			t.Errorf("a v2 run without --duration must settle %s via RunConfig.Duration with no ctx timeout, got duration=%v timeout=%t", defaultSettle, runDuration, applyCtxTimeout)
-		}
-
-		effective, _ = defaultDuration(true, true, 5*time.Second)
-
-		runDuration, applyCtxTimeout = routeDuration(true, effective)
-		if runDuration != 5*time.Second || applyCtxTimeout {
-			t.Errorf("an explicit --duration 5s must reach RunConfig.Duration with no ctx timeout, got duration=%v timeout=%t", runDuration, applyCtxTimeout)
-		}
-
-		effective, _ = defaultDuration(true, true, 0)
-
-		runDuration, applyCtxTimeout = routeDuration(true, effective)
-		if runDuration != 0 || applyCtxTimeout {
-			t.Errorf("an explicit --duration 0 must stay endless after routing, got duration=%v timeout=%t", runDuration, applyCtxTimeout)
 		}
 	})
 
@@ -231,7 +163,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 
 	t.Run("genuine startup failure is not a clean exit", func(t *testing.T) {
 		ctx := context.Background()
-		runErr := errors.New("conflicting configuration: both Scenario and ScenarioV2 are set")
+		runErr := errors.New("scenario \"probe\" is not properly configured: Run is nil")
 
 		if isCleanInterruptExit(runErr, ctx.Err()) {
 			t.Error("a genuine startup failure with no ctx cancellation must remain fatal exit-1")
@@ -327,7 +259,7 @@ func TestRunnerCLIRouting(t *testing.T) {
 
 func TestExpectedFields(t *testing.T) {
 	t.Run("a scenario declaring all three kinds gets one field per kind", func(t *testing.T) {
-		full := examples.ScenarioV2{
+		full := examples.Scenario{
 			ExpectedErrors:      []string{"action_failed"},
 			ExpectedErrorCauses: []error{errors.New("boom")},
 			ExpectedWarnings:    []string{"slow"},
@@ -366,7 +298,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario declaring only warnings gets only the warnings field", func(t *testing.T) {
-		fields := expectedFields(examples.ScenarioV2{ExpectedWarnings: []string{"slow"}})
+		fields := expectedFields(examples.Scenario{ExpectedWarnings: []string{"slow"}})
 
 		if len(fields) != 1 || fields[0].Key != "expected_warnings" {
 			t.Fatalf("expectedFields must return only expected_warnings, got %v", fields)
@@ -374,7 +306,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a nil expected cause matches nothing and yields no entry", func(t *testing.T) {
-		fields := expectedFields(examples.ScenarioV2{
+		fields := expectedFields(examples.Scenario{
 			ExpectedErrorCauses: []error{errors.New("boom"), nil},
 		})
 
@@ -389,7 +321,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario whose expected causes are all nil gets no causes field", func(t *testing.T) {
-		fields := expectedFields(examples.ScenarioV2{ExpectedErrorCauses: []error{nil}})
+		fields := expectedFields(examples.Scenario{ExpectedErrorCauses: []error{nil}})
 
 		if len(fields) != 0 {
 			t.Errorf("expectedFields must return no field when every expected cause is nil, got %v", fields)
@@ -397,7 +329,7 @@ func TestExpectedFields(t *testing.T) {
 	})
 
 	t.Run("a scenario declaring nothing gets no field", func(t *testing.T) {
-		if got := expectedFields(examples.ScenarioV2{}); len(got) != 0 {
+		if got := expectedFields(examples.Scenario{}); len(got) != 0 {
 			t.Errorf("expectedFields must return no field for a scenario declaring nothing, got %d", len(got))
 		}
 	})
@@ -407,7 +339,7 @@ func TestStartingScenarioFields(t *testing.T) {
 	obsCore, logs := observer.New(zapcore.InfoLevel)
 	logger := zap.New(obsCore)
 
-	full := examples.ScenarioV2{
+	full := examples.Scenario{
 		ExpectedErrors:      []string{"action_failed"},
 		ExpectedErrorCauses: []error{errors.New("boom"), nil},
 		ExpectedWarnings:    []string{"slow"},
@@ -446,7 +378,7 @@ func TestStartingScenarioFields(t *testing.T) {
 
 	logger.Info("Starting scenario",
 		startingScenarioFields("probe", "a probe", "endless (until Ctrl+C)", time.Second,
-			examples.ScenarioV2{ExpectedWarnings: []string{"slow"}})...)
+			examples.Scenario{ExpectedWarnings: []string{"slow"}})...)
 
 	entries = logs.TakeAll()
 	if len(entries) != 1 {

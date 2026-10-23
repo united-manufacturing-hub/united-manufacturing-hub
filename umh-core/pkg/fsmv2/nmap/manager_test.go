@@ -62,6 +62,11 @@ func (s *stubManagerReader) LoadObservedTyped(_ context.Context, _, _ string, re
 	return nil
 }
 
+// LoadDesiredTyped reports that no desired state is saved.
+func (*stubManagerReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 var _ = Describe("NewFsmv2NmapManager", func() {
 	const target = "192.0.2.1"
 

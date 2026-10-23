@@ -50,7 +50,9 @@ func ParseUserSpec[T any](spec interface{}) (T, error) {
 	var result T
 	if userSpec.Config != "" {
 		if err := yaml.Unmarshal([]byte(userSpec.Config), &result); err != nil {
-			return zero, fmt.Errorf("failed to parse user spec config: %w", err)
+			// A YAML syntax error or a value of the wrong type is the user's
+			// config mistake, so the supervisor logs it as config_error.
+			return zero, &ConfigError{Err: fmt.Errorf("failed to parse user spec config: %w", err)}
 		}
 	}
 

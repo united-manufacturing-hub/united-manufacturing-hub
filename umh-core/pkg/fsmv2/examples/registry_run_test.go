@@ -28,18 +28,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
-var _ = Describe("RegistryV2 scenarios", func() {
+var _ = Describe("Registry scenarios", func() {
 	BeforeEach(func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 	})
 
-	It("registers at least one v2 scenario", func() {
-		Expect(examples.RegistryV2).NotTo(BeEmpty(),
+	It("registers at least one scenario", func() {
+		Expect(examples.Registry).NotTo(BeEmpty(),
 			"the per-scenario specs below run nothing when the registry is empty")
 	})
 
-	names := make([]string, 0, len(examples.RegistryV2))
-	for name := range examples.RegistryV2 {
+	names := make([]string, 0, len(examples.Registry))
+	for name := range examples.Registry {
 		names = append(names, name)
 	}
 
@@ -54,7 +54,7 @@ var _ = Describe("RegistryV2 scenarios", func() {
 			defer cancel()
 
 			result, err := examples.Run(ctx, examples.RunConfig{
-				ScenarioV2:   examples.RegistryV2[name],
+				Scenario:     examples.Registry[name],
 				Duration:     time.Second,
 				TickInterval: 50 * time.Millisecond,
 				Logger:       logger,

@@ -36,7 +36,7 @@ func main() {
 	// Command-line flags
 	var (
 		scenarioName = flag.String("scenario", "simple", "scenario name from registry")
-		duration     = flag.Duration("duration", 0, fmt.Sprintf("v2: settle window after the scenario ends (default %s when unset); v1: bounds the whole run; 0 means endless until Ctrl+C", defaultSettle))
+		duration     = flag.Duration("duration", 0, fmt.Sprintf("settle window after the scenario ends (default %s when unset); 0 means endless until Ctrl+C", defaultSettleWindow))
 		logLevel     = flag.String("log-level", "info", "debug, info, warn, error")
 		tickInterval = flag.Duration("tick", 100*time.Millisecond, "tick interval")
 		listFlag     = flag.Bool("list", false, "list available scenarios and exit")
@@ -113,45 +113,33 @@ func main() {
 
 	defer func() { _ = logger.Sync() }()
 
-	v1Scenario, isV1 := examples.Registry[*scenarioName]
-	v2Scenario, isV2 := examples.RegistryV2[*scenarioName]
+	scenario, found := examples.Registry[*scenarioName]
 
-	if !isV2 {
-		liveScenario, isLive := examples.LiveRegistryV2[*scenarioName]
+	if !found {
+		liveScenario, isLive := examples.LiveRegistry[*scenarioName]
 		if isLive {
-			v2Scenario, isV2 = liveScenario, true
+			scenario, found = liveScenario, true
 		}
 	}
 
-	if !isV1 && !isV2 {
+	if !found {
 		logger.Fatal("Scenario not found",
 			zap.String("scenario", *scenarioName),
 			zap.String("hint", "Use --list to see available scenarios"),
 		)
 	}
 
-	description := v1Scenario.Description
-	if isV2 {
-		description = v2Scenario.Description
-	}
+	description := scenario.Description
 
 	// One signal owner: the CLI creates the cancellable ctx and is the only
 	// signal.Notify site, installed BEFORE examples.Run so a SIGINT during a
 	// running scenario cannot kill the process without teardown. The first
-	// SIGINT cancels the ctx (a v2 scenario sees it, the runner tears down
+	// SIGINT cancels the ctx (a scenario sees it, the runner tears down
 	// gracefully); a second SIGINT force-exits.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	effectiveDuration, defaulted := defaultDuration(isV2, durationSet, *duration)
-
-	settleWindow, applyCtxTimeout := routeDuration(isV2, effectiveDuration)
-	if applyCtxTimeout {
-		var timeoutCancel context.CancelFunc
-
-		ctx, timeoutCancel = context.WithTimeout(ctx, effectiveDuration)
-		defer timeoutCancel()
-	}
+	settleWindow, defaulted := resolveDuration(durationSet, *duration)
 
 	// runDone closes once main returns, i.e. once the run has fully torn down.
 	// The signal owner waits on it so a second SIGINT can still force-exit
@@ -184,18 +172,17 @@ func main() {
 
 	switch {
 	case defaulted:
-		durationStr = fmt.Sprintf("%s after the scenario ends", defaultSettle)
-	case effectiveDuration > 0:
-		durationStr = effectiveDuration.String()
+		durationStr = fmt.Sprintf("%s after the scenario ends", defaultSettleWindow)
+	case settleWindow > 0:
+		durationStr = settleWindow.String()
 	}
 
 	logger.Info("Starting scenario",
-		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, v2Scenario)...,
+		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, scenario)...,
 	)
 
 	result, err := examples.Run(ctx, examples.RunConfig{
-		Scenario:           v1Scenario,
-		ScenarioV2:         v2Scenario,
+		Scenario:           scenario,
 		Duration:           settleWindow,
 		TickInterval:       *tickInterval,
 		Logger:             newRunLogger(logger),
@@ -271,33 +258,13 @@ func shutdownExitCode(result *examples.RunResult) int {
 	return 0
 }
 
-// routeDuration decides how a duration binds to a run. A v2 scenario treats
-// it as the time the run keeps going after Run returns, so it flows into
-// RunConfig.Duration and never bounds the run with a ctx timeout. A v1
-// scenario has no end of its own, so the duration bounds the whole run via a
-// ctx timeout. A zero duration stays endless on both paths.
-func routeDuration(isV2 bool, duration time.Duration) (runDuration time.Duration, applyCtxTimeout bool) {
-	if duration <= 0 {
-		return 0, false
-	}
+// defaultSettleWindow is the settle window of a run given no --duration: how
+// long the run keeps going after the scenario's Run returns.
+const defaultSettleWindow = time.Second
 
-	if isV2 {
-		return duration, false
-	}
-
-	return 0, true
-}
-
-// defaultSettle is how long a v2 run without --duration keeps going after the
-// scenario's Run returns.
-const defaultSettle = time.Second
-
-// defaultDuration returns the duration a run uses. A v2 scenario given no
-// --duration keeps going defaultSettle after its Run returns; defaulted
-// reports that case.
-func defaultDuration(isV2, durationSet bool, duration time.Duration) (effective time.Duration, defaulted bool) {
-	if isV2 && !durationSet {
-		return defaultSettle, true
+func resolveDuration(durationSet bool, duration time.Duration) (effective time.Duration, defaulted bool) {
+	if !durationSet {
+		return defaultSettleWindow, true
 	}
 
 	return duration, false
@@ -343,7 +310,7 @@ func newRunLogger(logger *zap.Logger) deps.FSMLogger {
 	return deps.NewUnsampledFSMLogger(logger.Sugar())
 }
 
-func startingScenarioFields(name, description, duration string, tick time.Duration, s examples.ScenarioV2) []zap.Field {
+func startingScenarioFields(name, description, duration string, tick time.Duration, s examples.Scenario) []zap.Field {
 	return append([]zap.Field{
 		zap.String("name", name),
 		zap.String("description", description),
@@ -353,7 +320,7 @@ func startingScenarioFields(name, description, duration string, tick time.Durati
 }
 
 // expectedFields returns one field per expectation list the scenario fills.
-func expectedFields(s examples.ScenarioV2) []zap.Field {
+func expectedFields(s examples.Scenario) []zap.Field {
 	var fields []zap.Field
 
 	if len(s.ExpectedErrors) > 0 {

@@ -20,6 +20,7 @@ package fsmv2_test
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -306,6 +307,19 @@ var _ = Describe("WorkerBase", func() {
 			_, err := worker.DeriveDesiredState(spec)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid desired state"))
+		})
+
+		It("an unknown state value is a config error naming the field", func() {
+			// The value is the user's typo, so misspell must not flag it.
+			spec := config.UserSpec{Config: "state: runing"} //nolint:misspell
+			_, err := worker.DeriveDesiredState(spec)
+			Expect(err).To(HaveOccurred())
+
+			var cfgErr *config.ConfigError
+			Expect(errors.As(err, &cfgErr)).To(BeTrue(),
+				"a state typo is the user's mistake, so it must be a *config.ConfigError, got %T", err)
+			Expect(cfgErr.Field).To(Equal("state"))
+			Expect(err.Error()).To(ContainSubstring("runing")) //nolint:misspell
 		})
 
 		It("nil spec returns a default WrappedDesiredState with empty config", func() {

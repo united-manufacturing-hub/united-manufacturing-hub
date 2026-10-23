@@ -27,8 +27,8 @@ import (
 	parentstate "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
-// CascadeScenarioV2 runs one exampleparent whose examplefailing children fail their connects in repeated cycles.
-var CascadeScenarioV2 = ScenarioV2{
+// CascadeScenario runs one exampleparent whose examplefailing children fail their connects in repeated cycles.
+var CascadeScenario = Scenario{
 	Name:        "cascade",
 	Description: "A parent goes Degraded while its failing children reconnect, and returns to Running when both are Connected",
 

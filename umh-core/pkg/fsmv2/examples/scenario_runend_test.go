@@ -78,7 +78,7 @@ func msgIndexes(entries []logEntry, msg string) []int {
 	return indexes
 }
 
-var _ = Describe("ScenarioV2 run end", func() {
+var _ = Describe("Scenario run end", func() {
 	It("logs one scenario_run_finished line after a Run that returned nil", func() {
 		DeferCleanup(register.ClearGlobalDeps, configworker.WorkerTypeName)
 
@@ -86,7 +86,7 @@ var _ = Describe("ScenarioV2 run end", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		finishing := examples.ScenarioV2{
+		finishing := examples.Scenario{
 			Name:        "run-finished-logging",
 			Description: "test-local Run for the run-finished log line",
 			Run: func(ctx context.Context, env examples.Env) error {
@@ -101,7 +101,7 @@ var _ = Describe("ScenarioV2 run end", func() {
 		defer cancel()
 
 		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   finishing,
+			Scenario:     finishing,
 			Duration:     50 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -143,7 +143,7 @@ var _ = Describe("ScenarioV2 run end", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		refusing := examples.ScenarioV2{
+		refusing := examples.Scenario{
 			Name:        "run-refused-logging",
 			Description: "test-local Run for the missing run-finished line",
 			Run: func(_ context.Context, _ examples.Env) error {
@@ -155,7 +155,7 @@ var _ = Describe("ScenarioV2 run end", func() {
 		defer cancel()
 
 		_, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   refusing,
+			Scenario:     refusing,
 			Duration:     50 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
@@ -179,7 +179,7 @@ var _ = Describe("ScenarioV2 run end", func() {
 		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
 		store := examples.SetupStore(logger)
 
-		swallowing := examples.ScenarioV2{
+		swallowing := examples.Scenario{
 			Name:        "run-swallowed-error",
 			Description: "test-local Run that logs an error and still returns nil",
 			Run: func(_ context.Context, env examples.Env) error {
@@ -194,7 +194,7 @@ var _ = Describe("ScenarioV2 run end", func() {
 		defer cancel()
 
 		_, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   swallowing,
+			Scenario:     swallowing,
 			Duration:     50 * time.Millisecond,
 			TickInterval: 50 * time.Millisecond,
 			Logger:       logger,
