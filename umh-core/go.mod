@@ -115,6 +115,7 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
+	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0-00010101000000-000000000000
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.elastic.co/ecszap v1.0.3 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
@@ -136,3 +137,5 @@ replace (
 	github.com/united-manufacturing-hub/ManagementConsole/cryptolib => ../../ManagementConsole/cryptolib
 	github.com/united-manufacturing-hub/ManagementConsole/shared => ../../ManagementConsole/shared
 )
+
+replace github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 => ./fsmv2

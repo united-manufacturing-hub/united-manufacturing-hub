@@ -81,6 +81,7 @@ WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh
 COPY ./go.mod ./go.sum ./
 # Copy vendored dependencies — invalidated only when vendor/ changes
 COPY ./vendor ./vendor
+COPY ./fsmv2 ./fsmv2
 
 # cryptolib disabled (default): no ManagementConsole sources; build falls back to the noop validator
 FROM build-base AS crypto-false

@@ -61,7 +61,7 @@ instead of importing zap directly. Direct zap imports are only allowed in:
   - integration/test_logger.go (test infrastructure)
 
 CORRECT:
-  import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+  import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
   logger.Info("something happened", deps.String("key", "value"))
 
 WRONG:
@@ -110,31 +110,25 @@ func getFsmv2Dir() string {
 	return filepath.Dir(filepath.Dir(filename))
 }
 
-// getCseDir returns the path to the cse package directory.
-func getCseDir() string {
-	_, filename, _, _ := runtime.Caller(0)
-	// Navigate from fsmv2/sentry/ up to pkg/, then into cse/
-	pkgDir := filepath.Dir(filepath.Dir(filepath.Dir(filename)))
-
-	return filepath.Join(pkgDir, "cse")
-}
-
-// getPersistenceDir returns the path to the persistence package directory.
-func getPersistenceDir() string {
-	_, filename, _, _ := runtime.Caller(0)
-	// Navigate from fsmv2/sentry/ up to pkg/, then into persistence/
-	pkgDir := filepath.Dir(filepath.Dir(filepath.Dir(filename)))
-
-	return filepath.Join(pkgDir, "persistence")
+// getFrameworkDir returns the directory of the fsmv2 module, which holds
+// the framework, cse and persistence code.
+func getFrameworkDir() string {
+	return filepath.Join(getFsmv2Dir(), "..", "..", "fsmv2")
 }
 
 // getAllDirs returns all directories that should be scanned for architecture tests.
 func getAllDirs() []string {
 	return []string{
 		getFsmv2Dir(),
-		getCseDir(),
-		getPersistenceDir(),
+		getFrameworkDir(),
 	}
+}
+
+// isSkippedDir reports whether a scan skips dir: the module's logger and
+// diagnosis packages.
+func isSkippedDir(dir string) bool {
+	return dir == filepath.Join(getFrameworkDir(), "logger") ||
+		dir == filepath.Join(getFrameworkDir(), "diagnosis")
 }
 
 // validateNoDirectZapUsage scans all non-test Go files for direct imports of
@@ -145,6 +139,10 @@ func validateNoDirectZapUsage(baseDir string) []Violation {
 	err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
+		}
+
+		if info.IsDir() && isSkippedDir(path) {
+			return filepath.SkipDir
 		}
 
 		if info.IsDir() || !strings.HasSuffix(path, ".go") {
@@ -240,6 +238,10 @@ func validateNoErrorDotError(baseDir string) []Violation {
 			return nil
 		}
 
+		if info.IsDir() && isSkippedDir(path) {
+			return filepath.SkipDir
+		}
+
 		if info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
@@ -248,7 +250,7 @@ func validateNoErrorDotError(baseDir string) []Violation {
 			return nil
 		}
 
-		if strings.Contains(path, "internal/validator") || strings.Contains(path, "/sentry/") {
+		if strings.Contains(path, "/sentry/") {
 			return nil
 		}
 

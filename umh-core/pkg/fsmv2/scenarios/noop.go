@@ -17,7 +17,7 @@ package scenarios
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 )
 
 // NoopScenario changes nothing, so the application worker spawns only its

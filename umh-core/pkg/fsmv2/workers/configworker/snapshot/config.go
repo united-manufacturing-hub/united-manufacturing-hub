@@ -18,7 +18,7 @@
 package snapshot
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 )
 
 // ConfigworkerConfig holds the user-provided configuration for the config worker.

@@ -21,8 +21,8 @@ import (
 
 	"go.uber.org/zap/zapcore"
 
-	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
+	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/sentry"
 )
 
 // TestCommunicatorFSMLoggerWiredToSentryHook locks the invariant that the

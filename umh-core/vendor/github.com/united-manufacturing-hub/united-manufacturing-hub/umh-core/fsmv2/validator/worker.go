@@ -1,0 +1,1038 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package validator
+
+import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// ValidateDeriveDesiredState checks that DeriveDesiredState doesn't access dependencies.
+func ValidateDeriveDesiredState(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkDeriveDesiredStateMethod(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkDeriveDesiredStateMethod parses a worker file and checks DeriveDesiredState.
+func checkDeriveDesiredStateMethod(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
+			return true
+		}
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			callExpr, ok := bodyNode.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+				if selExpr.Sel.Name == "GetDependencies" {
+					pos := fset.Position(callExpr.Pos())
+					violations = append(violations, Violation{
+						File:    filename,
+						Line:    pos.Line,
+						Type:    "PURE_DERIVE",
+						Message: "DeriveDesiredState() accesses dependencies (should use typed UserSpec parameter)",
+					})
+				}
+			}
+
+			return true
+		})
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateContextCancellationInCollect checks CollectObservedState handles ctx.Done().
+func ValidateContextCancellationInCollect(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkContextCancellationInCollect(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkContextCancellationInCollect parses a worker file and checks CollectObservedState.
+func checkContextCancellationInCollect(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "CollectObservedState" {
+			return true
+		}
+
+		hasContextCancellation := false
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			selectStmt, ok := bodyNode.(*ast.SelectStmt)
+			if !ok {
+				return true
+			}
+
+			for _, stmt := range selectStmt.Body.List {
+				commClause, ok := stmt.(*ast.CommClause)
+				if !ok || commClause.Comm == nil {
+					continue
+				}
+
+				if exprStmt, ok := commClause.Comm.(*ast.ExprStmt); ok {
+					if unaryExpr, ok := exprStmt.X.(*ast.UnaryExpr); ok {
+						if unaryExpr.Op == token.ARROW {
+							if callExpr, ok := unaryExpr.X.(*ast.CallExpr); ok {
+								if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+									if selExpr.Sel.Name == "Done" {
+										if ident, ok := selExpr.X.(*ast.Ident); ok {
+											if ident.Name == "ctx" {
+												hasContextCancellation = true
+
+												return false
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			return true
+		})
+
+		if !hasContextCancellation {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "MISSING_CONTEXT_CANCELLATION_COLLECT",
+				Message: "CollectObservedState() missing context cancellation handling (select with case <-ctx.Done())",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateNilSpecHandling checks that DeriveDesiredState checks for nil spec.
+func ValidateNilSpecHandling(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkNilSpecHandling(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkNilSpecHandling checks for nil spec check or use of nil-safe helpers (ParseUserSpec).
+func checkNilSpecHandling(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
+			return true
+		}
+
+		if funcDecl.Body == nil || len(funcDecl.Body.List) == 0 {
+			return true
+		}
+
+		if usesNilSafeHelper(funcDecl.Body) {
+			return true
+		}
+
+		hasNilCheck := false
+
+		for i := 0; i < 2 && i < len(funcDecl.Body.List); i++ {
+			stmt := funcDecl.Body.List[i]
+
+			ifStmt, ok := stmt.(*ast.IfStmt)
+			if !ok {
+				continue
+			}
+
+			if binExpr, ok := ifStmt.Cond.(*ast.BinaryExpr); ok {
+				if binExpr.Op == token.EQL {
+					if ident, ok := binExpr.X.(*ast.Ident); ok && ident.Name == "spec" {
+						if nilIdent, ok := binExpr.Y.(*ast.Ident); ok && nilIdent.Name == "nil" {
+							hasNilCheck = true
+
+							break
+						}
+					}
+
+					if ident, ok := binExpr.Y.(*ast.Ident); ok && ident.Name == "spec" {
+						if nilIdent, ok := binExpr.X.(*ast.Ident); ok && nilIdent.Name == "nil" {
+							hasNilCheck = true
+
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if !hasNilCheck {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "MISSING_NIL_SPEC_CHECK",
+				Message: "DeriveDesiredState() must check if spec == nil before type assertion",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// usesNilSafeHelper checks if the function body uses helpers that handle nil internally.
+func usesNilSafeHelper(body *ast.BlockStmt) bool {
+	nilSafeHelpers := map[string]bool{
+		"ParseUserSpec": true,
+	}
+
+	found := false
+
+	ast.Inspect(body, func(n ast.Node) bool {
+		callExpr, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		if indexExpr, ok := callExpr.Fun.(*ast.IndexExpr); ok {
+			if sel, ok := indexExpr.X.(*ast.SelectorExpr); ok {
+				if nilSafeHelpers[sel.Sel.Name] {
+					found = true
+
+					return false
+				}
+			}
+
+			if ident, ok := indexExpr.X.(*ast.Ident); ok {
+				if nilSafeHelpers[ident.Name] {
+					found = true
+
+					return false
+				}
+			}
+		}
+
+		if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+			if nilSafeHelpers[sel.Sel.Name] {
+				found = true
+
+				return false
+			}
+		}
+
+		return true
+	})
+
+	return found
+}
+
+// ValidatePointerReceivers checks that Worker methods use pointer receivers.
+func ValidatePointerReceivers(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkPointerReceivers(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkPointerReceivers checks that Worker methods use pointer receivers.
+func checkPointerReceivers(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	targetMethods := map[string]bool{
+		"CollectObservedState": true,
+		"DeriveDesiredState":   true,
+		"GetInitialState":      true,
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || !targetMethods[funcDecl.Name.Name] {
+			return true
+		}
+
+		if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+			return true
+		}
+
+		isPointer := false
+		if _, ok := funcDecl.Recv.List[0].Type.(*ast.StarExpr); ok {
+			isPointer = true
+		}
+
+		if !isPointer {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "VALUE_RECEIVER_ON_WORKER",
+				Message: fmt.Sprintf("Method %s() uses value receiver (should use pointer receiver *T)", funcDecl.Name.Name),
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateDependencyValidation checks that constructors validate dependencies.
+func ValidateDependencyValidation(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkDependencyValidation(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkDependencyValidation checks that constructors validate dependencies.
+func checkDependencyValidation(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || !strings.HasPrefix(funcDecl.Name.Name, "New") || !strings.HasSuffix(funcDecl.Name.Name, "Worker") {
+			return true
+		}
+
+		if funcDecl.Body == nil || len(funcDecl.Body.List) < 2 {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "MISSING_DEPENDENCY_VALIDATION",
+				Message: fmt.Sprintf("Constructor %s() should validate dependencies are non-nil", funcDecl.Name.Name),
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateChildSpecValidation checks that DeriveDesiredState validates children.
+func ValidateChildSpecValidation(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkChildSpecValidation(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkChildSpecValidation checks that parent workers validate ChildrenSpecs.
+// It checks only worker directories whose name contains "parent". There, a
+// DeriveDesiredState passes when it ranges over a Children field, when it
+// builds a []ChildSpec with make, or when a non-test file in the directory or
+// below it declares a top-level RenderChildren function.
+func checkChildSpecValidation(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	baseName := filepath.Base(filepath.Dir(filename))
+	if !strings.Contains(baseName, "parent") {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
+			return true
+		}
+
+		hasChildrenValidation := false
+		hasProgrammaticChildren := false
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			if rangeStmt, ok := bodyNode.(*ast.RangeStmt); ok {
+				if selExpr, ok := rangeStmt.X.(*ast.SelectorExpr); ok {
+					if selExpr.Sel.Name == "Children" {
+						hasChildrenValidation = true
+
+						return false
+					}
+				}
+			}
+
+			if callExpr, ok := bodyNode.(*ast.CallExpr); ok {
+				if ident, ok := callExpr.Fun.(*ast.Ident); ok && ident.Name == "make" {
+					if len(callExpr.Args) > 0 {
+						if arrayType, ok := callExpr.Args[0].(*ast.ArrayType); ok {
+							if sel, ok := arrayType.Elt.(*ast.SelectorExpr); ok {
+								if sel.Sel.Name == "ChildSpec" {
+									hasProgrammaticChildren = true
+
+									return false
+								}
+							}
+						}
+					}
+				}
+			}
+
+			return true
+		})
+
+		if !hasChildrenValidation && !hasProgrammaticChildren {
+			// A parent that declares a top-level RenderChildren passes the
+			// no-children-in-DeriveDesiredState check, even if DeriveDesiredState
+			// has no range-over-Children loop.
+			if !dirHasRenderChildren(filepath.Dir(filename)) {
+				pos := fset.Position(funcDecl.Pos())
+				violations = append(violations, Violation{
+					File:    filename,
+					Line:    pos.Line,
+					Type:    "MISSING_CHILDSPEC_VALIDATION",
+					Message: "DeriveDesiredState() should validate ChildrenSpecs before returning",
+				})
+			}
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// dirHasRenderChildren reports whether any non-test .go file in dir or its
+// subdirectories declares a top-level RenderChildren function.
+func dirHasRenderChildren(dir string) bool {
+	found := false
+
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || found {
+			return err
+		}
+
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+
+		fset := token.NewFileSet()
+
+		node, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			return nil
+		}
+
+		for _, decl := range node.Decls {
+			funcDecl, ok := decl.(*ast.FuncDecl)
+			if ok && funcDecl.Recv == nil && funcDecl.Name.Name == "RenderChildren" {
+				found = true
+
+				return nil
+			}
+		}
+
+		return nil
+	})
+
+	return found
+}
+
+// ValidateDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values ("stopped" or "running").
+func ValidateDeriveDesiredStateReturns(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkDeriveDesiredStateReturns(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values.
+func checkDeriveDesiredStateReturns(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	validStates := map[string]bool{
+		"stopped": true,
+		"running": true,
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
+			return true
+		}
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			retStmt, ok := bodyNode.(*ast.ReturnStmt)
+			if !ok || len(retStmt.Results) == 0 {
+				return true
+			}
+
+			firstResult := retStmt.Results[0]
+
+			var compLit *ast.CompositeLit
+			if unaryExpr, ok := firstResult.(*ast.UnaryExpr); ok {
+				compLit, _ = unaryExpr.X.(*ast.CompositeLit)
+			} else {
+				compLit, _ = firstResult.(*ast.CompositeLit)
+			}
+
+			if compLit == nil {
+				return true
+			}
+
+			for _, elt := range compLit.Elts {
+				kvExpr, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+
+				keyIdent, ok := kvExpr.Key.(*ast.Ident)
+				if !ok || keyIdent.Name != "State" {
+					continue
+				}
+
+				if basicLit, ok := kvExpr.Value.(*ast.BasicLit); ok && basicLit.Kind == token.STRING {
+					value := strings.Trim(basicLit.Value, `"`)
+					if !validStates[value] {
+						pos := fset.Position(kvExpr.Pos())
+						violations = append(violations, Violation{
+							File:    filename,
+							Line:    pos.Line,
+							Type:    "INVALID_DESIRED_STATE_VALUE",
+							Message: fmt.Sprintf("DeriveDesiredState returns invalid State value %q - must be \"stopped\" or \"running\"", value),
+						})
+					}
+				}
+			}
+
+			return true
+		})
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateFrameworkMetricsCopy checks that workers with dependencies copy framework metrics.
+func ValidateFrameworkMetricsCopy(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkFrameworkMetricsCopy(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkFrameworkMetricsCopy verifies that CollectObservedState copies framework metrics.
+// Workers that use NewObservation (Pattern A) are exempt: the collector post-processes
+// framework metrics automatically after CollectObservedState returns.
+func checkFrameworkMetricsCopy(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "CollectObservedState" {
+			return true
+		}
+
+		hasGetDependencies := false
+		hasGetFrameworkState := false
+		hasNewObservation := false
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			callExpr, ok := bodyNode.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+				switch selExpr.Sel.Name {
+				case "GetDependencies":
+					hasGetDependencies = true
+				case "GetFrameworkState":
+					hasGetFrameworkState = true
+				}
+			}
+
+			// Check for fsmv2.NewObservation (Pattern A: collector fills metrics post-COS)
+			if ident, ok := callExpr.Fun.(*ast.Ident); ok && ident.Name == "NewObservation" {
+				hasNewObservation = true
+			}
+
+			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok && selExpr.Sel.Name == "NewObservation" {
+				hasNewObservation = true
+			}
+
+			return true
+		})
+
+		if hasGetDependencies && !hasGetFrameworkState && !hasNewObservation {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "MISSING_FRAMEWORK_METRICS_COPY",
+				Message: "CollectObservedState() calls GetDependencies() but not GetFrameworkState() - must copy framework metrics from deps",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateMetricsEmbedderValueReceivers checks that MetricsEmbedder uses value receivers.
+func ValidateMetricsEmbedderValueReceivers(baseDir string) []Violation {
+	var violations []Violation
+
+	apiFile := filepath.Join(baseDir, "api.go")
+	fileViolations := checkMetricsEmbedderReceivers(apiFile)
+	violations = append(violations, fileViolations...)
+
+	return violations
+}
+
+// checkMetricsEmbedderReceivers checks that MetricsEmbedder methods use value receivers.
+func checkMetricsEmbedderReceivers(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	targetMethods := map[string]bool{
+		"GetWorkerMetrics":    true,
+		"GetFrameworkMetrics": true,
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+			return true
+		}
+
+		recv := funcDecl.Recv.List[0]
+
+		recvTypeName := getReceiverTypeName(recv.Type)
+		if recvTypeName != "MetricsEmbedder" {
+			return true
+		}
+
+		if !targetMethods[funcDecl.Name.Name] {
+			return true
+		}
+
+		if _, isPointer := recv.Type.(*ast.StarExpr); isPointer {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "POINTER_RECEIVER_ON_METRICS_EMBEDDER",
+				Message: fmt.Sprintf("MetricsEmbedder.%s() uses pointer receiver (*MetricsEmbedder) - must use value receiver for interface satisfaction", funcDecl.Name.Name),
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// getReceiverTypeName extracts the type name from a receiver.
+func getReceiverTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.StarExpr:
+		if ident, ok := t.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+	case *ast.Ident:
+		return t.Name
+	}
+
+	return ""
+}
+
+// ValidateSpecUsage checks that DeriveDesiredState uses spec type assertion results.
+func ValidateSpecUsage(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkSpecUsage(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkSpecUsage detects DeriveDesiredState methods that type-assert spec but discard the result.
+func checkSpecUsage(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
+			return true
+		}
+
+		if funcDecl.Body == nil {
+			return true
+		}
+
+		if usesNilSafeHelper(funcDecl.Body) {
+			return true
+		}
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			if hasDiscardedTypeAssertion(bodyNode) {
+				pos := fset.Position(funcDecl.Pos())
+				violations = append(violations, Violation{
+					File:    filename,
+					Line:    pos.Line,
+					Type:    "SPEC_RESULT_DISCARDED",
+					Message: "DeriveDesiredState() type-asserts spec but discards the result with _  -  spec fields should be parsed and used",
+				})
+
+				return false
+			}
+
+			return true
+		})
+
+		return true
+	})
+
+	return violations
+}
+
+// hasDiscardedTypeAssertion checks if a node contains a type assertion where the value is discarded with _.
+func hasDiscardedTypeAssertion(n ast.Node) bool {
+	switch stmt := n.(type) {
+	case *ast.AssignStmt:
+		return assignDiscardsTypeAssertion(stmt)
+	case *ast.IfStmt:
+		if stmt.Init != nil {
+			if assignStmt, ok := stmt.Init.(*ast.AssignStmt); ok {
+				return assignDiscardsTypeAssertion(assignStmt)
+			}
+		}
+	}
+
+	return false
+}
+
+// assignDiscardsTypeAssertion checks if an assignment discards a type assertion result with _.
+func assignDiscardsTypeAssertion(stmt *ast.AssignStmt) bool {
+	if len(stmt.Lhs) < 1 || len(stmt.Rhs) < 1 {
+		return false
+	}
+
+	hasTypeAssertion := false
+
+	for _, rhs := range stmt.Rhs {
+		if _, ok := rhs.(*ast.TypeAssertExpr); ok {
+			hasTypeAssertion = true
+
+			break
+		}
+	}
+
+	if !hasTypeAssertion {
+		return false
+	}
+
+	if ident, ok := stmt.Lhs[0].(*ast.Ident); ok && ident.Name == "_" {
+		return true
+	}
+
+	return false
+}
+
+// ValidateActionHistoryCopy checks that workers with dependencies copy action history.
+func ValidateActionHistoryCopy(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkActionHistoryCopy(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkActionHistoryCopy verifies that CollectObservedState copies action history.
+// checkActionHistoryCopy verifies that CollectObservedState copies action history.
+// Workers that use NewObservation (Pattern A) are exempt: the collector post-processes
+// action history automatically after CollectObservedState returns.
+func checkActionHistoryCopy(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "CollectObservedState" {
+			return true
+		}
+
+		hasGetDependencies := false
+		hasGetActionHistory := false
+		hasNewObservation := false
+
+		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
+			callExpr, ok := bodyNode.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+				switch selExpr.Sel.Name {
+				case "GetDependencies":
+					hasGetDependencies = true
+				case "GetActionHistory":
+					hasGetActionHistory = true
+				}
+			}
+
+			// Check for fsmv2.NewObservation (Pattern A: collector fills action history post-COS)
+			if ident, ok := callExpr.Fun.(*ast.Ident); ok && ident.Name == "NewObservation" {
+				hasNewObservation = true
+			}
+
+			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok && selExpr.Sel.Name == "NewObservation" {
+				hasNewObservation = true
+			}
+
+			return true
+		})
+
+		if hasGetDependencies && !hasGetActionHistory && !hasNewObservation {
+			pos := fset.Position(funcDecl.Pos())
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "MISSING_ACTION_HISTORY_COPY",
+				Message: "CollectObservedState() calls GetDependencies() but not GetActionHistory() - must copy action history from deps",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateCollectObservedState2ArgSignature validates that all CollectObservedState
+// implementations use the L1 two-argument signature:
+//
+//	CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (ObservedState, error)
+//
+// The single-argument form (ctx context.Context) is the pre-L1 signature and must not
+// appear in any worker file after the L1 migration.
+func ValidateCollectObservedState2ArgSignature(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkCollectObservedState2ArgSignature(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkCollectObservedState2ArgSignature checks that CollectObservedState has the 2-arg L1 signature.
+func checkCollectObservedState2ArgSignature(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "CollectObservedState" {
+			return true
+		}
+
+		// Count the non-receiver parameters.
+		paramCount := 0
+
+		if funcDecl.Type.Params != nil {
+			for _, field := range funcDecl.Type.Params.List {
+				// Each field can represent multiple names (e.g., "a, b int").
+				// Count at least 1 even if no names (anonymous).
+				names := len(field.Names)
+				if names == 0 {
+					names = 1
+				}
+
+				paramCount += names
+			}
+		}
+
+		// L1 signature requires exactly 2 parameters: ctx and desired.
+		if paramCount != 2 {
+			pos := fset.Position(funcDecl.Pos())
+
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "COLLECT_OBSERVED_STATE_1ARG_SIGNATURE",
+				Message: fmt.Sprintf("CollectObservedState has %d parameter(s); L1 requires 2 (ctx context.Context, desired DesiredState)", paramCount),
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}

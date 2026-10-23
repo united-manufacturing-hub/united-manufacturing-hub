@@ -18,7 +18,7 @@
 package cpuhealth
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // Details carries the per-tick values and flags ComposeMessage and

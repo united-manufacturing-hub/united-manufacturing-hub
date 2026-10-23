@@ -21,10 +21,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 )
 
 type ExampleslowWorker struct {
@@ -90,7 +90,7 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, desired fs
 	// Demonstration-only: this worker writes into deps from CollectObservedState
 	// to simulate runtime conditions (failure cycles / panic flags) that
 	// production configuration drives directly. Real workers MUST keep
-	// CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
+	// CollectObservedState pure I/O reads. See fsmv2/README.md
 	// "I/O isolation rule".
 	if desired != nil {
 		cfg := fsmv2.ExtractConfig[ExampleslowConfig](desired)

@@ -26,8 +26,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
+	umhlogger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
-	umhlogger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 func TestBaseFSM(t *testing.T) {

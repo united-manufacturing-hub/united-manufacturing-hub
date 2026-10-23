@@ -31,15 +31,15 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 
 	// Named imports for the config types these workers' DesiredState requires;
 	// the import itself triggers init(), which is the registration these package
@@ -197,7 +197,7 @@ func probeFrameworkMetrics(workerType string, w fsmv2.Worker, sentinel int64) in
 	id := deps.Identity{ID: workerType + "-probe", WorkerType: workerType, Name: workerType + "-probe"}
 	store := supervisor.CreateTestTriangularStoreForWorkerType(workerType)
 
-	cfg := collection.CollectorConfig[fsmv2.ObservedState]{
+	cfg := testutil.CollectorConfig[fsmv2.ObservedState]{
 		Worker:               w,
 		Identity:             id,
 		Store:                store,
@@ -210,7 +210,7 @@ func probeFrameworkMetrics(workerType string, w fsmv2.Worker, sentinel int64) in
 		},
 	}
 
-	c := collection.NewCollector[fsmv2.ObservedState](cfg)
+	c := testutil.NewCollector[fsmv2.ObservedState](cfg)
 
 	ctx := context.Background()
 	Expect(c.Start(ctx)).To(Succeed())
