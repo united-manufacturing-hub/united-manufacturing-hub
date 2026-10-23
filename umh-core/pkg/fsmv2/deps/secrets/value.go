@@ -53,6 +53,7 @@ func (v Value) Reveal() string {
 	if v.hidden == nil {
 		return ""
 	}
+
 	return v.hidden.reveal()
 }
 

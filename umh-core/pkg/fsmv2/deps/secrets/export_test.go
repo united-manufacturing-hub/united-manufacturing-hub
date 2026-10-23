@@ -19,5 +19,6 @@ package secrets
 func EntryCount(s *Store) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return len(s.entries)
 }

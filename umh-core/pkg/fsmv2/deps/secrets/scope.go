@@ -63,6 +63,7 @@ func (h Handle) ForWorker(d PathSource) (Scope, error) {
 	if err := checkPath(path); err != nil {
 		return Scope{}, err
 	}
+
 	return Scope{store: h.store, path: path}, nil
 }
 
@@ -77,6 +78,7 @@ func (s Scope) Get(key Key) (Value, error) {
 	if !found {
 		return Value{}, ErrNotFound
 	}
+
 	return value, nil
 }
 
@@ -87,6 +89,7 @@ func (s Scope) Put(key Key, value Value) error {
 		return err
 	}
 	s.store.put(entry, value)
+
 	return nil
 }
 
@@ -97,6 +100,7 @@ func (s Scope) Delete(key Key) error {
 		return err
 	}
 	s.store.delete(entry)
+
 	return nil
 }
 
@@ -108,6 +112,7 @@ func (s Scope) entryFor(key Key) (entryID, error) {
 	if key.name == "" {
 		return entryID{}, ErrInvalidName
 	}
+
 	return entryID{path: s.path, name: key.name}, nil
 }
 

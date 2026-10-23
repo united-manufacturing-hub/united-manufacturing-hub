@@ -55,6 +55,7 @@ var (
 func open(handle secrets.Handle, path string) secrets.Scope {
 	scope, err := handle.ForWorker(fakeDeps{path})
 	Expect(err).NotTo(HaveOccurred())
+
 	return scope
 }
 

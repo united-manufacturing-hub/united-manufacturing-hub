@@ -54,6 +54,7 @@ func (s *Store) get(key entryID) (Value, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	value, found := s.entries[key]
+
 	return value, found
 }
 
