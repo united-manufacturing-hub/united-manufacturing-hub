@@ -1,0 +1,9 @@
+# LikeC4 build and export output. umh-core.c4 is the only source.
+out/
+dist/
+*.mmd
+*.puml
+*.d2
+*.dot
+*.json
+node_modules/
