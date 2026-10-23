@@ -383,7 +383,8 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 		Context("when SignalNeedsRemoval received for worker in pendingRestart", func() {
 			It("should restart worker instead of removing", func() {
-				expectNoMetricsAfterSpec(mockIdentity().HierarchyPath)
+				identity := mockIdentity()
+				expectNoMetricsAfterSpec(identity.HierarchyPath)
 				store := newMockTriangularStore()
 
 				initialState := &mockState{}
@@ -398,7 +399,6 @@ var _ = Describe("Supervisor Lifecycle", func() {
 
 				s := newSupervisorWithWorker(worker, store, supervisor.CollectorHealthConfig{})
 
-				identity := mockIdentity()
 				s.TestSetPendingRestart(identity.ID)
 
 				// processSignal only restarts when started=true; set it before the tick.

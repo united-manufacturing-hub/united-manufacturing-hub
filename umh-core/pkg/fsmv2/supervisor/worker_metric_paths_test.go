@@ -80,10 +80,10 @@ func fsmv2SeriesFor(hierarchyPath string) map[string]float64 {
 	return series
 }
 
-// expectNoMetricsAfterSpec fails the current spec if anything still records a
-// metric under hierarchyPath after the spec body returns. A worker left
-// running keeps saving observations every observation interval. Its metrics
-// are process-wide, so it would change the numbers other specs read.
+// expectNoMetricsAfterSpec fails the current spec if anything records a metric
+// under hierarchyPath during the two observation intervals after the spec ends.
+// Metrics are process-wide, so a worker left running changes the numbers other
+// specs read.
 func expectNoMetricsAfterSpec(hierarchyPath string) {
 	DeferCleanup(func() {
 		atEnd := fsmv2SeriesFor(hierarchyPath)
