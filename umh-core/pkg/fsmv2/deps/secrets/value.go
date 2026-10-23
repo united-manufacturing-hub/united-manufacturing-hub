@@ -26,33 +26,34 @@ var ErrNotSerializable = errors.New("secrets: value cannot be encoded")
 // placeholder is what a Value prints instead of the string it holds.
 const placeholder = "[secret]"
 
-// box holds the string inside a closure, so fmt has no string field to print:
-// it cannot call Format or String through an unexported field of another
-// struct, so what it prints is the closure's function address.
-type box struct {
+// hiddenString holds the string inside a closure. A printer that follows
+// pointers through reflection, such as go-spew, reaches this struct and
+// prints a func instead of the string.
+type hiddenString struct {
 	reveal func() string
 }
 
 // Value holds a string that must not appear in logs or serialized state.
-// The string sits behind a closure in an unexported struct, and Format prints
-// the placeholder for every verb, so no fmt verb or log field can write it.
-// Values are immutable, and Get and the store share the same box, so no
-// method may change one in place.
+// Values are immutable, and Get and the store share the same hiddenString, so
+// no method may change one in place.
 type Value struct {
-	p *box
+	// hidden is a pointer because fmt cannot call Format on a Value nested in
+	// an unexported field of another struct. There fmt prints the pointer as
+	// an address and does not follow it.
+	hidden *hiddenString
 }
 
 // NewValue builds a Value holding s.
 func NewValue(s string) Value {
-	return Value{p: &box{reveal: func() string { return s }}}
+	return Value{hidden: &hiddenString{reveal: func() string { return s }}}
 }
 
 // Reveal returns the held string.
 func (v Value) Reveal() string {
-	if v.p == nil {
+	if v.hidden == nil {
 		return ""
 	}
-	return v.p.reveal()
+	return v.hidden.reveal()
 }
 
 // Format prints the placeholder for every verb. fmt calls it for every verb
@@ -62,7 +63,8 @@ func (v Value) Format(f fmt.State, verb rune) {
 	_, _ = io.WriteString(f, placeholder)
 }
 
-// MarshalText refuses to write the held string.
+// MarshalText returns ErrNotSerializable, so encoding a state struct that
+// holds a Value fails instead of writing {}.
 func (v Value) MarshalText() ([]byte, error) {
 	return nil, ErrNotSerializable
 }

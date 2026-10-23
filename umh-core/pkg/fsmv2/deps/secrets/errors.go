@@ -16,17 +16,19 @@ package secrets
 
 import "errors"
 
-// ErrInvalidName is returned when an entry name is empty or contains a
-// separator or path element.
-var ErrInvalidName = errors.New("secrets: invalid entry name")
+// ErrInvalidName is returned by Get, Put and Delete for a Key that NewKey did
+// not build.
+var ErrInvalidName = errors.New("secrets: key not built with NewKey")
 
-// ErrInvalidOwner is returned when a hierarchy path is empty or malformed.
-var ErrInvalidOwner = errors.New("secrets: invalid owner path")
+// ForWorker returns an error wrapping ErrInvalidPath when the hierarchy path
+// is empty or malformed.
+var ErrInvalidPath = errors.New("secrets: invalid hierarchy path")
 
-// ErrNotFound is returned when no entry of that name is stored under the
+// ErrNotFound is returned by Get when nothing is stored under the key in the
 // scope's path.
 var ErrNotFound = errors.New("secrets: entry not found")
 
-// ErrNoStore is returned by ScopeOf when the handle has no store behind it,
-// because nothing ever put one in the dependency map.
+// ErrNoStore is returned by ForWorker when the handle has no store behind it,
+// and by Get, Put and Delete on a zero Scope, such as the one ForWorker returns
+// with an error.
 var ErrNoStore = errors.New("secrets: no store")

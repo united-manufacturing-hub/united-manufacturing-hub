@@ -14,123 +14,118 @@
 
 package secrets
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
-// Scope is what a worker opens from a handle with ScopeOf. Its Get, Put and
-// Delete act on one named entry under the scope's hierarchy path, and they
-// take no path.
+// Key names one entry. Declare it once, as a package-level var next to the
+// worker that owns the entry, and pass that var to every Get, Put and Delete:
+//
+//	var JWTKey = secrets.NewKey("transport.jwt")
+type Key struct {
+	name string
+}
+
+// NewKey returns the key for the entry called name. Name it
+// "<worker type>.<entry>", as in "transport.jwt". It panics when name is
+// empty, contains "/", or is "." or "..", so a bad name fails when the
+// declaring package loads.
+func NewKey(name string) Key {
+	if !validName(name) {
+		panic(fmt.Sprintf("secrets.NewKey(%q): a name must be non-empty, contain no \"/\", and not be \".\" or \"..\"", name))
+	}
+
+	return Key{name: name}
+}
+
+// Scope is one worker's view of the store: Get, Put and Delete act on entries
+// under that worker's hierarchy path.
 type Scope struct {
-	store *MemoryStore
+	store *Store
 	path  string
 }
 
-// PathSource is satisfied by every worker's dependencies. ScopeOf reads the
+// PathSource is satisfied by every worker's dependencies. ForWorker reads the
 // worker's hierarchy path from it.
 type PathSource interface {
 	GetHierarchyPath() string
 }
 
-// ScopeOf opens the scope for the hierarchy path in d. A worker calls it once,
-// in its constructor, with the handle from config.LookupDependency(deps,
-// secrets.StoreKey) and its own dependencies:
-//
-//	scope, err := secrets.ScopeOf(handle, deps)
-//
-// It returns an error, and no usable scope, when the handle has no store
-// behind it or the path is empty or malformed. ScopeOf does not check who
-// calls it, so code that passes another worker's dependencies, or builds its
-// own PathSource, gets that path's scope.
-func ScopeOf(h Handle, d PathSource) (Scope, error) {
+// ForWorker returns the scope for the hierarchy path in d. It returns
+// ErrNoStore when the handle has no store behind it, and an error wrapping
+// ErrInvalidPath when the path is empty or malformed.
+func (h Handle) ForWorker(d PathSource) (Scope, error) {
 	if h.store == nil {
 		return Scope{}, ErrNoStore
 	}
 	path := d.GetHierarchyPath()
-	if err := CheckPath(path); err != nil {
+	if err := checkPath(path); err != nil {
 		return Scope{}, err
 	}
 	return Scope{store: h.store, path: path}, nil
 }
 
-// Get returns the value stored under name in the scope's path, or
-// ErrNotFound when no entry of that name is there.
-func (s Scope) Get(name string) (Value, error) {
-	if !validName(name) {
-		return Value{}, ErrInvalidName
+// Get returns the value stored under key, or ErrNotFound when nothing is
+// stored there yet.
+func (s Scope) Get(key Key) (Value, error) {
+	entry, err := s.entryFor(key)
+	if err != nil {
+		return Value{}, err
 	}
-	if s.store == nil {
-		return Value{}, ErrNotFound
-	}
-	s.store.mu.RLock()
-	defer s.store.mu.RUnlock()
-	val, found := s.store.entries[entryKey{owner: s.path, name: name}]
+	value, found := s.store.get(entry)
 	if !found {
 		return Value{}, ErrNotFound
 	}
-	return val, nil
+	return value, nil
 }
 
-// Put stores value under name in the scope's path.
-func (s Scope) Put(name string, v Value) error {
-	if !validName(name) {
-		return ErrInvalidName
+// Put stores value under key.
+func (s Scope) Put(key Key, value Value) error {
+	entry, err := s.entryFor(key)
+	if err != nil {
+		return err
 	}
-	if s.store == nil {
-		return ErrNotFound
-	}
-	s.store.mu.Lock()
-	defer s.store.mu.Unlock()
-	s.store.entries[entryKey{owner: s.path, name: name}] = v
+	s.store.put(entry, value)
 	return nil
 }
 
-// Delete removes the entry under name from the scope's path.
-func (s Scope) Delete(name string) error {
-	if !validName(name) {
-		return ErrInvalidName
+// Delete removes the entry under key; a key with no entry is not an error.
+func (s Scope) Delete(key Key) error {
+	entry, err := s.entryFor(key)
+	if err != nil {
+		return err
 	}
-	if s.store == nil {
-		return ErrNotFound
-	}
-	s.store.mu.Lock()
-	defer s.store.mu.Unlock()
-	delete(s.store.entries, entryKey{owner: s.path, name: name})
+	s.store.delete(entry)
 	return nil
 }
 
-// Ancestor returns the scope of the nearest ancestor whose worker type
-// equals workerType. A worker calls it when it needs a secret that a worker
-// above it holds:
-//
-//	comm, ok := scope.Ancestor("communicator")
-//
-// It walks up from the parent toward the root and stops at the first segment
-// whose type part equals workerType. It returns that ancestor's scope and
-// true, or false when no ancestor has that type. It never returns the
-// worker's own scope or the root as a fallback, and it refuses an empty
-// type. The returned scope can read, write and delete that ancestor's
-// entries.
-func (s Scope) Ancestor(workerType string) (Scope, bool) {
-	if workerType == "" || s.store == nil {
-		return Scope{}, false
+// entryFor returns the entryID for key under the scope's path.
+func (s Scope) entryFor(key Key) (entryID, error) {
+	if s.store == nil {
+		return entryID{}, ErrNoStore
 	}
-	segs, ok := splitPath(s.path)
-	if !ok {
-		return Scope{}, false
+	if key.name == "" {
+		return entryID{}, ErrInvalidName
 	}
-	for i := len(segs) - 2; i >= 0; i-- {
-		if typePart(segs[i]) == workerType {
-			return Scope{store: s.store, path: strings.Join(segs[:i+1], "/")}, true
+	return entryID{path: s.path, name: key.name}, nil
+}
+
+// checkPath returns nil if path is a well-formed hierarchy path: non-empty,
+// with no empty, "." or ".." segment. Otherwise it returns an error wrapping
+// ErrInvalidPath.
+func checkPath(path string) error {
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return fmt.Errorf("%w: %q", ErrInvalidPath, path)
 		}
 	}
-	return Scope{}, false
+
+	return nil
 }
 
-// typePart returns the text inside a segment's last pair of parentheses. A
-// segment with no pair, or an empty pair, has an empty type part.
-func typePart(seg string) string {
-	i := strings.LastIndex(seg, "(")
-	if i < 0 || !strings.HasSuffix(seg, ")") {
-		return ""
-	}
-	return seg[i+1 : len(seg)-1]
+// validName reports whether name is non-empty, contains no "/", and is not
+// "." or "..".
+func validName(name string) bool {
+	return name != "" && !strings.Contains(name, "/") && name != "." && name != ".."
 }

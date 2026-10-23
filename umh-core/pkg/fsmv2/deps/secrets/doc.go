@@ -13,76 +13,53 @@
 // limitations under the License.
 
 // Package secrets holds a store for secret entries, keyed by the hierarchy
-// path of the worker that owns them.
+// path of the worker that owns them (deps.Identity.HierarchyPath, such as
+// "application-fsmv2(application)/communicator-001(communicator)/transport-001(transport)").
 //
-// Usage: a worker that stores or reads a secret writes three steps. First,
-// in its constructor, it looks up the store's handle in its dependency map:
+// cmd/main.go creates one Store per process and puts its Handle in the root
+// dependency map under StoreKey. A worker opens its Scope once, in its
+// constructor: it looks up the handle and calls ForWorker with its own
+// dependencies, which carry its hierarchy path. No worker uses the store yet.
+// The transport worker would open its scope like this and keep it on its
+// TransportDependencies:
 //
 //	handle, ok := config.LookupDependency(dependencies, secrets.StoreKey)
-//
-// The lookup returns the handle, or false when the dependency map holds
-// nothing under the key. Second, it opens its scope with
-// its *deps.BaseDependencies, which carry its hierarchy path:
-//
-//	scope, err := secrets.ScopeOf(handle, bd)
-//
-// ScopeOf returns the worker's own scope, or an error and no usable scope
-// when the handle has no store behind it or the path is empty or malformed.
-// Third, it calls Get, Put or Delete on that scope. Each call takes an entry
-// name and no path: Put stores a Value under the name, Get returns the
-// stored Value or ErrNotFound, Delete removes the entry. Each of them
-// returns ErrInvalidName when the name is not valid.
-//
-// Use the worker's own scope for entries this worker owns. Use the scope
-// that Ancestor(workerType) returns for an entry a worker above it owns:
-//
-//	transport, ok := scope.Ancestor("transport")
-//
-// Ancestor returns the scope of the nearest ancestor whose type part equals
-// workerType, and true, or false when no ancestor has that type. An
-// ancestor scope can read, write and delete that ancestor's entries.
-//
-// For example, the transport worker could keep its login token in the store,
-// and its push child could read it:
-//
-//	// transport worker
-//	scope.Put("jwt", secrets.NewValue(token))
-//
-//	// push worker, a child of the transport worker
-//	transport, ok := scope.Ancestor("transport")
-//	jwt, err := transport.Get("jwt")
-//
-// The model in one place: one store per process. cmd/main.go creates the
-// store and puts its handle in the root dependencies under StoreKey, so
-// every worker receives it like any other dependency. A worker opens its
-// scope with ScopeOf in its constructor. Its own scope holds the entries of
-// its own hierarchy path, and Ancestor(type) returns the scope of the
-// nearest ancestor of that type. A worker that passes its own BaseDependencies
-// reaches only its own entries and its ancestors' entries. ScopeOf does
-// not check who calls it, so code that passes another worker's BaseDependencies,
-// or builds its own path source, gets that path's scope. A Value never
-// prints the string it holds: it prints [secret] and returns an error to
-// JSON and text encoders.
-//
-// A worker constructor that opens its scope:
-//
-//	func newTransportWorker(dependencies map[string]any, bd *deps.BaseDependencies) (*transportWorker, error) {
-//		handle, ok := config.LookupDependency(dependencies, secrets.StoreKey)
-//		if !ok {
-//			return nil, errors.New("no secrets store in the dependencies")
-//		}
-//		scope, err := secrets.ScopeOf(handle, bd)
-//		if err != nil {
-//			return nil, err
-//		}
-//		return &transportWorker{scope: scope}, nil
+//	if !ok {
+//		return nil, errors.New("transport: no secrets store in the dependency map")
 //	}
+//	bd := w.InitBase(identity, logger, stateReader)
+//	scope, err := handle.ForWorker(bd)
+//	if err != nil {
+//		return nil, err
+//	}
+//	w.BindDeps(NewTransportDependencies(nil, bd, provider, scope))
 //
-// A worker's hierarchy path is segments name(type) joined by "/". A root
-// application worker sits at <ID>(application), and each child adds a
-// segment <name>-001(<type>), so a transport child of the communicator sits
-// at
-// application-fsmv2(application)/communicator-001(communicator)/transport-001(transport).
-// Ancestor reads only the type part of each segment, the text inside the
-// last pair of parentheses.
+// NewTransportDependencies takes no scope today; this is the planned change.
+//
+// Get, Put and Delete take a Key (see Key) and act on that entry under the
+// scope's path.
+//
+// Get returns ErrNotFound when nothing is stored under the key yet.
+//
+// The store keeps a worker's entries until the process exits or the worker
+// deletes them. Nothing removes them when the worker is removed or restarted,
+// so a worker that needs its entries gone when it stops deletes them itself.
+//
+// A child reaches its parent's entries through the parent's dependencies, not
+// through a scope of its own. Actions receive their worker's dependencies, and
+// the push worker's dependency builder (register.SetGlobalDepsBuilder)
+// receives the transport dependencies from register.GlobalDeps. With a Secrets method on TransportDependencies that
+// returns the scope, the token would travel like this:
+//
+//	// AuthenticateAction, on the transport dependencies it receives
+//	err := deps.Secrets().Put(transport.JWTKey, secrets.NewValue(authResp.Token))
+//
+//	// push, on the transport dependencies its dependency builder received
+//	jwt, err := parentDeps.Secrets().Get(transport.JWTKey)
+//
+// ForWorker does not check who calls it. Code that passes another worker's
+// dependencies, or builds its own PathSource, gets that path's scope.
+//
+// A Value never prints the string it holds: it prints [secret] and returns
+// ErrNotSerializable to JSON and text encoders.
 package secrets

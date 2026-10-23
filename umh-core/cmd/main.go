@@ -677,9 +677,8 @@ func buildFSMv2Supervisor(
 
 	fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
 
-	// The process has one secrets store. Its handle goes into the root
-	// dependencies so that every worker can open its own scope with secrets.ScopeOf.
-	secretsStore := secrets.NewMemoryStore()
+	// One secrets store per process; see package secrets.
+	secretsStore := secrets.NewStore()
 	fsmv2config.SetDependency(fsmv2Deps, secrets.StoreKey, secretsStore.Handle())
 
 	// Publish the dynamicchildren registry under the configworker deps key and

@@ -27,7 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/secrets"
 )
 
-// fakeDeps stands in for a worker's dependencies in these rows.
+// fakeDeps stands in for a worker's dependencies in these tests.
 type fakeDeps struct {
 	path string
 }
@@ -36,287 +36,242 @@ func (f fakeDeps) GetHierarchyPath() string {
 	return f.path
 }
 
-// Test paths.
 const (
-	pathC = "app(application)/communicator(communicator)"
-	pathT = pathC + "/transport(transport)"
-	pathF = pathC + "/certfetcher(certfetcher)"
+	communicatorPath = "app(application)/communicator(communicator)"
+	transportPath    = communicatorPath + "/transport(transport)"
+	certFetcherPath  = communicatorPath + "/certfetcher(certfetcher)"
+
+	// The form the supervisor builds: a root application worker, a numbered
+	// communicator child, and a numbered transport child under it.
+	numberedTransportPath = "application-fsmv2(application)/communicator-001(communicator)/transport-001(transport)"
 )
 
-// The real path form: a root application worker, a numbered communicator
-// child, and a numbered transport child under it.
-const (
-	realC = "application-fsmv2(application)/communicator-001(communicator)"
-	realT = realC + "/transport-001(transport)"
+var (
+	tokenKey = secrets.NewKey("test.token")
+	otherKey = secrets.NewKey("test.other")
 )
 
-// open returns a scope from ScopeOf, failing the row if it errors.
-func open(h secrets.Handle, path string) secrets.Scope {
-	scope, err := secrets.ScopeOf(h, fakeDeps{path})
+// open returns the scope ForWorker gives for path, failing the test if it errors.
+func open(handle secrets.Handle, path string) secrets.Scope {
+	scope, err := handle.ForWorker(fakeDeps{path})
 	Expect(err).NotTo(HaveOccurred())
 	return scope
 }
 
 var _ = Describe("Scope", func() {
-	It("S1 checks that a scope from ScopeOf stores a value with Put and Get returns the same value", func() {
-		store := secrets.NewMemoryStore()
-		scope := open(store.Handle(), pathT)
+	DescribeTable("stores a value with Put and returns it with Get",
+		func(path string) {
+			store := secrets.NewStore()
+			scope := open(store.Handle(), path)
 
-		Expect(scope.Put("k", secrets.NewValue("v1"))).To(Succeed())
-		val, err := scope.Get("k")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(val.Reveal()).To(Equal("v1"))
-	})
+			Expect(scope.Put(tokenKey, secrets.NewValue("v1"))).To(Succeed())
+			value, err := scope.Get(tokenKey)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(value.Reveal()).To(Equal("v1"))
+		},
+		Entry("at a short path", transportPath),
+		Entry("at the numbered path form", numberedTransportPath),
+	)
 
-	It("S1b checks that a scope at the real path form stores a value with Put and Get returns the same value", func() {
-		store := secrets.NewMemoryStore()
-		scope := open(store.Handle(), realT)
+	It("returns ErrNotFound from Get for a key that nothing was stored under", func() {
+		store := secrets.NewStore()
+		scope := open(store.Handle(), transportPath)
+		Expect(scope.Put(tokenKey, secrets.NewValue("v1"))).To(Succeed())
 
-		Expect(scope.Put("k", secrets.NewValue("v1"))).To(Succeed())
-		val, err := scope.Get("k")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(val.Reveal()).To(Equal("v1"))
-	})
-
-	It("S2 checks that ScopeOf refuses an empty or malformed path and the store stays empty", func() {
-		store := secrets.NewMemoryStore()
-		h := store.Handle()
-
-		for _, malformed := range []string{"", "/a(x)", "a(x)/", "a(x)//b(y)", "a(x)/../b(y)", "."} {
-			scope, err := secrets.ScopeOf(h, fakeDeps{malformed})
-			Expect(err).NotTo(BeNil(), "ScopeOf(%q)", malformed)
-			Expect(errors.Is(err, secrets.ErrInvalidOwner)).To(BeTrue(), "ScopeOf(%q)", malformed)
-
-			err = scope.Put("k", secrets.NewValue("v"))
-			Expect(err).NotTo(BeNil(), "Put on the scope from ScopeOf(%q)", malformed)
-		}
-
-		// The store holds no entry after the refused puts.
-		Expect(secrets.EntryCount(store)).To(Equal(0))
-	})
-
-	It("S3 checks that ScopeOf returns ErrNoStore for a handle with no store behind it", func() {
-		scope, err := secrets.ScopeOf(secrets.Handle{}, fakeDeps{pathT})
-		Expect(err).NotTo(BeNil())
-		Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue())
-		Expect(scope.Put("k", secrets.NewValue("v"))).NotTo(Succeed())
-	})
-
-	It("S4 checks that a scope opened from a worker's own dependencies does not read a sibling's entries", func() {
-		store := secrets.NewMemoryStore()
-		h := store.Handle()
-		transport := open(h, pathT)
-		fetcher := open(h, pathF)
-
-		Expect(transport.Put("jwt", secrets.NewValue("v1"))).To(Succeed())
-
-		_, err := fetcher.Get("jwt")
-		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue(), "fetcher Get")
-
-		comm, ok := fetcher.Ancestor("communicator")
-		Expect(ok).To(BeTrue())
-		_, err = comm.Get("jwt")
-		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue(), "fetcher's communicator Get")
-	})
-
-	It("S5 checks that Ancestor finds the scope of an ancestor of a given worker type", func() {
-		store := secrets.NewMemoryStore()
-		h := store.Handle()
-		commScope := open(h, pathC)
-		transport := open(h, pathT)
-
-		Expect(commScope.Put("auth_token", secrets.NewValue("v1"))).To(Succeed())
-
-		comm, ok := transport.Ancestor("communicator")
-		Expect(ok).To(BeTrue())
-		val, err := comm.Get("auth_token")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(val.Reveal()).To(Equal("v1"))
-	})
-
-	It("S5b checks that Ancestor finds an ancestor's entry at the real path form", func() {
-		store := secrets.NewMemoryStore()
-		h := store.Handle()
-		commScope := open(h, realC)
-		transport := open(h, realT)
-
-		Expect(commScope.Put("auth_token", secrets.NewValue("v1"))).To(Succeed())
-
-		comm, ok := transport.Ancestor("communicator")
-		Expect(ok).To(BeTrue())
-		val, err := comm.Get("auth_token")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(val.Reveal()).To(Equal("v1"))
-	})
-
-	It("S6 checks that an ancestor scope can write and delete that ancestor's entries", func() {
-		store := secrets.NewMemoryStore()
-		h := store.Handle()
-		transport := open(h, pathT)
-		fetcher := open(h, pathF)
-
-		commT, ok := transport.Ancestor("communicator")
-		Expect(ok).To(BeTrue())
-		Expect(commT.Put("jwt", secrets.NewValue("v1"))).To(Succeed())
-
-		commF, ok := fetcher.Ancestor("communicator")
-		Expect(ok).To(BeTrue())
-		val, err := commF.Get("jwt")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(val.Reveal()).To(Equal("v1"))
-
-		Expect(commT.Delete("jwt")).To(Succeed())
-
-		_, err = commF.Get("jwt")
+		_, err := scope.Get(otherKey)
 		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue())
 	})
 
-	It("S7 checks that Ancestor resolves to the nearest ancestor of the given worker type", func() {
-		store := secrets.NewMemoryStore()
-		h := store.Handle()
-		scope := open(h, "a(x)/b(x)/c(y)")
+	It("removes an entry with Delete", func() {
+		store := secrets.NewStore()
+		scope := open(store.Handle(), transportPath)
+		Expect(scope.Put(tokenKey, secrets.NewValue("v1"))).To(Succeed())
 
-		anc, ok := scope.Ancestor("x")
-		Expect(ok).To(BeTrue())
+		Expect(scope.Delete(tokenKey)).To(Succeed())
 
-		// b's write is visible through the ancestor scope, a's is not.
-		a := open(h, "a(x)")
-		b := open(h, "a(x)/b(x)")
-		Expect(a.Put("k", secrets.NewValue("from-a"))).To(Succeed())
-		Expect(b.Put("k", secrets.NewValue("from-b"))).To(Succeed())
+		_, err := scope.Get(tokenKey)
+		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue())
+		Expect(secrets.EntryCount(store)).To(Equal(0))
 
-		val, err := anc.Get("k")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(val.Reveal()).To(Equal("from-b"))
+		Expect(scope.Delete(otherKey)).To(Succeed(), "Delete of a key with no entry")
 	})
 
-	It("S8 checks that Ancestor never falls back to the worker's own path, the root or a prefix match", func() {
-		store := secrets.NewMemoryStore()
-		h := store.Handle()
+	It("gives each worker its own entries: a sibling's scope does not see them", func() {
+		store := secrets.NewStore()
+		handle := store.Handle()
+		transport := open(handle, transportPath)
+		certFetcher := open(handle, certFetcherPath)
+		communicator := open(handle, communicatorPath)
 
-		transport := open(h, "app(application)/transport(transport)")
-		_, ok := transport.Ancestor("transport")
-		Expect(ok).To(BeFalse(), "the own segment never matches")
-		_, ok = transport.Ancestor("communicator")
-		Expect(ok).To(BeFalse())
-		_, ok = transport.Ancestor("")
-		Expect(ok).To(BeFalse())
+		Expect(transport.Put(tokenKey, secrets.NewValue("v1"))).To(Succeed())
 
-		suffixed := open(h, "app(application)/c(communicatorx)/t(transport)")
-		_, ok = suffixed.Ancestor("communicator")
-		Expect(ok).To(BeFalse(), "the type part must match exactly")
+		_, err := certFetcher.Get(tokenKey)
+		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue(), "sibling Get")
+		_, err = communicator.Get(tokenKey)
+		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue(), "parent Get")
 
-		emptyType := open(h, "app(application)/x()/t(transport)")
-		_, ok = emptyType.Ancestor("")
-		Expect(ok).To(BeFalse(), "an empty type is refused before the loop")
+		again := open(handle, transportPath)
+		value, err := again.Get(tokenKey)
+		Expect(err).NotTo(HaveOccurred(), "a second scope for the same path")
+		Expect(value.Reveal()).To(Equal("v1"))
 	})
 
-	It("S9 checks that an invalid entry name is refused by Get, Put and Delete and nothing is written", func() {
-		store := secrets.NewMemoryStore()
-		scope := open(store.Handle(), pathT)
+	It("refuses an empty or malformed path in ForWorker with ErrInvalidPath, and the store stays empty", func() {
+		store := secrets.NewStore()
+		handle := store.Handle()
 
-		for _, name := range []string{"", "a/b", ".", ".."} {
-			_, err := scope.Get(name)
-			Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Get with name "+name)
+		for _, malformed := range []string{"", "/a(x)", "a(x)/", "a(x)//b(y)", "a(x)/../b(y)", "a(x)/./b(y)", "."} {
+			scope, err := handle.ForWorker(fakeDeps{malformed})
+			Expect(errors.Is(err, secrets.ErrInvalidPath)).To(BeTrue(), "ForWorker(%q)", malformed)
 
-			err = scope.Put(name, secrets.NewValue("v"))
-			Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Put with name "+name)
-
-			err = scope.Delete(name)
-			Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Delete with name "+name)
+			err = scope.Put(tokenKey, secrets.NewValue("v"))
+			Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue(), "Put on the scope from ForWorker(%q)", malformed)
 		}
 
-		_, err := scope.Get("k")
-		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue(), "nothing was written")
+		Expect(secrets.EntryCount(store)).To(Equal(0))
 	})
 
-	It("S10 checks that two scopes can Put and Get concurrently", func() {
-		store := secrets.NewMemoryStore()
-		h := store.Handle()
-		putter := open(h, pathT)
-		getter := open(h, pathT)
+	It("returns ErrNoStore from ForWorker for a handle with no store behind it", func() {
+		_, err := secrets.Handle{}.ForWorker(fakeDeps{transportPath})
+		Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue())
+	})
+
+	It("returns ErrNoStore from Get, Put and Delete on a zero Scope", func() {
+		var scope secrets.Scope
+
+		_, err := scope.Get(tokenKey)
+		Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue(), "Get")
+		err = scope.Put(tokenKey, secrets.NewValue("v"))
+		Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue(), "Put")
+		err = scope.Delete(tokenKey)
+		Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue(), "Delete")
+	})
+
+	It("returns ErrInvalidName from Get, Put and Delete for a Key that NewKey did not build, writes nothing, and accepts a key from NewKey", func() {
+		store := secrets.NewStore()
+		scope := open(store.Handle(), transportPath)
+
+		_, err := scope.Get(secrets.Key{})
+		Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Get")
+		err = scope.Put(secrets.Key{}, secrets.NewValue("v"))
+		Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Put")
+		err = scope.Delete(secrets.Key{})
+		Expect(errors.Is(err, secrets.ErrInvalidName)).To(BeTrue(), "Delete")
+
+		Expect(secrets.EntryCount(store)).To(Equal(0))
+
+		// The same calls with a key from NewKey succeed.
+		Expect(scope.Put(tokenKey, secrets.NewValue("v"))).To(Succeed(), "Put with a valid key")
+		_, err = scope.Get(tokenKey)
+		Expect(err).NotTo(HaveOccurred(), "Get with a valid key")
+		Expect(scope.Delete(tokenKey)).To(Succeed(), "Delete with a valid key")
+	})
+
+	It("lets two scopes Put and Get concurrently without a data race (run with -race)", func() {
+		store := secrets.NewStore()
+		handle := store.Handle()
+		putter := open(handle, transportPath)
+		getter := open(handle, transportPath)
 
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
 			for i := 0; i < 1000; i++ {
-				_ = putter.Put("k", secrets.NewValue("v"))
+				_ = putter.Put(tokenKey, secrets.NewValue("v"))
 			}
 		}()
 		go func() {
 			defer wg.Done()
 			for i := 0; i < 1000; i++ {
-				_, _ = getter.Get("k")
+				_, _ = getter.Get(tokenKey)
 			}
 		}()
 		wg.Wait()
 	})
 
-	It("S11 checks that the handle travels through the dependency map and still opens the same store", func() {
-		store := secrets.NewMemoryStore()
-		commScope := open(store.Handle(), pathC)
-		Expect(commScope.Put("auth_token", secrets.NewValue("v1"))).To(Succeed())
+	It("opens the same store from a handle that travelled through the dependency map", func() {
+		store := secrets.NewStore()
+		communicator := open(store.Handle(), communicatorPath)
+		Expect(communicator.Put(tokenKey, secrets.NewValue("v1"))).To(Succeed())
 
 		root := map[string]any{}
 		config.SetDependency(root, secrets.StoreKey, store.Handle())
 		child := map[string]any{"other": 1}
 		merged := config.MergeDependencies(root, child)
 
-		h, ok := config.LookupDependency(merged, secrets.StoreKey)
+		handle, ok := config.LookupDependency(merged, secrets.StoreKey)
 		Expect(ok).To(BeTrue())
 
-		scope := open(h, pathC)
-		val, err := scope.Get("auth_token")
+		scope := open(handle, communicatorPath)
+		value, err := scope.Get(tokenKey)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(val.Reveal()).To(Equal("v1"))
+		Expect(value.Reveal()).To(Equal("v1"))
 	})
 
-	It("S12 checks that the held string reaches no saved state through any rendering", func() {
-		store := secrets.NewMemoryStore()
-		scope := open(store.Handle(), pathC)
-		Expect(scope.Put("k", secrets.NewValue("PLANTED-S12"))).To(Succeed())
+	It("checks that JSON and fmt output of the handle, the dependency map and a ChildSpec do not contain a stored value", func() {
+		store := secrets.NewStore()
+		scope := open(store.Handle(), communicatorPath)
+		Expect(scope.Put(tokenKey, secrets.NewValue(planted))).To(Succeed())
 
 		handle := store.Handle()
-		handlePtr := &handle
-		depMap := map[string]any{}
-		config.SetDependency(depMap, secrets.StoreKey, handle)
-		spec := config.ChildSpec{Dependencies: depMap}
+		handlePointer := &handle
+		dependencyMap := map[string]any{}
+		config.SetDependency(dependencyMap, secrets.StoreKey, handle)
+		spec := config.ChildSpec{Dependencies: dependencyMap}
 
 		objects := []struct {
-			name    string
-			value   any
-			marshal func(any) ([]byte, error)
+			name  string
+			value any
 		}{
-			{"handle", handle, json.Marshal},
-			{"&handle", handlePtr, json.Marshal},
-			{"dependency map", depMap, json.Marshal},
-			{"ChildSpec", spec, json.Marshal},
+			{"handle", handle},
+			{"&handle", handlePointer},
+			{"dependency map", dependencyMap},
+			{"ChildSpec", spec},
 		}
-		for _, obj := range objects {
-			b, err := obj.marshal(obj.value)
-			Expect(err).NotTo(HaveOccurred(), "json.Marshal of "+obj.name)
-			Expect(string(b)).NotTo(ContainSubstring("PLANTED-S12"), "json.Marshal of "+obj.name)
+		for _, object := range objects {
+			encoded, err := json.Marshal(object.value)
+			Expect(err).NotTo(HaveOccurred(), "json.Marshal of "+object.name)
+			Expect(string(encoded)).NotTo(ContainSubstring(planted), "json.Marshal of "+object.name)
 
 			for verb, out := range map[string]string{
-				"%v":  fmt.Sprintf("%v", obj.value),
-				"%+v": fmt.Sprintf("%+v", obj.value),
-				"%#v": fmt.Sprintf("%#v", obj.value),
-				"%s":  fmt.Sprintf("%s", obj.value),
+				"%v":  fmt.Sprintf("%v", object.value),
+				"%+v": fmt.Sprintf("%+v", object.value),
+				"%#v": fmt.Sprintf("%#v", object.value),
+				"%s":  fmt.Sprintf("%s", object.value),
 			} {
-				Expect(out).NotTo(ContainSubstring("PLANTED-S12"), verb+" of "+obj.name)
+				Expect(out).NotTo(ContainSubstring(planted), verb+" of "+object.name)
 			}
 		}
 
 		// Positive control: the same renderings of a plain string field do
 		// contain the value.
-		probe := struct{ S string }{"PLANTED-S12"}
-		b, err := json.Marshal(probe)
+		probe := struct{ S string }{planted}
+		encoded, err := json.Marshal(probe)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b)).To(ContainSubstring("PLANTED-S12"))
-		Expect(fmt.Sprintf("%v", probe)).To(ContainSubstring("PLANTED-S12"))
-		Expect(fmt.Sprintf("%+v", probe)).To(ContainSubstring("PLANTED-S12"))
-		Expect(fmt.Sprintf("%#v", probe)).To(ContainSubstring("PLANTED-S12"))
-		Expect(fmt.Sprintf("%s", probe)).To(ContainSubstring("PLANTED-S12"))
+		Expect(string(encoded)).To(ContainSubstring(planted))
+		Expect(fmt.Sprintf("%v", probe)).To(ContainSubstring(planted))
+		Expect(fmt.Sprintf("%+v", probe)).To(ContainSubstring(planted))
+		Expect(fmt.Sprintf("%#v", probe)).To(ContainSubstring(planted))
+		Expect(fmt.Sprintf("%s", probe)).To(ContainSubstring(planted))
+	})
+})
+
+var _ = Describe("NewKey", func() {
+	It("panics on an empty name, a name with \"/\", \".\" and \"..\"", func() {
+		for _, name := range []string{"", "a/b", ".", ".."} {
+			Expect(func() { secrets.NewKey(name) }).To(Panic(), "NewKey(%q)", name)
+		}
+	})
+
+	It("accepts a plain name, and the key it returns stores and reads an entry", func() {
+		var key secrets.Key
+		Expect(func() { key = secrets.NewKey("transport.jwt") }).NotTo(Panic())
+
+		scope := open(secrets.NewStore().Handle(), transportPath)
+		Expect(scope.Put(key, secrets.NewValue("v1"))).To(Succeed())
+		value, err := scope.Get(key)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(value.Reveal()).To(Equal("v1"))
 	})
 })

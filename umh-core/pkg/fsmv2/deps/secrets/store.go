@@ -15,80 +15,56 @@
 package secrets
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// StoreKey is the dependency key under which cmd/main.go puts the store's
-// handle in the root dependency map. A worker reads it with
-// config.LookupDependency(deps, secrets.StoreKey) and passes what it gets to
-// ScopeOf; it uses the handle for nothing else.
+// StoreKey is the dependency key for the store's Handle.
 var StoreKey = config.NewDependencyKey[Handle]("secrets.store")
 
-// MemoryStore holds every secret entry of one process, keyed by the
-// hierarchy path of the worker that owns the entry and the entry's name.
-// cmd/main.go creates the one store and puts its handle in the root
-// dependency map; no worker creates one.
-type MemoryStore struct {
+// Store holds secret entries in memory, keyed by hierarchy path and entry name.
+type Store struct {
 	mu      sync.RWMutex
-	entries map[entryKey]Value
+	entries map[entryID]Value
 }
 
-// entryKey is the map key for one entry: the owner path and the name joined.
-type entryKey struct {
-	owner string
-	name  string
+// entryID identifies one entry by its owner's hierarchy path and its name.
+type entryID struct {
+	path string
+	name string
 }
 
-// NewMemoryStore builds an empty store.
-func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{entries: make(map[entryKey]Value)}
+// NewStore builds an empty store.
+func NewStore() *Store {
+	return &Store{entries: make(map[entryID]Value)}
 }
 
-// Handle returns the store's handle, the value cmd/main.go puts under
-// StoreKey in the root dependency map. A worker only ever passes it to
-// ScopeOf; the handle has no methods of its own.
-func (s *MemoryStore) Handle() Handle {
+// Handle refers to a Store. A worker opens its Scope from it with ForWorker.
+type Handle struct {
+	store *Store
+}
+
+// Handle returns the value to put under StoreKey.
+func (s *Store) Handle() Handle {
 	return Handle{store: s}
 }
 
-// Handle is the value that travels through the dependency map. A worker
-// passes it to ScopeOf and uses it for nothing else.
-type Handle struct {
-	store *MemoryStore
+func (s *Store) get(key entryID) (Value, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	value, found := s.entries[key]
+	return value, found
 }
 
-// CheckPath returns nil if path is a well-formed hierarchy path: non-empty,
-// with no leading or trailing "/", and no empty, "." or ".." segment.
-// Otherwise it returns an error wrapping ErrInvalidOwner.
-func CheckPath(path string) error {
-	if _, ok := splitPath(path); !ok {
-		return fmt.Errorf("%w: %q", ErrInvalidOwner, path)
-	}
-
-	return nil
+func (s *Store) put(key entryID, value Value) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.entries[key] = value
 }
 
-// splitPath returns the path's segments, without the separators. An empty
-// segment anywhere means the path is malformed.
-func splitPath(p string) ([]string, bool) {
-	if p == "" || strings.HasPrefix(p, "/") || strings.HasSuffix(p, "/") {
-		return nil, false
-	}
-	parts := strings.Split(p, "/")
-	for _, part := range parts {
-		if part == "" || part == "." || part == ".." {
-			return nil, false
-		}
-	}
-	return parts, true
-}
-
-// validName reports whether name is a plain entry name: non-empty, with no
-// path element in it.
-func validName(name string) bool {
-	return name != "" && !strings.ContainsAny(name, "/") && name != "." && name != ".."
+func (s *Store) delete(key entryID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.entries, key)
 }

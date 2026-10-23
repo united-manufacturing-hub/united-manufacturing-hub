@@ -53,7 +53,7 @@ var _ = Describe("Value", func() {
 		Expect(errors.Is(err, secrets.ErrNotSerializable)).To(BeTrue())
 	})
 
-	It("checks that yaml, text and gob encoding each fail and write no bytes of the value", func() {
+	It("checks that yaml, text and gob encoding each fail, and gob writes no bytes of the value", func() {
 		v := secrets.NewValue(planted)
 
 		_, err := yaml.Marshal(v)
@@ -110,7 +110,7 @@ var _ = Describe("Value", func() {
 		Expect(out).NotTo(ContainSubstring(strings.ToUpper(hex.EncodeToString([]byte(planted)))))
 	})
 
-	It("checks that a struct with a pointer value field prints an address", func() {
+	It("checks that a struct with a *Value field does not print the held string", func() {
 		type withPointer struct {
 			v *secrets.Value
 		}

@@ -16,7 +16,7 @@ package secrets
 
 // EntryCount is exported for tests only. It reads the store's map under its
 // mutex and returns the number of entries it holds.
-func EntryCount(s *MemoryStore) int {
+func EntryCount(s *Store) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.entries)

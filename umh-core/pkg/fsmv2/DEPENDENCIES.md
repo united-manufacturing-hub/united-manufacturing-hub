@@ -454,24 +454,7 @@ This mirrors `FrameworkMetrics` exactly. The supervisor owns the data. The colle
 
 ## Secrets
 
-The secrets store travels through the dependency map like any other dependency, under the key `secrets.store`. The full usage is in [deps/secrets/doc.go](deps/secrets/doc.go).
-
-- In its constructor, a worker looks up the store's handle and opens its scope with its own BaseDependencies:
-
-```go
-handle, ok := config.LookupDependency(dependencies, secrets.StoreKey)
-scope, err := secrets.ScopeOf(handle, bd)
-```
-
-Use these two lines once, in the constructor. `ScopeOf` returns the worker's own scope, or an error and no usable scope when the handle has no store or the path is empty or malformed.
-
-- To use an entry a worker above it owns, the worker asks its scope for the nearest ancestor of a worker type:
-
-```go
-transport, ok := scope.Ancestor("transport")
-```
-
-`Ancestor` returns that ancestor's scope and true, or false when no ancestor has that type. The returned scope can read, write and delete that ancestor's entries.
+The secrets store travels through the dependency map under the key `secrets.store` (`secrets.StoreKey`). How a worker opens and uses its scope: [deps/secrets/doc.go](deps/secrets/doc.go).
 
 ## Related Documentation
 
