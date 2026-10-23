@@ -36,6 +36,8 @@ type box struct {
 // Value holds a string that must not appear in logs or serialized state.
 // The string sits behind a closure in an unexported struct, and Format prints
 // the placeholder for every verb, so no fmt verb or log field can write it.
+// Values are immutable, and Get and the store share the same box, so no
+// method may change one in place.
 type Value struct {
 	p *box
 }
