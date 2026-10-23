@@ -140,6 +140,29 @@ var _ = Describe("Scope", func() {
 		Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue())
 	})
 
+	It("keeps entries apart when a path and a name would join to the same string", func() {
+		pairs := []struct{ pathA, nameA, pathB, nameB string }{
+			{"a(x)", "b/c", "a(x)/b", "c"},
+			{"a(x)", "./c", "a(x)/.", "c"},
+			{"a(x)", "../c", "a(x)/..", "c"},
+		}
+
+		for _, p := range pairs {
+			handle := secrets.NewStore().Handle()
+			keyA := secrets.NewKey(p.nameA)
+			scopeA := open(handle, p.pathA)
+
+			Expect(scopeA.Put(keyA, secrets.NewValue("v"))).To(Succeed())
+
+			value, err := scopeA.Get(keyA)
+			Expect(err).NotTo(HaveOccurred(), "Get %q under %q", p.nameA, p.pathA)
+			Expect(value.Reveal()).To(Equal("v"))
+
+			_, err = open(handle, p.pathB).Get(secrets.NewKey(p.nameB))
+			Expect(errors.Is(err, secrets.ErrNotFound)).To(BeTrue(), "Get %q under %q", p.nameB, p.pathB)
+		}
+	})
+
 	It("returns ErrNoStore from ForWorker for a handle with no store behind it", func() {
 		_, err := secrets.Handle{}.ForWorker(fakeDeps{transportPath})
 		Expect(errors.Is(err, secrets.ErrNoStore)).To(BeTrue())
