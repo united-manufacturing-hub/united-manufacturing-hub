@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -162,9 +163,12 @@ func runScenario(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// tick also fails the run.
 	recorder := &runRecorder{
 		scenario:            cfg.Scenario.Name,
-		expectedErrors:      cfg.Scenario.ExpectedErrors,
-		expectedErrorCauses: cfg.Scenario.ExpectedErrorCauses,
-		expectedWarnings:    cfg.Scenario.ExpectedWarnings,
+		expectedErrors:      slices.Clone(cfg.Scenario.ExpectedErrors),
+		expectedErrorCauses: slices.Clone(cfg.Scenario.ExpectedErrorCauses),
+		expectedWarnings:    slices.Clone(cfg.Scenario.ExpectedWarnings),
+		matchedWarnings:     map[string]bool{},
+		matchedErrors:       map[string]bool{},
+		matchedCauses:       map[int]bool{},
 	}
 	runLogger := &recordingLogger{FSMLogger: cfg.Logger, recorder: recorder}
 
@@ -310,6 +314,10 @@ func runScenario(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 const storedStateCheckTimeout = 10 * time.Second
 
+// postRunFailure checks a finished run against its scenario's expectations
+// and returns the first failure it finds: an error or warning the scenario
+// did not expect, an expected entry the run never logged, or a stored
+// worker state its type may not report.
 func postRunFailure(ctx context.Context, recorder *runRecorder, store storage.TriangularStoreInterface, logger deps.FSMLogger) error {
 	if err := recorder.loggedError(); err != nil {
 		return err
@@ -317,6 +325,10 @@ func postRunFailure(ctx context.Context, recorder *runRecorder, store storage.Tr
 
 	if warn := recorder.loggedWarning(); warn != nil {
 		return warn
+	}
+
+	if missing := recorder.missingExpectedEntries(); len(missing) > 0 {
+		return errors.Join(missing...)
 	}
 
 	// WithoutCancel: a Ctrl+C after Run returned is not a failed store read.

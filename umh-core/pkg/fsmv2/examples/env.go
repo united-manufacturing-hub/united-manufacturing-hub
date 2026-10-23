@@ -49,7 +49,9 @@ type Env struct {
 }
 
 // runRecorder is the per-run state that Step and WaitFor share across copies
-// of Env. The fields above mu are set before the supervisor starts and never change.
+// of Env. The fields above mu are set before the supervisor starts and never
+// change. The matched maps exist so postRunFailure can name every expected
+// entry the run never logged.
 type runRecorder struct {
 	// scenario is the name of the run's scenario, so a step line can be
 	// attributed when several scenarios run in one process.
@@ -65,6 +67,19 @@ type runRecorder struct {
 	lastStep            string
 	firstUnexpectedErr  error
 	firstUnexpectedWarn error
+
+	// matchedWarnings holds the expectedWarnings entries a logged warning
+	// has matched.
+	matchedWarnings map[string]bool
+
+	// matchedErrors holds the expectedErrors entries a logged error
+	// message has matched.
+	matchedErrors map[string]bool
+
+	// matchedCauses holds, by index, the expectedErrorCauses entries a
+	// logged error has wrapped. Keyed by index because an error value is
+	// not always comparable, so it is not a safe map key.
+	matchedCauses map[int]bool
 }
 
 // alwaysAllowedMessages are logged by the collector in normal operation, so
@@ -75,28 +90,40 @@ var alwaysAllowedMessages = []string{
 	"collector_stop_skipped",
 }
 
-// recordLoggedError keeps the first error the scenario does not expect.
+// recordLoggedError keeps the first error the scenario does not expect. The
+// matchers run before the lock, because errors.Is calls user code that may
+// log again.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
-	if r.messageAllowed(msg, r.expectedErrors) {
-		return
-	}
-
-	if r.errorCauseAllowed(err) {
-		return
-	}
+	matched := matchedEntries(r.expectedErrors, msg)
+	caused := matchedCauseIndices(err, r.expectedErrorCauses)
+	unexpected := !r.messageAllowed(msg, r.expectedErrors) && !r.errorCauseAllowed(err)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.firstUnexpectedErr == nil {
+	for _, entry := range matched {
+		r.matchedErrors[entry] = true
+	}
+
+	for _, i := range caused {
+		r.matchedCauses[i] = true
+	}
+
+	if unexpected && r.firstUnexpectedErr == nil {
 		r.firstUnexpectedErr = fmt.Errorf("the scenario does not expect this error: %s (%w)", msg, err)
 	}
 }
 
-// An empty expected entry matches nothing: strings.Contains would match every message.
+// messageMatchesEntry reports whether msg contains entry. An empty entry
+// is never required and matches nothing, because strings.Contains would
+// match every message.
+func messageMatchesEntry(msg, entry string) bool {
+	return entry != "" && strings.Contains(msg, entry)
+}
+
 func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	for _, substr := range expected {
-		if substr != "" && strings.Contains(msg, substr) {
+		if messageMatchesEntry(msg, substr) {
 			return true
 		}
 	}
@@ -110,11 +137,17 @@ func (r *runRecorder) messageAllowed(msg string, expected []string) bool {
 	return false
 }
 
+// errorMatchesCause reports whether err is or wraps cause. A nil cause is
+// never required and matches nothing.
+func errorMatchesCause(err, cause error) bool {
+	return cause != nil && errors.Is(err, cause)
+}
+
 // errorCauseAllowed reports whether err is or wraps one of the scenario's
-// expected causes. A nil entry matches nothing.
+// expected causes.
 func (r *runRecorder) errorCauseAllowed(err error) bool {
 	for _, cause := range r.expectedErrorCauses {
-		if cause != nil && errors.Is(err, cause) {
+		if errorMatchesCause(err, cause) {
 			return true
 		}
 	}
@@ -123,16 +156,67 @@ func (r *runRecorder) errorCauseAllowed(err error) bool {
 }
 
 func (r *runRecorder) recordLoggedWarning(msg string) {
-	if r.messageAllowed(msg, r.expectedWarnings) {
-		return
-	}
+	matched := matchedEntries(r.expectedWarnings, msg)
+	unexpected := !r.messageAllowed(msg, r.expectedWarnings)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.firstUnexpectedWarn == nil {
+	for _, entry := range matched {
+		r.matchedWarnings[entry] = true
+	}
+
+	if unexpected && r.firstUnexpectedWarn == nil {
 		r.firstUnexpectedWarn = fmt.Errorf("the scenario does not expect this warning: %s", msg)
 	}
+}
+
+// matchedEntries returns the entries of expected that msg contains, in
+// expected's order.
+func matchedEntries(expected []string, msg string) []string {
+	var matched []string
+
+	for _, entry := range expected {
+		if messageMatchesEntry(msg, entry) {
+			matched = append(matched, entry)
+		}
+	}
+
+	return matched
+}
+
+// matchedCauseIndices returns the indices of causes that err is or wraps.
+func matchedCauseIndices(err error, causes []error) []int {
+	var matched []int
+
+	for i, cause := range causes {
+		if errorMatchesCause(err, cause) {
+			matched = append(matched, i)
+		}
+	}
+
+	return matched
+}
+
+// unmatchedEntries returns the entries of expected that no logged message
+// matched, in expected's order. An entry the list repeats is returned once.
+func (r *runRecorder) unmatchedEntries(expected []string, matched map[string]bool) []string {
+	var missing []string
+
+	seen := make(map[string]bool, len(expected))
+
+	for _, want := range expected {
+		if want == "" || seen[want] {
+			continue
+		}
+
+		if !matched[want] {
+			seen[want] = true
+			missing = append(missing, want)
+		}
+	}
+
+	return missing
 }
 
 func (r *runRecorder) loggedWarning() error {
@@ -140,6 +224,72 @@ func (r *runRecorder) loggedWarning() error {
 	defer r.mu.Unlock()
 
 	return r.firstUnexpectedWarn
+}
+
+// missingExpectedEntries returns one error per entry of ExpectedErrors,
+// ExpectedErrorCauses and ExpectedWarnings that the run never logged: the
+// errors first, then the causes, then the warnings, each group in the order
+// the scenario listed it. An entry the scenario lists twice is named once,
+// except a cause whose type cannot be compared, which is named each time
+// it is listed.
+func (r *runRecorder) missingExpectedEntries() []error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var missing []error
+
+	for _, entry := range r.unmatchedEntries(r.expectedErrors, r.matchedErrors) {
+		missing = append(missing, fmt.Errorf("the scenario expects this error, but the run never logged it: %s", entry))
+	}
+
+	var missingCauses []error
+
+	for i, cause := range r.expectedErrorCauses {
+		if cause == nil || r.matchedCauses[i] {
+			continue
+		}
+
+		if containsSameCause(missingCauses, cause) {
+			continue
+		}
+
+		missingCauses = append(missingCauses, cause)
+	}
+
+	for _, cause := range missingCauses {
+		missing = append(missing, fmt.Errorf("the scenario expects this error cause, but the run never logged it: %w", cause))
+	}
+
+	for _, entry := range r.unmatchedEntries(r.expectedWarnings, r.matchedWarnings) {
+		missing = append(missing, fmt.Errorf("the scenario expects this warning, but the run never logged it: %s", entry))
+	}
+
+	return missing
+}
+
+// containsSameCause reports whether earlier holds the same cause value. A
+// cause whose type cannot be compared is never the same entry.
+func containsSameCause(earlier []error, cause error) bool {
+	for _, seen := range earlier {
+		if sameCause(seen, cause) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// sameCause reports whether a and b hold the same error value. Comparing
+// two causes whose values cannot be compared panics, so a panic counts as
+// different entries.
+func sameCause(a, b error) (same bool) {
+	defer func() {
+		if recover() != nil {
+			same = false
+		}
+	}()
+
+	return a == b //nolint:errorlint // the sameness of two listed cause entries is their values' ==, not errors.Is
 }
 
 func (r *runRecorder) loggedError() error {
@@ -263,21 +413,33 @@ type Scenario struct {
 	// until Run returns.
 	Run func(ctx context.Context, env Env) error
 
-	// ExpectedErrors lists substrings of error log messages this scenario
-	// expects. Any other error logged during the run fails it, or sets
-	// RunResult.Err when it is logged after Run returned.
+	// ExpectedErrors lists substrings of error messages this scenario
+	// expects. Every listed entry must appear in an error message the
+	// run logs, or RunResult.Err names the entry; only the message text
+	// is matched, so an error's value counts only through
+	// ExpectedErrorCauses. Any other error logged during the run fails
+	// it, or sets RunResult.Err when it is logged after Run returned.
+	// An error logged through the run's logger counts, whether it comes
+	// from the scenario's workers, their supervisors or its Run; the
+	// runner's own errors and the store's errors do not.
 	ExpectedErrors []string
 
 	// ExpectedErrorCauses lists error values this scenario expects, matched
 	// with errors.Is. Use it when the message is generic: ActionExecutor
 	// (supervisor/internal/execution) logs every failed action as
 	// action_failed, so expecting that message would let any failed action
-	// pass.
+	// pass. Every listed cause must appear in an error the run logs, or
+	// RunResult.Err names the cause. A nil entry matches nothing and is
+	// never required.
 	ExpectedErrorCauses []error
 
 	// ExpectedWarnings lists substrings of warning log messages this
-	// scenario expects. Any other warning logged during the run sets
-	// RunResult.Err once the run has ended.
+	// scenario expects. Every listed entry must appear in a warning the
+	// run logs, or RunResult.Err names the entry. A warning no entry
+	// lists also sets RunResult.Err. A warning logged through the run's
+	// logger counts, whether it comes from the scenario's workers, their
+	// supervisors or its Run; the runner's own warnings and the store's
+	// warnings do not.
 	ExpectedWarnings []string
 
 	// Name is the identifier for this scenario (used in CLI --scenario flag).
