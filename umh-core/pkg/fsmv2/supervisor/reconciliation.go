@@ -1229,7 +1229,8 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		// this id clears the tombstone only after this write.
 		s.tombstoneWorker(ctx, workerID, workerCtx.identity.HierarchyPath)
 
-		delete(s.workers, workerID)
+		removalDone := make(chan struct{})
+		s.removing[workerID] = removalDone
 		s.mu.Unlock()
 
 		// Clean up children outside parent lock to avoid deadlock with GetChildren/calculateHierarchySize.
@@ -1263,7 +1264,19 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 
 		s.stopWorker(ctx, workerCtx)
 
-		s.logger.Debug("worker_removed_successfully",
+		// Shutdown's drain ends when no workers remain and then cancels the
+		// context the collector runs on. The worker therefore leaves s.workers
+		// only after its final observation, so that cancel cannot skip it.
+		s.mu.Lock()
+		delete(s.workers, workerID)
+		delete(s.removing, workerID)
+		// Once the lock is released, an AddWorker can register a worker and
+		// replace s.logger, so read it while the lock is held.
+		logger := s.logger
+		s.mu.Unlock()
+		close(removalDone)
+
+		logger.Debug("worker_removed_successfully",
 			deps.Int("children_cleaned", childCount))
 
 		return nil

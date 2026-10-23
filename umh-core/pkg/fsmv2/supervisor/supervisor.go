@@ -163,10 +163,14 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// pendingReAddSentrySent holds the worker IDs whose pending re-add has
 	// already sent its one Sentry error. Later retries log at Debug.
 	pendingReAddSentrySent map[string]bool
-	healthChecker          *InfrastructureHealthChecker
-	panicTracker           *panicRecovery
-	actionExecutor         *execution.ActionExecutor
-	ctxCancel              context.CancelFunc
+	// removing holds, per worker id, a channel that is closed when the
+	// removal of that worker finishes. The worker stays in workers until its
+	// final observation, and AddWorker waits on this channel for the same id.
+	removing       map[string]chan struct{}
+	healthChecker  *InfrastructureHealthChecker
+	panicTracker   *panicRecovery
+	actionExecutor *execution.ActionExecutor
+	ctxCancel      context.CancelFunc
 	// tickLoopDone is closed when the tickLoop goroutine exits. Stored here so
 	// Shutdown() can wait for tickLoop to fully exit in Phase 4 after ctxCancel().
 	// Nil when Start() has not been called (StartAsChild supervisors have no tickLoop).
@@ -317,6 +321,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		restartRequestedAt:     make(map[string]time.Time),
 		pendingReAdds:          make(map[string]deps.Identity),
 		pendingReAddSentrySent: make(map[string]bool),
+		removing:               make(map[string]chan struct{}),
 		createdAt:              time.Now(),
 		parentID:               "",
 		healthChecker:          NewInfrastructureHealthChecker(DefaultMaxInfraRecoveryAttempts, DefaultRecoveryAttemptWindow),
