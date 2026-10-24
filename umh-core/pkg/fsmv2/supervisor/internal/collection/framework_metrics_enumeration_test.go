@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+
 // Every registered worker type gets framework metrics on its Observation,
 // whatever its TDeps and whatever GetDependenciesAny returns. The collector
 // injects framework metrics from its own locals before the deps guard, so a

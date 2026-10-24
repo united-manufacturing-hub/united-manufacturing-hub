@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+
 // Positive-controlled end-to-end proof that every registered worker gets
 // framework metrics on its Observation: a real nmap worker, built through its
 // real registration, driven through a real Collector and a real TriangularStore,
