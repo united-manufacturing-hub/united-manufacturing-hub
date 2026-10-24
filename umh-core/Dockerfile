@@ -78,7 +78,7 @@ FROM golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 # Copy dependency manifests first — only invalidated when deps change
-COPY ./go.mod ./go.sum ./
+COPY ./go.mod ./go.sum ./go.work ./go.work.sum ./
 # Copy vendored dependencies — invalidated only when vendor/ changes
 COPY ./vendor ./vendor
 COPY ./fsmv2 ./fsmv2

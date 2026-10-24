@@ -445,8 +445,9 @@ badssl-test: pre-test
 
 update-go-dependencies:
 	go get -u ./...
+	cd $(FSMV2_DIR) && go get -u ./... && go mod tidy
 	go mod tidy
-	go mod vendor
+	go work vendor
 
 # Print version variables for use in other scripts/tools
 print-versions:

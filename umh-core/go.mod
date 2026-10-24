@@ -30,6 +30,7 @@ require (
 	github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-00010101000000-000000000000
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
+	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0-00010101000000-000000000000
 	github.com/vektah/gqlparser/v2 v2.5.60
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.57.0
@@ -115,7 +116,6 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
-	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0-00010101000000-000000000000
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.elastic.co/ecszap v1.0.3 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect

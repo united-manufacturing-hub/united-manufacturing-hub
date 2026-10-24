@@ -1,3 +1,4 @@
+## workspace
 # dario.cat/mergo v1.0.2
 ## explicit; go 1.13
 dario.cat/mergo
@@ -586,35 +587,6 @@ github.com/united-manufacturing-hub/umh-utils/env
 github.com/united-manufacturing-hub/umh-utils/logger
 # github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0-00010101000000-000000000000 => ./fsmv2
 ## explicit; go 1.27.1
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/channelusage
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/retry
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/retry/failurerate
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/secrets
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/helpers
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence/memory
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/sentry
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/collection
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/execution
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/health
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/panicutil
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/lockmanager
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/metrics
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/testutil
-github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/validator
 # github.com/vektah/gqlparser/v2 v2.5.60
 ## explicit; go 1.25
 github.com/vektah/gqlparser/v2
@@ -829,4 +801,3 @@ google.golang.org/protobuf/types/known/wrapperspb
 gopkg.in/yaml.v3
 # github.com/united-manufacturing-hub/ManagementConsole/cryptolib => ../../ManagementConsole/cryptolib
 # github.com/united-manufacturing-hub/ManagementConsole/shared => ../../ManagementConsole/shared
-# github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 => ./fsmv2
