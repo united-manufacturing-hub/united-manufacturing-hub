@@ -697,6 +697,14 @@ func buildFSMv2Supervisor(
 	secretsStore := secrets.NewStore()
 	fsmv2config.SetDependency(fsmv2Deps, secrets.StoreKey, secretsStore.Handle())
 
+	// The module's children get their dependencies through this map, as live
+	// values; the children document carries none.
+	if err := addChildDependencies(fsmv2Deps, registered); err != nil {
+		fsmv2Hook.Stop()
+
+		return nil, func() {}, fmt.Errorf("failed to add the Management Console module's dependencies: %w", err)
+	}
+
 	// Publish the dynamicchildren registry under the configworker deps key and
 	// the process-scoped fsmv2client before constructing the supervisor, so the
 	// application worker's first CollectObservedState observes

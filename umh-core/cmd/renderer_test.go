@@ -75,3 +75,52 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 		Expect(children[2].WorkerType).To(Equal("type-b"))
 	})
 })
+
+var _ = Describe("the module's child dependencies", func() {
+	// plantedDependency stands in for a value a module could hand its child,
+	// with an exported field that yaml and json would write out.
+	type plantedDependency struct {
+		Marker string
+	}
+
+	It("checks that the children document carries no dependency, not even a planted value", func() {
+		child := fsmv2config.ChildSpec{
+			Name:         "a",
+			WorkerType:   "type-a",
+			Enabled:      true,
+			Dependencies: map[string]any{"a.provider": &plantedDependency{Marker: "planted-marker-7f3a"}},
+		}
+
+		doc, err := renderSupervisorChildrenYAML([]fsmv2config.ChildSpec{child})
+		Expect(err).To(Succeed())
+		Expect(doc).NotTo(ContainSubstring("planted-marker-7f3a"))
+		Expect(doc).NotTo(ContainSubstring("dependencies"))
+	})
+
+	It("checks that a child's dependency reaches the supervisor's dependency map as the same value", func() {
+		provider := &plantedDependency{Marker: "planted-marker-7f3a"}
+		deps := map[string]any{"umh.store": "store"}
+
+		err := addChildDependencies(deps, []fsmv2config.ChildSpec{{
+			Name:         "a",
+			Dependencies: map[string]any{"a.provider": provider},
+		}})
+		Expect(err).To(Succeed())
+
+		got, ok := deps["a.provider"].(*plantedDependency)
+		Expect(ok).To(BeTrue())
+		Expect(got).To(BeIdenticalTo(provider))
+	})
+
+	It("checks that a child cannot replace a dependency umh-core already set", func() {
+		deps := map[string]any{"umh.store": "store"}
+
+		err := addChildDependencies(deps, []fsmv2config.ChildSpec{{
+			Name:         "a",
+			Dependencies: map[string]any{"umh.store": "other"},
+		}})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("child 0"))
+		Expect(deps["umh.store"]).To(Equal("store"))
+	})
+})
