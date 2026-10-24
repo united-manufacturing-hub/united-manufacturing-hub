@@ -15,7 +15,7 @@
 package hello_world
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 )
 
 // HelloworldConfig holds the user-provided configuration for the helloworld worker.

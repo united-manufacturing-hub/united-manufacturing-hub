@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
 // CPUStallScenario drives the real CPU monitor over a fake machine whose
@@ -91,7 +91,7 @@ var CPUStallScenario = scenariorunner.Scenario{
 
 		// Staleness is decided on the wall clock: the collector stamps
 		// CollectedAt with time.Now() when it wraps each observation
-		// (wrapNewObservation, pkg/fsmv2/supervisor/internal/collection). This
+		// (wrapNewObservation, fsmv2/supervisor/internal/collection). This
 		// wait therefore runs on wall time. The collector goroutine blocks inside
 		// Poll and holds collectionMu, so nothing is saved and the reading stays
 		// Stale for as long as the read hangs.

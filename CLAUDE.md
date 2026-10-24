@@ -34,7 +34,7 @@ Run these from `umh-core/` (targets are in `umh-core/Makefile`).
 
 - `umh-core/cmd/main.go`: entry point. Reads `/data/config.yaml` and starts the control loop.
 - `umh-core/pkg/fsm/`: FSMv1 state machines (Benthos, Redpanda, S6, …). Legacy. The package doc describes the files every component has.
-- `umh-core/pkg/fsmv2/`: FSMv2 framework and workers. Read `umh-core/pkg/fsmv2/CLAUDE.md` before working there.
+- `umh-core/fsmv2/` (the FSMv2 framework, its own Go module) and `umh-core/pkg/fsmv2/` (the workers). Read `umh-core/fsmv2/CLAUDE.md` before working in either.
 - `umh-core/pkg/communicator/`: Management Console connection, action handlers (`actions/`), status subscribers. The package doc of `router/` describes how actions and status travel.
 - `umh-core/pkg/config/`: `config.yaml` parsing, templates and variables. `config.yaml` is the source of truth: umh-core renders every benthos config from it.
 - `umh-core/docs/`: user-facing GitBook docs (rules in `umh-core/docs/CLAUDE.md`).

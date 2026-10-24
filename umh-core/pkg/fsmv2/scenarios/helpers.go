@@ -15,7 +15,7 @@
 package scenarios
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 )
 
 // timesEntered returns how many times the worker has entered state. The count

@@ -17,13 +17,13 @@
 //
 // The judging machinery is NOT here. This package declares a table — what to
 // read, over how long, against which thresholds — and hands snapshots to the
-// engine in pkg/diagnosis, which evaluates it. What lives here is the CPU
+// engine in fsmv2/diagnosis, which evaluates it. What lives here is the CPU
 // vocabulary: the sources, the thresholds, the names of the causes and the
 // sentences.
 //
 // Most of the types this package's declarations are built from are declared in
-// pkg/diagnosis and are not searchable in this directory; run
-// "go doc ./pkg/diagnosis" for all of them. What this package declares for
+// fsmv2/diagnosis and are not searchable in this directory; run
+// "go doc ./fsmv2/diagnosis" for all of them. What this package declares for
 // itself is the CPU vocabulary those are built from: Sample and Scope (the
 // readings), Verdict, Cause, CauseKind, State, Attribution and Unit (the
 // judgement), and Details (the facts the sentences interpolate).
@@ -50,7 +50,7 @@
 // Five questions, asked each tick. The verdict is degraded when any of them
 // fires. A question fires when its number crosses the threshold declared
 // beside it, and stays fired until the number comes back past a second
-// threshold on the healthier side; pkg/diagnosis holds that state and drives
+// threshold on the healthier side; fsmv2/diagnosis holds that state and drives
 // the crossings. Each question's thresholds live in its own signal_*.go file;
 // this doc names none of them.
 //

@@ -17,7 +17,7 @@ package communicator
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 )
 
 // CommunicatorConfig holds the user-provided configuration for the communicator worker.
