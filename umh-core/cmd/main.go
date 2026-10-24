@@ -245,7 +245,10 @@ func main() {
 
 	fsmv2, err := startFSMv2Runtime(ctx, &configData, communicationState, log, forceExit)
 	if err != nil {
-		log.Errorw("FSMv2 startup failed", "error", err)
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "FSMv2 startup failed: %w", err)
+		log.Errorf("Sleeping 60s before exit to rate-limit the restart loop")
+		sentry.Flush(5 * time.Second)
+		time.Sleep(60 * time.Second)
 		_ = log.Sync()
 		os.Exit(1)
 	}
