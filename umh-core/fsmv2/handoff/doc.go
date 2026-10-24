@@ -15,5 +15,5 @@
 // Package handoff defines the message type for handing a received message from
 // an FSMv2 worker to the pkg/communicator router: the received message bytes,
 // the sender the message names, and a trace ID. The package is temporary. It
-// is removed under ENG-7166 once the communicator no longer needs it.
+// is removed once the communicator no longer needs it.
 package handoff

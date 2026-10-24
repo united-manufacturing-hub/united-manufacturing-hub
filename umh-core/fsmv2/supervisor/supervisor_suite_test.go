@@ -281,7 +281,7 @@ func (m *mockStore) LoadDesiredTyped(ctx context.Context, workerType string, id 
 
 	// afterLoadDesired runs after the loaded value is materialized into dest,
 	// letting a test interleave a concurrent write into the load-modify-save
-	// window (the ENG-4971 TOCTOU race).
+	// window (the lifecycle-flag TOCTOU race).
 	if m.afterLoadDesired != nil {
 		m.afterLoadDesired(ctx, workerType, id)
 	}
