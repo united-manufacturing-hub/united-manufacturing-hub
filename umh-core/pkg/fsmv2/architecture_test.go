@@ -628,7 +628,12 @@ func validateStateStructs() []validator.Violation {
 // getFrameworkDir returns the directory of the fsmv2 module, which holds the
 // framework code that this file's checks scan.
 func getFrameworkDir() string {
-	return filepath.Join(getFsmv2Dir(), "..", "..", "fsmv2")
+	dir := filepath.Join(getFsmv2Dir(), "..", "..", "fsmv2")
+	// The validators report no violations for a directory they cannot read,
+	// so a wrong path here would let every check pass.
+	Expect(dir).To(BeADirectory())
+
+	return dir
 }
 
 // nonFrameworkPackages names the module's packages that are not FSMv2

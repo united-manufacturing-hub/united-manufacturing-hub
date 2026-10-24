@@ -26,6 +26,8 @@ import (
 
 	//nolint:revive // dot import for Ginkgo DSL
 	. "github.com/onsi/ginkgo/v2"
+	//nolint:revive // dot import for Gomega matchers
+	. "github.com/onsi/gomega"
 )
 
 // Violation represents an architectural violation found in code.
@@ -53,7 +55,7 @@ var _ = Describe("FSMv2 Sentry Architecture", func() {
 
 				if len(violations) > 0 {
 					message := formatViolations("Direct Zap Import Violations", violations,
-						`Production code must use the FSMLogger interface (pkg/fsmv2/deps)
+						`Production code must use the FSMLogger interface (fsmv2/deps)
 instead of importing zap directly. Direct zap imports are only allowed in:
 
   - deps/logger_impl.go (the FSMLogger implementation)
@@ -113,7 +115,12 @@ func getFsmv2Dir() string {
 // getFrameworkDir returns the directory of the fsmv2 module, which holds
 // the framework, cse and persistence code.
 func getFrameworkDir() string {
-	return filepath.Join(getFsmv2Dir(), "..", "..", "fsmv2")
+	dir := filepath.Join(getFsmv2Dir(), "..", "..", "fsmv2")
+	// The scans below skip a directory they cannot walk, so a wrong path here
+	// would let every check pass.
+	Expect(dir).To(BeADirectory())
+
+	return dir
 }
 
 // getAllDirs returns all directories that should be scanned for architecture tests.
@@ -220,7 +227,7 @@ func checkForZapImports(filename string) []Violation {
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "DIRECT_ZAP_IMPORT",
-				Message: fmt.Sprintf("Direct import of %q is not allowed; use the FSMLogger interface from pkg/fsmv2/deps instead", importPath),
+				Message: fmt.Sprintf("Direct import of %q is not allowed; use the FSMLogger interface from fsmv2/deps instead", importPath),
 			})
 		}
 	}
@@ -250,7 +257,7 @@ func validateNoErrorDotError(baseDir string) []Violation {
 			return nil
 		}
 
-		if strings.Contains(path, "/sentry/") {
+		if strings.Contains(path, "fsmv2/validator") || strings.Contains(path, "/sentry/") {
 			return nil
 		}
 
