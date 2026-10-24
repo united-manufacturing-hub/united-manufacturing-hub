@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // SetTickInterval overrides the awaitRollout poll interval so specs do not
@@ -52,4 +53,24 @@ func (a *EditProtocolConverterAction) CompareProtocolConverterDFCConfig(pcSnapsh
 // message.
 func (a *EditProtocolConverterAction) LastRenderErr() error {
 	return a.lastRenderErr
+}
+
+func (a *DeployProtocolConverterAction) SetTickInterval(d time.Duration) {
+	a.tickInterval = d
+}
+
+func (a *DeployProtocolConverterAction) SetAwaitTimeout(d time.Duration) {
+	a.awaitTimeout = d
+}
+
+func FindBenthosConfigError(logs []s6.LogEntry, since time.Time) (string, bool) {
+	return findBenthosConfigError(logs, since)
+}
+
+func EditedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) ([]s6.LogEntry, []s6.LogEntry) {
+	return editedFlowLogs(dfcType, snapshot)
+}
+
+func (a *DeployProtocolConverterAction) SetFSMLogger(l deps.FSMLogger) {
+	a.fsmLogger = l
 }
