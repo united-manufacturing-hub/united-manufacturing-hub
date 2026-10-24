@@ -24,3 +24,9 @@ reviews:
   profile: chill # There is another profile called 'assertive' which is so nitpicky
   path_filters:
     - "!umh-core/vendor/**"
+  path_instructions:
+    - path: "umh-core/pkg/models/action_models.go"
+      instructions: >-
+        If this change adds, renames or removes an ActionType, ask the author
+        whether the Management Console module's action table has the same
+        change, and which roles may run the new action.

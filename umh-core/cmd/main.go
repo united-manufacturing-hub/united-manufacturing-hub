@@ -73,6 +73,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/validator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/hook"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -276,34 +277,16 @@ func main() {
 
 	// fsmv2Done is closed when the FSMv2 supervisor has fully stopped.
 	// main() waits on it at the bottom so the process does not exit before
-	// the supervisor drains.  If the supervisor fails to build, the channel is
-	// closed immediately so the <-fsmv2Done below is a no-op.
-	fsmv2Done := make(chan struct{})
-
-	appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log, forceExit)
-	if buildErr != nil {
-		log.Errorw("Failed to build FSMv2 supervisor", "error", buildErr)
-		close(fsmv2Done)
-	} else {
-		defer cleanup()
-
-		go func() {
-			defer close(fsmv2Done)
-
-			if runErr := appSup.Run(ctx); runErr != nil {
-				log.Errorw("FSMv2 supervisor Run error", "error", runErr)
-			}
-		}()
-
-		if communicatorEnabled(configData.Agent) {
-			log.Info("Starting FSMv2 communicator because backend credentials are present")
-			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-				wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
-			})
-		} else {
-			log.Info("No backend credentials configured; running FSMv2 runtime without communicator")
-		}
+	// the supervisor drains.  If startup fails before the supervisor runs,
+	// the process exits above and never reaches this wait.
+	transport, transportErr := startFSMv2Transport(ctx, &configData, communicationState, log, forceExit)
+	if transportErr != nil {
+		log.Errorw("FSMv2 startup failed", "error", transportErr)
+		_ = log.Sync()
+		os.Exit(1)
 	}
+	defer transport.cleanup()
+	fsmv2Done := transport.done
 
 	// Start the system snapshot logger with automatic panic recovery
 	sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
@@ -322,6 +305,97 @@ func main() {
 	<-fsmv2Done
 
 	log.Info("umh-core completed")
+}
+
+// The seams below make main's startup order observable to tests without
+// copying it: a test replaces a function variable with a probe, then drives
+// the real startup path. Production keeps the real implementations assigned
+// here, and the variables are unexported.
+
+// runHook is the seam for the registration run: it calls every function the
+// release build registered, in order, before the supervisor starts.
+var runHook = hook.Run
+
+// newFSMv2Store is the seam for the store constructor. buildFSMv2Supervisor
+// creates its store by calling it, so a test's constructor can keep the
+// pointer it returns.
+var newFSMv2Store = scenariorunner.SetupStore
+
+// buildFSMv2SupervisorFn is the seam for the FSMv2 build: a test can inject a
+// build that fails.
+var buildFSMv2SupervisorFn = buildFSMv2Supervisor
+
+// startFSMv2SupervisorFn is the seam for the supervisor start: a test can
+// inject a start that records whether the supervisor has started.
+var startFSMv2SupervisorFn = defaultStartFSMv2Supervisor
+
+// wireFSMv2CommunicatorFn is the seam for the communicator wiring: a test can
+// inject a no-op, so startup runs without the real communication state.
+var wireFSMv2CommunicatorFn = wireFSMv2Communicator
+
+// defaultStartFSMv2Supervisor runs the supervisor and closes done when it has
+// fully stopped.
+func defaultStartFSMv2Supervisor(appSup fsmv2Supervisor, ctx context.Context, done chan struct{}, log *zap.SugaredLogger) {
+	go func() {
+		defer close(done)
+
+		if runErr := appSup.Run(ctx); runErr != nil {
+			log.Errorw("FSMv2 supervisor Run error", "error", runErr)
+		}
+	}()
+}
+
+// fsmv2StartupResult carries what main needs from one attempt to build and
+// start the FSMv2 application supervisor.
+type fsmv2StartupResult struct {
+	// done is closed when the FSMv2 supervisor has fully stopped, or at once
+	// when it was never started.
+	done chan struct{}
+	// cleanup must run after the supervisor has stopped.
+	cleanup func()
+}
+
+// startFSMv2Transport is main's FSMv2 startup path: run the registered
+// startup functions, build and start the supervisor, and wire the
+// communicator when backend credentials are present. It returns the first
+// error it meets; nothing later in the sequence runs after one.
+func startFSMv2Transport(
+	ctx context.Context,
+	configData *config.FullConfig,
+	communicationState *communication_state.CommunicationState,
+	log *zap.SugaredLogger,
+	forceExit <-chan struct{},
+) (fsmv2StartupResult, error) {
+	done := make(chan struct{})
+
+	hookDeps := hook.Deps{Config: hook.Config{RelayURL: configData.Agent.APIURL, Location: configData.Agent.Location}, Logger: log}
+	hookErr := runHook(hookDeps)
+	if hookErr != nil {
+		close(done)
+
+		return fsmv2StartupResult{done: done, cleanup: func() {}}, fmt.Errorf("failed to run the registered startup functions: %w", hookErr)
+	}
+
+	appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit)
+	if buildErr != nil {
+		close(done)
+
+		return fsmv2StartupResult{done: done, cleanup: func() {}}, fmt.Errorf("failed to build FSMv2 supervisor: %w", buildErr)
+	}
+
+	startFSMv2SupervisorFn(appSup, ctx, done, log)
+
+	if communicatorEnabled(configData.Agent) {
+		log.Info("Starting FSMv2 communicator because backend credentials are present")
+		wire := wireFSMv2CommunicatorFn
+		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+			wire(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, configData, communicationState, log)
+		})
+	} else {
+		log.Info("No backend credentials configured; running FSMv2 runtime without communicator")
+	}
+
+	return fsmv2StartupResult{done: done, cleanup: cleanup}, nil
 }
 
 // communicatorEnabled reports whether the FSMv2 communicator can run, which
@@ -643,7 +717,7 @@ func buildFSMv2Supervisor(
 	// without restarting umh-core.
 
 	// Setup store (in-memory for now).
-	store = scenariorunner.SetupStore(deps.NewFSMLogger(logger))
+	store = newFSMv2Store(deps.NewFSMLogger(logger))
 
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering.
 	fsmv2Logger := logger.Named("fsmv2")
