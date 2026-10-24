@@ -63,6 +63,7 @@ var _ = Describe("SubscriberHandler Race Condition", func() {
 			logger,
 			nil, // topicBrowserCommunicator
 			make(chan handoff.Message, 10),
+			nil,                    // the registered provider for the connection part
 			nil,                    // featureUsage
 			deps.NewNopFSMLogger(), // fsmLogger
 		)

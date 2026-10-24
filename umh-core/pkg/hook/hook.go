@@ -17,8 +17,12 @@
 package hook
 
 import (
+	"context"
+	"fmt"
+
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -44,21 +48,53 @@ type Deps struct {
 	Logger *zap.SugaredLogger
 }
 
-var registered []func(Deps) error
+// StatusFunc returns the connection part of a status message.
+// The status generator calls it once for each status message.
+type StatusFunc func(ctx context.Context, subscriberCount int) *models.Communicator
+
+// Result is what a registered function returns.
+type Result struct {
+	// Children are the child workers the release build adds under the
+	// application.
+	Children []config.ChildSpec
+	// Status provides the connection part of status messages. It is nil when
+	// this function does not provide it.
+	Status StatusFunc
+}
+
+var registered []func(Deps) (Result, error)
 
 // Register adds f. main calls every registered function once, in order,
 // before the supervisor starts.
-func Register(f func(Deps) error) {
+func Register(f func(Deps) (Result, error)) {
 	registered = append(registered, f)
 }
 
-// Run calls each registered function in order, and stops at the first error.
-func Run(d Deps) error {
-	for _, f := range registered {
-		if err := f(d); err != nil {
-			return err
+// Run calls each registered function in order. Its result holds their
+// children in that order, and the one Status that is not nil. It stops at
+// the first error, and returns an error when two functions both provide a
+// Status.
+func Run(d Deps) (Result, error) {
+	var result Result
+	statusFrom := -1
+
+	for i, f := range registered {
+		r, err := f(d)
+		if err != nil {
+			return Result{}, err
+		}
+
+		result.Children = append(result.Children, r.Children...)
+
+		if r.Status != nil {
+			if result.Status != nil {
+				return Result{}, fmt.Errorf("two registered functions provide a Status: function %d and function %d", statusFrom, i)
+			}
+
+			result.Status = r.Status
+			statusFrom = i
 		}
 	}
 
-	return nil
+	return result, nil
 }

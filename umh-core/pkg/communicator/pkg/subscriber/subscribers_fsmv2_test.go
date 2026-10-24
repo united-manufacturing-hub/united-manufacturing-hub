@@ -71,6 +71,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				logger,
 				nil, // topicBrowserCommunicator
 				outbound,
+				nil,                    // the registered provider for the connection part
 				nil,                    // featureUsage
 				deps.NewNopFSMLogger(), // fsmLogger
 			)
@@ -145,6 +146,7 @@ var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 			logger,
 			topicBrowserCommunicator,
 			outbound,
+			nil,                    // the registered provider for the connection part
 			nil,                    // featureUsage
 			deps.NewNopFSMLogger(), // fsmLogger
 		)

@@ -154,6 +154,7 @@ var _ = Describe("FSMv2 outbound channel drop Sentry warning", func() {
 			topicbrowser.NewTopicBrowserCommunicatorWithSimulator(logger),
 			ch,
 			nil,
+			nil,
 			fsmLogger,
 		)
 

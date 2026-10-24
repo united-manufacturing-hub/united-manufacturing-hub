@@ -370,7 +370,7 @@ func startFSMv2Transport(
 	done := make(chan struct{})
 
 	hookDeps := hook.Deps{Config: hook.Config{RelayURL: configData.Agent.APIURL, Location: configData.Agent.Location}, Logger: log}
-	hookErr := runHook(hookDeps)
+	hookResult, hookErr := runHook(hookDeps)
 	if hookErr != nil {
 		close(done)
 
@@ -389,8 +389,9 @@ func startFSMv2Transport(
 	if communicatorEnabled(configData.Agent) {
 		log.Info("Starting FSMv2 communicator because backend credentials are present")
 		wire := wireFSMv2CommunicatorFn
+		status := hookResult.Status
 		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-			wire(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, configData, communicationState, log)
+			wire(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, configData, communicationState, log, status)
 		})
 	} else {
 		log.Info("No backend credentials configured; running FSMv2 runtime without communicator")
@@ -845,6 +846,7 @@ func wireFSMv2Communicator(
 	configData *config.FullConfig,
 	communicationState *communication_state.CommunicationState,
 	logger *zap.SugaredLogger,
+	status hook.StatusFunc,
 ) {
 	_ = appSup // kept for future per-supervisor introspection
 
@@ -870,6 +872,7 @@ func wireFSMv2Communicator(
 		communicationState.SystemSnapshotManager,
 		communicationState.ConfigManager,
 		subscriberOutbound,
+		status,
 	)
 	if configData.Agent.UseGatekeeper {
 		communicationState.Gatekeeper.CertificateHandler().SetSubHandler(communicationState.SubscriberHandler)

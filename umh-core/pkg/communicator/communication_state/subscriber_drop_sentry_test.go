@@ -178,6 +178,7 @@ var _ = Describe("Subscriber drop reaches Sentry through the production wiring",
 			snapshotManager,
 			configManager,
 			outbound,
+			nil,
 		)
 		Expect(state.SubscriberHandler).NotTo(BeNil(), "the production constructor must build the subscriber handler")
 

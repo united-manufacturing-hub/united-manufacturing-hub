@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/hook"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -37,6 +38,10 @@ type StatusCollectorType struct {
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator
 	featureUsage             *models.FeatureUsage
 	subscriberCount          func() int
+	// status provides the connection part of each status message. It is nil
+	// in a build from this repository alone, and the connection part is
+	// empty then.
+	status hook.StatusFunc
 }
 
 // NewStatusCollector creates a status collector that generates periodic status payloads
@@ -49,6 +54,7 @@ func NewStatusCollector(
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 	featureUsage *models.FeatureUsage,
 	subscriberCount func() int,
+	status hook.StatusFunc,
 ) *StatusCollectorType {
 	collector := &StatusCollectorType{
 		dog:                      dog,
@@ -58,6 +64,7 @@ func NewStatusCollector(
 		topicBrowserCommunicator: topicBrowserCommunicator,
 		featureUsage:             featureUsage,
 		subscriberCount:          subscriberCount,
+		status:                   status,
 	}
 
 	return collector
@@ -249,7 +256,12 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		featureUsage = &fu
 	}
 
-	communicatorData := CommunicatorFromFSMv2(ctx, s.logger, s.subscriberCount())
+	// The connection part comes from the registered provider. With none
+	// registered the part is empty.
+	var communicatorData *models.Communicator
+	if s.status != nil {
+		communicatorData = s.status(ctx, s.subscriberCount())
+	}
 
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{

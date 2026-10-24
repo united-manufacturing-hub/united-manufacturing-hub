@@ -80,6 +80,7 @@ func newTestHandler(outbound chan handoff.Message) *subscriber.Handler {
 		zap.NewNop().Sugar(),
 		nil, // topicBrowserCommunicator
 		outbound,
+		nil,                    // the registered provider for the connection part
 		nil,                    // featureUsage
 		deps.NewNopFSMLogger(), // fsmLogger
 	)
