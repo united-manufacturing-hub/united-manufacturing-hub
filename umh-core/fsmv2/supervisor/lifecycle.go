@@ -864,6 +864,9 @@ func (s *Supervisor[TObserved, TDesired]) retryPendingReAdds(ctx context.Context
 // This destroys the old worker instance completely (including all dependencies) and
 // creates a fresh worker via the factory. All worker state resets,
 // including any attempt counters, connection pools, or cached data in dependencies.
+// Entries in the secrets store (package secrets) survive worker recreation.
+// The replacement worker retains the same hierarchy path, so those entries
+// remain available when the worker opens a secrets scope.
 //
 // Flow:
 //  1. RemoveWorkerForRestart
