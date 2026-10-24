@@ -92,7 +92,7 @@ var workerHealthyMessage = cpuhealth.ComposeMessage(
 const supervisorNotRunningMessage = "USE_FSMV2_CPU is enabled but the fsmv2 supervisor is not running, so CPU is not measured"
 
 // cpuStubStateReader is the cpuStubReader harness pattern from
-// pkg/fsmv2/fsmv2client/freshness_test.go: a deps.StateReader that serves a
+// fsmv2/fsmv2client/freshness_test.go: a deps.StateReader that serves a
 // staged fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]] verbatim, letting
 // the test drive a REAL fsmv2 client's read side without a storage engine. The
 // framework wraps the worker's CPUStatus in simple.Status — the developer

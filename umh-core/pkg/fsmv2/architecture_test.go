@@ -630,7 +630,7 @@ func validateStateStructs() []validator.Violation {
 func getFrameworkDir() string {
 	dir := filepath.Join(getFsmv2Dir(), "..", "..", "fsmv2")
 	// The validators report no violations for a directory they cannot read,
-	// so a wrong path here would let every check pass.
+	// so a wrong path here would let the checks that scan the module pass.
 	Expect(dir).To(BeADirectory())
 
 	return dir

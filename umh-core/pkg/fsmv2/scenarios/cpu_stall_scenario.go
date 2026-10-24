@@ -91,7 +91,7 @@ var CPUStallScenario = scenariorunner.Scenario{
 
 		// Staleness is decided on the wall clock: the collector stamps
 		// CollectedAt with time.Now() when it wraps each observation
-		// (wrapNewObservation, pkg/fsmv2/supervisor/internal/collection). This
+		// (wrapNewObservation, fsmv2/supervisor/internal/collection). This
 		// wait therefore runs on wall time. The collector goroutine blocks inside
 		// Poll and holds collectionMu, so nothing is saved and the reading stays
 		// Stale for as long as the read hangs.

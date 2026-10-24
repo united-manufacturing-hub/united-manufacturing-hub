@@ -174,12 +174,12 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 // recordMetrics publishes the evidence for the framework's worker-metrics
 // exporter, which turns each name into umh_fsmv2_worker_<name>
-// (WorkerMetricsExporter.getOrCreateGauge, pkg/fsmv2/supervisor/metrics/metrics.go).
+// (WorkerMetricsExporter.getOrCreateGauge, fsmv2/supervisor/metrics/metrics.go).
 func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.Details) {
 	// GaugeCPULastSampleUnix freezes along with every gauge below when a tick
 	// cannot measure: Poll returns before recordMetrics runs, and the collector
 	// reloads and re-publishes the previous gauge values instead
-	// (Collector.wrapNewObservation, pkg/fsmv2/supervisor/internal/collection/collector.go).
+	// (Collector.wrapNewObservation, fsmv2/supervisor/internal/collection/collector.go).
 	// Its age is what reveals the freeze.
 	m.SetGauge(deps.GaugeCPULastSampleUnix, float64(sampledAt.Unix()))
 

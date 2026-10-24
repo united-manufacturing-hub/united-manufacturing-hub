@@ -24,7 +24,7 @@ import (
 
 // TryingToStopState commits to cleanup. It does NOT check IsShutdownRequested
 // to abort cleanup mid-flight. Once the worker enters this state, it runs
-// to completion (Stopped) before any resume can begin. See pkg/fsmv2/doc.go
+// to completion (Stopped) before any resume can begin. See fsmv2/doc.go
 // § One-way stop trajectory for the rule and the architecture-validator name.
 //
 // Returns an empty []config.ChildSpec{} so children despawn (exampleparent's

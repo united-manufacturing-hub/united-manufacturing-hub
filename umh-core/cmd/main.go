@@ -718,7 +718,7 @@ func buildFSMv2Supervisor(
 		ForceExit:    forceExit,
 		// The production tree is 4 levels (application -> communicator ->
 		// transport -> push/pull). The drain budget cascades base x subtree
-		// height (see pkg/fsmv2/supervisor/doc.go,
+		// height (see fsmv2/supervisor/doc.go,
 		// "Graceful shutdown budget"), so a base of 2s bounds the worst-case
 		// chain drain at 8s -- inside docker's default 10s SIGTERM grace, with
 		// headroom for s6 teardown and redpanda disk sync. Healthy drains
