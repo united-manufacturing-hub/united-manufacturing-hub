@@ -21,7 +21,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // Scope reports whether a sampler's logical CPU count describes every CPU on

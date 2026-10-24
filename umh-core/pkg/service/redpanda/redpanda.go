@@ -27,12 +27,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
@@ -238,8 +238,8 @@ func WithSchemaRegistryManager(schemaRegistryManager ISchemaRegistry) RedpandaSe
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaService{
-		logger:    logger.NewDedupLogger(logger.For(managerName)),
-		s6Manager: s6fsm.NewS6Manager(managerName),
+		logger:                 logger.NewDedupLogger(logger.For(managerName)),
+		s6Manager:              s6fsm.NewS6Manager(managerName),
 		s6Service:              s6service.NewDefaultService(),
 		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,

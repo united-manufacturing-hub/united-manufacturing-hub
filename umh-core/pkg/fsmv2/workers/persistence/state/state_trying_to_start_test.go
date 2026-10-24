@@ -20,9 +20,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
@@ -73,8 +73,7 @@ var _ = Describe("TryingToStartState", func() {
 						},
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-						},
+						BaseDesiredState: fsmv2config.BaseDesiredState{},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
@@ -98,8 +97,7 @@ var _ = Describe("TryingToStartState", func() {
 						CollectedAt: time.Now(),
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-						},
+						BaseDesiredState: fsmv2config.BaseDesiredState{},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
@@ -126,8 +124,7 @@ var _ = Describe("TryingToStartState", func() {
 						},
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-						},
+						BaseDesiredState: fsmv2config.BaseDesiredState{},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,

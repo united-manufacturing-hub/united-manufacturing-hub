@@ -39,10 +39,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"

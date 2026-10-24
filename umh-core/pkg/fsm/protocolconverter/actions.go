@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -29,7 +30,6 @@ import (
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
@@ -554,12 +554,12 @@ func safeBenthosMetricsFrom(obs dataflowfsm.DataflowComponentObservedState) (inp
 	metrics := obs.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	return connectionMetrics{
-			ConnectionUp:   metrics.InputConnectionUpTotal(),
-			ConnectionLost: metrics.InputConnectionLostTotal(),
-		}, connectionMetrics{
-			ConnectionUp:   metrics.OutputConnectionUpTotal(),
-			ConnectionLost: metrics.OutputConnectionLostTotal(),
-		}
+		ConnectionUp:   metrics.InputConnectionUpTotal(),
+		ConnectionLost: metrics.InputConnectionLostTotal(),
+	}, connectionMetrics{
+		ConnectionUp:   metrics.OutputConnectionUpTotal(),
+		ConnectionLost: metrics.OutputConnectionLostTotal(),
+	}
 }
 
 // IsOtherDegraded checks for certain states that should never happen

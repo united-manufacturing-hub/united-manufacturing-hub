@@ -14,7 +14,7 @@
 
 package example_child
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 
 // ExamplechildConfig is the typed configuration for the child worker.
 type ExamplechildConfig struct {

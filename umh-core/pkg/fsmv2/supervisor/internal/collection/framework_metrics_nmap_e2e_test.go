@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+
 // Positive-controlled end-to-end proof that every registered worker gets
 // framework metrics on its Observation: a real nmap worker, built through its
 // real registration, driven through a real Collector and a real TriangularStore,
@@ -42,12 +44,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
 
 	// Populates the factory registry via init(); without it NewWorkerByType
 	// returns "unknown worker type" and the test fails loudly rather than
@@ -81,7 +83,7 @@ var _ = Describe("End-to-end: real nmap worker gets framework metrics through a 
 
 		store := supervisor.CreateTestTriangularStoreForWorkerType(workerType)
 
-		cfg := collection.CollectorConfig[fsmv2.ObservedState]{
+		cfg := testutil.CollectorConfig[fsmv2.ObservedState]{
 			Worker:   worker,
 			Identity: id,
 			Store:    store,
@@ -101,7 +103,7 @@ var _ = Describe("End-to-end: real nmap worker gets framework metrics through a 
 			},
 		}
 
-		c := collection.NewCollector[fsmv2.ObservedState](cfg)
+		c := testutil.NewCollector[fsmv2.ObservedState](cfg)
 
 		ctx := context.Background()
 		Expect(c.Start(ctx)).To(Succeed())

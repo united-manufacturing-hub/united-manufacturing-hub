@@ -1,0 +1,346 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package supervisor internal tests - these tests need access to unexported methods like tick().
+// Tests use package supervisor (internal) while external tests use package supervisor_test.
+package supervisor
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence/memory"
+)
+
+func registerInternalTestWorkerFactories() {
+	workerTypes := []string{
+		"child",
+		"parent",
+		"mqtt_client",
+		"mqtt_broker",
+		"opcua_client",
+		"opcua_server",
+		"s7comm_client",
+		"modbus_client",
+		"http_client",
+		"child1",
+		"child2",
+		"grandchild",
+		"valid_child",
+		"another_child",
+		"working-child",
+		"failing-child",
+		"working",
+		"failing",
+		"container",
+		"s6_service",
+		"type_a",
+		"type_b",
+	}
+
+	for _, workerType := range workerTypes {
+		wt := workerType
+		// Register worker factory
+		_ = factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+			return &TestWorkerWithType{
+				WorkerType: wt,
+			}
+		})
+
+		// Register supervisor factory for hierarchical composition
+		_ = factory.RegisterSupervisorFactoryByType(wt, func(cfg interface{}) interface{} {
+			supervisorCfg := cfg.(Config)
+
+			return NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+		})
+	}
+}
+
+// internalMockWorker is a mock worker for internal supervisor tests.
+// NOTE: This is different from mockWorker in supervisor_suite_test.go (external tests).
+type internalMockWorker struct {
+	identity     deps.Identity
+	initialState fsmv2.State[any, any]
+	observed     persistence.Document
+}
+
+func (m *internalMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return &mockObservedState{
+		doc:       m.observed,
+		timestamp: time.Now(),
+	}, nil
+}
+
+func (m *internalMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
+}
+
+func (m *internalMockWorker) GetInitialState() fsmv2.State[any, any] {
+	return m.initialState
+}
+
+// mockObservedState is shared across internal supervisor tests (package supervisor).
+// NOTE: There is a different mockObservedState in supervisor_suite_test.go (package supervisor_test).
+type mockObservedState struct {
+	doc       persistence.Document
+	timestamp time.Time
+}
+
+func (m *mockObservedState) GetTimestamp() time.Time {
+	return m.timestamp
+}
+
+func (m *mockObservedState) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.doc)
+}
+
+// mockState is shared across internal supervisor tests (package supervisor).
+// NOTE: There is a different mockState in supervisor_suite_test.go (package supervisor_test).
+type mockState struct {
+	name   string
+	reason string
+}
+
+func (m *mockState) String() string {
+	return m.name
+}
+
+func (m *mockState) Next(_ any) fsmv2.NextResult[any, any] {
+	return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, m.reason, nil)
+}
+
+func (m *mockState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
+
+// newObservationMockWorker returns fsmv2.NewObservation (zero CollectedAt) from CollectObservedState.
+type newObservationMockWorker struct {
+	initialState fsmv2.State[any, any]
+}
+
+type newObsStatus struct {
+	Ready bool `json:"ready"`
+}
+
+func (m *newObservationMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return fsmv2.NewObservation(newObsStatus{Ready: true}), nil
+}
+
+func (m *newObservationMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
+}
+
+func (m *newObservationMockWorker) GetInitialState() fsmv2.State[any, any] {
+	return m.initialState
+}
+
+var _ = Describe("Supervisor Internal", func() {
+	var (
+		ctx    context.Context
+		logger deps.FSMLogger
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		logger = deps.NewNopFSMLogger()
+		registerInternalTestWorkerFactories()
+	})
+
+	AfterEach(func() {
+		factory.ResetRegistry()
+	})
+
+	Describe("TriangularStore Integration", func() {
+		It("should use TriangularStore instead of basic Store", func() {
+			basicStore := memory.NewInMemoryStore()
+			defer func() { _ = basicStore.Close(ctx) }()
+
+			Expect(basicStore.CreateCollection(ctx, "test_identity", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
+
+			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+
+			supervisorCfg := Config{
+				WorkerType: "test",
+				Store:      triangularStore,
+				Logger:     logger,
+			}
+
+			supervisor := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+
+			Expect(supervisor).NotTo(BeNil())
+		})
+
+		It("should save identity to TriangularStore when adding worker", func() {
+			basicStore := memory.NewInMemoryStore()
+			defer func() { _ = basicStore.Close(ctx) }()
+
+			Expect(basicStore.CreateCollection(ctx, "test_identity", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
+
+			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+
+			supervisorCfg := Config{
+				WorkerType: "test",
+				Store:      triangularStore,
+				Logger:     logger,
+			}
+
+			supervisor := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+
+			identity := deps.Identity{
+				ID:         "worker-1",
+				Name:       "Test Worker",
+				WorkerType: "test",
+			}
+
+			worker := &internalMockWorker{
+				identity:     identity,
+				initialState: &mockState{name: "initial"},
+				observed: persistence.Document{
+					"id":     "worker-1",
+					"status": "running",
+				},
+			}
+
+			err := supervisor.AddWorker(identity, worker)
+			Expect(err).NotTo(HaveOccurred())
+
+			loadedIdentity, err := triangularStore.LoadIdentity(ctx, "test", "worker-1")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loadedIdentity["id"]).To(Equal("worker-1"))
+			Expect(loadedIdentity["name"]).To(Equal("Test Worker"))
+		})
+
+		It("should load snapshot from TriangularStore during tick", func() {
+			basicStore := memory.NewInMemoryStore()
+			defer func() { _ = basicStore.Close(ctx) }()
+
+			Expect(basicStore.CreateCollection(ctx, "test_identity", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
+
+			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+
+			supervisorCfg := Config{
+				WorkerType: "test",
+				Store:      triangularStore,
+				Logger:     logger,
+			}
+
+			supervisor := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+
+			identity := deps.Identity{
+				ID:         "worker-1",
+				Name:       "Test Worker",
+				WorkerType: "test",
+			}
+
+			worker := &internalMockWorker{
+				identity:     identity,
+				initialState: &mockState{name: "initial"},
+				observed: persistence.Document{
+					"id":     "worker-1",
+					"status": "running",
+				},
+			}
+
+			err := supervisor.AddWorker(identity, worker)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = triangularStore.SaveDesired(ctx, "test", "worker-1", persistence.Document{
+				"id":     "worker-1",
+				"config": "production",
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = supervisor.tick(ctx)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("AddWorker with NewObservation", func() {
+		It("should set CollectedAt when worker returns zero-time observation", func() {
+			basicStore := memory.NewInMemoryStore()
+			defer func() { _ = basicStore.Close(ctx) }()
+
+			Expect(basicStore.CreateCollection(ctx, "test_identity", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
+
+			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+				WorkerType: "test",
+				Store:      triangularStore,
+				Logger:     logger,
+			})
+
+			beforeAdd := time.Now()
+
+			identity := deps.Identity{
+				ID:         "worker-obs",
+				Name:       "Observation Worker",
+				WorkerType: "test",
+			}
+
+			newObsWorker := &newObservationMockWorker{
+				initialState: &mockState{name: "initial"},
+			}
+
+			err := sup.AddWorker(identity, newObsWorker)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Load the saved observation and verify CollectedAt was set.
+			var loaded struct {
+				CollectedAt time.Time `json:"collected_at"`
+			}
+			err = triangularStore.LoadObservedTyped(ctx, "test", "worker-obs", &loaded)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(loaded.CollectedAt).NotTo(BeZero(), "CollectedAt should be set by AddWorker")
+			Expect(loaded.CollectedAt).To(BeTemporally(">=", beforeAdd))
+		})
+	})
+
+	Describe("Test Specs (Future Implementation)", func() {
+		It("should test action behavior during circuit breaker", func() {
+			Skip("Task 3.2: Test spec for action-child lifecycle behavior")
+		})
+
+		It("should test collector continues during circuit open", func() {
+			Skip("Task 3.4: Test spec for collector-circuit independence")
+		})
+
+		It("should test variable propagation through 3-level hierarchy", func() {
+			Skip("Task 3.6: Test spec for variable flow through supervisor hierarchy")
+		})
+
+		It("should test location hierarchy computation", func() {
+			Skip("Task 3.7: Test spec for location hierarchy computation")
+		})
+
+		It("should test ProtocolConverter end-to-end tick", func() {
+			Skip("Task 3.8: Test spec for ProtocolConverter end-to-end integration")
+		})
+	})
+})

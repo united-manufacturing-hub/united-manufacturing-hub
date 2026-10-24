@@ -31,7 +31,7 @@ package cpuhealth
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // Marks are the two thresholds that turn a number into a yes or no: the value

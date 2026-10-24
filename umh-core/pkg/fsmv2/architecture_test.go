@@ -24,8 +24,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/validator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/validator"
 
 	// Import state packages to scan for violations.
 	childState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
@@ -324,7 +324,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 		Describe("No Direct Document Manipulation (Invariant: Type-Safe Boundaries)", func() {
 			It("should not type-assert to persistence.Document in supervisor", func() {
-				violations := validator.ValidateNoDirectDocumentManipulation(getFsmv2Dir())
+				violations := validator.ValidateNoDirectDocumentManipulation(getFrameworkDir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("Direct Document Manipulation Violations", violations, "DIRECT_DOCUMENT_ASSERTION")
 					Fail(message)
@@ -334,7 +334,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 		Describe("Structured Logging Only (Invariant: Consistent Log Format)", func() {
 			It("should use structured logging (Warnw/Errorw/Infow) not format-based (Warnf/Errorf/Infof)", func() {
-				violations := validator.ValidateStructuredLogging(getFsmv2Dir())
+				violations := structuredLoggingViolations()
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("Non-Structured Logging Violations", violations, "NON_STRUCTURED_LOGGING")
 					Fail(message)
@@ -438,7 +438,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 		Describe("MetricsEmbedder Value Receivers (Invariant: Interface Satisfaction)", func() {
 			It("should use value receivers for MetricsHolder interface methods", func() {
-				violations := validator.ValidateMetricsEmbedderValueReceivers(getFsmv2Dir())
+				violations := validator.ValidateMetricsEmbedderValueReceivers(getFrameworkDir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern(
 						"MetricsEmbedder Receiver Violations",
@@ -452,7 +452,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 		Describe("Static Error Messages (Invariant: Sentry Grouping)", func() {
 			It("should not have dynamic content in error messages", func() {
-				violations := validator.ValidateStaticErrorMessages(getFsmv2Dir())
+				violations := staticErrorMessageViolations()
 				if len(violations) > 0 {
 					// Report violations but skip instead of failing
 					// P2-19 will fix all violations; this test documents what needs fixing
@@ -620,6 +620,70 @@ func validateStateStructs() []validator.Violation {
 				Message: fmt.Sprintf("State %s has field '%s %s' (should be empty)", t.Name(), field.Name, field.Type),
 			})
 		}
+	}
+
+	return violations
+}
+
+// getFrameworkDir returns the directory of the fsmv2 module, which holds the
+// framework code that this file's checks scan.
+func getFrameworkDir() string {
+	dir := filepath.Join(getFsmv2Dir(), "..", "..", "fsmv2")
+	// The validators report no violations for a directory they cannot read,
+	// so a wrong path here would let the checks that scan the module pass.
+	Expect(dir).To(BeADirectory())
+
+	return dir
+}
+
+// nonFrameworkPackages names the module's packages that are not FSMv2
+// framework code.
+var nonFrameworkPackages = map[string]bool{
+	"logger":      true,
+	"cse":         true,
+	"persistence": true,
+	"diagnosis":   true,
+}
+
+// getFrameworkPaths returns the module's top-level files and directories,
+// except nonFrameworkPackages.
+func getFrameworkPaths() []string {
+	paths, err := filepath.Glob(filepath.Join(getFrameworkDir(), "*"))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(paths).NotTo(BeEmpty())
+
+	var kept []string
+
+	for _, p := range paths {
+		if nonFrameworkPackages[filepath.Base(p)] {
+			continue
+		}
+
+		kept = append(kept, p)
+	}
+
+	return kept
+}
+
+// structuredLoggingViolations runs ValidateStructuredLogging on the framework
+// code.
+func structuredLoggingViolations() []validator.Violation {
+	violations := validator.ValidateStructuredLogging(getFsmv2Dir())
+
+	for _, p := range getFrameworkPaths() {
+		violations = append(violations, validator.ValidateStructuredLogging(p)...)
+	}
+
+	return violations
+}
+
+// staticErrorMessageViolations runs ValidateStaticErrorMessages on the
+// framework code.
+func staticErrorMessageViolations() []validator.Violation {
+	violations := validator.ValidateStaticErrorMessages(getFsmv2Dir())
+
+	for _, p := range getFrameworkPaths() {
+		violations = append(violations, validator.ValidateStaticErrorMessages(p)...)
 	}
 
 	return violations

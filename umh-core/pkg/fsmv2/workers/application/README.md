@@ -174,5 +174,5 @@ This package replaces `pkg/fsmv2/root` with clearer naming:
 ## References
 
 - [Erlang/OTP Applications](https://www.erlang.org/doc/design_principles/applications.html)
-- [FSM v2 Architecture](../../README.md)
+- [FSM v2 Architecture](../../../../fsmv2/README.md)
 - [Example Parent Worker](../example/exampleparent/) - Similar pattern with more features
