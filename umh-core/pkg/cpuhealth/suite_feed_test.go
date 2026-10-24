@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Bind the generated suite to the real CPU table. pkg/diagnosis supplies Feed,
+// Bind the generated suite to the real CPU table. fsmv2/diagnosis supplies Feed,
 // Outcome and Run; this is the CPU half — a Readable snapshot in which every
 // Reading is Known and well inside every mark, and an Unreadable one in which
 // every Reading is Unknown(), so the six-scenario suite is generated from
@@ -24,11 +24,11 @@ package cpuhealth
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // cpuFeed is the CPU half of the generated suite: the two snapshots, built
-// from outside pkg/diagnosis through Known and Unknown.
+// from outside fsmv2/diagnosis through Known and Unknown.
 //
 // Virtualized and CpuScope are startup facts, not per-tick reads, so they do
 // not move between Readable and Unreadable — the capability gate is

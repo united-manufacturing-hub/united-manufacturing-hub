@@ -15,7 +15,7 @@
 package scenarios
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 )
 
 // Registry contains all available scenarios, merged into ListScenarios

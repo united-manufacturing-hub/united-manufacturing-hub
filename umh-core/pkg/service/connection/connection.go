@@ -34,6 +34,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
@@ -43,8 +45,6 @@ import (
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
@@ -645,7 +645,7 @@ func (c *ConnectionService) ReconcileManager(
 			Internal: config.InternalConfig{
 				Nmap: c.nmapConfigs,
 			}},
-		Tick: snapshot.Tick,
+		Tick:         snapshot.Tick,
 		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 }
@@ -690,7 +690,7 @@ func (c *ConnectionService) ForceRemoveConnection(
 	if ctx.Err() != nil {
 		c.logger.Warnf("Parent context already expired for force removal of %s", connectionName)
 	}
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
 	defer cancel()
 

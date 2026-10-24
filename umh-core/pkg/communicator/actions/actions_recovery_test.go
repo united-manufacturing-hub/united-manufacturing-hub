@@ -27,11 +27,11 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -330,7 +330,7 @@ func TestRecoverActionPanicDoublePanicGuardFiresWhenMetricPanics(t *testing.T) {
 }
 
 func TestRecoverActionPanicDoublePanicGuardReattemptsSentry(t *testing.T) {
-	// Mirror of pkg/fsmv2/supervisor/reconciliation.go:518-528 — when the
+	// Mirror of the double-panic guard in Supervisor.tick (fsmv2/supervisor/reconciliation.go) — when the
 	// primary Sentry call panics, the double-panic guard must still attempt
 	// to record a Sentry breadcrumb so future nil-fsmLogger-class regressions
 	// remain visible to engineering.

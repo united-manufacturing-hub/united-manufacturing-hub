@@ -1,0 +1,491 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package supervisor_test contains black-box tests for graceful-shutdown drain regression.
+package supervisor_test
+
+import (
+	"bytes"
+	"context"
+	"slices"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
+)
+
+// shutdownTestSyncBuffer is a goroutine-safe bytes.Buffer for log capture in these tests.
+type shutdownTestSyncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *shutdownTestSyncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.Write(p)
+}
+
+func (b *shutdownTestSyncBuffer) Sync() error { return nil }
+
+func (b *shutdownTestSyncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.String()
+}
+
+// containsLogEvent returns true if any JSON log line has the given msg value.
+// Wraps findLogEvents (drain_budget_cascade_test.go) so the JSON-line parse
+// exists once.
+func containsLogEvent(logOutput, msg string) bool {
+	return len(findLogEvents(logOutput, msg)) > 0
+}
+
+// findLogEvent returns the first log entry with the given msg, or nil.
+// Wraps findLogEvents (drain_budget_cascade_test.go) so the JSON-line parse
+// exists once.
+func findLogEvent(logOutput, msg string) map[string]interface{} {
+	entries := findLogEvents(logOutput, msg)
+	if len(entries) == 0 {
+		return nil
+	}
+
+	return entries[0]
+}
+
+// shutdownHonoringState returns SignalNeedsRemoval when the snapshot's Desired
+// implements fsmv2.DesiredState and IsShutdownRequested is true; otherwise
+// SignalNone. Mirrors testutil.State's signature.
+//
+// State must be non-nil in NextResult; tickWorker reads it.
+type shutdownHonoringState struct{}
+
+func (shutdownHonoringState) String() string { return "running" }
+
+func (shutdownHonoringState) LifecyclePhase() config.LifecyclePhase {
+	return config.PhaseRunningHealthy
+}
+
+func (s shutdownHonoringState) Next(snapshot any) fsmv2.NextResult[any, any] {
+	if snap, ok := snapshot.(fsmv2.Snapshot); ok {
+		if ds, ok := snap.Desired.(fsmv2.DesiredState); ok {
+			if ds.IsShutdownRequested() {
+				return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNeedsRemoval, State: s, Reason: "shutdown requested"}
+			}
+		}
+	}
+
+	return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNone, State: shutdownHonoringState{}, Reason: "running"}
+}
+
+var _ = Describe("Shutdown drain regression", func() {
+	const (
+		workerType = "container"
+		workerID   = "drain-test-worker"
+	)
+
+	var buf *shutdownTestSyncBuffer
+
+	BeforeEach(func() {
+		buf = &shutdownTestSyncBuffer{}
+	})
+
+	newStore := func() *storage.TriangularStore {
+		return supervisor.CreateTestTriangularStoreForWorkerType(workerType)
+	}
+
+	seedDesiredState := func(s *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]) {
+		ctx := context.Background()
+		desiredDoc := persistence.Document{
+			supervisor.FieldID:  workerID,
+			"ShutdownRequested": false,
+			"state":             "running",
+		}
+		Expect(s.TestSaveDesired(ctx, workerType, workerID, desiredDoc)).To(Succeed())
+	}
+
+	Describe("TestShutdown_DrainsWorkersViaReconciliation", func() {
+		It("should complete Shutdown() in under 500ms when worker honors ShutdownRequested", func() {
+			triangularStore := newStore()
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:              workerType,
+				Store:                   triangularStore,
+				Logger:                  logger,
+				TickInterval:            100 * time.Millisecond,
+				GracefulShutdownTimeout: 1 * time.Second,
+			})
+
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Drain Test Worker",
+				WorkerType: workerType,
+			}
+			worker := &supervisor.TestWorker{
+				InitialState: shutdownHonoringState{},
+			}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			// Sanity: worker must be alive before Shutdown.
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			start := time.Now()
+			s.Shutdown()
+			elapsed := time.Since(start)
+
+			// Assertion 1: elapsed well under GracefulShutdownTimeout (1s).
+			// Pre-fix: drain waits full 1s, elapsed ≈ 1s → FAILS.
+			// Post-fix: drain exits via remaining==0 at ~100–200ms → PASSES.
+			Expect(elapsed).To(BeNumerically("<", 500*time.Millisecond),
+				"Shutdown took %v; expected drain in <500ms (GracefulShutdownTimeout=1s). "+
+					"This confirms the drain deadlock: tickLoop is cancelled before drain polls s.workers.", elapsed)
+
+			// Assertion 2: worker map empty after Shutdown returns.
+			remaining := s.TestWorkerCount()
+			Expect(remaining).To(Equal(0), "expected s.workers to be empty after graceful drain")
+
+			// Assertion 3: graceful_shutdown_timeout warn must NOT be emitted.
+			logOutput := buf.String()
+			Expect(containsLogEvent(logOutput, "graceful_shutdown_timeout")).To(BeFalse(),
+				"graceful_shutdown_timeout was logged, indicating the timeout fired instead of draining")
+		})
+	})
+
+	Describe("TestShutdown_TimeoutPathStillFires", func() {
+		It("should fire graceful_shutdown_timeout when worker does not honor ShutdownRequested", func() {
+			triangularStore := newStore()
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:              workerType,
+				Store:                   triangularStore,
+				Logger:                  logger,
+				TickInterval:            50 * time.Millisecond,
+				GracefulShutdownTimeout: 200 * time.Millisecond,
+			})
+
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Timeout Test Worker",
+				WorkerType: workerType,
+			}
+			// Default TestWorker uses testutil.State which returns SignalNone indefinitely.
+			worker := &supervisor.TestWorker{}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			start := time.Now()
+			s.Shutdown()
+			elapsed := time.Since(start)
+
+			// Assertion 1: upper bound only — generous slop.
+			Expect(elapsed).To(BeNumerically("<", 500*time.Millisecond),
+				"Shutdown blocked far beyond GracefulShutdownTimeout=200ms: %v", elapsed)
+
+			// Assertion 2: worker not drained (timeout path — correct pre-fix and post-fix behaviour).
+			remaining := s.TestWorkerCount()
+			Expect(remaining).To(BeNumerically(">", 0),
+				"expected worker still present after timeout-path Shutdown (worker never honored shutdown)")
+
+			// Assertion 3: graceful_shutdown_timeout warn IS present, with remaining_worker_count > 0.
+			logOutput := buf.String()
+			entry := findLogEvent(logOutput, "graceful_shutdown_timeout")
+			Expect(entry).ToNot(BeNil(), "expected graceful_shutdown_timeout warn to be logged")
+			if entry != nil {
+				count, ok := entry["remaining_worker_count"]
+				Expect(ok).To(BeTrue(), "expected remaining_worker_count field in warn log")
+				Expect(count).To(BeNumerically(">", 0), "expected remaining_worker_count > 0")
+			}
+		})
+	})
+
+	Describe("TestRestart_DemotedToDuringDrain", func() {
+		It("should demote SignalNeedsRestart to removal when supervisor is draining (started=false)", func() {
+			// This test verifies the processSignal restart gating introduced in
+			// Commit 3: shouldRestart = s.started.Load() && s.pendingRestart[workerID].
+			// When Shutdown() sets started=false before drain, a pending restart
+			// must NOT spawn a new worker — it must be treated as a removal.
+			triangularStore := newStore()
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:              workerType,
+				Store:                   triangularStore,
+				Logger:                  logger,
+				TickInterval:            50 * time.Millisecond,
+				GracefulShutdownTimeout: 500 * time.Millisecond,
+			})
+
+			// shutdownHonoringState immediately emits SignalNeedsRemoval when
+			// ShutdownRequested is true, so the worker drains on the first tick
+			// after Shutdown() sets started=false.
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Demotion Test Worker",
+				WorkerType: workerType,
+			}
+			worker := &supervisor.TestWorker{
+				InitialState: shutdownHonoringState{},
+			}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			// Wait for the worker to be registered as alive.
+			Eventually(s.TestWorkerCount, 300*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			// Mark the worker as pendingRestart BEFORE calling Shutdown().
+			// This simulates a restart signal arriving just before drain starts.
+			s.TestSetPendingRestart(identity.ID)
+
+			// Shutdown() stores started=false (Phase 1) then drains (Phase 3).
+			// The drain loop will call processSignal on the worker.
+			// Because started=false, shouldRestart evaluates to false and the
+			// worker is removed rather than restarted.
+			s.Shutdown()
+
+			// After Shutdown returns, the worker must be gone — NOT re-added.
+			remaining := s.TestWorkerCount()
+			Expect(remaining).To(Equal(0),
+				"worker should be removed during drain, not restarted (started=false gating)")
+
+			// pendingRestart must have been cleaned up.
+			Expect(s.TestIsPendingRestart(identity.ID)).To(BeFalse(),
+				"pendingRestart entry should be cleared after demotion")
+		})
+	})
+
+	Describe("ForceExit short-circuits the drain", func() {
+		It("breaks the Phase 3 drain when the ForceExit channel closes", func() {
+			triangularStore := newStore()
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+			forceExit := make(chan struct{})
+
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType: workerType,
+				Store:      triangularStore,
+				Logger:     logger,
+				// Long timeout so the test must hit forceExit, not the timer.
+				TickInterval:            50 * time.Millisecond,
+				GracefulShutdownTimeout: 5 * time.Second,
+				ForceExit:               forceExit,
+			})
+
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Force Exit Test Worker",
+				WorkerType: workerType,
+			}
+			// Worker never honours ShutdownRequested -> drain would otherwise
+			// run to its full 5-second timeout. ForceExit must cut it short.
+			worker := &supervisor.TestWorker{}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			// Close forceExit shortly after Shutdown enters Phase 3 drain.
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				close(forceExit)
+			}()
+
+			start := time.Now()
+			s.Shutdown()
+			elapsed := time.Since(start)
+
+			// Assertion 1: elapsed must be far below GracefulShutdownTimeout=5s.
+			// A successful forceExit cuts Phase 3 within ~150ms of the close.
+			Expect(elapsed).To(BeNumerically("<", 1*time.Second),
+				"Shutdown took %v; expected ForceExit to cut Phase 3 well before "+
+					"GracefulShutdownTimeout=5s", elapsed)
+
+			// Assertion 2: the dedicated force-exit log event fires.
+			logOutput := buf.String()
+			Expect(containsLogEvent(logOutput, "graceful_shutdown_force_exit")).To(BeTrue(),
+				"expected graceful_shutdown_force_exit log; ForceExit branch did not fire")
+
+			// Assertion 3: the timeout path must NOT have fired (forceExit wins).
+			Expect(containsLogEvent(logOutput, "graceful_shutdown_timeout")).To(BeFalse(),
+				"graceful_shutdown_timeout fired; ForceExit should have won the race")
+		})
+	})
+
+	Describe("Removal takes the final observation before the worker leaves the supervisor", func() {
+		It("collects every observation, the final one included, while the worker is still registered", func() {
+			triangularStore := newStore()
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:              workerType,
+				Store:                   triangularStore,
+				Logger:                  logger,
+				TickInterval:            50 * time.Millisecond,
+				GracefulShutdownTimeout: 1 * time.Second,
+			})
+
+			// The Phase 3 drain ends when the supervisor has no workers left, and
+			// Phase 4 then cancels the context the collector runs on. A collection
+			// that runs after the worker left the supervisor can therefore be cut
+			// short or skipped.
+			var collectionsAfterRemoval atomic.Int32
+
+			// AddWorker collects once while it holds the supervisor lock, so the
+			// check below, which takes that lock, starts only with Shutdown.
+			var shuttingDown atomic.Bool
+
+			worker := &supervisor.TestWorker{
+				InitialState: shutdownHonoringState{},
+				CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
+					if shuttingDown.Load() && !slices.Contains(s.ListWorkers(), workerID) {
+						collectionsAfterRemoval.Add(1)
+					}
+
+					return &supervisor.TestObservedState{
+						ID:          workerID,
+						CollectedAt: time.Now(),
+						Desired:     &supervisor.TestDesiredState{},
+					}, nil
+				},
+			}
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Final Observation Test Worker",
+				WorkerType: workerType,
+			}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			shuttingDown.Store(true)
+			s.Shutdown()
+
+			Expect(s.TestWorkerCount()).To(Equal(0), "expected the worker to be removed during the drain")
+			Expect(collectionsAfterRemoval.Load()).To(BeZero(),
+				"CollectObservedState ran after the worker was removed from the supervisor")
+			Expect(findLogEvents(buf.String(), "collector_final_observation_completed")).To(HaveLen(1),
+				"expected exactly one final observation for the removed worker")
+		})
+
+		It("lets a worker with the same id be added again while the old one takes its final observation", func() {
+			store := &tombstoneHookStore{TriangularStoreInterface: newStore()}
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType:              workerType,
+				Store:                   store,
+				Logger:                  logger,
+				TickInterval:            50 * time.Millisecond,
+				GracefulShutdownTimeout: 1 * time.Second,
+			})
+			defer s.Shutdown()
+
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Re-added Worker",
+				WorkerType: workerType,
+			}
+
+			// The supervisor tombstones a removed worker just before its final
+			// observation, so every collection after the tombstone runs while
+			// the old worker is still being removed.
+			var removing atomic.Bool
+			store.beforeTombstone = func() { removing.Store(true) }
+
+			var addOnce sync.Once
+
+			addDone := make(chan error, 1)
+
+			worker := &supervisor.TestWorker{
+				InitialState: shutdownHonoringState{},
+				CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
+					if removing.Load() {
+						addOnce.Do(func() {
+							go func() {
+								addDone <- s.AddWorker(identity, &supervisor.TestWorker{InitialState: shutdownHonoringState{}})
+							}()
+
+							// Give AddWorker time to take the supervisor lock
+							// while the old worker is still registered.
+							time.Sleep(200 * time.Millisecond)
+						})
+					}
+
+					return &supervisor.TestObservedState{
+						ID:          workerID,
+						CollectedAt: time.Now(),
+						Desired:     &supervisor.TestDesiredState{},
+					}, nil
+				},
+			}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			Expect(s.TestSaveDesired(ctx, workerType, workerID, persistence.Document{
+				supervisor.FieldID:  workerID,
+				"ShutdownRequested": true,
+				"state":             "running",
+			})).To(Succeed())
+
+			Eventually(addDone, 3*time.Second).Should(Receive(BeNil()),
+				"AddWorker must wait for the removal to finish instead of failing with \"worker already exists\"")
+		})
+	})
+})

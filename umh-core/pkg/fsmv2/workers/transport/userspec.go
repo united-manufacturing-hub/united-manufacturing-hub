@@ -17,7 +17,7 @@ package transport
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 )
 
 // TransportUserSpec defines typed configuration for the transport worker.

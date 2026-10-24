@@ -30,6 +30,7 @@ require (
 	github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-00010101000000-000000000000
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
+	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0-00010101000000-000000000000
 	github.com/vektah/gqlparser/v2 v2.5.60
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.57.0
@@ -136,3 +137,5 @@ replace (
 	github.com/united-manufacturing-hub/ManagementConsole/cryptolib => ../../ManagementConsole/cryptolib
 	github.com/united-manufacturing-hub/ManagementConsole/shared => ../../ManagementConsole/shared
 )
+
+replace github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 => ./fsmv2
