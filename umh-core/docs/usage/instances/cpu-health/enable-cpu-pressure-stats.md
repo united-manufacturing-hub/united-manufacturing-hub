@@ -60,7 +60,15 @@ The Management Console shows the result on the instance's detail page. The Techn
 pressure stats).` to a percentage. `Pressure not available (measuring).` means UMH Core can read the
 file and is filling its 60-second window. Wait a minute and look again.
 
-If the file is still missing, run `cat /proc/pressure/cpu` on the machine. Output means PSI is on and
-cgroup v2 is what is missing. `No such file or directory` means the kernel ignored `psi=1`, which
-happens on a kernel built without PSI. In both cases, set a CPU limit on the container instead. UMH
-Core then measures headroom against the limit, and the `Pressure` line keeps reading `not measured`.
+If the file is still missing, run `cat /proc/cmdline` on the machine. If `psi=1` is not in the
+output, the running kernel did not get the parameter: repeat the step for your operating system and
+reboot. If `psi=1` is there, run `cat /proc/pressure/cpu` on the machine:
+
+- `No such file or directory` means the kernel ignored `psi=1`, which happens on a kernel built
+  without PSI.
+- Output means the kernel reports pressure for the whole machine, but not for the container. Run
+  `docker exec <container name> stat -fc %T /sys/fs/cgroup`. Anything other than `cgroup2fs` means
+  the container does not see cgroup v2.
+
+In both cases, set a CPU limit on the container instead. UMH Core then measures headroom against the
+limit, and the `Pressure` line keeps reading `not measured`.

@@ -12,7 +12,7 @@ Linux measures CPU pressure per container, as the share of time in which at leas
 
 Any program on Linux can wait for a core on a machine whose cores are free on average. A CPU usage graph averages over a second or longer, which hides a wait of a few milliseconds. A program that starts more tasks at one moment than there are cores makes the extra tasks wait. The cores can then be idle for the rest of the second. Tasks also wait when other software on the machine holds the cores. They wait as well when the container has used up its CPU limit (see **Throttling** in the [Glossary](README.md#glossary)).
 
-UMH Core is one such program. Every 100 ms, it starts the checks and updates for all its bridges and data flows at the same moment. This is UMH Core's own internal work, separate from how often a bridge polls its PLC. UMH is moving this work to FSMv2, a new design of UMH Core's internals that spreads it over time.
+UMH Core is one such program. Every 100 ms, it starts the checks and updates for all its bridges and data flows at the same moment. This is UMH Core's own internal work, separate from how often a bridge polls its PLC. UMH is changing UMH Core's internals to spread this work over time.
 
 ## Read the CPU pressure value yourself
 
