@@ -6,7 +6,7 @@ This file says where the FSMv2 rules for this repository live in the code.
 
 ## Architecture test
 
-`architecture_test.go` checks the source of every worker against the patterns in `validator/`. A failure names the violating file and line. For a pattern listed in `validator/registry.go`, it also prints why the pattern exists and the correct code. Run it from `umh-core/` after every change to a worker:
+`../pkg/fsmv2/architecture_test.go` checks the source of every worker against the patterns in `validator/`. A failure names the violating file and line. For a pattern listed in `validator/registry.go`, it also prints why the pattern exists and the correct code. Run it from `umh-core/` after every change to a worker:
 
 ```bash
 go test -tags=test -count=1 ./pkg/fsmv2/ -ginkgo.focus=Architecture -v
@@ -19,7 +19,7 @@ Do not filter with `-run Architecture`. The whole Ginkgo suite is one Go test, `
 | Topic | Where |
 |---|---|
 | Framework overview, states, actions, parent and child workers | `doc.go`, `README.md` |
-| A worker to copy | `workers/example/examplechild/`, `workers/example/exampleparent/` |
+| A worker to copy | `../pkg/fsmv2/workers/example/examplechild/`, `../pkg/fsmv2/workers/example/exampleparent/` |
 | Returning from `Next()`, reason strings, the children a parent wants | `Transition` and `NextResult` in `api.go`. The architecture test rejects `fsmv2.Result[...]` in state files. |
 | `WorkerBase`, `BindDeps` and the typed deps accessor | `worker_base.go` |
 | Registration and dependencies a parent passes to its children | `register/` |
