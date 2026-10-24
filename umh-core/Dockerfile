@@ -88,10 +88,11 @@ COPY ./fsmv2 ./fsmv2
 FROM build-base AS managementconsole-false
 
 # Official build: fetch the Management Console module at the version go.mod
-# pins and add its source to vendor/. The read token comes in as the build
-# secret github_token and is sent only as an HTTP header inside this step, so
-# it reaches no layer and no log. go mod download checks the source against
-# go.sum.
+# pins and add its source to vendor/. Only the parts of the module that the
+# binary uses are fetched: those vendor/modules.txt lists packages for. Each
+# download must match its go.sum line, or the build fails. The read token
+# comes in as the build secret github_token and is sent only as an HTTP header
+# inside this step, so it reaches no layer and no log.
 FROM build-base AS managementconsole-true
 RUN apk add --no-cache git
 RUN --mount=type=secret,id=github_token,required=true \
@@ -101,12 +102,19 @@ RUN --mount=type=secret,id=github_token,required=true \
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0=http.https://github.com/united-manufacturing-hub/ManagementConsole.extraheader \
     GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${auth}"; \
-    for m in cryptolib shared; do \
-    path="github.com/united-manufacturing-hub/ManagementConsole/$m"; \
-    version="$(awk -v p="$path" '$1=="#" && $2==p { if ($4=="=>") print $6; else print $3 }' vendor/modules.txt)"; \
-    [ -n "$version" ] || { echo "vendor/modules.txt does not list $path"; exit 1; }; \
-    dir="$(go mod download -json "$path@$version" | sed -n 's/^[[:space:]]*"Dir": "\(.*\)",$/\1/p')"; \
-    [ -n "$dir" ] || { echo "could not download $path@$version"; exit 1; }; \
+    modules="$(awk ' \
+    /^# github.com\/united-manufacturing-hub\/ManagementConsole\// { m = $2; v = ($4 == "=>") ? $6 : $3; next } \
+    /^# / { m = ""; next } \
+    m != "" && $1 !~ /^#/ { print m "@" v; m = "" }' vendor/modules.txt)"; \
+    [ -n "$modules" ] || { echo "vendor/modules.txt lists no Management Console package"; exit 1; }; \
+    for mv in $modules; do \
+    path="${mv%@*}"; version="${mv#*@}"; \
+    json="$(go mod download -json "$mv")"; \
+    dir="$(printf '%s\n' "$json" | sed -n 's/^[[:space:]]*"Dir": "\(.*\)",$/\1/p')"; \
+    sum="$(printf '%s\n' "$json" | sed -n 's/^[[:space:]]*"Sum": "\(.*\)",$/\1/p')"; \
+    want="$(awk -v p="$path" -v v="$version" '$1 == p && $2 == v { print $3 }' go.sum)"; \
+    [ -n "$dir" ] && [ -n "$want" ] && [ "$sum" = "$want" ] \
+    || { echo "$mv does not match go.sum"; exit 1; }; \
     mkdir -p "vendor/$path"; \
     cp -R "$dir/." "vendor/$path/"; \
     done
