@@ -107,6 +107,7 @@ var _ = Describe("Gatekeeper inbound pipeline", func() {
 		cancel context.CancelFunc
 		g      *Gatekeeper
 		in     chan *types.UMHMessage
+		out    chan *types.UMHMessage
 		cachi  *mockCertHandler
 		vali   *mockValidator
 	)
@@ -116,7 +117,7 @@ var _ = Describe("Gatekeeper inbound pipeline", func() {
 		cachi = &mockCertHandler{cert: &x509.Certificate{}, rootCA: &x509.Certificate{}}
 		vali = &mockValidator{allowed: true}
 		in = make(chan *types.UMHMessage, 10)
-		out := make(chan *types.UMHMessage, 10)
+		out = make(chan *types.UMHMessage, 10)
 		g = New(in, out, cachi, vali, zap.NewNop().Sugar())
 		g.Start(ctx)
 	})
@@ -163,5 +164,59 @@ var _ = Describe("Gatekeeper inbound pipeline", func() {
 		cancel()
 		g.Stop()
 		Expect(g.running).To(BeFalse())
+	})
+
+	It("sends the handler's bytes unchanged on the outbound path", func() {
+		// The subscriber handler already encoded this content; the
+		// gatekeeper must hand it over without encoding it a second time.
+		//
+		// The payload is a StatusMessage with Core set, so a decode and
+		// re-encode round trip changes the bytes: StatusMessage declares
+		// Plugins before Core, while a re-marshal of the decoded payload map
+		// sorts the keys the other way round. The precondition below fails
+		// the test if that ever stops holding, because a fixture whose bytes
+		// survive the round trip cannot detect a second encode.
+		statusPayload := models.StatusMessage{
+			Plugins: map[string]interface{}{},
+			Core: models.Core{
+				Agent: models.Agent{
+					Health: &models.Health{
+						Message:       "agent is running",
+						ObservedState: "Running",
+						DesiredState:  "Running",
+						Category:      models.Active,
+					},
+				},
+			},
+		}
+		encoded, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
+			MessageType: models.Status,
+			Payload:     statusPayload,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		decoded, err := encoding.DecodeMessageFromUMHInstanceToUser(encoded)
+		Expect(err).NotTo(HaveOccurred())
+		reEncoded, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
+			MessageType: decoded.MessageType,
+			Payload:     decoded.Payload,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		if reEncoded == encoded {
+			Fail("fixture bytes survive a decode and re-encode round trip, so the test cannot detect a second encode")
+		}
+
+		g.SetInstanceUUID("550e8400-e29b-41d4-a716-446655440000")
+		g.VerifiedOutboundChan() <- handoff.Message{
+			Content:     []byte(encoded),
+			SenderEmail: "status@example.com",
+		}
+
+		var transportMsg *types.UMHMessage
+		Eventually(out).Should(Receive(&transportMsg))
+
+		Expect(transportMsg.Content).To(Equal(encoded),
+			"the gatekeeper must not encode the handler's bytes a second time")
+		Expect(transportMsg.Email).To(Equal("status@example.com"))
 	})
 })

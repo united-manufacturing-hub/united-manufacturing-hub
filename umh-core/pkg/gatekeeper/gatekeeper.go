@@ -49,7 +49,7 @@ type Gatekeeper struct {
 
 	// Verified channels (created and owned by gatekeeper)
 	verifiedInbound  chan handoff.Message
-	verifiedOutbound chan *types.MessageWithSender
+	verifiedOutbound chan handoff.Message
 
 	// TODO(ENG-4558): Remove once actions write MessageWithSender directly.
 	legacyOutbound chan *models.UMHMessage
@@ -93,7 +93,7 @@ func New(
 		opt(g)
 	}
 	g.verifiedInbound = make(chan handoff.Message, g.verifiedInboundSize)
-	g.verifiedOutbound = make(chan *types.MessageWithSender, g.verifiedOutboundSize)
+	g.verifiedOutbound = make(chan handoff.Message, g.verifiedOutboundSize)
 	g.legacyOutbound = make(chan *models.UMHMessage, g.verifiedOutboundSize)
 	return g
 }
@@ -137,7 +137,7 @@ func (g *Gatekeeper) VerifiedInboundChan() <-chan handoff.Message {
 }
 
 // VerifiedOutboundChan returns the channel for the Router to write messages to send.
-func (g *Gatekeeper) VerifiedOutboundChan() chan<- *types.MessageWithSender {
+func (g *Gatekeeper) VerifiedOutboundChan() chan<- handoff.Message {
 	return g.verifiedOutbound
 }
 
@@ -321,13 +321,9 @@ func (g *Gatekeeper) processOutbound(ctx context.Context) {
 	}
 }
 
-func (g *Gatekeeper) handleOutbound(ctx context.Context, msg *types.MessageWithSender) {
-	encoded, err := g.compression.Encode(msg.Content)
-	if err != nil {
-		g.logger.Warnw("Failed to encode outbound message", "email", msg.SenderEmail, "error", err)
-		return
-	}
-
+func (g *Gatekeeper) handleOutbound(ctx context.Context, msg handoff.Message) {
+	// The handler already encoded the content; use it as it is.
+	encoded := string(msg.Content)
 	encrypted := []byte(encoded)
 
 	g.mu.RLock()

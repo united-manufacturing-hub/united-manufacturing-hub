@@ -36,6 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/secrets"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
@@ -645,12 +646,16 @@ func buildFSMv2Supervisor(
 	}
 
 	// Create channel adapter to bridge FSMv2 and legacy channels.
-	// Buffer size 0 uses the default (DefaultBufferSize).
+	// Buffer size 0 uses the default (DefaultBufferSize). The bridge reads
+	// the instance UUID for status messages from the subscriber handler, the
+	// same source the handler itself used before it started writing
+	// envelopes without one.
 	channelAdapter = fsmv2_adapter.NewLegacyChannelBridge(
 		communicationState.InboundChannel,
 		communicationState.OutboundChannel,
 		logger,
 		0,
+		nil,
 	)
 
 	// Start conversion goroutines. These run on the caller's signal ctx, NOT
@@ -848,27 +853,32 @@ func wireFSMv2Communicator(
 	// 2. Initialize SubscriberHandler (generates status messages)
 	// 3. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
+	// Both FSMv2 modes deliver status the same way: the handler writes
+	// encoded bytes with the subscriber, and the transport picks them up
+	// from the same kind of channel, whether the gatekeeper sits in the
+	// path or the bridge converts for the push worker.
+	var subscriberOutbound chan<- handoff.Message
 	if configData.Agent.UseGatekeeper {
-		communicationState.InitialiseAndStartSubscriberHandler(
-			5*time.Minute, // TTL: time until subscriber considered dead
-			1*time.Minute, // Cull: cycle time to remove dead subscribers
-			configData,
-			communicationState.SystemSnapshotManager,
-			communicationState.ConfigManager,
-			nil, // no legacy FSMv2 channel when gatekeeper is active
-			communicationState.Gatekeeper.VerifiedOutboundChan(), // Gatekeeper mode: write MessageWithSender
-		)
+		subscriberOutbound = communicationState.Gatekeeper.VerifiedOutboundChan()
+	} else {
+		subscriberOutbound = channelAdapter.GetStatusWriteChannel()
+	}
+	communicationState.InitialiseAndStartSubscriberHandler(
+		5*time.Minute, // TTL: time until subscriber considered dead
+		1*time.Minute, // Cull: cycle time to remove dead subscribers
+		configData,
+		communicationState.SystemSnapshotManager,
+		communicationState.ConfigManager,
+		subscriberOutbound,
+	)
+	if configData.Agent.UseGatekeeper {
 		communicationState.Gatekeeper.CertificateHandler().SetSubHandler(communicationState.SubscriberHandler)
 	} else {
-		communicationState.InitialiseAndStartSubscriberHandler(
-			5*time.Minute, // TTL: time until subscriber considered dead
-			1*time.Minute, // Cull: cycle time to remove dead subscribers
-			configData,
-			communicationState.SystemSnapshotManager,
-			communicationState.ConfigManager,
-			channelAdapter.GetOutboundWriteChannel(), // FSMv2 without gatekeeper
-			nil,                                      // no gatekeeper channel
-		)
+		// The bridge reads the instance UUID for each status message from
+		// the subscriber handler, the same value the handler itself used
+		// before it started writing envelopes without one.
+		handler := communicationState.SubscriberHandler
+		channelAdapter.SetInstanceUUIDSource(handler.GetInstanceUUID)
 	}
 	communicationState.InitializeRouterForFSMv2()
 

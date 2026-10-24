@@ -183,7 +183,7 @@ func newStandInDependencies() (storage.TriangularStoreInterface, map[string]any)
 
 	var store storage.TriangularStoreInterface = storage.NewTriangularStore(memory.NewInMemoryStore(), deps.NewNopFSMLogger())
 	bridge := fsmv2_adapter.NewLegacyChannelBridge(
-		make(chan *models.UMHMessage), make(chan *models.UMHMessage), zap.NewNop().Sugar(), 0)
+		make(chan *models.UMHMessage), make(chan *models.UMHMessage), zap.NewNop().Sugar(), 0, nil)
 
 	dependencies := map[string]any{}
 	fsmv2config.SetDependency(dependencies, communicator.ChannelProviderKey, communicator.ChannelProvider(bridge))

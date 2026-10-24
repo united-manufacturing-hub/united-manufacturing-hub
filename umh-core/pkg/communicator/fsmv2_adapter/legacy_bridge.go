@@ -22,16 +22,6 @@
 // between FSMv2's types.UMHMessage and the legacy models.UMHMessage
 // used by the Router and other subsystems.
 //
-// # When to Use
-//
-//   - When integrating FSMv2 Communicator with existing UMH subsystems
-//   - During migration from legacy Communicator to FSMv2 Communicator
-//
-// # When NOT to Use
-//
-//   - For new greenfield FSMv2 workers (use types.UMHMessage directly)
-//   - After full migration is complete (this package becomes obsolete)
-//
 // # Message Flow
 //
 //	┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -43,9 +33,8 @@
 //   - FSMv2 worker writes received messages to inbound channel
 //   - Bridge converts types.UMHMessage -> models.UMHMessage
 //   - Writes to CommunicationState.InboundChannel for Router processing
-//   - Router writes responses to CommunicationState.OutboundChannel
-//   - Bridge converts models.UMHMessage -> types.UMHMessage
-//   - FSMv2 worker reads from outbound channel to push to HTTP
+//   - The subscriber handler writes encoded status to the outbound channel
+//   - Bridge converts handoff.Message -> types.UMHMessage for the push worker
 //
 // # Deprecation Plan
 //
@@ -62,6 +51,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -85,6 +75,16 @@ type LegacyChannelBridge struct {
 	fsmInbound  chan *types.UMHMessage // FSMv2 writes here
 	fsmOutbound chan *types.UMHMessage // FSMv2 reads from here
 
+	// statusOutbound carries the subscriber handler's status messages. The
+	// handler writes handoff envelopes; the status conversion goroutine
+	// turns them into types.UMHMessage on fsmOutbound.
+	statusOutbound chan handoff.Message
+
+	// instanceUUIDSource supplies the instance UUID for status messages.
+	// The subscriber handler holds the same value, so the conversion fills
+	// what handoff.Message cannot carry.
+	instanceUUIDSource func() uuid.UUID
+
 	// Legacy channels from CommunicationState
 	legacyInbound  chan *models.UMHMessage // Router reads from here
 	legacyOutbound chan *models.UMHMessage // Router writes here
@@ -101,22 +101,27 @@ const DefaultBufferSize = 100
 // NewLegacyChannelBridge creates a bridge that adapts FSMv2 and legacy channels.
 // The bridge uses buffered channels with configurable capacity for both
 // inbound and outbound FSMv2 channels. If bufferSize is 0, DefaultBufferSize (100) is used.
+// instanceUUIDSource supplies the instance UUID the outbound conversion writes
+// into each status message; main wires it to the subscriber handler's value.
 func NewLegacyChannelBridge(
 	legacyInbound chan *models.UMHMessage,
 	legacyOutbound chan *models.UMHMessage,
 	logger *zap.SugaredLogger,
 	bufferSize int,
+	instanceUUIDSource func() uuid.UUID,
 ) *LegacyChannelBridge {
 	if bufferSize <= 0 {
 		bufferSize = DefaultBufferSize
 	}
 
 	return &LegacyChannelBridge{
-		fsmInbound:     make(chan *types.UMHMessage, bufferSize),
-		fsmOutbound:    make(chan *types.UMHMessage, bufferSize),
-		legacyInbound:  legacyInbound,
-		legacyOutbound: legacyOutbound,
-		logger:         logger,
+		fsmInbound:         make(chan *types.UMHMessage, bufferSize),
+		fsmOutbound:        make(chan *types.UMHMessage, bufferSize),
+		statusOutbound:     make(chan handoff.Message, bufferSize),
+		instanceUUIDSource: instanceUUIDSource,
+		legacyInbound:      legacyInbound,
+		legacyOutbound:     legacyOutbound,
+		logger:             logger,
 	}
 }
 
@@ -193,7 +198,52 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 		}
 	}()
 
-	// Goroutine: Legacy outbound -> FSMv2 outbound (for push)
+	// Goroutine: subscriber handler status -> FSMv2 outbound (for push)
+	b.wg.Add(1)
+
+	go func() {
+		defer b.wg.Done()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-b.statusOutbound:
+				if !ok {
+					b.logger.Infow("fsmv2_status_outbound_channel_closed")
+
+					return
+				}
+
+				// Convert handoff.Message -> types.UMHMessage. The instance
+				// UUID comes from the same source the handler used, because
+				// the envelope cannot carry it.
+				var instanceUUID uuid.UUID
+				if b.instanceUUIDSource != nil {
+					instanceUUID = b.instanceUUIDSource()
+				}
+
+				fsmMsg := &types.UMHMessage{
+					Content:      string(msg.Content),
+					InstanceUUID: instanceUUID.String(),
+					Email:        msg.SenderEmail,
+					TraceID:      msg.TraceID,
+				}
+
+				// Non-blocking send to prevent deadlock
+				select {
+				case b.fsmOutbound <- fsmMsg:
+				case <-ctx.Done():
+					return
+				default:
+					b.logger.Warnw("fsmv2_outbound_channel_full")
+					droppedMessagesTotal.WithLabelValues("outbound").Inc()
+				}
+			}
+		}
+	}()
+
+	// Goroutine: Legacy outbound -> FSMv2 outbound (action replies, for push)
 	b.wg.Add(1)
 
 	go func() {
@@ -262,12 +312,18 @@ func (b *LegacyChannelBridge) GetInboundStats(_ string) (capacity int, length in
 	return cap(b.fsmInbound), len(b.fsmInbound)
 }
 
-// GetOutboundWriteChannel returns the outbound channel for direct writing.
-// This allows SubscriberHandler to bypass the legacy->FSMv2 conversion goroutine
-// and write types.UMHMessage directly to the FSMv2 outbound channel.
-// Used for Priority 0: Remove Pusher from FSMv2 flow.
-func (b *LegacyChannelBridge) GetOutboundWriteChannel() chan<- *types.UMHMessage {
-	return b.fsmOutbound
+// GetStatusWriteChannel returns the channel the subscriber handler writes
+// its status messages to. The bridge converts each envelope for the push
+// worker.
+func (b *LegacyChannelBridge) GetStatusWriteChannel() chan<- handoff.Message {
+	return b.statusOutbound
+}
+
+// SetInstanceUUIDSource sets where the bridge reads the instance UUID for
+// status messages. The subscriber handler holds the same value, so the
+// conversion writes what the handler itself used before envelopes.
+func (b *LegacyChannelBridge) SetInstanceUUIDSource(source func() uuid.UUID) {
+	b.instanceUUIDSource = source
 }
 
 // RawChannels returns the raw bidirectional FSMv2 channels for the gatekeeper.

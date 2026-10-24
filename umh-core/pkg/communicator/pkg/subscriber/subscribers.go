@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 
 	"github.com/google/uuid"
 
@@ -37,12 +37,14 @@ import (
 )
 
 type Handler struct {
-	dog                        watchdog.Iface
-	configManager              config.ConfigManager
-	subscriberRegistry         *subscribers.Registry
-	fsmOutboundChannel         chan<- *types.UMHMessage        // FSMv2 without gatekeeper (nil when gatekeeper enabled)
-	gatekeeperOutboundChannel  chan<- *types.MessageWithSender // FSMv2 with gatekeeper (nil when gatekeeper disabled)
-	fsmLogger                  deps.FSMLogger                  // Sentry-routed logger for the FSMv2 drop site
+	dog                watchdog.Iface
+	configManager      config.ConfigManager
+	subscriberRegistry *subscribers.Registry
+	// outbound carries status messages for the transport. Both FSMv2 modes
+	// write the same envelope: the encoded status bytes and the subscriber.
+	outbound chan<- handoff.Message
+	// fsmLogger routes the drop warning to Sentry.
+	fsmLogger                  deps.FSMLogger
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
@@ -65,20 +67,18 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 without gatekeeper (nil when gatekeeper enabled)
-	gatekeeperOutboundChannel chan<- *types.MessageWithSender, // FSMv2 with gatekeeper (nil when gatekeeper disabled)
+	outbound chan<- handoff.Message, // status messages for the transport
 	featureUsage *models.FeatureUsage,
 	fsmLogger deps.FSMLogger, // Sentry-routed logger for the FSMv2 drop warning
 ) *Handler {
-	if fsmOutboundChannel == nil && gatekeeperOutboundChannel == nil {
-		panic("subscriber.NewHandler: fsmOutboundChannel or gatekeeperOutboundChannel must be non-nil (FSMv2 is the only status delivery path)")
+	if outbound == nil {
+		panic("subscriber.NewHandler: outbound must be non-nil (FSMv2 is the only status delivery path)")
 	}
 
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
-	s.fsmOutboundChannel = fsmOutboundChannel
-	s.gatekeeperOutboundChannel = gatekeeperOutboundChannel
+	s.outbound = outbound
 	s.fsmLogger = fsmLogger
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
@@ -196,63 +196,35 @@ func (s *Handler) notify() {
 			return
 		}
 
-		// Gatekeeper mode: write raw MessageWithSender
-		if s.gatekeeperOutboundChannel != nil {
-			msg := &types.MessageWithSender{
-				Content: models.UMHMessageContent{
-					MessageType: models.Status,
-					Payload:     statusMessage,
-				},
-				SenderEmail: email,
-			}
-			// A full outbound channel drops this status message. The
-			// Management Console then shows stale status while data keeps
-			// flowing. The same holds for the FSMv2 channel below.
-			select {
-			case s.gatekeeperOutboundChannel <- msg:
-				// Successfully sent to gatekeeper
-			default:
-				s.fsmLogger.SentryWarn(
-					deps.FeatureFSMv1Communicator,
-					"fsmv1.Communicator",
-					"gatekeeper_outbound_channel_full",
-					deps.Int("channel_len", len(s.gatekeeperOutboundChannel)),
-					deps.Int("channel_cap", cap(s.gatekeeperOutboundChannel)),
-				)
+		message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
+			MessageType: models.Status,
+			Payload:     statusMessage,
+		})
+		if err != nil {
+			s.logger.Warnf("Failed to encode status message for subscriber %s", email)
 
-				return
-			}
-		} else {
-			message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
-				MessageType: models.Status,
-				Payload:     statusMessage,
-			})
-			if err != nil {
-				s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
+			return
+		}
 
-				return
-			}
+		// A full outbound channel drops this status message. The
+		// Management Console then shows stale status while data keeps
+		// flowing.
+		select {
+		case s.outbound <- handoff.Message{
+			Content:     []byte(message),
+			SenderEmail: email,
+		}:
+			// Successfully sent to the transport
+		default:
+			s.fsmLogger.SentryWarn(
+				deps.FeatureFSMv1Communicator,
+				"fsmv1.Communicator",
+				"fsmv2_outbound_channel_full",
+				deps.Int("channel_len", len(s.outbound)),
+				deps.Int("channel_cap", cap(s.outbound)),
+			)
 
-			// FSMv2 mode without gatekeeper: write encoded types.UMHMessage
-			msg := &types.UMHMessage{
-				InstanceUUID: s.GetInstanceUUID().String(),
-				Content:      message,
-				Email:        email,
-			}
-			select {
-			case s.fsmOutboundChannel <- msg:
-				// Successfully sent to FSMv2 transport
-			default:
-				s.fsmLogger.SentryWarn(
-					deps.FeatureFSMv1Communicator,
-					"fsmv1.Communicator",
-					"fsmv2_outbound_channel_full",
-					deps.Int("channel_len", len(s.fsmOutboundChannel)),
-					deps.Int("channel_cap", cap(s.fsmOutboundChannel)),
-				)
-
-				return
-			}
+			return
 		}
 
 		// Mark subscriber as bootstrapped after first message

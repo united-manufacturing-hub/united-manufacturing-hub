@@ -49,6 +49,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 				legacyOutbound,
 				logger,
 				0, // Use default buffer size
+				nil,
 			)
 
 			Expect(bridge).NotTo(BeNil())
@@ -60,6 +61,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 				legacyOutbound,
 				logger,
 				50, // Custom buffer size
+				nil,
 			)
 
 			Expect(bridge).NotTo(BeNil())
@@ -71,6 +73,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 				legacyOutbound,
 				logger,
 				0, // Should use DefaultBufferSize
+				nil,
 			)
 
 			Expect(bridge).NotTo(BeNil())
@@ -82,6 +85,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 				legacyOutbound,
 				logger,
 				-5, // Negative should use DefaultBufferSize
+				nil,
 			)
 
 			Expect(bridge).NotTo(BeNil())
@@ -95,6 +99,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 				legacyOutbound,
 				logger,
 				0,
+				nil,
 			)
 
 			inbound, outbound := bridge.GetChannels("test-worker")
@@ -111,6 +116,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 				legacyOutbound,
 				logger,
 				0,
+				nil,
 			)
 
 			// Verify interface compliance via type assertion
@@ -136,7 +142,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 		It("should convert transport.UMHMessage to models.UMHMessage on inbound", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
 			legacyOut := make(chan *models.UMHMessage, 10)
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			fsmIn, _ := bridge.GetChannels("test")
@@ -157,7 +163,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 		It("should convert models.UMHMessage to transport.UMHMessage on outbound", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
 			legacyOut := make(chan *models.UMHMessage, 10)
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			_, fsmOut := bridge.GetChannels("test")
@@ -178,7 +184,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 		It("should handle context cancellation gracefully", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
 			legacyOut := make(chan *models.UMHMessage, 10)
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			cancel() // Cancel context
@@ -194,7 +200,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			fsmIn, _ := bridge.GetChannels("test")
@@ -221,7 +227,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			_, fsmOut := bridge.GetChannels("test")
@@ -248,7 +254,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			fsmIn, _ := bridge.GetChannels("test")
@@ -268,7 +274,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			fsmIn, _ := bridge.GetChannels("test")
@@ -298,7 +304,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			_, fsmOut := bridge.GetChannels("test")
@@ -327,7 +333,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			_, fsmOut := bridge.GetChannels("test")
@@ -353,7 +359,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			fsmIn, _ := bridge.GetChannels("test")
@@ -380,7 +386,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
+			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0, nil)
 			bridge.Start(ctx)
 
 			fsmIn, _ := bridge.GetChannels("test")

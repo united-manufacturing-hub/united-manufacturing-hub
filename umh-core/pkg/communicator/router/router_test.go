@@ -33,7 +33,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -68,7 +67,7 @@ func encodeInbound(messageType models.MessageType, payload any, sender, traceID 
 // package's own tests do. The handler pushes status on its own outbound
 // channel, of the type the subscriber package sends; action replies take
 // the router's outbound channel instead, so the specs read that one.
-func newTestHandler(fsmOutboundChannel chan *types.UMHMessage) *subscriber.Handler {
+func newTestHandler(outbound chan handoff.Message) *subscriber.Handler {
 	return subscriber.NewHandler(
 		&mockWatchdog{},
 		uuid.New(),
@@ -80,8 +79,7 @@ func newTestHandler(fsmOutboundChannel chan *types.UMHMessage) *subscriber.Handl
 		nil, // configManager
 		zap.NewNop().Sugar(),
 		nil, // topicBrowserCommunicator
-		fsmOutboundChannel,
-		nil,                    // gatekeeperOutboundChannel
+		outbound,
 		nil,                    // featureUsage
 		deps.NewNopFSMLogger(), // fsmLogger
 	)
@@ -91,7 +89,7 @@ var _ = Describe("Router", func() {
 	var (
 		inbound       chan handoff.Message
 		outbound      chan *models.UMHMessage
-		handlerPushes chan *types.UMHMessage
+		handlerPushes chan handoff.Message
 		handler       *subscriber.Handler
 		r             *router.Router
 		observed      *observer.ObservedLogs
@@ -114,7 +112,7 @@ var _ = Describe("Router", func() {
 	BeforeEach(func() {
 		inbound = make(chan handoff.Message, 10)
 		outbound = make(chan *models.UMHMessage, 100)
-		handlerPushes = make(chan *types.UMHMessage, 100)
+		handlerPushes = make(chan handoff.Message, 100)
 		handler = newTestHandler(handlerPushes)
 	})
 
