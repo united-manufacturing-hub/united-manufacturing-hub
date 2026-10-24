@@ -242,7 +242,7 @@ UNIT_TEST_PKGS_PARALLEL := ./pkg/fsmv2/scenarios/...
 # All unit-test packages except the parallel ones (evaluated on first use)
 UNIT_TEST_PKGS_SERIAL = $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/scenarios' | tr '\n' ' ')
 # The fsmv2 module (./fsmv2) is its own Go module, so umh-core's ./... does not
-# reach it. vet, lint, nilaway and unit-test also run there.
+# reach it. vet, lint, nilaway, test, unit-test and benchmark also run there.
 FSMV2_DIR := fsmv2
 
 build:
@@ -363,6 +363,7 @@ vet-nilaway-lint: vet nilaway lint
 
 test: vet-nilaway-lint
 	go test -race -v -tags=test ./...
+	cd $(FSMV2_DIR) && go test -race -v -tags=test ./...
 
 unit-test:
 ifeq ($(CI), true)
@@ -396,6 +397,7 @@ unit-test-fail-slow: vet-nilaway-lint
 benchmark:
 	@echo "Running benchmarks..."
 	go test -race -bench=. -benchmem ./...
+	cd $(FSMV2_DIR) && go test -race -bench=. -benchmem ./...
 
 benchmark-config:
 	@echo "Running config package benchmarks..."

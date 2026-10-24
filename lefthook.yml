@@ -35,6 +35,7 @@ pre-push:
       root: "umh-core"
       run: |
         golangci-lint run ./...
+        cd fsmv2 && golangci-lint run ./...
 
     - name: protobuf-check
       glob: "**/*.{proto,pb.go}"
