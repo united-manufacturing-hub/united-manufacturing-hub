@@ -461,6 +461,7 @@ const appPackagePrefix = "github.com/united-manufacturing-hub/united-manufacturi
 func isAppFrame(module, absPath string) bool {
 	return strings.HasPrefix(module, appPackagePrefix) ||
 		strings.Contains(absPath, "umh-core/pkg") ||
+		strings.Contains(absPath, "umh-core/fsmv2") ||
 		strings.Contains(absPath, "umh-core/cmd")
 }
 

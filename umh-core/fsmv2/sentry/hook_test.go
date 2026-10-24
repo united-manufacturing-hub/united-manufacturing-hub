@@ -183,6 +183,17 @@ main.second()
 		})
 	})
 
+	Describe("isAppFrame", func() {
+		It("should mark a frame under umh-core/fsmv2 as an app frame when the module is empty", func() {
+			absPath := "/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/supervisor.go"
+			Expect(sentry.IsAppFrame("", absPath)).To(BeTrue())
+		})
+
+		It("should not mark a Go runtime frame as an app frame", func() {
+			Expect(sentry.IsAppFrame("", "/usr/local/go/src/runtime/proc.go")).To(BeFalse())
+		})
+	})
+
 	Describe("extractErrorTypes", func() {
 		It("should return type chain for wrapped errors", func() {
 			// Create a wrapped error chain
