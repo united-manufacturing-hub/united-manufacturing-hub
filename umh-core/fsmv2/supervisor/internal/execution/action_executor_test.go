@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -574,28 +575,45 @@ var _ = Describe("ActionExecutor", func() {
 
 		Context("HasActionInProgress non-blocking behavior", func() {
 			It("should never block when checking action status", func() {
-				executor := execution.NewActionExecutor(10, "test-supervisor", testIdentity, deps.NewNopFSMLogger())
-				executor.Start(ctx)
-				defer executor.Shutdown()
+				enteredExecute := make(chan struct{})
+				releaseBlocked := make(chan struct{})
+				completed := make(chan struct{})
+				release := sync.OnceFunc(func() { close(releaseBlocked) })
+				// Also releases on a failed Expect, so AfterEach's Shutdown
+				// finds no worker parked on the channel.
+				defer release()
 
-				for i := range 100 {
-					_ = executor.EnqueueAction(fmt.Sprintf("action-%d", i), &testAction{
-						execute: func(ctx context.Context) error {
-							time.Sleep(100 * time.Millisecond)
+				Expect(executor.EnqueueAction("blocked-action", &testAction{
+					execute: func(ctx context.Context) error {
+						close(enteredExecute)
+						<-releaseBlocked
+						close(completed)
 
-							return nil
-						},
-					}, nil)
-				}
+						return nil
+					},
+				}, nil)).To(Succeed(),
+					"the blocked action must enqueue into the idle executor")
 
-				for range 1000 {
-					start := time.Now()
-					_ = executor.HasActionInProgress("action-0")
-					duration := time.Since(start)
+				Eventually(enteredExecute, 5*time.Second, 10*time.Millisecond).Should(BeClosed(),
+					"the blocked action must reach Execute before the read is probed")
 
-					Expect(duration).To(BeNumerically("<", 1*time.Millisecond),
-						fmt.Sprintf("HasActionInProgress took %v, expected <1ms (non-blocking read)", duration))
-				}
+				// A read that waited on the executor's lock, which the running
+				// action holds, could not return before releaseBlocked closes.
+				readReturned := make(chan struct{})
+				go func() {
+					defer close(readReturned)
+					_ = executor.HasActionInProgress("blocked-action")
+				}()
+
+				Eventually(readReturned, 5*time.Second, 10*time.Millisecond).Should(BeClosed(),
+					"HasActionInProgress must return while the action is still blocked in Execute")
+
+				Expect(executor.HasActionInProgress("blocked-action")).To(BeTrue(),
+					"the read must still report the action in progress after returning unblocked")
+
+				release()
+				Eventually(completed, 5*time.Second, 10*time.Millisecond).Should(BeClosed(),
+					"the released action must complete so Shutdown reaps no stuck worker")
 			})
 		})
 	})

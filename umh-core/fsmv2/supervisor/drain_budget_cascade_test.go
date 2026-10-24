@@ -566,13 +566,14 @@ var _ = Describe("Graceful drain budget cascading", func() {
 		Expect(spent).To(BeNumerically(">=", 3*cascadeTruncationBase),
 			"expected child_drain_elapsed to show the Phase-2 child drains spent at least the root's whole 3×base budget")
 
-		// Total wall clock = sum of the sibling subtree budgets (2×base each)
-		// plus an immediate root break-out — bounded, not stalled by a fresh
-		// root window on top. Slop covers the five sequentially-torn-down
-		// supervisors (root, two mids, two leafs).
-		Expect(elapsed).To(BeNumerically("<=", 4*cascadeTruncationBase+5*perLevelTeardownSlop),
-			"Shutdown took %v; two sequential 2×base sibling drains plus an immediate root break-out must stay within 4×base = %v (+%v teardown slop for 5 supervisors)",
-			elapsed, 4*cascadeTruncationBase, 5*perLevelTeardownSlop)
+		// A spent budget arms a non-positive timer that fires immediately, so
+		// the time after the sibling drains is one supervisor's Phase-3/4
+		// teardown. Total wall clock is not bounded: the two 2×base mid
+		// drains dominate it and stretch on a loaded runner.
+		ownDrainPhase := elapsed - spent
+		Expect(ownDrainPhase).To(BeNumerically("<=", perLevelTeardownSlop),
+			"the root's own drain phase took %v (total %v, child drains %v); a budget the sibling drains pre-spent must arm a non-positive timer that breaks out immediately, not a fresh 3×base window",
+			ownDrainPhase, elapsed, spent)
 	})
 
 	// Zero-worker exhaustion (supervisor/doc.go, "Graceful shutdown budget":

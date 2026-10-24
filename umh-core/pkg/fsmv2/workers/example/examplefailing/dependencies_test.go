@@ -84,7 +84,9 @@ var _ = Describe("FailingDependencies Observation-Based Recovery", func() {
 
 	Describe("ShouldDelayRecovery (time-based)", func() {
 		It("should delay while the configured milliseconds since the failure have not passed", func() {
-			failDeps.SetRecoveryDelayMs(50)
+			// Far longer than this spec takes on a loaded runner. The next
+			// spec covers a delay that expires.
+			failDeps.SetRecoveryDelayMs(10000)
 			failDeps.SetLastFailureTime(time.Now())
 
 			Expect(failDeps.ShouldDelayRecovery()).To(BeTrue(),

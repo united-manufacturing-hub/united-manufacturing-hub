@@ -407,12 +407,12 @@ func (i *Instance) safeBenthosMetrics() (input, output struct{ ConnectionUp, Con
 	metrics := i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	return struct{ ConnectionUp, ConnectionLost int64 }{
-			ConnectionUp:   metrics.InputConnectionUpTotal(),
-			ConnectionLost: metrics.InputConnectionLostTotal(),
-		}, struct{ ConnectionUp, ConnectionLost int64 }{
-			ConnectionUp:   metrics.OutputConnectionUpTotal(),
-			ConnectionLost: metrics.OutputConnectionLostTotal(),
-		}
+		ConnectionUp:   metrics.InputConnectionUpTotal(),
+		ConnectionLost: metrics.InputConnectionLostTotal(),
+	}, struct{ ConnectionUp, ConnectionLost int64 }{
+		ConnectionUp:   metrics.OutputConnectionUpTotal(),
+		ConnectionLost: metrics.OutputConnectionLostTotal(),
+	}
 }
 
 // IsOtherDegraded checks for certain states that should never happen

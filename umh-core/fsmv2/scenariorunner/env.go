@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
@@ -48,9 +49,9 @@ type Env struct {
 }
 
 // runRecorder is the per-run state that Step and WaitFor share across copies
-// of Env. The fields above mu are set before the supervisor starts and never
-// change. The matched maps exist so postRunFailure can name every expected
-// entry the run never logged.
+// of Env. The scenario and expected fields are set before the supervisor
+// starts and never change. The matched maps exist so postRunFailure can name
+// every expected entry the run never logged.
 type runRecorder struct {
 	// scenario is the name of the run's scenario, so a step line can be
 	// attributed when several scenarios run in one process.
@@ -59,6 +60,10 @@ type runRecorder struct {
 	expectedErrors      []string
 	expectedErrorCauses []error
 	expectedWarnings    []string
+
+	// teardownStarted is set before the runner shuts the supervisor down. It
+	// is atomic because recordLoggedError reads it before taking mu.
+	teardownStarted atomic.Bool
 
 	// mu guards the fields below. Step may run on a goroutine the scenario
 	// starts, and any goroutine that logs writes the first unexpected values.
@@ -91,11 +96,15 @@ var alwaysAllowedMessages = []string{
 
 // recordLoggedError keeps the first error the scenario does not expect. The
 // matchers run before the lock, because errors.Is calls user code that may
-// log again.
+// log again. The teardown flag is read first, so an error logged before
+// teardown stays unexpected even if teardown starts during the matching.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
+	tearingDown := r.teardownStarted.Load()
 	matched := matchedEntries(r.expectedErrors, msg)
 	caused := matchedCauseIndices(err, r.expectedErrorCauses)
-	unexpected := !r.messageAllowed(msg, r.expectedErrors) && !r.errorCauseAllowed(err)
+	unexpected := !r.messageAllowed(msg, r.expectedErrors) &&
+		!r.errorCauseAllowed(err) &&
+		!isTeardownCancellation(err, tearingDown)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -296,6 +305,17 @@ func (r *runRecorder) loggedError() error {
 	defer r.mu.Unlock()
 
 	return r.firstUnexpectedErr
+}
+
+// isTeardownCancellation reports whether err is an in-flight action failing
+// because teardown cancelled the supervisor. Before teardown, the same
+// context.Canceled is a scenario defect.
+func isTeardownCancellation(err error, tearingDown bool) bool {
+	if !tearingDown {
+		return false
+	}
+
+	return errors.Is(err, context.Canceled)
 }
 
 func (r *runRecorder) setLastStep(description string) {

@@ -554,12 +554,12 @@ func safeBenthosMetricsFrom(obs dataflowfsm.DataflowComponentObservedState) (inp
 	metrics := obs.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	return connectionMetrics{
-			ConnectionUp:   metrics.InputConnectionUpTotal(),
-			ConnectionLost: metrics.InputConnectionLostTotal(),
-		}, connectionMetrics{
-			ConnectionUp:   metrics.OutputConnectionUpTotal(),
-			ConnectionLost: metrics.OutputConnectionLostTotal(),
-		}
+		ConnectionUp:   metrics.InputConnectionUpTotal(),
+		ConnectionLost: metrics.InputConnectionLostTotal(),
+	}, connectionMetrics{
+		ConnectionUp:   metrics.OutputConnectionUpTotal(),
+		ConnectionLost: metrics.OutputConnectionLostTotal(),
+	}
 }
 
 // IsOtherDegraded checks for certain states that should never happen
