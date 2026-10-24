@@ -20,24 +20,25 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/managementconsole"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/hook"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -52,49 +53,40 @@ func (s *stubSupervisor) Run(ctx context.Context) error {
 	return nil
 }
 
-// localHook builds a spec-local registration run with the same semantics as
-// hook.Run: it calls each f in order with the same Deps, and returns the
-// first non-nil error without calling the rest. The cmd specs never touch
-// hook's package-global registry, so no spec's functions can leak into
-// another's run.
-func localHook(fs ...func(hook.Deps) (hook.Result, error)) func(hook.Deps) (hook.Result, error) {
-	return func(d hook.Deps) (hook.Result, error) {
-		var result hook.Result
-		for _, f := range fs {
-			r, err := f(d)
-			if err != nil {
-				return hook.Result{}, err
-			}
-			result.Children = append(result.Children, r.Children...)
-			if r.Status != nil {
-				result.Status = r.Status
-			}
-		}
-		return result, nil
-	}
+// nothingRegistered stands in for the open-source build, where no Management
+// Console module is registered.
+func nothingRegistered(managementconsole.Deps) (managementconsole.Result, error) {
+	return managementconsole.Result{}, nil
 }
 
 // restoreStartupSeams puts every startup seam back to its production
 // implementation, so one spec's probes cannot leak into the next.
 func restoreStartupSeams() {
-	runHook = hook.Run
+	runHook = managementconsole.Run
 	newFSMv2Store = scenariorunner.SetupStore
 	buildFSMv2SupervisorFn = buildFSMv2Supervisor
 	startFSMv2SupervisorFn = defaultStartFSMv2Supervisor
 	wireFSMv2CommunicatorFn = wireFSMv2Communicator
 }
 
-// installStubBuild makes the build seam return a stub supervisor and a real
-// store built through the store seam, so a spec can drive the real startup
-// path without the real supervisor tree.
-func installStubBuild() {
+// installStubBuild makes the build seam return a stub supervisor, after
+// building a real store through the store seam, so a spec can drive the real
+// startup path without the real supervisor tree. It returns where the build
+// records the children it was given.
+func installStubBuild() *[]fsmv2config.ChildSpec {
+	var got []fsmv2config.ChildSpec
+
 	newFSMv2Store = func(l deps.FSMLogger) storage.TriangularStoreInterface {
 		return scenariorunner.SetupStore(l)
 	}
-	buildFSMv2SupervisorFn = func(ctx context.Context, configData *config.FullConfig, communicationState *communication_state.CommunicationState, logger *zap.SugaredLogger, forceExit <-chan struct{}) (fsmv2Supervisor, *fsmv2_adapter.LegacyChannelBridge, storage.TriangularStoreInterface, string, func(), error) {
-		store := newFSMv2Store(deps.NewFSMLogger(logger))
-		return &stubSupervisor{}, nil, store, "placeholder-uuid", func() {}, nil
+	buildFSMv2SupervisorFn = func(ctx context.Context, configData *config.FullConfig, communicationState *communication_state.CommunicationState, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
+		_ = newFSMv2Store(deps.NewFSMLogger(logger))
+		got = registered
+
+		return &stubSupervisor{}, func() {}, nil
 	}
+
+	return &got
 }
 
 // installStartProbe makes the start seam record that the supervisor started
@@ -108,31 +100,14 @@ func installStartProbe(supStarted chan struct{}) {
 
 // noopWire replaces the communicator wiring with a no-op.
 func noopWire() {
-	wireFSMv2CommunicatorFn = func(context.Context, fsmv2Supervisor, *fsmv2_adapter.LegacyChannelBridge, storage.TriangularStoreInterface, string, *config.FullConfig, *communication_state.CommunicationState, *zap.SugaredLogger, hook.StatusFunc) {
+	wireFSMv2CommunicatorFn = func(context.Context, <-chan handoff.Message, chan<- handoff.Message, *config.FullConfig, *communication_state.CommunicationState, *zap.SugaredLogger, managementconsole.StatusFunc) {
 	}
 }
 
-// installStubBuildWithBridge makes the build seam return a stub supervisor
-// and a real, started channel bridge, so the real communicator wiring can
-// deliver status messages the spec can read.
-func installStubBuildWithBridge(ctx context.Context) *fsmv2_adapter.LegacyChannelBridge {
-	newFSMv2Store = func(l deps.FSMLogger) storage.TriangularStoreInterface {
-		return scenariorunner.SetupStore(l)
-	}
-	bridge := fsmv2_adapter.NewLegacyChannelBridge(
-		make(chan *models.UMHMessage, 100),
-		make(chan *models.UMHMessage, 100),
-		zap.NewNop().Sugar(),
-		0,
-		nil,
-	)
-	bridge.Start(ctx)
-	buildFSMv2SupervisorFn = func(ctx context.Context, configData *config.FullConfig, communicationState *communication_state.CommunicationState, logger *zap.SugaredLogger, forceExit <-chan struct{}) (fsmv2Supervisor, *fsmv2_adapter.LegacyChannelBridge, storage.TriangularStoreInterface, string, func(), error) {
-		store := newFSMv2Store(deps.NewFSMLogger(logger))
-		return &stubSupervisor{}, bridge, store, "placeholder-uuid", func() {}, nil
-	}
-
-	return bridge
+// newBareCommunicationState is the smallest communication state startup
+// accepts: it records the login response and nothing else.
+func newBareCommunicationState() *communication_state.CommunicationState {
+	return communication_state.NewCommunicationState(nil, nil, nil, config.ReleaseChannelStable, nil, nil, zap.NewNop().Sugar(), nil, nil)
 }
 
 // runStartup drives the real startup function with the standard stubs and
@@ -141,13 +116,7 @@ func runStartup(cfg *config.FullConfig) (fsmv2StartupResult, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	return startFSMv2Transport(ctx, cfg, nil, zap.NewNop().Sugar(), nil)
-}
-
-// runStartupWithState drives the real startup function with the standard
-// stubs and a real communication state, so the real communicator wiring runs.
-func runStartupWithState(ctx context.Context, cfg *config.FullConfig, commState *communication_state.CommunicationState) (fsmv2StartupResult, error) {
-	return startFSMv2Transport(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
+	return startFSMv2Transport(ctx, cfg, newBareCommunicationState(), zap.NewNop().Sugar(), nil)
 }
 
 var _ = Describe("Startup seams", func() {
@@ -177,7 +146,7 @@ var _ = Describe("Startup seams", func() {
 		installStartProbe(supStarted)
 
 		record := make(chan string, 1)
-		runHook = localHook(func(hook.Deps) (hook.Result, error) {
+		runHook = func(managementconsole.Deps) (managementconsole.Result, error) {
 			msg := "not started"
 			select {
 			case <-supStarted:
@@ -189,8 +158,9 @@ var _ = Describe("Startup seams", func() {
 			case record <- msg:
 			default:
 			}
-			return hook.Result{}, nil
-		})
+
+			return managementconsole.Result{}, nil
+		}
 
 		transport, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
@@ -207,9 +177,9 @@ var _ = Describe("Startup seams", func() {
 		noopWire()
 		installStartProbe(supStarted)
 
-		runHook = localHook(func(hook.Deps) (hook.Result, error) {
-			return hook.Result{}, errHook
-		})
+		runHook = func(managementconsole.Deps) (managementconsole.Result, error) {
+			return managementconsole.Result{}, errHook
+		}
 
 		_, err := runStartup(cfg)
 		Expect(err).To(HaveOccurred())
@@ -223,7 +193,7 @@ var _ = Describe("Startup seams", func() {
 		noopWire()
 		installStartProbe(supStarted)
 
-		runHook = localHook(func(hook.Deps) (hook.Result, error) { return hook.Result{}, nil })
+		runHook = nothingRegistered
 
 		transport, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
@@ -231,12 +201,89 @@ var _ = Describe("Startup seams", func() {
 		Eventually(supStarted, time.Second).Should(Receive())
 	})
 
+	It("checks that startup hands the module's children to the supervisor build", func() {
+		got := installStubBuild()
+		noopWire()
+		installStartProbe(make(chan struct{}, 1))
+
+		child := fsmv2config.ChildSpec{Name: "x", WorkerType: "test-worker", Enabled: true}
+		runHook = func(managementconsole.Deps) (managementconsole.Result, error) {
+			return managementconsole.Result{Children: []fsmv2config.ChildSpec{child}}, nil
+		}
+
+		transport, err := runStartup(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		defer transport.cleanup()
+
+		Expect(*got).To(Equal([]fsmv2config.ChildSpec{child}))
+	})
+
+	It("checks that startup hands the module the relay settings", func() {
+		installStubBuild()
+		noopWire()
+		installStartProbe(make(chan struct{}, 1))
+
+		cfg.Agent.AllowInsecureTLS = true
+		cfg.Agent.Location = map[int]string{0: "enterprise"}
+
+		var got managementconsole.Config
+		runHook = func(d managementconsole.Deps) (managementconsole.Result, error) {
+			got = d.Config
+
+			return managementconsole.Result{}, nil
+		}
+
+		transport, err := runStartup(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		defer transport.cleanup()
+
+		_, err = uuid.Parse(got.InstanceUUID)
+		Expect(err).NotTo(HaveOccurred(), "the login UUID must be a UUID")
+
+		got.InstanceUUID = ""
+		Expect(got).To(Equal(managementconsole.Config{
+			RelayURL:         "https://example.invalid",
+			AuthToken:        "test-token",
+			AllowInsecureTLS: true,
+			Location:         map[int]string{0: "enterprise"},
+		}))
+	})
+
+	It("checks that the instance UUID the module reports becomes the login response's UUID", func() {
+		installStubBuild()
+		noopWire()
+		installStartProbe(make(chan struct{}, 1))
+
+		var report func(string)
+		runHook = func(d managementconsole.Deps) (managementconsole.Result, error) {
+			report = d.SetInstanceUUID
+
+			return managementconsole.Result{}, nil
+		}
+
+		commState := newBareCommunicationState()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		transport, err := startFSMv2Transport(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
+		Expect(err).NotTo(HaveOccurred())
+		defer transport.cleanup()
+
+		reported := uuid.New()
+		report(reported.String())
+
+		commState.LoginResponseMu.RLock()
+		got := commState.LoginResponse.UUID
+		commState.LoginResponseMu.RUnlock()
+		Expect(got).To(Equal(reported))
+	})
+
 	Context("when the FSMv2 build fails", func() {
 		buildErr := errors.New("planted build error")
 
 		BeforeEach(func() {
-			buildFSMv2SupervisorFn = func(ctx context.Context, configData *config.FullConfig, communicationState *communication_state.CommunicationState, logger *zap.SugaredLogger, forceExit <-chan struct{}) (fsmv2Supervisor, *fsmv2_adapter.LegacyChannelBridge, storage.TriangularStoreInterface, string, func(), error) {
-				return nil, nil, nil, "", func() {}, buildErr
+			buildFSMv2SupervisorFn = func(ctx context.Context, configData *config.FullConfig, communicationState *communication_state.CommunicationState, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
+				return nil, func() {}, buildErr
 			}
 			noopWire()
 		})
@@ -252,7 +299,7 @@ var _ = Describe("Startup seams", func() {
 		})
 
 		It("checks that startup returns the build error when one function is registered (the official image)", func() {
-			runHook = localHook(func(hook.Deps) (hook.Result, error) { return hook.Result{}, nil })
+			runHook = nothingRegistered
 			supStarted := make(chan struct{}, 1)
 			installStartProbe(supStarted)
 
@@ -278,7 +325,7 @@ var _ = Describe("Startup seams", func() {
 			installStubBuild()
 			installStartProbe(supStarted)
 
-			runHook = localHook(func(hook.Deps) (hook.Result, error) { return hook.Result{}, nil })
+			runHook = nothingRegistered
 
 			transport, err := runStartup(cfg)
 			Expect(err).NotTo(HaveOccurred())
@@ -315,15 +362,14 @@ var _ = Describe("Startup seams", func() {
 		)
 	}
 
-	// decodedConnectionPart reads the next status message off the bridge's
+	// decodedConnectionPart reads the next status message off the module's
 	// outbound channel and returns its connection part, nil when the message
 	// carries none.
-	decodedConnectionPart := func(bridge *fsmv2_adapter.LegacyChannelBridge) *models.Communicator {
-		_, outbound := bridge.GetChannels("")
-		var transportMsg *types.UMHMessage
-		Eventually(outbound, "10s", "100ms").Should(Receive(&transportMsg))
+	decodedConnectionPart := func(outbound <-chan handoff.Message) *models.Communicator {
+		var msg handoff.Message
+		Eventually(outbound, "10s", "100ms").Should(Receive(&msg))
 
-		content, err := encoding.DecodeMessageFromUMHInstanceToUser(transportMsg.Content)
+		content, err := encoding.DecodeMessageFromUMHInstanceToUser(string(msg.Content))
 		Expect(err).NotTo(HaveOccurred())
 
 		rawPayload, err := json.Marshal(content.Payload)
@@ -342,20 +388,23 @@ var _ = Describe("Startup seams", func() {
 		fsmv2client.SetClient(nil)
 		DeferCleanup(func() { fsmv2client.SetClient(previousClient) })
 
-		p := &models.Communicator{State: "Running", SubscriberCount: 5}
+		p := &managementconsole.Status{Health: managementconsole.Active, HealthMessage: "connected", State: "Running", SubscriberCount: 5}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		commState := newStartupCommunicationState(ctx)
-		bridge := installStubBuildWithBridge(ctx)
+		installStubBuild()
 		installStartProbe(make(chan struct{}, 1))
 
-		runHook = func(hook.Deps) (hook.Result, error) {
-			return hook.Result{Status: func(context.Context, int) *models.Communicator { return p }}, nil
+		var outbound <-chan handoff.Message
+		runHook = func(d managementconsole.Deps) (managementconsole.Result, error) {
+			outbound = d.Outbound
+
+			return managementconsole.Result{Status: func(context.Context, int) *managementconsole.Status { return p }}, nil
 		}
 
-		_, err := runStartupWithState(ctx, cfg, commState)
+		_, err := startFSMv2Transport(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		// The wire goroutine creates the handler after startup returns. Poll
@@ -364,15 +413,11 @@ var _ = Describe("Startup seams", func() {
 		Eventually(commState.GetSubscriberHandler, "10s", "10ms").ShouldNot(BeNil())
 		commState.GetSubscriberHandler().AddOrRefreshSubscriber("status@example.com", false)
 
-		// The provider's value survives the JSON round trip, so compare
-		// against the round-tripped form of p.
-		expected := &models.Communicator{}
-		raw, err := json.Marshal(p)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(json.Unmarshal(raw, expected)).To(Succeed())
-
-		Expect(decodedConnectionPart(bridge)).To(Equal(expected),
-			"the registered Status must reach the status message's connection part")
+		Expect(decodedConnectionPart(outbound)).To(Equal(&models.Communicator{
+			Health:          &models.Health{Category: models.Active, Message: "connected"},
+			State:           "Running",
+			SubscriberCount: 5,
+		}), "the registered Status must reach the status message's connection part")
 	})
 
 	It("checks that no registered Status leaves the status message's connection part empty", func() {
@@ -384,12 +429,17 @@ var _ = Describe("Startup seams", func() {
 		defer cancel()
 
 		commState := newStartupCommunicationState(ctx)
-		bridge := installStubBuildWithBridge(ctx)
+		installStubBuild()
 		installStartProbe(make(chan struct{}, 1))
 
-		runHook = localHook()
+		var outbound <-chan handoff.Message
+		runHook = func(d managementconsole.Deps) (managementconsole.Result, error) {
+			outbound = d.Outbound
 
-		_, err := runStartupWithState(ctx, cfg, commState)
+			return managementconsole.Result{}, nil
+		}
+
+		_, err := startFSMv2Transport(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Same readiness wait as the spec above: the wire goroutine creates
@@ -397,7 +447,40 @@ var _ = Describe("Startup seams", func() {
 		Eventually(commState.GetSubscriberHandler, "10s", "10ms").ShouldNot(BeNil())
 		commState.GetSubscriberHandler().AddOrRefreshSubscriber("empty@example.com", false)
 
-		Expect(decodedConnectionPart(bridge)).To(BeNil(),
+		Expect(decodedConnectionPart(outbound)).To(BeNil(),
 			"with no registered Status the connection part must stay empty")
+	})
+})
+
+var _ = Describe("forwardReplies", func() {
+	It("checks that an action reply reaches the module as its content, recipient and trace ID", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		replies := make(chan *models.UMHMessage, 1)
+		outbound := make(chan handoff.Message, 1)
+		go forwardReplies(ctx, replies, outbound)
+
+		trace := uuid.New()
+		replies <- &models.UMHMessage{Content: "encoded-reply", Email: "user@example.com", Metadata: &models.MessageMetadata{TraceID: trace}}
+
+		var got handoff.Message
+		Eventually(outbound, time.Second).Should(Receive(&got))
+		Expect(got).To(Equal(handoff.Message{Content: []byte("encoded-reply"), SenderEmail: "user@example.com", TraceID: trace.String()}))
+	})
+
+	It("checks that a reply without a trace ID reaches the module with an empty trace ID", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		replies := make(chan *models.UMHMessage, 1)
+		outbound := make(chan handoff.Message, 1)
+		go forwardReplies(ctx, replies, outbound)
+
+		replies <- &models.UMHMessage{Content: "encoded-reply", Email: "user@example.com"}
+
+		var got handoff.Message
+		Eventually(outbound, time.Second).Should(Receive(&got))
+		Expect(got.TraceID).To(BeEmpty())
 	})
 })

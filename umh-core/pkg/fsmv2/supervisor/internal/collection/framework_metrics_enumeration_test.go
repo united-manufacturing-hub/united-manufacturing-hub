@@ -20,8 +20,8 @@
 // struct{}-deps worker (nmap) carries them like any other.
 //
 // The registry is populated by package init(). A missing blank import leaves it
-// empty, so the HaveLen(16) floor below is what makes a forgotten import fail
-// loudly instead of passing trivially; a 17th registration also reddens it.
+// empty, so the HaveLen(12) floor below is what makes a forgotten import fail
+// loudly instead of passing trivially; a 13th registration also reddens it.
 
 package collection_test
 
@@ -55,28 +55,24 @@ import (
 	helloworld "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 
 	// Blank imports populate the factory registry via init(). If any of these is
-	// forgotten, ListRegisteredTypes() returns fewer types and the HaveLen(16)
+	// forgotten, ListRegisteredTypes() returns fewer types and the HaveLen(12)
 	// floor below fails loudly instead of letting the test pass trivially.
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 )
 
 // registeredFloor is the hard lower bound on the number of registered worker
 // types. factory.ListRegisteredTypes() is populated by package init(), so a
 // test that forgets a blank import returns zero types and passes trivially;
 // asserting an exact count catches both a missing import (returns 0) and a new
-// 17th registration (returns 17). Measured at this HEAD: exactly 16, and the
+// 13th registration (returns 13). Measured at this HEAD: exactly 12, and the
 // registered historian type is "historian-timescale", not "historian".
-const registeredFloor = 16
+const registeredFloor = 12
 
 // panicOnConstruction names the types that panic rather than error when
 // built via factory.NewWorkerByType in this isolated test process, because
@@ -87,11 +83,7 @@ const registeredFloor = 16
 // the recovered panic is asserted to match that reason, so a skip cannot hide a
 // constructor regression inside one of them.
 var panicOnConstruction = map[string]string{
-	"communicator": `no channel provider under "communicator.channel_provider"`,
-	"transport":    `no channel provider under "transport.channel_provider"`,
-	"persistence":  `no store under "persistence.store"`,
-	"pull":         "deps builder returned",
-	"push":         "deps builder returned",
+	"persistence": `no store under "persistence.store"`,
 }
 
 // targetWorkers are the three workers the design exists to fix: they are the
@@ -226,7 +218,7 @@ func probeFrameworkMetrics(workerType string, w fsmv2.Worker, sentinel int64) in
 }
 
 var _ = Describe("Framework metrics on every registered worker type", func() {
-	It("enumerates exactly the registered worker types (hard floor: catches a missing blank import or a 17th type)", func() {
+	It("enumerates exactly the registered worker types (hard floor: catches a missing blank import or a 13th type)", func() {
 		Expect(factory.ListRegisteredTypes()).To(HaveLen(registeredFloor))
 	})
 

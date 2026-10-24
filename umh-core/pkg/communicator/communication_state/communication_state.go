@@ -21,8 +21,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/managementconsole"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
@@ -31,16 +31,24 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/hook"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
+// LoginResponse holds the instance identity the router and the subscriber
+// handler put into the messages they send.
+type LoginResponse struct {
+	// UUID is the instance UUID the relay returned at login, or a placeholder
+	// until the first login.
+	UUID uuid.UUID
+	JWT  string
+	Name string
+}
+
 type CommunicationState struct {
 	ConfigManager         config.ConfigManager
-	LoginResponse         *v2.LoginResponse
+	LoginResponse         *LoginResponse
 	LoginResponseMu       *sync.RWMutex
 	mu                    *sync.RWMutex
 	Watchdog              *watchdog.Watchdog
@@ -48,7 +56,6 @@ type CommunicationState struct {
 	SubscriberHandler     *subscriber.Handler
 	OutboundChannel       chan *models.UMHMessage
 	Router                *router.Router
-	Gatekeeper            *gatekeeper.Gatekeeper
 	SystemSnapshotManager *fsm.SnapshotManager
 	Logger                *zap.SugaredLogger
 	TopicBrowserCache     *topicbrowser.Cache
@@ -150,7 +157,7 @@ func (c *CommunicationState) UpdateTopicBrowserCache() error {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers.
-func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, outbound chan<- handoff.Message, status hook.StatusFunc) {
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, outbound chan<- handoff.Message, status managementconsole.StatusFunc) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -228,7 +235,7 @@ func (c *CommunicationState) SetLoginResponseForFSMv2(instanceUUID string) {
 		c.Logger.Warnw("Failed to parse instance UUID for FSMv2, using nil UUID", "error", err)
 	}
 
-	c.LoginResponse = &v2.LoginResponse{
+	c.LoginResponse = &LoginResponse{
 		UUID: parsedUUID,
 		JWT:  "", // Empty JWT - FSMv2 handles auth
 		Name: "FSMv2 Instance",
@@ -251,9 +258,10 @@ func (c *CommunicationState) SetLoginResponseForFSMv2(instanceUUID string) {
 	}
 }
 
-// InitializeRouterForFSMv2 initializes the Router for FSMv2 mode.
-// FSMv2 handles pulling via its own transport worker, so no Puller is required.
-func (c *CommunicationState) InitializeRouterForFSMv2() {
+// InitializeRouterForFSMv2 creates and starts the router. It reads the
+// messages users sent to this instance from inbound, and writes action replies
+// to OutboundChannel.
+func (c *CommunicationState) InitializeRouterForFSMv2(inbound <-chan handoff.Message) {
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start router for FSMv2")
 
@@ -262,12 +270,7 @@ func (c *CommunicationState) InitializeRouterForFSMv2() {
 
 	c.mu.Lock()
 	c.LoginResponseMu.RLock()
-	// Note: Puller is nil for FSMv2 mode - FSMv2 handles pulling via PullWorker
-	if c.Gatekeeper != nil {
-		c.Router = router.NewRouterForFSMv2(c.Watchdog, c.Gatekeeper.VerifiedInboundChan(), c.LoginResponse.UUID, c.Gatekeeper.LegacyOutboundChan(), c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
-	} else {
-		c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
-	}
+	c.Router = router.NewRouterForFSMv2(c.Watchdog, inbound, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
 	c.LoginResponseMu.RUnlock()
 	c.mu.Unlock()
 

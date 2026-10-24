@@ -114,8 +114,10 @@ type AgentConfig struct {
 	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"`
 	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`
 
-	UseGatekeeper bool `yaml:"useGatekeeper,omitempty"` // Enable gatekeeper middleware for message validation and encryption
-	UseFSMv2CPU   bool `yaml:"useFSMv2CPU,omitempty"`   // Enable the fsmv2 CPU monitor worker
+	// Deprecated: UseGatekeeper is ignored. It stays so that a config.yaml that
+	// still sets it parses, because the config parse rejects unknown keys.
+	UseGatekeeper bool `yaml:"useGatekeeper,omitempty"`
+	UseFSMv2CPU   bool `yaml:"useFSMv2CPU,omitempty"` // Enable the fsmv2 CPU monitor worker
 }
 
 type CommunicatorConfig struct {

@@ -16,41 +16,25 @@
 // Management Console.
 //
 // Actions travel from the Management Console to umh-core, and status travels
-// back. umh-core opens both connections itself: it polls GET /v2/instance/pull
-// for actions and sends status with POST /v2/instance/push. The pull response
-// and the push request each carry a JSON object whose UMHMessages field lists
-// types.UMHMessage values. The types are PullPayload and PushPayload in package
-// pkg/fsmv2/workers/transport/types.
+// back. The connection itself belongs to the Management Console module, which
+// the official image registers through package managementconsole. In the
+// open-source build no module is registered, and no message arrives.
 //
 // An action takes this path:
 //
-//  1. The FSMv2 transport pull worker (pkg/fsmv2/workers/transport/pull)
-//     fetches the messages.
-//  2. The message reaches the Router as a handoff.Message holding encoded
-//     bytes. The environment variable USE_GATEKEEPER, read once at startup in
-//     cmd/main.go, decides which component hands it over. It defaults to
-//     false.
-//     - USE_GATEKEEPER=false: fsmv2_adapter.LegacyChannelBridge converts each
-//     message into a models.UMHMessage. The Router built by NewRouter hands
-//     its content over as bytes.
-//     - USE_GATEKEEPER=true: package gatekeeper decrypts and decodes each
-//     message, re-encodes it and puts it on its verified inbound channel. For
-//     every message type except subscribe, it also checks the sender's
-//     permissions and drops the message if the check fails. The Router built
-//     by NewRouterForFSMv2 reads the result.
-//  3. The Router decodes the bytes and refuses a message that names no
-//     sender. Router.handleAction passes the action to
+//  1. The Management Console module receives the message, checks it, and
+//     hands it over as a handoff.Message holding the encoded bytes.
+//  2. The Router built by NewRouterForFSMv2 decodes the bytes and refuses a
+//     message that names no sender. Router.handleAction passes the action to
 //     actions.HandleActionMessage.
-//  4. Each action type has its own handler in pkg/communicator/actions. A
+//  3. Each action type has its own handler in pkg/communicator/actions. A
 //     handler that changes something writes config.yaml through the config
 //     manager. The Management Console never writes benthos config directly.
-//  5. The FSMs reconcile against the new config.yaml, render the benthos
+//  4. The FSMs reconcile against the new config.yaml, render the benthos
 //     config and start benthos-umh under S6.
 //
-// Status takes the reverse path. The subscriber package builds the status
-// message. With USE_GATEKEEPER=false the subscriber package encodes it, and
-// with USE_GATEKEEPER=true package gatekeeper encodes it. The FSMv2 transport
-// push worker (pkg/fsmv2/workers/transport/push) sends it.
+// Status takes the reverse path. The subscriber package builds and encodes the
+// status message, and the Management Console module sends it.
 package router
 
 import (

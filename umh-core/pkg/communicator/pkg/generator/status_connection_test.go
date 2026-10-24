@@ -22,13 +22,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/managementconsole"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/generator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/hook"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -37,7 +37,7 @@ import (
 // the generator tests use: one container manager, one agent manager, a mock
 // config manager, and a topic browser communicator. The fixed fields the
 // specs assert on are the ones the snapshot and the config feed.
-func newCollectorForConnection(status hook.StatusFunc) *generator.StatusCollectorType {
+func newCollectorForConnection(status managementconsole.StatusFunc) *generator.StatusCollectorType {
 	// Pin the client to nil for these specs, so the connection part comes
 	// only from the Status input, whatever an earlier spec published.
 	previous := fsmv2client.GetClient()
@@ -93,20 +93,21 @@ var _ = Describe("Status connection part", func() {
 	})
 
 	It("checks that the provider's part appears in the status message as given", func() {
-		part := &models.Communicator{
-			Health: &models.Health{
-				Message:       "planted connection part",
-				ObservedState: "Running",
-				DesiredState:  "Running",
-				Category:      models.Active,
-			},
-			State:                      "Running",
-			SubscriberCount:            3,
-			ConsecutiveErrors:          0,
-			OutboundChannelFillPercent: 12.5,
-			OutboundChannelPeakPercent: 40,
+		// Every field holds a distinct non-zero value, so a field the
+		// conversion drops or swaps makes the comparison fail.
+		part := &managementconsole.Status{
+			Health:              managementconsole.Degraded,
+			HealthMessage:       "planted connection part",
+			State:               "Degraded",
+			SubscriberCount:     3,
+			ConsecutiveErrors:   4,
+			LastErrorType:       "server_error",
+			OutboundFillPercent: 12.5,
+			OutboundPeakPercent: 40,
+			Push:                &managementconsole.ChannelStatus{State: "Running", LastErrorType: "push_error", Messages: 900, MessagesDropped: 7, PendingMessages: 2, ConsecutiveErrors: 1},
+			Pull:                &managementconsole.ChannelStatus{State: "Degraded", LastErrorType: "pull_error", Messages: 800, MessagesDropped: 6, PendingMessages: 5, ConsecutiveErrors: 8},
 		}
-		provider := func(ctx context.Context, subscriberCount int) *models.Communicator {
+		provider := func(ctx context.Context, subscriberCount int) *managementconsole.Status {
 			Expect(ctx).NotTo(BeNil())
 			Expect(subscriberCount).To(Equal(1))
 
@@ -118,7 +119,16 @@ var _ = Describe("Status connection part", func() {
 		status := collector.GenerateStatusMessage(context.Background(), true)
 		Expect(status).NotTo(BeNil())
 
-		Expect(status.Core.Communicator).To(Equal(part),
-			"the provider's part must appear in the status message as given")
+		Expect(status.Core.Communicator).To(Equal(&models.Communicator{
+			Health:                     &models.Health{Category: models.Degraded, Message: "planted connection part"},
+			State:                      "Degraded",
+			SubscriberCount:            3,
+			ConsecutiveErrors:          4,
+			LastErrorType:              "server_error",
+			OutboundChannelFillPercent: 12.5,
+			OutboundChannelPeakPercent: 40,
+			Push:                       &models.CommunicatorChannel{State: "Running", LastErrorType: "push_error", Messages: 900, MessagesDropped: 7, PendingMessages: 2, ConsecutiveErrors: 1},
+			Pull:                       &models.CommunicatorChannel{State: "Degraded", LastErrorType: "pull_error", Messages: 800, MessagesDropped: 6, PendingMessages: 5, ConsecutiveErrors: 8},
+		}), "the provider's part must appear in the status message as given")
 	})
 })

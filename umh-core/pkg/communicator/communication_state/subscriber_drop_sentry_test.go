@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
-	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -161,7 +160,7 @@ var _ = Describe("Subscriber drop reaches Sentry through the production wiring",
 			nil,
 			nil,
 		)
-		state.LoginResponse = &v2.LoginResponse{
+		state.LoginResponse = &communication_state.LoginResponse{
 			UUID: uuid.New(),
 			JWT:  "test-jwt",
 			Name: "subscriber-drop-sentry-test",

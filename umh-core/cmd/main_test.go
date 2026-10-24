@@ -191,7 +191,7 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 
-		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		appSup, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -232,7 +232,7 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 
-		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		appSup, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 		Expect(err).NotTo(HaveOccurred())
 

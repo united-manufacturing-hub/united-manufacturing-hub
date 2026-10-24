@@ -29,22 +29,20 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/secrets"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/managementconsole"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -61,20 +59,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
-	certfetcher "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
-	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
-	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/validator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/hook"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -183,9 +169,6 @@ func main() {
 		HistorianConfigured:           configData.Historian != nil,
 		HistorianBridgeCount:          countHistorianBridges(configData),
 	}
-
-	gatekeeperEnabled, _ := env.GetAsBool("USE_GATEKEEPER", false, false)
-	configData.Agent.UseGatekeeper = gatekeeperEnabled
 
 	// Ensure the S6 repository directory exists
 	// This is particularly important when using /tmp/umh-core/services (the default)
@@ -313,9 +296,13 @@ func main() {
 // the real startup path. Production keeps the real implementations assigned
 // here, and the variables are unexported.
 
-// runHook is the seam for the registration run: it calls every function the
-// release build registered, in order, before the supervisor starts.
-var runHook = hook.Run
+// runHook is the seam for starting the Management Console module, which the
+// official image registers. It runs before the supervisor starts.
+var runHook = managementconsole.Run
+
+// connectionBufferSize is the capacity of the inbound and outbound channels
+// between umh-core and the Management Console module.
+const connectionBufferSize = 100
 
 // newFSMv2Store is the seam for the store constructor. buildFSMv2Supervisor
 // creates its store by calling it, so a test's constructor can keep the
@@ -369,15 +356,40 @@ func startFSMv2Transport(
 ) (fsmv2StartupResult, error) {
 	done := make(chan struct{})
 
-	hookDeps := hook.Deps{Config: hook.Config{RelayURL: configData.Agent.APIURL, Location: configData.Agent.Location}, Logger: log}
-	hookResult, hookErr := runHook(hookDeps)
-	if hookErr != nil {
+	// The instance UUID is a placeholder until the Management Console module
+	// reports the one the relay returned at login.
+	placeholderUUID := uuid.New().String()
+	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
+
+	// inbound carries the messages users sent to this instance to the router.
+	// outbound carries status messages and action replies to the module.
+	inbound := make(chan handoff.Message, connectionBufferSize)
+	outbound := make(chan handoff.Message, connectionBufferSize)
+
+	mc, mcErr := runHook(managementconsole.Deps{
+		Inbound:  inbound,
+		Outbound: outbound,
+		SetInstanceUUID: func(id string) {
+			if isAuthenticatedUUID(id, placeholderUUID) {
+				applyAuthenticatedUUID(id, communicationState)
+			}
+		},
+		Config: managementconsole.Config{
+			RelayURL:         configData.Agent.APIURL,
+			AuthToken:        configData.Agent.AuthToken,
+			InstanceUUID:     placeholderUUID,
+			AllowInsecureTLS: configData.Agent.AllowInsecureTLS,
+			Location:         configData.Agent.Location,
+		},
+		Logger: deps.NewFSMLogger(log),
+	})
+	if mcErr != nil {
 		close(done)
 
-		return fsmv2StartupResult{done: done, cleanup: func() {}}, fmt.Errorf("failed to run the registered startup functions: %w", hookErr)
+		return fsmv2StartupResult{done: done, cleanup: func() {}}, fmt.Errorf("failed to start the Management Console module: %w", mcErr)
 	}
 
-	appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit)
+	appSup, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit, mc.Children)
 	if buildErr != nil {
 		close(done)
 
@@ -389,9 +401,9 @@ func startFSMv2Transport(
 	if communicatorEnabled(configData.Agent) {
 		log.Info("Starting FSMv2 communicator because backend credentials are present")
 		wire := wireFSMv2CommunicatorFn
-		status := hookResult.Status
+		status := mc.Status
 		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-			wire(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, configData, communicationState, log, status)
+			wire(ctx, inbound, outbound, configData, communicationState, log, status)
 		})
 	} else {
 		log.Info("No backend credentials configured; running FSMv2 runtime without communicator")
@@ -627,9 +639,10 @@ type fsmv2Supervisor interface {
 	Run(ctx context.Context) error
 }
 
-// buildFSMv2Supervisor constructs the ApplicationSupervisor and the channel
-// adapter used in FSMv2 transport mode.  It returns a cleanup function that
-// must be deferred by the caller to stop the SentryHook goroutine.
+// buildFSMv2Supervisor constructs the ApplicationSupervisor with the
+// persistence child and the children the Management Console module returned.
+// It returns a cleanup function that must be deferred by the caller to stop
+// the SentryHook goroutine.
 // The returned appSup has NOT been started yet; the caller is responsible for
 // calling appSup.Run(ctx). Run detaches the tick loop from ctx and treats
 // ctx cancellation (the first SIGTERM here) as the trigger for a graceful
@@ -641,81 +654,15 @@ func buildFSMv2Supervisor(
 	communicationState *communication_state.CommunicationState,
 	logger *zap.SugaredLogger,
 	forceExit <-chan struct{},
-) (appSup fsmv2Supervisor, channelAdapter *fsmv2_adapter.LegacyChannelBridge, store storage.TriangularStoreInterface, placeholderUUID string, cleanup func(), err error) {
+	registered []fsmv2config.ChildSpec,
+) (appSup fsmv2Supervisor, cleanup func(), err error) {
 	if configData == nil {
-		return nil, nil, nil, "", func() {}, errors.New("config is nil, cannot build FSMv2 supervisor")
+		return nil, func() {}, errors.New("config is nil, cannot build FSMv2 supervisor")
 	}
 
-	// Create channel adapter to bridge FSMv2 and legacy channels.
-	// Buffer size 0 uses the default (DefaultBufferSize). The bridge reads
-	// the instance UUID for status messages from the subscriber handler, the
-	// same source the handler itself used before it started writing
-	// envelopes without one.
-	channelAdapter = fsmv2_adapter.NewLegacyChannelBridge(
-		communicationState.InboundChannel,
-		communicationState.OutboundChannel,
-		logger,
-		0,
-		nil,
-	)
-
-	// Start conversion goroutines. These run on the caller's signal ctx, NOT
-	// the supervisor's detached context: the first SIGTERM kills both bridge
-	// goroutines (fsmInbound→Router and legacyOutbound→push) immediately, while
-	// the detached tick loop keeps ticking pull and push for the whole drain
-	// window (ENG-4971). With no drain gate on the workers, that window drops:
-	//   - any fsmInbound batch the pull worker delivers after the Router-side
-	//     goroutine has died (the long-poll runs on the detached ctx, so an
-	//     in-flight poll completes server-side and its already-dequeued batch
-	//     lands in a channel nobody reads — never redelivered);
-	//   - Router replies queued onto legacyOutbound after the push-side
-	//     goroutine has died;
-	//   - the pull and push in-memory pendingMessages retry buffers, which die
-	//     when each worker is reaped at the end of the drain.
-	// This loss is bounded by the per-level drain budget (base × subtree height)
-	// and accepted here: the process is terminating, so an action arriving after
-	// SIGTERM could not complete or have its reply delivered anyway.
-	//
-	// Bridge conversion goroutines only needed without gatekeeper.
-	if !configData.Agent.UseGatekeeper {
-		channelAdapter.Start(ctx)
-	}
-
-	var certHandler *certificatehandler.CertHandler
-
-	// Gatekeeper setup (behind feature flag)
-	if configData.Agent.UseGatekeeper {
-		logger.Info("Gatekeeper enabled (feature flag)")
-		inboundRaw, outboundRaw := channelAdapter.RawChannels()
-		certHandler = certificatehandler.NewHandler(
-			validator.NewValidator(logger),
-			"", // JWT set after auth via polling
-			configData.Agent.APIURL,
-			configData.Agent.AuthToken,
-			"", // instanceUUID set after auth via polling
-			configData.Agent.AllowInsecureTLS,
-			logger,
-		)
-		gk := gatekeeper.New(
-			inboundRaw,
-			outboundRaw,
-			certHandler,
-			validator.NewValidator(logger),
-			logger,
-			gatekeeper.WithLocation(configData.Agent.Location),
-		)
-		gk.Start(ctx)
-		communicationState.Gatekeeper = gk
-	}
-
-	// Build YAML config for FSMv2 ApplicationSupervisor.
-	// instanceUUID is a placeholder — the real UUID is returned by the backend
-	// and picked up by polling TransportWorker.ObservedState below (Bug #6 fix).
-	placeholderUUID = uuid.New().String()
-
-	yamlConfig, err := renderSupervisorChildrenYAML(configData.Agent, placeholderUUID)
+	yamlConfig, err := renderSupervisorChildrenYAML(registered)
 	if err != nil {
-		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to render FSMv2 supervisor children: %w", err)
+		return nil, func() {}, fmt.Errorf("failed to render FSMv2 supervisor children: %w", err)
 	}
 
 	// The historian monitor is a dynamic child, upserted and deleted at runtime
@@ -723,7 +670,7 @@ func buildFSMv2Supervisor(
 	// without restarting umh-core.
 
 	// Setup store (in-memory for now).
-	store = newFSMv2Store(deps.NewFSMLogger(logger))
+	store := newFSMv2Store(deps.NewFSMLogger(logger))
 
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering.
 	fsmv2Logger := logger.Named("fsmv2")
@@ -741,20 +688,9 @@ func buildFSMv2Supervisor(
 
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
+	// The supervisor merges this map into every child, so each dependency
+	// reaches its worker however deep it sits.
 	fsmv2Deps := map[string]any{}
-
-	// The supervisor merges this map into every child, so each provider reaches
-	// its worker however deep it sits.
-	fsmv2config.SetDependency(fsmv2Deps, communicator.ChannelProviderKey, communicator.ChannelProvider(channelAdapter))
-	fsmv2config.SetDependency(fsmv2Deps, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(channelAdapter))
-
-	// The certfetcher worker reads its cert handler from the same map. The
-	// handler is created only when gatekeeper is enabled, and
-	// renderSupervisorChildrenYAML adds the certfetcher child only then.
-	if configData.Agent.UseGatekeeper {
-		fsmv2config.SetDependency(fsmv2Deps, certfetcher.CertHandlerKey, communicationState.Gatekeeper.CertificateHandler())
-	}
-
 	fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
 
 	// One secrets store per process; see package secrets.
@@ -814,7 +750,7 @@ func buildFSMv2Supervisor(
 		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
 		fsmv2Hook.Stop()
 
-		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
+		return nil, func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
 	}
 
 	// Register supervisor for debug introspection (/debug/fsmv2 endpoint).
@@ -830,101 +766,35 @@ func buildFSMv2Supervisor(
 		fsmv2Hook.Stop()
 	}
 
-	return appSup, channelAdapter, store, placeholderUUID, cleanup, nil
+	return appSup, cleanup, nil
 }
 
-// wireFSMv2Communicator wires the legacy CommunicationState to the already-started
-// FSMv2 supervisor.  It sets up the subscriber handler and the FSMv2 router,
-// then polls the TransportWorker's ObservedState until the real authenticated
-// UUID is available.  This function blocks until ctx is cancelled.
+// wireFSMv2Communicator starts the subscriber handler and the router. The
+// router reads the messages users sent to this instance from inbound. Status
+// messages from the subscriber handler and the router's action replies go to
+// outbound, where the Management Console module reads them. This function
+// blocks until ctx is cancelled.
 func wireFSMv2Communicator(
 	ctx context.Context,
-	appSup fsmv2Supervisor,
-	channelAdapter *fsmv2_adapter.LegacyChannelBridge,
-	store storage.TriangularStoreInterface,
-	placeholderUUID string,
+	inbound <-chan handoff.Message,
+	outbound chan<- handoff.Message,
 	configData *config.FullConfig,
 	communicationState *communication_state.CommunicationState,
 	logger *zap.SugaredLogger,
-	status hook.StatusFunc,
+	status managementconsole.StatusFunc,
 ) {
-	_ = appSup // kept for future per-supervisor introspection
-
-	// Initialize Router for FSMv2 mode:
-	// 1. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
-	// 2. Initialize SubscriberHandler (generates status messages)
-	// 3. Start Router (processes inbound messages, generates status via Subscriber)
-	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
-	// Both FSMv2 modes deliver status the same way: the handler writes
-	// encoded bytes with the subscriber, and the transport picks them up
-	// from the same kind of channel, whether the gatekeeper sits in the
-	// path or the bridge converts for the push worker.
-	var subscriberOutbound chan<- handoff.Message
-	if configData.Agent.UseGatekeeper {
-		subscriberOutbound = communicationState.Gatekeeper.VerifiedOutboundChan()
-	} else {
-		subscriberOutbound = channelAdapter.GetStatusWriteChannel()
-	}
 	communicationState.InitialiseAndStartSubscriberHandler(
 		5*time.Minute, // TTL: time until subscriber considered dead
 		1*time.Minute, // Cull: cycle time to remove dead subscribers
 		configData,
 		communicationState.SystemSnapshotManager,
 		communicationState.ConfigManager,
-		subscriberOutbound,
+		outbound,
 		status,
 	)
-	if configData.Agent.UseGatekeeper {
-		communicationState.Gatekeeper.CertificateHandler().SetSubHandler(communicationState.SubscriberHandler)
-	} else {
-		// The bridge reads the instance UUID for each status message from
-		// the subscriber handler, the same value the handler itself used
-		// before it started writing envelopes without one.
-		handler := communicationState.SubscriberHandler
-		channelAdapter.SetInstanceUUIDSource(handler.GetInstanceUUID)
-	}
-	communicationState.InitializeRouterForFSMv2()
+	communicationState.InitializeRouterForFSMv2(inbound)
 
-	// Poll the TransportWorker's ObservedState for the authenticated UUID and JWT.
-	// TransportWorker handles authentication (ENG-4264) and exposes both via
-	// AuthSession. The transport child ID follows the supervisor naming
-	// convention: spec.Name + "-001" = "transport-001". When the gatekeeper is
-	// active, the UUID and JWT are forwarded to it here.
-	//
-	// This goroutine exits as soon as the context is cancelled; it does not
-	// block the caller.
-	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-
-		uuidSet := false
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				var observed fsmv2.Observation[transportSnapshot.TransportStatus]
-
-				err := store.LoadObservedTyped(ctx, "transport", "transport-001", &observed)
-				if err != nil {
-					continue
-				}
-
-				realUUID := observed.Status.AuthSession.InstanceUUID
-				if !uuidSet && isAuthenticatedUUID(realUUID, placeholderUUID) {
-					logger.Infow("Detected real UUID from TransportWorker ObservedState, updating LoginResponse",
-						"realUUID", realUUID,
-						"placeholderUUID", placeholderUUID)
-					applyAuthenticatedUUID(realUUID, communicationState)
-					uuidSet = true
-				}
-
-				if communicationState.Gatekeeper != nil && observed.Status.AuthSession.Token != "" {
-					communicationState.Gatekeeper.SetJWT(observed.Status.AuthSession.Token)
-				}
-			}
-		}
-	}()
+	go forwardReplies(ctx, communicationState.OutboundChannel, outbound)
 
 	logger.Info("FSMv2 communicator wired, waiting for context cancellation")
 
@@ -932,6 +802,43 @@ func wireFSMv2Communicator(
 	<-ctx.Done()
 
 	logger.Info("FSMv2 communicator context cancelled")
+}
+
+// forwardReplies moves the router's action replies from replies to outbound
+// until ctx is cancelled. A reply waits while outbound is full, because a
+// dropped reply leaves the user's action without an answer.
+func forwardReplies(ctx context.Context, replies <-chan *models.UMHMessage, outbound chan<- handoff.Message) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case reply, ok := <-replies:
+			if !ok {
+				return
+			}
+
+			if reply == nil {
+				continue
+			}
+
+			select {
+			case outbound <- replyMessage(reply):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+// replyMessage turns an action reply into the message the Management Console
+// module sends: the encoded content, the user it goes to, and the trace ID.
+func replyMessage(reply *models.UMHMessage) handoff.Message {
+	m := handoff.Message{Content: []byte(reply.Content), SenderEmail: reply.Email}
+	if reply.Metadata != nil && reply.Metadata.TraceID != uuid.Nil {
+		m.TraceID = reply.Metadata.TraceID.String()
+	}
+
+	return m
 }
 
 // isAuthenticatedUUID reports whether observed is the instance UUID returned by
@@ -944,8 +851,4 @@ func isAuthenticatedUUID(observed, placeholder string) bool {
 func applyAuthenticatedUUID(uuid string, cs *communication_state.CommunicationState) {
 	cs.SetLoginResponseForFSMv2(uuid)
 	sentry.SetInstanceUUID(uuid)
-
-	if cs.Gatekeeper != nil {
-		cs.Gatekeeper.SetInstanceUUID(uuid)
-	}
 }

@@ -18,13 +18,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/managementconsole"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/hook"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -41,7 +41,7 @@ type StatusCollectorType struct {
 	// status provides the connection part of each status message. It is nil
 	// in a build from this repository alone, and the connection part is
 	// empty then.
-	status hook.StatusFunc
+	status managementconsole.StatusFunc
 }
 
 // NewStatusCollector creates a status collector that generates periodic status payloads
@@ -54,7 +54,7 @@ func NewStatusCollector(
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 	featureUsage *models.FeatureUsage,
 	subscriberCount func() int,
-	status hook.StatusFunc,
+	status managementconsole.StatusFunc,
 ) *StatusCollectorType {
 	collector := &StatusCollectorType{
 		dog:                      dog,
@@ -260,7 +260,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	// registered the part is empty.
 	var communicatorData *models.Communicator
 	if s.status != nil {
-		communicatorData = s.status(ctx, s.subscriberCount())
+		communicatorData = communicatorFromStatus(s.status(ctx, s.subscriberCount()))
 	}
 
 	statusMessage := &models.StatusMessage{
