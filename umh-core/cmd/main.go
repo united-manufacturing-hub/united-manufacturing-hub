@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -26,22 +25,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/secrets"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/managementconsole"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
-	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
@@ -58,9 +45,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
-	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -259,18 +243,13 @@ func main() {
 		log.Info("GraphQL server disabled via configuration")
 	}
 
-	// fsmv2Done is closed when the FSMv2 supervisor has fully stopped.
-	// main() waits on it at the bottom so the process does not exit before
-	// the supervisor drains.  If startup fails before the supervisor runs,
-	// the process exits above and never reaches this wait.
-	transport, transportErr := startFSMv2Transport(ctx, &configData, communicationState, log, forceExit)
-	if transportErr != nil {
-		log.Errorw("FSMv2 startup failed", "error", transportErr)
+	fsmv2, err := startFSMv2Runtime(ctx, &configData, communicationState, log, forceExit)
+	if err != nil {
+		log.Errorw("FSMv2 startup failed", "error", err)
 		_ = log.Sync()
 		os.Exit(1)
 	}
-	defer transport.cleanup()
-	fsmv2Done := transport.done
+	defer fsmv2.cleanup()
 
 	// Start the system snapshot logger with automatic panic recovery
 	sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
@@ -284,140 +263,11 @@ func main() {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Control loop failed: %w", err)
 	}
 
-	// Block until the FSMv2 supervisor has shut down. If it never started,
-	// fsmv2Done was closed at creation and this is a no-op.
-	<-fsmv2Done
+	// Wait until the FSMv2 supervisor has stopped, so the process does not
+	// exit before the supervisor drains.
+	<-fsmv2.done
 
 	log.Info("umh-core completed")
-}
-
-// The seams below make main's startup order observable to tests without
-// copying it: a test replaces a function variable with a probe, then drives
-// the real startup path. Production keeps the real implementations assigned
-// here, and the variables are unexported.
-
-// runHook is the seam for starting the Management Console module, which the
-// official image registers. It runs before the supervisor starts.
-var runHook = managementconsole.Run
-
-// connectionBufferSize is the capacity of the inbound and outbound channels
-// between umh-core and the Management Console module.
-const connectionBufferSize = 100
-
-// newFSMv2Store is the seam for the store constructor. buildFSMv2Supervisor
-// creates its store by calling it, so a test's constructor can keep the
-// pointer it returns.
-var newFSMv2Store = scenariorunner.SetupStore
-
-// buildFSMv2SupervisorFn is the seam for the FSMv2 build: a test can inject a
-// build that fails.
-var buildFSMv2SupervisorFn = buildFSMv2Supervisor
-
-// startFSMv2SupervisorFn is the seam for the supervisor start: a test can
-// inject a start that records whether the supervisor has started.
-var startFSMv2SupervisorFn = defaultStartFSMv2Supervisor
-
-// wireFSMv2CommunicatorFn is the seam for the communicator wiring: a test can
-// inject a no-op, so startup runs without the real communication state.
-var wireFSMv2CommunicatorFn = wireFSMv2Communicator
-
-// defaultStartFSMv2Supervisor runs the supervisor and closes done when it has
-// fully stopped.
-func defaultStartFSMv2Supervisor(appSup fsmv2Supervisor, ctx context.Context, done chan struct{}, log *zap.SugaredLogger) {
-	go func() {
-		defer close(done)
-
-		if runErr := appSup.Run(ctx); runErr != nil {
-			log.Errorw("FSMv2 supervisor Run error", "error", runErr)
-		}
-	}()
-}
-
-// fsmv2StartupResult carries what main needs from one attempt to build and
-// start the FSMv2 application supervisor.
-type fsmv2StartupResult struct {
-	// done is closed when the FSMv2 supervisor has fully stopped, or at once
-	// when it was never started.
-	done chan struct{}
-	// cleanup must run after the supervisor has stopped.
-	cleanup func()
-}
-
-// startFSMv2Transport is main's FSMv2 startup path: run the registered
-// startup functions, build and start the supervisor, and wire the
-// communicator when backend credentials are present. It returns the first
-// error it meets; nothing later in the sequence runs after one.
-func startFSMv2Transport(
-	ctx context.Context,
-	configData *config.FullConfig,
-	communicationState *communication_state.CommunicationState,
-	log *zap.SugaredLogger,
-	forceExit <-chan struct{},
-) (fsmv2StartupResult, error) {
-	done := make(chan struct{})
-
-	// The instance UUID is a placeholder until the Management Console module
-	// reports the one the relay returned at login.
-	placeholderUUID := uuid.New().String()
-	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
-
-	// inbound carries the messages users sent to this instance to the router.
-	// outbound carries status messages and action replies to the module.
-	inbound := make(chan handoff.Message, connectionBufferSize)
-	outbound := make(chan handoff.Message, connectionBufferSize)
-
-	mc, mcErr := runHook(managementconsole.Deps{
-		Inbound:  inbound,
-		Outbound: outbound,
-		SetInstanceUUID: func(id string) {
-			if isAuthenticatedUUID(id, placeholderUUID) {
-				applyAuthenticatedUUID(id, communicationState)
-			}
-		},
-		Config: managementconsole.Config{
-			RelayURL:         configData.Agent.APIURL,
-			AuthToken:        configData.Agent.AuthToken,
-			InstanceUUID:     placeholderUUID,
-			AllowInsecureTLS: configData.Agent.AllowInsecureTLS,
-			Location:         configData.Agent.Location,
-		},
-		Logger: deps.NewFSMLogger(log),
-	})
-	if mcErr != nil {
-		close(done)
-
-		return fsmv2StartupResult{done: done, cleanup: func() {}}, fmt.Errorf("failed to start the Management Console module: %w", mcErr)
-	}
-
-	appSup, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit, mc.Children)
-	if buildErr != nil {
-		close(done)
-
-		return fsmv2StartupResult{done: done, cleanup: func() {}}, fmt.Errorf("failed to build FSMv2 supervisor: %w", buildErr)
-	}
-
-	startFSMv2SupervisorFn(appSup, ctx, done, log)
-
-	if communicatorEnabled(configData.Agent) {
-		log.Info("Starting FSMv2 communicator because backend credentials are present")
-		wire := wireFSMv2CommunicatorFn
-		status := mc.Status
-		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-			wire(ctx, inbound, outbound, configData, communicationState, log, status)
-		})
-	} else {
-		log.Info("No backend credentials configured; running FSMv2 runtime without communicator")
-	}
-
-	return fsmv2StartupResult{done: done, cleanup: cleanup}, nil
-}
-
-// communicatorEnabled reports whether the FSMv2 communicator can run, which
-// requires backend credentials. It gates only wireFSMv2Communicator: the FSMv2
-// runtime is built and run regardless of credentials, so this must never gate
-// its construction or its Run call.
-func communicatorEnabled(cfg config.AgentConfig) bool {
-	return cfg.APIURL != "" && cfg.AuthToken != ""
 }
 
 // countHistorianBridges returns the number of bridges whose write DFC targets the historian output.
@@ -629,234 +479,4 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 			}
 		}
 	}
-}
-
-// fsmv2Supervisor is the minimal interface required from the ApplicationSupervisor
-// by main().  Using an interface keeps buildFSMv2Supervisor decoupled from the
-// concrete generic type and avoids repeating the full type parameter list.
-type fsmv2Supervisor interface {
-	metrics.FSMv2DebugProvider
-	Run(ctx context.Context) error
-}
-
-// buildFSMv2Supervisor constructs the ApplicationSupervisor with the
-// persistence child and the children the Management Console module returned.
-// It returns a cleanup function that must be deferred by the caller to stop
-// the SentryHook goroutine.
-// The returned appSup has NOT been started yet; the caller is responsible for
-// calling appSup.Run(ctx). Run detaches the tick loop from ctx and treats
-// ctx cancellation (the first SIGTERM here) as the trigger for a graceful
-// drain against the live loop (ENG-4971) — do not substitute Start(ctx),
-// which ties the loop's lifetime to the caller's cancel.
-func buildFSMv2Supervisor(
-	ctx context.Context,
-	configData *config.FullConfig,
-	communicationState *communication_state.CommunicationState,
-	logger *zap.SugaredLogger,
-	forceExit <-chan struct{},
-	registered []fsmv2config.ChildSpec,
-) (appSup fsmv2Supervisor, cleanup func(), err error) {
-	if configData == nil {
-		return nil, func() {}, errors.New("config is nil, cannot build FSMv2 supervisor")
-	}
-
-	yamlConfig, err := renderSupervisorChildrenYAML(registered)
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("failed to render FSMv2 supervisor children: %w", err)
-	}
-
-	// The historian monitor is a dynamic child, upserted and deleted at runtime
-	// by the config worker's per-tick reconcile so live config edits apply
-	// without restarting umh-core.
-
-	// Setup store (in-memory for now).
-	store := newFSMv2Store(deps.NewFSMLogger(logger))
-
-	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering.
-	fsmv2Logger := logger.Named("fsmv2")
-	// Wrap with FSMv2 SentryHook for automatic error capture to Sentry with:
-	// - Per-fingerprint debouncing (5 min window)
-	// - Error chain extraction for stable fingerprinting
-	// - Feature-based routing for error ownership
-	fsmv2Hook := fsmv2sentry.NewSentryHook(5 * time.Minute)
-
-	// Release the Communicator action-handler SentryHook's debouncer
-	// goroutine. The hook is lazy-initialized on first action; this
-	// no-ops when nothing exercised the path. Symmetric with the
-	// fsmv2Hook.Stop() above (pkg/communicator/actions/actions.go).
-	defer actions.StopCommunicatorSentryHook()
-
-	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
-
-	// The supervisor merges this map into every child, so each dependency
-	// reaches its worker however deep it sits.
-	fsmv2Deps := map[string]any{}
-	fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
-
-	// One secrets store per process; see package secrets.
-	secretsStore := secrets.NewStore()
-	fsmv2config.SetDependency(fsmv2Deps, secrets.StoreKey, secretsStore.Handle())
-
-	// The module's children get their dependencies through this map, as live
-	// values; the children document carries none.
-	if err := addChildDependencies(fsmv2Deps, registered); err != nil {
-		fsmv2Hook.Stop()
-
-		return nil, func() {}, fmt.Errorf("failed to add the Management Console module's dependencies: %w", err)
-	}
-
-	// Publish the dynamicchildren registry under the configworker deps key and
-	// the process-scoped fsmv2client before constructing the supervisor, so the
-	// application worker's first CollectObservedState observes
-	// RegistryConfigured=true (the configworker kernel child spawns and dynamic
-	// child spawning is enabled) and FSMv1 components can reach the client via
-	// fsmv2client.GetClient(). Both must be published before
-	// NewApplicationSupervisor so the application worker's first COS sees the
-	// registry; the cleanup clears both and must run after the supervisor has
-	// stopped (the caller runs cleanup after appSup.Run returns).
-	dynWriter := dynamicchildren.NewWriter()
-	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
-	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
-
-	// Publish the config manager the config worker polls each tick to reconcile
-	// the historian monitor child (replacing the standalone watchConfig
-	// goroutine). Published before NewApplicationSupervisor so the config
-	// worker's first CollectObservedState sees it; cleared in cleanup and the
-	// error path below alongside the other deps keys.
-	// TODO(ENG-4400): remove this wiring once the config worker reads
-	// config.yaml directly instead of polling the manager.
-	register.SetGlobalDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
-
-	// Published before NewApplicationSupervisor, like the keys above: the
-	// config worker reads this key when it is constructed.
-	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
-
-	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:           "application-fsmv2",
-		Name:         "Application FSMv2",
-		Store:        store,
-		Logger:       deps.NewFSMLogger(fsmv2Logger),
-		TickInterval: 100 * time.Millisecond,
-		YAMLConfig:   yamlConfig,
-		Dependencies: fsmv2Deps,
-		ForceExit:    forceExit,
-		// The production tree is 4 levels (application -> communicator ->
-		// transport -> push/pull). The drain budget cascades base x subtree
-		// height (see fsmv2/supervisor/doc.go,
-		// "Graceful shutdown budget"), so a base of 2s bounds the worst-case
-		// chain drain at 8s -- inside docker's default 10s SIGTERM grace, with
-		// headroom for s6 teardown and redpanda disk sync. Healthy drains
-		// complete in ticks and never touch the budget; this only shortens how
-		// long a STUCK worker delays shutdown before its level warns and moves
-		// on. The base propagates to every child supervisor unchanged.
-		GracefulShutdownTimeout: 2 * time.Second,
-	})
-	if err != nil {
-		fsmv2client.SetClient(nil)
-		register.ClearGlobalDeps(configworker.WorkerTypeName)
-		register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
-		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
-		fsmv2Hook.Stop()
-
-		return nil, func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
-	}
-
-	// Register supervisor for debug introspection (/debug/fsmv2 endpoint).
-	metrics.RegisterFSMv2DebugProvider("application", appSup)
-
-	cleanup = func() {
-		// Clear the client and the configworker deps key after the supervisor
-		// has stopped (the caller runs cleanup after appSup.Run returns).
-		fsmv2client.SetClient(nil)
-		register.ClearGlobalDeps(configworker.WorkerTypeName)
-		register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
-		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
-		fsmv2Hook.Stop()
-	}
-
-	return appSup, cleanup, nil
-}
-
-// wireFSMv2Communicator starts the subscriber handler and the router. The
-// router reads the messages users sent to this instance from inbound. Status
-// messages from the subscriber handler and the router's action replies go to
-// outbound, where the Management Console module reads them. This function
-// blocks until ctx is cancelled.
-func wireFSMv2Communicator(
-	ctx context.Context,
-	inbound <-chan handoff.Message,
-	outbound chan<- handoff.Message,
-	configData *config.FullConfig,
-	communicationState *communication_state.CommunicationState,
-	logger *zap.SugaredLogger,
-	status managementconsole.StatusFunc,
-) {
-	communicationState.InitialiseAndStartSubscriberHandler(
-		5*time.Minute, // TTL: time until subscriber considered dead
-		1*time.Minute, // Cull: cycle time to remove dead subscribers
-		configData,
-		communicationState.SystemSnapshotManager,
-		communicationState.ConfigManager,
-		outbound,
-		status,
-	)
-	communicationState.InitializeRouterForFSMv2(inbound)
-
-	go forwardReplies(ctx, communicationState.OutboundChannel, outbound)
-
-	logger.Info("FSMv2 communicator wired, waiting for context cancellation")
-
-	// Block until the caller's context is cancelled (e.g. main ctx cancelled).
-	<-ctx.Done()
-
-	logger.Info("FSMv2 communicator context cancelled")
-}
-
-// forwardReplies moves the router's action replies from replies to outbound
-// until ctx is cancelled. A reply waits while outbound is full, because a
-// dropped reply leaves the user's action without an answer.
-func forwardReplies(ctx context.Context, replies <-chan *models.UMHMessage, outbound chan<- handoff.Message) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case reply, ok := <-replies:
-			if !ok {
-				return
-			}
-
-			if reply == nil {
-				continue
-			}
-
-			select {
-			case outbound <- replyMessage(reply):
-			case <-ctx.Done():
-				return
-			}
-		}
-	}
-}
-
-// replyMessage turns an action reply into the message the Management Console
-// module sends: the encoded content, the user it goes to, and the trace ID.
-func replyMessage(reply *models.UMHMessage) handoff.Message {
-	m := handoff.Message{Content: []byte(reply.Content), SenderEmail: reply.Email}
-	if reply.Metadata != nil && reply.Metadata.TraceID != uuid.Nil {
-		m.TraceID = reply.Metadata.TraceID.String()
-	}
-
-	return m
-}
-
-// isAuthenticatedUUID reports whether observed is the instance UUID returned by
-// the backend at login, rather than empty or the random placeholder.
-func isAuthenticatedUUID(observed, placeholder string) bool {
-	return observed != "" && observed != placeholder
-}
-
-// applyAuthenticatedUUID hands the backend's instance UUID to the communicator and to Sentry.
-func applyAuthenticatedUUID(uuid string, cs *communication_state.CommunicationState) {
-	cs.SetLoginResponseForFSMv2(uuid)
-	sentry.SetInstanceUUID(uuid)
 }

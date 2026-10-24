@@ -39,15 +39,13 @@ func TestMain(t *testing.T) {
 	RunSpecs(t, "Main Suite")
 }
 
-var _ = Describe("communicatorEnabled", func() {
-	// communicatorEnabled is the decision main() consults to gate the FSMv2
-	// communicator. It is a pure function of the backend configuration, so it
-	// is asserted directly here rather than by running main(). The
-	// keep-the-legacy knob (UseFSMv2Transport) no longer routes anywhere: the
-	// legacy backend path was deleted, so the communicator is the only path it
-	// gates.
+var _ = Describe("hasRelayCredentials", func() {
+	// startFSMv2Runtime calls hasRelayCredentials to decide whether to run the
+	// router. The check depends only on the agent config, so these specs call
+	// it directly instead of running main(). UseFSMv2Transport no longer has
+	// any effect, because the legacy backend path was deleted.
 
-	It("enables the communicator when credentials are present, even with the legacy transport switch off", func() {
+	It("enables the router when credentials are present, even with the legacy transport switch off", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				APIURL:            "http://fsmv2.invalid:9999",
@@ -56,16 +54,16 @@ var _ = Describe("communicatorEnabled", func() {
 			},
 		}
 
-		Expect(communicatorEnabled(cfg)).To(BeTrue())
+		Expect(hasRelayCredentials(cfg)).To(BeTrue())
 	})
 
-	It("does not enable the communicator when credentials are absent", func() {
+	It("does not enable the router when credentials are absent", func() {
 		cfg := config.AgentConfig{}
 
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 
-	It("does not enable the communicator when only API_URL is set", func() {
+	It("does not enable the router when only API_URL is set", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				APIURL: "http://fsmv2.invalid:9999",
@@ -74,17 +72,17 @@ var _ = Describe("communicatorEnabled", func() {
 
 		// The && credential contract must reject partial state; an operator with
 		// one field empty should not run without a token.
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 
-	It("does not enable the communicator when only AUTH_TOKEN is set", func() {
+	It("does not enable the router when only AUTH_TOKEN is set", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				AuthToken: "test-token",
 			},
 		}
 
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 })
 
@@ -155,7 +153,7 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 	// The constructor reads neither credential today, so what this spec pins is
 	// their absence: it starts failing the moment either one is consulted here.
 	// It does not exercise credential handling, which lives in
-	// communicatorEnabled.
+	// hasRelayCredentials.
 	//
 	// The nil arguments below are unread on this path. Four of them panic if
 	// that ever changes, which a spec reports as a failure. The nil

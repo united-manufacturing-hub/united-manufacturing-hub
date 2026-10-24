@@ -62,11 +62,11 @@ func nothingRegistered(managementconsole.Deps) (managementconsole.Result, error)
 // restoreStartupSeams puts every startup seam back to its production
 // implementation, so one spec's probes cannot leak into the next.
 func restoreStartupSeams() {
-	runHook = managementconsole.Run
+	startManagementConsoleConnection = managementconsole.Run
 	newFSMv2Store = scenariorunner.SetupStore
 	buildFSMv2SupervisorFn = buildFSMv2Supervisor
 	startFSMv2SupervisorFn = defaultStartFSMv2Supervisor
-	wireFSMv2CommunicatorFn = wireFSMv2Communicator
+	runRouterFn = runRouter
 }
 
 // installStubBuild makes the build seam return a stub supervisor, after
@@ -98,9 +98,9 @@ func installStartProbe(supStarted chan struct{}) {
 	}
 }
 
-// noopWire replaces the communicator wiring with a no-op.
-func noopWire() {
-	wireFSMv2CommunicatorFn = func(context.Context, <-chan handoff.Message, chan<- handoff.Message, *config.FullConfig, *communication_state.CommunicationState, *zap.SugaredLogger, managementconsole.StatusFunc) {
+// noopRouter replaces runRouter with a no-op.
+func noopRouter() {
+	runRouterFn = func(context.Context, <-chan handoff.Message, chan<- handoff.Message, *config.FullConfig, *communication_state.CommunicationState, *zap.SugaredLogger, managementconsole.StatusFunc) {
 	}
 }
 
@@ -112,11 +112,11 @@ func newBareCommunicationState() *communication_state.CommunicationState {
 
 // runStartup drives the real startup function with the standard stubs and
 // returns its error.
-func runStartup(cfg *config.FullConfig) (fsmv2StartupResult, error) {
+func runStartup(cfg *config.FullConfig) (fsmv2Runtime, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	return startFSMv2Transport(ctx, cfg, newBareCommunicationState(), zap.NewNop().Sugar(), nil)
+	return startFSMv2Runtime(ctx, cfg, newBareCommunicationState(), zap.NewNop().Sugar(), nil)
 }
 
 var _ = Describe("Startup seams", func() {
@@ -142,11 +142,11 @@ var _ = Describe("Startup seams", func() {
 		supStarted := make(chan struct{}, 1)
 
 		installStubBuild()
-		noopWire()
+		noopRouter()
 		installStartProbe(supStarted)
 
 		record := make(chan string, 1)
-		runHook = func(managementconsole.Deps) (managementconsole.Result, error) {
+		startManagementConsoleConnection = func(managementconsole.Deps) (managementconsole.Result, error) {
 			msg := "not started"
 			select {
 			case <-supStarted:
@@ -162,9 +162,9 @@ var _ = Describe("Startup seams", func() {
 			return managementconsole.Result{}, nil
 		}
 
-		transport, err := runStartup(cfg)
+		fsmv2, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		defer transport.cleanup()
+		defer fsmv2.cleanup()
 
 		Expect(record).To(Receive(Equal("not started")))
 	})
@@ -174,10 +174,10 @@ var _ = Describe("Startup seams", func() {
 
 		supStarted := make(chan struct{}, 1)
 		installStubBuild()
-		noopWire()
+		noopRouter()
 		installStartProbe(supStarted)
 
-		runHook = func(managementconsole.Deps) (managementconsole.Result, error) {
+		startManagementConsoleConnection = func(managementconsole.Deps) (managementconsole.Result, error) {
 			return managementconsole.Result{}, errHook
 		}
 
@@ -190,52 +190,52 @@ var _ = Describe("Startup seams", func() {
 	It("checks that startup starts the supervisor when the hook returns nil", func() {
 		supStarted := make(chan struct{}, 1)
 		installStubBuild()
-		noopWire()
+		noopRouter()
 		installStartProbe(supStarted)
 
-		runHook = nothingRegistered
+		startManagementConsoleConnection = nothingRegistered
 
-		transport, err := runStartup(cfg)
+		fsmv2, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		defer transport.cleanup()
+		defer fsmv2.cleanup()
 		Eventually(supStarted, time.Second).Should(Receive())
 	})
 
 	It("checks that startup hands the module's children to the supervisor build", func() {
 		got := installStubBuild()
-		noopWire()
+		noopRouter()
 		installStartProbe(make(chan struct{}, 1))
 
 		child := fsmv2config.ChildSpec{Name: "x", WorkerType: "test-worker", Enabled: true}
-		runHook = func(managementconsole.Deps) (managementconsole.Result, error) {
+		startManagementConsoleConnection = func(managementconsole.Deps) (managementconsole.Result, error) {
 			return managementconsole.Result{Children: []fsmv2config.ChildSpec{child}}, nil
 		}
 
-		transport, err := runStartup(cfg)
+		fsmv2, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		defer transport.cleanup()
+		defer fsmv2.cleanup()
 
 		Expect(*got).To(Equal([]fsmv2config.ChildSpec{child}))
 	})
 
 	It("checks that startup hands the module the relay settings", func() {
 		installStubBuild()
-		noopWire()
+		noopRouter()
 		installStartProbe(make(chan struct{}, 1))
 
 		cfg.Agent.AllowInsecureTLS = true
 		cfg.Agent.Location = map[int]string{0: "enterprise"}
 
 		var got managementconsole.Config
-		runHook = func(d managementconsole.Deps) (managementconsole.Result, error) {
+		startManagementConsoleConnection = func(d managementconsole.Deps) (managementconsole.Result, error) {
 			got = d.Config
 
 			return managementconsole.Result{}, nil
 		}
 
-		transport, err := runStartup(cfg)
+		fsmv2, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		defer transport.cleanup()
+		defer fsmv2.cleanup()
 
 		_, err = uuid.Parse(got.InstanceUUID)
 		Expect(err).NotTo(HaveOccurred(), "the login UUID must be a UUID")
@@ -251,11 +251,11 @@ var _ = Describe("Startup seams", func() {
 
 	It("checks that the instance UUID the module reports becomes the login response's UUID", func() {
 		installStubBuild()
-		noopWire()
+		noopRouter()
 		installStartProbe(make(chan struct{}, 1))
 
 		var report func(string)
-		runHook = func(d managementconsole.Deps) (managementconsole.Result, error) {
+		startManagementConsoleConnection = func(d managementconsole.Deps) (managementconsole.Result, error) {
 			report = d.SetInstanceUUID
 
 			return managementconsole.Result{}, nil
@@ -265,9 +265,9 @@ var _ = Describe("Startup seams", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		transport, err := startFSMv2Transport(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
+		fsmv2, err := startFSMv2Runtime(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
 		Expect(err).NotTo(HaveOccurred())
-		defer transport.cleanup()
+		defer fsmv2.cleanup()
 
 		reported := uuid.New()
 		report(reported.String())
@@ -285,7 +285,7 @@ var _ = Describe("Startup seams", func() {
 			buildFSMv2SupervisorFn = func(ctx context.Context, configData *config.FullConfig, communicationState *communication_state.CommunicationState, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
 				return nil, func() {}, buildErr
 			}
-			noopWire()
+			noopRouter()
 		})
 
 		It("checks that startup returns the build error when nothing is registered (the OSS build)", func() {
@@ -299,7 +299,7 @@ var _ = Describe("Startup seams", func() {
 		})
 
 		It("checks that startup returns the build error when one function is registered (the official image)", func() {
-			runHook = nothingRegistered
+			startManagementConsoleConnection = nothingRegistered
 			supStarted := make(chan struct{}, 1)
 			installStartProbe(supStarted)
 
@@ -314,9 +314,9 @@ var _ = Describe("Startup seams", func() {
 			installStubBuild()
 			installStartProbe(supStarted)
 
-			transport, err := runStartup(cfg)
+			fsmv2, err := runStartup(cfg)
 			Expect(err).NotTo(HaveOccurred())
-			defer transport.cleanup()
+			defer fsmv2.cleanup()
 			Eventually(supStarted, time.Second).Should(Receive())
 		})
 
@@ -325,11 +325,11 @@ var _ = Describe("Startup seams", func() {
 			installStubBuild()
 			installStartProbe(supStarted)
 
-			runHook = nothingRegistered
+			startManagementConsoleConnection = nothingRegistered
 
-			transport, err := runStartup(cfg)
+			fsmv2, err := runStartup(cfg)
 			Expect(err).NotTo(HaveOccurred())
-			defer transport.cleanup()
+			defer fsmv2.cleanup()
 			Eventually(supStarted, time.Second).Should(Receive())
 		})
 	})
@@ -398,16 +398,16 @@ var _ = Describe("Startup seams", func() {
 		installStartProbe(make(chan struct{}, 1))
 
 		var outbound <-chan handoff.Message
-		runHook = func(d managementconsole.Deps) (managementconsole.Result, error) {
+		startManagementConsoleConnection = func(d managementconsole.Deps) (managementconsole.Result, error) {
 			outbound = d.Outbound
 
 			return managementconsole.Result{Status: func(context.Context, int) *managementconsole.Status { return p }}, nil
 		}
 
-		_, err := startFSMv2Transport(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
+		_, err := startFSMv2Runtime(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		// The wire goroutine creates the handler after startup returns. Poll
+		// The router goroutine creates the handler after startup returns. Poll
 		// the lock-taking accessor until it exists; the handler stays for the
 		// rest of the spec, so this waits for a state, not a window.
 		Eventually(commState.GetSubscriberHandler, "10s", "10ms").ShouldNot(BeNil())
@@ -433,16 +433,16 @@ var _ = Describe("Startup seams", func() {
 		installStartProbe(make(chan struct{}, 1))
 
 		var outbound <-chan handoff.Message
-		runHook = func(d managementconsole.Deps) (managementconsole.Result, error) {
+		startManagementConsoleConnection = func(d managementconsole.Deps) (managementconsole.Result, error) {
 			outbound = d.Outbound
 
 			return managementconsole.Result{}, nil
 		}
 
-		_, err := startFSMv2Transport(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
+		_, err := startFSMv2Runtime(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Same readiness wait as the spec above: the wire goroutine creates
+		// Same readiness wait as the spec above: the router goroutine creates
 		// the handler after startup returns.
 		Eventually(commState.GetSubscriberHandler, "10s", "10ms").ShouldNot(BeNil())
 		commState.GetSubscriberHandler().AddOrRefreshSubscriber("empty@example.com", false)
