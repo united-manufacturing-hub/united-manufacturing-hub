@@ -24,13 +24,13 @@ import (
 
 	"github.com/benbjohnson/clock"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -174,12 +174,12 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 // recordMetrics publishes the evidence for the framework's worker-metrics
 // exporter, which turns each name into umh_fsmv2_worker_<name>
-// (WorkerMetricsExporter.getOrCreateGauge, pkg/fsmv2/supervisor/metrics/metrics.go).
+// (WorkerMetricsExporter.getOrCreateGauge, fsmv2/supervisor/metrics/metrics.go).
 func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.Details) {
 	// GaugeCPULastSampleUnix freezes along with every gauge below when a tick
 	// cannot measure: Poll returns before recordMetrics runs, and the collector
 	// reloads and re-publishes the previous gauge values instead
-	// (Collector.wrapNewObservation, pkg/fsmv2/supervisor/internal/collection/collector.go).
+	// (Collector.wrapNewObservation, fsmv2/supervisor/internal/collection/collector.go).
 	// Its age is what reveals the freeze.
 	m.SetGauge(deps.GaugeCPULastSampleUnix, float64(sampledAt.Unix()))
 

@@ -21,12 +21,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenariorunner"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
 const (
@@ -40,7 +40,7 @@ const (
 
 	// cpuLatchWindow is the pressure window's span. The latch releases only
 	// once the window has collected this long, and a released signal cannot
-	// fire again for this long (Latch.Update in pkg/diagnosis).
+	// fire again for this long (Latch.Update in fsmv2/diagnosis).
 	cpuLatchWindow = 60 * time.Second
 )
 

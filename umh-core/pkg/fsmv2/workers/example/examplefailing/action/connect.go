@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	examplefailing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 )
 

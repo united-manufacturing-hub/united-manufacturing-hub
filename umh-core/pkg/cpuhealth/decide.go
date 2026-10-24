@@ -21,7 +21,7 @@
 package cpuhealth
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // Decide runs one tick and returns the tick's Verdict and Details. Each stage

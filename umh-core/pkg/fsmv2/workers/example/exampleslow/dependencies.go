@@ -17,7 +17,7 @@ package example_slow
 import (
 	"sync"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
 // ExampleslowDepsIface is the minimal interface used by action files to avoid import cycles with snapshot.
