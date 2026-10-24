@@ -96,13 +96,15 @@ var alwaysAllowedMessages = []string{
 
 // recordLoggedError keeps the first error the scenario does not expect. The
 // matchers run before the lock, because errors.Is calls user code that may
-// log again.
+// log again. The teardown flag is read first, so an error logged before
+// teardown stays unexpected even if teardown starts during the matching.
 func (r *runRecorder) recordLoggedError(err error, msg string) {
+	tearingDown := r.teardownStarted.Load()
 	matched := matchedEntries(r.expectedErrors, msg)
 	caused := matchedCauseIndices(err, r.expectedErrorCauses)
 	unexpected := !r.messageAllowed(msg, r.expectedErrors) &&
 		!r.errorCauseAllowed(err) &&
-		!r.isTeardownCancellation(err)
+		!isTeardownCancellation(err, tearingDown)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -308,8 +310,8 @@ func (r *runRecorder) loggedError() error {
 // isTeardownCancellation reports whether err is an in-flight action failing
 // because teardown cancelled the supervisor. Before teardown, the same
 // context.Canceled is a scenario defect.
-func (r *runRecorder) isTeardownCancellation(err error) bool {
-	if !r.teardownStarted.Load() {
+func isTeardownCancellation(err error, tearingDown bool) bool {
+	if !tearingDown {
 		return false
 	}
 
