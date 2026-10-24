@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
@@ -128,10 +129,12 @@ var _ = Describe("Gatekeeper inbound pipeline", func() {
 	It("allowed action flows through full pipeline", func() {
 		in <- &types.UMHMessage{Content: encodeAction("deploy-protocol-converter"), Email: "user@test.com", TraceID: "t1"}
 
-		var msg *types.MessageWithSender
+		var msg handoff.Message
 		Eventually(g.VerifiedInboundChan()).Should(Receive(&msg))
 
-		Expect(msg.Content.MessageType).To(Equal(models.Action))
+		decoded, err := encoding.DecodeMessageFromUserToUMHInstance(string(msg.Content))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(decoded.MessageType).To(Equal(models.Action))
 		Expect(msg.SenderEmail).To(Equal("user@test.com"))
 		Expect(msg.TraceID).To(Equal("t1"))
 		Expect(vali.LastAction()).To(Equal("deploy-protocol-converter"))

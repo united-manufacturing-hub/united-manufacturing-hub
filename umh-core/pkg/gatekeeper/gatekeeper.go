@@ -23,6 +23,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/compression"
@@ -46,7 +48,7 @@ type Gatekeeper struct {
 	outboundChan chan *types.UMHMessage
 
 	// Verified channels (created and owned by gatekeeper)
-	verifiedInbound  chan *types.MessageWithSender
+	verifiedInbound  chan handoff.Message
 	verifiedOutbound chan *types.MessageWithSender
 
 	// TODO(ENG-4558): Remove once actions write MessageWithSender directly.
@@ -90,7 +92,7 @@ func New(
 	for _, opt := range opts {
 		opt(g)
 	}
-	g.verifiedInbound = make(chan *types.MessageWithSender, g.verifiedInboundSize)
+	g.verifiedInbound = make(chan handoff.Message, g.verifiedInboundSize)
 	g.verifiedOutbound = make(chan *types.MessageWithSender, g.verifiedOutboundSize)
 	g.legacyOutbound = make(chan *models.UMHMessage, g.verifiedOutboundSize)
 	return g
@@ -130,7 +132,7 @@ func (g *Gatekeeper) Stop() {
 }
 
 // VerifiedInboundChan returns the channel for the Router to read verified messages.
-func (g *Gatekeeper) VerifiedInboundChan() <-chan *types.MessageWithSender {
+func (g *Gatekeeper) VerifiedInboundChan() <-chan handoff.Message {
 	return g.verifiedInbound
 }
 
@@ -279,9 +281,15 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *types.UMHMessage) {
 		}
 	}
 
+	routerBytes, err := encoding.EncodeMessageFromUserToUMHInstance(messageContent)
+	if err != nil {
+		g.logger.Warnw("Failed to encode verified message for the router", "email", msg.Email, "error", err)
+		return
+	}
+
 	select {
-	case g.verifiedInbound <- &types.MessageWithSender{
-		Content:     messageContent,
+	case g.verifiedInbound <- handoff.Message{
+		Content:     []byte(routerBytes),
 		SenderEmail: msg.Email,
 		TraceID:     msg.TraceID,
 	}:
