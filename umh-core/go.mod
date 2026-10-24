@@ -27,7 +27,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.44.0
 	github.com/tiendc/go-deepcopy v1.7.2
-	github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024144638-b378316005e0
+	github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024163744-15f468add16d
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0
@@ -42,6 +42,7 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
@@ -139,4 +140,4 @@ require (
 
 replace github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 => ./fsmv2
 
-replace github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0 => github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261024144638-b378316005e0
+replace github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0 => github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261024163744-15f468add16d

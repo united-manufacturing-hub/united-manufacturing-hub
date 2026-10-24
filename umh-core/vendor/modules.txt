@@ -2,6 +2,10 @@
 # dario.cat/mergo v1.0.2
 ## explicit; go 1.13
 dario.cat/mergo
+# filippo.io/edwards25519 v1.2.0
+## explicit; go 1.24.0
+filippo.io/edwards25519
+filippo.io/edwards25519/field
 # github.com/99designs/gqlgen v0.17.95
 ## explicit; go 1.26
 github.com/99designs/gqlgen/complexity
@@ -571,12 +575,39 @@ github.com/twitchyliquid64/golang-asm/unsafeheader
 # github.com/ugorji/go/codec v1.3.2
 ## explicit; go 1.21
 github.com/ugorji/go/codec
-# github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024144638-b378316005e0
+# github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024163744-15f468add16d
 ## explicit; go 1.27.1
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/certificate
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/certificates
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/conversion
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/instance
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/instance/native
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/internal/core
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/internal/impl/native
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/internal/link
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/internal/nativeports
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/internal/ports/compression
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/internal/ports/encryption
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/internal/ports/porterr
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/internal/ports/signature
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/envelope/keys/native
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/internal/errcode
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/key_encryption
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/logger
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/messages/statusaction
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/password_derivation
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/permissions
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/certfetcher
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/certfetcher/action
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/certfetcher/state
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/communicator
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/communicator/backoff
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/communicator/state
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/gatekeeper
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/gatekeeper/snapshot
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/gatekeeper/state
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/action
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/channelusage
@@ -595,6 +626,10 @@ github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/state
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/types
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/userspec
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/settings
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/chains
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/gatekeeper
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/replies
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/route
 # github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 ## explicit; go 1.20
@@ -690,6 +725,8 @@ go.yaml.in/yaml/v3
 golang.org/x/arch/x86/x86asm
 # golang.org/x/crypto v0.57.0
 ## explicit; go 1.26.0
+golang.org/x/crypto/argon2
+golang.org/x/crypto/blake2b
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
@@ -818,4 +855,4 @@ google.golang.org/protobuf/types/known/wrapperspb
 gopkg.in/yaml.v3
 # k8s.io/client-go v0.37.1
 ## explicit; go 1.26.0
-# github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0 => github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261024144638-b378316005e0
+# github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0 => github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261024163744-15f468add16d

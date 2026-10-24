@@ -6,6 +6,8 @@ cloud.google.com/go/compute/metadata v0.9.0 h1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdB
 cloud.google.com/go/compute/metadata v0.9.0/go.mod h1:E0bWwX5wTnLPedCKqk3pJmVgCBSM6qQI1yTBdEb3C10=
 dario.cat/mergo v1.0.2 h1:85+piFYR1tMbRrLcDwR18y4UKJ3aH1Tbzi24VRW1TK8=
 dario.cat/mergo v1.0.2/go.mod h1:E/hbnu0NxMFBjpMIE34DRGLWqDy0g5FuKDhCb31ngxA=
+filippo.io/edwards25519 v1.2.0 h1:crnVqOiS4jqYleHd9vaKZ+HKtHfllngJIiOpNpoJsjo=
+filippo.io/edwards25519 v1.2.0/go.mod h1:xzAOLCNug/yB62zG1bQ8uziwrIqIuxhctzJT18Q77mc=
 github.com/99designs/gqlgen v0.17.95 h1:882h7F5iJImgtyUVttc4MOK2NbzbMYc2oyNeHqkjpP4=
 github.com/99designs/gqlgen v0.17.95/go.mod h1:kHYPrpwOXDU1OQyxIg3Z7nVXSnlUoHVWBY7CMJCAM4M=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 h1:He8afgbRMd7mFxO99hRNu+6tazq8nFF9lIwo9JFroBk=
@@ -215,6 +217,8 @@ github.com/mdelapenya/tlscert v0.2.0 h1:7H81W6Z/4weDvZBNOfQte5GpIMo0lGYEeWbkGp5L
 github.com/mdelapenya/tlscert v0.2.0/go.mod h1:O4njj3ELLnJjGdkN7M/vIVCpZ+Cf0L6muqOG4tLSl8o=
 github.com/mfridman/tparse v0.18.0 h1:wh6dzOKaIwkUGyKgOntDW4liXSo37qg5AXbIhkMV3vE=
 github.com/mfridman/tparse v0.18.0/go.mod h1:gEvqZTuCgEhPbYk/2lS3Kcxg1GmTxxU7kTC8DvP0i/A=
+github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
+github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/moby/docker-image-spec v1.3.1 h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0=
 github.com/moby/docker-image-spec v1.3.1/go.mod h1:eKmb5VW8vQEh/BAr2yvVNvuiJuY6UIocYsFu/DxxRpo=
 github.com/moby/go-archive v0.3.0 h1:nos4BtzzUIqB406BgQnWGMI4qib9BZ8XUHU+ucv/n1c=
@@ -337,8 +341,10 @@ github.com/twmb/franz-go/pkg/kmsg v1.14.0 h1:gSxrBEKWl3qnsx3QKWol5OEVujuPmIoDkhM
 github.com/twmb/franz-go/pkg/kmsg v1.14.0/go.mod h1:+DPt4NC8RmI6hqb8G09+3giKObE6uD2Eya6CfqBpeJY=
 github.com/ugorji/go/codec v1.3.2 h1:zkEASHHyEClGeURfgNT9PJZVfAbs9oEX9QXggwWNJbc=
 github.com/ugorji/go/codec v1.3.2/go.mod h1:pRBVtBSKl77K30Bv8R2P+cLSGaTtex6fsA2Wjqmfxj4=
-github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024144638-b378316005e0 h1:eNRr8HhazoG8/ESesgGplehOOivMnmuXPkXQkWm51ug=
-github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024144638-b378316005e0/go.mod h1:mcMfrIOMfMAAq+BMmxTN2C9cChrdFhFj33TaM7GbfWs=
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024163744-15f468add16d h1:jsCakU9pXSsQXHh9swjp2HzcaQKqhTQIIvKwBl4ouD0=
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024163744-15f468add16d/go.mod h1:mcMfrIOMfMAAq+BMmxTN2C9cChrdFhFj33TaM7GbfWs=
+github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261024163744-15f468add16d h1:Zc6A3lNhOyYihq4bXgxu4t1qrBhDW9+F22hzSKuJ7xw=
+github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261024163744-15f468add16d/go.mod h1:Gy4kYe1omqd7qDTpZ3XZ/QGKBY5RFxqC49rvXnOGJ4Y=
 github.com/united-manufacturing-hub/expiremap/v2 v2.1.0 h1:f2pcAPTXLlsVHE4uvXKK01dOFtwzVK2+hfrOzAtQ6WM=
 github.com/united-manufacturing-hub/expiremap/v2 v2.1.0/go.mod h1:55KwBsaVAumB4S+gsvKGFNHaAE4DRAO5KyfglpQTFnI=
 github.com/united-manufacturing-hub/umh-utils v0.2.2 h1:3Op9Cx+fwqxL1Qtu7AytZ19LU8vOBmJSF0dsXs0Oxw4=
