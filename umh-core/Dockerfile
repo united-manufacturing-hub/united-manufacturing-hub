@@ -14,8 +14,9 @@
 
 # --- Build Stage ---
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
-# Global so FROM crypto-${CRYPTOLIB} resolves; off means no ManagementConsole/mc context needed.
-ARG CRYPTOLIB=false
+# Global, so that FROM managementconsole-${MANAGEMENTCONSOLE} resolves. false builds
+# the open-source image, true the official image, local a development image.
+ARG MANAGEMENTCONSOLE=false
 
 # --- Cache Stage ---
 FROM scratch AS cache
@@ -83,17 +84,41 @@ COPY ./go.mod ./go.sum ./go.work ./go.work.sum ./
 COPY ./vendor ./vendor
 COPY ./fsmv2 ./fsmv2
 
-# cryptolib disabled (default): no ManagementConsole sources; build falls back to the noop validator
-FROM build-base AS crypto-false
+# Open-source build: no Management Console module.
+FROM build-base AS managementconsole-false
 
-# cryptolib enabled: inject private ManagementConsole sources (provided via --build-context mc=...)
-FROM build-base AS crypto-true
+# Official build: fetch the Management Console module at the version go.mod
+# pins and add its source to vendor/. The read token comes in as the build
+# secret github_token and is sent only as an HTTP header inside this step, so
+# it reaches no layer and no log. go mod download checks the source against
+# go.sum.
+FROM build-base AS managementconsole-true
+RUN apk add --no-cache git
+RUN --mount=type=secret,id=github_token,required=true \
+    set -eu; \
+    auth="$(printf 'x-access-token:%s' "$(cat /run/secrets/github_token)" | base64 | tr -d '\n')"; \
+    export GOPRIVATE=github.com/united-manufacturing-hub/ManagementConsole GIT_TERMINAL_PROMPT=0 \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=http.https://github.com/united-manufacturing-hub/ManagementConsole.extraheader \
+    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${auth}"; \
+    for m in cryptolib shared; do \
+    path="github.com/united-manufacturing-hub/ManagementConsole/$m"; \
+    version="$(awk -v p="$path" '$1=="#" && $2==p { if ($4=="=>") print $6; else print $3 }' vendor/modules.txt)"; \
+    [ -n "$version" ] || { echo "vendor/modules.txt does not list $path"; exit 1; }; \
+    dir="$(go mod download -json "$path@$version" | sed -n 's/^[[:space:]]*"Dir": "\(.*\)",$/\1/p')"; \
+    [ -n "$dir" ] || { echo "could not download $path@$version"; exit 1; }; \
+    mkdir -p "vendor/$path"; \
+    cp -R "$dir/." "vendor/$path/"; \
+    done
+
+# Local development build: the Management Console module from a local checkout
+# (--build-context mc=...). The Makefile refuses it in CI.
+FROM build-base AS managementconsole-local
 COPY --from=mc cryptolib ./vendor/github.com/united-manufacturing-hub/ManagementConsole/cryptolib
 COPY --from=mc shared ./vendor/github.com/united-manufacturing-hub/ManagementConsole/shared
 
-# Only crypto-true references the mc context, so the default build needs no ManagementConsole.
-FROM crypto-${CRYPTOLIB} AS build
-ARG CRYPTOLIB=false
+FROM managementconsole-${MANAGEMENTCONSOLE} AS build
+ARG MANAGEMENTCONSOLE=false
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -106,9 +131,17 @@ COPY ./pkg ./pkg
 COPY ./internal ./internal
 RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
+# An image built with the Management Console module must link it. The build
+# fails when the module's package that checks incoming messages is not part of
+# the binary.
+RUN if [ "$MANAGEMENTCONSOLE" != "false" ]; then \
+    go list -mod=vendor -tags managementconsole -deps ./cmd \
+    | grep -qx 'github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/gatekeeper' \
+    || { echo "the Management Console module is not linked: its message check package is missing"; exit 1; }; \
+    fi
 # CGO_ENABLED=1 is needed for the race detector to work
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    if [ "$CRYPTOLIB" = "true" ]; then BASE_TAGS="cryptolib"; else BASE_TAGS=""; fi; \
+    if [ "$MANAGEMENTCONSOLE" != "false" ]; then BASE_TAGS="managementconsole"; else BASE_TAGS=""; fi; \
     if [ "$DEBUG" = "true" ]; then \
     CGO_ENABLED=1 go build \
     -race \
