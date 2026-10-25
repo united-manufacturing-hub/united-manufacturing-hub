@@ -575,7 +575,7 @@ github.com/twitchyliquid64/golang-asm/unsafeheader
 # github.com/ugorji/go/codec v1.3.2
 ## explicit; go 1.21
 github.com/ugorji/go/codec
-# github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261024163744-15f468add16d
+# github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261025005759-30d9d3b169dc
 ## explicit; go 1.27.1
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/certificate
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/certificates
@@ -596,6 +596,7 @@ github.com/united-manufacturing-hub/ManagementConsole/cryptolib/internal/errcode
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/key_encryption
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/logger
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/messages/statusaction
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/messages/statusaction/instance
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/password_derivation
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/permissions
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore
@@ -606,11 +607,11 @@ github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/communicator/backoff
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/communicator/state
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/gatekeeper
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/gatekeeper/action
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/gatekeeper/snapshot
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/gatekeeper/state
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/action
-github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/channelusage
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/http
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/http/hash
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/message
@@ -625,10 +626,10 @@ github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/snapshot
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/state
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/transport/types
-github.com/united-manufacturing-hub/ManagementConsole/cryptolib/runtimes/umhcore/userspec
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/settings
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/chains
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/gatekeeper
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/pin
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/replies
 github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/route
 # github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
@@ -855,4 +856,4 @@ google.golang.org/protobuf/types/known/wrapperspb
 gopkg.in/yaml.v3
 # k8s.io/client-go v0.37.1
 ## explicit; go 1.26.0
-# github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0 => github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261024163744-15f468add16d
+# github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0 => github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261025005759-30d9d3b169dc
