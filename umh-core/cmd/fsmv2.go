@@ -40,7 +40,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // connectionBufferSize is the capacity of the inbound and outbound channels
@@ -293,8 +292,8 @@ func managementConsoleDeps(
 	}
 }
 
-// startRouterIfConfigured runs the router in the background when relay
-// credentials are set, and only logs that it is skipped otherwise.
+// startRouterIfConfigured starts the router when relay credentials are set,
+// and only logs that it is skipped otherwise.
 func startRouterIfConfigured(
 	ctx context.Context,
 	inbound <-chan handoff.Message,
@@ -312,11 +311,7 @@ func startRouterIfConfigured(
 
 	log.Info("API_URL and AUTH_TOKEN are set; starting the router for Management Console messages")
 
-	// Read the seam now: tests reassign it after startup returns.
-	run := runRouterFn
-	sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-		run(ctx, inbound, outbound, configData, communicationState, log, status)
-	})
+	runRouterFn(ctx, inbound, outbound, configData, communicationState, log, status)
 }
 
 // hasRelayCredentials reports whether both the relay URL and the auth token

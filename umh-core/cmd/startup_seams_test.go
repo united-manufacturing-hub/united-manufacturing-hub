@@ -418,10 +418,8 @@ var _ = Describe("Startup seams", func() {
 		_, err := startFSMv2Runtime(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		// The router goroutine creates the handler after startup returns. Poll
-		// the lock-taking accessor until it exists; the handler stays for the
-		// rest of the spec, so this waits for a state, not a window.
-		Eventually(commState.GetSubscriberHandler, "10s", "10ms").ShouldNot(BeNil())
+		// runRouter creates the handler before startup returns.
+		Expect(commState.GetSubscriberHandler()).NotTo(BeNil())
 		commState.GetSubscriberHandler().AddOrRefreshSubscriber("status@example.com", false)
 
 		Expect(decodedConnectionPart(outbound)).To(Equal(&models.Communicator{
@@ -453,9 +451,7 @@ var _ = Describe("Startup seams", func() {
 		_, err := startFSMv2Runtime(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Same readiness wait as the spec above: the router goroutine creates
-		// the handler after startup returns.
-		Eventually(commState.GetSubscriberHandler, "10s", "10ms").ShouldNot(BeNil())
+		Expect(commState.GetSubscriberHandler()).NotTo(BeNil())
 		commState.GetSubscriberHandler().AddOrRefreshSubscriber("empty@example.com", false)
 
 		Expect(decodedConnectionPart(outbound)).To(BeNil(),
@@ -493,5 +489,27 @@ var _ = Describe("forwardReplies", func() {
 		var got handoff.Message
 		Eventually(outbound, time.Second).Should(Receive(&got))
 		Expect(got.TraceID).To(BeEmpty())
+	})
+
+	It("checks that forwardReplies returns when ctx is cancelled while outbound is full", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		replies := make(chan *models.UMHMessage, 1)
+		outbound := make(chan handoff.Message, 1)
+		outbound <- handoff.Message{Content: []byte("queued")}
+
+		returned := make(chan struct{})
+		go func() {
+			defer close(returned)
+			forwardReplies(ctx, replies, outbound)
+		}()
+
+		replies <- &models.UMHMessage{Content: "waiting-reply"}
+		Eventually(func() int { return len(replies) }, time.Second).Should(BeZero())
+		Consistently(returned, 100*time.Millisecond).ShouldNot(BeClosed())
+
+		cancel()
+		Eventually(returned, time.Second).Should(BeClosed())
 	})
 })

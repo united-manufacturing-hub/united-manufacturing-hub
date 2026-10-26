@@ -65,7 +65,9 @@ type Deps struct {
 	Inbound chan<- handoff.Message
 	// Outbound carries the messages umh-core sends to users: status messages
 	// and action replies. Content holds the encoded message, and SenderEmail
-	// the user it goes to. The Management Console module reads this channel.
+	// the user it goes to. The Management Console module reads this channel,
+	// and adds the instance UUID from its latest login to every message it
+	// sends.
 	Outbound <-chan handoff.Message
 	// SetInstanceUUID tells umh-core the instance UUID the relay returned at
 	// login. umh-core uses it in the messages it sends. The Management

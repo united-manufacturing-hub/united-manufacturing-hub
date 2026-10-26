@@ -32,8 +32,8 @@ import (
 // runRouter starts the subscriber handler and the router. The router reads the
 // messages users sent to this instance from inbound. Status messages from the
 // subscriber handler and the router's action replies go to outbound, where the
-// Management Console module reads them. This function blocks until ctx is
-// cancelled.
+// Management Console module reads them. It returns once they are started;
+// the reply forwarding stops when ctx is cancelled.
 func runRouter(
 	ctx context.Context,
 	inbound <-chan handoff.Message,
@@ -54,39 +54,57 @@ func runRouter(
 	)
 	communicationState.InitializeRouterForFSMv2(inbound)
 
-	go forwardReplies(ctx, communicationState.OutboundChannel, outbound)
+	sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+		forwardReplies(ctx, communicationState.OutboundChannel, outbound)
+	})
 
-	logger.Info("Router started, waiting for context cancellation")
-
-	// Block until the caller's context is cancelled (e.g. main ctx cancelled).
-	<-ctx.Done()
-
-	logger.Info("Router context cancelled")
+	logger.Info("Router started")
 }
 
 // forwardReplies moves the router's action replies from replies to outbound
-// until ctx is cancelled. A reply waits while outbound is full, because a
-// dropped reply leaves the user's action without an answer.
+// until ctx is cancelled or replies is closed.
+//
+// A reply waits while outbound is full rather than being dropped, because a
+// dropped reply leaves the user's action without an answer. Status messages
+// are dropped instead, because the next one replaces them. outbound stays
+// full only while the Management Console module has no login. In that time
+// the module receives no new actions, so only the actions already running
+// wait, each in its own goroutine. The router keeps reading inbound.
 func forwardReplies(ctx context.Context, replies <-chan *models.UMHMessage, outbound chan<- handoff.Message) {
 	for {
-		select {
-		case <-ctx.Done():
+		reply, open := receiveReply(ctx, replies)
+		if !open {
 			return
-		case reply, ok := <-replies:
-			if !ok {
-				return
-			}
-
-			if reply == nil {
-				continue
-			}
-
-			select {
-			case outbound <- replyMessage(reply):
-			case <-ctx.Done():
-				return
-			}
 		}
+
+		if reply == nil {
+			continue
+		}
+
+		if !sendUntilCancelled(ctx, outbound, replyMessage(reply)) {
+			return
+		}
+	}
+}
+
+// receiveReply returns open=false when ctx is cancelled or replies is closed.
+func receiveReply(ctx context.Context, replies <-chan *models.UMHMessage) (reply *models.UMHMessage, open bool) {
+	select {
+	case <-ctx.Done():
+		return nil, false
+	case reply, open := <-replies:
+		return reply, open
+	}
+}
+
+// sendUntilCancelled waits until outbound accepts message, and returns false
+// when ctx is cancelled first.
+func sendUntilCancelled(ctx context.Context, outbound chan<- handoff.Message, message handoff.Message) bool {
+	select {
+	case outbound <- message:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 
@@ -109,7 +127,7 @@ func isAuthenticatedUUID(observed, placeholder string) bool {
 
 // applyAuthenticatedUUID hands the relay's instance UUID to the login
 // response in the communication state and to Sentry.
-func applyAuthenticatedUUID(uuid string, cs *communication_state.CommunicationState) {
-	cs.SetLoginResponseForFSMv2(uuid)
-	sentry.SetInstanceUUID(uuid)
+func applyAuthenticatedUUID(instanceUUID string, communicationState *communication_state.CommunicationState) {
+	communicationState.SetLoginResponseForFSMv2(instanceUUID)
+	sentry.SetInstanceUUID(instanceUUID)
 }
