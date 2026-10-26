@@ -82,8 +82,9 @@ type Result struct {
 	// for example the connection to the relay. Their worker types must be
 	// registered with the fsmv2 worker registry.
 	Children []config.ChildSpec
-	// Status reports the state of the connection for status messages. It is
-	// nil when the Management Console module does not report one.
+	// Status reports the state of the connection for status messages. The
+	// Management Console module always sets it. It is nil only in the empty
+	// Result of a build without the module.
 	Status StatusFunc
 }
 
@@ -92,7 +93,8 @@ type Result struct {
 type StartFunc func(Deps) (Result, error)
 
 // StatusFunc returns the state of the connection. umh-core calls it once for
-// each status message. It returns nil when the state is not known yet.
+// each status message. It never returns nil. Before the module has observed
+// the connection, it returns a Status whose Health is Neutral.
 type StatusFunc func(ctx context.Context) *Status
 
 // HealthCategory classifies the connection's health.
