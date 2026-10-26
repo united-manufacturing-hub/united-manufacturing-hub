@@ -182,18 +182,11 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 			nil,
 		)
 
-		// The channel bridge this builds starts two goroutines that exit only on
-		// ctx.Done(), and cleanup cannot reap them, so the context has to be
-		// cancellable. context.Background() would leak both for the life of the
-		// test binary.
-		ctx, cancel := context.WithCancel(context.Background())
-		DeferCleanup(cancel)
-
-		appSup, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil, nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(appSup).NotTo(BeNil())
+		Expect(applicationSupervisor).NotTo(BeNil())
 	})
 
 	// Without credentials and with USE_FSMV2_CPU on, the CPU worker must run.
@@ -230,11 +223,11 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 
-		appSup, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil, nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 		Expect(err).NotTo(HaveOccurred())
 
-		go func() { _ = appSup.Run(ctx) }()
+		go func() { _ = applicationSupervisor.Run(ctx) }()
 
 		Eventually(func() fsmv2client.Freshness {
 			_, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](

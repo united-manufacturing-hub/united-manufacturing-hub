@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -24,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/secrets"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
@@ -67,104 +67,123 @@ type fsmv2Supervisor interface {
 
 // buildFSMv2Supervisor constructs the ApplicationSupervisor with the
 // persistence child and the children the Management Console module returned.
-// It returns a cleanup function that must be deferred by the caller to stop
-// the SentryHook goroutine.
-// The returned appSup has NOT been started yet; the caller is responsible for
-// calling appSup.Run(ctx). Run detaches the tick loop from ctx and treats
+// It returns a cleanup function that the caller must run after the supervisor
+// has stopped. Cleanup clears the globals published here and stops the
+// Sentry hooks' goroutines.
+// The returned supervisor has NOT been started yet; the caller is responsible
+// for calling its Run(ctx). Run detaches the tick loop from ctx and treats
 // ctx cancellation (the first SIGTERM here) as the trigger for a graceful
-// drain against the live loop (ENG-4971) — do not substitute Start(ctx),
-// which ties the loop's lifetime to the caller's cancel.
+// drain against the live loop. Do not substitute Start(ctx), which ties the
+// loop's lifetime to the caller's cancel.
 func buildFSMv2Supervisor(
-	ctx context.Context,
-	configData *config.FullConfig,
-	communicationState *communication_state.CommunicationState,
+	configManager config.ConfigManager,
+	cpuMonitorEnabled bool,
 	logger *zap.SugaredLogger,
 	forceExit <-chan struct{},
 	registered []fsmv2config.ChildSpec,
-) (appSup fsmv2Supervisor, cleanup func(), err error) {
-	if configData == nil {
-		return nil, func() {}, errors.New("config is nil, cannot build FSMv2 supervisor")
+) (fsmv2Supervisor, func(), error) {
+	childrenYAML, renderErr := renderSupervisorChildrenYAML(registered)
+	if renderErr != nil {
+		return nil, func() {}, fmt.Errorf("failed to render FSMv2 supervisor children: %w", renderErr)
 	}
 
-	yamlConfig, err := renderSupervisorChildrenYAML(registered)
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("failed to render FSMv2 supervisor children: %w", err)
-	}
-
-	// The historian monitor is a dynamic child, upserted and deleted at runtime
-	// by the config worker's per-tick reconcile so live config edits apply
-	// without restarting umh-core.
-
-	// Setup store (in-memory for now).
 	store := newFSMv2Store(deps.NewFSMLogger(logger))
 
-	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering.
-	fsmv2Logger := logger.Named("fsmv2")
-	// Wrap with FSMv2 SentryHook for automatic error capture to Sentry with:
-	// - Per-fingerprint debouncing (5 min window)
-	// - Error chain extraction for stable fingerprinting
-	// - Feature-based routing for error ownership
-	fsmv2Hook := fsmv2sentry.NewSentryHook(5 * time.Minute)
-
-	// Release the Communicator action-handler SentryHook's debouncer
-	// goroutine. The hook is lazy-initialized on first action; this
-	// no-ops when nothing exercised the path. Symmetric with the
-	// fsmv2Hook.Stop() above (pkg/communicator/actions/actions.go).
-	defer actions.StopCommunicatorSentryHook()
-
-	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
-
-	// The supervisor merges this map into every child, so each dependency
-	// reaches its worker however deep it sits.
-	fsmv2Deps := map[string]any{}
-	fsmv2config.SetDependency(fsmv2Deps, persistenceWorker.StoreKey, store)
-
-	// One secrets store per process; see package secrets.
-	secretsStore := secrets.NewStore()
-	fsmv2config.SetDependency(fsmv2Deps, secrets.StoreKey, secretsStore.Handle())
-
-	// The module's children get their dependencies through this map, as live
-	// values; the children document carries none.
-	if err := addChildDependencies(fsmv2Deps, registered); err != nil {
-		fsmv2Hook.Stop()
-
-		return nil, func() {}, fmt.Errorf("failed to add the Management Console module's dependencies: %w", err)
+	dependencies, dependenciesErr := supervisorDependencies(store, registered)
+	if dependenciesErr != nil {
+		return nil, func() {}, fmt.Errorf("failed to add the Management Console module's dependencies: %w", dependenciesErr)
 	}
 
-	// Publish the dynamicchildren registry under the configworker deps key and
-	// the process-scoped fsmv2client before constructing the supervisor, so the
-	// application worker's first CollectObservedState observes
-	// RegistryConfigured=true (the configworker kernel child spawns and dynamic
-	// child spawning is enabled) and FSMv1 components can reach the client via
-	// fsmv2client.GetClient(). Both must be published before
-	// NewApplicationSupervisor so the application worker's first COS sees the
-	// registry; the cleanup clears both and must run after the supervisor has
-	// stopped (the caller runs cleanup after appSup.Run returns).
-	dynWriter := dynamicchildren.NewWriter()
-	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
-	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
+	sentryHook := fsmv2sentry.NewSentryHook(5 * time.Minute)
+	supervisorLogger := withSentryHook(logger.Named("fsmv2"), sentryHook)
 
-	// Publish the config manager the config worker polls each tick to reconcile
-	// the historian monitor child (replacing the standalone watchConfig
-	// goroutine). Published before NewApplicationSupervisor so the config
-	// worker's first CollectObservedState sees it; cleared in cleanup and the
-	// error path below alongside the other deps keys.
-	// TODO(ENG-4400): remove this wiring once the config worker reads
-	// config.yaml directly instead of polling the manager.
-	register.SetGlobalDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
+	// The config worker reads these globals when it is constructed.
+	publishConfigWorkerGlobals(store, configManager, cpuMonitorEnabled)
+	cleanup := func() {
+		clearConfigWorkerGlobals()
+		sentryHook.Stop()
+		// The action handlers create their own hook on the first action, so
+		// it can only be stopped at shutdown.
+		actions.StopCommunicatorSentryHook()
+	}
 
-	// Published before NewApplicationSupervisor, like the keys above: the
-	// config worker reads this key when it is constructed.
-	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
+	applicationSupervisor, createErr := application.NewApplicationSupervisor(supervisorConfig(store, supervisorLogger, childrenYAML, dependencies, forceExit))
+	if createErr != nil {
+		cleanup()
 
-	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
+		return nil, func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", createErr)
+	}
+
+	// Register supervisor for debug introspection (/debug/fsmv2 endpoint).
+	metrics.RegisterFSMv2DebugProvider("application", applicationSupervisor)
+
+	return applicationSupervisor, cleanup, nil
+}
+
+// supervisorDependencies builds the map the supervisor merges into every
+// child, so each dependency reaches its worker however deep it sits. It holds
+// the store, the process's one secrets store, and the dependencies of the
+// module's children as live values.
+func supervisorDependencies(store storage.TriangularStoreInterface, registered []fsmv2config.ChildSpec) (map[string]any, error) {
+	dependencies := map[string]any{}
+	fsmv2config.SetDependency(dependencies, persistenceWorker.StoreKey, store)
+	fsmv2config.SetDependency(dependencies, secrets.StoreKey, secrets.NewStore().Handle())
+
+	if err := addChildDependencies(dependencies, registered); err != nil {
+		return nil, err
+	}
+
+	return dependencies, nil
+}
+
+// withSentryHook returns logger with its errors also sent to Sentry through
+// hook, which debounces them per fingerprint.
+func withSentryHook(logger *zap.SugaredLogger, hook *fsmv2sentry.SentryHook) *zap.SugaredLogger {
+	return logger.Desugar().WithOptions(zap.WrapCore(hook.Wrap)).Sugar()
+}
+
+// publishConfigWorkerGlobals publishes what the config worker and FSMv1
+// components read from process globals: the dynamic children registry, the
+// fsmv2 client, the config manager and the CPU monitor flag. The config worker
+// polls the config manager each tick to reconcile the historian monitor
+// child. It must run before NewApplicationSupervisor, so the application
+// worker's first observation sees the registry.
+//
+// TODO: stop publishing the config manager once the config worker reads
+// config.yaml directly instead of polling the manager.
+func publishConfigWorkerGlobals(store storage.TriangularStoreInterface, configManager config.ConfigManager, cpuMonitorEnabled bool) {
+	dynamicChildrenWriter := dynamicchildren.NewWriter()
+	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynamicChildrenWriter.Registry())
+	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicChildrenWriter, store))
+	register.SetGlobalDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, configManager)
+	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, cpuMonitorEnabled)
+}
+
+// clearConfigWorkerGlobals clears what publishConfigWorkerGlobals published.
+// It must run after the supervisor has stopped.
+func clearConfigWorkerGlobals() {
+	fsmv2client.SetClient(nil)
+	register.ClearGlobalDeps(configworker.WorkerTypeName)
+	register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
+	register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
+}
+
+// supervisorConfig is the ApplicationSupervisor's configuration.
+func supervisorConfig(
+	store storage.TriangularStoreInterface,
+	logger *zap.SugaredLogger,
+	childrenYAML string,
+	dependencies map[string]any,
+	forceExit <-chan struct{},
+) application.SupervisorConfig {
+	return application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
 		Store:        store,
-		Logger:       deps.NewFSMLogger(fsmv2Logger),
+		Logger:       deps.NewFSMLogger(logger),
 		TickInterval: 100 * time.Millisecond,
-		YAMLConfig:   yamlConfig,
-		Dependencies: fsmv2Deps,
+		YAMLConfig:   childrenYAML,
+		Dependencies: dependencies,
 		ForceExit:    forceExit,
 		// Each supervisor level may wait up to this base before it gives up on
 		// a stuck child, so a full shutdown can take up to base x tree height
@@ -178,31 +197,7 @@ func buildFSMv2Supervisor(
 		// long a STUCK worker delays shutdown before its level warns and moves
 		// on. The base propagates to every child supervisor unchanged.
 		GracefulShutdownTimeout: 2 * time.Second,
-	})
-	if err != nil {
-		fsmv2client.SetClient(nil)
-		register.ClearGlobalDeps(configworker.WorkerTypeName)
-		register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
-		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
-		fsmv2Hook.Stop()
-
-		return nil, func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
 	}
-
-	// Register supervisor for debug introspection (/debug/fsmv2 endpoint).
-	metrics.RegisterFSMv2DebugProvider("application", appSup)
-
-	cleanup = func() {
-		// Clear the client and the configworker deps key after the supervisor
-		// has stopped (the caller runs cleanup after appSup.Run returns).
-		fsmv2client.SetClient(nil)
-		register.ClearGlobalDeps(configworker.WorkerTypeName)
-		register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
-		register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
-		fsmv2Hook.Stop()
-	}
-
-	return appSup, cleanup, nil
 }
 
 // runFSMv2SupervisorInBackground runs the supervisor in a goroutine and closes
@@ -255,7 +250,7 @@ func startFSMv2Runtime(
 		return fsmv2Handle{}, fmt.Errorf("failed to start the Management Console module: %w", moduleErr)
 	}
 
-	applicationSupervisor, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit, managementConsole.Children)
+	applicationSupervisor, cleanup, buildErr := buildFSMv2SupervisorFn(communicationState.ConfigManager, configData.Agent.UseFSMv2CPU, log, forceExit, managementConsole.Children)
 	if buildErr != nil {
 		return fsmv2Handle{}, fmt.Errorf("failed to build FSMv2 supervisor: %w", buildErr)
 	}
