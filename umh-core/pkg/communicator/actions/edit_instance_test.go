@@ -260,10 +260,10 @@ var _ = Describe("EditInstance", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 
-				cfg, err := mockConfig.GetConfig(ctx, 0)
+				currentConfig, err := mockConfig.GetConfig(ctx, 0)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg.ProtocolConverter = []config.ProtocolConverterConfig{{
+				currentConfig.ProtocolConverter = []config.ProtocolConverterConfig{{
 					FSMInstanceConfig: config.FSMInstanceConfig{Name: "writer", DesiredFSMState: "active"},
 					ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
@@ -278,7 +278,7 @@ var _ = Describe("EditInstance", func() {
 						Location: map[string]string{"0": "Old Enterprise", "1": "Old Site"},
 					},
 				}}
-				mockConfig.WithConfig(cfg)
+				mockConfig.WithConfig(currentConfig)
 			}
 
 			moveTo := func(enterprise string) error {
@@ -295,10 +295,10 @@ var _ = Describe("EditInstance", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 
-				cfg, err := mockConfig.GetConfig(ctx, 0)
+				currentConfig, err := mockConfig.GetConfig(ctx, 0)
 				Expect(err).NotTo(HaveOccurred())
 
-				return cfg.Agent.Location[0]
+				return currentConfig.Agent.Location[0]
 			}
 
 			It("rejects a location that moves valid write flow topics outside the bridge location", func() {
@@ -306,7 +306,7 @@ var _ = Describe("EditInstance", func() {
 
 				err := moveTo("New Enterprise")
 				Expect(err).To(MatchError(ContainSubstring(`bridge "writer"`)))
-				Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
+				Expect(err).To(MatchError(ContainSubstring(`^umh\.v1\.Old Enterprise\.Old Site\._raw\.`)))
 				Expect(agentEnterprise()).To(Equal("Old Enterprise"))
 
 				Expect(failureReply(drainReplies(outboundChannel)).ErrorCode).To(Equal(models.ErrValidationFailed))
@@ -352,6 +352,7 @@ var _ = Describe("EditInstance", func() {
 			Expect(replies).To(HaveLen(3))
 			Expect(replies[2].State).To(Equal(string(models.ActionFinishedWithFailure)))
 			Expect(replies[2].ErrorCode).To(Equal(models.ErrRetryConfigReadFailed))
+			Expect(replies[2].Message).NotTo(ContainSubstring("topic"))
 		})
 
 		It("should handle WriteConfig failure", func() {

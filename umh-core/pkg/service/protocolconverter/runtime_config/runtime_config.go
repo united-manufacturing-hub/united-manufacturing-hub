@@ -246,7 +246,7 @@ func BuildRuntimeConfig(
 }
 
 // dataContractNames lists the names of the configured data contracts, the set a write flow
-// topic may name on top of dataflowcomponentserviceconfig.BuiltinDataContracts.
+// topic may name on top of the built-in _raw and _historian.
 func dataContractNames(dataContracts []config.DataContractsConfig) []string {
 	names := make([]string, 0, len(dataContracts))
 	for _, dataContract := range dataContracts {
@@ -392,7 +392,7 @@ func renderConfig(
 	// Source topics are regular expressions, so every variable renders into them as an
 	// escaped literal: `^umh\.v1\.{{ .location_path }}\.` matches the location path exactly.
 	renderedWriteConfig.Source, err = config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig.Source,
-		regexQuotedScope(scope).(map[string]any), regexQuotedSecrets(secrets)...)
+		regexQuotedScope(scope), regexQuotedSecrets(secrets)...)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
@@ -437,42 +437,48 @@ func renderConfig(
 	}, writeFlowErr
 }
 
-// regexQuotedScope returns a copy of the template scope v with every string value passed
-// through regexp.QuoteMeta, descending into nested maps and slices.
-func regexQuotedScope(v any) any {
-	switch value := v.(type) {
-	case string:
-		return regexp.QuoteMeta(value)
-	case map[string]any:
-		quoted := make(map[string]any, len(value))
-		for k, item := range value {
-			quoted[k] = regexQuotedScope(item)
-		}
+// regexQuotedScope returns a copy of scope with every string escaped by regexp.QuoteMeta,
+// so variables render into a regular expression as literal text.
+func regexQuotedScope(scope map[string]any) map[string]any {
+	quoted := make(map[string]any, len(scope))
+	for key, value := range scope {
+		quoted[key] = regexQuotedValue(value)
+	}
 
-		return quoted
+	return quoted
+}
+
+// regexQuotedValue escapes value if it is a string, and every string inside it if it is
+// a map or slice. Other values are returned unchanged.
+func regexQuotedValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return regexp.QuoteMeta(typed)
+	case map[string]any:
+		return regexQuotedScope(typed)
 	case map[string]string:
-		quoted := make(map[string]string, len(value))
-		for k, item := range value {
-			quoted[k] = regexp.QuoteMeta(item)
+		quoted := make(map[string]string, len(typed))
+		for key, item := range typed {
+			quoted[key] = regexp.QuoteMeta(item)
 		}
 
 		return quoted
 	case []any:
-		quoted := make([]any, len(value))
-		for i, item := range value {
-			quoted[i] = regexQuotedScope(item)
+		quoted := make([]any, len(typed))
+		for i, item := range typed {
+			quoted[i] = regexQuotedValue(item)
 		}
 
 		return quoted
 	case []string:
-		quoted := make([]string, len(value))
-		for i, item := range value {
+		quoted := make([]string, len(typed))
+		for i, item := range typed {
 			quoted[i] = regexp.QuoteMeta(item)
 		}
 
 		return quoted
 	default:
-		return v
+		return value
 	}
 }
 

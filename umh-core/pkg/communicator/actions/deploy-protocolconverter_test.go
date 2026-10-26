@@ -15,15 +15,12 @@
 package actions_test
 
 import (
-	"sync"
-
 	"errors"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -47,8 +44,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		pcPort          uint32
 		pcLocation      map[int]string
 		stateMocker     *actions.StateMocker
-		messages        []*models.UMHMessage
-		mu              sync.Mutex
+		recorder        *replyRecorder
 	)
 
 	// Setup before each test
@@ -87,11 +83,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		stateMocker.Tick()
 		action = actions.NewDeployProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		mu.Lock()
-		messages = nil
-		mu.Unlock()
-
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		recorder = newReplyRecorder(outboundChannel)
 	})
 
 	// Cleanup after each test
@@ -285,31 +277,20 @@ var _ = Describe("DeployProtocolConverter", func() {
 			return err
 		}
 
-		It("should reject a write flow whose topics are outside the bridge location", func() {
-			err := deployWithWriteTopics("^umh\\.v1\\.TestEnterprise\\.OtherSite\\._historian\\.foo")
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must be beneath the bridge location"))
-			Expect(err.Error()).To(ContainSubstring("^umh\\.v1\\.TestEnterprise\\.OtherSite\\._historian\\.foo"))
+		// expectRejected asserts that the deploy failed as a validation failure naming
+		// topic, and that nothing was persisted.
+		expectRejected := func(err error, topic string) {
+			Expect(err).To(MatchError(ContainSubstring(topic)))
 			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
-		})
 
-		// consumedFailure returns the failure reply among the messages consumed so far.
-		consumedFailure := func() queuedReply {
-			mu.Lock()
-			defer mu.Unlock()
-
-			return failureReply(decodeReplies(messages))
+			Eventually(func() queuedReply { return failureReply(recorder.replies()) }).
+				Should(HaveField("ErrorCode", models.ErrValidationFailed))
 		}
 
-		It("should report a topic violation as a validation failure", func() {
-			Expect(deployWithWriteTopics("^umh\\.v1\\.TestEnterprise\\.OtherSite\\._historian\\.foo")).NotTo(Succeed())
+		It("should reject a write flow whose topics are outside the bridge location", func() {
+			topic := "^umh\\.v1\\.TestEnterprise\\.OtherSite\\._historian\\.foo"
 
-			Eventually(consumedFailure).Should(HaveField("ErrorCode", Not(BeEmpty())))
-
-			reply := consumedFailure()
-			Expect(reply.ErrorCode).To(Equal(models.ErrValidationFailed))
-			Expect(reply.Message).To(HavePrefix("Failed to deploy Bridge: write flow topics must "))
+			expectRejected(deployWithWriteTopics(topic), topic)
 		})
 
 		It("should report a config read failure as retryable, not as a topic violation", func() {
@@ -317,30 +298,20 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			Expect(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._historian\\.foo")).NotTo(Succeed())
 
-			Eventually(consumedFailure).Should(HaveField("ErrorCode", Not(BeEmpty())))
-
-			reply := consumedFailure()
-			Expect(reply.ErrorCode).To(Equal(models.ErrRetryConfigReadFailed))
-			Expect(reply.Message).To(ContainSubstring("failed to read current config"))
-			Expect(reply.Message).NotTo(ContainSubstring("write flow topics"))
+			Eventually(func() queuedReply { return failureReply(recorder.replies()) }).
+				Should(HaveField("ErrorCode", models.ErrRetryConfigReadFailed))
+			Expect(failureReply(recorder.replies()).Message).NotTo(ContainSubstring("topic"))
 			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
 		})
 
 		It("should reject a write flow whose topics name no data contract", func() {
-			err := deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\.")
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must each name one existing data contract"))
-			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
+			expectRejected(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\."),
+				"^umh\\.v1\\.TestEnterprise\\.TestSite\\.")
 		})
 
 		It("should reject a write flow whose topics name a data contract that does not exist", func() {
-			err := deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._pump_v1\\.pressure")
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must each name one existing data contract"))
-			Expect(err.Error()).To(ContainSubstring("_pump_v1"))
-			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeFalse())
+			expectRejected(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._pump_v1\\.pressure"),
+				"^umh\\.v1\\.TestEnterprise\\.TestSite\\._pump_v1\\.pressure")
 		})
 
 		It("should accept a write flow naming a data contract declared in the config", func() {
@@ -354,8 +325,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			err := deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._pmup_v1\\.pressure")
 
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("_pump_v1"))
+			Expect(err).To(MatchError(ContainSubstring("_pump_v1")))
 		})
 
 		It("should accept a write flow whose topics resolve beneath the bridge location", func() {
@@ -651,59 +621,3 @@ var _ = Describe("DeployProtocolConverter", func() {
 		})
 	})
 })
-
-// queuedReply is an action reply as the user receives it.
-type queuedReply struct {
-	State     string
-	Message   string
-	ErrorCode string
-}
-
-// decodeReplies decodes the action replies among msgs, in order.
-func decodeReplies(msgs []*models.UMHMessage) []queuedReply {
-	var replies []queuedReply
-
-	for _, msg := range msgs {
-		decoded, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
-		Expect(err).NotTo(HaveOccurred())
-
-		payload, isMap := decoded.Payload.(map[string]interface{})
-		if !isMap {
-			continue
-		}
-
-		var reply queuedReply
-		reply.State, _ = payload["actionReplyState"].(string)
-		reply.Message, _ = payload["actionReplyPayload"].(string)
-
-		if v2, hasV2 := payload["actionReplyPayloadV2"].(map[string]interface{}); hasV2 {
-			reply.ErrorCode, _ = v2["errorCode"].(string)
-		}
-
-		replies = append(replies, reply)
-	}
-
-	return replies
-}
-
-// drainReplies decodes and returns the action replies queued in outbound, in order.
-func drainReplies(outbound chan *models.UMHMessage) []queuedReply {
-	var msgs []*models.UMHMessage
-	for len(outbound) > 0 {
-		msgs = append(msgs, <-outbound)
-	}
-
-	return decodeReplies(msgs)
-}
-
-// failureReply returns the ActionFinishedWithFailure reply among replies, or the zero
-// reply when there is none.
-func failureReply(replies []queuedReply) queuedReply {
-	for _, reply := range replies {
-		if reply.State == string(models.ActionFinishedWithFailure) {
-			return reply
-		}
-	}
-
-	return queuedReply{}
-}

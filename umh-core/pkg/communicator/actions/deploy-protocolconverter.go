@@ -182,13 +182,19 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	errCode, err := checkWriteTopics(ctx, a.configManager, func(currentConfig config.FullConfig) error {
-		return writeTopicViolation(pcConfig, currentConfig)
-	})
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to read current config: %v", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrRetryConfigReadFailed, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
+
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	if err := writeTopicViolation(pcConfig, currentConfig); err != nil {
 		errorMsg := fmt.Sprintf("Failed to deploy Bridge: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, errCode, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
+			errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}

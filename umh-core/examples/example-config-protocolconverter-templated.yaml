@@ -31,7 +31,7 @@ templates:
               address: "opc.tcp://{{ .IP }}:{{ .PORT }}"
       dataflowcomponent_write:
         source:
-          topics: "umh.v1.{{ .location_path }}._historian.temperature-sensor-pc.*"
+          topics: '^umh\.v1\.{{ .location_path }}\._historian\.temperature-sensor-pc\.'
         destination:
           protocol: http_client
           code: |

@@ -163,15 +163,24 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	if errCode, err := checkWriteTopics(ctx, a.configManager, a.writeTopicViolation); err != nil {
-		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to read current config: %s", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, errCode, nil, a.outboundChannel, models.EditInstance, nil)
+			errorMsg, models.ErrRetryConfigReadFailed, nil, a.outboundChannel, models.EditInstance, nil)
 
 		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
 	}
 
-	err := a.configManager.AtomicSetLocation(ctx, *a.location)
+	if err := a.bridgesStoppedByLocation(currentConfig); err != nil {
+		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.EditInstance, nil)
+
+		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
+	}
+
+	err = a.configManager.AtomicSetLocation(ctx, *a.location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)
@@ -186,10 +195,11 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	return "Successfully updated instance location", nil, nil
 }
 
-// writeTopicViolation reports the bridges of currentConfig whose valid write flow topics
-// the location change moves outside the bridge's new location. Bridges whose topics were
-// already invalid are left to the reconciliation loop, which reports them on the bridge.
-func (a *EditInstanceAction) writeTopicViolation(currentConfig config.FullConfig) error {
+// bridgesStoppedByLocation reports the bridges of currentConfig whose valid write flow
+// topics the location change moves outside the bridge's new location. Bridges whose topics
+// were already invalid are left to the reconciliation loop, which reports them on the
+// bridge.
+func (a *EditInstanceAction) bridgesStoppedByLocation(currentConfig config.FullConfig) error {
 	updatedConfig := currentConfig.Clone()
 	updatedConfig.ApplyAgentLocation(*a.location)
 
@@ -205,7 +215,7 @@ func (a *EditInstanceAction) writeTopicViolation(currentConfig config.FullConfig
 		return nil
 	}
 
-	return fmt.Errorf("the new location would stop the write flows of these bridges, update their topics first: %s",
+	return fmt.Errorf("the new location moves the write flow topics of these bridges outside their location; update their topics first: %s",
 		strings.Join(broken, "; "))
 }
 

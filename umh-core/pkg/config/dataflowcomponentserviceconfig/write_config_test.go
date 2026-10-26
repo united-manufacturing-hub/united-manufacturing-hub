@@ -210,6 +210,9 @@ var _ = Describe("write_config", func() {
 			Entry("every level beneath the bridge", `^umh\.v1\.acme\.cologne\.line-4\.(?:[^._][^.]*\.)*_pump_v1\.`, true),
 			Entry("one tag on every level beneath the bridge", `^umh\.v1\.acme\.cologne\.line-4\.(?:[^._][^.]*\.)*_pump_v1\.motor\.current`, true),
 			Entry("built-in contract", `^umh\.v1\.acme\.cologne\.line-4\._raw\.`, true),
+			Entry("a pattern that matches no topic, such as an error message pasted back in", `^umh\.v1\.acme\.cologne\.line-4\.: ^umh\.v1\..*\._pump(?:_v\d+)?\.`, false),
+			Entry("a pattern that requires the topic to end before more text", `^umh\.v1\.acme\.cologne\.line-4\._raw\.$x`, false),
+			Entry("a branch that matches no topic next to one that does", `^umh\.v1\.acme\.cologne\.line-4\.(?:_raw\.$x|_pump_v1\.)`, true),
 			Entry("built-in historian contract", `^umh\.v1\.acme\.cologne\.line-4\._historian\.temperature`, true),
 			Entry("specific virtual path and tag", `^umh\.v1\.acme\.cologne\.line-4\._pump_v1\.motor\.current`, true),
 			Entry("virtual path subtree", `^umh\.v1\.acme\.cologne\.line-4\._pump_v1\.motor\..*`, true),
@@ -273,14 +276,17 @@ var _ = Describe("write_config", func() {
 			Expect(err).To(MatchError(ContainSubstring(`^umh\.v1\.acme\.cologne\.sublevel\.`)))
 		})
 
-		It("reports each kind of violation in one error", func() {
+		It("describes each offending topic in its own sentence and ends with a valid example", func() {
 			err := validate(`^umh\.v1\.elsewhere\._raw\.foo`+"\n"+`^umh\.v1\.acme\.cologne\.bar`+"\n"+
-				`umh\.v1\.acme\.cologne\._raw\.`+"\n"+`^umh\.v1\.acme\.cologne\.(`, "acme.cologne")
-			Expect(err).To(MatchError(ContainSubstring(`must be beneath the bridge location, starting with ^umh\.v1\.acme\.cologne\.: ^umh\.v1\.elsewhere\._raw\.foo`)))
-			Expect(err).To(MatchError(ContainSubstring(`must each name one existing data contract`)))
-			Expect(err).To(MatchError(ContainSubstring(`^umh\.v1\.acme\.cologne\.bar`)))
-			Expect(err).To(MatchError(ContainSubstring(`must start with ^: umh\.v1\.acme\.cologne\._raw\.`)))
-			Expect(err).To(MatchError(ContainSubstring(`must be valid regular expressions: ^umh\.v1\.acme\.cologne\.(`)))
+				`umh\.v1\.acme\.cologne\._raw\.`+"\n"+`^umh\.v1\.acme\.cologne\.(`+"\n"+
+				`^umh\.v1\.acme\.cologne\._raw\.$x`, "acme.cologne")
+			Expect(err).To(MatchError(`the write flow topics need changes: ` +
+				`topic "^umh\.v1\.elsewhere\._raw\.foo" can match topics outside this bridge's location acme.cologne; start it with ^umh\.v1\.acme\.cologne\.; ` +
+				`topic "^umh\.v1\.acme\.cologne\.bar" must name exactly one data contract after the location, followed by \.; available: _raw, _historian; list versions explicitly, like _pump_v[1-2]\.; ` +
+				`topic "umh\.v1\.acme\.cologne\._raw\." must start with ^, otherwise it also matches topics that only contain it; ` +
+				`topic "^umh\.v1\.acme\.cologne\.(" is not a valid regular expression: missing closing ); ` +
+				`topic "^umh\.v1\.acme\.cologne\._raw\.$x" cannot match any topic, so the write flow would receive no messages. ` +
+				`Example of a valid topic: ^umh\.v1\.acme\.cologne\._historian\.`))
 		})
 
 		It("names the contracts a topic may use", func() {
@@ -289,15 +295,21 @@ var _ = Describe("write_config", func() {
 			Expect(err).To(MatchError(ContainSubstring("_historian")))
 		})
 
-		It("rejects a declared data contract without a version and says why", func() {
+		It("explains that a declared data contract without a version needs one", func() {
 			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: `^umh\.v1\.acme\.cologne\._pump\.`},
 			}
 
 			err := input.ToWriteConfig().ValidateTopics("acme.cologne", []string{"_pump", "_valve_v1"})
-			Expect(err).To(MatchError(ContainSubstring(`must each name one existing data contract`)))
-			Expect(err).To(MatchError(ContainSubstring(`data contracts _pump are declared without a version`)))
-			Expect(err).NotTo(MatchError(ContainSubstring(`(_raw, _historian, _pump,`)))
+			Expect(err).To(MatchError(ContainSubstring(`available: _raw, _historian, _valve_v1;`)))
+			Expect(err).To(MatchError(ContainSubstring(
+				`data contract "_pump" has no version; rename it with one, like _pump_v1, before a write flow can use it`)))
+			Expect(err).To(MatchError(HaveSuffix(`Example of a valid topic: ^umh\.v1\.acme\.cologne\._valve_v1\.`)))
+		})
+
+		It("tells a bridge without a location to start beneath the UNS prefix", func() {
+			err := validate(`^other\._raw\.`, "")
+			Expect(err).To(MatchError(ContainSubstring(`can match topics outside the UNS; start it with ^umh\.v1\.`)))
 		})
 
 		It("accepts a versioned data contract next to an unversioned declared one", func() {

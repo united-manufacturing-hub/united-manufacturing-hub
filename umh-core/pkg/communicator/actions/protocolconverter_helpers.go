@@ -15,7 +15,6 @@
 package actions
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -58,34 +57,14 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 	return nil
 }
 
-// checkWriteTopics reads the current config and passes it to violation, which reports a
-// write flow topic violation the action must not persist, so the user sees it right away
-// instead of only on the degraded bridge later. It returns the action error code along
-// with the error: models.ErrRetryConfigReadFailed when the config cannot be read, which a
-// retry may fix, and models.ErrValidationFailed for a violation, which only a change to
-// the topics fixes.
-//
-// The agent location and the declared data contracts come from the config manager
-// rather than from the system snapshot, because the snapshot carries no config (see
-// fsm.GetManagerSnapshots).
-func checkWriteTopics(ctx context.Context, configManager config.ConfigManager, violation func(config.FullConfig) error) (string, error) {
-	currentConfig, err := configManager.GetConfig(ctx, 0)
-	if err != nil {
-		return models.ErrRetryConfigReadFailed, fmt.Errorf("failed to read current config: %w", err)
-	}
-
-	if err := violation(currentConfig); err != nil {
-		return models.ErrValidationFailed, err
-	}
-
-	return "", nil
-}
-
 // writeTopicViolation returns why the write flow of pcConfig may not subscribe to its
 // topics within fullConfig, which supplies the agent location and the declared data
 // contracts, or nil when it may. The rule itself lives in BuildRuntimeConfig, which
 // reports it as a WriteFlowConfigError; every other render failure is left to the
 // reconciliation loop, which reports it on the bridge.
+//
+// Actions pass the config from the config manager rather than from the system snapshot,
+// because the snapshot carries no config (see fsm.GetManagerSnapshots).
 func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig config.FullConfig) error {
 	_, err := runtime_config.BuildRuntimeConfig(
 		pcConfig.ProtocolConverterServiceConfig,

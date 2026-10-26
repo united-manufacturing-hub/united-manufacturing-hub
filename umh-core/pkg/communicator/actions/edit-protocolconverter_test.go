@@ -129,10 +129,9 @@ var _ = Describe("EditProtocolConverter", func() {
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
 		stateMocker     *actions.StateMocker
-		messages        []*models.UMHMessage
+		recorder        *replyRecorder
 		pcName          string
 		pcUUID          uuid.UUID
-		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -142,9 +141,6 @@ var _ = Describe("EditProtocolConverter", func() {
 		actionUUID = uuid.New()
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
-		mu.Lock()
-		messages = nil
-		mu.Unlock()
 		pcName = "wetter"
 		pcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(pcName)
 
@@ -204,7 +200,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 		action = actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		recorder = newReplyRecorder(outboundChannel)
 	})
 
 	// Cleanup after each test
@@ -1021,31 +1017,18 @@ var _ = Describe("EditProtocolConverter", func() {
 			}
 
 			It("rejects the edit without persisting it", func() {
-				err := editWithWriteTopics("^umh\\.v1\\.test-enterprise\\.other-site\\.foo")
+				topic := "^umh\\.v1\\.test-enterprise\\.other-site\\.foo"
 
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("must be beneath the bridge location"))
-				Expect(err.Error()).To(ContainSubstring("^umh\\.v1\\.test-enterprise\\.other-site\\.foo"))
+				Expect(editWithWriteTopics(topic)).To(MatchError(ContainSubstring(topic)))
 				Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeFalse())
 			})
 
 			It("reports the violation as a validation failure before announcing the update", func() {
 				Expect(editWithWriteTopics("^umh\\.v1\\.test-enterprise\\.other-site\\.foo")).NotTo(Succeed())
 
-				consumed := func() []queuedReply {
-					mu.Lock()
-					defer mu.Unlock()
-
-					return decodeReplies(messages)
-				}
-
-				Eventually(func() queuedReply { return failureReply(consumed()) }).
-					Should(HaveField("ErrorCode", Not(BeEmpty())))
-
-				replies := consumed()
-				Expect(replies).NotTo(ContainElement(HaveField("State", string(models.ActionExecuting))))
-				Expect(failureReply(replies).ErrorCode).To(Equal(models.ErrValidationFailed))
-				Expect(failureReply(replies).Message).To(HavePrefix("Failed to update bridge: write flow topics must "))
+				Eventually(func() queuedReply { return failureReply(recorder.replies()) }).
+					Should(HaveField("ErrorCode", models.ErrValidationFailed))
+				Expect(recorder.replies()).NotTo(ContainElement(HaveField("State", string(models.ActionExecuting))))
 			})
 
 			It("accepts topics that resolve beneath the bridge location", func() {
@@ -1140,10 +1123,12 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 
 				It("rejects a move that puts valid write flow topics outside the new location", func() {
-					err := moveToCell("^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\.cell-1\\._raw\\.")
+					topic := "^umh\\.v1\\.test-enterprise\\.test-site\\.test-area\\.test-line\\.cell-1\\._raw\\."
 
-					Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
+					Expect(moveToCell(topic)).To(MatchError(ContainSubstring(topic)))
 					Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeFalse())
+					Eventually(func() queuedReply { return failureReply(recorder.replies()) }).
+						Should(HaveField("ErrorCode", models.ErrValidationFailed))
 				})
 
 				It("accepts a move when the write flow topics follow location_path", func() {

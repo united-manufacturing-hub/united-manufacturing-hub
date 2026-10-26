@@ -327,13 +327,19 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	validateCtx, cancelValidate := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancelValidate()
 
-	errCode, err := checkWriteTopics(validateCtx, a.configManager, func(currentConfig config.FullConfig) error {
-		return a.writeTopicViolation(newSpec, currentConfig)
-	})
+	currentConfig, err := a.configManager.GetConfig(validateCtx, 0)
 	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to read current config: %v", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrRetryConfigReadFailed, nil, a.outboundChannel, models.EditProtocolConverter, nil)
+
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	if err := a.editTopicViolation(newSpec, currentConfig); err != nil {
 		errorMsg := fmt.Sprintf("Failed to update bridge: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
+			errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.EditProtocolConverter, nil)
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
@@ -393,12 +399,12 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	return response, nil, nil
 }
 
-// writeTopicViolation returns the write topic violation of newSpec within currentConfig
+// editTopicViolation returns the write topic violation of newSpec within currentConfig
 // when the edit is its cause: the edit supplies the write config, or it changes what the
 // existing topics are checked against, such as the bridge location, a variable, or the
 // state of a stopped write flow. A violation the bridge already had does not block an
 // unrelated edit.
-func (a *EditProtocolConverterAction) writeTopicViolation(newSpec config.ProtocolConverterConfig, currentConfig config.FullConfig) error {
+func (a *EditProtocolConverterAction) editTopicViolation(newSpec config.ProtocolConverterConfig, currentConfig config.FullConfig) error {
 	if a.writeDFCInput != nil {
 		return writeTopicViolation(newSpec, currentConfig)
 	}

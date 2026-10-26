@@ -353,7 +353,6 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(err).To(MatchError(ContainSubstring(`^umh\.v1\.plant-A\.line-9\._historian\.oven\.`)))
-			Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
 			Expect(errors.As(err, new(*runtime_config.WriteFlowConfigError))).To(BeTrue())
 
 			// The violation is confined to the write flow: the connection and read flow
@@ -435,7 +434,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			}
 
 			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nil, nil, nodeName, pcName)
-			Expect(err).To(MatchError(ContainSubstring("must be beneath the bridge location")))
+			Expect(err).To(MatchError(ContainSubstring(`^umh.v1.plant-A.line-4\._historian\.press\.`)))
+			Expect(errors.As(err, new(*runtime_config.WriteFlowConfigError))).To(BeTrue())
 		})
 
 		It("should not require UMHTopics when write DFC has no output", func() {

@@ -785,38 +785,46 @@ func (m *FileConfigManagerWithBackoff) GetLastError() error {
 // processor slice elements in place, which a shallow copy of c shares, so callers that
 // still need the original apply it to a Clone.
 func (c *FullConfig) ApplyAgentLocation(location models.EditInstanceLocationModel) {
-	// Location is a hierarchical structure represented as map[int]string
-	// 0: Enterprise, 1: Site, 2: Area, 3: Line, 4: WorkCell
-	c.Agent.Location = map[int]string{0: location.Enterprise}
-
-	for level, value := range map[int]*string{1: location.Site, 2: location.Area, 3: location.Line, 4: location.WorkCell} {
-		if value != nil {
-			c.Agent.Location[level] = *value
-		}
-	}
-
-	withAgentLevels := func(componentLocation map[string]string) map[string]string {
-		merged := maps.Clone(componentLocation)
-		if merged == nil {
-			merged = make(map[string]string, len(c.Agent.Location))
-		}
-
-		for level, value := range c.Agent.Location {
-			merged[strconv.Itoa(level)] = value
-		}
-
-		return merged
-	}
+	c.Agent.Location = agentLocationLevels(location)
 
 	for i := range c.ProtocolConverter {
 		spec := &c.ProtocolConverter[i].ProtocolConverterServiceConfig
-		spec.Location = withAgentLevels(spec.Location)
+		spec.Location = overrideLocationLevels(spec.Location, c.Agent.Location)
 	}
 
 	for i := range c.StreamProcessor {
 		spec := &c.StreamProcessor[i].StreamProcessorServiceConfig
-		spec.Location = withAgentLevels(spec.Location)
+		spec.Location = overrideLocationLevels(spec.Location, c.Agent.Location)
 	}
+}
+
+// agentLocationLevels returns the agent location keyed by level: 0 enterprise, 1 site,
+// 2 area, 3 line, 4 work cell. Levels the location does not set are absent.
+func agentLocationLevels(location models.EditInstanceLocationModel) map[int]string {
+	levels := map[int]string{0: location.Enterprise}
+
+	for level, value := range map[int]*string{1: location.Site, 2: location.Area, 3: location.Line, 4: location.WorkCell} {
+		if value != nil {
+			levels[level] = *value
+		}
+	}
+
+	return levels
+}
+
+// overrideLocationLevels returns a copy of component with every level of agent set to the
+// agent's value. It never modifies component, so a Clone that shares the map is unaffected.
+func overrideLocationLevels(component map[string]string, agent map[int]string) map[string]string {
+	merged := maps.Clone(component)
+	if merged == nil {
+		merged = make(map[string]string, len(agent))
+	}
+
+	for level, value := range agent {
+		merged[strconv.Itoa(level)] = value
+	}
+
+	return merged
 }
 
 // AtomicSetLocation sets the location in the config atomically
