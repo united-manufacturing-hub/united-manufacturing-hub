@@ -115,6 +115,9 @@ jobs:
             echo "VERSION=0.0.0-dev-${{ github.sha }}" >> $GITHUB_OUTPUT
           fi
 
+      # The official image includes a private module.
+      # Its build output is hidden, because compiler errors name private files.
+      # Maintainers with read access to that module can rebuild the official image locally to see the error.
       - name: Build and Push
         working-directory: ./umh-core
         env:
@@ -127,10 +130,16 @@ jobs:
             [ -n "$tag" ] && TAGS="$TAGS -t $tag"
           done <<< "${{ steps.meta.outputs.tags }}"
 
-          make build-depot \
+          if make build-depot \
             VERSION=${{ steps.version.outputs.VERSION }} \
             TAGS="$TAGS" \
-            MC_PATH=${{ github.workspace }}/ManagementConsole
+            MC_PATH=${{ github.workspace }}/ManagementConsole > /dev/null 2>&1; then
+            echo "The official image build passed."
+          else
+            rc=$?
+            echo "::error::The official image includes a private module. Its build output is hidden, because compiler errors name private files. Maintainers with read access to that module can rebuild the official image locally to see the error."
+            exit "$rc"
+          fi
 
       - name: Get image digest
         id: digest
