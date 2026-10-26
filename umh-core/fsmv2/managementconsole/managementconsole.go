@@ -92,9 +92,8 @@ type Result struct {
 type StartFunc func(Deps) (Result, error)
 
 // StatusFunc returns the state of the connection. umh-core calls it once for
-// each status message, with the number of users who receive that message. It
-// returns nil when the state is not known yet.
-type StatusFunc func(ctx context.Context, subscriberCount int) *Status
+// each status message. It returns nil when the state is not known yet.
+type StatusFunc func(ctx context.Context) *Status
 
 // HealthCategory classifies the connection's health.
 type HealthCategory int
@@ -116,8 +115,6 @@ type Status struct {
 	// State is the state of the worker that holds the connection, for
 	// example "Running".
 	State string
-	// SubscriberCount is the number of users who receive status messages.
-	SubscriberCount int
 	// ConsecutiveErrors is the number of errors since the last success, and
 	// LastErrorType names the last one while errors continue.
 	ConsecutiveErrors int
