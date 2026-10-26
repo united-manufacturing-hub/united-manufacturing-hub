@@ -462,6 +462,21 @@ update-go-dependencies:
 	cd $(FSMV2_DIR) && go get -u ./... && go mod tidy
 	go mod tidy
 	go work vendor
+	rm -rf vendor/$(MC_MODULE)
+
+MC_MODULE := github.com/united-manufacturing-hub/ManagementConsole
+
+# moves the module pin to REF, a ManagementConsole commit on staging or a tag
+bump-managementconsole:
+	@test -n "$(REF)" || { echo "usage: make bump-managementconsole REF=<commit or tag>"; exit 1; }
+	@status="$$(gh api repos/united-manufacturing-hub/ManagementConsole/compare/staging...$(REF) --jq .status)"; \
+	  [ "$$status" = "behind" ] || [ "$$status" = "identical" ] || { echo "$(REF) is not on ManagementConsole staging"; exit 1; }
+	GOPRIVATE=$(MC_MODULE) go get $(MC_MODULE)/cryptolib@$(REF)
+	version="$$(go list -m -f '{{.Version}}' $(MC_MODULE)/cryptolib)"; \
+	  go mod edit -replace=$(MC_MODULE)/shared@v0.0.0=$(MC_MODULE)/shared@$$version
+	GOPRIVATE=$(MC_MODULE) go mod tidy
+	GOPRIVATE=$(MC_MODULE) go work vendor
+	rm -rf vendor/$(MC_MODULE)
 
 # Print version variables for use in other scripts/tools
 print-versions:
