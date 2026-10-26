@@ -99,7 +99,6 @@ var _ = Describe("Status connection part", func() {
 			Health:              managementconsole.Degraded,
 			HealthMessage:       "planted connection part",
 			State:               "Degraded",
-			SubscriberCount:     3,
 			ConsecutiveErrors:   4,
 			LastErrorType:       "server_error",
 			OutboundFillPercent: 12.5,
@@ -107,9 +106,8 @@ var _ = Describe("Status connection part", func() {
 			Push:                &managementconsole.ChannelStatus{State: "Running", LastErrorType: "push_error", Messages: 900, MessagesDropped: 7, PendingMessages: 2, ConsecutiveErrors: 1},
 			Pull:                &managementconsole.ChannelStatus{State: "Degraded", LastErrorType: "pull_error", Messages: 800, MessagesDropped: 6, PendingMessages: 5, ConsecutiveErrors: 8},
 		}
-		provider := func(ctx context.Context, subscriberCount int) *managementconsole.Status {
+		provider := func(ctx context.Context) *managementconsole.Status {
 			Expect(ctx).NotTo(BeNil())
-			Expect(subscriberCount).To(Equal(1))
 
 			return part
 		}
@@ -122,7 +120,7 @@ var _ = Describe("Status connection part", func() {
 		Expect(status.Core.Communicator).To(Equal(&models.Communicator{
 			Health:                     &models.Health{Category: models.Degraded, Message: "planted connection part"},
 			State:                      "Degraded",
-			SubscriberCount:            3,
+			SubscriberCount:            1,
 			ConsecutiveErrors:          4,
 			LastErrorType:              "server_error",
 			OutboundChannelFillPercent: 12.5,

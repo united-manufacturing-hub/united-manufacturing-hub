@@ -17,8 +17,8 @@
 //
 // Actions travel from the Management Console to umh-core, and status travels
 // back. The connection itself belongs to the Management Console module, which
-// the official image registers through package managementconsole. In the
-// open-source build no module is registered, and no message arrives.
+// the official image links in when it is built. In the open-source build no
+// module is linked, and no message arrives.
 //
 // An action takes this path:
 //

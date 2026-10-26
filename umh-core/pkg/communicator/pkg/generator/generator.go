@@ -260,7 +260,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	// registered the part is empty.
 	var communicatorData *models.Communicator
 	if s.status != nil {
-		communicatorData = communicatorFromStatus(s.status(ctx, s.subscriberCount()))
+		communicatorData = communicatorFromStatus(s.status(ctx), s.subscriberCount())
 	}
 
 	statusMessage := &models.StatusMessage{

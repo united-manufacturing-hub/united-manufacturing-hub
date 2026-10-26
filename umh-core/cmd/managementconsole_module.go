@@ -24,6 +24,4 @@ import (
 
 // The official image links the Management Console module. go.mod pins the
 // module's version.
-func init() {
-	managementconsole.Register(umhcore.Start)
-}
+var linkedManagementConsoleModule managementconsole.StartFunc = umhcore.Start

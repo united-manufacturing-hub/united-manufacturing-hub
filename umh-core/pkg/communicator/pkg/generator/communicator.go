@@ -19,9 +19,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// communicatorFromStatus copies the connection's status into the status
-// message's connection part. It returns nil for a nil status.
-func communicatorFromStatus(st *managementconsole.Status) *models.Communicator {
+// communicatorFromStatus copies the connection's status and umh-core's
+// subscriber count into the status message's connection part. It returns nil
+// for a nil status.
+func communicatorFromStatus(st *managementconsole.Status, subscriberCount int) *models.Communicator {
 	if st == nil {
 		return nil
 	}
@@ -32,7 +33,7 @@ func communicatorFromStatus(st *managementconsole.Status) *models.Communicator {
 			Message:  st.HealthMessage,
 		},
 		State:                      st.State,
-		SubscriberCount:            st.SubscriberCount,
+		SubscriberCount:            subscriberCount,
 		ConsecutiveErrors:          st.ConsecutiveErrors,
 		LastErrorType:              st.LastErrorType,
 		OutboundChannelFillPercent: st.OutboundFillPercent,

@@ -49,7 +49,7 @@ const connectionBufferSize = 100
 // Test seams for main's startup order. A test replaces one with a probe and
 // then drives the real startup path. Production never reassigns them.
 var (
-	startManagementConsoleConnection = managementconsole.Run
+	startManagementConsoleConnection = linkedManagementConsoleModule
 	newFSMv2Store                    = scenariorunner.SetupStore
 	buildFSMv2SupervisorFn           = buildFSMv2Supervisor
 	runFSMv2SupervisorFn             = runFSMv2SupervisorInBackground
@@ -261,8 +261,8 @@ func startFSMv2Runtime(
 }
 
 // startManagementConsoleIfConfigured starts the Management Console module when
-// relay credentials are set. Without them it returns an empty Result, so the
-// supervisor runs without the module's children.
+// relay credentials are set and the module is linked. Otherwise it returns an
+// empty Result, so the supervisor runs without the module's children.
 func startManagementConsoleIfConfigured(
 	agent config.AgentConfig,
 	placeholderUUID string,
@@ -272,6 +272,12 @@ func startManagementConsoleIfConfigured(
 	log *zap.SugaredLogger,
 ) (managementconsole.Result, error) {
 	if !hasRelayCredentials(agent) {
+		return managementconsole.Result{}, nil
+	}
+
+	if startManagementConsoleConnection == nil {
+		log.Info("no Management Console module linked")
+
 		return managementconsole.Result{}, nil
 	}
 
@@ -298,11 +304,11 @@ func managementConsoleDeps(
 			}
 		},
 		Config: managementconsole.Config{
-			RelayURL:         agent.APIURL,
-			AuthToken:        agent.AuthToken,
-			InstanceUUID:     placeholderUUID,
-			AllowInsecureTLS: agent.AllowInsecureTLS,
-			Location:         agent.Location,
+			RelayURL:             agent.APIURL,
+			AuthToken:            agent.AuthToken,
+			LoginPlaceholderUUID: placeholderUUID,
+			AllowInsecureTLS:     agent.AllowInsecureTLS,
+			Location:             agent.Location,
 		},
 		Logger: deps.NewFSMLogger(log),
 	}

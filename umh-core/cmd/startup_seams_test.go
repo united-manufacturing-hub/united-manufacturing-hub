@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
@@ -70,7 +71,7 @@ func registeredModule(children []fsmv2config.ChildSpec, status managementconsole
 // restoreStartupSeams puts every startup seam back to its production
 // implementation, so one spec's probes cannot leak into the next.
 func restoreStartupSeams() {
-	startManagementConsoleConnection = managementconsole.Run
+	startManagementConsoleConnection = linkedManagementConsoleModule
 	newFSMv2Store = scenariorunner.SetupStore
 	buildFSMv2SupervisorFn = buildFSMv2Supervisor
 	runFSMv2SupervisorFn = runFSMv2SupervisorInBackground
@@ -209,6 +210,27 @@ var _ = Describe("Startup seams", func() {
 		Eventually(supStarted, time.Second).Should(Receive())
 	})
 
+	It("checks that startup logs that no module is linked and starts the supervisor without children when credentials are set", func() {
+		got := installStubBuild()
+		noopRouter()
+		supStarted := make(chan struct{}, 1)
+		installStartProbe(supStarted)
+
+		startManagementConsoleConnection = nil
+
+		core, logs := observer.New(zap.InfoLevel)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		handle, err := startFSMv2Runtime(ctx, cfg, newBareCommunicationState(), zap.New(core).Sugar(), nil)
+		Expect(err).NotTo(HaveOccurred())
+		defer handle.cleanup()
+
+		Expect(logs.FilterMessage("no Management Console module linked").Len()).To(Equal(1))
+		Expect(*got).To(BeEmpty())
+		Eventually(supStarted, time.Second).Should(Receive())
+	})
+
 	It("checks that startup hands the module's children to the supervisor build", func() {
 		got := installStubBuild()
 		noopRouter()
@@ -245,10 +267,10 @@ var _ = Describe("Startup seams", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer handle.cleanup()
 
-		_, err = uuid.Parse(got.InstanceUUID)
+		_, err = uuid.Parse(got.LoginPlaceholderUUID)
 		Expect(err).NotTo(HaveOccurred(), "the login UUID must be a UUID")
 
-		got.InstanceUUID = ""
+		got.LoginPlaceholderUUID = ""
 		Expect(got).To(Equal(managementconsole.Config{
 			RelayURL:         "https://example.invalid",
 			AuthToken:        "test-token",
@@ -289,7 +311,7 @@ var _ = Describe("Startup seams", func() {
 	Context("when the FSMv2 build fails", func() {
 		buildErr := errors.New("planted build error")
 		stubChildren := []fsmv2config.ChildSpec{{Name: "connection", WorkerType: "test-worker", Enabled: true}}
-		stubStatus := func(context.Context, int) *managementconsole.Status { return nil }
+		stubStatus := func(context.Context) *managementconsole.Status { return nil }
 
 		BeforeEach(func() {
 			buildFSMv2SupervisorFn = func(configManager config.ConfigManager, cpuMonitorEnabled bool, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
@@ -322,7 +344,7 @@ var _ = Describe("Startup seams", func() {
 
 	Context("when the FSMv2 build succeeds", func() {
 		stubChildren := []fsmv2config.ChildSpec{{Name: "connection", WorkerType: "test-worker", Enabled: true}}
-		stubStatus := func(context.Context, int) *managementconsole.Status { return nil }
+		stubStatus := func(context.Context) *managementconsole.Status { return nil }
 
 		BeforeEach(func() {
 			noopRouter()
@@ -408,7 +430,7 @@ var _ = Describe("Startup seams", func() {
 		fsmv2client.SetClient(nil)
 		DeferCleanup(func() { fsmv2client.SetClient(previousClient) })
 
-		p := &managementconsole.Status{Health: managementconsole.Active, HealthMessage: "connected", State: "Running", SubscriberCount: 5}
+		p := &managementconsole.Status{Health: managementconsole.Active, HealthMessage: "connected", State: "Running"}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -421,7 +443,7 @@ var _ = Describe("Startup seams", func() {
 		startManagementConsoleConnection = func(d managementconsole.Deps) (managementconsole.Result, error) {
 			outbound = d.Outbound
 
-			return managementconsole.Result{Status: func(context.Context, int) *managementconsole.Status { return p }}, nil
+			return managementconsole.Result{Status: func(context.Context) *managementconsole.Status { return p }}, nil
 		}
 
 		_, err := startFSMv2Runtime(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
@@ -434,8 +456,8 @@ var _ = Describe("Startup seams", func() {
 		Expect(decodedConnectionPart(outbound)).To(Equal(&models.Communicator{
 			Health:          &models.Health{Category: models.Active, Message: "connected"},
 			State:           "Running",
-			SubscriberCount: 5,
-		}), "the registered Status must reach the status message's connection part")
+			SubscriberCount: 1,
+		}), "the registered Status and umh-core's subscriber count must reach the status message's connection part")
 	})
 
 	It("checks that no registered Status leaves the status message's connection part empty", func() {
