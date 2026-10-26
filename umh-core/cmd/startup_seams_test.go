@@ -59,6 +59,14 @@ func nothingRegistered(managementconsole.Deps) (managementconsole.Result, error)
 	return managementconsole.Result{}, nil
 }
 
+// registeredModule stands in for the official image, where the Management
+// Console module is registered and returns its children and a Status.
+func registeredModule(children []fsmv2config.ChildSpec, status managementconsole.StatusFunc) managementconsole.StartFunc {
+	return func(managementconsole.Deps) (managementconsole.Result, error) {
+		return managementconsole.Result{Children: children, Status: status}, nil
+	}
+}
+
 // restoreStartupSeams puts every startup seam back to its production
 // implementation, so one spec's probes cannot leak into the next.
 func restoreStartupSeams() {
@@ -280,6 +288,8 @@ var _ = Describe("Startup seams", func() {
 
 	Context("when the FSMv2 build fails", func() {
 		buildErr := errors.New("planted build error")
+		stubChildren := []fsmv2config.ChildSpec{{Name: "connection", WorkerType: "test-worker", Enabled: true}}
+		stubStatus := func(context.Context, int) *managementconsole.Status { return nil }
 
 		BeforeEach(func() {
 			buildFSMv2SupervisorFn = func(configManager config.ConfigManager, cpuMonitorEnabled bool, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
@@ -298,8 +308,8 @@ var _ = Describe("Startup seams", func() {
 			Consistently(supStarted, 200*time.Millisecond).ShouldNot(Receive())
 		})
 
-		It("checks that startup returns the build error when one function is registered (the official image)", func() {
-			startManagementConsoleConnection = nothingRegistered
+		It("checks that startup returns the build error when a module is registered (the official image)", func() {
+			startManagementConsoleConnection = registeredModule(stubChildren, stubStatus)
 			supStarted := make(chan struct{}, 1)
 			installStartProbe(supStarted)
 
@@ -320,16 +330,17 @@ var _ = Describe("Startup seams", func() {
 			Eventually(supStarted, time.Second).Should(Receive())
 		})
 
-		It("checks that a good build starts the supervisor when one function is registered (the official image)", func() {
+		It("checks that a good build gets the module's children and starts the supervisor when a module is registered (the official image)", func() {
 			supStarted := make(chan struct{}, 1)
-			installStubBuild()
+			got := installStubBuild()
 			installStartProbe(supStarted)
 
-			startManagementConsoleConnection = nothingRegistered
+			startManagementConsoleConnection = registeredModule(stubChildren, stubStatus)
 
 			handle, err := runStartup(cfg)
 			Expect(err).NotTo(HaveOccurred())
 			defer handle.cleanup()
+			Expect(*got).To(Equal(stubChildren))
 			Eventually(supStarted, time.Second).Should(Receive())
 		})
 	})
