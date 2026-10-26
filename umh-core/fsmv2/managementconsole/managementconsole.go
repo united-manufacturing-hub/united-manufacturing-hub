@@ -149,4 +149,11 @@ type ChannelStatus struct {
 	PendingMessages int
 	// ConsecutiveErrors is the number of failures since the last success.
 	ConsecutiveErrors int
+	// LastStatusCode is the HTTP status code of the last request.
+	LastStatusCode int
+	// LastLatencyMs is the duration of the last request, in milliseconds.
+	LastLatencyMs float64
+	// Backpressured reports whether the direction from the relay to the
+	// instance is pausing because Inbound is full. Only Pull sets it.
+	Backpressured bool
 }
