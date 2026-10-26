@@ -28,10 +28,7 @@ func communicatorFromStatus(st *managementconsole.Status, subscriberCount int) *
 	}
 
 	return &models.Communicator{
-		Health: &models.Health{
-			Category: healthCategoryOf(st.Health),
-			Message:  st.HealthMessage,
-		},
+		Health:                     communicatorHealthOf(healthCategoryOf(st.Health), st.HealthMessage),
 		State:                      st.State,
 		SubscriberCount:            subscriberCount,
 		ConsecutiveErrors:          st.ConsecutiveErrors,
@@ -41,6 +38,12 @@ func communicatorFromStatus(st *managementconsole.Status, subscriberCount int) *
 		Push:                       channelFromStatus(st.Push),
 		Pull:                       channelFromStatus(st.Pull),
 	}
+}
+
+// communicatorHealthOf builds the connection part's health. The connection
+// should always be active, so the desired state is Active.
+func communicatorHealthOf(category models.HealthCategory, message string) *models.Health {
+	return &models.Health{Message: message, ObservedState: category.String(), DesiredState: models.Active.String(), Category: category}
 }
 
 // healthCategoryOf maps the connection's health to the status message's
@@ -70,5 +73,8 @@ func channelFromStatus(c *managementconsole.ChannelStatus) *models.CommunicatorC
 		MessagesDropped:   c.MessagesDropped,
 		PendingMessages:   c.PendingMessages,
 		ConsecutiveErrors: c.ConsecutiveErrors,
+		LastStatusCode:    c.LastStatusCode,
+		LastLatencyMs:     c.LastLatencyMs,
+		Backpressured:     c.Backpressured,
 	}
 }

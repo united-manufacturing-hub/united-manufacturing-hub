@@ -118,7 +118,7 @@ var _ = Describe("Status connection part", func() {
 		Expect(status).NotTo(BeNil())
 
 		Expect(status.Core.Communicator).To(Equal(&models.Communicator{
-			Health:                     &models.Health{Category: models.Degraded, Message: "planted connection part"},
+			Health:                     &models.Health{Category: models.Degraded, Message: "planted connection part", ObservedState: models.Degraded.String(), DesiredState: models.Active.String()},
 			State:                      "Degraded",
 			SubscriberCount:            1,
 			ConsecutiveErrors:          4,

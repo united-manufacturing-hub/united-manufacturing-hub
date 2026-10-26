@@ -454,7 +454,7 @@ var _ = Describe("Startup seams", func() {
 		commState.GetSubscriberHandler().AddOrRefreshSubscriber("status@example.com", false)
 
 		Expect(decodedConnectionPart(outbound)).To(Equal(&models.Communicator{
-			Health:          &models.Health{Category: models.Active, Message: "connected"},
+			Health:          &models.Health{Category: models.Active, Message: "connected", ObservedState: models.Active.String(), DesiredState: models.Active.String()},
 			State:           "Running",
 			SubscriberCount: 1,
 		}), "the registered Status and umh-core's subscriber count must reach the status message's connection part")
