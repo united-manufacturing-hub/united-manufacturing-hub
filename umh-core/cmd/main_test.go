@@ -41,9 +41,10 @@ func TestMain(t *testing.T) {
 
 var _ = Describe("hasRelayCredentials", func() {
 	// startFSMv2Runtime calls hasRelayCredentials to decide whether to start
-	// the Management Console module and the router. The check depends only on the agent config, so these specs call
-	// it directly instead of running main(). UseFSMv2Transport no longer has
-	// any effect, because the legacy backend path was deleted.
+	// the Management Console module and the router. The check depends only on
+	// the agent config, so these specs call it directly instead of running
+	// main(). UseFSMv2Transport no longer has any effect, because the legacy
+	// backend path was deleted.
 
 	It("enables the router when credentials are present, even with the legacy transport switch off", func() {
 		cfg := config.AgentConfig{

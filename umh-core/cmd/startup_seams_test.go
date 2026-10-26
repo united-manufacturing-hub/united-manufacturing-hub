@@ -318,6 +318,15 @@ var _ = Describe("Startup seams", func() {
 			Expect(errors.Is(err, buildErr)).To(BeTrue())
 			Consistently(supStarted, 200*time.Millisecond).ShouldNot(Receive())
 		})
+	})
+
+	Context("when the FSMv2 build succeeds", func() {
+		stubChildren := []fsmv2config.ChildSpec{{Name: "connection", WorkerType: "test-worker", Enabled: true}}
+		stubStatus := func(context.Context, int) *managementconsole.Status { return nil }
+
+		BeforeEach(func() {
+			noopRouter()
+		})
 
 		It("checks that a good build starts the supervisor when nothing is registered (the OSS build)", func() {
 			supStarted := make(chan struct{}, 1)
