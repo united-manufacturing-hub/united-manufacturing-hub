@@ -72,7 +72,7 @@ type fsmv2Supervisor interface {
 // The returned supervisor has NOT been started yet; the caller is responsible
 // for calling its Run(ctx). Run detaches the tick loop from ctx and treats
 // ctx cancellation (the first SIGTERM here) as the trigger for a graceful
-// drain against the live loop. Do not substitute Start(ctx), which ties the
+// drain against the live loop (ENG-4971). Do not substitute Start(ctx), which ties the
 // loop's lifetime to the caller's cancel.
 func buildFSMv2Supervisor(
 	configManager config.ConfigManager,
@@ -148,7 +148,7 @@ func withSentryHook(logger *zap.SugaredLogger, hook *fsmv2sentry.SentryHook) *za
 // child. It must run before NewApplicationSupervisor, so the application
 // worker's first observation sees the registry.
 //
-// TODO: stop publishing the config manager once the config worker reads
+// TODO(ENG-4400): stop publishing the config manager once the config worker reads
 // config.yaml directly instead of polling the manager.
 func publishConfigWorkerGlobals(store storage.TriangularStoreInterface, configManager config.ConfigManager, cpuMonitorEnabled bool) {
 	dynamicChildrenWriter := dynamicchildren.NewWriter()
