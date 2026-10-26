@@ -42,10 +42,11 @@ type Config struct {
 	RelayURL string
 	// AuthToken is the instance's token for logging in to the relay.
 	AuthToken string
-	// InstanceUUID is the UUID umh-core sends at login. It is a random
-	// placeholder for each start; the relay returns the instance's real UUID,
-	// which the module reports through Deps.SetInstanceUUID.
-	InstanceUUID string
+	// LoginPlaceholderUUID is the UUID umh-core sends at login. It is not the
+	// instance's UUID. umh-core picks a new random value at each start. The
+	// relay returns the instance's real UUID at login, and the module reports
+	// it through Deps.SetInstanceUUID.
+	LoginPlaceholderUUID string
 	// AllowInsecureTLS disables certificate checks towards the relay. It is
 	// meant for test setups only.
 	AllowInsecureTLS bool
