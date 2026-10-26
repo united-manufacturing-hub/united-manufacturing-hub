@@ -17,10 +17,10 @@
 // connects an umh-core instance to the Management Console through the relay.
 // The relay is the Management Console server that instances connect to.
 //
-// The Management Console module calls Register once, from an init function.
-// umh-core calls Run once at startup and runs the workers Run returns. With
-// nothing registered, Run returns an empty Result and umh-core adds no
-// workers.
+// The package holds only types. umh-core calls a StartFunc once at startup and
+// runs the workers in the Result it returns. umh-core's main package chooses
+// that start function when it is built, so this package has no state of its
+// own.
 //
 // The package lives in umh-core's fsmv2 module, which the Management Console
 // module already imports. The Management Console module depends on fsmv2
@@ -149,31 +149,4 @@ type ChannelStatus struct {
 	PendingMessages int
 	// ConsecutiveErrors is the number of failures since the last success.
 	ConsecutiveErrors int
-}
-
-var start StartFunc
-
-// Register sets the start function. Call it once, from an init function. It
-// panics when f is nil or when a start function is already set, because
-// either is a programming error.
-func Register(f StartFunc) {
-	if f == nil {
-		panic("managementconsole: Register called with a nil start function")
-	}
-
-	if start != nil {
-		panic("managementconsole: Register called twice")
-	}
-
-	start = f
-}
-
-// Run calls the start function and returns its result. With no start function
-// set, it returns an empty Result and no error.
-func Run(d Deps) (Result, error) {
-	if start == nil {
-		return Result{}, nil
-	}
-
-	return start(d)
 }
