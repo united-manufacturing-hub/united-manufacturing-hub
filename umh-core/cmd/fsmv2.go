@@ -220,11 +220,11 @@ type fsmv2Handle struct {
 	cleanup func()
 }
 
-// startFSMv2Runtime is main's FSMv2 startup path. It starts the connection to
-// the Management Console if the Management Console module is linked in. It
-// then builds and starts the supervisor, and runs the router when relay
-// credentials are present. It returns the first error it meets; nothing later
-// in the sequence runs after one.
+// startFSMv2Runtime is main's FSMv2 startup path. When relay credentials are
+// set, it starts the connection to the Management Console if the Management
+// Console module is linked in. It then builds and starts the supervisor, and
+// runs the router when relay credentials are set. It returns the first error
+// it meets; nothing later in the sequence runs after one.
 func startFSMv2Runtime(
 	ctx context.Context,
 	configData *config.FullConfig,
@@ -242,9 +242,7 @@ func startFSMv2Runtime(
 	inbound := make(chan handoff.Message, connectionBufferSize)
 	outbound := make(chan handoff.Message, connectionBufferSize)
 
-	moduleDeps := managementConsoleDeps(configData.Agent, placeholderUUID, inbound, outbound, communicationState, log)
-
-	managementConsole, moduleErr := startManagementConsoleConnection(moduleDeps)
+	managementConsole, moduleErr := startManagementConsoleIfConfigured(configData.Agent, placeholderUUID, inbound, outbound, communicationState, log)
 	if moduleErr != nil {
 		return fsmv2Handle{}, fmt.Errorf("failed to start the Management Console module: %w", moduleErr)
 	}
@@ -260,6 +258,24 @@ func startFSMv2Runtime(
 	startRouterIfConfigured(ctx, inbound, outbound, configData, communicationState, log, managementConsole.Status)
 
 	return fsmv2Handle{stopped: stopped, cleanup: cleanup}, nil
+}
+
+// startManagementConsoleIfConfigured starts the Management Console module when
+// relay credentials are set. Without them it returns an empty Result, so the
+// supervisor runs without the module's children.
+func startManagementConsoleIfConfigured(
+	agent config.AgentConfig,
+	placeholderUUID string,
+	inbound chan handoff.Message,
+	outbound chan handoff.Message,
+	communicationState *communication_state.CommunicationState,
+	log *zap.SugaredLogger,
+) (managementconsole.Result, error) {
+	if !hasRelayCredentials(agent) {
+		return managementconsole.Result{}, nil
+	}
+
+	return startManagementConsoleConnection(managementConsoleDeps(agent, placeholderUUID, inbound, outbound, communicationState, log))
 }
 
 // managementConsoleDeps builds what the Management Console module gets at
@@ -304,7 +320,7 @@ func startRouterIfConfigured(
 	status managementconsole.StatusFunc,
 ) {
 	if !hasRelayCredentials(configData.Agent) {
-		log.Info("API_URL or AUTH_TOKEN is not set; running FSMv2 without the router")
+		log.Info("API_URL or AUTH_TOKEN is not set; running FSMv2 without the Management Console connection")
 
 		return
 	}
@@ -315,9 +331,10 @@ func startRouterIfConfigured(
 }
 
 // hasRelayCredentials reports whether both the relay URL and the auth token
-// are set. It gates only runRouter. The FSMv2 supervisor is built and run
-// whether or not credentials are set, so this check must never gate
-// buildFSMv2Supervisor or the supervisor's Run call.
+// are set. It gates only the Management Console module's start and runRouter.
+// The FSMv2 supervisor is built and run whether or not credentials are set, so
+// this check must never gate buildFSMv2Supervisor or the supervisor's Run
+// call.
 func hasRelayCredentials(cfg config.AgentConfig) bool {
 	return cfg.APIURL != "" && cfg.AuthToken != ""
 }
