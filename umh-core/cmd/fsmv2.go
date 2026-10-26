@@ -238,8 +238,6 @@ func startFSMv2Runtime(
 	log *zap.SugaredLogger,
 	forceExit <-chan struct{},
 ) (fsmv2Handle, error) {
-	stopped := make(chan struct{})
-
 	// The instance UUID is a placeholder until the Management Console module
 	// reports the one the relay returned at login.
 	placeholderUUID := uuid.New().String()
@@ -250,7 +248,38 @@ func startFSMv2Runtime(
 	inbound := make(chan handoff.Message, connectionBufferSize)
 	outbound := make(chan handoff.Message, connectionBufferSize)
 
-	mc, mcErr := startManagementConsoleConnection(managementconsole.Deps{
+	moduleDeps := managementConsoleDeps(configData.Agent, placeholderUUID, inbound, outbound, communicationState, log)
+
+	managementConsole, moduleErr := startManagementConsoleConnection(moduleDeps)
+	if moduleErr != nil {
+		return fsmv2Handle{}, fmt.Errorf("failed to start the Management Console module: %w", moduleErr)
+	}
+
+	applicationSupervisor, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit, managementConsole.Children)
+	if buildErr != nil {
+		return fsmv2Handle{}, fmt.Errorf("failed to build FSMv2 supervisor: %w", buildErr)
+	}
+
+	stopped := make(chan struct{})
+	runFSMv2SupervisorFn(ctx, applicationSupervisor, stopped, log)
+
+	startRouterIfConfigured(ctx, inbound, outbound, configData, communicationState, log, managementConsole.Status)
+
+	return fsmv2Handle{stopped: stopped, cleanup: cleanup}, nil
+}
+
+// managementConsoleDeps builds what the Management Console module gets at
+// start. The module reports the relay's instance UUID through
+// SetInstanceUUID; the placeholder and empty values are ignored.
+func managementConsoleDeps(
+	agent config.AgentConfig,
+	placeholderUUID string,
+	inbound chan handoff.Message,
+	outbound chan handoff.Message,
+	communicationState *communication_state.CommunicationState,
+	log *zap.SugaredLogger,
+) managementconsole.Deps {
+	return managementconsole.Deps{
 		Inbound:  inbound,
 		Outbound: outbound,
 		SetInstanceUUID: func(id string) {
@@ -259,41 +288,40 @@ func startFSMv2Runtime(
 			}
 		},
 		Config: managementconsole.Config{
-			RelayURL:         configData.Agent.APIURL,
-			AuthToken:        configData.Agent.AuthToken,
+			RelayURL:         agent.APIURL,
+			AuthToken:        agent.AuthToken,
 			InstanceUUID:     placeholderUUID,
-			AllowInsecureTLS: configData.Agent.AllowInsecureTLS,
-			Location:         configData.Agent.Location,
+			AllowInsecureTLS: agent.AllowInsecureTLS,
+			Location:         agent.Location,
 		},
 		Logger: deps.NewFSMLogger(log),
-	})
-	if mcErr != nil {
-		close(stopped)
-
-		return fsmv2Handle{stopped: stopped, cleanup: func() {}}, fmt.Errorf("failed to start the Management Console module: %w", mcErr)
 	}
+}
 
-	appSup, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit, mc.Children)
-	if buildErr != nil {
-		close(stopped)
-
-		return fsmv2Handle{stopped: stopped, cleanup: func() {}}, fmt.Errorf("failed to build FSMv2 supervisor: %w", buildErr)
-	}
-
-	runFSMv2SupervisorFn(ctx, appSup, stopped, log)
-
-	if hasRelayCredentials(configData.Agent) {
-		log.Info("API_URL and AUTH_TOKEN are set; starting the router for Management Console messages")
-		run := runRouterFn
-		status := mc.Status
-		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-			run(ctx, inbound, outbound, configData, communicationState, log, status)
-		})
-	} else {
+// startRouterIfConfigured runs the router in the background when relay
+// credentials are set, and only logs that it is skipped otherwise.
+func startRouterIfConfigured(
+	ctx context.Context,
+	inbound <-chan handoff.Message,
+	outbound chan<- handoff.Message,
+	configData *config.FullConfig,
+	communicationState *communication_state.CommunicationState,
+	log *zap.SugaredLogger,
+	status managementconsole.StatusFunc,
+) {
+	if !hasRelayCredentials(configData.Agent) {
 		log.Info("API_URL or AUTH_TOKEN is not set; running FSMv2 without the router")
+
+		return
 	}
 
-	return fsmv2Handle{stopped: stopped, cleanup: cleanup}, nil
+	log.Info("API_URL and AUTH_TOKEN are set; starting the router for Management Console messages")
+
+	// Read the seam now: tests reassign it after startup returns.
+	run := runRouterFn
+	sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+		run(ctx, inbound, outbound, configData, communicationState, log, status)
+	})
 }
 
 // hasRelayCredentials reports whether both the relay URL and the auth token
