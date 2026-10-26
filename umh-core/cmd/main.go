@@ -243,7 +243,7 @@ func main() {
 		log.Info("GraphQL server disabled via configuration")
 	}
 
-	fsmv2, err := startFSMv2Runtime(ctx, &configData, communicationState, log, forceExit)
+	fsmv2Handle, err := startFSMv2Runtime(ctx, &configData, communicationState, log, forceExit)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "FSMv2 startup failed: %w", err)
 		log.Errorf("Sleeping 60s before exit to rate-limit the restart loop")
@@ -252,7 +252,7 @@ func main() {
 		_ = log.Sync()
 		os.Exit(1)
 	}
-	defer fsmv2.cleanup()
+	defer fsmv2Handle.cleanup()
 
 	// Start the system snapshot logger with automatic panic recovery
 	sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
@@ -268,7 +268,7 @@ func main() {
 
 	// Wait until the FSMv2 supervisor has stopped, so the process does not
 	// exit before the supervisor drains.
-	<-fsmv2.done
+	<-fsmv2Handle.stopped
 
 	log.Info("umh-core completed")
 }

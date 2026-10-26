@@ -65,7 +65,7 @@ func restoreStartupSeams() {
 	startManagementConsoleConnection = managementconsole.Run
 	newFSMv2Store = scenariorunner.SetupStore
 	buildFSMv2SupervisorFn = buildFSMv2Supervisor
-	startFSMv2SupervisorFn = defaultStartFSMv2Supervisor
+	runFSMv2SupervisorFn = runFSMv2SupervisorInBackground
 	runRouterFn = runRouter
 }
 
@@ -89,12 +89,12 @@ func installStubBuild() *[]fsmv2config.ChildSpec {
 	return &got
 }
 
-// installStartProbe makes the start seam record that the supervisor started
-// and close done.
+// installStartProbe makes the run seam record that the supervisor started
+// and close stopped.
 func installStartProbe(supStarted chan struct{}) {
-	startFSMv2SupervisorFn = func(appSup fsmv2Supervisor, ctx context.Context, done chan struct{}, log *zap.SugaredLogger) {
+	runFSMv2SupervisorFn = func(ctx context.Context, applicationSupervisor fsmv2Supervisor, stopped chan struct{}, log *zap.SugaredLogger) {
 		supStarted <- struct{}{}
-		close(done)
+		close(stopped)
 	}
 }
 
@@ -112,7 +112,7 @@ func newBareCommunicationState() *communication_state.CommunicationState {
 
 // runStartup drives the real startup function with the standard stubs and
 // returns its error.
-func runStartup(cfg *config.FullConfig) (fsmv2Runtime, error) {
+func runStartup(cfg *config.FullConfig) (fsmv2Handle, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -162,9 +162,9 @@ var _ = Describe("Startup seams", func() {
 			return managementconsole.Result{}, nil
 		}
 
-		fsmv2, err := runStartup(cfg)
+		handle, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		defer fsmv2.cleanup()
+		defer handle.cleanup()
 
 		Expect(record).To(Receive(Equal("not started")))
 	})
@@ -195,9 +195,9 @@ var _ = Describe("Startup seams", func() {
 
 		startManagementConsoleConnection = nothingRegistered
 
-		fsmv2, err := runStartup(cfg)
+		handle, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		defer fsmv2.cleanup()
+		defer handle.cleanup()
 		Eventually(supStarted, time.Second).Should(Receive())
 	})
 
@@ -211,9 +211,9 @@ var _ = Describe("Startup seams", func() {
 			return managementconsole.Result{Children: []fsmv2config.ChildSpec{child}}, nil
 		}
 
-		fsmv2, err := runStartup(cfg)
+		handle, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		defer fsmv2.cleanup()
+		defer handle.cleanup()
 
 		Expect(*got).To(Equal([]fsmv2config.ChildSpec{child}))
 	})
@@ -233,9 +233,9 @@ var _ = Describe("Startup seams", func() {
 			return managementconsole.Result{}, nil
 		}
 
-		fsmv2, err := runStartup(cfg)
+		handle, err := runStartup(cfg)
 		Expect(err).NotTo(HaveOccurred())
-		defer fsmv2.cleanup()
+		defer handle.cleanup()
 
 		_, err = uuid.Parse(got.InstanceUUID)
 		Expect(err).NotTo(HaveOccurred(), "the login UUID must be a UUID")
@@ -265,9 +265,9 @@ var _ = Describe("Startup seams", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		fsmv2, err := startFSMv2Runtime(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
+		handle, err := startFSMv2Runtime(ctx, cfg, commState, zap.NewNop().Sugar(), nil)
 		Expect(err).NotTo(HaveOccurred())
-		defer fsmv2.cleanup()
+		defer handle.cleanup()
 
 		reported := uuid.New()
 		report(reported.String())
@@ -314,9 +314,9 @@ var _ = Describe("Startup seams", func() {
 			installStubBuild()
 			installStartProbe(supStarted)
 
-			fsmv2, err := runStartup(cfg)
+			handle, err := runStartup(cfg)
 			Expect(err).NotTo(HaveOccurred())
-			defer fsmv2.cleanup()
+			defer handle.cleanup()
 			Eventually(supStarted, time.Second).Should(Receive())
 		})
 
@@ -327,9 +327,9 @@ var _ = Describe("Startup seams", func() {
 
 			startManagementConsoleConnection = nothingRegistered
 
-			fsmv2, err := runStartup(cfg)
+			handle, err := runStartup(cfg)
 			Expect(err).NotTo(HaveOccurred())
-			defer fsmv2.cleanup()
+			defer handle.cleanup()
 			Eventually(supStarted, time.Second).Should(Receive())
 		})
 	})

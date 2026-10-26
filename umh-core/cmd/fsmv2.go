@@ -43,136 +43,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
-// The seams below make main's startup order observable to tests without
-// copying it: a test replaces a function variable with a probe, then drives
-// the real startup path. Production keeps the real implementations assigned
-// here, and the variables are unexported.
-
-// startManagementConsoleConnection is the seam for starting the connection to
-// the Management Console. The Management Console module provides it, and the
-// official image registers that module. It runs before the supervisor starts.
-var startManagementConsoleConnection = managementconsole.Run
-
 // connectionBufferSize is the capacity of the inbound and outbound channels
 // between umh-core and the Management Console module.
 const connectionBufferSize = 100
 
-// newFSMv2Store is the seam for the store constructor. buildFSMv2Supervisor
-// creates its store by calling it, so a test's constructor can keep the
-// pointer it returns.
-var newFSMv2Store = scenariorunner.SetupStore
-
-// buildFSMv2SupervisorFn is the seam for the FSMv2 build: a test can inject a
-// build that fails.
-var buildFSMv2SupervisorFn = buildFSMv2Supervisor
-
-// startFSMv2SupervisorFn is the seam for the supervisor start: a test can
-// inject a start that records whether the supervisor has started.
-var startFSMv2SupervisorFn = defaultStartFSMv2Supervisor
-
-// runRouterFn is the seam for runRouter: a test can inject a no-op, so
-// startup runs without the real communication state.
-var runRouterFn = runRouter
-
-// defaultStartFSMv2Supervisor runs the supervisor and closes done when it has
-// fully stopped.
-func defaultStartFSMv2Supervisor(appSup fsmv2Supervisor, ctx context.Context, done chan struct{}, log *zap.SugaredLogger) {
-	go func() {
-		defer close(done)
-
-		if runErr := appSup.Run(ctx); runErr != nil {
-			log.Errorw("FSMv2 supervisor Run error", "error", runErr)
-		}
-	}()
-}
-
-// fsmv2Runtime is what main keeps from startFSMv2Runtime: the channel that
-// closes when the FSMv2 application supervisor stops, and its cleanup.
-type fsmv2Runtime struct {
-	// done is closed when the FSMv2 supervisor has fully stopped, or at once
-	// when it was never started.
-	done chan struct{}
-	// cleanup must run after the supervisor has stopped.
-	cleanup func()
-}
-
-// startFSMv2Runtime is main's FSMv2 startup path. It starts the connection to
-// the Management Console if the Management Console module is linked in. It
-// then builds and starts the supervisor, and runs the router when relay
-// credentials are present. It returns the first error it meets; nothing later
-// in the sequence runs after one.
-func startFSMv2Runtime(
-	ctx context.Context,
-	configData *config.FullConfig,
-	communicationState *communication_state.CommunicationState,
-	log *zap.SugaredLogger,
-	forceExit <-chan struct{},
-) (fsmv2Runtime, error) {
-	done := make(chan struct{})
-
-	// The instance UUID is a placeholder until the Management Console module
-	// reports the one the relay returned at login.
-	placeholderUUID := uuid.New().String()
-	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
-
-	// inbound carries the messages users sent to this instance to the router.
-	// outbound carries status messages and action replies to the module.
-	inbound := make(chan handoff.Message, connectionBufferSize)
-	outbound := make(chan handoff.Message, connectionBufferSize)
-
-	mc, mcErr := startManagementConsoleConnection(managementconsole.Deps{
-		Inbound:  inbound,
-		Outbound: outbound,
-		SetInstanceUUID: func(id string) {
-			if isAuthenticatedUUID(id, placeholderUUID) {
-				applyAuthenticatedUUID(id, communicationState)
-			}
-		},
-		Config: managementconsole.Config{
-			RelayURL:         configData.Agent.APIURL,
-			AuthToken:        configData.Agent.AuthToken,
-			InstanceUUID:     placeholderUUID,
-			AllowInsecureTLS: configData.Agent.AllowInsecureTLS,
-			Location:         configData.Agent.Location,
-		},
-		Logger: deps.NewFSMLogger(log),
-	})
-	if mcErr != nil {
-		close(done)
-
-		return fsmv2Runtime{done: done, cleanup: func() {}}, fmt.Errorf("failed to start the Management Console module: %w", mcErr)
-	}
-
-	appSup, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit, mc.Children)
-	if buildErr != nil {
-		close(done)
-
-		return fsmv2Runtime{done: done, cleanup: func() {}}, fmt.Errorf("failed to build FSMv2 supervisor: %w", buildErr)
-	}
-
-	startFSMv2SupervisorFn(appSup, ctx, done, log)
-
-	if hasRelayCredentials(configData.Agent) {
-		log.Info("API_URL and AUTH_TOKEN are set; starting the router for Management Console messages")
-		run := runRouterFn
-		status := mc.Status
-		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-			run(ctx, inbound, outbound, configData, communicationState, log, status)
-		})
-	} else {
-		log.Info("API_URL or AUTH_TOKEN is not set; running FSMv2 without the router")
-	}
-
-	return fsmv2Runtime{done: done, cleanup: cleanup}, nil
-}
-
-// hasRelayCredentials reports whether both the relay URL and the auth token
-// are set. It gates only runRouter. The FSMv2 supervisor is built and run
-// whether or not credentials are set, so this check must never gate
-// buildFSMv2Supervisor or the supervisor's Run call.
-func hasRelayCredentials(cfg config.AgentConfig) bool {
-	return cfg.APIURL != "" && cfg.AuthToken != ""
-}
+// Test seams for main's startup order. A test replaces one with a probe and
+// then drives the real startup path. Production never reassigns them.
+var (
+	startManagementConsoleConnection = managementconsole.Run
+	newFSMv2Store                    = scenariorunner.SetupStore
+	buildFSMv2SupervisorFn           = buildFSMv2Supervisor
+	runFSMv2SupervisorFn             = runFSMv2SupervisorInBackground
+	runRouterFn                      = runRouter
+)
 
 // fsmv2Supervisor is the minimal interface required from the ApplicationSupervisor
 // by main().  Using an interface keeps buildFSMv2Supervisor decoupled from the
@@ -320,4 +203,103 @@ func buildFSMv2Supervisor(
 	}
 
 	return appSup, cleanup, nil
+}
+
+// runFSMv2SupervisorInBackground runs the supervisor in a goroutine and closes
+// stopped when it has fully stopped.
+func runFSMv2SupervisorInBackground(ctx context.Context, applicationSupervisor fsmv2Supervisor, stopped chan struct{}, log *zap.SugaredLogger) {
+	go func() {
+		defer close(stopped)
+
+		if runErr := applicationSupervisor.Run(ctx); runErr != nil {
+			log.Errorw("FSMv2 supervisor Run error", "error", runErr)
+		}
+	}()
+}
+
+// fsmv2Handle lets main wait for the FSMv2 supervisor to stop and then
+// release what startFSMv2Runtime set up.
+type fsmv2Handle struct {
+	// stopped is closed when the FSMv2 supervisor has fully stopped.
+	stopped chan struct{}
+	// cleanup must run after stopped is closed.
+	cleanup func()
+}
+
+// startFSMv2Runtime is main's FSMv2 startup path. It starts the connection to
+// the Management Console if the Management Console module is linked in. It
+// then builds and starts the supervisor, and runs the router when relay
+// credentials are present. It returns the first error it meets; nothing later
+// in the sequence runs after one.
+func startFSMv2Runtime(
+	ctx context.Context,
+	configData *config.FullConfig,
+	communicationState *communication_state.CommunicationState,
+	log *zap.SugaredLogger,
+	forceExit <-chan struct{},
+) (fsmv2Handle, error) {
+	stopped := make(chan struct{})
+
+	// The instance UUID is a placeholder until the Management Console module
+	// reports the one the relay returned at login.
+	placeholderUUID := uuid.New().String()
+	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
+
+	// inbound carries the messages users sent to this instance to the router.
+	// outbound carries status messages and action replies to the module.
+	inbound := make(chan handoff.Message, connectionBufferSize)
+	outbound := make(chan handoff.Message, connectionBufferSize)
+
+	mc, mcErr := startManagementConsoleConnection(managementconsole.Deps{
+		Inbound:  inbound,
+		Outbound: outbound,
+		SetInstanceUUID: func(id string) {
+			if isAuthenticatedUUID(id, placeholderUUID) {
+				applyAuthenticatedUUID(id, communicationState)
+			}
+		},
+		Config: managementconsole.Config{
+			RelayURL:         configData.Agent.APIURL,
+			AuthToken:        configData.Agent.AuthToken,
+			InstanceUUID:     placeholderUUID,
+			AllowInsecureTLS: configData.Agent.AllowInsecureTLS,
+			Location:         configData.Agent.Location,
+		},
+		Logger: deps.NewFSMLogger(log),
+	})
+	if mcErr != nil {
+		close(stopped)
+
+		return fsmv2Handle{stopped: stopped, cleanup: func() {}}, fmt.Errorf("failed to start the Management Console module: %w", mcErr)
+	}
+
+	appSup, cleanup, buildErr := buildFSMv2SupervisorFn(ctx, configData, communicationState, log, forceExit, mc.Children)
+	if buildErr != nil {
+		close(stopped)
+
+		return fsmv2Handle{stopped: stopped, cleanup: func() {}}, fmt.Errorf("failed to build FSMv2 supervisor: %w", buildErr)
+	}
+
+	runFSMv2SupervisorFn(ctx, appSup, stopped, log)
+
+	if hasRelayCredentials(configData.Agent) {
+		log.Info("API_URL and AUTH_TOKEN are set; starting the router for Management Console messages")
+		run := runRouterFn
+		status := mc.Status
+		sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+			run(ctx, inbound, outbound, configData, communicationState, log, status)
+		})
+	} else {
+		log.Info("API_URL or AUTH_TOKEN is not set; running FSMv2 without the router")
+	}
+
+	return fsmv2Handle{stopped: stopped, cleanup: cleanup}, nil
+}
+
+// hasRelayCredentials reports whether both the relay URL and the auth token
+// are set. It gates only runRouter. The FSMv2 supervisor is built and run
+// whether or not credentials are set, so this check must never gate
+// buildFSMv2Supervisor or the supervisor's Run call.
+func hasRelayCredentials(cfg config.AgentConfig) bool {
+	return cfg.APIURL != "" && cfg.AuthToken != ""
 }
