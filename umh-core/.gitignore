@@ -17,3 +17,7 @@ umh-core-data/
 test_output.txt
 /runner
 /runner-panic
+
+# The Management Console module is private. go.mod pins its version and the
+# official build fetches it; its source is never committed.
+vendor/github.com/united-manufacturing-hub/ManagementConsole/

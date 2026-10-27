@@ -201,13 +201,25 @@ COMMON_ARGS = \
 ROOT_DIR := $(shell git rev-parse --show-toplevel)
 MC_PATH := $(ROOT_DIR)/../ManagementConsole
 
-# CRYPTOLIB=true builds the private cryptolib validator (needs mc context); false is noop, no MC.
-CRYPTOLIB ?= false
-MC_CONTEXT_ARG = $(if $(filter true,$(CRYPTOLIB)),--build-context mc=$(MC_PATH),)
+# MANAGEMENTCONSOLE selects the Management Console module:
+#   false  the open-source image, without the module (default);
+#   true   the official image, with the module at the version go.mod pins. It
+#          needs a read token for the private module in MC_READ_TOKEN, which
+#          reaches the build only as the secret github_token;
+#   local  a development image, with the module from the checkout at MC_PATH.
+#          CI refuses it.
+MANAGEMENTCONSOLE ?= false
+comma := ,
+MC_BUILD_ARGS = --build-arg MANAGEMENTCONSOLE=$(MANAGEMENTCONSOLE) \
+	$(if $(filter true,$(MANAGEMENTCONSOLE)),--secret id=github_token$(comma)env=MC_READ_TOKEN,) \
+	$(if $(filter local,$(MANAGEMENTCONSOLE)),--build-context mc=$(MC_PATH),)
+ifeq ($(CI)-$(MANAGEMENTCONSOLE),true-local)
+$(error MANAGEMENTCONSOLE=local is for development only; CI builds use true or false)
+endif
 
 define DOCKER_BUILD
 	docker buildx build $(COMMON_ARGS) $(EXTRA_ARGS) \
-		--build-arg CRYPTOLIB=$(CRYPTOLIB) $(MC_CONTEXT_ARG) \
+		$(MC_BUILD_ARGS) \
 		--progress=plain --load -f Dockerfile \
 		-t $(IMAGE_NAME):$(TAG) .
 endef
@@ -220,7 +232,7 @@ CI_ARGS = \
 # TAGS should be passed as: TAGS="-t ghcr.io/.../umh-core:tag1 -t ghcr.io/.../umh-core:tag2"
 define DEPOT_BUILD
 	depot build $(CI_ARGS) $(EXTRA_ARGS) \
-		--build-arg CRYPTOLIB=$(CRYPTOLIB) $(MC_CONTEXT_ARG) \
+		$(MC_BUILD_ARGS) \
 		--project $(DEPOT_PROJECT_ID) \
 		--push \
 		--progress=plain -f Dockerfile \
@@ -256,8 +268,8 @@ build build-pprof build-debug: build-protobuf download-docker-binaries
 # CI build using Depot (multi-arch)
 # Note: Skips build-protobuf since pb.go files are committed to repo
 # Usage: make build-depot DEPOT_PROJECT_ID=xxx TAGS="-t ghcr.io/.../umh-core:v1.0.0" VERSION=v1.0.0
-# Release images always ship the real cryptolib validator.
-build-depot: CRYPTOLIB := true
+# Release images always link the Management Console module.
+build-depot: MANAGEMENTCONSOLE := true
 build-depot: download-docker-binaries
 	$(call DEPOT_BUILD)
 
@@ -450,6 +462,21 @@ update-go-dependencies:
 	cd $(FSMV2_DIR) && go get -u ./... && go mod tidy
 	go mod tidy
 	go work vendor
+	rm -rf vendor/$(MC_MODULE)
+
+MC_MODULE := github.com/united-manufacturing-hub/ManagementConsole
+
+# moves the module pin to REF, a ManagementConsole commit on staging or a tag
+bump-managementconsole:
+	@test -n "$(REF)" || { echo "usage: make bump-managementconsole REF=<commit or tag>"; exit 1; }
+	@status="$$(gh api repos/united-manufacturing-hub/ManagementConsole/compare/staging...$(REF) --jq .status)"; \
+	  [ "$$status" = "behind" ] || [ "$$status" = "identical" ] || { echo "$(REF) is not on ManagementConsole staging"; exit 1; }
+	GOPRIVATE=$(MC_MODULE) go get $(MC_MODULE)/cryptolib@$(REF)
+	version="$$(go list -m -f '{{.Version}}' $(MC_MODULE)/cryptolib)"; \
+	  go mod edit -replace=$(MC_MODULE)/shared@v0.0.0=$(MC_MODULE)/shared@$$version
+	GOPRIVATE=$(MC_MODULE) go mod tidy
+	GOPRIVATE=$(MC_MODULE) go work vendor
+	rm -rf vendor/$(MC_MODULE)
 
 # Print version variables for use in other scripts/tools
 print-versions:

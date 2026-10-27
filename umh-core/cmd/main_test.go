@@ -39,15 +39,14 @@ func TestMain(t *testing.T) {
 	RunSpecs(t, "Main Suite")
 }
 
-var _ = Describe("communicatorEnabled", func() {
-	// communicatorEnabled is the decision main() consults to gate the FSMv2
-	// communicator. It is a pure function of the backend configuration, so it
-	// is asserted directly here rather than by running main(). The
-	// keep-the-legacy knob (UseFSMv2Transport) no longer routes anywhere: the
-	// legacy backend path was deleted, so the communicator is the only path it
-	// gates.
+var _ = Describe("hasRelayCredentials", func() {
+	// startFSMv2Runtime calls hasRelayCredentials to decide whether to start
+	// the Management Console module and the router. The check depends only on
+	// the agent config, so these specs call it directly instead of running
+	// main(). UseFSMv2Transport no longer has any effect, because the legacy
+	// backend path was deleted.
 
-	It("enables the communicator when credentials are present, even with the legacy transport switch off", func() {
+	It("enables the router when credentials are present, even with the legacy transport switch off", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				APIURL:            "http://fsmv2.invalid:9999",
@@ -56,16 +55,16 @@ var _ = Describe("communicatorEnabled", func() {
 			},
 		}
 
-		Expect(communicatorEnabled(cfg)).To(BeTrue())
+		Expect(hasRelayCredentials(cfg)).To(BeTrue())
 	})
 
-	It("does not enable the communicator when credentials are absent", func() {
+	It("does not enable the router when credentials are absent", func() {
 		cfg := config.AgentConfig{}
 
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 
-	It("does not enable the communicator when only API_URL is set", func() {
+	It("does not enable the router when only API_URL is set", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				APIURL: "http://fsmv2.invalid:9999",
@@ -74,17 +73,17 @@ var _ = Describe("communicatorEnabled", func() {
 
 		// The && credential contract must reject partial state; an operator with
 		// one field empty should not run without a token.
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 
-	It("does not enable the communicator when only AUTH_TOKEN is set", func() {
+	It("does not enable the router when only AUTH_TOKEN is set", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				AuthToken: "test-token",
 			},
 		}
 
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 })
 
@@ -155,7 +154,7 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 	// The constructor reads neither credential today, so what this spec pins is
 	// their absence: it starts failing the moment either one is consulted here.
 	// It does not exercise credential handling, which lives in
-	// communicatorEnabled.
+	// hasRelayCredentials.
 	//
 	// The nil arguments below are unread on this path. Four of them panic if
 	// that ever changes, which a spec reports as a failure. The nil
@@ -184,18 +183,11 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 			nil,
 		)
 
-		// The channel bridge this builds starts two goroutines that exit only on
-		// ctx.Done(), and cleanup cannot reap them, so the context has to be
-		// cancellable. context.Background() would leak both for the life of the
-		// test binary.
-		ctx, cancel := context.WithCancel(context.Background())
-		DeferCleanup(cancel)
-
-		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(appSup).NotTo(BeNil())
+		Expect(applicationSupervisor).NotTo(BeNil())
 	})
 
 	// Without credentials and with USE_FSMV2_CPU on, the CPU worker must run.
@@ -232,11 +224,11 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 
-		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 		Expect(err).NotTo(HaveOccurred())
 
-		go func() { _ = appSup.Run(ctx) }()
+		go func() { _ = applicationSupervisor.Run(ctx) }()
 
 		Eventually(func() fsmv2client.Freshness {
 			_, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](

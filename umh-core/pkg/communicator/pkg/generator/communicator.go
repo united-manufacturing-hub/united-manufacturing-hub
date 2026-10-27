@@ -15,207 +15,66 @@
 package generator
 
 import (
-	"context"
-	"fmt"
-	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps/channelusage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
-	pullsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
-	pushsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
-	transportsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
-	transportstate "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/managementconsole"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/zap"
 )
 
-// transportMaxAge bounds how old the transport worker's observation may be
-// before it is reported degraded.
-const transportMaxAge = 10 * time.Second
-
-var (
-	transportRef = dynamicchildren.Ref{WorkerType: "transport", Name: "transport"}
-	pushRef      = dynamicchildren.Ref{WorkerType: "push", Name: "push"}
-	pullRef      = dynamicchildren.Ref{WorkerType: "pull", Name: "pull"}
-)
-
-var (
-	transportRunning    = (&transportstate.RunningState{}).String()
-	transportDegraded   = (&transportstate.DegradedState{}).String()
-	transportStarting   = (&transportstate.StartingState{}).String()
-	transportAuthFailed = (&transportstate.AuthFailedState{}).String()
-)
-
-// CommunicatorFromFSMv2 reads the fsmv2 transport worker and its push and pull
-// children and maps them to models.Communicator. It returns nil when the fsmv2
-// client is unavailable.
-func CommunicatorFromFSMv2(ctx context.Context, log *zap.SugaredLogger, subscriberCount int) *models.Communicator {
-	client := fsmv2client.GetClient()
-	if client == nil {
+// communicatorFromStatus copies the connection's status and umh-core's
+// subscriber count into the status message's connection part. It returns nil
+// for a nil status.
+func communicatorFromStatus(st *managementconsole.Status, subscriberCount int) *models.Communicator {
+	if st == nil {
 		return nil
 	}
-
-	c := communicatorStatus(ctx, log, client)
-	c.SubscriberCount = subscriberCount
-
-	return c
-}
-
-func communicatorStatus(ctx context.Context, log *zap.SugaredLogger, client *fsmv2client.FSMv2Client) *models.Communicator {
-	transport, freshness, err := fsmv2client.GetFresh[transportsnapshot.TransportStatus](ctx, client, transportRef, transportMaxAge)
-	if err != nil {
-		log.Warnw("communicator status: failed to read transport observed state", "error", err)
-
-		return unknownCommunicator()
-	}
-
-	switch freshness {
-	case fsmv2client.Fresh:
-		return CommunicatorFromObservations(
-			transport,
-			observationOrZero[pushsnapshot.PushStatus](ctx, client, pushRef),
-			observationOrZero[pullsnapshot.PullStatus](ctx, client, pullRef),
-		)
-	case fsmv2client.Stale:
-		return &models.Communicator{Health: communicatorHealthOf(models.Degraded, "Communicator status is stale")}
-	case fsmv2client.Deleted, fsmv2client.NotFound:
-		return unknownCommunicator()
-	default:
-		log.Warnw("communicator status: unexpected transport freshness", "freshness", freshness)
-
-		return unknownCommunicator()
-	}
-}
-
-func unknownCommunicator() *models.Communicator {
-	return &models.Communicator{Health: communicatorHealthOf(models.Neutral, "Communicator status unknown")}
-}
-
-// CommunicatorFromObservations maps the transport worker's observation and its
-// children's to models.Communicator. A child with a zero observation is
-// reported as not yet observed.
-func CommunicatorFromObservations(
-	transport fsmv2.Observation[transportsnapshot.TransportStatus],
-	push fsmv2.Observation[pushsnapshot.PushStatus],
-	pull fsmv2.Observation[pullsnapshot.PullStatus],
-) *models.Communicator {
-	status := transport.Status
 
 	return &models.Communicator{
-		Health:                     communicatorHealth(transport.State, status),
-		State:                      transport.State,
-		ConsecutiveErrors:          status.ConsecutiveErrors,
-		LastErrorType:              errorTypeName(status.ConsecutiveErrors, status.LastErrorType),
-		OutboundChannelFillPercent: status.OutboundQueue.FillPercent,
-		OutboundChannelPeakPercent: status.OutboundQueue.PeakPercent,
-		Push:                       pushChannel(push),
-		Pull:                       pullChannel(pull),
+		Health:                     communicatorHealthOf(healthCategoryOf(st.Health), st.HealthMessage),
+		State:                      st.State,
+		SubscriberCount:            subscriberCount,
+		ConsecutiveErrors:          st.ConsecutiveErrors,
+		LastErrorType:              st.LastErrorType,
+		OutboundChannelFillPercent: st.OutboundFillPercent,
+		OutboundChannelPeakPercent: st.OutboundPeakPercent,
+		Push:                       channelFromStatus(st.Push),
+		Pull:                       channelFromStatus(st.Pull),
 	}
 }
 
-// observationOrZero reads ref's observation, or returns a zero observation when
-// the read fails.
-func observationOrZero[TStatus any](ctx context.Context, client *fsmv2client.FSMv2Client, ref dynamicchildren.Ref) fsmv2.Observation[TStatus] {
-	observed, err := fsmv2client.Get[TStatus](ctx, client, ref)
-	if err != nil {
-		return fsmv2.Observation[TStatus]{}
-	}
-
-	return observed
-}
-
-func pushChannel(observed fsmv2.Observation[pushsnapshot.PushStatus]) *models.CommunicatorChannel {
-	if observed.CollectedAt.IsZero() {
-		return nil
-	}
-
-	status := observed.Status
-	metrics := observed.Metrics.Worker
-
-	return &models.CommunicatorChannel{
-		State:             observed.State,
-		LastErrorType:     errorTypeName(status.ConsecutiveErrors, status.LastErrorType),
-		Messages:          metrics.Counters[string(deps.CounterMessagesPushed)],
-		MessagesDropped:   metrics.Counters[string(deps.CounterMessagesDropped)],
-		PendingMessages:   status.PendingMessageCount,
-		ConsecutiveErrors: status.ConsecutiveErrors,
-		LastStatusCode:    status.LastStatusCode,
-		LastLatencyMs:     metrics.Gauges[string(deps.GaugeLastPushLatencyMs)],
-	}
-}
-
-func pullChannel(observed fsmv2.Observation[pullsnapshot.PullStatus]) *models.CommunicatorChannel {
-	if observed.CollectedAt.IsZero() {
-		return nil
-	}
-
-	status := observed.Status
-	metrics := observed.Metrics.Worker
-
-	return &models.CommunicatorChannel{
-		State:             observed.State,
-		LastErrorType:     errorTypeName(status.ConsecutiveErrors, status.LastErrorType),
-		Messages:          metrics.Counters[string(deps.CounterMessagesPulled)],
-		MessagesDropped:   metrics.Counters[string(deps.CounterMessagesDropped)],
-		PendingMessages:   status.PendingMessageCount,
-		ConsecutiveErrors: status.ConsecutiveErrors,
-		LastStatusCode:    status.LastStatusCode,
-		LastLatencyMs:     metrics.Gauges[string(deps.GaugeLastPullLatencyMs)],
-		Backpressured:     status.IsBackpressured,
-	}
-}
-
-// errorTypeName names the last error while errors are ongoing, and is empty
-// otherwise.
-func errorTypeName(consecutiveErrors int, errorType types.ErrorType) string {
-	if consecutiveErrors == 0 {
-		return ""
-	}
-
-	return errorType.String()
-}
-
-func communicatorHealth(state string, status transportsnapshot.TransportStatus) *models.Health {
-	queue := status.OutboundQueue
-	usage := fmt.Sprintf(
-		"Outbound queue %.0f%% full (%s), peak %.0f%% (%s) in the last %.0fs",
-		queue.FillPercent, queue.FillThreshold(),
-		queue.PeakPercent, queue.PeakThreshold(),
-		channelusage.Window.Seconds(),
-	)
-
-	switch {
-	case queue.Degraded:
-		return communicatorHealthOf(models.Degraded, usage+". Status updates and action replies may be lost")
-	case state == transportAuthFailed:
-		return communicatorHealthOf(models.Degraded, "Authentication with the Management Console failed")
-	case state == transportDegraded:
-		message := "Connection to the Management Console is degraded"
-		if name := errorTypeName(status.ConsecutiveErrors, status.LastErrorType); name != "" {
-			message += fmt.Sprintf(": %d consecutive %s errors", status.ConsecutiveErrors, name)
-		}
-
-		return communicatorHealthOf(models.Degraded, message)
-	case state == transportStarting:
-		return communicatorHealthOf(models.Neutral, "Connecting to the Management Console")
-	case state != transportRunning:
-		return communicatorHealthOf(models.Neutral, "Communicator not running")
-	case !queue.Measured:
-		return communicatorHealthOf(models.Neutral, "Measuring outbound queue usage")
-	default:
-		return communicatorHealthOf(models.Active, usage)
-	}
-}
-
+// communicatorHealthOf builds the connection part's health. The connection
+// should always be active, so the desired state is Active.
 func communicatorHealthOf(category models.HealthCategory, message string) *models.Health {
-	return &models.Health{
-		Message:       message,
-		ObservedState: category.String(),
-		DesiredState:  models.Active.String(),
-		Category:      category,
+	return &models.Health{Message: message, ObservedState: category.String(), DesiredState: models.Active.String(), Category: category}
+}
+
+// healthCategoryOf maps the connection's health to the status message's
+// category. An unknown value maps to Neutral.
+func healthCategoryOf(h managementconsole.HealthCategory) models.HealthCategory {
+	switch h {
+	case managementconsole.Active:
+		return models.Active
+	case managementconsole.Degraded:
+		return models.Degraded
+	default:
+		return models.Neutral
+	}
+}
+
+// channelFromStatus copies one direction of the connection. It returns nil for
+// a nil status.
+func channelFromStatus(c *managementconsole.ChannelStatus) *models.CommunicatorChannel {
+	if c == nil {
+		return nil
+	}
+
+	return &models.CommunicatorChannel{
+		State:             c.State,
+		LastErrorType:     c.LastErrorType,
+		Messages:          c.Messages,
+		MessagesDropped:   c.MessagesDropped,
+		PendingMessages:   c.PendingMessages,
+		ConsecutiveErrors: c.ConsecutiveErrors,
+		LastStatusCode:    c.LastStatusCode,
+		LastLatencyMs:     c.LastLatencyMs,
+		Backpressured:     c.Backpressured,
 	}
 }
