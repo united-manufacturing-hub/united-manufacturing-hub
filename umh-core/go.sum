@@ -343,10 +343,10 @@ github.com/twmb/franz-go/pkg/kmsg v1.14.0 h1:gSxrBEKWl3qnsx3QKWol5OEVujuPmIoDkhM
 github.com/twmb/franz-go/pkg/kmsg v1.14.0/go.mod h1:+DPt4NC8RmI6hqb8G09+3giKObE6uD2Eya6CfqBpeJY=
 github.com/ugorji/go/codec v1.3.2 h1:zkEASHHyEClGeURfgNT9PJZVfAbs9oEX9QXggwWNJbc=
 github.com/ugorji/go/codec v1.3.2/go.mod h1:pRBVtBSKl77K30Bv8R2P+cLSGaTtex6fsA2Wjqmfxj4=
-github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261025005759-30d9d3b169dc h1:M/upws63uSjVFXfonSfcxdJxRbMjB+m5pEN/0sClIhg=
-github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261025005759-30d9d3b169dc/go.mod h1:LaadCbue5rM/vtdLh8HiwNqHlGMfLYTEG9Pn/m8VmEQ=
-github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261025005759-30d9d3b169dc h1:MkiRaNcyAPRqPLQo9bAldtyBNUVI6PsWOheJ9tUGPAI=
-github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261025005759-30d9d3b169dc/go.mod h1:Gy4kYe1omqd7qDTpZ3XZ/QGKBY5RFxqC49rvXnOGJ4Y=
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261027094255-0ba540879681 h1:02h8rIz4yhfRtxy2+iTR1dNeMxZgDuabAUvQjaQpg8o=
+github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-20261027094255-0ba540879681/go.mod h1:l08ffg1FtDjccONc4LOKIYDj+PtNDASU9sp/hR6CnXI=
+github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261027094255-0ba540879681 h1:6YJWjT6ca5HE4VeJNC8v7YAxa7NtS1CIgfvFXuSb/gE=
+github.com/united-manufacturing-hub/ManagementConsole/shared v0.0.0-20261027094255-0ba540879681/go.mod h1:Gy4kYe1omqd7qDTpZ3XZ/QGKBY5RFxqC49rvXnOGJ4Y=
 github.com/united-manufacturing-hub/expiremap/v2 v2.1.0 h1:f2pcAPTXLlsVHE4uvXKK01dOFtwzVK2+hfrOzAtQ6WM=
 github.com/united-manufacturing-hub/expiremap/v2 v2.1.0/go.mod h1:55KwBsaVAumB4S+gsvKGFNHaAE4DRAO5KyfglpQTFnI=
 github.com/united-manufacturing-hub/umh-utils v0.2.2 h1:3Op9Cx+fwqxL1Qtu7AytZ19LU8vOBmJSF0dsXs0Oxw4=
