@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.44]
+
 ### Improvements
 
 - When a bridge's connection is down, the tooltip on the bridge's connection status now says why, for example that the DNS lookup timed out or the device refused the connection, and what to check
