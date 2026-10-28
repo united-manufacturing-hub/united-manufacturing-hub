@@ -161,7 +161,7 @@ Advanced users can edit the YAML directly:
 protocolConverter:
   - name: my-plc-bridge
     desiredState: active
-    debug_level: false  # Next to name and desiredState, not inside protocolConverterServiceConfig
+    debug_level: false
     protocolConverterServiceConfig:
       location:
         2: "production-line"

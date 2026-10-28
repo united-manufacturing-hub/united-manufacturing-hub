@@ -94,7 +94,7 @@ A list of all [stand-alone flows](../usage/data-flows/stand-alone-flow.md) (UI: 
 dataFlow:
 - name: opcua-to-uns
   desiredState: active
-  debug_level: false  # Enable detailed logging for troubleshooting
+  debug_level: false  # Set to true for detailed logging while troubleshooting
   dataFlowComponentConfig:
     benthos:
       input:
@@ -135,7 +135,7 @@ It combines a **connection probe** and two **stand-alone data flows (one for rea
 protocolConverter:
 - name: press-opcua
   desiredState: active
-  debug_level: false  # Enable detailed logging for troubleshooting
+  debug_level: false  # Set to true for detailed logging while troubleshooting
   protocolConverterServiceConfig:
     location:
       2: press1
@@ -172,11 +172,11 @@ protocolConverter:
 | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | `name`                                     | Unique ID for this converter instance                                                       |
 | `desiredState`                             | `active` to run immediately, or `stopped` to keep it defined but off.                       |
+| `debug_level` | Enable verbose logging for troubleshooting. When `true`, enables DEBUG log level and protocol-specific debugging (e.g., general OPC UA debug logging via the `OPC_DEBUG=debug` environment variable, detailed connection diagnostics). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. Disable after resolving issues. |
 | `protocolConverterServiceConfig.location`  | Appended to the global `agent.location`. Optional, but useful to identify per-machine data. |
-| `debug_level` | Enable verbose logging for troubleshooting. When `true`, enables DEBUG log level and protocol-specific debugging (e.g., OPC UA packet inspection via `OPC_DEBUG=1` environment variable, detailed connection diagnostics). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. Disable after resolving issues. **Note:** Same structure as stand-alone flows: `debug_level` sits next to `name` and `desiredState`. Inside `protocolConverterServiceConfig` it is ignored. |
 | `protocolConverterServiceConfig.config.connection.nmap` | TCP liveness check to decide if the device is reachable.                                    |
 | `protocolConverterServiceConfig.config.dataflowcomponent_read.benthos` | Benthos pipeline to pull and forward data.                                                  |
-| `protocolConverterServiceConfig.config.dataflowcomponent_write.benthos` | Benthos pipeline to push and forward data.                                                  |
+| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow that pushes data from the UNS to the device, set with `source`, `processing` and `destination`. |
 | `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](variables.md#variables) for details. |
 
 ### Benthos-UMH Processors
