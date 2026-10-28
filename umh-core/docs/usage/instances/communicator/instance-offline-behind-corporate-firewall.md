@@ -62,13 +62,13 @@ umh-core trusts only public certificate authorities. It rejects the certificate 
    docker rm -f <container name>
    ```
 
-4. Start the container again with the same `docker run` command as before, and add two flags. The first mounts the directory. The second tells umh-core to load certificates from it. In the example, `...` stands for the flags of your original command.
+4. Start the container again with the same `docker run` command as before, and add two flags. The first mounts the directory. The second tells umh-core to load certificates from it. In the example, `<your original flags>` stands for the flags of your original command. Replace it with those flags, one per line and each line ending in `\`, or delete the line if there are none.
 
    ```bash
    docker run \
      -v /opt/umh/certs:/certs:ro \
      -e SSL_CERT_DIR=/etc/ssl/certs:/certs \
-     ...
+     <your original flags> \
      management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION>
    ```
 

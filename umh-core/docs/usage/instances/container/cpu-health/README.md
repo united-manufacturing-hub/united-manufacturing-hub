@@ -86,6 +86,10 @@ Steal uses the 95th percentile once 20 samples are in, and the mean before that,
 instance gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine
 the Steal line reads `not measured` with its reason.
 
+## Enabling CPU pressure stats
+
+This section moved to its own page. To make the `Pressure` line show a percentage, follow [Enable CPU pressure stats](enable-cpu-pressure-stats.md). Old links to `#enabling-cpu-pressure-stats` land here.
+
 ## Metrics
 
 With `USE_FSMV2_CPU=true`, the CPU worker publishes the gauges below on the Prometheus endpoint on port 8080. The CPU worker measures once per second, and each measurement is called a tick. [Read the metrics](../../agent/metrics.md#read-the-metrics) explains how to read the endpoint. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
