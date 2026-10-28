@@ -23,10 +23,6 @@ var validWorkerStates = map[string]map[string]bool{
 		"Running": true, "Degraded": true, "Stopped": true,
 		"unknown": true,
 	},
-	"certfetcher": {
-		"Stopped": true, "Running": true, "Degraded": true,
-		"unknown": true,
-	},
 	"configworker": {
 		"Running": true, "Stopped": true,
 		"unknown": true,
@@ -60,10 +56,6 @@ var validWorkerStates = map[string]map[string]bool{
 		"running": true, "degraded": true,
 		"stopped": true, "unknown": true,
 	},
-	"communicator": {
-		"Stopped": true, "Syncing": true, "Recovering": true,
-		"unknown": true,
-	},
 	"helloworld": {
 		"TryingToStart": true, "Running": true,
 		"Degraded": true, "Stopped": true,
@@ -80,18 +72,5 @@ var validWorkerStates = map[string]map[string]bool{
 	"persistence": {
 		"Stopped": true, "TryingToStart": true, "Running": true,
 		"Degraded": true, "Stopping": true, "unknown": true,
-	},
-	"transport": {
-		"Stopped": true, "Starting": true, "Running": true,
-		"Degraded": true, "AuthFailed": true, "Stopping": true,
-		"unknown": true,
-	},
-	"push": {
-		"Running": true, "Degraded": true, "Stopped": true, "Stopping": true,
-		"unknown": true,
-	},
-	"pull": {
-		"Running": true, "Degraded": true, "Stopped": true, "Stopping": true,
-		"unknown": true,
 	},
 }

@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
@@ -32,20 +31,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
-	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	transportsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 // expectedWorkerTypes lists the worker types the walk below must reach.
 // The walk fails when it reaches fewer of them, so a render that drops a child
-// cannot shrink the set that the registry checks run on.
-var expectedWorkerTypes = []string{"communicator", "transport", "push", "pull", "application"}
+// cannot shrink the set that the registry checks run on. The connection
+// workers come from the Management Console module and are checked there.
+var expectedWorkerTypes = []string{"persistence", "application"}
 
 // extraWorkerTypes lists worker types that umh-core starts but that no render
 // function below returns. The application adds configworker as its kernel
@@ -60,10 +54,9 @@ var _ = Describe("production worker tree", func() {
 	// NewWorkerByType builds from. Most state packages call
 	// fsmv2.RegisterInitialState, which WorkerBase.GetInitialState reads. Both
 	// run only when main links the package that calls them. This test builds
-	// the child specs with the same render functions the supervisors call. For
-	// every worker type it finds, it then does what a supervisor does for a
-	// child: it creates the worker through the factory and asks it for its
-	// initial state.
+	// the child specs with the same render function main calls. For every
+	// worker type it finds, it then does what a supervisor does for a child: it
+	// creates the worker through the factory and asks it for its initial state.
 	It("creates every worker type it renders through the factory and reads its initial state", func() {
 		var walked []string
 		reached := map[string]bool{}
@@ -74,14 +67,9 @@ var _ = Describe("production worker tree", func() {
 			}
 		}
 
-		// Root level: the children main gives the application supervisor.
-		agent := config.AgentConfig{CommunicatorConfig: config.CommunicatorConfig{
-			APIURL:    "http://relay.invalid",
-			AuthToken: "token",
-		}}
-		Expect(communicatorEnabled(agent)).To(BeTrue())
-
-		doc, err := renderSupervisorChildrenYAML(agent, "instance-uuid")
+		// Root level: the children main gives the application supervisor when
+		// nothing is registered.
+		doc, err := renderSupervisorChildrenYAML(nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		var root struct {
@@ -92,31 +80,6 @@ var _ = Describe("production worker tree", func() {
 		Expect(yaml.Unmarshal([]byte(doc), &root)).To(Succeed())
 		for _, child := range root.Children {
 			reach(child.WorkerType)
-		}
-
-		// Communicator level, and the transport level below each transport child.
-		if reached["communicator"] {
-			commChildren, err := communicator.RenderChildren(communicator.CommunicatorConfig{
-				RelayURL:     agent.APIURL,
-				InstanceUUID: "instance-uuid",
-				AuthToken:    agent.AuthToken,
-			}, true)
-			Expect(err).NotTo(HaveOccurred())
-
-			for _, spec := range commChildren {
-				reach(spec.WorkerType)
-				if spec.WorkerType != "transport" {
-					continue
-				}
-
-				transportChildren, err := transportsnapshot.RenderChildren(
-					transportsnapshot.TransportDesiredState{}, transportsnapshot.TransportStatus{}, true)
-				Expect(err).NotTo(HaveOccurred())
-
-				for _, child := range transportChildren {
-					reach(child.WorkerType)
-				}
-			}
 		}
 
 		// The root is the application, which no render returns.
@@ -178,16 +141,11 @@ var _ = Describe("production worker tree", func() {
 // back the values that were published before it ran.
 func newStandInDependencies() (storage.TriangularStoreInterface, map[string]any) {
 	keepGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName)
-	keepGlobalDeps[*transportWorker.TransportDependencies](transportWorker.WorkerTypeName)
 	register.SetGlobalDeps(configworker.WorkerTypeName, dynamicchildren.NewWriter().Registry())
 
 	var store storage.TriangularStoreInterface = storage.NewTriangularStore(memory.NewInMemoryStore(), deps.NewNopFSMLogger())
-	bridge := fsmv2_adapter.NewLegacyChannelBridge(
-		make(chan *models.UMHMessage), make(chan *models.UMHMessage), zap.NewNop().Sugar(), 0)
 
 	dependencies := map[string]any{}
-	fsmv2config.SetDependency(dependencies, communicator.ChannelProviderKey, communicator.ChannelProvider(bridge))
-	fsmv2config.SetDependency(dependencies, transportWorker.ChannelProviderKey, transportWorker.ChannelProvider(bridge))
 	fsmv2config.SetDependency(dependencies, persistenceWorker.StoreKey, store)
 
 	return store, dependencies

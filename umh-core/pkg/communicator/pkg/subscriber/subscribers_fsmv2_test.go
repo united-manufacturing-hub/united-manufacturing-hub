@@ -15,29 +15,31 @@
 package subscriber_test
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
 
 var _ = Describe("FSMv2 Direct Channel Mode", func() {
 	var (
-		handler            *subscriber.Handler
-		logger             *zap.SugaredLogger
-		fsmOutboundChannel chan *types.UMHMessage
+		handler  *subscriber.Handler
+		logger   *zap.SugaredLogger
+		outbound chan handoff.Message
 	)
 
 	BeforeEach(func() {
@@ -47,15 +49,15 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 	})
 
 	AfterEach(func() {
-		if fsmOutboundChannel != nil {
-			close(fsmOutboundChannel)
+		if outbound != nil {
+			close(outbound)
 		}
 	})
 
-	Describe("FSMv2 mode (fsmOutboundChannel != nil)", func() {
+	Describe("FSMv2 mode (outbound channel provided)", func() {
 		BeforeEach(func() {
 			// Create buffered channel for FSMv2 mode
-			fsmOutboundChannel = make(chan *types.UMHMessage, 10)
+			outbound = make(chan handoff.Message, 10)
 
 			handler = subscriber.NewHandler(
 				&mockWatchdog{},
@@ -68,8 +70,8 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 				nil, // configManager
 				logger,
 				nil, // topicBrowserCommunicator
-				fsmOutboundChannel,
-				nil,                    // gatekeeperOutboundChannel
+				outbound,
+				nil,                    // the registered provider for the connection part
 				nil,                    // featureUsage
 				deps.NewNopFSMLogger(), // fsmLogger
 			)
@@ -83,11 +85,11 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 			Expect(handler.GetInstanceUUID()).To(Equal(expectedUUID))
 		})
 
-		It("should use FSMv2 mode when fsmOutboundChannel is provided", func() {
+		It("should use FSMv2 mode when the outbound channel is provided", func() {
 			// This test verifies that the handler was correctly initialized with FSMv2 channel
 			// The actual message sending would require mocking more components,
 			// but we can verify the channel is correctly passed
-			Expect(fsmOutboundChannel).NotTo(BeNil())
+			Expect(outbound).NotTo(BeNil())
 		})
 	})
 
@@ -95,7 +97,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 
 var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 	// The guard for the FSMv2 status path: a subscriber registers, the notifier
-	// runs, and a Status message arrives on fsmOutboundChannel with no Pusher
+	// runs, and a Status message arrives on the outbound channel with no Pusher
 	// involved. A later rung removes the write-only Pusher; this guard pins the
 	// delivery path it must not break.
 	//
@@ -129,7 +131,7 @@ var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 		configManager := config.NewMockConfigManager()
 		topicBrowserCommunicator := topicbrowser.NewTopicBrowserCommunicator(logger)
 
-		fsmOutboundChannel := make(chan *types.UMHMessage, 10)
+		outbound := make(chan handoff.Message, 10)
 		instanceUUID := uuid.New()
 
 		handler := subscriber.NewHandler(
@@ -143,8 +145,8 @@ var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 			configManager,
 			logger,
 			topicBrowserCommunicator,
-			fsmOutboundChannel,
-			nil,                    // gatekeeperOutboundChannel
+			outbound,
+			nil,                    // the registered provider for the connection part
 			nil,                    // featureUsage
 			deps.NewNopFSMLogger(), // fsmLogger
 		)
@@ -153,16 +155,37 @@ var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 		handler.AddOrRefreshSubscriber(subscriberEmail, false)
 		handler.StartNotifier()
 
-		var received *types.UMHMessage
-		Eventually(fsmOutboundChannel, "10s", "100ms").Should(Receive(&received),
+		var received handoff.Message
+		Eventually(outbound, "10s", "100ms").Should(Receive(&received),
 			"expected a status message on the FSMv2 outbound channel")
 
-		Expect(received.InstanceUUID).To(Equal(instanceUUID.String()))
-		Expect(received.Email).To(Equal(subscriberEmail))
+		Expect(received.SenderEmail).To(Equal(subscriberEmail))
 
-		content, err := encoding.DecodeMessageFromUMHInstanceToUser(received.Content)
+		content, err := encoding.DecodeMessageFromUMHInstanceToUser(string(received.Content))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(content.MessageType).To(Equal(models.Status))
+
+		// Precondition for the direction assertion below: the instance-to-user
+		// encoder compresses only from 1024 bytes of JSON on (corev1) or always
+		// (old). A smaller payload would leave the assertion unable to tell
+		// the two encode directions apart under the old encoder this package
+		// runs.
+		whole, err := json.Marshal(models.UMHMessageContent{
+			MessageType: models.Status,
+			Payload:     content.Payload,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		if len(whole) < 1024 {
+			Fail(fmt.Sprintf("status payload too small to pin the encode direction: %d bytes", len(whole)))
+		}
+
+		// The instance-to-user direction compresses, so the delivered bytes
+		// carry the zstd frame magic both decoders test. The user-to-instance
+		// direction never compresses, so it would deliver plain base64 JSON.
+		plain, err := base64.StdEncoding.DecodeString(string(received.Content))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plain[:4]).To(Equal([]byte{0x28, 0xb5, 0x2f, 0xfd}),
+			"the status bytes must be zstd-compressed, so they must carry the frame magic")
 
 		rawPayload, err := json.Marshal(content.Payload)
 		Expect(err).NotTo(HaveOccurred())

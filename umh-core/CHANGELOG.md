@@ -2,10 +2,14 @@
 
 ## Unreleased
 
+## [0.44.44]
+
 ### Improvements
 
 - When a bridge's connection is down, the tooltip on the bridge's connection status now says why, for example that the DNS lookup timed out or the device refused the connection, and what to check
 - Routine start-up and restart messages from umh-core's internal components are now DEBUG instead of INFO, which makes state changes, warnings and errors easier to spot
+- If umh-core cannot start its FSMv2 supervisor, the container now exits with code 1, so its restart policy can start it again. Before, it kept running without FSMv2
+- `USE_GATEKEEPER` no longer has any effect and can be removed from your configuration. The `useGatekeeper` key in config.yaml is ignored
 
 ### Fixes
 

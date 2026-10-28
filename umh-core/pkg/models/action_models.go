@@ -122,6 +122,10 @@ type ActionType string
 // checks each action's fsmLogger field actually gets set when the
 // production switch builds the action — if the new type is missing from
 // the list, the test silently skips it. ENG-4959.
+//
+// Adding, renaming or removing an ActionType also needs an entry in the
+// Management Console module's action table, with the roles that may run it.
+// Without that entry, the official umh-core image can refuse the action.
 const (
 	// UnknownAction represents an unknown action type.
 	UnknownAction ActionType = "unknown"
@@ -790,7 +794,7 @@ const (
 	ErrDeployTimeout = "ERR_DEPLOY_TIMEOUT"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
-	ErrBridgeNotFound = "ERR_BRIDGE_NOT_FOUND"
+	ErrBridgeNotFound    = "ERR_BRIDGE_NOT_FOUND"
 	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
 	// It is retryable because the write failure might be caused by temporary filesystem issues.
 	ErrRetryConfigWriteFailed = "ERR_RETRY_CONFIG_WRITE_FAILED"

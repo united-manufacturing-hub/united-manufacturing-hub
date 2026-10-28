@@ -25,12 +25,11 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/handoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -161,15 +160,15 @@ var _ = Describe("Subscriber drop reaches Sentry through the production wiring",
 			nil,
 			nil,
 		)
-		state.LoginResponse = &v2.LoginResponse{
+		state.LoginResponse = &communication_state.LoginResponse{
 			UUID: uuid.New(),
 			JWT:  "test-jwt",
 			Name: "subscriber-drop-sentry-test",
 		}
 
 		// A capacity-1 channel that is already full, so every notify tick drops.
-		fsmOutboundChannel := make(chan *types.UMHMessage, 1)
-		fsmOutboundChannel <- &types.UMHMessage{InstanceUUID: "subscriber-drop-sentry-prefill"}
+		outbound := make(chan handoff.Message, 1)
+		outbound <- handoff.Message{SenderEmail: "subscriber-drop-sentry-prefill"}
 
 		state.InitialiseAndStartSubscriberHandler(
 			time.Minute,
@@ -177,7 +176,7 @@ var _ = Describe("Subscriber drop reaches Sentry through the production wiring",
 			&config.FullConfig{},
 			snapshotManager,
 			configManager,
-			fsmOutboundChannel,
+			outbound,
 			nil,
 		)
 		Expect(state.SubscriberHandler).NotTo(BeNil(), "the production constructor must build the subscriber handler")

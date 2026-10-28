@@ -22,137 +22,105 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 )
 
 var _ = Describe("renderSupervisorChildrenYAML", func() {
-	// renderSupervisorChildrenYAML is the pure core of buildFSMv2Supervisor's
-	// child selection. The design decision that matters is that choosing the
-	// children moves out of the effectful builder, so the central invariant --
-	// persistence always, communicator iff credentials -- is provable without a
-	// supervisor, a store or a goroutine.
-
-	type decodedChild struct {
-		Name       string `yaml:"name"`
-		WorkerType string `yaml:"workerType"`
-		UserSpec   struct {
-			Config string `yaml:"config"`
-		} `yaml:"userSpec"`
-	}
 	type decodedChildren struct {
-		Children []decodedChild `yaml:"children"`
-	}
-	type decodedUserConfig struct {
-		RelayURL     string `yaml:"relayURL"`
-		InstanceUUID string `yaml:"instanceUUID"`
-		AuthToken    string `yaml:"authToken"`
-	}
-
-	childNames := func(doc string) []string {
-		var parsed decodedChildren
-		Expect(yaml.Unmarshal([]byte(doc), &parsed)).To(Succeed())
-		out := make([]string, 0, len(parsed.Children))
-		for _, c := range parsed.Children {
-			out = append(out, c.Name)
-		}
-
-		return out
+		Children []fsmv2config.ChildSpec `yaml:"children"`
 	}
 
 	// render fails the spec on a render error rather than asserting against an
 	// empty document: an empty document means a supervisor with no children at
 	// all, which no assertion below would distinguish from a correct render.
-	render := func(cfg config.AgentConfig, instanceUUID string) string {
-		doc, err := renderSupervisorChildrenYAML(cfg, instanceUUID)
+	render := func(registered []fsmv2config.ChildSpec) []fsmv2config.ChildSpec {
+		doc, err := renderSupervisorChildrenYAML(registered)
 		Expect(err).To(Succeed(), "rendering the supervisor children must not fail")
-
-		return doc
-	}
-
-	It("always renders persistence and communicator only with credentials, round-tripping byte-for-byte", func() {
-		// Lockstep half of Property 8: the persistence child and its deps
-		// registration are both unconditional. The pure core cannot register
-		// deps, so that half is asserted at the source: no read of
-		// UseFSMv2MemoryCleanup may remain in cmd/main.go, or persistence could
-		// spawn without its deps.
-		src, err := os.ReadFile("main.go")
-		Expect(err).To(Succeed())
-		Expect(bytes.Contains(src, []byte("UseFSMv2MemoryCleanup"))).To(BeFalse(),
-			"persistence child + deps registration must become unconditional in lockstep; "+
-				"the memory-cleanup gate is still read in cmd/main.go")
-
-		// Zero AgentConfig: no credentials, no memory-cleanup. Persistence must
-		// appear regardless; communicator must not (there is no runtime to wire it to).
-		Expect(childNames(render(config.AgentConfig{}, "uuid-0"))).
-			To(ContainElement("persistence"))
-		Expect(childNames(render(config.AgentConfig{}, "uuid-0"))).
-			NotTo(ContainElement("communicator"))
-
-		// Credentials present: communicator appears, and its nested userSpec
-		// config must decode back to the exact bytes passed in -- including the
-		// hostile token (E14/E15), which disqualifies fmt.Sprintf inline
-		// building and forces yaml.Marshal.
-		const (
-			relayURL        = `http://fsmv2.invalid:9999`
-			authToken       = "token\"with\\backslash\nand-newline"
-			placeholderUUID = "placeholder-1234"
-		)
-		credentialed := config.AgentConfig{CommunicatorConfig: config.CommunicatorConfig{
-			APIURL:    relayURL,
-			AuthToken: authToken,
-		}}
-		doc := render(credentialed, placeholderUUID)
-		Expect(childNames(doc)).To(ContainElement("persistence"))
-		Expect(childNames(doc)).To(ContainElement("communicator"))
 
 		var parsed decodedChildren
 		Expect(yaml.Unmarshal([]byte(doc), &parsed)).To(Succeed())
-		var comm *decodedChild
-		for i := range parsed.Children {
-			if parsed.Children[i].Name == "communicator" {
-				comm = &parsed.Children[i]
 
-				break
-			}
-		}
-		Expect(comm).NotTo(BeNil(), "communicator child must be present in the emitted YAML")
-		var userCfg decodedUserConfig
-		Expect(yaml.Unmarshal([]byte(comm.UserSpec.Config), &userCfg)).To(Succeed())
-		Expect(userCfg.RelayURL).To(Equal(relayURL))
-		Expect(userCfg.AuthToken).To(Equal(authToken))
-		Expect(userCfg.InstanceUUID).To(Equal(placeholderUUID))
+		return parsed.Children
+	}
 
-		// Partial credentials (only API URL) are treated as no credentials
-		// (E2): the existing && contract must be preserved in the renderer.
-		partial := config.AgentConfig{CommunicatorConfig: config.CommunicatorConfig{APIURL: relayURL}}
-		Expect(childNames(render(partial, "uuid-1"))).
-			NotTo(ContainElement("communicator"))
+	It("checks that only persistence is rendered when nothing is registered", func() {
+		// The persistence child and its deps registration are both
+		// unconditional, so no read of UseFSMv2MemoryCleanup may remain in
+		// cmd/main.go, or persistence could spawn without its deps.
+		src, err := os.ReadFile("main.go")
+		Expect(err).To(Succeed())
+		Expect(bytes.Contains(src, []byte("UseFSMv2MemoryCleanup"))).To(BeFalse(),
+			"the memory-cleanup gate is still read in cmd/main.go")
+
+		children := render(nil)
+		Expect(children).To(HaveLen(1))
+		Expect(children[0].Name).To(Equal("persistence"))
+		Expect(children[0].WorkerType).To(Equal("persistence"))
 	})
 
-	// The certfetcher child fetches user certificates from the Management
-	// Console for the gatekeeper, so it needs both the gatekeeper and
-	// credentials. Without credentials it is omitted, the same rule as the
-	// communicator.
-	DescribeTable("renders the certfetcher child only with the gatekeeper on and credentials present",
-		func(useGatekeeper bool, apiURL, authToken string, expectCertfetcher bool) {
-			cfg := config.AgentConfig{
-				CommunicatorConfig: config.CommunicatorConfig{
-					APIURL:    apiURL,
-					AuthToken: authToken,
-				},
-				UseGatekeeper: useGatekeeper,
-			}
+	It("checks that the registered children follow persistence, in order, with their config unchanged", func() {
+		// The config holds characters that inline string formatting would
+		// mangle, so it must round-trip through the YAML document unchanged.
+		const hostile = "relay: \"x\\y\"\nline two"
+		a := fsmv2config.ChildSpec{Name: "a", WorkerType: "type-a", UserSpec: fsmv2config.UserSpec{Config: hostile}, Enabled: true}
+		b := fsmv2config.ChildSpec{Name: "b", WorkerType: "type-b", Enabled: true}
 
-			names := childNames(render(cfg, "uuid-2"))
-			Expect(names).To(ContainElement("persistence"))
-			if expectCertfetcher {
-				Expect(names).To(ContainElement("certfetcher"))
-			} else {
-				Expect(names).NotTo(ContainElement("certfetcher"))
-			}
-		},
-		Entry("gatekeeper on, credentials present", true, "http://fsmv2.invalid:9999", "test-token", true),
-		Entry("gatekeeper on, no credentials", true, "", "", false),
-		Entry("gatekeeper off, credentials present", false, "http://fsmv2.invalid:9999", "test-token", false),
-	)
+		children := render([]fsmv2config.ChildSpec{a, b})
+		Expect(children).To(HaveLen(3))
+		Expect(children[0].Name).To(Equal("persistence"))
+		Expect(children[1].Name).To(Equal("a"))
+		Expect(children[1].WorkerType).To(Equal("type-a"))
+		Expect(children[1].UserSpec.Config).To(Equal(hostile))
+		Expect(children[2].Name).To(Equal("b"))
+		Expect(children[2].WorkerType).To(Equal("type-b"))
+	})
+})
+
+var _ = Describe("the module's child dependencies", func() {
+	// plantedDependency stands in for a value a module could hand its child,
+	// with an exported field that yaml and json would write out.
+	type plantedDependency struct {
+		Marker string
+	}
+
+	It("checks that the children document carries no dependency, not even a planted value", func() {
+		child := fsmv2config.ChildSpec{
+			Name:         "a",
+			WorkerType:   "type-a",
+			Enabled:      true,
+			Dependencies: map[string]any{"a.provider": &plantedDependency{Marker: "planted-marker-7f3a"}},
+		}
+
+		doc, err := renderSupervisorChildrenYAML([]fsmv2config.ChildSpec{child})
+		Expect(err).To(Succeed())
+		Expect(doc).NotTo(ContainSubstring("planted-marker-7f3a"))
+		Expect(doc).NotTo(ContainSubstring("dependencies"))
+	})
+
+	It("checks that a child's dependency reaches the supervisor's dependency map as the same value", func() {
+		provider := &plantedDependency{Marker: "planted-marker-7f3a"}
+		deps := map[string]any{"umh.store": "store"}
+
+		err := addChildDependencies(deps, []fsmv2config.ChildSpec{{
+			Name:         "a",
+			Dependencies: map[string]any{"a.provider": provider},
+		}})
+		Expect(err).To(Succeed())
+
+		got, ok := deps["a.provider"].(*plantedDependency)
+		Expect(ok).To(BeTrue())
+		Expect(got).To(BeIdenticalTo(provider))
+	})
+
+	It("checks that a child cannot replace a dependency umh-core already set", func() {
+		deps := map[string]any{"umh.store": "store"}
+
+		err := addChildDependencies(deps, []fsmv2config.ChildSpec{{
+			Name:         "a",
+			Dependencies: map[string]any{"umh.store": "other"},
+		}})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("child 0"))
+		Expect(deps["umh.store"]).To(Equal("store"))
+	})
 })
