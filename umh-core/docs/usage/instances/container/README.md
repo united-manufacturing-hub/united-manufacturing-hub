@@ -82,7 +82,7 @@ The three `umh_container_cpu_*` gauges change their meaning with `USE_FSMV2_CPU`
 |---|---|---|
 | `umh_container_cpu_usage_mcores` | gauge | Host CPU load scaled to the CPU limit, or to the host cores without a limit. One sample, in millicores. |
 | `umh_container_cpu_core_count` | gauge | Number of CPUs the umh-core process may run on. This is the number of host cores, unless the container is pinned to some of them with `--cpuset-cpus`. |
-| `umh_container_cpu_load_percent` | gauge | `umh_container_cpu_usage_mcores` as a percentage of the host cores |
+| `umh_container_cpu_load_percent` | gauge | `umh_container_cpu_usage_mcores` as a percentage of `umh_container_cpu_core_count` |
 
 #### FSMv2 (with `USE_FSMV2_CPU=true`)
 

@@ -1,5 +1,7 @@
 # Metrics
 
+If you are the power user, hand the Docker-host and Prometheus steps on this page to IT. IT needs access to port 8080 on the Docker host and to your Prometheus setup.
+
 Every UMH Core instance serves Prometheus metrics in the Prometheus text format on port 8080, at the path `/metrics`. The metrics come from umh-core, the process inside the UMH Core container. Use them to monitor an instance with Prometheus and Grafana. Because the endpoint runs inside the container, you can read it when the Management Console cannot reach the instance.
 
 The component pages list the metrics of one component. See [Metrics by component](#metrics-by-component).
@@ -174,7 +176,7 @@ umh-core counts one error at several layers, for example under the bridge and ag
 
 `umh_core_reconcile_duration_milliseconds` with `component="control_loop"` and `instance="main"` is the duration of one whole cycle of umh-core's control loop. A cycle should finish within 100 milliseconds. A longer cycle writes a warning to the agent log. Other `instance` values time single steps inside that cycle. A component's step names start with the component's name. The filter `instance=~"<name>(\\..*)?"` selects all of them. Do not add the steps up. They are nested inside each other, and a sum counts time twice.
 
-`umh_core_reconcile_starved_total_seconds` adds more than one second for each second of a stall. Only an increase above zero is meaningful. It means umh-core stopped for more than 15 seconds.
+`umh_core_reconcile_starved_total_seconds` adds more than one second for each second of a stall. Only an increase above zero is meaningful. It means the control loop did not run for more than 15 seconds.
 
 ## Metrics by component
 

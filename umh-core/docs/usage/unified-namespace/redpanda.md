@@ -21,7 +21,7 @@ An idle Redpanda shows the Active badge. Its tooltip starts with `idle: no input
 
 ## When Redpanda is degraded
 
-The badge tooltip starts with `degraded: ` and continues with the reason. umh-core runs the checks in the order of this table and shows the reason of the first check that fails. The two `found error` rows are one check, which shows the earliest matching log line. Redpanda returns to `idle` once no check fails.
+The badge tooltip starts with `degraded:`, a space and the reason. umh-core runs the checks in the order of this table and shows the reason of the first check that fails. The two `found error` rows are one check, which shows the earliest matching log line. Redpanda returns to `idle` once no check fails.
 
 | Reason | What it means | What to do |
 |---|---|---|
@@ -41,8 +41,8 @@ The Redpanda card on the instance details page shows the state badge, the throug
 
 | Field | Shows |
 |---|---|
-| **Incoming Throughput** | Bytes per second written to Redpanda, averaged over a time window. The unit scales from B/s to KiB/s and MiB/s. |
-| **Outgoing Throughput** | Bytes per second read from Redpanda, averaged over the same window. |
+| **Incoming Throughput** | Bytes per second written to Redpanda, averaged over a time window. The unit is B/s, KiB/s, MiB/s or a larger binary unit, depending on the value. |
+| **Outgoing Throughput** | Bytes per second read from Redpanda, averaged over the same window. The unit scales the same way. |
 | **Logs** | Opens the Redpanda log. |
 | **Metrics** | Opens the Redpanda Metrics page. |
 

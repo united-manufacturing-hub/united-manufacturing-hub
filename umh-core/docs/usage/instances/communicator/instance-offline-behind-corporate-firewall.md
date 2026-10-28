@@ -1,22 +1,24 @@
 # Instance Stays Offline Behind a Corporate Firewall
 
+If you are the power user, hand this page to IT when the Docker host is behind a corporate proxy or TLS inspection. IT must confirm the firewall rules, the proxy settings and the corporate CA before you run the commands below.
+
 An instance behind a corporate firewall that never shows as online in the Management Console usually has one of three causes. The firewall blocks the connection, the network requires a proxy, or the firewall inspects TLS. A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
 
 ## Which error the instance reports
 
-The Management Console shows a red alert, "Instance Offline", once 15 seconds pass without a message from the instance. The cards keep showing the last status the instance sent, if it sent one. They do not show why the connection fails. The error counters of the communicator count failed requests by cause, with one series per worker. The failed logins are the series whose `hierarchy_path` ends in `(transport)`. [Metrics](../agent/metrics.md#read-the-metrics) explains how to read the metrics and how to collect them with Prometheus. [Communicator](README.md#errors) explains each counter. To read the three counters once, run this on the Docker host:
+The Management Console shows a red alert, "Instance Offline", once 15 seconds pass without a message from the instance. The cards keep showing the last status the instance sent, if it sent one. They do not show why the connection fails. The error counters of the communicator count failed requests by cause, with one series per worker. The failed logins are the series whose `hierarchy_path` ends in `(transport)`. [Metrics](../agent/metrics.md#read-the-metrics) explains how to read the metrics and how to collect them with Prometheus. [Communicator](README.md#errors) explains each counter. To read the counters once, run this on the Docker host:
 
 ```bash
-docker exec <container name> wget -qO- http://localhost:8080/metrics | grep -E 'network_errors_total|proxy_block_errors_total|auth_failures_total'
+docker exec <container name> wget -qO- http://localhost:8080/metrics | grep -E 'network_errors_total|proxy_block_errors_total|auth_failures_total|instance_deleted_total|server_errors_total|rate_limit_errors_total|cloudflare_errors_total'
 ```
 
-Find the counter that keeps rising in this table.
+Find the counter that keeps rising in this table. If none of them rises, read the full `/metrics` output.
 
 | Counter | Meaning |
 |---|---|
-| `umh_fsmv2_worker_network_errors_total` | The login failed without an answer that umh-core can classify. Either it never reached the Management Console, or something on the way answered with a status umh-core does not classify. A proxy that requires a login answers with status 407, and that counts here too. The counter does not say which case applies. Continue with [Find the cause](#find-the-cause). |
+| `umh_fsmv2_worker_network_errors_total` | A request failed without an answer that umh-core can classify. Either it never reached the Management Console, or something on the way answered with a status umh-core does not classify. A proxy that requires a login answers with status 407, and that counts here too. The counter does not say which case applies. Continue with [Find the cause](#find-the-cause). |
 | `umh_fsmv2_worker_proxy_block_errors_total` | A proxy answered with a block page instead of the Management Console. Ask your IT department to allow `management.umh.app` on the proxy. |
-| `umh_fsmv2_worker_auth_failures_total` | The login was answered with status 401 or 403. Usually the Management Console rejected the `AUTH_TOKEN` from your `docker run` command. A proxy or Cloudflare can also answer 403. If the token is correct, continue with [Find the cause](#find-the-cause). |
+| `umh_fsmv2_worker_auth_failures_total` | A request was answered with status 401 or 403. Under the transport worker, usually the Management Console rejected the `AUTH_TOKEN` from your `docker run` command. Under the push or pull worker, the session token was rejected. A proxy or Cloudflare can also answer 403. If the token is correct, or the series is not from the transport worker, continue with [Find the cause](#find-the-cause). |
 
 ## Find the cause
 
@@ -79,5 +81,7 @@ umh-core trusts only public certificate authorities. It rejects the certificate 
 ## Image pulls fail with an x509 error
 
 The Docker host pulls the umh-core image from `management.umh.app` through the same firewall. If the firewall inspects TLS, `docker pull` fails with an error that ends in `x509: certificate signed by unknown authority`. The steps above do not fix this, because Docker has its own trust store.
+
+The proxy variables of the container do not apply here, because the Docker daemon pulls the image, not the container. If the host needs a proxy for the pull, configure it for the Docker daemon (see [Docker Engine](https://docs.docker.com/engine/daemon/proxy/) and [Docker Desktop](https://docs.docker.com/desktop/settings-and-maintenance/settings/#proxies)).
 
 On Linux, put the corporate CA certificate file at `/etc/docker/certs.d/management.umh.app/ca.crt` on the Docker host. On Docker Desktop, add it to the trust store of the operating system and restart Docker Desktop.

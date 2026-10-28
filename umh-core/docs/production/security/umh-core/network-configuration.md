@@ -23,7 +23,7 @@ A firewall that inspects TLS replaces the certificate of `management.umh.app` wi
 
 ## Proxy Configuration
 
-If your network requires a proxy, add the proxy variables to the `docker run` command. An existing container must be removed and started again with the new flags, as in [step 3](../../../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) of the corporate CA steps. The container's bridges stop until it is back up.
+If your network requires a proxy, add the proxy variables to the `docker run` command. An existing container must be removed and started again with the new flags, as in [step 4](../../../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) of the corporate CA steps. The container's bridges stop until it is back up.
 
 ```bash
 docker run \

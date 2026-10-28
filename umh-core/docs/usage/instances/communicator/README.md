@@ -83,9 +83,9 @@ The pull worker records these series. `umh_fsmv2_worker_pending_messages` and `u
 | `umh_fsmv2_worker_pull_failures` | counter | Fetches from the Management Console that failed |
 | `umh_fsmv2_worker_messages_pulled` | counter | Messages fetched |
 | `umh_fsmv2_worker_bytes_pulled` | counter | Size of the messages fetched, in bytes. It counts the same way as `umh_fsmv2_worker_bytes_pushed`. |
-| `umh_fsmv2_worker_pending_messages` | gauge | Fetched messages that wait to be handed on inside umh-core. At most 1000 wait. |
-| `umh_fsmv2_worker_pending_messages_delivered` | counter | Waiting messages handed on in a hand-over that emptied the waiting list. A partial hand-over is not counted here. |
-| `umh_fsmv2_worker_partial_deliveries` | counter | Hand-overs where only part of the messages fit. The rest waits. |
+| `umh_fsmv2_worker_pending_messages` | gauge | Fetched messages that wait to be handed on inside umh-core. At most 1000 messages wait. |
+| `umh_fsmv2_worker_pending_messages_delivered` | counter | Waiting messages handed on in a handover that emptied the waiting list. A partial handover is not counted here. |
+| `umh_fsmv2_worker_partial_deliveries` | counter | Handovers where only part of the messages fit. The rest waits. |
 | `umh_fsmv2_worker_messages_dropped` | counter | Fetched messages lost, because more than 1000 waited or the communicator reset the connection after repeated errors |
 | `umh_fsmv2_worker_backpressure_active` | gauge | 1 while fetching is paused because umh-core cannot take more messages, 0 otherwise |
 | `umh_fsmv2_worker_backpressure_entry_total` | counter | How often fetching was paused |

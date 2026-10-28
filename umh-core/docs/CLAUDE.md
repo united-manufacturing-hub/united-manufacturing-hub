@@ -23,7 +23,7 @@ Leave out any section that doesn't apply, and keep this order:
 1. Opening in the primary reader's words, with no internals.
 2. What the Management Console shows, and what to do about it.
 3. `## Configuration`: the `config.yaml` keys and environment variables. For each, give the default and whether a change needs a restart or a new container (`docker restart` keeps the old environment).
-4. `## Metrics`: link [Read the metrics](usage/instances/agent/metrics.md#read-the-metrics), then list only this component's series as `| Name | Type | Reports |`. If the component can run under either framework, show two visible tables: the default first, then the other one with its switch named.
+4. `## Metrics`: link [Read the metrics](usage/instances/agent/metrics.md#read-the-metrics) with a path relative to the current page, then list only this component's series as `| Name | Type | Reports |`. If the component can run under either framework, show two visible tables: the default first, then the other one with its switch named.
 5. Details for IT or support.
 
 ## Config snippets
