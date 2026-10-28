@@ -113,6 +113,10 @@ jobs:
             echo "VERSION=0.0.0-dev-${{ github.sha }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Download image binaries
+        working-directory: ./umh-core
+        run: make download-docker-binaries
+
       # The official image includes a private module.
       # Its build output is hidden, because compiler errors name private files.
       # Maintainers with read access to that module can rebuild the official image locally to see the error.
