@@ -38,11 +38,12 @@
 //
 //	Goroutine A                Goroutine B
 //	-----------                -----------
-//	Lock(Supervisor.mu)        // Must wait
-//	Lock(WorkerContext.mu)          ^ BLOCKED (waits for A)
-//	Unlock(WorkerContext.mu)   Lock(WorkerContext.mu)  // Now allowed
-//	Unlock(Supervisor.mu)      Unlock(WorkerContext.mu)
-//	   = NO DEADLOCK              Unlock(Supervisor.mu)
+//	Lock(Supervisor.mu)        Lock(Supervisor.mu)
+//	Lock(WorkerContext.mu)        ^ BLOCKED (waits for A)
+//	Unlock(WorkerContext.mu)
+//	Unlock(Supervisor.mu)      Lock(WorkerContext.mu)  // Now allowed
+//	   = NO DEADLOCK           Unlock(WorkerContext.mu)
+//	                           Unlock(Supervisor.mu)
 //
 // # Lock level hierarchy
 //
@@ -54,7 +55,8 @@
 //
 // The levels are the lockLevel constants in supervisor/supervisor.go.
 //
-// Rule: Always acquire locks in ascending level order.
+// Rule: Always acquire locks in ascending level order. A goroutine may take
+// any single lock alone; the rule applies when it holds more than one.
 //
 // # Supervisor.mu before WorkerContext.mu
 //
@@ -77,24 +79,31 @@
 // # Panic on violation
 //
 // The LockManager panics on lock order violations to provide immediate feedback
-// with a full stack trace. A log message could be missed; a panic cannot.
+// with a stack trace. A log message could be missed; a panic cannot.
 // Crashing during testing is preferable to deadlocking in production.
 //
 // The panic message includes:
+//   - The goroutine ID
 //   - Which locks are involved
 //   - Their respective levels
 //   - The expected ordering
-//   - Full stack trace
+//   - The goroutine's stack trace, cut off at 4096 bytes
 //
 // # Detection mechanism
 //
 // The LockManager tracks per-goroutine lock acquisitions:
 //
 // 1. Each goroutine has a list of held locks (name + level)
-// 2. On Lock(), check if any held lock has a HIGHER level
+// 2. On Lock() or RLock(), check if any held lock has a HIGHER level
 // 3. If yes, panic (ordering violation)
 // 4. If no, record the lock and proceed
-// 5. On Unlock(), remove the lock from the held list
+// 5. On Unlock() or RUnlock(), remove the lock from the held list
+//
+// Locks at the same level are not checked against each other. Every
+// WorkerContext.mu has level 3, so a goroutine may hold several of them.
+//
+// With checks enabled, IsHeld reports whether the calling goroutine holds a
+// lock with the given name. With checks disabled it always returns false.
 //
 // # Usage
 //
@@ -124,7 +133,7 @@
 // Any lock order violation causes a panic with:
 //   - The violating lock acquisition
 //   - The higher-level lock already held
-//   - Full stack trace
+//   - The goroutine's stack trace
 //
 // # Supervisor integration
 //
