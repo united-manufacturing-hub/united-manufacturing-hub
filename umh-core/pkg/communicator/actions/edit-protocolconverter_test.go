@@ -46,10 +46,11 @@ import (
 )
 
 // recordedSentryEvent captures one SentryWarn/SentryError call: the event
-// name and the structured fields it carried.
+// name, whether it was a warning, and the structured fields it carried.
 type recordedSentryEvent struct {
-	name   string
-	fields []deps.Field
+	name    string
+	warning bool
+	fields  []deps.Field
 }
 
 // fieldKeys returns the keys of the event's structured fields.
@@ -74,20 +75,20 @@ func (l *recordingFSMLogger) Debug(msg string, fields ...deps.Field) {}
 func (l *recordingFSMLogger) Info(msg string, fields ...deps.Field)  {}
 
 func (l *recordingFSMLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
-	l.record(msg, fields)
+	l.record(msg, true, fields)
 }
 
 func (l *recordingFSMLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
-	l.record(msg, fields)
+	l.record(msg, false, fields)
 }
 
 func (l *recordingFSMLogger) With(fields ...deps.Field) deps.FSMLogger { return l }
 
-func (l *recordingFSMLogger) record(name string, fields []deps.Field) {
+func (l *recordingFSMLogger) record(name string, warning bool, fields []deps.Field) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	l.events = append(l.events, recordedSentryEvent{name: name, fields: fields})
+	l.events = append(l.events, recordedSentryEvent{name: name, warning: warning, fields: fields})
 }
 
 // eventNames returns the names of all recorded Sentry events in order.

@@ -297,7 +297,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 			if !readActive && !writeActive {
 				pcToStop.DesiredFSMState = protocolconverter.OperationalStateStopped
 			} else {
-				stopRead, stopWrite := flowsToStopAfterFailedDeploy(flowsWithConfigError, lastSnapshot, readActive, writeActive)
+				stopRead, stopWrite := flowsToStop(flowsWithConfigError, lastSnapshot, readActive, writeActive)
 				if stopRead {
 					pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
 				}
@@ -427,9 +427,13 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 
 // waitForComponentToAppear polls live FSM state until the new component
 // reaches the desired state, a flow logs a benthos config error, or the timeout hits.
-// It returns the error code the frontend uses to decide whether a retry can help,
-// the last snapshot, the flows that logged a config error, and the user-facing error.
-func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, *protocolconverter.ProtocolConverterObservedStateSnapshot, flowSelection, error) {
+// errCode tells the frontend whether a retry can help; err is the user-facing error.
+func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (
+	errCode string,
+	lastSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot,
+	flowsWithConfigError flowSelection,
+	err error,
+) {
 	tickInterval := a.tickInterval
 	if tickInterval == 0 {
 		tickInterval = constants.ActionTickerTime
@@ -448,8 +452,6 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 	// Track last known blocking reason for timeout error message
 	var lastStatusReason string
-
-	var lastSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot
 
 	var sentReadLogs, sentWriteLogs []s6.LogEntry
 
@@ -568,11 +570,15 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 	}
 }
 
+// sendNewLogs sends up to 10 lines of logs beyond the first len(sentLogs) to the
+// action output and returns the logs seen so far, to pass as sentLogs next time.
 func (a *DeployProtocolConverterAction) sendNewLogs(logs []s6.LogEntry, sentLogs []s6.LogEntry, remainingSeconds int) []s6.LogEntry {
 	return SendLimitedLogs(logs, sentLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 }
 
-func flowsToStopAfterFailedDeploy(flowsWithConfigError flowSelection, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
+// flowsToStop decides which dataflow components to flip to stopped after a failed deploy.
+func flowsToStop(flowsWithConfigError flowSelection, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
+	// A config error explains the failure, so stop only the flows that logged one.
 	stopRead = readActive && flowsWithConfigError.read
 	stopWrite = writeActive && flowsWithConfigError.write
 
@@ -580,18 +586,12 @@ func flowsToStopAfterFailedDeploy(flowsWithConfigError flowSelection, snapshot *
 		return stopRead, stopWrite
 	}
 
-	return flowsToStop(snapshot, readActive, writeActive)
-}
-
-// flowsToStop decides which dataflow components to flip to stopped after a failed
-// deploy that no config error explains: the active flows that did not reach a
-// healthy state, or every active flow when none is unhealthy or nothing was observed.
-func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
 	// No observed state: can't isolate the failure, so stop every active flow.
 	if snapshot == nil {
 		return readActive, writeActive
 	}
 
+	// Otherwise stop the active flows that did not reach a healthy state.
 	info := snapshot.ServiceInfo
 	if readActive && !isDFCHealthy(info.DataflowComponentReadFSMState) {
 		stopRead = true

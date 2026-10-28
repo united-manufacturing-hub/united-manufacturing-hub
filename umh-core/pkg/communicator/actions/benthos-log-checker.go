@@ -25,11 +25,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
+// benthosConfigErrorPatterns match the lines benthos logs when it rejects its
+// config before it starts. Such an error repeats on every restart until the
+// config changes, so an action can fail at once instead of waiting for the timeout.
 var benthosConfigErrorPatterns = []string{
 	"unable to infer",
 	"Config lint error",
 }
 
+// findBenthosConfigError returns the message of the first benthos config error
+// logged at or after since. Older lines are skipped: a stopped flow keeps the
+// lines of its previous config, which say nothing about the config being rolled out.
 func findBenthosConfigError(logs []s6.LogEntry, since time.Time) (string, bool) {
 	for _, log := range logs {
 		if log.Timestamp.Before(since) {
@@ -59,6 +65,9 @@ func isBenthosConfigErrorLine(content string) bool {
 	return false
 }
 
+// benthosConfigErrorText returns the part of a config error line that names the
+// problem: the lint field without its config location, else the msg field, else
+// the whole line.
 func benthosConfigErrorText(content string) string {
 	lint, hasLint := quotedFieldValue(content, "lint")
 	if hasLint {
@@ -73,6 +82,8 @@ func benthosConfigErrorText(content string) string {
 	return content
 }
 
+// quotedFieldValue returns the value of a key="value" field in a logfmt line
+// (https://brandur.org/logfmt), the format benthos logs in.
 func quotedFieldValue(content string, key string) (string, bool) {
 	_, afterKey, hasKey := strings.Cut(content, " "+key+"=")
 	if !hasKey {
@@ -89,12 +100,16 @@ func quotedFieldValue(content string, key string) (string, bool) {
 	return value, unquoteErr == nil
 }
 
+// configLocationPrefix matches the "path(line,col) " prefix benthos puts before a
+// lint message. It names a line of the rendered benthos config, which the user did not write.
 var configLocationPrefix = regexp.MustCompile(`^\S+\(\d+,\d+\) `)
 
 func withoutConfigLocation(lint string) string {
 	return configLocationPrefix.ReplaceAllString(lint, "")
 }
 
+// flowSelection names the flows of a bridge, for example the ones that logged a
+// config error.
 type flowSelection struct {
 	read  bool
 	write bool
@@ -109,6 +124,8 @@ func flowBenthosLogs(flow dataflowcomponent.DataflowComponentObservedState) []s6
 	return flow.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 }
 
+// findFlowConfigError looks for a config error in the logs of a bridge's read
+// and write flow. When both flows logged one, the message names both.
 func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry, since time.Time) (flowConfigError, bool) {
 	readMessage, readHasError := findBenthosConfigError(readLogs, since)
 	writeMessage, writeHasError := findBenthosConfigError(writeLogs, since)

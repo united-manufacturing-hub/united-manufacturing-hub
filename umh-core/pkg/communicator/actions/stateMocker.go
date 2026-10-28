@@ -62,8 +62,8 @@ type StateMocker struct {
 	done               chan struct{}                // channel to signal shutdown of goroutine
 	mu                 *sync.RWMutex                // mutex to protect the state of the mocker
 	IgnoreDfcUntilTick map[string]int               // map of component ID to tick to ignore
-	RejectedConfigLogs map[string][]s6.LogEntry
-	lastConfig         config.FullConfig // last config is needed to detect config changes (events)
+	RejectedConfigLogs map[string][]s6.LogEntry     // map of component ID to the benthos logs of a rejected config; such a component never becomes active
+	lastConfig         config.FullConfig            // last config is needed to detect config changes (events)
 	TickCounter        int
 	running            atomic.Bool // flag to track if the mocker is running
 	lastConfigSet      bool        // flag to track if the last config has been set

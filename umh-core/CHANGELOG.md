@@ -4,8 +4,8 @@
 
 ### Fixes
 
-- A bridge deploy now fails within seconds when benthos rejects the configuration before it starts, for example a misspelled setting (`field retension not recognised`). Before, the deploy waited 30 seconds and failed without naming the setting
-- Deploying or editing a stand-alone flow, or editing a bridge, with such a configuration now shows the benthos error instead of "check the component logs"
+- A bridge deploy now fails within seconds when benthos rejects the configuration before it starts, for example a misspelled setting (`field retension not recognised`). The bridge is kept and only the rejected flow is stopped. Before, the deploy waited 30 seconds and failed without naming the setting
+- Deploying or editing a stand-alone flow, or editing a bridge, with a configuration benthos rejects now shows the benthos error instead of "check the component logs"
 
 ## [0.44.46]
 

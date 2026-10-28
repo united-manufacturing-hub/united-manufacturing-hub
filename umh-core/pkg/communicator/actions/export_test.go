@@ -55,22 +55,30 @@ func (a *EditProtocolConverterAction) LastRenderErr() error {
 	return a.lastRenderErr
 }
 
+// SetTickInterval overrides the deploy wait's poll interval so specs do not
+// wait on the 1s production ticker.
 func (a *DeployProtocolConverterAction) SetTickInterval(d time.Duration) {
 	a.tickInterval = d
 }
 
+// SetAwaitTimeout overrides the deploy wait's timeout so timeout-path specs
+// do not wait the full 30s.
 func (a *DeployProtocolConverterAction) SetAwaitTimeout(d time.Duration) {
 	a.awaitTimeout = d
 }
 
+// FindBenthosConfigError exposes findBenthosConfigError to the specs.
 func FindBenthosConfigError(logs []s6.LogEntry, since time.Time) (string, bool) {
 	return findBenthosConfigError(logs, since)
 }
 
+// EditedFlowLogs exposes editedFlowLogs to the specs.
 func EditedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) ([]s6.LogEntry, []s6.LogEntry) {
 	return editedFlowLogs(dfcType, snapshot)
 }
 
+// SetFSMLogger replaces the action's FSMLogger so specs can record which
+// Sentry events fire.
 func (a *DeployProtocolConverterAction) SetFSMLogger(l deps.FSMLogger) {
 	a.fsmLogger = l
 }
