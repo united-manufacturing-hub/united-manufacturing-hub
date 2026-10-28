@@ -268,12 +268,14 @@ var _ = Describe("DeployProtocolConverter with a benthos config error", func() {
 		Expect(err).To(MatchError(ContainSubstring(inferErrorText)))
 	})
 
-	It("reports a rejected setting to Sentry apart from a timeout", func() {
+	It("reports a rejected setting to Sentry as a warning apart from a timeout", func() {
 		publishWriteFlowLogs(lintErrorLine)
 
 		_, _ = deploy()
 
-		Expect(sentryEvents.eventNames()).To(ContainElement("deploy_protocol_converter_config_error"))
+		configErrorEvents := sentryEvents.eventsNamed("deploy_protocol_converter_config_error")
+		Expect(configErrorEvents).To(HaveLen(1))
+		Expect(configErrorEvents[0].warning).To(BeTrue())
 		Expect(sentryEvents.eventNames()).NotTo(ContainElement("deploy_protocol_converter_wait_failed"))
 	})
 

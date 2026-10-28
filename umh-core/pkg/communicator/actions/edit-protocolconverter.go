@@ -958,6 +958,8 @@ func (a *EditProtocolConverterAction) awaitRollout(
 	}
 }
 
+// editedFlowLogs returns the benthos logs of the flows a read, write or both edit
+// changes, and nil for the other flow, so its errors cannot fail the edit.
 func editedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) ([]s6.LogEntry, []s6.LogEntry) {
 	readLogs := flowBenthosLogs(snapshot.ServiceInfo.DataflowComponentReadObservedState)
 	writeLogs := flowBenthosLogs(snapshot.ServiceInfo.DataflowComponentWriteObservedState)
