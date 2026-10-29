@@ -183,6 +183,49 @@ func observedBenthosToServiceConfig(obs benthosserviceconfig.BenthosServiceConfi
 	}
 }
 
+// DFCType represents the type of dataflow component configuration.
+type DFCType string
+
+const (
+	// DFCTypeRead represents a read dataflow component.
+	DFCTypeRead DFCType = "read"
+	// DFCTypeWrite represents a write dataflow component.
+	DFCTypeWrite DFCType = "write"
+	// DFCTypeBoth represents both read and write dataflow components being updated simultaneously.
+	DFCTypeBoth DFCType = "both"
+	// DFCTypeEmpty represents no dataflow component (connection/location update only).
+	DFCTypeEmpty DFCType = "empty"
+)
+
+// String returns the string representation of the DFCType.
+func (d DFCType) String() string {
+	return string(d)
+}
+
+// IsValid checks if the DFCType has a valid value.
+func (d DFCType) IsValid() bool {
+	switch d {
+	case DFCTypeRead, DFCTypeWrite, DFCTypeBoth, DFCTypeEmpty:
+		return true
+	default:
+		return false
+	}
+}
+
+// flowName maps a DFCType to the user-facing noun used in error messages shown
+// in the Management Console. DFC is a legacy internal term; the UI calls these
+// "flow config".
+func (d DFCType) flowName() string {
+	switch d {
+	case DFCTypeRead:
+		return "read flow config"
+	case DFCTypeWrite:
+		return "write flow config"
+	default:
+		return d.String() + " flow config"
+	}
+}
+
 // dfcTypeFromPresence returns a DFCType based on boolean flags for read/write presence.
 func dfcTypeFromPresence(read, write bool) DFCType {
 	switch {
