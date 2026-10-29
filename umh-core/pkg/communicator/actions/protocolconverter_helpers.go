@@ -226,6 +226,14 @@ func (d DFCType) flowName() string {
 	}
 }
 
+func (d DFCType) includesRead() bool {
+	return d == DFCTypeRead || d == DFCTypeBoth
+}
+
+func (d DFCType) includesWrite() bool {
+	return d == DFCTypeWrite || d == DFCTypeBoth
+}
+
 // dfcTypeFromPresence returns a DFCType based on boolean flags for read/write presence.
 func dfcTypeFromPresence(read, write bool) DFCType {
 	switch {
