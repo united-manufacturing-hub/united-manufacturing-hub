@@ -17,6 +17,7 @@ package actions
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,21 +34,36 @@ var benthosConfigErrorPatterns = []string{
 	"Config lint error",
 }
 
-// findBenthosConfigError returns the message of the first benthos config error
-// logged at or after since. Older lines are skipped: a stopped flow keeps the
-// lines of its previous config, which say nothing about the config being rolled out.
+// findBenthosConfigError returns the distinct benthos config errors logged at or
+// after since, joined with "; ". Benthos logs one line per lint error before it
+// exits, so a config with several errors reports all of them at once. Older lines
+// are skipped: a stopped flow keeps the lines of its previous config, which say
+// nothing about the config being rolled out.
 func findBenthosConfigError(logs []s6.LogEntry, since time.Time) (string, bool) {
+	var messages []string
+
 	for _, log := range logs {
 		if log.Timestamp.Before(since) {
 			continue
 		}
 
-		if isBenthosConfigErrorLine(log.Content) {
-			return benthosConfigErrorText(log.Content), true
+		if !isBenthosConfigErrorLine(log.Content) {
+			continue
 		}
+
+		message := benthosConfigErrorText(log.Content)
+		if slices.Contains(messages, message) {
+			continue
+		}
+
+		messages = append(messages, message)
 	}
 
-	return "", false
+	if len(messages) == 0 {
+		return "", false
+	}
+
+	return strings.Join(messages, "; "), true
 }
 
 func isBenthosConfigErrorLine(content string) bool {
