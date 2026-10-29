@@ -33,9 +33,8 @@ import (
 )
 
 const (
-	timescaleImage                     = "timescale/timescaledb:2.24.0-pg17"
-	timescaleImageWithoutDroppedColumn = "timescale/timescaledb:2.26.0-pg17"
-	postgresImage                      = "postgres:17-alpine"
+	timescaleImage = "timescale/timescaledb:2.24.0-pg17"
+	postgresImage  = "postgres:17-alpine"
 )
 
 // historianSchemaDDL mirrors the shape benthos-umh's historian output creates: two
@@ -904,19 +903,31 @@ var _ = Describe("Summary collection", Label("integration"), func() {
 var _ = Describe("TimescaleDB versions", Label("integration"), func() {
 	ctx := context.Background()
 
-	It("reads a TimescaleDB whose chunk catalog has no dropped column", func() {
-		pool := startDatabase(timescaleImageWithoutDroppedColumn)
-		_, err := pool.Exec(ctx, historianSchemaDDL)
-		Expect(err).NotTo(HaveOccurred())
+	DescribeTable("reads a TimescaleDB whose chunk catalog changed",
+		func(image string) {
+			pool := startDatabase(image)
+			_, err := pool.Exec(ctx, historianSchemaDDL)
+			Expect(err).NotTo(HaveOccurred())
 
-		metrics, err := Collect(ctx, pool)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(metrics.Tables).To(HaveLen(2))
+			metrics, err := Collect(ctx, pool)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metrics.Tables).To(HaveLen(2))
 
-		summary, err := CollectSummary(ctx, pool)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
-	})
+			value := tableNamed(metrics.Tables, "value_bench")
+			Expect(value.CompressedChunks).To(BeNumerically(">", 0))
+			Expect(value.CompressedChunks).To(BeNumerically("<", value.Chunks))
+			Expect(value.BytesAfterCompression).To(BeNumerically(">", 0))
+			Expect(value.Rows).To(BeNumerically(">", 0))
+			Expect(value.LatestRowTimestamp).NotTo(BeEmpty())
+
+			summary, err := CollectSummary(ctx, pool)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(summary.TableNames).To(ConsistOf("value_bench", "attribute_bench"))
+		},
+		Entry("2.26, which removed chunk.dropped", "timescale/timescaledb:2.26.0-pg17"),
+		Entry("2.29 and later, which removed chunk.schema_name, chunk.table_name and chunk.compressed_chunk_id",
+			"timescale/timescaledb:2.31.0-pg17"),
+	)
 
 	It("leaves out the chunks an older TimescaleDB marked dropped and kept in its catalog", func() {
 		pool := startDatabase(timescaleImage)

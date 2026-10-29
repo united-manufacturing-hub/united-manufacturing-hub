@@ -144,7 +144,11 @@ func readVersions(ctx context.Context, db Database) (string, string, error) {
 	return postgresVersion, *timescaleVersion, nil
 }
 
-const chunkRelation = `to_regclass(format('%I.%I', ch.schema_name, ch.table_name))`
+const liveChunks = `(SELECT ch.id, ch.hypertable_id, ch.status,
+          format('%I.%I', ic.chunk_schema, ic.chunk_name)::regclass AS relation
+     FROM timescaledb_information.chunks ic
+     JOIN _timescaledb_catalog.chunk ch
+       ON ch.id = _timescaledb_functions.chunk_id_from_relid(format('%I.%I', ic.chunk_schema, ic.chunk_name)::regclass))`
 
 // Sizes come from the catalog rather than timescaledb_information's size
 // functions, which stat every chunk's files and cost two orders of magnitude more
@@ -152,9 +156,9 @@ const chunkRelation = `to_regclass(format('%I.%I', ch.schema_name, ch.table_name
 // one (status bit 8) keeps the rows written after compression in its own heap, so
 // both are read from the relation.
 const chunkOccupiedDiskBytes = `CASE WHEN ch.id IS NULL THEN 0
-            WHEN ch.compressed_chunk_id IS NULL OR ch.status & 8 = 8
+            WHEN ch.status & 1 = 0 OR ch.status & 8 = 8
             THEN coalesce(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size, 0)
-               + coalesce(pg_total_relation_size(` + chunkRelation + `), 0)
+               + pg_total_relation_size(ch.relation)
             ELSE s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size END`
 
 const tablesQuery = `WITH sizes AS (
@@ -163,9 +167,9 @@ const tablesQuery = `WITH sizes AS (
          coalesce(sum(s.compressed_heap_size + s.compressed_index_size + s.compressed_toast_size), 0)::bigint AS bytes_after_compression,
          coalesce(sum(` + chunkOccupiedDiskBytes + `), 0)::bigint AS disk_bytes,
          count(ch.id) AS chunks,
-         count(ch.compressed_chunk_id) AS compressed_chunks
+         count(ch.id) FILTER (WHERE ch.status & 1 = 1) AS compressed_chunks
     FROM _timescaledb_catalog.hypertable h
-    LEFT JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND ` + chunkRelation + ` IS NOT NULL
+    LEFT JOIN ` + liveChunks + ` ch ON ch.hypertable_id = h.id
     LEFT JOIN _timescaledb_catalog.compression_chunk_size s ON s.chunk_id = ch.id
    WHERE h.schema_name = $1
    GROUP BY h.id
@@ -269,15 +273,14 @@ func readJobs(ctx context.Context, db Database) ([]Job, error) {
 // https://www.postgresql.org/docs/current/monitoring-stats.html
 const tableRowsQuery = `SELECT h.table_name,
        coalesce(sum(s.numrows_pre_compression), 0)
-     + coalesce(sum(CASE WHEN ch.compressed_chunk_id IS NULL
+     + coalesce(sum(CASE WHEN ch.status & 1 = 0
                          THEN greatest(coalesce(st.n_live_tup, 0), greatest(c.reltuples, 0)::bigint)
                          ELSE 0 END), 0)
   FROM _timescaledb_catalog.hypertable h
-  JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND ` + chunkRelation + ` IS NOT NULL
+  JOIN ` + liveChunks + ` ch ON ch.hypertable_id = h.id
   LEFT JOIN _timescaledb_catalog.compression_chunk_size s ON s.chunk_id = ch.id
-  LEFT JOIN pg_namespace n ON n.nspname = ch.schema_name
-  LEFT JOIN pg_class c ON c.relname = ch.table_name AND c.relnamespace = n.oid
-  LEFT JOIN pg_stat_all_tables st ON st.relid = c.oid
+  LEFT JOIN pg_class c ON c.oid = ch.relation
+  LEFT JOIN pg_stat_all_tables st ON st.relid = ch.relation
  WHERE h.schema_name = $1
  GROUP BY h.table_name`
 
@@ -356,14 +359,10 @@ func dataSpanSeconds(spans map[string]rowSpan) int64 {
 	return *latest - *earliest
 }
 
-const chunksQuery = `SELECT h.table_name, ch.schema_name, ch.table_name
-  FROM _timescaledb_catalog.hypertable h
-  JOIN _timescaledb_catalog.dimension d ON d.hypertable_id = h.id AND d.column_name = 'ts'
-  JOIN _timescaledb_catalog.chunk ch ON ch.hypertable_id = h.id AND ` + chunkRelation + ` IS NOT NULL
-  JOIN _timescaledb_catalog.chunk_constraint cc ON cc.chunk_id = ch.id
-  JOIN _timescaledb_catalog.dimension_slice ds ON ds.id = cc.dimension_slice_id AND ds.dimension_id = d.id
- WHERE h.schema_name = $1
- ORDER BY h.table_name, ds.range_start, ch.id`
+const chunksQuery = `SELECT hypertable_name, chunk_schema, chunk_name
+  FROM timescaledb_information.chunks
+ WHERE hypertable_schema = $1 AND primary_dimension = 'ts'
+ ORDER BY hypertable_name, range_start, chunk_name`
 
 type chunkRow struct {
 	Table       string
