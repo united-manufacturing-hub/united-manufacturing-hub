@@ -15,6 +15,8 @@
 package dataflowcomponentserviceconfig_test
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -188,6 +190,8 @@ var _ = Describe("write_config", func() {
 			Entry("wildcard in place of a location level", `^umh\.v1\.acme\..*\._raw\.`, "acme.cologne", false),
 			Entry("wildcard across location levels", `^umh\.v1\.acme.*\._raw\.`, "acme.cologne", false),
 			Entry("unanchored pattern also matches mid-topic", `umh\.v1\.acme\.cologne\._raw\.`, "acme.cologne", false),
+			Entry("anchor inside each alternative", `^umh\.v1\.acme\.cologne\.a\._raw\.|^umh\.v1\.acme\.cologne\.b\._raw\.`, "acme.cologne", false),
+			Entry("anchor in front of the alternatives", `^(?:umh\.v1\.acme\.cologne\.a\._raw\.|umh\.v1\.acme\.cologne\.b\._raw\.)`, "acme.cologne", true),
 			Entry("location with regex metacharacters taken literally", `^umh\.v1\.acme\.line-4\._raw\.`, "acme.line-4", true),
 			Entry("case-insensitive pattern also matches other locations", `(?i)^umh\.v1\.acme\.cologne\._raw\.`, "acme.cologne", false),
 			Entry("empty location accepts any level naming a contract", `^umh\.v1\.anything\._raw\.`, "", true),
@@ -282,12 +286,37 @@ var _ = Describe("write_config", func() {
 				`^umh\.v1\.acme\.cologne\._raw\.$x`, "acme.cologne")
 			Expect(err).To(MatchError(`the write flow topics need changes: ` +
 				`topic "^umh\.v1\.elsewhere\._raw\.foo" can match topics outside this bridge's location acme.cologne; start it with ^umh\.v1\.acme\.cologne\.; ` +
-				`topic "^umh\.v1\.acme\.cologne\.bar" must name exactly one data contract after the location, followed by \.; available: _raw, _historian; list versions explicitly, like _pump_v[1-2]\.; ` +
-				`topic "umh\.v1\.acme\.cologne\._raw\." must start with ^, otherwise it also matches topics that only contain it; ` +
+				`topic "^umh\.v1\.acme\.cologne\.bar" must name a data contract beneath the location, followed by \.; available: _raw, _historian; ` +
+				`topic "umh\.v1\.acme\.cologne\._raw\." must start with ^, in front of any alternatives like ^(?:a|b), otherwise it also matches topics that only contain it; ` +
 				`topic "^umh\.v1\.acme\.cologne\.(" is not a valid regular expression: missing closing ); ` +
 				`topic "^umh\.v1\.acme\.cologne\._raw\.$x" cannot match any topic, so the write flow would receive no messages. ` +
 				`Example of a valid topic: ^umh\.v1\.acme\.cologne\._historian\.`))
 		})
+
+		DescribeTable("explains why a topic names no usable data contract",
+			func(topic, problem string) {
+				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
+				}
+
+				err := input.ToWriteConfig().ValidateTopics("acme.cologne", []string{"_pump_v1", "_pump_v2"})
+				Expect(err).To(MatchError(ContainSubstring(`topic "` + topic + `" ` + problem)))
+			},
+			Entry("no contract", `^umh\.v1\.acme\.cologne\.pump-01\.temperature`,
+				`must name a data contract beneath the location`),
+			Entry("contract not declared", `^umh\.v1\.acme\.cologne\._writeflow_test_v2\.`,
+				`names a data contract that is not declared in dataContracts:`),
+			Entry("version not declared", `^umh\.v1\.acme\.cologne\._pump_v3\.`,
+				`names a data contract that is not declared in dataContracts:`),
+			Entry("wildcard instead of a contract", `^umh\.v1\.acme\.cologne\..*`,
+				`can match more than one data contract`),
+			Entry("wildcard contract", `^umh\.v1\.acme\.cologne\._[a-z]+\.`,
+				`can match more than one data contract`),
+			Entry("wildcard over versions", `^umh\.v1\.acme\.cologne\._pump_v\d+\.`,
+				`can match more than one data contract`),
+			Entry("contract not followed by a dot", `^umh\.v1\.acme\.cologne\._pump_v1`,
+				`can match more than one data contract`),
+		)
 
 		It("names the contracts a topic may use", func() {
 			err := validate(`^umh\.v1\.acme\.cologne\._nope\.foo`, "acme.cologne")
@@ -305,6 +334,28 @@ var _ = Describe("write_config", func() {
 			Expect(err).To(MatchError(ContainSubstring(
 				`data contract "_pump" has no version; rename it with one, like _pump_v1, before a write flow can use it`)))
 			Expect(err).To(MatchError(HaveSuffix(`Example of a valid topic: ^umh\.v1\.acme\.cologne\._valve_v1\.`)))
+		})
+
+		It("explains only the unversioned data contracts a rejected topic can match", func() {
+			validate := func(topics string) error {
+				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topics},
+				}
+
+				return input.ToWriteConfig().ValidateTopics("acme.cologne", []string{"_pump", "_valve"})
+			}
+
+			err := validate(`^umh\.v1\.acme\.cologne\.(?:_raw|_historian)\.`)
+			Expect(err).To(MatchError(ContainSubstring("can match more than one data contract")))
+			Expect(err).NotTo(MatchError(ContainSubstring("has no version")))
+
+			err = validate(`^umh\.v1\.acme\.cologne\.(?:_raw|_pump)\.` + "\n" + `^umh\.v1\.acme\.cologne\._pump\.`)
+			Expect(err).To(MatchError(ContainSubstring(`data contract "_pump" has no version`)))
+			Expect(strings.Count(err.Error(), "has no version")).To(Equal(1))
+
+			err = validate(`^umh\.v1\.other\._pump\.`)
+			Expect(err).To(MatchError(ContainSubstring("outside this bridge's location")))
+			Expect(err).NotTo(MatchError(ContainSubstring("has no version")))
 		})
 
 		It("tells a bridge without a location to start beneath the UNS prefix", func() {

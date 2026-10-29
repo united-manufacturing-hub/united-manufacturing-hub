@@ -85,9 +85,7 @@ func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig con
 }
 
 // introducedWriteTopicViolation returns the write topic violation of a bridge after a
-// change, unless the bridge already had one before it. A change, such as a new location,
-// must not turn valid write flow topics invalid, but it is not blocked by a violation it
-// did not cause.
+// change, unless the bridge already had one before it.
 func introducedWriteTopicViolation(before, after config.ProtocolConverterConfig, beforeConfig, afterConfig config.FullConfig) error {
 	err := writeTopicViolation(after, afterConfig)
 	if err == nil || writeTopicViolation(before, beforeConfig) != nil {
