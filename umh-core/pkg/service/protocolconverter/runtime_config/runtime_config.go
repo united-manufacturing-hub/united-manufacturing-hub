@@ -470,13 +470,6 @@ func regexQuotedValue(value any) any {
 		}
 
 		return quoted
-	case []string:
-		quoted := make([]string, len(typed))
-		for i, item := range typed {
-			quoted[i] = regexp.QuoteMeta(item)
-		}
-
-		return quoted
 	default:
 		return value
 	}

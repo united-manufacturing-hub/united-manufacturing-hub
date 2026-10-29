@@ -16,8 +16,8 @@
 // matches unanchored against the full UNS topic name. The rules apply to every topic the
 // expression can match, not to how it reads:
 //
-//   - It starts with `^`. Without it, the expression also matches any topic that merely
-//     contains it.
+//   - It starts with `^`, in front of any alternation: `^a|^b` is written `^(?:a|b)`.
+//     Without it, the expression also matches any topic that merely contains it.
 //   - It matches only topics strictly beneath the bridge location, so a write flow
 //     consumes only its own branch of the UNS tree. An unescaped `.` matches any
 //     character, so the dots between levels must be escaped.
@@ -52,14 +52,14 @@ var dataContractVersionSuffix = regexp.MustCompile(`_v\d+$`)
 // given the data contracts declared in config.yaml.
 func (c DataflowComponentWriteConfig) ValidateTopics(locationPath string, dataContracts []string) error {
 	versioned, unversioned := splitByVersion(dataContracts)
-	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(builtinDataContracts), versioned...))
+	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(builtinDataContracts), versioned...), unversioned)
 
 	rejected := rejectTopics(c.Topics, grammar)
 	if len(rejected) == 0 {
 		return nil
 	}
 
-	return topicError(rejected, grammar, versioned, unversioned)
+	return topicError(rejected, grammar, versioned)
 }
 
 // splitByVersion separates declared data contracts with a `_v<N>` suffix from those
@@ -82,6 +82,15 @@ type rejectedTopic struct {
 	violation topicViolation
 	// syntaxError is why the topic is no regular expression, for topicInvalidRegex.
 	syntaxError string
+	// unversioned are the declared data contracts without a version that the topic can
+	// match.
+	unversioned []string
+}
+
+// reaches reports whether the topic is rejected for its data contract and can match
+// contract.
+func (t rejectedTopic) reaches(contract string) bool {
+	return t.violation.listsContracts() && slices.Contains(t.unversioned, contract)
 }
 
 func rejectTopics(topics []string, grammar writeTopicGrammar) []rejectedTopic {
@@ -92,26 +101,24 @@ func rejectTopics(topics []string, grammar writeTopicGrammar) []rejectedTopic {
 			continue
 		}
 
-		violation, syntaxError := grammar.check(topic)
-		if violation != topicAllowed {
-			rejected = append(rejected, rejectedTopic{topic: topic, violation: violation, syntaxError: syntaxError})
+		if checked := grammar.check(topic); checked.violation != topicAllowed {
+			rejected = append(rejected, checked)
 		}
 	}
 
 	return rejected
 }
 
-func topicError(rejected []rejectedTopic, grammar writeTopicGrammar, versioned, unversioned []string) error {
-	problems := make([]string, 0, len(rejected)+len(unversioned))
-	missingContract := false
+func topicError(rejected []rejectedTopic, grammar writeTopicGrammar, versioned []string) error {
+	problems := make([]string, 0, len(rejected)+len(grammar.unversioned))
 
 	for _, topic := range rejected {
 		problems = append(problems, topic.problem(grammar))
-		missingContract = missingContract || topic.violation == topicNoDataContract
 	}
 
-	if missingContract {
-		for _, contract := range unversioned {
+	for _, contract := range grammar.unversioned {
+		reached := slices.ContainsFunc(rejected, func(topic rejectedTopic) bool { return topic.reaches(contract) })
+		if reached {
 			problems = append(problems, fmt.Sprintf(
 				"data contract %q has no version; rename it with one, like %s_v1, before a write flow can use it",
 				contract, contract))
@@ -131,8 +138,15 @@ const (
 	topicUnanchored
 	topicMatchesNothing
 	topicOutsideLocation
-	topicNoDataContract
+	topicMissingContract
+	topicUnknownContract
+	topicSeveralContracts
 )
+
+// listsContracts reports whether the problem for v lists the available data contracts.
+func (v topicViolation) listsContracts() bool {
+	return v == topicMissingContract || v == topicUnknownContract || v == topicSeveralContracts
+}
 
 // problem describes in one sentence how the topic breaks its rule. The topic is quoted
 // as written, so its backslashes read the same as in config.yaml.
@@ -143,7 +157,8 @@ func (t rejectedTopic) problem(grammar writeTopicGrammar) string {
 	case topicInvalidRegex:
 		return fmt.Sprintf("topic %s is not a valid regular expression: %s", quoted, t.syntaxError)
 	case topicUnanchored:
-		return fmt.Sprintf("topic %s must start with ^, otherwise it also matches topics that only contain it", quoted)
+		return fmt.Sprintf("topic %s must start with ^, in front of any alternatives like ^(?:a|b), "+
+			"otherwise it also matches topics that only contain it", quoted)
 	case topicMatchesNothing:
 		return fmt.Sprintf("topic %s cannot match any topic, so the write flow would receive no messages", quoted)
 	case topicOutsideLocation:
@@ -153,9 +168,15 @@ func (t rejectedTopic) problem(grammar writeTopicGrammar) string {
 
 		return fmt.Sprintf("topic %s can match topics outside this bridge's location %s; start it with %s",
 			quoted, grammar.locationPath, grammar.anchoredPrefix())
-	case topicNoDataContract:
-		return fmt.Sprintf("topic %s must name exactly one data contract after the location, followed by \\.; "+
-			"available: %s; list versions explicitly, like _pump_v[1-2]\\.", quoted, strings.Join(grammar.contracts, ", "))
+	case topicMissingContract:
+		return fmt.Sprintf("topic %s must name a data contract beneath the location, followed by \\.; available: %s",
+			quoted, grammar.availableContracts())
+	case topicUnknownContract:
+		return fmt.Sprintf("topic %s names a data contract that is not declared in dataContracts:; available: %s",
+			quoted, grammar.availableContracts())
+	case topicSeveralContracts:
+		return fmt.Sprintf("topic %s can match more than one data contract; name exactly one, followed by \\., "+
+			"and list versions explicitly, like _pump_v[1-2]\\.; available: %s", quoted, grammar.availableContracts())
 	default:
 		return ""
 	}
@@ -171,39 +192,47 @@ const (
 	phaseLevel
 	// phaseContract reads a segment starting with `_`, the data contract.
 	phaseContract
-	// phaseAccepted, phaseOutsideLocation and phaseNoContract are final: no later rune
-	// changes them.
+	// phaseAccepted, phaseOutsideLocation, phaseMissingContract, phaseUnknownContract and
+	// phaseUnversionedContract are final: no later rune changes them.
 	phaseAccepted
 	phaseOutsideLocation
-	phaseNoContract
+	// phaseMissingContract is an empty level read before any contract.
+	phaseMissingContract
+	// phaseUnknownContract is a contract segment that names no available contract.
+	phaseUnknownContract
+	// phaseUnversionedContract is a contract segment that names a declared contract
+	// without a version.
+	phaseUnversionedContract
 )
 
 type writeTopicState struct {
 	phase writeTopicPhase
 	// prefixRead counts the runes of the location prefix read, in phaseLocationPrefix.
 	prefixRead int
-	// contract is the contract name read so far in phaseContract, and the accepted
-	// contract in phaseAccepted.
+	// contract is the contract name read so far in phaseContract, and the contract read
+	// in phaseAccepted and phaseUnversionedContract.
 	contract string
 }
 
 // writeTopicGrammar accepts topics beneath a bridge location whose first `_` segment is
-// one of a fixed list of data contracts.
+// one of a fixed list of data contracts. It also recognizes the declared contracts
+// without a version, which it rejects.
 type writeTopicGrammar struct {
 	locationPath     string
 	locationPrefix   []rune
 	contracts        []string
+	unversioned      []string
 	contractPrefixes map[string]bool
 }
 
-func newWriteTopicGrammar(locationPath string, contracts []string) writeTopicGrammar {
+func newWriteTopicGrammar(locationPath string, contracts, unversioned []string) writeTopicGrammar {
 	prefix := unsTopicPrefix
 	if locationPath != "" {
 		prefix += locationPath + "."
 	}
 
 	contractPrefixes := map[string]bool{}
-	for _, contract := range contracts {
+	for _, contract := range slices.Concat(contracts, unversioned) {
 		for end := 1; end <= len(contract); end++ {
 			contractPrefixes[contract[:end]] = true
 		}
@@ -213,6 +242,7 @@ func newWriteTopicGrammar(locationPath string, contracts []string) writeTopicGra
 		locationPath:     locationPath,
 		locationPrefix:   []rune(prefix),
 		contracts:        contracts,
+		unversioned:      unversioned,
 		contractPrefixes: contractPrefixes,
 	}
 }
@@ -221,6 +251,11 @@ func newWriteTopicGrammar(locationPath string, contracts []string) writeTopicGra
 // `^umh\.v1\.acme\.cologne\.`.
 func (g writeTopicGrammar) anchoredPrefix() string {
 	return "^" + regexp.QuoteMeta(string(g.locationPrefix))
+}
+
+// availableContracts lists the data contracts a write flow topic may name.
+func (g writeTopicGrammar) availableContracts() string {
+	return strings.Join(g.contracts, ", ")
 }
 
 // exampleTopic is a valid topic for the first declared versioned contract, or for
@@ -234,19 +269,21 @@ func (g writeTopicGrammar) exampleTopic(versioned []string) string {
 	return g.anchoredPrefix() + regexp.QuoteMeta(contract) + `\.`
 }
 
-func (g writeTopicGrammar) Start() writeTopicState {
+func (g writeTopicGrammar) start() writeTopicState {
 	return writeTopicState{phase: phaseLocationPrefix}
 }
 
-func (g writeTopicGrammar) Significant() []rune {
+// significant lists the runes step treats differently from the rest. step gives every
+// other rune the same transition, so matchEndStates tries only one of them.
+func (g writeTopicGrammar) significant() []rune {
 	significant := []rune{'.', '_'}
 	significant = append(significant, g.locationPrefix...)
-	significant = append(significant, []rune(strings.Join(g.contracts, ""))...)
+	significant = append(significant, []rune(strings.Join(slices.Concat(g.contracts, g.unversioned), ""))...)
 
 	return significant
 }
 
-func (g writeTopicGrammar) Step(state writeTopicState, r rune) writeTopicState {
+func (g writeTopicGrammar) step(state writeTopicState, r rune) writeTopicState {
 	switch state.phase {
 	case phaseLocationPrefix:
 		return g.stepLocationPrefix(state, r)
@@ -278,7 +315,7 @@ func stepLevelStart(r rune) writeTopicState {
 	case '_':
 		return writeTopicState{phase: phaseContract, contract: "_"}
 	case '.':
-		return writeTopicState{phase: phaseNoContract}
+		return writeTopicState{phase: phaseMissingContract}
 	default:
 		return writeTopicState{phase: phaseLevel}
 	}
@@ -297,9 +334,13 @@ func (g writeTopicGrammar) stepContract(state writeTopicState, r rune) writeTopi
 		return writeTopicState{phase: phaseAccepted, contract: state.contract}
 	}
 
+	if r == '.' && slices.Contains(g.unversioned, state.contract) {
+		return writeTopicState{phase: phaseUnversionedContract, contract: state.contract}
+	}
+
 	next := state.contract + string(r)
 	if !g.contractPrefixes[next] {
-		return writeTopicState{phase: phaseNoContract}
+		return writeTopicState{phase: phaseUnknownContract}
 	}
 
 	return writeTopicState{phase: phaseContract, contract: next}
@@ -311,46 +352,73 @@ func (s writeTopicState) violation() topicViolation {
 		return topicAllowed
 	case phaseLocationPrefix, phaseOutsideLocation:
 		return topicOutsideLocation
+	case phaseUnknownContract, phaseUnversionedContract:
+		return topicUnknownContract
+	case phaseContract:
+		// A topic ending inside the contract segment also matches longer contract names,
+		// such as _pump_v10 after _pump_v1.
+		return topicSeveralContracts
 	default:
-		return topicNoDataContract
+		return topicMissingContract
 	}
 }
 
-// check returns the first rule pattern breaks, or topicAllowed. For topicInvalidRegex it
-// also returns the syntax error.
-func (g writeTopicGrammar) check(pattern string) (topicViolation, string) {
-	analysis, err := analyzeTopicPattern(pattern, g)
+// check returns topic with the first rule it breaks, or with topicAllowed.
+func (g writeTopicGrammar) check(topic string) rejectedTopic {
+	program, err := compileRegex(topic)
 	if err != nil {
 		var syntaxErr *syntax.Error
 		if errors.As(err, &syntaxErr) {
-			return topicInvalidRegex, string(syntaxErr.Code)
+			return rejectedTopic{topic: topic, violation: topicInvalidRegex, syntaxError: string(syntaxErr.Code)}
 		}
 
-		return topicInvalidRegex, err.Error()
+		return rejectedTopic{topic: topic, violation: topicInvalidRegex, syntaxError: err.Error()}
 	}
 
-	if analysis.MatchesMidTopic {
-		return topicUnanchored, ""
+	if !isAnchored(program) {
+		return rejectedTopic{topic: topic, violation: topicUnanchored}
 	}
 
-	if len(analysis.EndStates) == 0 {
-		return topicMatchesNothing, ""
+	endStates := matchEndStates(program, g)
+	if len(endStates) == 0 {
+		return rejectedTopic{topic: topic, violation: topicMatchesNothing}
 	}
 
+	return rejectedTopic{
+		topic:       topic,
+		violation:   endStatesViolation(endStates),
+		unversioned: unversionedContracts(endStates),
+	}
+}
+
+// endStatesViolation returns the first rule broken by the topics ending in states.
+func endStatesViolation(states []writeTopicState) topicViolation {
 	violations := map[topicViolation]bool{}
-	for _, state := range analysis.EndStates {
+	for _, state := range states {
 		violations[state.violation()] = true
 	}
 
 	if violations[topicOutsideLocation] {
-		return topicOutsideLocation, ""
+		return topicOutsideLocation
 	}
 
-	if violations[topicNoDataContract] || !namesOneContract(analysis.EndStates) {
-		return topicNoDataContract, ""
+	if len(violations) > 1 || !namesOneContract(states) {
+		return topicSeveralContracts
 	}
 
-	return topicAllowed, ""
+	return states[0].violation()
+}
+
+// unversionedContracts returns the declared contracts without a version that states name.
+func unversionedContracts(states []writeTopicState) []string {
+	var contracts []string
+	for _, state := range states {
+		if state.phase == phaseUnversionedContract && !slices.Contains(contracts, state.contract) {
+			contracts = append(contracts, state.contract)
+		}
+	}
+
+	return contracts
 }
 
 // namesOneContract reports whether every accepted state names a version of the same
@@ -358,7 +426,9 @@ func (g writeTopicGrammar) check(pattern string) (topicViolation, string) {
 func namesOneContract(states []writeTopicState) bool {
 	bases := map[string]bool{}
 	for _, state := range states {
-		bases[dataContractVersionSuffix.ReplaceAllString(state.contract, "")] = true
+		if state.phase == phaseAccepted {
+			bases[dataContractVersionSuffix.ReplaceAllString(state.contract, "")] = true
+		}
 	}
 
 	return len(bases) <= 1

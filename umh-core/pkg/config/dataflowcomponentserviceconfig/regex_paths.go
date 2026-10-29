@@ -20,67 +20,44 @@ import (
 	"unicode"
 )
 
-// topicGrammar is a deterministic automaton over the runes of a UNS topic.
-type topicGrammar[S comparable] interface {
-	// Start is the state before the first rune of a topic.
-	Start() S
-	// Step is the state after reading r in state.
-	Step(state S, r rune) S
-	// Significant lists the runes Step treats differently from the rest. Step must give
-	// every rune outside this list the same transition, because the search tries only one
-	// of them.
-	Significant() []rune
-}
-
-// topicAnalysis describes every topic a pattern can match.
-type topicAnalysis[S comparable] struct {
-	// EndStates are the grammar states after every topic prefix the pattern matches.
-	// The topic may continue past that prefix, because the match is not anchored at
-	// the end.
-	EndStates []S
-	// MatchesMidTopic reports whether the pattern also matches a topic starting past
-	// its first rune, which happens when the pattern does not start with ^.
-	MatchesMidTopic bool
-}
-
-// analyzeTopicPattern returns what pattern can match, read against grammar.
-func analyzeTopicPattern[S comparable](pattern string, grammar topicGrammar[S]) (topicAnalysis[S], error) {
+// compileRegex compiles pattern into the program regexp.Compile runs.
+func compileRegex(pattern string) (*syntax.Prog, error) {
 	parsed, err := syntax.Parse(pattern, syntax.Perl)
 	if err != nil {
-		return topicAnalysis[S]{}, err
+		return nil, err
 	}
 
-	program, err := syntax.Compile(parsed.Simplify())
-	if err != nil {
-		return topicAnalysis[S]{}, err
-	}
-
-	alphabet := newRuneAlphabet(grammar.Significant())
-
-	return topicAnalysis[S]{
-		EndStates:       walkPattern(program, alphabet, grammar, true),
-		MatchesMidTopic: len(walkPattern(program, alphabet, anyTopicGrammar{}, false)) > 0,
-	}, nil
+	return syntax.Compile(parsed.Simplify())
 }
 
-// patternPosition is an instruction of the regex program, the grammar state reached there,
-// and whether the topic start or end has been asserted.
-type patternPosition[S comparable] struct {
+// isAnchored reports whether every match of program starts at the start of the text.
+// StartCond only sees a ^ in front of every branch, so ^a|^b is not anchored and
+// ^(?:a|b) is.
+func isAnchored(program *syntax.Prog) bool {
+	return program.StartCond()&(syntax.EmptyBeginText|syntax.EmptyBeginLine) != 0
+}
+
+// regexPosition is an instruction of the regex program, the grammar state reached there,
+// and whether the text start or end has been asserted.
+type regexPosition struct {
 	instruction uint32
-	state       S
+	state       writeTopicState
 	atTextStart bool
 	atTextEnd   bool
 }
 
-// walkPattern follows every path through program and returns the grammar state at each match.
-func walkPattern[S comparable](program *syntax.Prog, alphabet runeAlphabet, grammar topicGrammar[S], atTextStart bool) []S {
-	pending := []patternPosition[S]{{
+// matchEndStates follows every path through program from the start of a text without
+// newlines and returns the grammar state after every prefix of the text it matches. The
+// text may continue past that prefix, because the match is not anchored at the end.
+func matchEndStates(program *syntax.Prog, grammar writeTopicGrammar) []writeTopicState {
+	alphabet := newRuneAlphabet(grammar.significant())
+	pending := []regexPosition{{
 		instruction: uint32(program.Start),
-		state:       grammar.Start(),
-		atTextStart: atTextStart,
+		state:       grammar.start(),
+		atTextStart: true,
 	}}
-	visited := map[patternPosition[S]]bool{}
-	var endStates []S
+	visited := map[regexPosition]bool{}
+	var endStates []writeTopicState
 
 	for len(pending) > 0 {
 		current := pending[len(pending)-1]
@@ -94,7 +71,9 @@ func walkPattern[S comparable](program *syntax.Prog, alphabet runeAlphabet, gram
 
 		instruction := &program.Inst[current.instruction]
 		if instruction.Op == syntax.InstMatch {
-			endStates = appendUnique(endStates, current.state)
+			if !slices.Contains(endStates, current.state) {
+				endStates = append(endStates, current.state)
+			}
 
 			continue
 		}
@@ -106,12 +85,12 @@ func walkPattern[S comparable](program *syntax.Prog, alphabet runeAlphabet, gram
 }
 
 // successors returns the positions reachable from current in one instruction.
-func successors[S comparable](current patternPosition[S], instruction *syntax.Inst, alphabet runeAlphabet, grammar topicGrammar[S]) []patternPosition[S] {
+func successors(current regexPosition, instruction *syntax.Inst, alphabet runeAlphabet, grammar writeTopicGrammar) []regexPosition {
 	switch instruction.Op {
 	case syntax.InstAlt, syntax.InstAltMatch:
-		return []patternPosition[S]{current.at(instruction.Out), current.at(instruction.Arg)}
+		return []regexPosition{current.at(instruction.Out), current.at(instruction.Arg)}
 	case syntax.InstCapture, syntax.InstNop:
-		return []patternPosition[S]{current.at(instruction.Out)}
+		return []regexPosition{current.at(instruction.Out)}
 	case syntax.InstEmptyWidth:
 		return passAssertion(current, instruction)
 	case syntax.InstRune, syntax.InstRune1, syntax.InstRuneAny, syntax.InstRuneAnyNotNL:
@@ -121,18 +100,18 @@ func successors[S comparable](current patternPosition[S], instruction *syntax.In
 	}
 }
 
-func (p patternPosition[S]) at(instruction uint32) patternPosition[S] {
+func (p regexPosition) at(instruction uint32) regexPosition {
 	p.instruction = instruction
 
 	return p
 }
 
 // passAssertion handles ^, $ and their multi-line forms. It treats other assertions such
-// as \b as always true, which only adds paths, so no topic the regex matches is missed.
-func passAssertion[S comparable](current patternPosition[S], instruction *syntax.Inst) []patternPosition[S] {
+// as \b as always true, which only adds paths, so no text the regex matches is missed.
+func passAssertion(current regexPosition, instruction *syntax.Inst) []regexPosition {
 	assertion := syntax.EmptyOp(instruction.Arg)
 
-	// Topics contain no newline, so ^ and $ in multi-line mode hold only at the ends.
+	// The text contains no newline, so ^ and $ in multi-line mode hold only at the ends.
 	if assertion&(syntax.EmptyBeginText|syntax.EmptyBeginLine) != 0 && !current.atTextStart {
 		return nil
 	}
@@ -142,20 +121,20 @@ func passAssertion[S comparable](current patternPosition[S], instruction *syntax
 		next.atTextEnd = true
 	}
 
-	return []patternPosition[S]{next}
+	return []regexPosition{next}
 }
 
-func consumeRune[S comparable](current patternPosition[S], instruction *syntax.Inst, alphabet runeAlphabet, grammar topicGrammar[S]) []patternPosition[S] {
+func consumeRune(current regexPosition, instruction *syntax.Inst, alphabet runeAlphabet, grammar writeTopicGrammar) []regexPosition {
 	if current.atTextEnd {
 		return nil
 	}
 
-	var next []patternPosition[S]
+	var next []regexPosition
 
 	for _, r := range alphabet.representatives(instruction) {
-		next = append(next, patternPosition[S]{
+		next = append(next, regexPosition{
 			instruction: instruction.Out,
-			state:       grammar.Step(current.state, r),
+			state:       grammar.step(current.state, r),
 		})
 	}
 
@@ -177,7 +156,7 @@ func (a runeAlphabet) isSignificant(r rune) bool {
 }
 
 // representatives returns every significant rune instruction accepts, plus one
-// insignificant rune when it accepts any. Topics contain no newline, so none is returned.
+// insignificant rune when it accepts any. The text contains no newline, so none is returned.
 func (a runeAlphabet) representatives(instruction *syntax.Inst) []rune {
 	var out []rune
 
@@ -245,19 +224,4 @@ func caseVariants(r rune) []rune {
 	}
 
 	return variants
-}
-
-// anyTopicGrammar is the grammar with one state, used to ask only whether a match exists.
-type anyTopicGrammar struct{}
-
-func (anyTopicGrammar) Start() struct{}              { return struct{}{} }
-func (anyTopicGrammar) Step(struct{}, rune) struct{} { return struct{}{} }
-func (anyTopicGrammar) Significant() []rune          { return nil }
-
-func appendUnique[S comparable](states []S, state S) []S {
-	if slices.Contains(states, state) {
-		return states
-	}
-
-	return append(states, state)
 }
