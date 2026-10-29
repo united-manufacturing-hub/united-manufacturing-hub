@@ -541,8 +541,8 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 						readLogs := flowBenthosLogs(pcSnapshot.ServiceInfo.DataflowComponentReadObservedState)
 						writeLogs := flowBenthosLogs(pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState)
-						sentReadLogs = a.sendNewLogs(readLogs, sentReadLogs, remainingSeconds)
-						sentWriteLogs = a.sendNewLogs(writeLogs, sentWriteLogs, remainingSeconds)
+						sentReadLogs = SendLimitedLogs(readLogs, sentReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
+						sentWriteLogs = SendLimitedLogs(writeLogs, sentWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 
 						configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
 						if hasConfigError {
@@ -569,12 +569,6 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 			}
 		}
 	}
-}
-
-// sendNewLogs sends up to 10 lines of logs beyond the first len(sentLogs) to the
-// action output and returns the logs seen so far, to pass as sentLogs next time.
-func (a *DeployProtocolConverterAction) sendNewLogs(logs []s6.LogEntry, sentLogs []s6.LogEntry, remainingSeconds int) []s6.LogEntry {
-	return SendLimitedLogs(logs, sentLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 }
 
 // flowsToStop decides which dataflow components to flip to stopped after a failed deploy.
