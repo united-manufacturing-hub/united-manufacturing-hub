@@ -27,6 +27,8 @@ import (
 const (
 	lintErrorLine        = `time="2026-10-21T12:58:08Z" level=error msg="Config lint error" @service=benthos lint="/run/service/benthos-dataflow-write-protocolconverter-historian_pump/config/benthos.yaml(14,1) compress_after must be a duration with a unit, like \"168h\", \"30m\" or \"45s\""`
 	lintErrorText        = `compress_after must be a duration with a unit, like "168h", "30m" or "45s"`
+	retentionLintLine    = `time="2026-10-21T12:58:08Z" level=error msg="Config lint error" @service=benthos lint="/run/service/benthos-dataflow-write-protocolconverter-historian_pump/config/benthos.yaml(15,1) retention must be a duration with a unit, like \"168h\", \"30m\" or \"45s\""`
+	retentionLintText    = `retention must be a duration with a unit, like "168h", "30m" or "45s"`
 	inferErrorLine       = `level=error msg="unable to infer input type from candidates: [foo]"`
 	inferErrorText       = `unable to infer input type from candidates: [foo]`
 	startupLine          = `level=info msg="Running main config from specified file" @service=benthos`
@@ -49,6 +51,20 @@ var _ = Describe("FindBenthosConfigError", func() {
 
 	It("returns the lint message without the config file location", func() {
 		text, found := actions.FindBenthosConfigError(logsAt(loggedAfterWaitStart, startupLine, lintErrorLine), waitStart)
+
+		Expect(found).To(BeTrue())
+		Expect(text).To(Equal(lintErrorText))
+	})
+
+	It("returns every lint message benthos logged", func() {
+		text, found := actions.FindBenthosConfigError(logsAt(loggedAfterWaitStart, lintErrorLine, retentionLintLine), waitStart)
+
+		Expect(found).To(BeTrue())
+		Expect(text).To(Equal(lintErrorText + "; " + retentionLintText))
+	})
+
+	It("returns a repeated lint message once", func() {
+		text, found := actions.FindBenthosConfigError(logsAt(loggedAfterWaitStart, lintErrorLine, lintErrorLine), waitStart)
 
 		Expect(found).To(BeTrue())
 		Expect(text).To(Equal(lintErrorText))
