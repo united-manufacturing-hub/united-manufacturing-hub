@@ -257,7 +257,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			}
 
 			result, err := runtime_config.BuildRuntimeConfig(
-				spec, agentLocation, globalVars, historian, nodeName, pcName)
+				spec, agentLocation, globalVars, historian, nil, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("timescale.internal"))
 		})
@@ -270,9 +270,9 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			}
 
 			_, errWithoutVariable := runtime_config.BuildRuntimeConfig(
-				specWithoutVariable, agentLocation, globalVars, nil, nodeName, pcName)
+				specWithoutVariable, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			_, errWithVariable := runtime_config.BuildRuntimeConfig(
-				specWithVariable, agentLocation, globalVars, nil, nodeName, pcName)
+				specWithVariable, agentLocation, globalVars, nil, nil, nodeName, pcName)
 			Expect(errWithVariable).To(HaveOccurred())
 			Expect(errWithVariable.Error()).NotTo(Equal(errWithoutVariable.Error()))
 		})
