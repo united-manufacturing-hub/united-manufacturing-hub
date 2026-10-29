@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- The instance now reports the state of its historian database on TimescaleDB 2.26 or later. Before, the report failed with `column ch.dropped does not exist`
+
 ## [0.44.44]
 
 ### Improvements
