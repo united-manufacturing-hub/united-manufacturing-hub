@@ -108,16 +108,9 @@ func withoutConfigLocation(lint string) string {
 	return configLocationPrefix.ReplaceAllString(lint, "")
 }
 
-// flowSelection names the flows of a bridge, for example the ones that logged a
-// config error.
-type flowSelection struct {
-	read  bool
-	write bool
-}
-
 type flowConfigError struct {
 	message string
-	flows   flowSelection
+	flows   DFCType
 }
 
 func flowBenthosLogs(flow dataflowcomponent.DataflowComponentObservedState) []s6.LogEntry {
@@ -129,7 +122,7 @@ func flowBenthosLogs(flow dataflowcomponent.DataflowComponentObservedState) []s6
 func findFlowConfigError(readLogs []s6.LogEntry, writeLogs []s6.LogEntry, since time.Time) (flowConfigError, bool) {
 	readMessage, readHasError := findBenthosConfigError(readLogs, since)
 	writeMessage, writeHasError := findBenthosConfigError(writeLogs, since)
-	flows := flowSelection{read: readHasError, write: writeHasError}
+	flows := dfcTypeFromPresence(readHasError, writeHasError)
 
 	if readHasError && writeHasError {
 		message := fmt.Sprintf("read flow: %s; write flow: %s", readMessage, writeMessage)
