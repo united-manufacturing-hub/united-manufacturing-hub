@@ -38,23 +38,25 @@
 //
 //	Goroutine A                Goroutine B
 //	-----------                -----------
-//	Lock(Supervisor.mu)        // Must wait
-//	Lock(WorkerContext.mu)          ^ BLOCKED (waits for A)
-//	Unlock(WorkerContext.mu)   Lock(WorkerContext.mu)  // Now allowed
-//	Unlock(Supervisor.mu)      Unlock(WorkerContext.mu)
-//	   = NO DEADLOCK              Unlock(Supervisor.mu)
+//	Lock(Supervisor.mu)        Lock(Supervisor.mu)
+//	Lock(WorkerContext.mu)        ^ BLOCKED (waits for A)
+//	Unlock(WorkerContext.mu)
+//	Unlock(Supervisor.mu)      Lock(WorkerContext.mu)  // Now allowed
+//	   = NO DEADLOCK           Unlock(WorkerContext.mu)
+//	                           Unlock(Supervisor.mu)
 //
 // # Lock level hierarchy
 //
 // FSMv2 uses the following lock levels (lower = acquire first):
 //
-//	Level 0: Supervisor.mu       - Top-level supervisor state
-//	Level 1: ctxMu               - Context map modifications
-//	Level 2: WorkerContext.mu    - Per-worker state
-//	Level 3: Collector.mu        - Per-worker collection
-//	Level 4: ActionExecutor.mu   - Per-worker action execution
+//	Level 1: Supervisor.mu       - Workers map, children and global variables
+//	Level 2: Supervisor.ctxMu    - Supervisor context and its cancel function
+//	Level 3: WorkerContext.mu    - Per-worker current state
 //
-// Rule: Always acquire locks in ascending level order.
+// The levels are the lockLevel constants in supervisor/supervisor.go.
+//
+// Rule: Always acquire locks in ascending level order. A goroutine may take
+// any single lock alone; the rule applies when it holds more than one.
 //
 // # Supervisor.mu before WorkerContext.mu
 //
@@ -69,52 +71,56 @@
 // Lock order checking is controlled by ENABLE_LOCK_ORDER_CHECKS=1.
 //
 // Checking lock order requires per-goroutine tracking and runtime stack
-// introspection, adding overhead (microseconds per lock). Enable checks
-// during development and testing to catch ordering violations early.
-// CI runs with checks enabled; any ordering violation fails the build.
-//
-// In production: ENABLE_LOCK_ORDER_CHECKS="" (disabled, no overhead)
-// In development: ENABLE_LOCK_ORDER_CHECKS=1 (enabled, catches violations)
-// In CI: ENABLE_LOCK_ORDER_CHECKS=1 (enabled, enforces ordering)
+// introspection, adding overhead (microseconds per lock). Checks are disabled
+// unless the variable is set, so production runs without the overhead.
+// No Makefile target or CI workflow sets it; only the lockmanager unit tests
+// enable it. Set it yourself to check the supervisor's lock order.
 //
 // # Panic on violation
 //
 // The LockManager panics on lock order violations to provide immediate feedback
-// with a full stack trace. A log message could be missed; a panic cannot.
+// with a stack trace. A log message could be missed; a panic cannot.
 // Crashing during testing is preferable to deadlocking in production.
 //
 // The panic message includes:
+//   - The goroutine ID
 //   - Which locks are involved
 //   - Their respective levels
 //   - The expected ordering
-//   - Full stack trace
+//   - The goroutine's stack trace, cut off at 4096 bytes
 //
 // # Detection mechanism
 //
 // The LockManager tracks per-goroutine lock acquisitions:
 //
 // 1. Each goroutine has a list of held locks (name + level)
-// 2. On Lock(), check if any held lock has a HIGHER level
+// 2. On Lock() or RLock(), check if any held lock has a HIGHER level
 // 3. If yes, panic (ordering violation)
 // 4. If no, record the lock and proceed
-// 5. On Unlock(), remove the lock from the held list
+// 5. On Unlock() or RUnlock(), remove the lock from the held list
+//
+// Locks at the same level are not checked against each other. Every
+// WorkerContext.mu has level 3, so a goroutine may hold several of them.
+//
+// With checks enabled, IsHeld reports whether the calling goroutine holds a
+// lock with the given name. With checks disabled it always returns false.
 //
 // # Usage
 //
 //	manager := lockmanager.NewLockManager()
 //
 //	// Create locks with levels
-//	supervisorMu := manager.NewLock("Supervisor.mu", 0)
-//	workerMu := manager.NewLock("WorkerContext.mu", 2)
+//	supervisorMu := manager.NewLock("Supervisor.mu", 1)
+//	workerMu := manager.NewLock("WorkerContext.mu", 3)
 //
-//	// Correct ordering (level 0 before level 2)
+//	// Correct ordering (level 1 before level 3)
 //	supervisorMu.Lock()
 //	workerMu.Lock()
 //	// ... do work ...
 //	workerMu.Unlock()
 //	supervisorMu.Unlock()
 //
-//	// Incorrect ordering (level 2 before level 0) - panics if checks enabled
+//	// Incorrect ordering (level 3 before level 1) - panics if checks enabled
 //	workerMu.Lock()
 //	supervisorMu.Lock()  // PANIC: lock order violation
 //
@@ -127,16 +133,20 @@
 // Any lock order violation causes a panic with:
 //   - The violating lock acquisition
 //   - The higher-level lock already held
-//   - Full stack trace
+//   - The goroutine's stack trace
 //
 // # Supervisor integration
 //
 // The supervisor creates locks at initialization:
 //
+//	lm := lockmanager.NewLockManager()
 //	s := &Supervisor{
-//	    lockManager: lockmanager.NewLockManager(),
+//	    lockManager: lm,
+//	    mu:          lm.NewLock(lockNameSupervisorMu, lockLevelSupervisorMu),
+//	    ctxMu:       lm.NewLock(lockNameSupervisorCtxMu, lockLevelSupervisorCtxMu),
 //	}
-//	s.mu = s.lockManager.NewLock("Supervisor.mu", 0)
+//
+// Each WorkerContext.mu is created in newWorkerContext with lockLevelWorkerContextMu.
 //
 // All lock operations go through the LockManager for ordering validation.
 package lockmanager
