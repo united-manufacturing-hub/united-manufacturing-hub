@@ -24,13 +24,24 @@ const (
 	messageWarning     = "Memory utilization warning"
 	messageCritical    = "Memory utilization critical"
 
+	messageHostMemoryFull = "Machine memory nearly full"
+	messagePressure       = "Processes are waiting for memory"
+	messageOomKill        = "A process was stopped because memory ran out"
+
 	warningFraction = constants.MemoryMediumThresholdPercent / 100
 )
+
+var degradedMessages = map[CauseKind]string{
+	CauseKindContainerLimitFull: messageCritical,
+	CauseKindHostMemoryFull:     messageHostMemoryFull,
+	CauseKindPressure:           messagePressure,
+	CauseKindOomKill:            messageOomKill,
+}
 
 // ComposeMessage renders a verdict as the memory health message.
 func ComposeMessage(verdict Verdict, details Details) string {
 	if verdict.State == StateDegraded {
-		return messageCritical
+		return degradedMessage(verdict)
 	}
 
 	usedFraction, measured := details.AvgUsedFraction.Get()
@@ -43,4 +54,17 @@ func ComposeMessage(verdict Verdict, details Details) string {
 	}
 
 	return messageNormal
+}
+
+func degradedMessage(verdict Verdict) string {
+	if len(verdict.Causes) == 0 {
+		return messageCritical
+	}
+
+	message, known := degradedMessages[verdict.Causes[0].Kind]
+	if !known {
+		return messageCritical
+	}
+
+	return message
 }
