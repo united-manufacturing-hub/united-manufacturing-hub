@@ -27,8 +27,8 @@ const (
 	v1MemoryUsageFile = "memory/memory.usage_in_bytes"
 	v1OomControlFile  = "memory/memory.oom_control"
 
-	largestKernelPageBytes = 64 << 10
-	v1NoLimitFloorBytes    = math.MaxInt64 - largestKernelPageBytes
+	largestKernelPageSizeBytes = 64 << 10
+	v1UnlimitedThresholdBytes  = math.MaxInt64 - largestKernelPageSizeBytes
 )
 
 type cgroupV1Source struct {
@@ -51,7 +51,7 @@ func (s *cgroupV1Source) read(ctx context.Context) (CgroupMemory, error) {
 		return CgroupMemory{}, err
 	}
 
-	if limitBytes >= v1NoLimitFloorBytes {
+	if limitBytes >= v1UnlimitedThresholdBytes {
 		return CgroupMemory{CurrentBytes: usageBytes, Unlimited: true}, nil
 	}
 
