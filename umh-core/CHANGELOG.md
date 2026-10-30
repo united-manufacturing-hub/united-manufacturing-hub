@@ -2,15 +2,9 @@
 
 ## Unreleased
 
-### Improvements
+### New Features
 
-- A preview of a new container memory reading is available on the `/metrics` endpoint. It says whether each number came from the container or from the machine. Turn it on with `USE_FSMV2_MEMORY_MONITOR=true`, then recreate the container.
-- With the memory preview on, memory counts as degraded once its average use over the last 60 seconds reaches 80%, and healthy again once that average falls below 75%. A short spike no longer changes the memory status, and use that stays close to 80% no longer switches it back and forth.
-- With the memory preview on, the container's use of its own memory limit and the machine's memory use are judged separately, and either one can degrade memory. A container below its limit on a machine whose memory is nearly full now counts as degraded.
-- With the memory preview on, memory also counts as degraded when processes in the container wait for memory for more than 20% of the last minute, and for a minute after the kernel kills a process in the container because memory ran out. Waiting for memory is measured only on hosts with cgroup v2 and pressure stall information enabled.
-- With the memory preview on, the memory status message is built like the CPU one: a headline naming what degraded memory, a sentence with the measured value and what to do about it, and a Technical Details list with every rule, its value and its threshold. A healthy message says how much memory is in use and how much more can be used before memory is marked degraded.
-- The memory preview now also reads the container's memory limit on hosts that use cgroup v1.
-- With the memory preview on, memory counts as degraded and bridges are held back whenever no recent memory reading is available. This includes the first seconds after a restart.
+- Preview of more detailed memory reporting. Memory is judged on its average over the last 60 seconds, and a degraded status names the cause: the container's memory limit, the machine's memory, processes waiting for memory, or a process stopped because memory ran out. Turn it on with `USE_FSMV2_MEMORY_MONITOR=true` and recreate the container
 
 ### Fixes
 
