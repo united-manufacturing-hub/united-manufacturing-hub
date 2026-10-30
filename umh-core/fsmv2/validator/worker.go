@@ -912,7 +912,6 @@ func ValidateActionHistoryCopy(baseDir string) []Violation {
 }
 
 // checkActionHistoryCopy verifies that CollectObservedState copies action history.
-// checkActionHistoryCopy verifies that CollectObservedState copies action history.
 // Workers that use NewObservation (Pattern A) are exempt: the collector post-processes
 // action history automatically after CollectObservedState returns.
 func checkActionHistoryCopy(filename string) []Violation {
