@@ -262,7 +262,8 @@ const (
 
 	GaugeMemoryUsedRingActive GaugeName = "memory_used_ring_active"
 
-	GaugeMemoryAvgHostUsedFraction GaugeName = "memory_avg_host_used_fraction"
+	GaugeMemoryAvgHostUsedBytes    GaugeName = "memory_avg_host_used_bytes"
+	GaugeMemoryHostTotalBytes      GaugeName = "memory_host_total_bytes"
 	GaugeMemoryHostRingActive      GaugeName = "memory_host_ring_active"
 	GaugeMemoryPressureAvg60Ratio  GaugeName = "memory_pressure_avg60_ratio"
 	GaugeMemoryPressureSignalReady GaugeName = "memory_pressure_signal_ready"

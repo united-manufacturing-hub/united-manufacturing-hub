@@ -70,7 +70,8 @@ var _ = Describe("the memory worker's gauges", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		gauges := memoryDeps.MetricsRecorder().Drain().Gauges
-		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryAvgHostUsedFraction), float64(hostUsedBytes)/float64(hostTotalBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryAvgHostUsedBytes), float64(hostUsedBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryHostTotalBytes), float64(hostTotalBytes)))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryHostRingActive), 1.0))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryPressureAvg60Ratio), 0.25))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryPressureSignalReady), 1.0))
