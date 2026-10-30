@@ -33,7 +33,7 @@ func ComposeMessage(verdict Verdict, details Details) string {
 		return messageCritical
 	}
 
-	usedFraction, measured := details.UsedFraction.Get()
+	usedFraction, measured := details.AvgUsedFraction.Get()
 	if !measured {
 		return messageNotMeasured
 	}

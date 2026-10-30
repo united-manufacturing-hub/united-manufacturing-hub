@@ -24,12 +24,13 @@ var causeKinds = map[string]CauseKind{
 
 // Details holds the numbers behind a verdict.
 type Details struct {
-	UsedFraction diagnosis.Reading `json:"usedFraction"`
+	AvgUsedFraction diagnosis.Reading `json:"avgUsedFraction"`
+	AvgUsedBytes    diagnosis.Reading `json:"avgUsedBytes"`
 }
 
 // Measured reports whether the window holds enough samples to judge the memory.
 func (d Details) Measured() bool {
-	_, measured := d.UsedFraction.Get()
+	_, measured := d.AvgUsedFraction.Get()
 
 	return measured
 }
@@ -63,10 +64,16 @@ func describeCause(engine *diagnosis.Engine[Sample], firedSignal diagnosis.Fired
 }
 
 func buildDetails(engine *diagnosis.Engine[Sample]) Details {
-	value, state := engine.Reduction(signalLimitFull, instrumentUsedFraction).Get()
+	return Details{
+		AvgUsedFraction: readingFromReduced(engine.Reduction(signalLimitFull, instrumentUsedFraction).Get()),
+		AvgUsedBytes:    readingFromReduced(engine.Measurement(measurementUsedBytes).Get()),
+	}
+}
+
+func readingFromReduced(value float64, state diagnosis.State) diagnosis.Reading {
 	if state != diagnosis.StateValue {
-		return Details{UsedFraction: diagnosis.Unknown()}
+		return diagnosis.Unknown()
 	}
 
-	return Details{UsedFraction: diagnosis.Known(value)}
+	return diagnosis.Known(value)
 }

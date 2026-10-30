@@ -66,7 +66,7 @@ func (j *memoryJudge) decideRepeatedly(usedPercent int64, samples int) (memoryhe
 }
 
 func usedFractionOf(details memoryhealth.Details) float64 {
-	fraction, measured := details.UsedFraction.Get()
+	fraction, measured := details.AvgUsedFraction.Get()
 	Expect(measured).To(BeTrue())
 
 	return fraction
@@ -126,6 +126,24 @@ var _ = Describe("Decide", func() {
 
 		Expect(verdict.State).To(Equal(memoryhealth.StateDegraded))
 		Expect(usedFractionOf(details)).To(BeNumerically("~", 0.77, 1e-9))
+	})
+
+	It("averages the used bytes over the window", func() {
+		judge := newMemoryJudge()
+		judge.decideRepeatedly(90, twoMinutesOfSamples)
+
+		_, details := judge.decideRepeatedly(30, twoMinutesOfSamples)
+
+		avgUsedBytes, measured := details.AvgUsedBytes.Get()
+		Expect(measured).To(BeTrue())
+		Expect(avgUsedBytes).To(BeNumerically("~", float64(decimalTotalBytes)*0.30, 1))
+	})
+
+	It("has no average of the used bytes after a single sample", func() {
+		_, details := newMemoryJudge().decide(50)
+
+		_, measured := details.AvgUsedBytes.Get()
+		Expect(measured).To(BeFalse())
 	})
 
 	It("recovers once the windowed usage falls below the recovery level", func() {
