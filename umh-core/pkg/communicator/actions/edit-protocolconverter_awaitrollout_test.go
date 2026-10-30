@@ -40,10 +40,12 @@ import (
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	connsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func() {
@@ -447,7 +449,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	// The spec's variables hold the PRE-EDIT connection values on purpose: the
 	// observed spec lags the persisted edit by one or more control-loop cycles, and
 	// renderDesiredDFCConfig is expected to overlay the edit's own IP/PORT on top.
-	stageReadDFCSnapshot := func(desiredTarget string, scannedTarget string, pcState string, portState string) {
+	stageReadDFCSnapshotWithLogs := func(desiredTarget string, scannedTarget string, pcState string, portState string, benthosLogs []s6.LogEntry) {
 		publish(pcState, &protocolconverter.ProtocolConverterObservedStateSnapshot{
 			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
@@ -469,11 +471,18 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 					ServiceInfo: dfcsvc.ServiceInfo{
 						BenthosObservedState: benthosfsm.BenthosObservedState{
 							ObservedBenthosServiceConfig: caughtUpReadDFCBenthos,
+							ServiceInfo: benthossvc.ServiceInfo{
+								BenthosStatus: benthossvc.BenthosStatus{BenthosLogs: benthosLogs},
+							},
 						},
 					},
 				},
 			},
 		})
+	}
+
+	stageReadDFCSnapshot := func(desiredTarget string, scannedTarget string, pcState string, portState string) {
+		stageReadDFCSnapshotWithLogs(desiredTarget, scannedTarget, pcState, portState, nil)
 	}
 
 	// runAwaitRolloutRead is runAwaitRollout plus a read DFC in the payload, which
@@ -573,6 +582,27 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		Expect(elapsed).To(BeNumerically("<", 4*time.Second),
 			"against a 6s budget: a check that withholds acceptance from a healthy read-DFC edit is worse "+
 				"than the bug it replaces, so this must not creep towards the timeout")
+	})
+
+	It("rolls back a read-DFC edit that benthos rejects and names the lint message", func() {
+		stageReadDFCSnapshotWithLogs("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingDFC, string(nmapservice.PortStateOpen),
+			[]s6.LogEntry{{Timestamp: time.Now().Add(time.Minute), Content: startupLine}, {Timestamp: time.Now().Add(time.Minute), Content: lintErrorLine}})
+
+		elapsed, err, _ := runAwaitRolloutRead("dest.example.com")
+
+		Expect(err).To(MatchError(ContainSubstring(lintErrorText)))
+		Expect(err).To(MatchError(ContainSubstring("because of a configuration error")))
+		Expect(elapsed).To(BeNumerically("<", 4*time.Second))
+	})
+
+	It("does not roll back a starting read-DFC edit on a config error logged before the edit", func() {
+		stageReadDFCSnapshotWithLogs("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingDFC, string(nmapservice.PortStateOpen),
+			[]s6.LogEntry{{Timestamp: time.Now().Add(-time.Minute), Content: lintErrorLine}})
+
+		_, err, _ := runAwaitRolloutRead("dest.example.com")
+
+		Expect(err).NotTo(MatchError(ContainSubstring("rolled back")))
+		Expect(err).NotTo(MatchError(ContainSubstring(lintErrorText)))
 	})
 
 	It("does not accept a read-DFC edit while the scan still shows the previous target", func() {

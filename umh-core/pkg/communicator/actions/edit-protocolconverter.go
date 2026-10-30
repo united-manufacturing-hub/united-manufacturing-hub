@@ -61,49 +61,6 @@ import (
 
 var errBridgeNotFound = errors.New("not found")
 
-// DFCType represents the type of dataflow component configuration.
-type DFCType string
-
-const (
-	// DFCTypeRead represents a read dataflow component.
-	DFCTypeRead DFCType = "read"
-	// DFCTypeWrite represents a write dataflow component.
-	DFCTypeWrite DFCType = "write"
-	// DFCTypeBoth represents both read and write dataflow components being updated simultaneously.
-	DFCTypeBoth DFCType = "both"
-	// DFCTypeEmpty represents no dataflow component (connection/location update only).
-	DFCTypeEmpty DFCType = "empty"
-)
-
-// String returns the string representation of the DFCType.
-func (d DFCType) String() string {
-	return string(d)
-}
-
-// IsValid checks if the DFCType has a valid value.
-func (d DFCType) IsValid() bool {
-	switch d {
-	case DFCTypeRead, DFCTypeWrite, DFCTypeBoth, DFCTypeEmpty:
-		return true
-	default:
-		return false
-	}
-}
-
-// flowName maps a DFCType to the user-facing noun used in error messages shown
-// in the Management Console. DFC is a legacy internal term; the UI calls these
-// "flow config".
-func (d DFCType) flowName() string {
-	switch d {
-	case DFCTypeRead:
-		return "read flow config"
-	case DFCTypeWrite:
-		return "write flow config"
-	default:
-		return d.String() + " flow config"
-	}
-}
-
 // EditProtocolConverterAction implements the Action interface for editing
 // protocol converter configurations, particularly for adding DFC configurations.
 type EditProtocolConverterAction struct {
@@ -548,8 +505,8 @@ func (a *EditProtocolConverterAction) awaitRollout(
 	timeoutDuration := timeoutInterval
 
 	var (
-		logs     []s6.LogEntry
-		lastLogs []s6.LogEntry
+		lastReadLogs  []s6.LogEntry
+		lastWriteLogs []s6.LogEntry
 
 		// Fail-fast on persistent render failures (ENG-5103): a deterministic
 		// render error repeats identically every tick; abort after a few
@@ -899,26 +856,12 @@ func (a *EditProtocolConverterAction) awaitRollout(
 					currentStateReason = pcSnapshot.ServiceInfo.StatusReason
 				}
 
-				// send the benthos logs to the user; for DFCTypeBoth, prefer write logs since
-				// read logs are also included below via the merged slice.
+				readLogs, writeLogs := editedFlowLogs(a.dfcType, pcSnapshot)
+				lastReadLogs = SendLimitedLogs(readLogs, lastReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
+				lastWriteLogs = SendLimitedLogs(writeLogs, lastWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
 
-				switch a.dfcType {
-				case DFCTypeWrite, DFCTypeBoth:
-					logs = pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-				default:
-					logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-				}
-
-				// only send the logs that have not been sent yet
-				if len(logs) > len(lastLogs) {
-					lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
-				}
-
-				// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
-				// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
-				// abort the startup process rather than waiting for the full timeout period,
-				// as these errors require configuration changes to resolve.
-				if CheckBenthosLogLinesForConfigErrors(logs) {
+				configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
+				if hasConfigError {
 					SendActionReply(
 						a.instanceUUID,
 						a.userEmail,
@@ -937,13 +880,13 @@ func (a *EditProtocolConverterAction) awaitRollout(
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
 							deps.String("rollbackConfig", rollbackConfig.String()))
 
-						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has an invalid configuration (%s) but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, configError.message, err)
 					}
 
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
 						deps.String("rollbackConfig", rollbackConfig.String()))
 
-					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration because of a configuration error: %s", a.name, configError.message)
 				}
 
 				SendActionReply(
@@ -970,6 +913,21 @@ func (a *EditProtocolConverterAction) awaitRollout(
 			}
 		}
 	}
+}
+
+// editedFlowLogs returns the benthos logs of the flows a read, write or both edit
+// changes, and nil for the other flow, so its errors cannot fail the edit.
+func editedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) ([]s6.LogEntry, []s6.LogEntry) {
+	var readLogs, writeLogs []s6.LogEntry
+	if dfcType.includesRead() {
+		readLogs = flowBenthosLogs(snapshot.ServiceInfo.DataflowComponentReadObservedState)
+	}
+
+	if dfcType.includesWrite() {
+		writeLogs = flowBenthosLogs(snapshot.ServiceInfo.DataflowComponentWriteObservedState)
+	}
+
+	return readLogs, writeLogs
 }
 
 // rollbackEdit restores the pre-edit configuration via the same
