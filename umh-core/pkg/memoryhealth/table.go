@@ -27,7 +27,7 @@ const (
 	unitFraction           = "fraction"
 
 	sampleInterval = time.Second
-	limitFullSpan  = 10 * time.Second
+	limitFullSpan  = 60 * time.Second
 
 	limitFullFireFraction  = constants.MemoryHighThresholdPercent / 100
 	limitFullClearFraction = limitFullFireFraction - 0.05
