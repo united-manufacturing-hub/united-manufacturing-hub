@@ -57,7 +57,7 @@ With the preview on, the instance's memory status comes from this reading. Memor
 | Cause | Degraded from | Healthy again below | Gauge |
 |---|---|---|---|
 | `container-limit-full` | 0.8 (80%) of the container's own memory limit, as a 60s mean. Judged only when the container has a limit | 0.75 | `memory_avg_used_fraction` while `memory_total_is_cgroup_limit` is 1 |
-| `host-memory-full` | 0.8 (80%) of the machine's memory, as a 60s mean | 0.75 | `memory_avg_host_used_fraction` |
+| `host-memory-full` | 0.8 (80%) of the machine's memory, as a 60s mean | 0.75 | `memory_avg_host_used_bytes` / `memory_host_total_bytes` |
 | `pressure` | 0.20: processes in the container waited for memory for 20% of the last minute | 0.12 | `memory_pressure_avg60_ratio` |
 | `oom-kill` | 1 OOM kill in the container within the last 60s | 0 for a whole 60s | `memory_oom_kills_last_60s` |
 
@@ -74,8 +74,9 @@ Memory also counts as degraded, and bridges are held back, whenever no reading f
 | `memory_total_is_cgroup_limit` | 1 when `memory_total_bytes` is the container's memory limit, 0 when it is the machine's total memory |
 | `memory_last_sample_unix` | the unix seconds of the last tick that measured |
 | `memory_used_ring_active` | 1 once the 60-second window holds enough samples to trust `memory_avg_used_bytes` and `memory_avg_used_fraction`, 0 before. It works like `cpu_usage_ring_active` |
-| `memory_avg_host_used_fraction` | the 60s mean of the machine's used memory as a 0..1 fraction of the machine's total |
-| `memory_host_ring_active` | 1 once `memory_avg_host_used_fraction` can be trusted, 0 before and while the machine's memory is unreadable |
+| `memory_avg_host_used_bytes` | the 60s mean of the machine's used memory, in bytes. It works like `cpu_avg_host_busy_cores` |
+| `memory_host_total_bytes` | the machine's total memory, in bytes |
+| `memory_host_ring_active` | 1 once `memory_avg_host_used_bytes` can be trusted, 0 before and while the machine's memory is unreadable |
 | `memory_pressure_avg60_ratio` | the kernel's PSI memory-some avg60 as a 0..1 fraction |
 | `memory_pressure_signal_ready` | 1 when `memory_pressure_avg60_ratio` was read, 0 on cgroup v1 or without PSI |
 | `memory_oom_kills_last_60s` | the OOM kills in the container within the last 60s |

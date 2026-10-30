@@ -127,7 +127,8 @@ func recordMetrics(recorder *deps.MetricsRecorder, sample memoryhealth.Sample, d
 	recorder.SetGaugeFlag(deps.GaugeMemoryUsedFromCgroup, sample.Source != memoryhealth.SourceHostFallbackCgroupUnreadable)
 	recorder.SetGaugeFlag(deps.GaugeMemoryTotalIsCgroupLimit, sample.Source == memoryhealth.SourceCgroupLimit)
 
-	recorder.SetGauge(deps.GaugeMemoryAvgHostUsedFraction, details.AvgHostUsedFraction)
+	recorder.SetGauge(deps.GaugeMemoryAvgHostUsedBytes, details.AvgHostUsedFraction*details.HostTotalBytes)
+	recorder.SetGauge(deps.GaugeMemoryHostTotalBytes, details.HostTotalBytes)
 	recorder.SetGaugeFlag(deps.GaugeMemoryHostRingActive, details.HostRingActive)
 	recorder.SetGauge(deps.GaugeMemoryPressureAvg60Ratio, details.PressureAvg60)
 	recorder.SetGaugeFlag(deps.GaugeMemoryPressureSignalReady, details.PressureSignalReady)
