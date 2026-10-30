@@ -69,6 +69,7 @@ var _ = Describe("rules that detect a read of the worker's dependencies", func()
 			Expect(violations[0].Type).To(Equal("PURE_DERIVE"))
 		},
 		Entry("Deps", "Deps"),
+		Entry("GetDependenciesAny", "GetDependenciesAny"),
 	)
 
 	DescribeTable("MISSING_FRAMEWORK_METRICS_COPY",
@@ -80,6 +81,7 @@ var _ = Describe("rules that detect a read of the worker's dependencies", func()
 			Expect(violations[0].Type).To(Equal("MISSING_FRAMEWORK_METRICS_COPY"))
 		},
 		Entry("Deps", "Deps"),
+		Entry("GetDependenciesAny", "GetDependenciesAny"),
 	)
 
 	DescribeTable("MISSING_ACTION_HISTORY_COPY",
@@ -91,5 +93,6 @@ var _ = Describe("rules that detect a read of the worker's dependencies", func()
 			Expect(violations[0].Type).To(Equal("MISSING_ACTION_HISTORY_COPY"))
 		},
 		Entry("Deps", "Deps"),
+		Entry("GetDependenciesAny", "GetDependenciesAny"),
 	)
 })

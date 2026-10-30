@@ -38,6 +38,17 @@ func ValidateDeriveDesiredState(baseDir string) []Violation {
 	return violations
 }
 
+// readsDeps reports whether selector calls one of the WorkerBase methods that
+// return the worker's dependencies.
+func readsDeps(selector *ast.SelectorExpr) bool {
+	switch selector.Sel.Name {
+	case "Deps", "GetDependenciesAny":
+		return true
+	default:
+		return false
+	}
+}
+
 // checkDeriveDesiredStateMethod parses a worker file and checks DeriveDesiredState.
 func checkDeriveDesiredStateMethod(filename string) []Violation {
 	var violations []Violation
@@ -62,7 +73,7 @@ func checkDeriveDesiredStateMethod(filename string) []Violation {
 			}
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				if selExpr.Sel.Name == "Deps" {
+				if readsDeps(selExpr) {
 					pos := fset.Position(callExpr.Pos())
 					violations = append(violations, Violation{
 						File:    filename,
@@ -671,10 +682,11 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 			}
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				switch selExpr.Sel.Name {
-				case "Deps":
+				if readsDeps(selExpr) {
 					hasDeps = true
-				case "GetFrameworkState":
+				}
+
+				if selExpr.Sel.Name == "GetFrameworkState" {
 					hasGetFrameworkState = true
 				}
 			}
@@ -697,7 +709,7 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "MISSING_FRAMEWORK_METRICS_COPY",
-				Message: "CollectObservedState() calls Deps() but not GetFrameworkState() - must copy framework metrics from deps",
+				Message: "CollectObservedState() reads dependencies but does not call GetFrameworkState() - must copy framework metrics from deps",
 			})
 		}
 
@@ -930,10 +942,11 @@ func checkActionHistoryCopy(filename string) []Violation {
 			}
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				switch selExpr.Sel.Name {
-				case "Deps":
+				if readsDeps(selExpr) {
 					hasDeps = true
-				case "GetActionHistory":
+				}
+
+				if selExpr.Sel.Name == "GetActionHistory" {
 					hasGetActionHistory = true
 				}
 			}
@@ -956,7 +969,7 @@ func checkActionHistoryCopy(filename string) []Violation {
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "MISSING_ACTION_HISTORY_COPY",
-				Message: "CollectObservedState() calls Deps() but not GetActionHistory() - must copy action history from deps",
+				Message: "CollectObservedState() reads dependencies but does not call GetActionHistory() - must copy action history from deps",
 			})
 		}
 
