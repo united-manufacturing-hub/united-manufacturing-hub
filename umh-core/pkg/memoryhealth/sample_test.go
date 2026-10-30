@@ -98,6 +98,54 @@ var _ = Describe("Sampler", func() {
 		Entry("cgroup v1", withFile(cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", memoryPressureText("25.00"))),
 	)
 
+	DescribeTable("counts the OOM kills since the previous read",
+		func(baseFiles map[string]string, countFile string, countText func(int) string) {
+			files := withFile(baseFiles, countFile, countText(3))
+			sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+			firstSample, err := sampler.Read(context.Background())
+			Expect(err).ToNot(HaveOccurred())
+			_, measured := firstSample.NewOomKills.Get()
+			Expect(measured).To(BeFalse())
+
+			files[fixtureCgroupBase+"/"+countFile] = countText(5)
+
+			secondSample, err := sampler.Read(context.Background())
+			Expect(err).ToNot(HaveOccurred())
+			newOomKills, measured := secondSample.NewOomKills.Get()
+			Expect(measured).To(BeTrue())
+			Expect(newOomKills).To(Equal(2.0))
+		},
+		Entry("cgroup v2 memory.events", cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.events", memoryEventsText),
+		Entry("cgroup v1 memory.oom_control", cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory/memory.oom_control", oomControlText),
+	)
+
+	It("leaves the new OOM kills unknown when the counter goes down", func() {
+		files := withFile(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.events", memoryEventsText(5))
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+		_, err := sampler.Read(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+
+		files[fixtureCgroupBase+"/memory.events"] = memoryEventsText(1)
+
+		sample, err := sampler.Read(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		_, measured := sample.NewOomKills.Get()
+		Expect(measured).To(BeFalse())
+	})
+
+	It("leaves the new OOM kills unknown without memory.events", func() {
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes))), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+		_, _ = sampler.Read(context.Background())
+		sample, err := sampler.Read(context.Background())
+
+		Expect(err).ToNot(HaveOccurred())
+		_, measured := sample.NewOomKills.Get()
+		Expect(measured).To(BeFalse())
+	})
+
 	It("reads a cgroup v1 with a limit without the host", func() {
 		sample, err := readSample(cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), unreadableHostMemory)
 

@@ -272,3 +272,50 @@ var _ = Describe("Decide for memory pressure", func() {
 		Expect(recovered.State).To(Equal(memoryhealth.StateHealthy))
 	})
 })
+
+func containerWithNewOomKills(newOomKills float64) memoryhealth.Sample {
+	sample := containerAtPercent(50)
+	sample.NewOomKills = diagnosis.Known(newOomKills)
+
+	return sample
+}
+
+var _ = Describe("Decide for OOM kills", func() {
+	It("degrades with oom-kill on a new OOM kill", func() {
+		judge := newMemoryJudge()
+		judge.decideSample(containerWithNewOomKills(0))
+
+		verdict, details := judge.decideSample(containerWithNewOomKills(1))
+
+		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindOomKill))
+
+		oomKills, measured := details.OomKillsLast60s.Get()
+		Expect(measured).To(BeTrue())
+		Expect(oomKills).To(Equal(1.0))
+	})
+
+	It("counts every OOM kill in the window", func() {
+		judge := newMemoryJudge()
+		judge.decideSample(containerWithNewOomKills(2))
+
+		_, details := judge.decideSample(containerWithNewOomKills(1))
+
+		oomKills, _ := details.OomKillsLast60s.Get()
+		Expect(oomKills).To(Equal(3.0))
+	})
+
+	It("recovers once a whole window passes without an OOM kill", func() {
+		judge := newMemoryJudge()
+		judge.decideSample(containerWithNewOomKills(1))
+
+		verdict, _ := judge.decideSampleRepeatedly(containerWithNewOomKills(0), twoMinutesOfSamples)
+
+		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+	})
+
+	It("is healthy without OOM kills", func() {
+		verdict, _ := newMemoryJudge().decideSampleRepeatedly(containerWithNewOomKills(0), twoMinutesOfSamples)
+
+		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+	})
+})

@@ -29,6 +29,7 @@ const (
 	CauseKindContainerLimitFull CauseKind = "container-limit-full"
 	CauseKindHostMemoryFull     CauseKind = "host-memory-full"
 	CauseKindPressure           CauseKind = "pressure"
+	CauseKindOomKill            CauseKind = "oom-kill"
 )
 
 // Cause is one reason the memory is degraded, with the windowed value behind it.
