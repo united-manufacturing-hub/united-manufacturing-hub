@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/health"
 )
@@ -28,12 +27,7 @@ import (
 var _ = Describe("FreshnessChecker", func() {
 	Context("when observation data is fresh", func() {
 		It("should return true", func() {
-			checker := health.NewFreshnessChecker(
-				10*time.Second,
-				20*time.Second,
-				"test",
-				deps.NewNopFSMLogger(),
-			)
+			checker := health.NewFreshnessChecker(10*time.Second, 20*time.Second)
 
 			snapshot := &fsmv2.Snapshot{
 				Identity: supervisor.TestIdentity(),
@@ -51,12 +45,7 @@ var _ = Describe("FreshnessChecker", func() {
 
 	Context("when observation data is stale", func() {
 		It("should return false", func() {
-			checker := health.NewFreshnessChecker(
-				10*time.Second,
-				20*time.Second,
-				"test",
-				deps.NewNopFSMLogger(),
-			)
+			checker := health.NewFreshnessChecker(10*time.Second, 20*time.Second)
 
 			snapshot := &fsmv2.Snapshot{
 				Identity: supervisor.TestIdentity(),
@@ -74,12 +63,7 @@ var _ = Describe("FreshnessChecker", func() {
 
 	Context("when observation data has timed out", func() {
 		It("should detect timeout", func() {
-			checker := health.NewFreshnessChecker(
-				10*time.Second,
-				20*time.Second,
-				"test",
-				deps.NewNopFSMLogger(),
-			)
+			checker := health.NewFreshnessChecker(10*time.Second, 20*time.Second)
 
 			snapshot := &fsmv2.Snapshot{
 				Identity: supervisor.TestIdentity(),

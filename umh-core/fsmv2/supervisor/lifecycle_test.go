@@ -17,6 +17,7 @@ package supervisor_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -98,6 +99,57 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unresponsive"))
 			})
+		})
+	})
+
+	Describe("Tick with timed-out observation", func() {
+		newTimedOutSupervisor := func(logger deps.FSMLogger) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+			store := newMockTriangularStore()
+			s := newSupervisorWithWorkerAndLogger(&mockWorker{}, store, supervisor.CollectorHealthConfig{
+				StaleThreshold:     10 * time.Second,
+				Timeout:            20 * time.Second,
+				MaxRestartAttempts: 3,
+			}, logger)
+
+			identity := mockIdentity()
+			store.Observed["test"] = map[string]interface{}{
+				identity.ID: persistence.Document{
+					"id":          identity.ID,
+					"collectedAt": time.Now().Add(-25 * time.Second),
+				},
+			}
+
+			return s
+		}
+
+		timeoutWarnings := func(logger *sentryWarnRecorder) []string {
+			var messages []string
+
+			for _, warning := range logger.Warns() {
+				if strings.Contains(warning.Msg, "timeout") {
+					messages = append(messages, warning.Msg)
+				}
+			}
+
+			return messages
+		}
+
+		It("reports the timeout to Sentry once per tick", func() {
+			logger := &sentryWarnRecorder{}
+			s := newTimedOutSupervisor(logger)
+			s.TestSetStarted(true)
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(timeoutWarnings(logger)).To(Equal([]string{"data_timeout"}))
+		})
+
+		It("does not report the timeout to Sentry while the supervisor shuts down", func() {
+			logger := &sentryWarnRecorder{}
+			s := newTimedOutSupervisor(logger)
+			s.TestSetStarted(false)
+
+			Expect(s.TestTick(context.Background())).To(Succeed())
+			Expect(timeoutWarnings(logger)).To(BeEmpty())
 		})
 	})
 
