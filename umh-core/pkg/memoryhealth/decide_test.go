@@ -235,3 +235,40 @@ var _ = Describe("Decide for the container and the machine", func() {
 		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindHostMemoryFull))
 	})
 })
+
+func containerUnderPressure(pressure float64) memoryhealth.Sample {
+	sample := containerAtPercent(50)
+	sample.Pressure = diagnosis.Known(pressure)
+
+	return sample
+}
+
+var _ = Describe("Decide for memory pressure", func() {
+	It("degrades with pressure once some avg60 passes 20 percent", func() {
+		verdict, details := newMemoryJudge().decideSample(containerUnderPressure(0.25))
+
+		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindPressure))
+		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 0.25, 1e-9))
+
+		pressure, measured := details.PressureAvg60.Get()
+		Expect(measured).To(BeTrue())
+		Expect(pressure).To(BeNumerically("~", 0.25, 1e-9))
+	})
+
+	It("stays healthy below 20 percent", func() {
+		verdict, _ := newMemoryJudge().decideSample(containerUnderPressure(0.15))
+
+		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+	})
+
+	It("stays degraded until the pressure falls below 12 percent", func() {
+		judge := newMemoryJudge()
+		judge.decideSample(containerUnderPressure(0.25))
+
+		stillDegraded, _ := judge.decideSampleRepeatedly(containerUnderPressure(0.15), twoMinutesOfSamples)
+		Expect(causeKindsOf(stillDegraded)).To(ConsistOf(memoryhealth.CauseKindPressure))
+
+		recovered, _ := judge.decideSampleRepeatedly(containerUnderPressure(0.10), twoMinutesOfSamples)
+		Expect(recovered.State).To(Equal(memoryhealth.StateHealthy))
+	})
+})

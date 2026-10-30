@@ -22,6 +22,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/mem"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -48,6 +49,7 @@ type Sample struct {
 	TotalBytes     int64
 	HostUsedBytes  int64
 	HostTotalBytes int64
+	Pressure       diagnosis.Reading
 	CgroupReadErr  error
 	HostReadErr    error
 }
@@ -87,12 +89,14 @@ func ReadHostMemory(ctx context.Context) (usedBytes, totalBytes uint64, err erro
 // Read takes one sample. It returns the sample with an error when no total
 // could be measured; the sample's read errors then name what failed.
 func (s *Sampler) Read(ctx context.Context) (Sample, error) {
-	cgroup, cgroupErr := s.reader(ctx).read(ctx)
+	reader := s.reader(ctx)
+
+	cgroup, cgroupErr := reader.read(ctx)
 	if ctx.Err() != nil {
 		return Sample{}, ctx.Err()
 	}
 
-	sample := Sample{Timestamp: time.Now(), CgroupReadErr: cgroupErr}
+	sample := Sample{Timestamp: time.Now(), CgroupReadErr: cgroupErr, Pressure: reader.readPressure(ctx)}
 
 	hostUsed, hostTotal, hostErr := s.hostMemory(ctx)
 	if ctx.Err() != nil {

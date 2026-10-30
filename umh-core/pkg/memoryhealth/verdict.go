@@ -28,6 +28,7 @@ type CauseKind string
 const (
 	CauseKindContainerLimitFull CauseKind = "container-limit-full"
 	CauseKindHostMemoryFull     CauseKind = "host-memory-full"
+	CauseKindPressure           CauseKind = "pressure"
 )
 
 // Cause is one reason the memory is degraded, with the windowed value behind it.

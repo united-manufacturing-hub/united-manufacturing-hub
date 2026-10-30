@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -58,6 +59,7 @@ func (e *CgroupReadError) Unwrap() error {
 
 type cgroupReader interface {
 	read(ctx context.Context) (CgroupMemory, error)
+	readPressure(ctx context.Context) diagnosis.Reading
 }
 
 func readCgroupFile(ctx context.Context, fileSystem filesystem.Service, cgroupBase, file string) ([]byte, error) {

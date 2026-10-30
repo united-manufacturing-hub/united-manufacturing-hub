@@ -55,6 +55,7 @@ func memoryTable() diagnosis.Table[Sample] {
 		Signals: []diagnosis.Signal[Sample]{
 			containerLimitFullSignal(),
 			hostMemoryFullSignal(),
+			pressureSignal(),
 		},
 	}
 }
