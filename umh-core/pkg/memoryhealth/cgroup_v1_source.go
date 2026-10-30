@@ -25,6 +25,7 @@ import (
 const (
 	v1MemoryLimitFile = "memory/memory.limit_in_bytes"
 	v1MemoryUsageFile = "memory/memory.usage_in_bytes"
+	v1OomControlFile  = "memory/memory.oom_control"
 
 	largestKernelPageBytes = 64 << 10
 	v1NoLimitFloorBytes    = math.MaxInt64 - largestKernelPageBytes
@@ -59,4 +60,8 @@ func (s *cgroupV1Source) read(ctx context.Context) (CgroupMemory, error) {
 
 func (s *cgroupV1Source) readPressure(context.Context) diagnosis.Reading {
 	return diagnosis.Unknown()
+}
+
+func (s *cgroupV1Source) readOomKillCount(ctx context.Context) (int64, error) {
+	return readOomKillCountFile(ctx, s.fileSystem, s.cgroupBase, v1OomControlFile)
 }

@@ -60,6 +60,27 @@ func (e *CgroupReadError) Unwrap() error {
 type cgroupReader interface {
 	read(ctx context.Context) (CgroupMemory, error)
 	readPressure(ctx context.Context) diagnosis.Reading
+	readOomKillCount(ctx context.Context) (int64, error)
+}
+
+const oomKillCounterName = "oom_kill"
+
+var errNoOomKillCounter = errors.New("no oom_kill line")
+
+func readOomKillCountFile(ctx context.Context, fileSystem filesystem.Service, cgroupBase, file string) (int64, error) {
+	data, err := readCgroupFile(ctx, fileSystem, cgroupBase, file)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == oomKillCounterName {
+			return parseNonNegativeInteger(file, fields[1])
+		}
+	}
+
+	return 0, &CgroupReadError{File: file, Outcome: ReadUnparsable, Err: errNoOomKillCounter}
 }
 
 func readCgroupFile(ctx context.Context, fileSystem filesystem.Service, cgroupBase, file string) ([]byte, error) {
@@ -82,7 +103,7 @@ func readByteCountFile(ctx context.Context, fileSystem filesystem.Service, cgrou
 		return 0, err
 	}
 
-	byteCount, err := parseByteCount(file, string(data))
+	byteCount, err := parseNonNegativeInteger(file, string(data))
 	if err != nil {
 		return 0, &CgroupReadError{File: file, Outcome: ReadUnparsable, Err: err}
 	}
@@ -90,7 +111,7 @@ func readByteCountFile(ctx context.Context, fileSystem filesystem.Service, cgrou
 	return byteCount, nil
 }
 
-func parseByteCount(file, text string) (int64, error) {
+func parseNonNegativeInteger(file, text string) (int64, error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
 		return 0, fmt.Errorf("empty %s data", file)

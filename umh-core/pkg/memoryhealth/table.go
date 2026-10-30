@@ -24,6 +24,7 @@ const (
 	measurementUsedBytes    = "used-bytes"
 	measurementUsedFraction = "used-fraction"
 	unitFraction            = "fraction"
+	reductionSum            = "sum"
 
 	sampleInterval = time.Second
 	averageSpan    = 60 * time.Second
@@ -32,10 +33,15 @@ const (
 // NewEngine builds the engine that judges memory samples. Each engine keeps its
 // own windows, so a worker builds one and feeds it every sample.
 func NewEngine() (*diagnosis.Engine[Sample], error) {
-	return diagnosis.NewEngine(memoryTable())
+	sum, err := diagnosis.NewReduction(reductionSum, 1, sumOfPoints)
+	if err != nil {
+		return nil, err
+	}
+
+	return diagnosis.NewEngine(memoryTable(sum))
 }
 
-func memoryTable() diagnosis.Table[Sample] {
+func memoryTable(sum diagnosis.Reduction) diagnosis.Table[Sample] {
 	return diagnosis.Table[Sample]{
 		Interval: sampleInterval,
 		Measurements: []diagnosis.Measurement[Sample]{
@@ -56,6 +62,7 @@ func memoryTable() diagnosis.Table[Sample] {
 			containerLimitFullSignal(),
 			hostMemoryFullSignal(),
 			pressureSignal(),
+			oomKillSignal(sum),
 		},
 	}
 }
@@ -74,4 +81,13 @@ func fractionOf(usedBytes, totalBytes int64) diagnosis.Reading {
 	}
 
 	return diagnosis.Known(float64(usedBytes) / float64(totalBytes))
+}
+
+func sumOfPoints(points []diagnosis.Point) float64 {
+	var sum float64
+	for _, point := range points {
+		sum += point.Value
+	}
+
+	return sum
 }

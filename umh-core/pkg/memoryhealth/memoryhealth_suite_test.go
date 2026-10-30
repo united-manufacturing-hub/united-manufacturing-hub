@@ -62,6 +62,14 @@ func memoryPressureText(someAvg60 string) string {
 	return "some avg10=0.00 avg60=" + someAvg60 + " avg300=0.00 total=0\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n"
 }
 
+func memoryEventsText(oomKills int) string {
+	return "low 0\nhigh 0\nmax 4\noom 2\noom_kill " + strconv.Itoa(oomKills) + "\noom_group_kill 0\n"
+}
+
+func oomControlText(oomKills int) string {
+	return "oom_kill_disable 0\nunder_oom 0\noom_kill " + strconv.Itoa(oomKills) + "\n"
+}
+
 func withFile(files map[string]string, file, content string) map[string]string {
 	extended := maps.Clone(files)
 	extended[fixtureCgroupBase+"/"+file] = content

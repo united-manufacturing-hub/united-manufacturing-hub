@@ -27,6 +27,7 @@ const (
 	v2MemoryMaxFile      = "memory.max"
 	v2MemoryCurrentFile  = "memory.current"
 	v2MemoryPressureFile = "memory.pressure"
+	v2MemoryEventsFile   = "memory.events"
 	v2NoLimitText        = "max"
 
 	pressureSomeLinePrefix = "some"
@@ -59,7 +60,7 @@ func (s *cgroupV2Source) read(ctx context.Context) (CgroupMemory, error) {
 
 	var limitBytes int64
 	if !unlimited {
-		limitBytes, err = parseByteCount(v2MemoryMaxFile, memoryMaxText)
+		limitBytes, err = parseNonNegativeInteger(v2MemoryMaxFile, memoryMaxText)
 		if err != nil {
 			return CgroupMemory{}, &CgroupReadError{File: v2MemoryMaxFile, Outcome: ReadUnparsable, Err: err}
 		}
@@ -103,4 +104,8 @@ func someAvg60Fraction(pressureText string) diagnosis.Reading {
 	}
 
 	return diagnosis.Unknown()
+}
+
+func (s *cgroupV2Source) readOomKillCount(ctx context.Context) (int64, error) {
+	return readOomKillCountFile(ctx, s.fileSystem, s.cgroupBase, v2MemoryEventsFile)
 }
