@@ -56,6 +56,10 @@ func (e *CgroupReadError) Unwrap() error {
 	return e.Err
 }
 
+type cgroupReader interface {
+	read(ctx context.Context) (CgroupMemory, error)
+}
+
 func readCgroupFile(ctx context.Context, fileSystem filesystem.Service, cgroupBase, file string) ([]byte, error) {
 	data, err := fileSystem.ReadFile(ctx, cgroupBase+"/"+file)
 	if err == nil {

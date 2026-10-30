@@ -56,11 +56,19 @@ type Sampler struct {
 	fileSystem filesystem.Service
 	cgroupBase string
 	hostMemory HostMemoryReader
+
+	cgroup  cgroupReader
+	version cgroupVersion
 }
 
 // NewSampler returns a Sampler reading the cgroup under cgroupBase.
 func NewSampler(fileSystem filesystem.Service, cgroupBase string, hostMemory HostMemoryReader) *Sampler {
-	return &Sampler{fileSystem: fileSystem, cgroupBase: cgroupBase, hostMemory: hostMemory}
+	return &Sampler{
+		fileSystem: fileSystem,
+		cgroupBase: cgroupBase,
+		hostMemory: hostMemory,
+		cgroup:     newCgroupV2Source(fileSystem, cgroupBase),
+	}
 }
 
 // ReadHostMemory returns the machine's used and total memory from the operating
@@ -77,7 +85,7 @@ func ReadHostMemory(ctx context.Context) (usedBytes, totalBytes uint64, err erro
 // Read takes one sample. It returns the sample with an error when no total
 // could be measured; the sample's read errors then name what failed.
 func (s *Sampler) Read(ctx context.Context) (Sample, error) {
-	cgroup, cgroupErr := ReadCgroupMemory(ctx, s.fileSystem, s.cgroupBase)
+	cgroup, cgroupErr := s.reader(ctx).read(ctx)
 	if ctx.Err() != nil {
 		return Sample{}, ctx.Err()
 	}
@@ -138,4 +146,17 @@ func (s *Sampler) cgroupAgainstHostTotal(ctx context.Context, sample Sample, cgr
 	sample.TotalBytes = int64(hostTotal)
 
 	return sample, nil
+}
+
+func (s *Sampler) reader(ctx context.Context) cgroupReader {
+	if s.version != cgroupVersionUnresolved {
+		return s.cgroup
+	}
+
+	s.version = detectCgroupVersion(ctx, s.fileSystem, s.cgroupBase)
+	if s.version == cgroupV1 {
+		s.cgroup = newCgroupV1Source(s.fileSystem, s.cgroupBase)
+	}
+
+	return s.cgroup
 }

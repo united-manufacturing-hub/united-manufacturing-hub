@@ -16,7 +16,9 @@ package memoryhealth_test
 
 import (
 	"context"
+	"errors"
 	"io/fs"
+	"maps"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -53,6 +55,68 @@ var _ = Describe("Sampler", func() {
 		Entry("memory.max is max", "max\n"),
 		Entry("memory.max is 0", "0\n"),
 	)
+
+	It("reads a cgroup v1 with a limit without the host", func() {
+		sample, err := readSample(cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), unreadableHostMemory)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(sample.Source).To(Equal(memoryhealth.SourceCgroupLimit))
+		Expect(sample.UsedBytes).To(Equal(halfGiBBytes))
+		Expect(sample.TotalBytes).To(Equal(oneGiBBytes))
+	})
+
+	DescribeTable("measures a cgroup v1 without a limit against the host total",
+		func(limitInBytes string) {
+			sample, err := readSample(cgroupV1Files(limitInBytes, bytesText(halfGiBBytes)), hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(sample.Source).To(Equal(memoryhealth.SourceHostTotalNoCgroupLimit))
+			Expect(sample.UsedBytes).To(Equal(halfGiBBytes))
+			Expect(sample.TotalBytes).To(Equal(eightGiBBytes))
+		},
+		Entry("4 KiB pages", "9223372036854771712\n"),
+		Entry("16 KiB pages", "9223372036854759424\n"),
+		Entry("64 KiB pages", "9223372036854710272\n"),
+	)
+
+	It("names the v1 file that could not be parsed", func() {
+		sample, err := readSample(cgroupV1Files(bytesText(oneGiBBytes), "abc\n"), hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(sample.Source).To(Equal(memoryhealth.SourceHostFallbackCgroupUnreadable))
+
+		var cgroupErr *memoryhealth.CgroupReadError
+		Expect(errors.As(sample.CgroupReadErr, &cgroupErr)).To(BeTrue())
+		Expect(cgroupErr.File).To(Equal("memory/memory.usage_in_bytes"))
+		Expect(cgroupErr.Outcome).To(Equal(memoryhealth.ReadUnparsable))
+	})
+
+	It("detects the cgroup version again on the next read while no version was found", func() {
+		files := map[string]string{}
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+		firstSample, err := sampler.Read(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(firstSample.Source).To(Equal(memoryhealth.SourceHostFallbackCgroupUnreadable))
+
+		maps.Copy(files, cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)))
+
+		secondSample, err := sampler.Read(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(secondSample.Source).To(Equal(memoryhealth.SourceCgroupLimit))
+		Expect(secondSample.TotalBytes).To(Equal(oneGiBBytes))
+	})
+
+	It("reports the missing v2 file when neither cgroup version is readable", func() {
+		sample, err := readSample(map[string]string{}, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+		Expect(err).ToNot(HaveOccurred())
+
+		var cgroupErr *memoryhealth.CgroupReadError
+		Expect(errors.As(sample.CgroupReadErr, &cgroupErr)).To(BeTrue())
+		Expect(cgroupErr.File).To(Equal("memory.max"))
+		Expect(cgroupErr.Outcome).To(Equal(memoryhealth.ReadMissing))
+	})
 
 	It("fails a cgroup without a limit when the host total is unreadable", func() {
 		sample, err := readSample(cgroupFiles("max\n", bytesText(halfGiBBytes)), unreadableHostMemory)
