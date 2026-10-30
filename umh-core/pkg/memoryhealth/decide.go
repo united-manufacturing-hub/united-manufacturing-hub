@@ -73,13 +73,19 @@ func buildVerdict(engine *diagnosis.Engine[Sample], fired []diagnosis.Fired) Ver
 		causes[index] = describeCause(engine, firedSignal)
 	}
 
-	return Verdict{State: StateDegraded, Causes: causes}
+	return Verdict{State: StateDegraded, Attribution: causes[0].Attribution, Causes: causes}
 }
 
 func describeCause(engine *diagnosis.Engine[Sample], firedSignal diagnosis.Fired) Cause {
 	value, _ := engine.Reduction(firedSignal.Signal, firedSignal.Instrument).Get()
 
-	return Cause{Kind: causeKinds[firedSignal.Signal], Value: value}
+	return Cause{
+		Kind:        causeKinds[firedSignal.Signal],
+		Instrument:  firedSignal.Instrument,
+		Unit:        Unit(firedSignal.Marks.Unit),
+		Attribution: nameAttribution(firedSignal.Attribution),
+		Value:       value,
+	}
 }
 
 func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {

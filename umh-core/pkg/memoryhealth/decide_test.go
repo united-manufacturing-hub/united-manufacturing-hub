@@ -332,3 +332,52 @@ var _ = Describe("Decide's cause order", func() {
 		}))
 	})
 })
+
+type causeShape struct {
+	Instrument  string
+	Unit        memoryhealth.Unit
+	Attribution memoryhealth.Attribution
+}
+
+func causeShapesOf(verdict memoryhealth.Verdict) map[memoryhealth.CauseKind]causeShape {
+	shapes := make(map[memoryhealth.CauseKind]causeShape, len(verdict.Causes))
+	for _, cause := range verdict.Causes {
+		shapes[cause.Kind] = causeShape{Instrument: cause.Instrument, Unit: cause.Unit, Attribution: cause.Attribution}
+	}
+
+	return shapes
+}
+
+var _ = Describe("Decide's cause details", func() {
+	It("names the instrument, unit and attribution of every cause", func() {
+		judge := newMemoryJudge()
+		sample := containerAndMachineAtPercent(95, 95)
+		sample.Pressure = diagnosis.Known(0.90)
+		sample.NewOomKills = diagnosis.Known(0)
+		judge.decideSampleRepeatedly(sample, twoMinutesOfSamples)
+
+		sample.NewOomKills = diagnosis.Known(1)
+		verdict, _ := judge.decideSample(sample)
+
+		Expect(causeShapesOf(verdict)).To(Equal(map[memoryhealth.CauseKind]causeShape{
+			memoryhealth.CauseKindOomKill:            {Instrument: "oom-kills-last-60s", Unit: "kills", Attribution: memoryhealth.AttributionContainer},
+			memoryhealth.CauseKindPressure:           {Instrument: "pressure-avg60", Unit: "fraction", Attribution: memoryhealth.AttributionContainer},
+			memoryhealth.CauseKindContainerLimitFull: {Instrument: "container-used-fraction", Unit: "fraction", Attribution: memoryhealth.AttributionContainer},
+			memoryhealth.CauseKindHostMemoryFull:     {Instrument: "host-used-fraction", Unit: "fraction", Attribution: memoryhealth.AttributionHost},
+		}))
+	})
+
+	It("takes the verdict's attribution from the first cause", func() {
+		verdict, _ := newMemoryJudge().decideSampleRepeatedly(containerAndMachineAtPercent(50, 95), twoMinutesOfSamples)
+
+		Expect(causeKindsOf(verdict)).To(Equal([]memoryhealth.CauseKind{memoryhealth.CauseKindHostMemoryFull}))
+		Expect(verdict.Attribution).To(Equal(memoryhealth.AttributionHost))
+	})
+
+	It("leaves the attribution empty on a healthy verdict", func() {
+		verdict, _ := newMemoryJudge().decideSampleRepeatedly(containerAndMachineAtPercent(50, 50), twoMinutesOfSamples)
+
+		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+		Expect(verdict.Attribution).To(BeEmpty())
+	})
+})

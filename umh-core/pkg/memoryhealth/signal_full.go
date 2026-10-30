@@ -39,17 +39,18 @@ var fullMarks = diagnosis.Marks{
 }
 
 func containerLimitFullSignal() diagnosis.Signal[Sample] {
-	return fullSignal(signalContainerLimitFull, instrumentContainerUsedFraction, containerUsedFraction)
+	return fullSignal(signalContainerLimitFull, instrumentContainerUsedFraction, blameContainer, containerUsedFraction)
 }
 
 func hostMemoryFullSignal() diagnosis.Signal[Sample] {
-	return fullSignal(signalHostMemoryFull, instrumentHostUsedFraction, hostUsedFraction)
+	return fullSignal(signalHostMemoryFull, instrumentHostUsedFraction, blameHost, hostUsedFraction)
 }
 
-func fullSignal(name, instrument string, extract func(Sample) diagnosis.Reading) diagnosis.Signal[Sample] {
+func fullSignal(name, instrument string, blame int, extract func(Sample) diagnosis.Reading) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            name,
 		Tier:            tierSaturation,
+		Attribution:     blame,
 		DemoteSpan:      averageSpan,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{

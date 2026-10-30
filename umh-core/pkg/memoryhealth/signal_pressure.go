@@ -35,6 +35,7 @@ func pressureSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            signalPressure,
 		Tier:            tierStarvation,
+		Attribution:     blameContainer,
 		DemoteSpan:      averageSpan,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{

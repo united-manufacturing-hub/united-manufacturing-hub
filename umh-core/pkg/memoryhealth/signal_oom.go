@@ -36,6 +36,7 @@ func oomKillSignal(sum diagnosis.Reduction) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            signalOomKill,
 		Tier:            tierOutOfMemory,
+		Attribution:     blameContainer,
 		DemoteSpan:      averageSpan,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
