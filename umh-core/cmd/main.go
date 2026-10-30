@@ -143,6 +143,9 @@ func main() {
 	cpuMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
 
+	memoryMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_MONITOR", false, false)
+	configData.Agent.UseFSMv2MemoryMonitor = memoryMonitorEnabled
+
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
 		FSMv2CPUEnabled:               models.FSMv2CPUEnabled(cpuMonitorEnabled),

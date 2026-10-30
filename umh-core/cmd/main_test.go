@@ -183,7 +183,7 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 			nil,
 		)
 
-		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, logger.For(logger.ComponentCore), nil, nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, cfg.Agent.UseFSMv2MemoryMonitor, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -224,7 +224,7 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 
-		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, logger.For(logger.ComponentCore), nil, nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, cfg.Agent.UseFSMv2MemoryMonitor, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 		Expect(err).NotTo(HaveOccurred())
 
