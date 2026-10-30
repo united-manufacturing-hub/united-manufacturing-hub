@@ -155,6 +155,7 @@ var _ = Describe("the memory seam's verdict", func() {
 		Expect(memory.Health.Message).To(Equal(healthyWorkerMemory.Message))
 		Expect(memory.CGroupUsedBytes).To(Equal(healthyWorkerMemory.AvgUsedBytes))
 		Expect(memory.CGroupTotalBytes).To(Equal(healthyWorkerMemory.TotalBytes))
+		Expect(memory.MemoryHealth).To(Equal(&models.MemoryHealth{Verdict: healthyWorkerMemory.Verdict, Details: healthyWorkerMemory.Details}))
 	})
 
 	It("copies a fresh degraded reading", func() {
@@ -163,6 +164,7 @@ var _ = Describe("the memory seam's verdict", func() {
 		Expect(memory.Health.Category).To(Equal(models.Degraded))
 		Expect(memory.Health.Message).To(Equal(criticalWorkerMemory.Message))
 		Expect(memory.CGroupTotalBytes).To(Equal(criticalWorkerMemory.TotalBytes))
+		Expect(memory.MemoryHealth).To(Equal(&models.MemoryHealth{Verdict: criticalWorkerMemory.Verdict, Details: criticalWorkerMemory.Details}))
 	})
 
 	It("reports a reading that is not measured yet as degraded without its bytes", func() {
@@ -173,6 +175,7 @@ var _ = Describe("the memory seam's verdict", func() {
 		Expect(memory.Health.Category).To(Equal(models.Degraded))
 		Expect(memory.Health.Message).To(Equal(status.Reason))
 		Expect(memory.CGroupTotalBytes).To(BeZero())
+		Expect(memory.MemoryHealth).To(BeNil())
 	})
 
 	It("reports a failed poll as degraded with the poll's reason", func() {
@@ -202,6 +205,7 @@ var _ = Describe("the memory seam's verdict", func() {
 			Expect(memory.Health.Message).To(ContainSubstring(messagePart))
 			Expect(memory.CGroupUsedBytes).To(BeZero())
 			Expect(memory.CGroupTotalBytes).To(BeZero())
+			Expect(memory.MemoryHealth).To(BeNil())
 		},
 		Entry("stale", fsmv2client.Stale, "stale"),
 		Entry("not found", fsmv2client.NotFound, "never observed"),

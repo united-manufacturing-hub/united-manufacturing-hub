@@ -108,6 +108,7 @@ func measuredMemory(result fsmv2memory.MemoryStatus, category models.HealthCateg
 		Health:           memoryHealth(result.Message, category),
 		CGroupUsedBytes:  result.AvgUsedBytes,
 		CGroupTotalBytes: result.TotalBytes,
+		MemoryHealth:     &models.MemoryHealth{Verdict: result.Verdict, Details: result.Details},
 	}
 }
 
