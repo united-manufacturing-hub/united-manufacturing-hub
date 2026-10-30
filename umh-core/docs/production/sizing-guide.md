@@ -19,7 +19,7 @@
 * **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
 * Keeps **seven days** of replayable raw history under the defaults a new instance starts with (`log_retention_ms = 7 days`, `log_cleanup_policy = delete`)
-* Runs below 70% CPU. Without CPU Health, a new bridge waits at 70% or more. With CPU Health turned on, [CPU Health](../usage/instances/cpu-health/README.md) explains when a new bridge waits.
+* Runs below 70% CPU. Without CPU Health, a new bridge waits at 70% or more. With CPU Health turned on, [CPU Health](../usage/instances/container/cpu-health/README.md) explains when a new bridge waits.
 
 #### Disk usage in practice
 
@@ -54,7 +54,7 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 **Dynamic Resource Protection:**
 Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
 
-- **CPU Utilization**: A new bridge waits while CPU usage is at 70% or more. That is the rule without [CPU Health](../usage/instances/cpu-health/README.md). With CPU Health turned on (`USE_FSMV2_CPU=true`), usage alone no longer makes a new bridge wait. There, 70% is a last-resort fallback, used only when no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured. With CPU Health turned on, if UMH Core cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits.
+- **CPU Utilization**: A new bridge waits while CPU usage is at 70% or more. That is the rule without [CPU Health](../usage/instances/container/cpu-health/README.md). With CPU Health turned on (`USE_FSMV2_CPU=true`), usage alone no longer makes a new bridge wait. There, 70% is a last-resort fallback, used only when no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured. With CPU Health turned on, if UMH Core cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits.
 - **CPU Throttling**: A new bridge waits while the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
 - **Memory Usage**: A new bridge waits while memory use is above 80%
 - **Disk Usage**: A new bridge waits while disk use is above 85%

@@ -50,7 +50,7 @@ UMH Core supports both **direct YAML editing** and **Management Console UI** for
 
 | Field                           | Type               | Default             | Purpose                                                                                        |
 | ------------------------------- | ------------------ | ------------------- | ---------------------------------------------------------------------------------------------- |
-| `metricsPort`                   | `int`              | **9102**            | Exposes Prometheus metrics for the container.                                                  |
+| `metricsPort`                   | `int`              | **8080**            | Port of the Prometheus metrics. Fixed at 8080: umh-core sets this value on every start, so a different value has no effect. See [Metrics](../usage/instances/agent/metrics.md). |
 | `location`                      | map `int → string` | –                   | Hierarchical location path (level0-4+) that identifies this instance. **Level 0 (enterprise) is mandatory**. Can follow ISA-95, KKS, or any organizational naming standard. |
 | `communicator.apiUrl`           | `string`           | – (console-managed) | HTTPS endpoint of the Management Console.                                                      |
 | `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `AUTH_TOKEN` env-var.                            |
@@ -68,7 +68,7 @@ UMH Core supports both **direct YAML editing** and **Management Console UI** for
 
 ```yaml
 agent:
-  metricsPort: 9102
+  metricsPort: 8080
   communicator:
     apiUrl: "https://api.management.umh.app"
     authToken: "${AUTH_TOKEN}"

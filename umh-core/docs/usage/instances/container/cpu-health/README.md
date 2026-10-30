@@ -60,11 +60,11 @@ its reason, as the Steal line above does.
 While CPU health is degraded, UMH Core will not start an additional bridge on the instance, because it would
 compete for CPU that is already short. The bridge waits, and its status reason names the
 resource that stopped it, here the CPU. For every reason a bridge waits and the full procedure, see
-[Bridges Do Not Start](../../data-flows/bridges-do-not-start.md). Bridges already running are left alone.
+[Bridges Do Not Start](../../../data-flows/bridges-do-not-start.md). Bridges already running are left alone.
 
-To start bridges anyway in an emergency, use the emergency setting [Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission). It turns off every admission check, including CPU.
+To start bridges anyway in an emergency, use the emergency setting [Turn off bridge admission](../../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission). It turns off every admission check, including CPU.
 
-Waiting for CPU health is separate from the bridge limit. The [Sizing Guide](../../../production/sizing-guide.md) covers the bridge limit, the number of bridges a core count can hold. Real CPU use varies per bridge, so a bridge can wait on CPU health before the instance reaches its bridge limit.
+Waiting for CPU health is separate from the bridge limit. The [Sizing Guide](../../../../production/sizing-guide.md) covers the bridge limit, the number of bridges a core count can hold. Real CPU use varies per bridge, so a bridge can wait on CPU health before the instance reaches its bridge limit.
 
 ## Thresholds
 
@@ -86,9 +86,13 @@ Steal uses the 95th percentile once 20 samples are in, and the mean before that,
 instance gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine
 the Steal line reads `not measured` with its reason.
 
+## Enabling CPU pressure stats
+
+This section moved to its own page. To make the `Pressure` line show a percentage, follow [Enable CPU pressure stats](enable-cpu-pressure-stats.md). Old links to `#enabling-cpu-pressure-stats` land here.
+
 ## Metrics
 
-With `USE_FSMV2_CPU=true`, the CPU worker publishes the gauges below on the Prometheus endpoint on port 8080. The CPU worker measures once per second, and each measurement is called a tick. [Metrics](../../../production/metrics.md) explains how to read the endpoint. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
+With `USE_FSMV2_CPU=true`, the CPU worker publishes the gauges below on the Prometheus endpoint on port 8080. The CPU worker measures once per second, and each measurement is called a tick. [Read the metrics](../../agent/metrics.md#read-the-metrics) explains how to read the endpoint. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
 
 When a tick could not measure, every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
 
