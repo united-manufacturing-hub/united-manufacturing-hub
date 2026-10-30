@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/memoryhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -252,7 +253,7 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 	totalBytes := vmStat.Total
 
 	// Try cgroup values: prefer container-aware limits over host values
-	cgroupInfo, cgroupErr := c.getCgroupMemoryInfo(ctx)
+	cgroupInfo, cgroupErr := memoryhealth.ReadCgroupMemory(ctx, c.fs, "/sys/fs/cgroup")
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
