@@ -32,6 +32,13 @@ type Details struct {
 	AvgHostUsedFraction diagnosis.Reading `json:"avgHostUsedFraction"`
 	PressureAvg60       diagnosis.Reading `json:"pressureAvg60"`
 	OomKillsLast60s     diagnosis.Reading `json:"oomKillsLast60s"`
+
+	AvgLimitUsedFraction diagnosis.Reading `json:"avgLimitUsedFraction"`
+	LimitApplies         bool              `json:"limitApplies"`
+	TotalBytes           float64           `json:"totalBytes"`
+	HostTotalBytes       float64           `json:"hostTotalBytes"`
+	PressureApplies      bool              `json:"pressureApplies"`
+	OomKillsApply        bool              `json:"oomKillsApply"`
 }
 
 // Measured reports whether the window holds enough samples to judge the memory.
@@ -46,7 +53,7 @@ func (d Details) Measured() bool {
 func Decide(engine *diagnosis.Engine[Sample], sample Sample) (Verdict, Details) {
 	fired, _ := engine.Observe(sample, diagnosis.NewEnvironment(), sample.Timestamp)
 
-	return buildVerdict(engine, fired), buildDetails(engine)
+	return buildVerdict(engine, fired), buildDetails(engine, sample)
 }
 
 func buildVerdict(engine *diagnosis.Engine[Sample], fired []diagnosis.Fired) Verdict {
@@ -69,13 +76,22 @@ func describeCause(engine *diagnosis.Engine[Sample], firedSignal diagnosis.Fired
 	return Cause{Kind: causeKinds[firedSignal.Signal], Value: value}
 }
 
-func buildDetails(engine *diagnosis.Engine[Sample]) Details {
+func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
+	_, pressureRead := sample.Pressure.Get()
+
 	return Details{
 		AvgUsedFraction:     readingFromReduced(engine.Measurement(measurementUsedFraction).Get()),
 		AvgUsedBytes:        readingFromReduced(engine.Measurement(measurementUsedBytes).Get()),
 		AvgHostUsedFraction: readingFromReduced(engine.Reduction(signalHostMemoryFull, instrumentHostUsedFraction).Get()),
 		PressureAvg60:       readingFromReduced(engine.Reduction(signalPressure, instrumentPressureAvg60).Get()),
 		OomKillsLast60s:     readingFromReduced(engine.Reduction(signalOomKill, instrumentOomKillsLast60s).Get()),
+
+		AvgLimitUsedFraction: readingFromReduced(engine.Reduction(signalContainerLimitFull, instrumentContainerUsedFraction).Get()),
+		LimitApplies:         sample.Source == SourceCgroupLimit,
+		TotalBytes:           float64(sample.TotalBytes),
+		HostTotalBytes:       float64(sample.HostTotalBytes),
+		PressureApplies:      pressureRead,
+		OomKillsApply:        sample.OomCounterRead,
 	}
 }
 

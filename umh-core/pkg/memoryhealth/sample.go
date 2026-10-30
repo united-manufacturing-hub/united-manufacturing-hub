@@ -51,6 +51,7 @@ type Sample struct {
 	HostTotalBytes int64
 	Pressure       diagnosis.Reading
 	NewOomKills    diagnosis.Reading
+	OomCounterRead bool
 	CgroupReadErr  error
 	HostReadErr    error
 }
@@ -104,11 +105,14 @@ func (s *Sampler) Read(ctx context.Context) (Sample, error) {
 		return Sample{}, ctx.Err()
 	}
 
+	newOomKills, oomCounterRead := s.newOomKills(ctx, reader)
+
 	sample := Sample{
-		Timestamp:     time.Now(),
-		CgroupReadErr: cgroupErr,
-		Pressure:      reader.readPressure(ctx),
-		NewOomKills:   s.newOomKills(ctx, reader),
+		Timestamp:      time.Now(),
+		CgroupReadErr:  cgroupErr,
+		Pressure:       reader.readPressure(ctx),
+		NewOomKills:    newOomKills,
+		OomCounterRead: oomCounterRead,
 	}
 
 	hostUsed, hostTotal, hostErr := s.hostMemory(ctx)
@@ -187,18 +191,18 @@ func (s *Sampler) reader(ctx context.Context) cgroupReader {
 	return s.cgroup
 }
 
-func (s *Sampler) newOomKills(ctx context.Context, reader cgroupReader) diagnosis.Reading {
+func (s *Sampler) newOomKills(ctx context.Context, reader cgroupReader) (newOomKills diagnosis.Reading, counterRead bool) {
 	count, err := reader.readOomKillCount(ctx)
 	if err != nil {
-		return diagnosis.Unknown()
+		return diagnosis.Unknown(), false
 	}
 
 	previous := s.oomKillBaseline
 	s.oomKillBaseline = oomKillBaseline{count: count, have: true}
 
 	if !previous.have || count < previous.count {
-		return diagnosis.Unknown()
+		return diagnosis.Unknown(), true
 	}
 
-	return diagnosis.Known(float64(count - previous.count))
+	return diagnosis.Known(float64(count - previous.count)), true
 }
