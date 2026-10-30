@@ -18,6 +18,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -54,4 +55,8 @@ func (s *cgroupV1Source) read(ctx context.Context) (CgroupMemory, error) {
 	}
 
 	return CgroupMemory{LimitBytes: limitBytes, CurrentBytes: usageBytes}, nil
+}
+
+func (s *cgroupV1Source) readPressure(context.Context) diagnosis.Reading {
+	return diagnosis.Unknown()
 }

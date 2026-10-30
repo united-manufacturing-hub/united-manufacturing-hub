@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"maps"
 	"strconv"
 	"testing"
 
@@ -55,6 +56,17 @@ func cgroupFiles(memoryMax, memoryCurrent string) map[string]string {
 		fixtureCgroupBase + "/memory.max":     memoryMax,
 		fixtureCgroupBase + "/memory.current": memoryCurrent,
 	}
+}
+
+func memoryPressureText(someAvg60 string) string {
+	return "some avg10=0.00 avg60=" + someAvg60 + " avg300=0.00 total=0\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n"
+}
+
+func withFile(files map[string]string, file, content string) map[string]string {
+	extended := maps.Clone(files)
+	extended[fixtureCgroupBase+"/"+file] = content
+
+	return extended
 }
 
 func cgroupV1Files(limitInBytes, usageInBytes string) map[string]string {

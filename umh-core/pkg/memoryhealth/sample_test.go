@@ -73,6 +73,31 @@ var _ = Describe("Sampler", func() {
 		Expect(sample.HostTotalBytes).To(BeZero())
 	})
 
+	It("reads the some avg60 of memory.pressure as a fraction", func() {
+		files := withFile(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", memoryPressureText("25.00"))
+
+		sample, err := readSample(files, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+		Expect(err).ToNot(HaveOccurred())
+		pressure, measured := sample.Pressure.Get()
+		Expect(measured).To(BeTrue())
+		Expect(pressure).To(BeNumerically("~", 0.25, 1e-9))
+	})
+
+	DescribeTable("leaves the pressure unknown without a readable memory.pressure",
+		func(files map[string]string) {
+			sample, err := readSample(files, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+			Expect(err).ToNot(HaveOccurred())
+			_, measured := sample.Pressure.Get()
+			Expect(measured).To(BeFalse())
+		},
+		Entry("no memory.pressure", cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes))),
+		Entry("no some line", withFile(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", "full avg10=0.00 avg60=1.00 avg300=0.00 total=0\n")),
+		Entry("an unparsable avg60", withFile(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", memoryPressureText("abc"))),
+		Entry("cgroup v1", withFile(cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", memoryPressureText("25.00"))),
+	)
+
 	It("reads a cgroup v1 with a limit without the host", func() {
 		sample, err := readSample(cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), unreadableHostMemory)
 

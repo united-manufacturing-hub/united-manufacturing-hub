@@ -16,15 +16,21 @@ package memoryhealth
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 const (
-	v2MemoryMaxFile     = "memory.max"
-	v2MemoryCurrentFile = "memory.current"
-	v2NoLimitText       = "max"
+	v2MemoryMaxFile      = "memory.max"
+	v2MemoryCurrentFile  = "memory.current"
+	v2MemoryPressureFile = "memory.pressure"
+	v2NoLimitText        = "max"
+
+	pressureSomeLinePrefix = "some"
+	pressureAvg60Prefix    = "avg60="
 )
 
 type cgroupV2Source struct {
@@ -65,4 +71,36 @@ func (s *cgroupV2Source) read(ctx context.Context) (CgroupMemory, error) {
 	}
 
 	return CgroupMemory{LimitBytes: limitBytes, CurrentBytes: currentBytes, Unlimited: unlimited}, nil
+}
+
+func (s *cgroupV2Source) readPressure(ctx context.Context) diagnosis.Reading {
+	data, err := readCgroupFile(ctx, s.fileSystem, s.cgroupBase, v2MemoryPressureFile)
+	if err != nil {
+		return diagnosis.Unknown()
+	}
+
+	return someAvg60Fraction(string(data))
+}
+
+func someAvg60Fraction(pressureText string) diagnosis.Reading {
+	for _, line := range strings.Split(pressureText, "\n") {
+		if !strings.HasPrefix(line, pressureSomeLinePrefix) {
+			continue
+		}
+
+		for _, field := range strings.Fields(line) {
+			if !strings.HasPrefix(field, pressureAvg60Prefix) {
+				continue
+			}
+
+			percent, err := strconv.ParseFloat(strings.TrimPrefix(field, pressureAvg60Prefix), 64)
+			if err != nil {
+				return diagnosis.Unknown()
+			}
+
+			return diagnosis.Known(percent / 100)
+		}
+	}
+
+	return diagnosis.Unknown()
 }

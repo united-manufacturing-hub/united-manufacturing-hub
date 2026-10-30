@@ -21,6 +21,7 @@ import (
 var causeKinds = map[string]CauseKind{
 	signalContainerLimitFull: CauseKindContainerLimitFull,
 	signalHostMemoryFull:     CauseKindHostMemoryFull,
+	signalPressure:           CauseKindPressure,
 }
 
 // Details holds the numbers behind a verdict.
@@ -28,6 +29,7 @@ type Details struct {
 	AvgUsedFraction     diagnosis.Reading `json:"avgUsedFraction"`
 	AvgUsedBytes        diagnosis.Reading `json:"avgUsedBytes"`
 	AvgHostUsedFraction diagnosis.Reading `json:"avgHostUsedFraction"`
+	PressureAvg60       diagnosis.Reading `json:"pressureAvg60"`
 }
 
 // Measured reports whether the window holds enough samples to judge the memory.
@@ -70,6 +72,7 @@ func buildDetails(engine *diagnosis.Engine[Sample]) Details {
 		AvgUsedFraction:     readingFromReduced(engine.Measurement(measurementUsedFraction).Get()),
 		AvgUsedBytes:        readingFromReduced(engine.Measurement(measurementUsedBytes).Get()),
 		AvgHostUsedFraction: readingFromReduced(engine.Reduction(signalHostMemoryFull, instrumentHostUsedFraction).Get()),
+		PressureAvg60:       readingFromReduced(engine.Reduction(signalPressure, instrumentPressureAvg60).Get()),
 	}
 }
 
