@@ -41,12 +41,21 @@ func pollTimes(memoryDeps *MemoryDeps, polls int) (MemoryStatus, simple.Health) 
 }
 
 var _ = Describe("the memory worker's poll", func() {
-	It("reports the sample it judged", func() {
+	It("reports the sample's source and total", func() {
 		status, _ := pollTimes(newTestDeps(fixtureFilesystem(cgroupAtPercent(50)), unreadableHostMemory), 1)
 
 		Expect(status.Source).To(Equal(memoryhealth.SourceCgroupLimit))
-		Expect(status.UsedBytes).To(Equal(decimalLimitBytes / 2))
 		Expect(status.TotalBytes).To(Equal(decimalLimitBytes))
+	})
+
+	It("reports the used memory averaged over the window, not the latest sample", func() {
+		memoryDeps := newTestDeps(fixtureFilesystem(cgroupAtPercent(50)), unreadableHostMemory)
+		pollTimes(memoryDeps, 1)
+		readFrom(memoryDeps, cgroupAtPercent(70))
+
+		status, _ := pollTimes(memoryDeps, 1)
+
+		Expect(status.AvgUsedBytes).To(Equal(decimalLimitBytes * 60 / 100))
 	})
 
 	It("is degraded until the memory is measured", func() {

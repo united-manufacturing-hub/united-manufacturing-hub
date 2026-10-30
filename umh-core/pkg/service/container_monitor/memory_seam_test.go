@@ -83,17 +83,17 @@ func (r warningRecorder) SentryWarn(feature deps.Feature, _ string, msg string, 
 
 var (
 	healthyWorkerMemory = fsmv2memory.MemoryStatus{
-		Source:     memoryhealth.SourceCgroupLimit,
-		UsedBytes:  500,
-		TotalBytes: 1000,
-		Verdict:    memoryhealth.Verdict{State: memoryhealth.StateHealthy},
-		Details:    memoryhealth.Details{AvgUsedFraction: 0.5, UsedRingActive: true},
-		Message:    "worker says normal",
+		Source:       memoryhealth.SourceCgroupLimit,
+		AvgUsedBytes: 500,
+		TotalBytes:   1000,
+		Verdict:      memoryhealth.Verdict{State: memoryhealth.StateHealthy},
+		Details:      memoryhealth.Details{AvgUsedFraction: 0.5, UsedRingActive: true},
+		Message:      "worker says normal",
 	}
 	criticalWorkerMemory = fsmv2memory.MemoryStatus{
-		Source:     memoryhealth.SourceCgroupLimit,
-		UsedBytes:  900,
-		TotalBytes: 1000,
+		Source:       memoryhealth.SourceCgroupLimit,
+		AvgUsedBytes: 900,
+		TotalBytes:   1000,
 		Verdict: memoryhealth.Verdict{
 			State:  memoryhealth.StateDegraded,
 			Causes: []memoryhealth.Cause{{Kind: memoryhealth.CauseKindContainerLimitFull, Value: 0.9}},
@@ -102,12 +102,12 @@ var (
 		Message: "worker says critical",
 	}
 	unmeasuredWorkerMemory = fsmv2memory.MemoryStatus{
-		Source:     memoryhealth.SourceCgroupLimit,
-		UsedBytes:  500,
-		TotalBytes: 1000,
-		Verdict:    memoryhealth.Verdict{State: memoryhealth.StateHealthy},
-		Details:    memoryhealth.Details{},
-		Message:    "worker says not measured",
+		Source:       memoryhealth.SourceCgroupLimit,
+		AvgUsedBytes: 500,
+		TotalBytes:   1000,
+		Verdict:      memoryhealth.Verdict{State: memoryhealth.StateHealthy},
+		Details:      memoryhealth.Details{},
+		Message:      "worker says not measured",
 	}
 )
 
@@ -153,7 +153,7 @@ var _ = Describe("the memory seam's verdict", func() {
 
 		Expect(memory.Health.Category).To(Equal(models.Active))
 		Expect(memory.Health.Message).To(Equal(healthyWorkerMemory.Message))
-		Expect(memory.CGroupUsedBytes).To(Equal(healthyWorkerMemory.UsedBytes))
+		Expect(memory.CGroupUsedBytes).To(Equal(healthyWorkerMemory.AvgUsedBytes))
 		Expect(memory.CGroupTotalBytes).To(Equal(healthyWorkerMemory.TotalBytes))
 	})
 
@@ -186,7 +186,7 @@ var _ = Describe("the memory seam's verdict", func() {
 	})
 
 	It("reports a healthy worker without a verdict as degraded", func() {
-		status := memoryWorkerStatus{Result: fsmv2memory.MemoryStatus{UsedBytes: 500, TotalBytes: 1000}}
+		status := memoryWorkerStatus{Result: fsmv2memory.MemoryStatus{AvgUsedBytes: 500, TotalBytes: 1000}}
 
 		memory := container_monitor.JudgeWorkerMemory(status, fsmv2client.Fresh)
 
@@ -270,7 +270,7 @@ var _ = Describe("GetStatus with USE_FSMV2_MEMORY_MONITOR", func() {
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(info.MemoryHealth).To(Equal(models.Active))
-		Expect(info.Memory.CGroupUsedBytes).To(Equal(healthyWorkerMemory.UsedBytes))
+		Expect(info.Memory.CGroupUsedBytes).To(Equal(healthyWorkerMemory.AvgUsedBytes))
 	})
 
 	It("ignores the worker when the flag is off", func() {
