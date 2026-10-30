@@ -231,7 +231,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// This is the trust boundary: states assume data is always fresh
 	// EXCEPT when shutdown is requested - shutdown doesn't need fresh observation
 	if !isShutdownRequested && !s.checkDataFreshness(observationTimestamp, workerCtx.identity.HierarchyPath) {
-		if s.freshnessChecker.IsTimeout(observationTimestamp, workerCtx.identity.HierarchyPath) {
+		if s.freshnessChecker.IsTimeout(observationTimestamp) {
 			// I4: Check if we've exhausted restart attempts
 			// Acquire lock to read mutable collectorHealth fields (restartCount)
 			// Note: maxRestartAttempts is immutable (set in constructor), no lock needed
@@ -1554,13 +1554,13 @@ func (s *Supervisor[TObserved, TDesired]) checkDataFreshness(observedAt time.Tim
 	// when collectors are already stopped and data is expected to be stale.
 	isShuttingDown := !s.started.Load()
 
-	if s.freshnessChecker.IsTimeout(observedAt, hierarchyPath) {
+	if s.freshnessChecker.IsTimeout(observedAt) {
 		s.logFreshnessWarning(isShuttingDown, hierarchyPath, "data_timeout", age, s.collectorHealth.timeout)
 
 		return false
 	}
 
-	if !s.freshnessChecker.Check(observedAt, hierarchyPath) {
+	if !s.freshnessChecker.Check(observedAt) {
 		s.logFreshnessWarning(isShuttingDown, hierarchyPath, "data_stale", age, s.collectorHealth.staleThreshold)
 
 		return false
