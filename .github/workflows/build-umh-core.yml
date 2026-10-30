@@ -113,6 +113,14 @@ jobs:
             echo "VERSION=0.0.0-dev-${{ github.sha }}" >> $GITHUB_OUTPUT
           fi
 
+      # Runs visibly, so a download failure shows its real error; the build below hides its output.
+      - name: Download image binaries
+        working-directory: ./umh-core
+        run: make download-docker-binaries
+
+      # The official image includes a private module.
+      # Its build output is hidden, because it can name private files.
+      # Maintainers with read access to that module can rebuild the image locally to see a build error.
       - name: Build and Push
         working-directory: ./umh-core
         env:
@@ -126,9 +134,15 @@ jobs:
             [ -n "$tag" ] && TAGS="$TAGS -t $tag"
           done <<< "${{ steps.meta.outputs.tags }}"
 
-          make build-depot \
+          if make build-depot \
             VERSION=${{ steps.version.outputs.VERSION }} \
-            TAGS="$TAGS"
+            TAGS="$TAGS" > /dev/null 2>&1; then
+            echo "The official image build passed."
+          else
+            rc=$?
+            echo "::error::The official image build failed. Its output is hidden, because it can name files of the private module the image includes. Maintainers with read access to that module can rebuild the image locally to see a build error."
+            exit "$rc"
+          fi
 
       - name: Get image digest
         id: digest
