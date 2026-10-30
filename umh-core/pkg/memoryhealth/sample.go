@@ -80,7 +80,6 @@ func NewSampler(fileSystem filesystem.Service, cgroupBase string, hostMemory Hos
 		fileSystem: fileSystem,
 		cgroupBase: cgroupBase,
 		hostMemory: hostMemory,
-		cgroup:     newCgroupV2Source(fileSystem, cgroupBase),
 	}
 }
 
@@ -186,7 +185,11 @@ func (s *Sampler) reader(ctx context.Context) cgroupReader {
 	s.version = detectCgroupVersion(ctx, s.fileSystem, s.cgroupBase)
 	if s.version == cgroupV1 {
 		s.cgroup = newCgroupV1Source(s.fileSystem, s.cgroupBase)
+
+		return s.cgroup
 	}
+
+	s.cgroup = newCgroupV2Source(s.fileSystem, s.cgroupBase)
 
 	return s.cgroup
 }
