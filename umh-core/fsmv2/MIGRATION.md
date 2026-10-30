@@ -259,7 +259,7 @@ type MyWorker struct {
 
 func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
     // Runs in background goroutine managed by supervisor.
-    // GetDependencies is the worker's typed accessor over GetDependenciesAny.
+    // Deps is the worker's typed accessor over GetDependenciesAny.
     return fsmv2.NewObservation(MyStatus{
         IsProcessRunning: w.Deps().ProcessManager().IsRunning(),
     }), nil
