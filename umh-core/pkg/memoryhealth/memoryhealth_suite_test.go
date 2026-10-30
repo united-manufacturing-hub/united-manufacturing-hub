@@ -57,6 +57,13 @@ func cgroupFiles(memoryMax, memoryCurrent string) map[string]string {
 	}
 }
 
+func cgroupV1Files(limitInBytes, usageInBytes string) map[string]string {
+	return map[string]string{
+		fixtureCgroupBase + "/memory/memory.limit_in_bytes": limitInBytes,
+		fixtureCgroupBase + "/memory/memory.usage_in_bytes": usageInBytes,
+	}
+}
+
 func fixtureFilesystem(files map[string]string) *filesystem.MockFileSystem {
 	return filesystem.NewMockFileSystem().WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 		if err := ctx.Err(); err != nil {
@@ -69,6 +76,10 @@ func fixtureFilesystem(files map[string]string) *filesystem.MockFileSystem {
 		}
 
 		return []byte(content), nil
+	}).WithFileExistsFunc(func(_ context.Context, path string) (bool, error) {
+		_, ok := files[path]
+
+		return ok, nil
 	})
 }
 
