@@ -45,12 +45,12 @@ var _ = Describe("ReadCgroupMemory", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(memory).To(Equal(expected))
 		},
-		Entry("a numeric limit", bytesText(eightGiBBytes), bytesText(twoGiBBytes),
-			memoryhealth.CgroupMemory{LimitBytes: eightGiBBytes, CurrentBytes: twoGiBBytes}),
+		Entry("a numeric limit", bytesText(eightGiB), bytesText(twoGiB),
+			memoryhealth.CgroupMemory{LimitBytes: eightGiB, CurrentBytes: twoGiB}),
 		Entry("values without a trailing newline", "4294967296", "1073741824",
-			memoryhealth.CgroupMemory{LimitBytes: fourGiBBytes, CurrentBytes: oneGiBBytes}),
-		Entry("max as the limit", "max\n", bytesText(twoGiBBytes),
-			memoryhealth.CgroupMemory{CurrentBytes: twoGiBBytes, Unlimited: true}),
+			memoryhealth.CgroupMemory{LimitBytes: fourGiB, CurrentBytes: oneGiB}),
+		Entry("max as the limit", "max\n", bytesText(twoGiB),
+			memoryhealth.CgroupMemory{CurrentBytes: twoGiB, Unlimited: true}),
 	)
 
 	DescribeTable("rejects a value that does not parse",
@@ -59,9 +59,9 @@ var _ = Describe("ReadCgroupMemory", func() {
 
 			Expect(err).To(HaveOccurred())
 		},
-		Entry("an empty memory.max", "", bytesText(twoGiBBytes)),
-		Entry("a non-numeric memory.max", "notanumber\n", bytesText(twoGiBBytes)),
-		Entry("a negative memory.max", "-1\n", bytesText(twoGiBBytes)),
+		Entry("an empty memory.max", "", bytesText(twoGiB)),
+		Entry("a non-numeric memory.max", "notanumber\n", bytesText(twoGiB)),
+		Entry("a negative memory.max", "-1\n", bytesText(twoGiB)),
 		Entry("an empty memory.current", "max\n", ""),
 		Entry("a non-numeric memory.current", "max\n", "abc\n"),
 		Entry("a negative memory.current", "max\n", "-100\n"),
@@ -73,7 +73,7 @@ var _ = Describe("ReadCgroupMemory", func() {
 
 			Expect(err).To(MatchError(fs.ErrNotExist))
 		},
-		Entry("memory.max", map[string]string{fixtureCgroupBase + "/memory.current": bytesText(twoGiBBytes)}),
+		Entry("memory.max", map[string]string{fixtureCgroupBase + "/memory.current": bytesText(twoGiB)}),
 		Entry("memory.current", map[string]string{fixtureCgroupBase + "/memory.max": "max\n"}),
 	)
 
@@ -86,7 +86,7 @@ var _ = Describe("ReadCgroupMemory", func() {
 			Expect(readErr.Outcome).To(Equal(expectedOutcome))
 		},
 		Entry("missing memory.max", map[string]string{}, "memory.max", memoryhealth.ReadMissing),
-		Entry("unparsable memory.max", cgroupFiles("lots\n", bytesText(twoGiBBytes)), "memory.max", memoryhealth.ReadUnparsable),
+		Entry("unparsable memory.max", cgroupFiles("lots\n", bytesText(twoGiB)), "memory.max", memoryhealth.ReadUnparsable),
 		Entry("missing memory.current", map[string]string{fixtureCgroupBase + "/memory.max": "max\n"}, "memory.current", memoryhealth.ReadMissing),
 		Entry("unparsable memory.current", cgroupFiles("max\n", "abc\n"), "memory.current", memoryhealth.ReadUnparsable),
 	)

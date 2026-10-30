@@ -34,39 +34,39 @@ func readSample(files map[string]string, hostMemory memoryhealth.HostMemoryReade
 
 var _ = Describe("Sampler", func() {
 	It("reads a cgroup with a limit without the host", func() {
-		sample, err := readSample(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), unreadableHostMemory)
+		sample, err := readSample(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), unreadableHostMemory)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sample.Source).To(Equal(memoryhealth.SourceCgroupLimit))
-		Expect(sample.UsedBytes).To(Equal(halfGiBBytes))
-		Expect(sample.TotalBytes).To(Equal(oneGiBBytes))
+		Expect(sample.UsedBytes).To(Equal(halfGiB))
+		Expect(sample.TotalBytes).To(Equal(oneGiB))
 		Expect(sample.Timestamp).ToNot(BeZero())
 	})
 
 	DescribeTable("measures a cgroup without a limit against the host total",
 		func(memoryMax string) {
-			sample, err := readSample(cgroupFiles(memoryMax, bytesText(halfGiBBytes)), hostMemoryOf(threeGiBBytes, eightGiBBytes))
+			sample, err := readSample(cgroupFiles(memoryMax, bytesText(halfGiB)), hostMemoryOf(threeGiB, eightGiB))
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(sample.Source).To(Equal(memoryhealth.SourceHostTotalNoCgroupLimit))
-			Expect(sample.UsedBytes).To(Equal(halfGiBBytes))
-			Expect(sample.TotalBytes).To(Equal(eightGiBBytes))
+			Expect(sample.UsedBytes).To(Equal(halfGiB))
+			Expect(sample.TotalBytes).To(Equal(eightGiB))
 		},
 		Entry("memory.max is max", "max\n"),
 		Entry("memory.max is 0", "0\n"),
 	)
 
 	It("reads the machine's memory beside a cgroup with a limit", func() {
-		sample, err := readSample(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), hostMemoryOf(threeGiBBytes, eightGiBBytes))
+		sample, err := readSample(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), hostMemoryOf(threeGiB, eightGiB))
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sample.Source).To(Equal(memoryhealth.SourceCgroupLimit))
-		Expect(sample.HostUsedBytes).To(Equal(threeGiBBytes))
-		Expect(sample.HostTotalBytes).To(Equal(eightGiBBytes))
+		Expect(sample.HostUsedBytes).To(Equal(threeGiB))
+		Expect(sample.HostTotalBytes).To(Equal(eightGiB))
 	})
 
 	It("keeps a cgroup with a limit when the machine's memory is unreadable", func() {
-		sample, err := readSample(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), unreadableHostMemory)
+		sample, err := readSample(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), unreadableHostMemory)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sample.HostReadErr).To(MatchError(errHostUnreadable))
@@ -74,9 +74,9 @@ var _ = Describe("Sampler", func() {
 	})
 
 	It("reads the some avg60 of memory.pressure as a fraction", func() {
-		files := withFile(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", memoryPressureText("25.00"))
+		files := withFile(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), "memory.pressure", memoryPressureText("25.00"))
 
-		sample, err := readSample(files, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+		sample, err := readSample(files, hostMemoryOf(threeGiB, eightGiB))
 
 		Expect(err).ToNot(HaveOccurred())
 		pressure, measured := sample.Pressure.Get()
@@ -86,22 +86,22 @@ var _ = Describe("Sampler", func() {
 
 	DescribeTable("leaves the pressure unknown without a readable memory.pressure",
 		func(files map[string]string) {
-			sample, err := readSample(files, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+			sample, err := readSample(files, hostMemoryOf(threeGiB, eightGiB))
 
 			Expect(err).ToNot(HaveOccurred())
 			_, measured := sample.Pressure.Get()
 			Expect(measured).To(BeFalse())
 		},
-		Entry("no memory.pressure", cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes))),
-		Entry("no some line", withFile(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", "full avg10=0.00 avg60=1.00 avg300=0.00 total=0\n")),
-		Entry("an unparsable avg60", withFile(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", memoryPressureText("abc"))),
-		Entry("cgroup v1", withFile(cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.pressure", memoryPressureText("25.00"))),
+		Entry("no memory.pressure", cgroupFiles(bytesText(oneGiB), bytesText(halfGiB))),
+		Entry("no some line", withFile(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), "memory.pressure", "full avg10=0.00 avg60=1.00 avg300=0.00 total=0\n")),
+		Entry("an unparsable avg60", withFile(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), "memory.pressure", memoryPressureText("abc"))),
+		Entry("cgroup v1", withFile(cgroupV1Files(bytesText(oneGiB), bytesText(halfGiB)), "memory.pressure", memoryPressureText("25.00"))),
 	)
 
 	DescribeTable("counts the OOM kills since the previous read",
 		func(baseFiles map[string]string, countFile string, countText func(int) string) {
 			files := withFile(baseFiles, countFile, countText(3))
-			sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+			sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiB, eightGiB))
 
 			firstSample, err := sampler.Read(context.Background())
 			Expect(err).ToNot(HaveOccurred())
@@ -116,13 +116,13 @@ var _ = Describe("Sampler", func() {
 			Expect(measured).To(BeTrue())
 			Expect(newOomKills).To(Equal(2.0))
 		},
-		Entry("cgroup v2 memory.events", cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.events", memoryEventsText),
-		Entry("cgroup v1 memory.oom_control", cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory/memory.oom_control", oomControlText),
+		Entry("cgroup v2 memory.events", cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), "memory.events", memoryEventsText),
+		Entry("cgroup v1 memory.oom_control", cgroupV1Files(bytesText(oneGiB), bytesText(halfGiB)), "memory/memory.oom_control", oomControlText),
 	)
 
 	It("leaves the new OOM kills unknown when the counter goes down", func() {
-		files := withFile(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), "memory.events", memoryEventsText(5))
-		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+		files := withFile(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), "memory.events", memoryEventsText(5))
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiB, eightGiB))
 
 		_, err := sampler.Read(context.Background())
 		Expect(err).ToNot(HaveOccurred())
@@ -136,7 +136,7 @@ var _ = Describe("Sampler", func() {
 	})
 
 	It("leaves the new OOM kills unknown without memory.events", func() {
-		sampler := memoryhealth.NewSampler(fixtureFilesystem(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes))), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB))), fixtureCgroupBase, hostMemoryOf(threeGiB, eightGiB))
 
 		_, _ = sampler.Read(context.Background())
 		sample, err := sampler.Read(context.Background())
@@ -147,22 +147,22 @@ var _ = Describe("Sampler", func() {
 	})
 
 	It("reads a cgroup v1 with a limit without the host", func() {
-		sample, err := readSample(cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), unreadableHostMemory)
+		sample, err := readSample(cgroupV1Files(bytesText(oneGiB), bytesText(halfGiB)), unreadableHostMemory)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sample.Source).To(Equal(memoryhealth.SourceCgroupLimit))
-		Expect(sample.UsedBytes).To(Equal(halfGiBBytes))
-		Expect(sample.TotalBytes).To(Equal(oneGiBBytes))
+		Expect(sample.UsedBytes).To(Equal(halfGiB))
+		Expect(sample.TotalBytes).To(Equal(oneGiB))
 	})
 
 	DescribeTable("measures a cgroup v1 without a limit against the host total",
 		func(limitInBytes string) {
-			sample, err := readSample(cgroupV1Files(limitInBytes, bytesText(halfGiBBytes)), hostMemoryOf(threeGiBBytes, eightGiBBytes))
+			sample, err := readSample(cgroupV1Files(limitInBytes, bytesText(halfGiB)), hostMemoryOf(threeGiB, eightGiB))
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(sample.Source).To(Equal(memoryhealth.SourceHostTotalNoCgroupLimit))
-			Expect(sample.UsedBytes).To(Equal(halfGiBBytes))
-			Expect(sample.TotalBytes).To(Equal(eightGiBBytes))
+			Expect(sample.UsedBytes).To(Equal(halfGiB))
+			Expect(sample.TotalBytes).To(Equal(eightGiB))
 		},
 		Entry("4 KiB pages", "9223372036854771712\n"),
 		Entry("16 KiB pages", "9223372036854759424\n"),
@@ -170,7 +170,7 @@ var _ = Describe("Sampler", func() {
 	)
 
 	It("names the v1 file that could not be parsed", func() {
-		sample, err := readSample(cgroupV1Files(bytesText(oneGiBBytes), "abc\n"), hostMemoryOf(threeGiBBytes, eightGiBBytes))
+		sample, err := readSample(cgroupV1Files(bytesText(oneGiB), "abc\n"), hostMemoryOf(threeGiB, eightGiB))
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sample.Source).To(Equal(memoryhealth.SourceHostFallbackCgroupUnreadable))
@@ -183,22 +183,22 @@ var _ = Describe("Sampler", func() {
 
 	It("detects the cgroup version again on the next read while no version was found", func() {
 		files := map[string]string{}
-		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiB, eightGiB))
 
 		firstSample, err := sampler.Read(context.Background())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(firstSample.Source).To(Equal(memoryhealth.SourceHostFallbackCgroupUnreadable))
 
-		maps.Copy(files, cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)))
+		maps.Copy(files, cgroupV1Files(bytesText(oneGiB), bytesText(halfGiB)))
 
 		secondSample, err := sampler.Read(context.Background())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(secondSample.Source).To(Equal(memoryhealth.SourceCgroupLimit))
-		Expect(secondSample.TotalBytes).To(Equal(oneGiBBytes))
+		Expect(secondSample.TotalBytes).To(Equal(oneGiB))
 	})
 
 	It("reports the missing v2 file when neither cgroup version is readable", func() {
-		sample, err := readSample(map[string]string{}, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+		sample, err := readSample(map[string]string{}, hostMemoryOf(threeGiB, eightGiB))
 
 		Expect(err).ToNot(HaveOccurred())
 
@@ -209,7 +209,7 @@ var _ = Describe("Sampler", func() {
 	})
 
 	It("fails a cgroup without a limit when the host total is unreadable", func() {
-		sample, err := readSample(cgroupFiles("max\n", bytesText(halfGiBBytes)), unreadableHostMemory)
+		sample, err := readSample(cgroupFiles("max\n", bytesText(halfGiB)), unreadableHostMemory)
 
 		Expect(err).To(MatchError(errHostUnreadable))
 		Expect(sample.HostReadErr).To(MatchError(errHostUnreadable))
@@ -217,16 +217,16 @@ var _ = Describe("Sampler", func() {
 
 	DescribeTable("uses the host's memory when the cgroup is unreadable",
 		func(files map[string]string) {
-			sample, err := readSample(files, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+			sample, err := readSample(files, hostMemoryOf(threeGiB, eightGiB))
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(sample.Source).To(Equal(memoryhealth.SourceHostFallbackCgroupUnreadable))
-			Expect(sample.UsedBytes).To(Equal(threeGiBBytes))
-			Expect(sample.TotalBytes).To(Equal(eightGiBBytes))
+			Expect(sample.UsedBytes).To(Equal(threeGiB))
+			Expect(sample.TotalBytes).To(Equal(eightGiB))
 			Expect(sample.CgroupReadErr).To(HaveOccurred())
 		},
 		Entry("no cgroup files", map[string]string{}),
-		Entry("an unparsable memory.current", cgroupFiles(bytesText(oneGiBBytes), "abc\n")),
+		Entry("an unparsable memory.current", cgroupFiles(bytesText(oneGiB), "abc\n")),
 	)
 
 	It("fails when both the cgroup and the host are unreadable", func() {
@@ -249,7 +249,7 @@ var _ = Describe("Sampler", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		sampler := memoryhealth.NewSampler(fixtureFilesystem(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes))), fixtureCgroupBase, hostMemoryOf(threeGiBBytes, eightGiBBytes))
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB))), fixtureCgroupBase, hostMemoryOf(threeGiB, eightGiB))
 
 		_, err := sampler.Read(ctx)
 
