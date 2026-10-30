@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	decimalTotalBytes int64 = 1000000000
+	decimalTotalBytes   int64 = 1000000000
+	decimalMachineBytes int64 = 8000000000
 
 	twoMinutesOfSamples = 120
 )
@@ -44,16 +45,63 @@ func newMemoryJudge() *memoryJudge {
 	return &memoryJudge{engine: engine, sampleTime: firstSampleTime}
 }
 
-func (j *memoryJudge) decide(usedPercent int64) (memoryhealth.Verdict, memoryhealth.Details) {
-	sample := memoryhealth.Sample{
-		Timestamp:  j.sampleTime,
+func percentOf(totalBytes, percent int64) int64 {
+	return totalBytes * percent / 100
+}
+
+func containerAtPercent(usedPercent int64) memoryhealth.Sample {
+	return memoryhealth.Sample{
 		Source:     memoryhealth.SourceCgroupLimit,
-		UsedBytes:  decimalTotalBytes * usedPercent / 100,
+		UsedBytes:  percentOf(decimalTotalBytes, usedPercent),
 		TotalBytes: decimalTotalBytes,
 	}
+}
+
+func containerAndMachineAtPercent(containerPercent, machinePercent int64) memoryhealth.Sample {
+	sample := containerAtPercent(containerPercent)
+	sample.HostUsedBytes = percentOf(decimalMachineBytes, machinePercent)
+	sample.HostTotalBytes = decimalMachineBytes
+
+	return sample
+}
+
+func unlimitedContainerOnMachineAtPercent(containerPercent, machinePercent int64) memoryhealth.Sample {
+	return memoryhealth.Sample{
+		Source:         memoryhealth.SourceHostTotalNoCgroupLimit,
+		UsedBytes:      percentOf(decimalMachineBytes, containerPercent),
+		TotalBytes:     decimalMachineBytes,
+		HostUsedBytes:  percentOf(decimalMachineBytes, machinePercent),
+		HostTotalBytes: decimalMachineBytes,
+	}
+}
+
+func (j *memoryJudge) decideSample(sample memoryhealth.Sample) (memoryhealth.Verdict, memoryhealth.Details) {
+	sample.Timestamp = j.sampleTime
 	j.sampleTime = j.sampleTime.Add(time.Second)
 
 	return memoryhealth.Decide(j.engine, sample)
+}
+
+func (j *memoryJudge) decideSampleRepeatedly(sample memoryhealth.Sample, samples int) (memoryhealth.Verdict, memoryhealth.Details) {
+	verdict, details := j.decideSample(sample)
+	for range samples - 1 {
+		verdict, details = j.decideSample(sample)
+	}
+
+	return verdict, details
+}
+
+func (j *memoryJudge) decide(usedPercent int64) (memoryhealth.Verdict, memoryhealth.Details) {
+	return j.decideSample(containerAtPercent(usedPercent))
+}
+
+func causeKindsOf(verdict memoryhealth.Verdict) []memoryhealth.CauseKind {
+	kinds := make([]memoryhealth.CauseKind, len(verdict.Causes))
+	for index, cause := range verdict.Causes {
+		kinds[index] = cause.Kind
+	}
+
+	return kinds
 }
 
 func (j *memoryJudge) decideRepeatedly(usedPercent int64, samples int) (memoryhealth.Verdict, memoryhealth.Details) {
@@ -94,7 +142,7 @@ var _ = Describe("Decide", func() {
 		Expect(details.Measured()).To(BeTrue())
 		Expect(verdict.State).To(Equal(memoryhealth.StateDegraded))
 		Expect(verdict.Causes).To(HaveLen(1))
-		Expect(verdict.Causes[0].Kind).To(Equal(memoryhealth.CauseKindLimitFull))
+		Expect(verdict.Causes[0].Kind).To(Equal(memoryhealth.CauseKindContainerLimitFull))
 		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 0.80, 1e-9))
 	})
 
@@ -153,5 +201,37 @@ var _ = Describe("Decide", func() {
 		verdict, _ := judge.decideRepeatedly(70, twoMinutesOfSamples)
 
 		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+	})
+})
+
+var _ = Describe("Decide for the container and the machine", func() {
+	It("degrades with host-memory-full when the machine is full and the container is below its limit", func() {
+		verdict, details := newMemoryJudge().decideSampleRepeatedly(containerAndMachineAtPercent(50, 90), twoMinutesOfSamples)
+
+		Expect(verdict.State).To(Equal(memoryhealth.StateDegraded))
+		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindHostMemoryFull))
+		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 0.90, 1e-9))
+
+		avgHostUsedFraction, measured := details.AvgHostUsedFraction.Get()
+		Expect(measured).To(BeTrue())
+		Expect(avgHostUsedFraction).To(BeNumerically("~", 0.90, 1e-9))
+	})
+
+	It("degrades with both causes when the container and the machine are full", func() {
+		verdict, _ := newMemoryJudge().decideSampleRepeatedly(containerAndMachineAtPercent(90, 90), twoMinutesOfSamples)
+
+		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindContainerLimitFull, memoryhealth.CauseKindHostMemoryFull))
+	})
+
+	It("is healthy when the container and the machine are below the degraded level", func() {
+		verdict, _ := newMemoryJudge().decideSampleRepeatedly(containerAndMachineAtPercent(50, 50), twoMinutesOfSamples)
+
+		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+	})
+
+	It("judges a container without a limit only against the full machine", func() {
+		verdict, _ := newMemoryJudge().decideSampleRepeatedly(unlimitedContainerOnMachineAtPercent(10, 90), twoMinutesOfSamples)
+
+		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindHostMemoryFull))
 	})
 })

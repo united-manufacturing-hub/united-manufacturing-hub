@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	degradedVerdict = Verdict{State: StateDegraded, Causes: []Cause{{Kind: CauseKindLimitFull, Value: 0.9}}}
+	degradedVerdict = Verdict{State: StateDegraded, Causes: []Cause{{Kind: CauseKindContainerLimitFull, Value: 0.9}}}
 	healthyVerdict  = Verdict{State: StateHealthy}
 )
 
