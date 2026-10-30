@@ -65,19 +65,30 @@ Memory also counts as degraded, and bridges are held back, whenever no reading f
 
 `pressure` needs cgroup v2 with pressure stall information (PSI) enabled, the same as CPU pressure. `oom-kill` counts only the kills after umh-core started, so it does not report a kill that restarted umh-core itself.
 
+### Measurements
+
 | Gauge | Reports |
 |---|---|
 | `memory_avg_used_bytes` | the 60s mean of the memory in use, in bytes: the container's, or the machine's when `memory_used_from_cgroup` is 0 |
 | `memory_total_bytes` | the limit that usage is judged against: the container's memory limit, or the machine's total memory when the container has none |
 | `memory_avg_used_fraction` | the 60s mean of the memory in use as a 0..1 fraction of `memory_total_bytes` |
-| `memory_used_from_cgroup` | 1 when the memory in use is the container's own usage, 0 when the container's cgroup was unreadable and the machine's usage was used |
-| `memory_total_is_cgroup_limit` | 1 when `memory_total_bytes` is the container's memory limit, 0 when it is the machine's total memory |
-| `memory_last_sample_unix` | the unix seconds of the last tick that measured |
-| `memory_used_ring_active` | 1 once the 60-second window holds enough samples to trust `memory_avg_used_bytes` and `memory_avg_used_fraction`, 0 before. It works like `cpu_usage_ring_active` |
-| `memory_avg_host_used_bytes` | the 60s mean of the machine's used memory, in bytes. It works like `cpu_avg_host_busy_cores` |
+| `memory_avg_host_used_bytes` | the whole machine's 60s mean used memory, in bytes. It works like `cpu_avg_host_busy_cores` |
 | `memory_host_total_bytes` | the machine's total memory, in bytes |
-| `memory_host_ring_active` | 1 once `memory_avg_host_used_bytes` can be trusted, 0 before and while the machine's memory is unreadable |
 | `memory_pressure_avg60_ratio` | the kernel's PSI memory-some avg60 as a 0..1 fraction |
-| `memory_pressure_signal_ready` | 1 when `memory_pressure_avg60_ratio` was read, 0 on cgroup v1 or without PSI |
 | `memory_oom_kills_last_60s` | the OOM kills in the container within the last 60s |
-| `memory_oom_signal_ready` | 1 when `memory_oom_kills_last_60s` can be trusted, 0 before the second read and when the OOM counter is unreadable |
+| `memory_last_sample_unix` | the unix seconds of the last tick that measured |
+
+### Flags
+
+| Flag | Applies to |
+|---|---|
+| `memory_used_ring_active` | `memory_avg_used_bytes` and `memory_avg_used_fraction` |
+| `memory_host_ring_active` | `memory_avg_host_used_bytes` |
+| `memory_pressure_signal_ready` | `memory_pressure_avg60_ratio` |
+| `memory_oom_signal_ready` | `memory_oom_kills_last_60s` |
+| `memory_used_from_cgroup` | `memory_avg_used_bytes` |
+| `memory_total_is_cgroup_limit` | `memory_total_bytes` and `memory_avg_used_fraction` |
+
+The `_ring_active` and `_signal_ready` flags work like the CPU flags above. `memory_host_ring_active` also reads 0 while the machine's memory is unreadable. `memory_pressure_signal_ready` stays 0 on cgroup v1 and without PSI. `memory_oom_signal_ready` reads 0 before the second read of the OOM counter and while that counter is unreadable.
+
+The two source flags say where a number came from, not whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable and the machine's usage was used instead. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.

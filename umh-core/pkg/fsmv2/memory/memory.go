@@ -120,20 +120,21 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 
 func recordMetrics(recorder *deps.MetricsRecorder, sample memoryhealth.Sample, details memoryhealth.Details) {
 	recorder.SetGauge(deps.GaugeMemoryLastSampleUnix, float64(sample.Timestamp.Unix()))
+
 	recorder.SetGauge(deps.GaugeMemoryAvgUsedBytes, details.AvgUsedBytes)
 	recorder.SetGauge(deps.GaugeMemoryTotalBytes, float64(sample.TotalBytes))
 	recorder.SetGauge(deps.GaugeMemoryAvgUsedFraction, details.AvgUsedFraction)
-	recorder.SetGaugeFlag(deps.GaugeMemoryUsedRingActive, details.UsedRingActive)
-	recorder.SetGaugeFlag(deps.GaugeMemoryUsedFromCgroup, sample.Source != memoryhealth.SourceHostFallbackCgroupUnreadable)
-	recorder.SetGaugeFlag(deps.GaugeMemoryTotalIsCgroupLimit, sample.Source == memoryhealth.SourceCgroupLimit)
-
 	recorder.SetGauge(deps.GaugeMemoryAvgHostUsedBytes, details.AvgHostUsedFraction*details.HostTotalBytes)
 	recorder.SetGauge(deps.GaugeMemoryHostTotalBytes, details.HostTotalBytes)
-	recorder.SetGaugeFlag(deps.GaugeMemoryHostRingActive, details.HostRingActive)
 	recorder.SetGauge(deps.GaugeMemoryPressureAvg60Ratio, details.PressureAvg60)
-	recorder.SetGaugeFlag(deps.GaugeMemoryPressureSignalReady, details.PressureSignalReady)
 	recorder.SetGauge(deps.GaugeMemoryOomKillsLast60s, details.OomKillsLast60s)
+
+	recorder.SetGaugeFlag(deps.GaugeMemoryUsedRingActive, details.UsedRingActive)
+	recorder.SetGaugeFlag(deps.GaugeMemoryHostRingActive, details.HostRingActive)
+	recorder.SetGaugeFlag(deps.GaugeMemoryPressureSignalReady, details.PressureSignalReady)
 	recorder.SetGaugeFlag(deps.GaugeMemoryOomSignalReady, details.OomSignalReady)
+	recorder.SetGaugeFlag(deps.GaugeMemoryUsedFromCgroup, sample.Source != memoryhealth.SourceHostFallbackCgroupUnreadable)
+	recorder.SetGaugeFlag(deps.GaugeMemoryTotalIsCgroupLimit, sample.Source == memoryhealth.SourceCgroupLimit)
 }
 
 func healthFromStatus(_ MemoryConfig, status MemoryStatus) simple.Health {
