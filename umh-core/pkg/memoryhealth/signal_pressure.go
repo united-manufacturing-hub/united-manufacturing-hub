@@ -34,6 +34,7 @@ var pressureMarks = diagnosis.Marks{
 func pressureSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            signalPressure,
+		Tier:            tierStarvation,
 		DemoteSpan:      averageSpan,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
