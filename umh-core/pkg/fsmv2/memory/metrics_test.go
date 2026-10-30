@@ -24,30 +24,40 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
-func drainedGaugesAfterOnePoll(files map[string]string) map[string]float64 {
+func drainedGaugesAfterPolls(files map[string]string, polls int) map[string]float64 {
 	memoryDeps := newTestDeps(fixtureFilesystem(files), hostMemoryOf(hostUsedBytes, hostTotalBytes))
 
-	_, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
-	Expect(err).ToNot(HaveOccurred())
+	for range polls {
+		_, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
+		Expect(err).ToNot(HaveOccurred())
+	}
 
 	return memoryDeps.MetricsRecorder().Drain().Gauges
 }
 
 var _ = Describe("the memory worker's gauges", func() {
-	It("publishes a cgroup reading", func() {
-		gauges := drainedGaugesAfterOnePoll(cgroupAtPercent(50))
+	It("publishes the averages of a cgroup reading as a fraction", func() {
+		gauges := drainedGaugesAfterPolls(cgroupAtPercent(50), 2)
 
-		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedBytes), float64(decimalLimitBytes/2)))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryAvgUsedBytes), float64(decimalLimitBytes/2)))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalBytes), float64(decimalLimitBytes)))
-		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedPercent), 50.0))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryAvgUsedFraction), 0.5))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedRingActive), 1.0))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedFromCgroup), 1.0))
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalIsCgroupLimit), 1.0))
 		Expect(gauges[string(deps.GaugeMemoryLastSampleUnix)]).To(BeNumerically("~", float64(time.Now().Unix()), 5))
 	})
 
+	It("marks the averages as not ready after a single poll", func() {
+		gauges := drainedGaugesAfterPolls(cgroupAtPercent(50), 1)
+
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedRingActive), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalBytes), float64(decimalLimitBytes)))
+	})
+
 	DescribeTable("marks which source each number came from",
 		func(files map[string]string, expectedUsedFromCgroup, expectedTotalIsCgroupLimit float64) {
-			gauges := drainedGaugesAfterOnePoll(files)
+			gauges := drainedGaugesAfterPolls(files, 1)
 
 			Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryUsedFromCgroup), expectedUsedFromCgroup))
 			Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalIsCgroupLimit), expectedTotalIsCgroupLimit))

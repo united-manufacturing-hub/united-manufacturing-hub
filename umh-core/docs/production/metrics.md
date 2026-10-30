@@ -52,13 +52,14 @@ A `_ring_active` flag covers one 60-second window, and reads 0 until that window
 
 These gauges appear when the container is started with `-e USE_FSMV2_MEMORY_MONITOR=true`. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges above, and they also keep their previous value on a tick that could not measure.
 
-With the preview on, the instance's memory status comes from this reading. Memory counts as degraded once the average of `memory_used_percent` over the last 60 seconds reaches 80%, and healthy again once that average falls below 75%. Memory also counts as degraded, and bridges are held back, whenever no reading from the last three seconds is available.
+With the preview on, the instance's memory status comes from this reading. Memory counts as degraded once `memory_avg_used_fraction` reaches 0.8 (80%), and healthy again once it falls below 0.75 (75%). Memory also counts as degraded, and bridges are held back, whenever no reading from the last three seconds is available.
 
 | Gauge | Reports |
 |---|---|
-| `memory_used_bytes` | the memory in use, in bytes: the container's, or the machine's when `memory_used_from_cgroup` is 0 |
+| `memory_avg_used_bytes` | the 60s mean of the memory in use, in bytes: the container's, or the machine's when `memory_used_from_cgroup` is 0 |
 | `memory_total_bytes` | the limit that usage is judged against: the container's memory limit, or the machine's total memory when the container has none |
-| `memory_used_percent` | `memory_used_bytes` as a percentage of `memory_total_bytes` |
-| `memory_used_from_cgroup` | 1 when `memory_used_bytes` is the container's own usage, 0 when the container's cgroup was unreadable and the machine's usage was used |
+| `memory_avg_used_fraction` | the 60s mean of the memory in use as a 0..1 fraction of `memory_total_bytes`. The memory status is judged on this value |
+| `memory_used_from_cgroup` | 1 when the memory in use is the container's own usage, 0 when the container's cgroup was unreadable and the machine's usage was used |
 | `memory_total_is_cgroup_limit` | 1 when `memory_total_bytes` is the container's memory limit, 0 when it is the machine's total memory |
 | `memory_last_sample_unix` | the unix seconds of the last tick that measured |
+| `memory_used_ring_active` | 1 once the 60-second window holds enough samples to trust `memory_avg_used_bytes` and `memory_avg_used_fraction`, 0 before. It works like `cpu_usage_ring_active` |
