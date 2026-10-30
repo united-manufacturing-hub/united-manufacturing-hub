@@ -24,6 +24,7 @@ import (
 const (
 	signalLimitFull        = "limit-full"
 	instrumentUsedFraction = "used-fraction"
+	measurementUsedBytes   = "used-bytes"
 	unitFraction           = "fraction"
 
 	sampleInterval = time.Second
@@ -50,7 +51,13 @@ func NewEngine() (*diagnosis.Engine[Sample], error) {
 func memoryTable() diagnosis.Table[Sample] {
 	return diagnosis.Table[Sample]{
 		Interval: sampleInterval,
-		Signals:  []diagnosis.Signal[Sample]{limitFullSignal()},
+		Measurements: []diagnosis.Measurement[Sample]{{
+			Name:      measurementUsedBytes,
+			Extract:   usedBytes,
+			Span:      limitFullSpan,
+			Reduction: diagnosis.Mean,
+		}},
+		Signals: []diagnosis.Signal[Sample]{limitFullSignal()},
 	}
 }
 
@@ -77,4 +84,8 @@ func usedFraction(sample Sample) diagnosis.Reading {
 	}
 
 	return diagnosis.Known(float64(sample.UsedBytes) / float64(sample.TotalBytes))
+}
+
+func usedBytes(sample Sample) diagnosis.Reading {
+	return diagnosis.Known(float64(sample.UsedBytes))
 }

@@ -27,7 +27,7 @@ var (
 )
 
 func detailsAt(usedFraction float64) Details {
-	return Details{UsedFraction: diagnosis.Known(usedFraction)}
+	return Details{AvgUsedFraction: diagnosis.Known(usedFraction)}
 }
 
 var _ = Describe("ComposeMessage", func() {
@@ -39,6 +39,6 @@ var _ = Describe("ComposeMessage", func() {
 		Entry("a healthy verdict at exactly the warning level", healthyVerdict, detailsAt(warningFraction), messageWarning),
 		Entry("a degraded verdict", degradedVerdict, detailsAt(0.9), messageCritical),
 		Entry("a degraded verdict below the degraded level before it recovers", degradedVerdict, detailsAt(0.77), messageCritical),
-		Entry("an unmeasured window", healthyVerdict, Details{UsedFraction: diagnosis.Unknown()}, messageNotMeasured),
+		Entry("an unmeasured window", healthyVerdict, Details{AvgUsedFraction: diagnosis.Unknown()}, messageNotMeasured),
 	)
 })
