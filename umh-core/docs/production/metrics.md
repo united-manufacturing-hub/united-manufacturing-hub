@@ -52,7 +52,7 @@ A `_ring_active` flag covers one 60-second window, and reads 0 until that window
 
 These gauges appear when the container is started with `-e USE_FSMV2_MEMORY_MONITOR=true`. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges above, and they also keep their previous value on a tick that could not measure.
 
-With the preview on, the instance's memory status comes from this reading. Memory counts as degraded once the average of `memory_used_percent` over the last 10 seconds reaches 80%, and healthy again once that average falls below 75%. Memory also counts as degraded, and bridges are held back, whenever no reading from the last three seconds is available.
+With the preview on, the instance's memory status comes from this reading. Memory counts as degraded once the average of `memory_used_percent` over the last 60 seconds reaches 80%, and healthy again once that average falls below 75%. Memory also counts as degraded, and bridges are held back, whenever no reading from the last three seconds is available.
 
 | Gauge | Reports |
 |---|---|
