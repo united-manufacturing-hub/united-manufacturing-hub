@@ -205,7 +205,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Logger() deps.FSMLogger {
 }
 
 // BindDeps stores the typed deps payload. Call after InitBase in worker constructors.
-// The stored value is returned by GetDependenciesAny to satisfy DependencyProvider.
+// The stored value is returned by Deps and by GetDependenciesAny.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
 	w.mu.Lock()
 	w.typedDeps = d

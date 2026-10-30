@@ -55,10 +55,11 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// back, so dropping bd here drops this worker's framework metrics with it.
 	//
 	// Do not declare a TDeps embedding *deps.BaseDependencies without also
-	// declaring NewDeps. Nothing binds the zero value, its embedded pointer stays
-	// nil, and a nil pointer still satisfies the accessor check the collector
-	// gates on, so the first framework read dereferences nil. The collector
-	// recovers it as a collector_panic every tick instead of skipping the worker.
+	// declaring NewDeps. The worker then binds the zero TDeps, its embedded
+	// pointer stays nil, and a nil pointer still satisfies the accessor check
+	// the collector gates on, so the first framework read dereferences nil. The
+	// collector recovers it as a collector_panic every tick instead of skipping
+	// the worker.
 	// Either declare NewDeps, or keep BaseDependencies out of TDeps.
 	//
 	// NewDeps has no error return, so anything fallible belongs behind Poll. A
