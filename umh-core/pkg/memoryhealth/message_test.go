@@ -25,17 +25,17 @@ import (
 )
 
 const (
-	twoGiBBytes     = 2 * bytesPerGiB
-	sixteenGiBBytes = 16 * bytesPerGiB
+	twoGiB     = 2 * bytesPerGiB
+	sixteenGiB = 16 * bytesPerGiB
 )
 
 func limitDetails(avgLimitUsedFraction float64) Details {
 	return Details{
 		LimitApplies:         true,
-		TotalBytes:           twoGiBBytes,
-		HostTotalBytes:       sixteenGiBBytes,
+		TotalBytes:           twoGiB,
+		HostTotalBytes:       sixteenGiB,
 		AvgUsedFraction:      diagnosis.Known(avgLimitUsedFraction),
-		AvgUsedBytes:         diagnosis.Known(avgLimitUsedFraction * twoGiBBytes),
+		AvgUsedBytes:         diagnosis.Known(avgLimitUsedFraction * twoGiB),
 		AvgLimitUsedFraction: diagnosis.Known(avgLimitUsedFraction),
 		AvgHostUsedFraction:  diagnosis.Known(0.41),
 		PressureApplies:      true,
@@ -48,7 +48,7 @@ func limitDetails(avgLimitUsedFraction float64) Details {
 func noLimitDetails(avgHostUsedFraction float64) Details {
 	details := limitDetails(0)
 	details.LimitApplies = false
-	details.TotalBytes = sixteenGiBBytes
+	details.TotalBytes = sixteenGiB
 	details.AvgLimitUsedFraction = diagnosis.Unknown()
 	details.AvgHostUsedFraction = diagnosis.Known(avgHostUsedFraction)
 

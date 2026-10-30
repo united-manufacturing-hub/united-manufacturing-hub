@@ -35,12 +35,12 @@ func TestMemoryHealth(t *testing.T) {
 }
 
 const (
-	halfGiBBytes  int64 = 536870912
-	oneGiBBytes   int64 = 1073741824
-	twoGiBBytes   int64 = 2147483648
-	threeGiBBytes int64 = 3221225472
-	fourGiBBytes  int64 = 4294967296
-	eightGiBBytes int64 = 8589934592
+	halfGiB  int64 = 536870912
+	oneGiB   int64 = 1073741824
+	twoGiB   int64 = 2147483648
+	threeGiB int64 = 3221225472
+	fourGiB  int64 = 4294967296
+	eightGiB int64 = 8589934592
 
 	fixtureCgroupBase = "/sys/fs/cgroup"
 )
