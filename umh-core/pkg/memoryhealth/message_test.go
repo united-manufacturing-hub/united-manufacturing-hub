@@ -20,8 +20,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 const (
@@ -34,14 +32,19 @@ func limitDetails(avgLimitUsedFraction float64) Details {
 		LimitApplies:         true,
 		TotalBytes:           twoGiB,
 		HostTotalBytes:       sixteenGiB,
-		AvgUsedFraction:      diagnosis.Known(avgLimitUsedFraction),
-		AvgUsedBytes:         diagnosis.Known(avgLimitUsedFraction * twoGiB),
-		AvgLimitUsedFraction: diagnosis.Known(avgLimitUsedFraction),
-		AvgHostUsedFraction:  diagnosis.Known(0.41),
+		AvgUsedFraction:      avgLimitUsedFraction,
+		AvgUsedBytes:         avgLimitUsedFraction * twoGiB,
+		UsedRingActive:       true,
+		AvgLimitUsedFraction: avgLimitUsedFraction,
+		LimitRingActive:      true,
+		AvgHostUsedFraction:  0.41,
+		HostRingActive:       true,
 		PressureApplies:      true,
-		PressureAvg60:        diagnosis.Known(0.03),
+		PressureAvg60:        0.03,
+		PressureSignalReady:  true,
 		OomKillsApply:        true,
-		OomKillsLast60s:      diagnosis.Known(0),
+		OomKillsLast60s:      0,
+		OomSignalReady:       true,
 	}
 }
 
@@ -49,8 +52,9 @@ func noLimitDetails(avgHostUsedFraction float64) Details {
 	details := limitDetails(0)
 	details.LimitApplies = false
 	details.TotalBytes = sixteenGiB
-	details.AvgLimitUsedFraction = diagnosis.Unknown()
-	details.AvgHostUsedFraction = diagnosis.Known(avgHostUsedFraction)
+	details.AvgLimitUsedFraction = 0
+	details.LimitRingActive = false
+	details.AvgHostUsedFraction = avgHostUsedFraction
 
 	return details
 }
@@ -104,7 +108,7 @@ var _ = Describe("ComposeMessage for a degraded verdict", func() {
 	DescribeTable("explains OOM kills with their count",
 		func(kills float64, expectedCount string) {
 			details := limitDetails(0.5)
-			details.OomKillsLast60s = diagnosis.Known(kills)
+			details.OomKillsLast60s = kills
 
 			message := ComposeMessage(degradedBy(Cause{Kind: CauseKindOomKill, Value: kills}), details)
 
@@ -124,7 +128,7 @@ var _ = Describe("ComposeMessage for a degraded verdict", func() {
 	It("writes one blended paragraph when the container and the machine are both full", func() {
 		causes := degradedBy(Cause{Kind: CauseKindContainerLimitFull, Value: 0.9}, Cause{Kind: CauseKindHostMemoryFull, Value: 0.85})
 		details := limitDetails(0.9)
-		details.AvgHostUsedFraction = diagnosis.Known(0.85)
+		details.AvgHostUsedFraction = 0.85
 
 		body, _, _ := strings.Cut(ComposeMessage(causes, details), technicalDetailsLabel)
 
@@ -153,8 +157,8 @@ var _ = Describe("ComposeMessage for a healthy verdict", func() {
 
 	It("says it is starting up until the usage is measured", func() {
 		details := limitDetails(0.5)
-		details.AvgUsedBytes = diagnosis.Unknown()
-		details.AvgLimitUsedFraction = diagnosis.Unknown()
+		details.UsedRingActive = false
+		details.LimitRingActive = false
 
 		message := ComposeMessage(Verdict{State: StateHealthy}, details)
 
@@ -184,7 +188,7 @@ var _ = Describe("the Technical Details table", func() {
 	It("says why a rule does not run on this host", func() {
 		details := noLimitDetails(0.41)
 		details.PressureApplies = false
-		details.PressureAvg60 = diagnosis.Unknown()
+		details.PressureSignalReady = false
 
 		lines := technicalDetailsLines(ComposeMessage(Verdict{State: StateHealthy}, details))
 
@@ -194,7 +198,7 @@ var _ = Describe("the Technical Details table", func() {
 
 	It("says a rule is still measuring while its window fills", func() {
 		details := limitDetails(0.55)
-		details.OomKillsLast60s = diagnosis.Unknown()
+		details.OomSignalReady = false
 
 		lines := technicalDetailsLines(ComposeMessage(Verdict{State: StateHealthy}, details))
 

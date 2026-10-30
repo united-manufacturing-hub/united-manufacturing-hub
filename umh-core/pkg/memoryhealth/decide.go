@@ -27,25 +27,31 @@ var causeKinds = map[string]CauseKind{
 
 // Details holds the numbers behind a verdict.
 type Details struct {
-	AvgUsedFraction     diagnosis.Reading `json:"avgUsedFraction"`
-	AvgUsedBytes        diagnosis.Reading `json:"avgUsedBytes"`
-	AvgHostUsedFraction diagnosis.Reading `json:"avgHostUsedFraction"`
-	PressureAvg60       diagnosis.Reading `json:"pressureAvg60"`
-	OomKillsLast60s     diagnosis.Reading `json:"oomKillsLast60s"`
+	AvgUsedBytes    float64 `json:"avgUsedBytes"`
+	AvgUsedFraction float64 `json:"avgUsedFraction"`
+	UsedRingActive  bool    `json:"usedRingActive"`
 
-	AvgLimitUsedFraction diagnosis.Reading `json:"avgLimitUsedFraction"`
-	LimitApplies         bool              `json:"limitApplies"`
-	TotalBytes           float64           `json:"totalBytes"`
-	HostTotalBytes       float64           `json:"hostTotalBytes"`
-	PressureApplies      bool              `json:"pressureApplies"`
-	OomKillsApply        bool              `json:"oomKillsApply"`
+	LimitApplies         bool    `json:"limitApplies"`
+	TotalBytes           float64 `json:"totalBytes"`
+	AvgLimitUsedFraction float64 `json:"avgLimitUsedFraction"`
+	LimitRingActive      bool    `json:"limitRingActive"`
+
+	HostTotalBytes      float64 `json:"hostTotalBytes"`
+	AvgHostUsedFraction float64 `json:"avgHostUsedFraction"`
+	HostRingActive      bool    `json:"hostRingActive"`
+
+	PressureAvg60       float64 `json:"pressureAvg60"`
+	PressureApplies     bool    `json:"pressureApplies"`
+	PressureSignalReady bool    `json:"pressureSignalReady"`
+
+	OomKillsLast60s float64 `json:"oomKillsLast60s"`
+	OomKillsApply   bool    `json:"oomKillsApply"`
+	OomSignalReady  bool    `json:"oomSignalReady"`
 }
 
 // Measured reports whether the window holds enough samples to judge the memory.
 func (d Details) Measured() bool {
-	_, measured := d.AvgUsedFraction.Get()
-
-	return measured
+	return d.UsedRingActive
 }
 
 // Decide feeds one sample to the engine and returns the verdict and the numbers
@@ -79,26 +85,41 @@ func describeCause(engine *diagnosis.Engine[Sample], firedSignal diagnosis.Fired
 func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
 	_, pressureRead := sample.Pressure.Get()
 
-	return Details{
-		AvgUsedFraction:     readingFromReduced(engine.Measurement(measurementUsedFraction).Get()),
-		AvgUsedBytes:        readingFromReduced(engine.Measurement(measurementUsedBytes).Get()),
-		AvgHostUsedFraction: readingFromReduced(engine.Reduction(signalHostMemoryFull, instrumentHostUsedFraction).Get()),
-		PressureAvg60:       readingFromReduced(engine.Reduction(signalPressure, instrumentPressureAvg60).Get()),
-		OomKillsLast60s:     readingFromReduced(engine.Reduction(signalOomKill, instrumentOomKillsLast60s).Get()),
+	avgUsedBytes, usedBytesReady := reducedValue(engine.Measurement(measurementUsedBytes).Get())
+	avgUsedFraction, usedFractionReady := reducedValue(engine.Measurement(measurementUsedFraction).Get())
+	avgLimitUsedFraction, limitReady := reducedValue(engine.Reduction(signalContainerLimitFull, instrumentContainerUsedFraction).Get())
+	avgHostUsedFraction, hostReady := reducedValue(engine.Reduction(signalHostMemoryFull, instrumentHostUsedFraction).Get())
+	pressureAvg60, pressureReady := reducedValue(engine.Reduction(signalPressure, instrumentPressureAvg60).Get())
+	oomKillsLast60s, oomReady := reducedValue(engine.Reduction(signalOomKill, instrumentOomKillsLast60s).Get())
 
-		AvgLimitUsedFraction: readingFromReduced(engine.Reduction(signalContainerLimitFull, instrumentContainerUsedFraction).Get()),
+	return Details{
+		AvgUsedBytes:    avgUsedBytes,
+		AvgUsedFraction: avgUsedFraction,
+		UsedRingActive:  usedBytesReady && usedFractionReady,
+
 		LimitApplies:         sample.Source == SourceCgroupLimit,
 		TotalBytes:           float64(sample.TotalBytes),
-		HostTotalBytes:       float64(sample.HostTotalBytes),
-		PressureApplies:      pressureRead,
-		OomKillsApply:        sample.OomCounterRead,
+		AvgLimitUsedFraction: avgLimitUsedFraction,
+		LimitRingActive:      limitReady,
+
+		HostTotalBytes:      float64(sample.HostTotalBytes),
+		AvgHostUsedFraction: avgHostUsedFraction,
+		HostRingActive:      hostReady,
+
+		PressureAvg60:       pressureAvg60,
+		PressureApplies:     pressureRead,
+		PressureSignalReady: pressureReady,
+
+		OomKillsLast60s: oomKillsLast60s,
+		OomKillsApply:   sample.OomCounterRead,
+		OomSignalReady:  oomReady,
 	}
 }
 
-func readingFromReduced(value float64, state diagnosis.State) diagnosis.Reading {
+func reducedValue(value float64, state diagnosis.State) (float64, bool) {
 	if state != diagnosis.StateValue {
-		return diagnosis.Unknown()
+		return 0, false
 	}
 
-	return diagnosis.Known(value)
+	return value, true
 }

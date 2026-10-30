@@ -114,10 +114,9 @@ func (j *memoryJudge) decideRepeatedly(usedPercent int64, samples int) (memoryhe
 }
 
 func usedFractionOf(details memoryhealth.Details) float64 {
-	fraction, measured := details.AvgUsedFraction.Get()
-	Expect(measured).To(BeTrue())
+	Expect(details.UsedRingActive).To(BeTrue())
 
-	return fraction
+	return details.AvgUsedFraction
 }
 
 var _ = Describe("Decide", func() {
@@ -182,16 +181,15 @@ var _ = Describe("Decide", func() {
 
 		_, details := judge.decideRepeatedly(30, twoMinutesOfSamples)
 
-		avgUsedBytes, measured := details.AvgUsedBytes.Get()
-		Expect(measured).To(BeTrue())
-		Expect(avgUsedBytes).To(BeNumerically("~", float64(decimalTotalBytes)*0.30, 1))
+		Expect(details.UsedRingActive).To(BeTrue())
+		Expect(details.AvgUsedBytes).To(BeNumerically("~", float64(decimalTotalBytes)*0.30, 1))
 	})
 
 	It("has no average of the used bytes after a single sample", func() {
 		_, details := newMemoryJudge().decide(50)
 
-		_, measured := details.AvgUsedBytes.Get()
-		Expect(measured).To(BeFalse())
+		Expect(details.UsedRingActive).To(BeFalse())
+		Expect(details.AvgUsedBytes).To(BeZero())
 	})
 
 	It("recovers once the windowed usage falls below the recovery level", func() {
@@ -212,9 +210,8 @@ var _ = Describe("Decide for the container and the machine", func() {
 		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindHostMemoryFull))
 		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 0.90, 1e-9))
 
-		avgHostUsedFraction, measured := details.AvgHostUsedFraction.Get()
-		Expect(measured).To(BeTrue())
-		Expect(avgHostUsedFraction).To(BeNumerically("~", 0.90, 1e-9))
+		Expect(details.HostRingActive).To(BeTrue())
+		Expect(details.AvgHostUsedFraction).To(BeNumerically("~", 0.90, 1e-9))
 	})
 
 	It("degrades with both causes when the container and the machine are full", func() {
@@ -250,9 +247,8 @@ var _ = Describe("Decide for memory pressure", func() {
 		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindPressure))
 		Expect(verdict.Causes[0].Value).To(BeNumerically("~", 0.25, 1e-9))
 
-		pressure, measured := details.PressureAvg60.Get()
-		Expect(measured).To(BeTrue())
-		Expect(pressure).To(BeNumerically("~", 0.25, 1e-9))
+		Expect(details.PressureSignalReady).To(BeTrue())
+		Expect(details.PressureAvg60).To(BeNumerically("~", 0.25, 1e-9))
 	})
 
 	It("stays healthy below 20 percent", func() {
@@ -289,9 +285,8 @@ var _ = Describe("Decide for OOM kills", func() {
 
 		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindOomKill))
 
-		oomKills, measured := details.OomKillsLast60s.Get()
-		Expect(measured).To(BeTrue())
-		Expect(oomKills).To(Equal(1.0))
+		Expect(details.OomSignalReady).To(BeTrue())
+		Expect(details.OomKillsLast60s).To(Equal(1.0))
 	})
 
 	It("counts every OOM kill in the window", func() {
@@ -300,8 +295,7 @@ var _ = Describe("Decide for OOM kills", func() {
 
 		_, details := judge.decideSample(containerWithNewOomKills(1))
 
-		oomKills, _ := details.OomKillsLast60s.Get()
-		Expect(oomKills).To(Equal(3.0))
+		Expect(details.OomKillsLast60s).To(Equal(3.0))
 	})
 
 	It("recovers once a whole window passes without an OOM kill", func() {

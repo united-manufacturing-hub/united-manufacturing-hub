@@ -70,12 +70,11 @@ func healthyHeadline(details Details) string {
 		return fmt.Sprintf(headlineHealthyMachine, used, total, fmtGiB(budget.headroom))
 	}
 
-	avgLimitUsedFraction, _ := details.AvgLimitUsedFraction.Get()
 	if nearDegraded {
-		return fmt.Sprintf(headlineHealthyLimitClose, used, total, toPercent(avgLimitUsedFraction))
+		return fmt.Sprintf(headlineHealthyLimitClose, used, total, toPercent(details.AvgLimitUsedFraction))
 	}
 
-	return fmt.Sprintf(headlineHealthyLimit, used, total, toPercent(avgLimitUsedFraction), fmtGiB(budget.headroom))
+	return fmt.Sprintf(headlineHealthyLimit, used, total, toPercent(details.AvgLimitUsedFraction), fmtGiB(budget.headroom))
 }
 
 type memoryBudget struct {
@@ -97,27 +96,18 @@ func newBudget(usedBytes, totalBytes float64) memoryBudget {
 
 func effectiveBudget(details Details) memoryBudget {
 	if details.LimitApplies {
-		avgUsedBytes, _ := details.AvgUsedBytes.Get()
-
-		return newBudget(avgUsedBytes, details.TotalBytes)
+		return newBudget(details.AvgUsedBytes, details.TotalBytes)
 	}
 
-	avgHostUsedFraction, _ := details.AvgHostUsedFraction.Get()
-
-	return newBudget(avgHostUsedFraction*details.HostTotalBytes, details.HostTotalBytes)
+	return newBudget(details.AvgHostUsedFraction*details.HostTotalBytes, details.HostTotalBytes)
 }
 
 func usageMeasured(details Details) bool {
 	if details.LimitApplies {
-		_, usedBytesMeasured := details.AvgUsedBytes.Get()
-		_, limitFractionMeasured := details.AvgLimitUsedFraction.Get()
-
-		return usedBytesMeasured && limitFractionMeasured
+		return details.UsedRingActive && details.LimitRingActive
 	}
 
-	_, hostFractionMeasured := details.AvgHostUsedFraction.Get()
-
-	return hostFractionMeasured && details.HostTotalBytes > 0
+	return details.HostRingActive && details.HostTotalBytes > 0
 }
 
 type memoryRule struct {
@@ -168,42 +158,37 @@ func technicalDetails(causes []Cause, details Details) string {
 }
 
 func memoryRules(causes []Cause, details Details) []memoryRule {
-	avgLimitUsedFraction, limitReady := details.AvgLimitUsedFraction.Get()
-	avgHostUsedFraction, hostReady := details.AvgHostUsedFraction.Get()
-	pressure, pressureReady := details.PressureAvg60.Get()
-	oomKills, oomKillsReady := details.OomKillsLast60s.Get()
-
 	return []memoryRule{
 		{
 			label:                labelInstanceMemory,
-			measured:             fmt.Sprintf("%d%% of %s limit", toPercent(avgLimitUsedFraction), fmtGiB(details.TotalBytes/bytesPerGiB)),
+			measured:             fmt.Sprintf("%d%% of %s limit", toPercent(details.AvgLimitUsedFraction), fmtGiB(details.TotalBytes/bytesPerGiB)),
 			marks:                fullMarks,
 			notApplicableBecause: absentUnless(details.LimitApplies, reasonNoMemoryLimit),
-			ready:                limitReady,
+			ready:                details.LimitRingActive,
 			latched:              hasKind(causes, CauseKindContainerLimitFull),
 		},
 		{
 			label:                labelMachineMemory,
-			measured:             fmt.Sprintf("%d%% of %s", toPercent(avgHostUsedFraction), fmtGiB(details.HostTotalBytes/bytesPerGiB)),
+			measured:             fmt.Sprintf("%d%% of %s", toPercent(details.AvgHostUsedFraction), fmtGiB(details.HostTotalBytes/bytesPerGiB)),
 			marks:                fullMarks,
 			notApplicableBecause: absentUnless(details.HostTotalBytes > 0, reasonNoMachineReading),
-			ready:                hostReady,
+			ready:                details.HostRingActive,
 			latched:              hasKind(causes, CauseKindHostMemoryFull),
 		},
 		{
 			label:                labelPressure,
-			measured:             fmt.Sprintf("%d%%", toPercent(pressure)),
+			measured:             fmt.Sprintf("%d%%", toPercent(details.PressureAvg60)),
 			marks:                pressureMarks,
 			notApplicableBecause: absentUnless(details.PressureApplies, reasonNoPressureStats),
-			ready:                pressureReady,
+			ready:                details.PressureSignalReady,
 			latched:              hasKind(causes, CauseKindPressure),
 		},
 		{
 			label:                labelOomKills,
-			measured:             fmt.Sprintf("%d in the last minute", int(oomKills)),
+			measured:             fmt.Sprintf("%d in the last minute", int(details.OomKillsLast60s)),
 			marks:                oomKillMarks,
 			notApplicableBecause: absentUnless(details.OomKillsApply, reasonNoOomCounter),
-			ready:                oomKillsReady,
+			ready:                details.OomSignalReady,
 			latched:              hasKind(causes, CauseKindOomKill),
 		},
 	}
@@ -268,9 +253,7 @@ func causeDetails(cause Cause, causes []Cause, details Details) string {
 		return fmt.Sprintf(detailLimitFull, toPercent(cause.Value), fmtGiB(details.TotalBytes/bytesPerGiB))
 	case CauseKindHostMemoryFull:
 		if hasKind(causes, CauseKindContainerLimitFull) {
-			avgLimitUsedFraction, _ := details.AvgLimitUsedFraction.Get()
-
-			return fmt.Sprintf(detailBothFull, toPercent(avgLimitUsedFraction), fmtGiB(details.TotalBytes/bytesPerGiB))
+			return fmt.Sprintf(detailBothFull, toPercent(details.AvgLimitUsedFraction), fmtGiB(details.TotalBytes/bytesPerGiB))
 		}
 
 		return fmt.Sprintf(detailHostFull, toPercent(cause.Value), fmtGiB(details.HostTotalBytes/bytesPerGiB))
