@@ -30,6 +30,29 @@ func detailsAt(usedFraction float64) Details {
 	return Details{AvgUsedFraction: diagnosis.Known(usedFraction)}
 }
 
+func degradedBy(kinds ...CauseKind) Verdict {
+	causes := make([]Cause, len(kinds))
+	for index, kind := range kinds {
+		causes[index] = Cause{Kind: kind}
+	}
+
+	return Verdict{State: StateDegraded, Causes: causes}
+}
+
+var _ = Describe("ComposeMessage for a degraded verdict", func() {
+	DescribeTable("names the top-ranked cause",
+		func(verdict Verdict, expectedMessage string) {
+			Expect(ComposeMessage(verdict, detailsAt(0.3))).To(Equal(expectedMessage))
+		},
+		Entry("container-limit-full", degradedBy(CauseKindContainerLimitFull), messageCritical),
+		Entry("host-memory-full", degradedBy(CauseKindHostMemoryFull), messageHostMemoryFull),
+		Entry("pressure", degradedBy(CauseKindPressure), messagePressure),
+		Entry("oom-kill", degradedBy(CauseKindOomKill), messageOomKill),
+		Entry("oom-kill ranked before container-limit-full", degradedBy(CauseKindOomKill, CauseKindContainerLimitFull), messageOomKill),
+		Entry("no cause", degradedBy(), messageCritical),
+	)
+})
+
 var _ = Describe("ComposeMessage", func() {
 	DescribeTable("names the usage level",
 		func(verdict Verdict, details Details, expectedMessage string) {
