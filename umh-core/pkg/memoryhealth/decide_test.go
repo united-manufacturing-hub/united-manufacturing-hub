@@ -24,7 +24,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/memoryhealth"
 )
 
-const decimalTotalBytes int64 = 1000000000
+const (
+	decimalTotalBytes int64 = 1000000000
+
+	twoMinutesOfSamples = 120
+)
 
 var firstSampleTime = time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
 
@@ -96,7 +100,7 @@ var _ = Describe("Decide", func() {
 
 	It("does not degrade on one sample above the degraded level inside a lower window", func() {
 		judge := newMemoryJudge()
-		judge.decideRepeatedly(50, 9)
+		judge.decideRepeatedly(50, twoMinutesOfSamples)
 
 		verdict, details := judge.decide(99)
 
@@ -104,11 +108,21 @@ var _ = Describe("Decide", func() {
 		Expect(usedFractionOf(details)).To(BeNumerically("<", 0.80))
 	})
 
+	It("does not degrade on a 15-second burst above the degraded level", func() {
+		judge := newMemoryJudge()
+		judge.decideRepeatedly(50, twoMinutesOfSamples)
+
+		verdict, details := judge.decideRepeatedly(99, 15)
+
+		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+		Expect(usedFractionOf(details)).To(BeNumerically("<", 0.80))
+	})
+
 	It("stays degraded while the windowed usage sits between the recovery and degraded levels", func() {
 		judge := newMemoryJudge()
-		judge.decideRepeatedly(90, 10)
+		judge.decideRepeatedly(90, twoMinutesOfSamples)
 
-		verdict, details := judge.decideRepeatedly(77, 20)
+		verdict, details := judge.decideRepeatedly(77, twoMinutesOfSamples)
 
 		Expect(verdict.State).To(Equal(memoryhealth.StateDegraded))
 		Expect(usedFractionOf(details)).To(BeNumerically("~", 0.77, 1e-9))
@@ -116,9 +130,9 @@ var _ = Describe("Decide", func() {
 
 	It("recovers once the windowed usage falls below the recovery level", func() {
 		judge := newMemoryJudge()
-		judge.decideRepeatedly(90, 10)
+		judge.decideRepeatedly(90, twoMinutesOfSamples)
 
-		verdict, _ := judge.decideRepeatedly(70, 20)
+		verdict, _ := judge.decideRepeatedly(70, twoMinutesOfSamples)
 
 		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
 	})
