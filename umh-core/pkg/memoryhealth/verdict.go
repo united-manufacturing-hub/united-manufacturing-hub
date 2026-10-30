@@ -32,14 +32,47 @@ const (
 	CauseKindOomKill            CauseKind = "oom-kill"
 )
 
+// Unit is the unit a cause's value is denominated in.
+type Unit string
+
+// Attribution names where a cause sits: inside this container or on the machine.
+type Attribution string
+
+const (
+	AttributionUnknown   Attribution = "unknown"
+	AttributionHost      Attribution = "host"
+	AttributionContainer Attribution = "container"
+)
+
+const (
+	blameHost = iota + 1
+	blameContainer
+)
+
 // Cause is one reason the memory is degraded, with the windowed value behind it.
 type Cause struct {
-	Kind  CauseKind `json:"kind"`
-	Value float64   `json:"value"`
+	Kind        CauseKind   `json:"kind"`
+	Instrument  string      `json:"instrument"`
+	Unit        Unit        `json:"unit"`
+	Attribution Attribution `json:"attribution"`
+	Value       float64     `json:"value"`
 }
 
 // Verdict is Decide's judgement of the memory, its causes ranked worst first.
+// Attribution is the first cause's.
 type Verdict struct {
-	State  State   `json:"state"`
-	Causes []Cause `json:"causes,omitempty"`
+	State       State       `json:"state"`
+	Attribution Attribution `json:"attribution,omitempty"`
+	Causes      []Cause     `json:"causes,omitempty"`
+}
+
+func nameAttribution(blame int) Attribution {
+	switch blame {
+	case blameHost:
+		return AttributionHost
+	case blameContainer:
+		return AttributionContainer
+	default:
+		return AttributionUnknown
+	}
 }
