@@ -83,8 +83,8 @@ func (s *cgroupV2Source) readPressure(ctx context.Context) diagnosis.Reading {
 	return someAvg60Fraction(string(data))
 }
 
-func someAvg60Fraction(pressureText string) diagnosis.Reading {
-	for _, line := range strings.Split(pressureText, "\n") {
+func someAvg60Fraction(memoryPressureText string) diagnosis.Reading {
+	for _, line := range strings.Split(memoryPressureText, "\n") {
 		if !strings.HasPrefix(line, pressureSomeLinePrefix) {
 			continue
 		}
