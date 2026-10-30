@@ -143,9 +143,13 @@ func main() {
 	cpuMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
 
+	memoryMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_MONITOR", false, false)
+	configData.Agent.UseFSMv2MemoryMonitor = memoryMonitorEnabled
+
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
 		FSMv2CPUEnabled:               models.FSMv2CPUEnabled(cpuMonitorEnabled),
+		FSMv2MemoryMonitorEnabled:     models.FSMv2MonitorEnabled(memoryMonitorEnabled),
 		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
 		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
 		FSMv2ProtocolConverterEnabled: protocolConverterEnabled,

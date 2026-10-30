@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New Features
+
+- Preview of more detailed memory reporting. Memory is judged on its average over the last 60 seconds, and a degraded status names the cause: the container's memory limit, the machine's memory, processes waiting for memory, or a process stopped because memory ran out. Turn it on with `USE_FSMV2_MEMORY_MONITOR=true` and recreate the container
+
 ### Fixes
 
 - The instance now reports the state of its historian database on TimescaleDB 2.26 or later. Before, the report failed with `column ch.dropped does not exist`

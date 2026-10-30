@@ -47,6 +47,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
+	fsmv2memory "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 
 	// Blank-import the state subpackage so its init() registers the initial
@@ -73,6 +74,10 @@ const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 // whether the fsmv2 CPU monitor child runs (USE_FSMV2_CPU).
 const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
 
+// MemoryMonitorEnabledDepsKey is the register.SetGlobalDeps key for the bool
+// that says whether the fsmv2 memory monitor child runs (USE_FSMV2_MEMORY_MONITOR).
+const MemoryMonitorEnabledDepsKey = WorkerTypeName + ".memorymonitorenabled"
+
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
 // to the shared dynamicchildren registry. See the package doc for why it does
 // nothing else yet.
@@ -89,6 +94,8 @@ type ConfigworkerWorker struct {
 	// set once at construction from CPUEnabledDepsKey (the USE_FSMV2_CPU env
 	// flag, read in cmd/main.go and never persisted).
 	cpuEnabled bool
+
+	memoryMonitorEnabled bool
 }
 
 // NewConfigworkerWorker creates a config worker holding the registry published
@@ -109,11 +116,13 @@ func NewConfigworkerWorker(
 	// nil (mirroring the fsmv2client.GetClient nil guard).
 	configManager := register.GlobalDeps[config.ConfigManager](ConfigManagerDepsKey)
 	cpuEnabled := register.GlobalDeps[bool](CPUEnabledDepsKey)
+	memoryMonitorEnabled := register.GlobalDeps[bool](MemoryMonitorEnabledDepsKey)
 
 	w := &ConfigworkerWorker{
-		registry:      shared,
-		configManager: configManager,
-		cpuEnabled:    cpuEnabled,
+		registry:             shared,
+		configManager:        configManager,
+		cpuEnabled:           cpuEnabled,
+		memoryMonitorEnabled: memoryMonitorEnabled,
 	}
 	w.InitBase(identity, logger, stateReader)
 
@@ -140,39 +149,32 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 
 	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
 	w.reconcileHistorian(ctx)
-	w.reconcileCPU(ctx)
+	w.reconcileMonitorChild(fsmv2cpu.Ref, w.cpuEnabled, deps.FeatureSupportCPU)
+	w.reconcileMonitorChild(fsmv2memory.Ref, w.memoryMonitorEnabled, deps.FeatureSupportMemory)
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil
 }
 
-// reconcileCPU upserts or deletes the CPU monitor child. It logs rather than
-// returns the upsert error, so a transient failure never fails the tick.
-func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
-	_ = ctx
-
+func (w *ConfigworkerWorker) reconcileMonitorChild(ref dynamicchildren.Ref, enabled bool, feature deps.Feature) {
 	client := fsmv2client.GetClient()
 	if client == nil {
 		return
 	}
 
-	if err := syncCPU(client, w.cpuEnabled); err != nil {
-		w.Logger().SentryWarn(deps.FeatureSupportCPU, w.Identity().HierarchyPath,
-			"cpu watch: upsert failed", deps.Err(err))
+	if err := syncMonitorChild(client, ref, enabled); err != nil {
+		w.Logger().SentryWarn(feature, w.Identity().HierarchyPath,
+			ref.WorkerType+" watch: upsert failed", deps.Err(err))
 	}
 }
 
-// syncCPU upserts the CPU monitor child when the flag is on and deletes it when
-// off. The flag cannot change mid-run, so today the Delete removes nothing; it
-// is kept so that a change which does let the flag flip cannot leave a CPU child
-// behind.
-func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
+func syncMonitorChild(client *fsmv2client.FSMv2Client, ref dynamicchildren.Ref, enabled bool) error {
 	if !enabled {
-		client.Delete(fsmv2cpu.Ref)
+		client.Delete(ref)
 
 		return nil
 	}
 
-	return client.Upsert(fsmv2cpu.Ref, nil)
+	return client.Upsert(ref, nil)
 }
 
 // reconcileHistorian reads the live config and syncs the historian monitor

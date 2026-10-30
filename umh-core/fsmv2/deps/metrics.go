@@ -239,6 +239,66 @@ const (
 	GaugeCPULastSampleUnix GaugeName = "cpu_last_sample_unix"
 )
 
+// Memory worker gauge names for the evidence behind a memory health verdict.
+// Each holds its last value until memory_last_sample_unix moves again.
+const (
+	// GaugeMemoryAvgUsedBytes tracks the 60s mean of the memory in use, in bytes.
+	GaugeMemoryAvgUsedBytes GaugeName = "memory_avg_used_bytes"
+
+	// GaugeMemoryTotalBytes tracks the total the usage is judged against, in bytes.
+	GaugeMemoryTotalBytes GaugeName = "memory_total_bytes"
+
+	// GaugeMemoryAvgUsedFraction tracks the 60s mean of used / total as a 0..1 fraction.
+	GaugeMemoryAvgUsedFraction GaugeName = "memory_avg_used_fraction"
+
+	// GaugeMemoryAvgHostUsedBytes tracks the whole machine's 60s mean used memory, in bytes.
+	GaugeMemoryAvgHostUsedBytes GaugeName = "memory_avg_host_used_bytes"
+
+	// GaugeMemoryHostTotalBytes tracks the machine's total memory, in bytes.
+	GaugeMemoryHostTotalBytes GaugeName = "memory_host_total_bytes"
+
+	// GaugeMemoryPressureAvg60Ratio tracks the kernel's memory-some avg60 pressure-stall
+	// figure as a 0..1 fraction: the share of the last minute in which at least one
+	// process in the container waited for memory.
+	GaugeMemoryPressureAvg60Ratio GaugeName = "memory_pressure_avg60_ratio"
+
+	// GaugeMemoryOomKillsLast60s tracks how many processes the kernel killed in the
+	// container in the last 60s because memory ran out.
+	GaugeMemoryOomKillsLast60s GaugeName = "memory_oom_kills_last_60s"
+
+	// GaugeMemoryLastSampleUnix carries the unix seconds of the last tick that measured.
+	GaugeMemoryLastSampleUnix GaugeName = "memory_last_sample_unix"
+)
+
+// Memory worker flags, 1 for true and 0 for false. The suffix says what makes
+// a trust flag 0, as for the CPU flags:
+//
+//	_ring_active   the 60s window has not reduced to a trusted number.
+//	_signal_ready  the signal has no trusted reading. On cgroup v1 or without
+//	               pressure stall information, the pressure flag never turns 1.
+//
+// The two source flags say where a measurement came from rather than whether
+// to trust it.
+const (
+	// GaugeMemoryUsedRingActive applies to memory_avg_used_bytes and memory_avg_used_fraction.
+	GaugeMemoryUsedRingActive GaugeName = "memory_used_ring_active"
+
+	// GaugeMemoryHostRingActive applies to memory_avg_host_used_bytes.
+	GaugeMemoryHostRingActive GaugeName = "memory_host_ring_active"
+
+	// GaugeMemoryPressureSignalReady applies to memory_pressure_avg60_ratio.
+	GaugeMemoryPressureSignalReady GaugeName = "memory_pressure_signal_ready"
+
+	// GaugeMemoryOomSignalReady applies to memory_oom_kills_last_60s.
+	GaugeMemoryOomSignalReady GaugeName = "memory_oom_signal_ready"
+
+	// GaugeMemoryUsedFromCgroup is 1 when memory_avg_used_bytes is the cgroup's own usage.
+	GaugeMemoryUsedFromCgroup GaugeName = "memory_used_from_cgroup"
+
+	// GaugeMemoryTotalIsCgroupLimit is 1 when memory_total_bytes is the cgroup's limit.
+	GaugeMemoryTotalIsCgroupLimit GaugeName = "memory_total_is_cgroup_limit"
+)
+
 // CPU worker flags, 1 for true and 0 for false. A 0 on any of them means the
 // measurement it names is not worth acting on this tick. The suffix says what
 // makes it 0:

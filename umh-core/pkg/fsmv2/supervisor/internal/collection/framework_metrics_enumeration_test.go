@@ -20,8 +20,8 @@
 // struct{}-deps worker (nmap) carries them like any other.
 //
 // The registry is populated by package init(). A missing blank import leaves it
-// empty, so the HaveLen(12) floor below is what makes a forgotten import fail
-// loudly instead of passing trivially; a 13th registration also reddens it.
+// empty, so the HaveLen(13) floor below is what makes a forgotten import fail
+// loudly instead of passing trivially; a 14th registration also reddens it.
 
 package collection_test
 
@@ -47,6 +47,7 @@ import (
 	// the import itself triggers init(), which is the registration these package
 	// names contribute to the factory registry.
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	fsmv2memory "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 	// helloworld and exampleslow declare their package names as hello_world and
@@ -55,7 +56,7 @@ import (
 	helloworld "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 
 	// Blank imports populate the factory registry via init(). If any of these is
-	// forgotten, ListRegisteredTypes() returns fewer types and the HaveLen(12)
+	// forgotten, ListRegisteredTypes() returns fewer types and the HaveLen(13)
 	// floor below fails loudly instead of letting the test pass trivially.
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
@@ -70,9 +71,9 @@ import (
 // types. factory.ListRegisteredTypes() is populated by package init(), so a
 // test that forgets a blank import returns zero types and passes trivially;
 // asserting an exact count catches both a missing import (returns 0) and a new
-// 13th registration (returns 13). Measured at this HEAD: exactly 12, and the
+// 14th registration (returns 14). Measured at this HEAD: exactly 13, and the
 // registered historian type is "historian-timescale", not "historian".
-const registeredFloor = 12
+const registeredFloor = 13
 
 // panicOnConstruction names the types that panic rather than error when
 // built via factory.NewWorkerByType in this isolated test process, because
@@ -131,6 +132,10 @@ func desiredProviderFor(workerType string) func() (fsmv2.DesiredState, error) {
 	case "cpu":
 		return func() (fsmv2.DesiredState, error) {
 			return &fsmv2.WrappedDesiredState[fsmv2cpu.CPUConfig]{Config: fsmv2cpu.CPUConfig{}}, nil
+		}
+	case "memory":
+		return func() (fsmv2.DesiredState, error) {
+			return &fsmv2.WrappedDesiredState[fsmv2memory.MemoryConfig]{Config: fsmv2memory.MemoryConfig{}}, nil
 		}
 	case "historian-timescale":
 		return func() (fsmv2.DesiredState, error) {
@@ -218,7 +223,7 @@ func probeFrameworkMetrics(workerType string, w fsmv2.Worker, sentinel int64) in
 }
 
 var _ = Describe("Framework metrics on every registered worker type", func() {
-	It("enumerates exactly the registered worker types (hard floor: catches a missing blank import or a 13th type)", func() {
+	It("enumerates exactly the registered worker types (hard floor: catches a missing blank import or a 14th type)", func() {
 		Expect(factory.ListRegisteredTypes()).To(HaveLen(registeredFloor))
 	})
 
