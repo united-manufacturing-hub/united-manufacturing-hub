@@ -106,7 +106,7 @@ func unfreshMemoryMessage(freshness fsmv2client.Freshness) string {
 func measuredMemory(result fsmv2memory.MemoryStatus, category models.HealthCategory) *models.Memory {
 	return &models.Memory{
 		Health:           memoryHealth(result.Message, category),
-		CGroupUsedBytes:  int64(result.UsedBytes),
+		CGroupUsedBytes:  int64(result.AvgUsedBytes),
 		CGroupTotalBytes: int64(result.TotalBytes),
 	}
 }

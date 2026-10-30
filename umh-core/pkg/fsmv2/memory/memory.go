@@ -16,6 +16,7 @@ package fsmv2memory
 
 import (
 	"context"
+	"math"
 	"sync"
 	"time"
 
@@ -43,14 +44,15 @@ var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 // MemoryConfig is empty: the memory monitor takes no configuration.
 type MemoryConfig struct{}
 
-// MemoryStatus is one poll's sample and the verdict judged from it.
+// MemoryStatus is one poll's sample, the 60-second average used memory and the
+// verdict judged from it.
 type MemoryStatus struct {
-	Source     memoryhealth.Source  `json:"source"`
-	UsedBytes  memoryhealth.Bytes   `json:"usedBytes"`
-	TotalBytes memoryhealth.Bytes   `json:"totalBytes"`
-	Verdict    memoryhealth.Verdict `json:"verdict"`
-	Details    memoryhealth.Details `json:"details"`
-	Message    string               `json:"message"`
+	Source       memoryhealth.Source  `json:"source"`
+	AvgUsedBytes memoryhealth.Bytes   `json:"avgUsedBytes"`
+	TotalBytes   memoryhealth.Bytes   `json:"totalBytes"`
+	Verdict      memoryhealth.Verdict `json:"verdict"`
+	Details      memoryhealth.Details `json:"details"`
+	Message      string               `json:"message"`
 }
 
 // MemoryDeps holds the sampler and the engine that keeps the memory windows.
@@ -106,12 +108,12 @@ func Poll(ctx context.Context, d *MemoryDeps, _ MemoryConfig) (MemoryStatus, err
 	recordMetrics(d.MetricsRecorder(), sample, details)
 
 	return MemoryStatus{
-		Source:     sample.Source,
-		UsedBytes:  sample.UsedBytes,
-		TotalBytes: sample.TotalBytes,
-		Verdict:    verdict,
-		Details:    details,
-		Message:    memoryhealth.ComposeMessage(verdict, details),
+		Source:       sample.Source,
+		AvgUsedBytes: memoryhealth.Bytes(math.Round(details.AvgUsedBytes)),
+		TotalBytes:   sample.TotalBytes,
+		Verdict:      verdict,
+		Details:      details,
+		Message:      memoryhealth.ComposeMessage(verdict, details),
 	}, nil
 }
 
