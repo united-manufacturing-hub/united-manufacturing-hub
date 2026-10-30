@@ -56,6 +56,23 @@ var _ = Describe("Sampler", func() {
 		Entry("memory.max is 0", "0\n"),
 	)
 
+	It("reads the machine's memory beside a cgroup with a limit", func() {
+		sample, err := readSample(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), hostMemoryOf(threeGiBBytes, eightGiBBytes))
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(sample.Source).To(Equal(memoryhealth.SourceCgroupLimit))
+		Expect(sample.HostUsedBytes).To(Equal(threeGiBBytes))
+		Expect(sample.HostTotalBytes).To(Equal(eightGiBBytes))
+	})
+
+	It("keeps a cgroup with a limit when the machine's memory is unreadable", func() {
+		sample, err := readSample(cgroupFiles(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), unreadableHostMemory)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(sample.HostReadErr).To(MatchError(errHostUnreadable))
+		Expect(sample.HostTotalBytes).To(BeZero())
+	})
+
 	It("reads a cgroup v1 with a limit without the host", func() {
 		sample, err := readSample(cgroupV1Files(bytesText(oneGiBBytes), bytesText(halfGiBBytes)), unreadableHostMemory)
 
