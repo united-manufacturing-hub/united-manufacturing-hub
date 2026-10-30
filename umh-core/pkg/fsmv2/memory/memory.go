@@ -124,6 +124,13 @@ func recordMetrics(recorder *deps.MetricsRecorder, sample memoryhealth.Sample, d
 	recorder.SetGaugeFlag(deps.GaugeMemoryUsedRingActive, details.UsedRingActive)
 	recorder.SetGaugeFlag(deps.GaugeMemoryUsedFromCgroup, sample.Source != memoryhealth.SourceHostFallbackCgroupUnreadable)
 	recorder.SetGaugeFlag(deps.GaugeMemoryTotalIsCgroupLimit, sample.Source == memoryhealth.SourceCgroupLimit)
+
+	recorder.SetGauge(deps.GaugeMemoryAvgHostUsedFraction, details.AvgHostUsedFraction)
+	recorder.SetGaugeFlag(deps.GaugeMemoryHostRingActive, details.HostRingActive)
+	recorder.SetGauge(deps.GaugeMemoryPressureAvg60Ratio, details.PressureAvg60)
+	recorder.SetGaugeFlag(deps.GaugeMemoryPressureSignalReady, details.PressureSignalReady)
+	recorder.SetGauge(deps.GaugeMemoryOomKillsLast60s, details.OomKillsLast60s)
+	recorder.SetGaugeFlag(deps.GaugeMemoryOomSignalReady, details.OomSignalReady)
 }
 
 func healthFromStatus(_ MemoryConfig, status MemoryStatus) simple.Health {

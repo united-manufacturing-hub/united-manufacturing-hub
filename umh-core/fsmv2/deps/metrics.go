@@ -261,6 +261,13 @@ const (
 	GaugeMemoryTotalIsCgroupLimit GaugeName = "memory_total_is_cgroup_limit"
 
 	GaugeMemoryUsedRingActive GaugeName = "memory_used_ring_active"
+
+	GaugeMemoryAvgHostUsedFraction GaugeName = "memory_avg_host_used_fraction"
+	GaugeMemoryHostRingActive      GaugeName = "memory_host_ring_active"
+	GaugeMemoryPressureAvg60Ratio  GaugeName = "memory_pressure_avg60_ratio"
+	GaugeMemoryPressureSignalReady GaugeName = "memory_pressure_signal_ready"
+	GaugeMemoryOomKillsLast60s     GaugeName = "memory_oom_kills_last_60s"
+	GaugeMemoryOomSignalReady      GaugeName = "memory_oom_signal_ready"
 )
 
 // CPU worker flags, 1 for true and 0 for false. A 0 on any of them means the

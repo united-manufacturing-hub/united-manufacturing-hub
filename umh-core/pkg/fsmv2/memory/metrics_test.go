@@ -55,6 +55,36 @@ var _ = Describe("the memory worker's gauges", func() {
 		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryTotalBytes), float64(decimalLimitBytes)))
 	})
 
+	It("publishes the machine, pressure and OOM evidence", func() {
+		files := cgroupAtPercent(50)
+		files[fixtureCgroupBase+"/memory.pressure"] = "some avg10=0.00 avg60=25.00 avg300=0.00 total=0\n"
+		files[fixtureCgroupBase+"/memory.events"] = "oom 3\noom_kill 3\n"
+		memoryDeps := newTestDeps(fixtureFilesystem(files), hostMemoryOf(hostUsedBytes, hostTotalBytes))
+
+		_, err := Poll(context.Background(), memoryDeps, MemoryConfig{})
+		Expect(err).ToNot(HaveOccurred())
+
+		files[fixtureCgroupBase+"/memory.events"] = "oom 4\noom_kill 4\n"
+
+		_, err = Poll(context.Background(), memoryDeps, MemoryConfig{})
+		Expect(err).ToNot(HaveOccurred())
+
+		gauges := memoryDeps.MetricsRecorder().Drain().Gauges
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryAvgHostUsedFraction), float64(hostUsedBytes)/float64(hostTotalBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryHostRingActive), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryPressureAvg60Ratio), 0.25))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryPressureSignalReady), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryOomKillsLast60s), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryOomSignalReady), 1.0))
+	})
+
+	It("marks the pressure and OOM evidence as not ready without their files", func() {
+		gauges := drainedGaugesAfterPolls(cgroupAtPercent(50), 2)
+
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryPressureSignalReady), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(deps.GaugeMemoryOomSignalReady), 0.0))
+	})
+
 	DescribeTable("marks which source each number came from",
 		func(files map[string]string, expectedUsedFromCgroup, expectedTotalIsCgroupLimit float64) {
 			gauges := drainedGaugesAfterPolls(files, 1)
