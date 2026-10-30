@@ -38,6 +38,17 @@ func ValidateDeriveDesiredState(baseDir string) []Violation {
 	return violations
 }
 
+// readsDeps reports whether selector calls one of the WorkerBase methods that
+// return the worker's dependencies.
+func readsDeps(selector *ast.SelectorExpr) bool {
+	switch selector.Sel.Name {
+	case "Deps", "GetDependenciesAny":
+		return true
+	default:
+		return false
+	}
+}
+
 // checkDeriveDesiredStateMethod parses a worker file and checks DeriveDesiredState.
 func checkDeriveDesiredStateMethod(filename string) []Violation {
 	var violations []Violation
@@ -62,7 +73,7 @@ func checkDeriveDesiredStateMethod(filename string) []Violation {
 			}
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				if selExpr.Sel.Name == "GetDependencies" {
+				if readsDeps(selExpr) {
 					pos := fset.Position(callExpr.Pos())
 					violations = append(violations, Violation{
 						File:    filename,
@@ -660,7 +671,7 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 			return true
 		}
 
-		hasGetDependencies := false
+		hasDeps := false
 		hasGetFrameworkState := false
 		hasNewObservation := false
 
@@ -671,10 +682,11 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 			}
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				switch selExpr.Sel.Name {
-				case "GetDependencies":
-					hasGetDependencies = true
-				case "GetFrameworkState":
+				if readsDeps(selExpr) {
+					hasDeps = true
+				}
+
+				if selExpr.Sel.Name == "GetFrameworkState" {
 					hasGetFrameworkState = true
 				}
 			}
@@ -691,13 +703,13 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 			return true
 		})
 
-		if hasGetDependencies && !hasGetFrameworkState && !hasNewObservation {
+		if hasDeps && !hasGetFrameworkState && !hasNewObservation {
 			pos := fset.Position(funcDecl.Pos())
 			violations = append(violations, Violation{
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "MISSING_FRAMEWORK_METRICS_COPY",
-				Message: "CollectObservedState() calls GetDependencies() but not GetFrameworkState() - must copy framework metrics from deps",
+				Message: "CollectObservedState() reads dependencies but does not call GetFrameworkState() - must copy framework metrics from deps",
 			})
 		}
 
@@ -900,7 +912,6 @@ func ValidateActionHistoryCopy(baseDir string) []Violation {
 }
 
 // checkActionHistoryCopy verifies that CollectObservedState copies action history.
-// checkActionHistoryCopy verifies that CollectObservedState copies action history.
 // Workers that use NewObservation (Pattern A) are exempt: the collector post-processes
 // action history automatically after CollectObservedState returns.
 func checkActionHistoryCopy(filename string) []Violation {
@@ -919,7 +930,7 @@ func checkActionHistoryCopy(filename string) []Violation {
 			return true
 		}
 
-		hasGetDependencies := false
+		hasDeps := false
 		hasGetActionHistory := false
 		hasNewObservation := false
 
@@ -930,10 +941,11 @@ func checkActionHistoryCopy(filename string) []Violation {
 			}
 
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				switch selExpr.Sel.Name {
-				case "GetDependencies":
-					hasGetDependencies = true
-				case "GetActionHistory":
+				if readsDeps(selExpr) {
+					hasDeps = true
+				}
+
+				if selExpr.Sel.Name == "GetActionHistory" {
 					hasGetActionHistory = true
 				}
 			}
@@ -950,13 +962,13 @@ func checkActionHistoryCopy(filename string) []Violation {
 			return true
 		})
 
-		if hasGetDependencies && !hasGetActionHistory && !hasNewObservation {
+		if hasDeps && !hasGetActionHistory && !hasNewObservation {
 			pos := fset.Position(funcDecl.Pos())
 			violations = append(violations, Violation{
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "MISSING_ACTION_HISTORY_COPY",
-				Message: "CollectObservedState() calls GetDependencies() but not GetActionHistory() - must copy action history from deps",
+				Message: "CollectObservedState() reads dependencies but does not call GetActionHistory() - must copy action history from deps",
 			})
 		}
 

@@ -422,7 +422,7 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 			}
 		},
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
-			// GetDependenciesAny, not GetDependencies: D is not known here. The
+			// GetDependenciesAny, not Deps: TDeps is not known here. The
 			// write reaches only a deps that implements SetFrameworkState; a
 			// deps without it gets no pre-COS write.
 			type depsGetter interface {
