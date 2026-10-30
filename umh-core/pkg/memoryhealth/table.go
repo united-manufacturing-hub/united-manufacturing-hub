@@ -30,6 +30,12 @@ const (
 	averageSpan    = 60 * time.Second
 )
 
+const (
+	tierOutOfMemory = iota
+	tierStarvation
+	tierSaturation
+)
+
 // NewEngine builds the engine that judges memory samples. Each engine keeps its
 // own windows, so a worker builds one and feeds it every sample.
 func NewEngine() (*diagnosis.Engine[Sample], error) {

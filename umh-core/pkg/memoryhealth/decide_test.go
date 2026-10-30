@@ -319,3 +319,22 @@ var _ = Describe("Decide for OOM kills", func() {
 		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
 	})
 })
+
+var _ = Describe("Decide's cause order", func() {
+	It("ranks an OOM kill first, then pressure, then a full limit", func() {
+		judge := newMemoryJudge()
+		sample := containerAndMachineAtPercent(95, 50)
+		sample.Pressure = diagnosis.Known(0.90)
+		sample.NewOomKills = diagnosis.Known(0)
+		judge.decideSampleRepeatedly(sample, twoMinutesOfSamples)
+
+		sample.NewOomKills = diagnosis.Known(1)
+		verdict, _ := judge.decideSample(sample)
+
+		Expect(causeKindsOf(verdict)).To(Equal([]memoryhealth.CauseKind{
+			memoryhealth.CauseKindOomKill,
+			memoryhealth.CauseKindPressure,
+			memoryhealth.CauseKindContainerLimitFull,
+		}))
+	})
+})

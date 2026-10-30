@@ -49,6 +49,7 @@ func hostMemoryFullSignal() diagnosis.Signal[Sample] {
 func fullSignal(name, instrument string, extract func(Sample) diagnosis.Reading) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            name,
+		Tier:            tierSaturation,
 		DemoteSpan:      averageSpan,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
