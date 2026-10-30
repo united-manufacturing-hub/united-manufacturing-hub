@@ -46,7 +46,7 @@ func (restartSignalState) LifecyclePhase() config.LifecyclePhase {
 
 func (s restartSignalState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if snap, ok := snapshot.(fsmv2.Snapshot); ok {
-		if snap.Desired != nil && snap.Desired.IsShutdownRequested() {
+		if snap.Desired.IsShutdownRequested() {
 			return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNeedsRemoval, State: s, Reason: "shutdown requested"}
 		}
 	}
@@ -199,7 +199,7 @@ func (s restartOnceState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	}
 
 	if snap, ok := snapshot.(fsmv2.Snapshot); ok {
-		if snap.Desired != nil && snap.Desired.IsShutdownRequested() {
+		if snap.Desired.IsShutdownRequested() {
 			return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNeedsRemoval, State: s, Reason: "shutdown requested"}
 		}
 	}
