@@ -260,15 +260,33 @@ const (
 	// GaugeMemoryTotalIsCgroupLimit is 1 when memory_total_bytes is the cgroup's limit.
 	GaugeMemoryTotalIsCgroupLimit GaugeName = "memory_total_is_cgroup_limit"
 
+	// GaugeMemoryUsedRingActive applies to memory_avg_used_bytes and memory_avg_used_fraction.
 	GaugeMemoryUsedRingActive GaugeName = "memory_used_ring_active"
 
-	GaugeMemoryAvgHostUsedBytes    GaugeName = "memory_avg_host_used_bytes"
-	GaugeMemoryHostTotalBytes      GaugeName = "memory_host_total_bytes"
-	GaugeMemoryHostRingActive      GaugeName = "memory_host_ring_active"
-	GaugeMemoryPressureAvg60Ratio  GaugeName = "memory_pressure_avg60_ratio"
+	// GaugeMemoryAvgHostUsedBytes tracks the whole machine's 60s mean used memory, in bytes.
+	GaugeMemoryAvgHostUsedBytes GaugeName = "memory_avg_host_used_bytes"
+
+	// GaugeMemoryHostTotalBytes tracks the machine's total memory, in bytes.
+	GaugeMemoryHostTotalBytes GaugeName = "memory_host_total_bytes"
+
+	// GaugeMemoryHostRingActive applies to memory_avg_host_used_bytes.
+	GaugeMemoryHostRingActive GaugeName = "memory_host_ring_active"
+
+	// GaugeMemoryPressureAvg60Ratio tracks the kernel's memory-some avg60 pressure-stall
+	// figure as a 0..1 fraction: the share of the last minute in which at least one
+	// process in the container waited for memory.
+	GaugeMemoryPressureAvg60Ratio GaugeName = "memory_pressure_avg60_ratio"
+
+	// GaugeMemoryPressureSignalReady applies to memory_pressure_avg60_ratio. It stays 0 on
+	// cgroup v1 and on kernels without pressure stall information.
 	GaugeMemoryPressureSignalReady GaugeName = "memory_pressure_signal_ready"
-	GaugeMemoryOomKillsLast60s     GaugeName = "memory_oom_kills_last_60s"
-	GaugeMemoryOomSignalReady      GaugeName = "memory_oom_signal_ready"
+
+	// GaugeMemoryOomKillsLast60s tracks how many processes the kernel killed in the
+	// container in the last 60s because memory ran out.
+	GaugeMemoryOomKillsLast60s GaugeName = "memory_oom_kills_last_60s"
+
+	// GaugeMemoryOomSignalReady applies to memory_oom_kills_last_60s.
+	GaugeMemoryOomSignalReady GaugeName = "memory_oom_signal_ready"
 )
 
 // CPU worker flags, 1 for true and 0 for false. A 0 on any of them means the
