@@ -42,12 +42,14 @@ type HostMemoryReader func(ctx context.Context) (usedBytes, totalBytes uint64, e
 
 // Sample is one reading of the container's memory.
 type Sample struct {
-	Timestamp     time.Time
-	Source        Source
-	UsedBytes     int64
-	TotalBytes    int64
-	CgroupReadErr error
-	HostReadErr   error
+	Timestamp      time.Time
+	Source         Source
+	UsedBytes      int64
+	TotalBytes     int64
+	HostUsedBytes  int64
+	HostTotalBytes int64
+	CgroupReadErr  error
+	HostReadErr    error
 }
 
 // Sampler reads the cgroup's memory and falls back to the host's memory where
@@ -90,7 +92,20 @@ func (s *Sampler) Read(ctx context.Context) (Sample, error) {
 		return Sample{}, ctx.Err()
 	}
 
-	sample, err := s.chooseSource(ctx, Sample{Timestamp: time.Now(), CgroupReadErr: cgroupErr}, cgroup)
+	sample := Sample{Timestamp: time.Now(), CgroupReadErr: cgroupErr}
+
+	hostUsed, hostTotal, hostErr := s.hostMemory(ctx)
+	if ctx.Err() != nil {
+		return Sample{}, ctx.Err()
+	}
+
+	sample.HostReadErr = hostErr
+	if hostErr == nil {
+		sample.HostUsedBytes = int64(hostUsed)
+		sample.HostTotalBytes = int64(hostTotal)
+	}
+
+	sample, err := chooseSource(sample, cgroup)
 	if err != nil {
 		return sample, err
 	}
@@ -102,13 +117,13 @@ func (s *Sampler) Read(ctx context.Context) (Sample, error) {
 	return sample, nil
 }
 
-func (s *Sampler) chooseSource(ctx context.Context, sample Sample, cgroup CgroupMemory) (Sample, error) {
+func chooseSource(sample Sample, cgroup CgroupMemory) (Sample, error) {
 	if sample.CgroupReadErr != nil {
-		return s.hostFallback(ctx, sample)
+		return hostFallback(sample)
 	}
 
 	if cgroup.Unlimited || cgroup.LimitBytes == 0 {
-		return s.cgroupAgainstHostTotal(ctx, sample, cgroup.CurrentBytes)
+		return cgroupAgainstHostTotal(sample, cgroup.CurrentBytes)
 	}
 
 	sample.Source = SourceCgroupLimit
@@ -118,32 +133,26 @@ func (s *Sampler) chooseSource(ctx context.Context, sample Sample, cgroup Cgroup
 	return sample, nil
 }
 
-func (s *Sampler) hostFallback(ctx context.Context, sample Sample) (Sample, error) {
-	hostUsed, hostTotal, hostErr := s.hostMemory(ctx)
-	if hostErr != nil {
-		sample.HostReadErr = hostErr
-
-		return sample, fmt.Errorf("cgroup memory is unreadable (%w) and host memory is unreadable: %w", sample.CgroupReadErr, hostErr)
+func hostFallback(sample Sample) (Sample, error) {
+	if sample.HostReadErr != nil {
+		return sample, fmt.Errorf("cgroup memory is unreadable (%w) and host memory is unreadable: %w", sample.CgroupReadErr, sample.HostReadErr)
 	}
 
 	sample.Source = SourceHostFallbackCgroupUnreadable
-	sample.UsedBytes = int64(hostUsed)
-	sample.TotalBytes = int64(hostTotal)
+	sample.UsedBytes = sample.HostUsedBytes
+	sample.TotalBytes = sample.HostTotalBytes
 
 	return sample, nil
 }
 
-func (s *Sampler) cgroupAgainstHostTotal(ctx context.Context, sample Sample, cgroupUsedBytes int64) (Sample, error) {
-	_, hostTotal, hostErr := s.hostMemory(ctx)
-	if hostErr != nil {
-		sample.HostReadErr = hostErr
-
-		return sample, fmt.Errorf("cgroup memory has no limit and host memory is unreadable: %w", hostErr)
+func cgroupAgainstHostTotal(sample Sample, cgroupUsedBytes int64) (Sample, error) {
+	if sample.HostReadErr != nil {
+		return sample, fmt.Errorf("cgroup memory has no limit and host memory is unreadable: %w", sample.HostReadErr)
 	}
 
 	sample.Source = SourceHostTotalNoCgroupLimit
 	sample.UsedBytes = cgroupUsedBytes
-	sample.TotalBytes = int64(hostTotal)
+	sample.TotalBytes = sample.HostTotalBytes
 
 	return sample, nil
 }
