@@ -242,23 +242,25 @@ const (
 // Memory worker gauges. Each holds its last value until memory_last_sample_unix
 // moves again.
 const (
-	// GaugeMemoryUsedBytes tracks the memory in use, in bytes.
-	GaugeMemoryUsedBytes GaugeName = "memory_used_bytes"
+	// GaugeMemoryAvgUsedBytes tracks the 60s mean of the memory in use, in bytes.
+	GaugeMemoryAvgUsedBytes GaugeName = "memory_avg_used_bytes"
 
 	// GaugeMemoryTotalBytes tracks the total the usage is judged against, in bytes.
 	GaugeMemoryTotalBytes GaugeName = "memory_total_bytes"
 
-	// GaugeMemoryUsedPercent tracks memory_used_bytes as a percentage of memory_total_bytes.
-	GaugeMemoryUsedPercent GaugeName = "memory_used_percent"
+	// GaugeMemoryAvgUsedFraction tracks the 60s mean of used / total as a 0..1 fraction.
+	GaugeMemoryAvgUsedFraction GaugeName = "memory_avg_used_fraction"
 
 	// GaugeMemoryLastSampleUnix carries the unix seconds of the last tick that measured.
 	GaugeMemoryLastSampleUnix GaugeName = "memory_last_sample_unix"
 
-	// GaugeMemoryUsedFromCgroup is 1 when memory_used_bytes is the cgroup's own usage.
+	// GaugeMemoryUsedFromCgroup is 1 when the used bytes are the cgroup's own usage.
 	GaugeMemoryUsedFromCgroup GaugeName = "memory_used_from_cgroup"
 
 	// GaugeMemoryTotalIsCgroupLimit is 1 when memory_total_bytes is the cgroup's limit.
 	GaugeMemoryTotalIsCgroupLimit GaugeName = "memory_total_is_cgroup_limit"
+
+	GaugeMemoryUsedRingActive GaugeName = "memory_used_ring_active"
 )
 
 // CPU worker flags, 1 for true and 0 for false. A 0 on any of them means the
