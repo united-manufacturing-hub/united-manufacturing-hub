@@ -269,7 +269,7 @@ jobs:
           path: changelog-scripts
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24"
+          node-version: "26"
       - name: Check released sections are unmodified
         if: >-
           ${{ github.event_name != 'merge_group'
