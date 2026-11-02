@@ -260,7 +260,7 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 	totalBytes := vmStat.Total
 
 	// Try cgroup values: prefer container-aware limits over host values
-	cgroupInfo, cgroupErr := memoryhealth.ReadCgroupMemory(ctx, c.fs, "/sys/fs/cgroup")
+	cgroupInfo, cgroupErr := memoryhealth.ReadCgroupMemory(ctx, c.fs, constants.CgroupMountPath)
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
