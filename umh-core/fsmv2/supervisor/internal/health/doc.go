@@ -115,11 +115,11 @@
 //	    logger,
 //	)
 //
-//	if !checker.Check(snapshot) {
+//	if !checker.Check(observed.GetTimestamp(), hierarchyPath) {
 //	    // Data is stale, handle degraded transition
 //	}
 //
-//	if checker.IsTimeout(snapshot) {
+//	if checker.IsTimeout(observed.GetTimestamp(), hierarchyPath) {
 //	    // Staleness timeout, restart collector
 //	}
 //
@@ -134,8 +134,8 @@
 //	}
 //
 //	// Supervisor tick loop
-//	if !freshnessChecker.Check(snapshot) {
-//	    if freshnessChecker.IsTimeout(snapshot) {
+//	if !freshnessChecker.Check(observed.CollectedAt, hierarchyPath) {
+//	    if freshnessChecker.IsTimeout(observed.CollectedAt, hierarchyPath) {
 //	        collector.TriggerNow()
 //	    }
 //	    // Transition to degraded

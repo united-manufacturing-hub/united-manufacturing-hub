@@ -17,7 +17,6 @@ package health
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
@@ -41,13 +40,13 @@ func NewFreshnessChecker(staleThreshold, timeout time.Duration, workerType strin
 
 // Check validates observation freshness.
 // Returns true if data is fresh.
-func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
-	age := time.Since(snapshot.Observed.GetTimestamp())
+func (f *FreshnessChecker) Check(observedAt time.Time, hierarchyPath string) bool {
+	age := time.Since(observedAt)
 	isFresh := age < f.staleThreshold
 
 	if !isFresh {
 		f.logger.Debug("observed_state_stale",
-			deps.HierarchyPath(snapshot.Identity.HierarchyPath),
+			deps.HierarchyPath(hierarchyPath),
 			deps.Duration("age", age),
 			deps.Duration("threshold", f.staleThreshold))
 	}
@@ -57,18 +56,17 @@ func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
 
 // IsTimeout checks if observation data has exceeded the timeout threshold.
 // Returns true if data is stale and requires collector restart.
-func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
-	collectedAt := snapshot.Observed.GetTimestamp()
-	age := time.Since(collectedAt)
+func (f *FreshnessChecker) IsTimeout(observedAt time.Time, hierarchyPath string) bool {
+	age := time.Since(observedAt)
 	isTimedOut := age >= f.timeout
 
 	if isTimedOut {
-		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_timeout",
+		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), hierarchyPath, "observed_state_timeout",
 			deps.Duration("age", age),
 			deps.Int64("age_ms", age.Milliseconds()),
 			deps.Duration("threshold", f.timeout),
 			deps.Int64("threshold_ms", f.timeout.Milliseconds()),
-			deps.String("collected_at", collectedAt.Format(time.RFC3339Nano)))
+			deps.String("collected_at", observedAt.Format(time.RFC3339Nano)))
 	}
 
 	return isTimedOut
