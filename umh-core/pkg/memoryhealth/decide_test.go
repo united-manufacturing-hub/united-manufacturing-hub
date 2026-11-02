@@ -29,6 +29,7 @@ const (
 	decimalMachineBytes int64 = 8000000000
 
 	twoMinutesOfSamples = 120
+	oneHourOfSamples    = 3600
 )
 
 var firstSampleTime = time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
@@ -286,7 +287,7 @@ var _ = Describe("Decide for OOM kills", func() {
 		Expect(causeKindsOf(verdict)).To(ConsistOf(memoryhealth.CauseKindOomKill))
 
 		Expect(details.OomSignalReady).To(BeTrue())
-		Expect(details.OomKillsLast60s).To(Equal(1.0))
+		Expect(details.OomKillsLastHour).To(Equal(1.0))
 	})
 
 	It("counts every OOM kill in the window", func() {
@@ -295,16 +296,18 @@ var _ = Describe("Decide for OOM kills", func() {
 
 		_, details := judge.decideSample(containerWithNewOomKills(1))
 
-		Expect(details.OomKillsLast60s).To(Equal(3.0))
+		Expect(details.OomKillsLastHour).To(Equal(3.0))
 	})
 
-	It("recovers once a whole window passes without an OOM kill", func() {
+	It("stays degraded for an hour after an OOM kill, then recovers", func() {
 		judge := newMemoryJudge()
 		judge.decideSample(containerWithNewOomKills(1))
 
-		verdict, _ := judge.decideSampleRepeatedly(containerWithNewOomKills(0), twoMinutesOfSamples)
+		stillDegraded, _ := judge.decideSampleRepeatedly(containerWithNewOomKills(0), oneHourOfSamples)
+		Expect(causeKindsOf(stillDegraded)).To(ConsistOf(memoryhealth.CauseKindOomKill))
 
-		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+		recovered, _ := judge.decideSampleRepeatedly(containerWithNewOomKills(0), twoMinutesOfSamples)
+		Expect(recovered.State).To(Equal(memoryhealth.StateHealthy))
 	})
 
 	It("is healthy without OOM kills", func() {
@@ -360,7 +363,7 @@ var _ = Describe("Decide's cause details", func() {
 		verdict, _ := judge.decideSample(sample)
 
 		Expect(causeShapesOf(verdict)).To(Equal(map[memoryhealth.CauseKind]causeShape{
-			memoryhealth.CauseKindOomKill:            {Instrument: "oom-kills-last-60s", Unit: "kills", Attribution: memoryhealth.AttributionContainer},
+			memoryhealth.CauseKindOomKill:            {Instrument: "oom-kills-last-hour", Unit: "kills", Attribution: memoryhealth.AttributionContainer},
 			memoryhealth.CauseKindPressure:           {Instrument: "pressure-avg60", Unit: "fraction", Attribution: memoryhealth.AttributionContainer},
 			memoryhealth.CauseKindContainerLimitFull: {Instrument: "container-used-fraction", Unit: "fraction", Attribution: memoryhealth.AttributionContainer},
 			memoryhealth.CauseKindHostMemoryFull:     {Instrument: "host-used-fraction", Unit: "fraction", Attribution: memoryhealth.AttributionHost},

@@ -44,9 +44,9 @@ type Details struct {
 	PressureApplies     bool    `json:"pressureApplies"`
 	PressureSignalReady bool    `json:"pressureSignalReady"`
 
-	OomKillsLast60s float64 `json:"oomKillsLast60s"`
-	OomKillsApply   bool    `json:"oomKillsApply"`
-	OomSignalReady  bool    `json:"oomSignalReady"`
+	OomKillsLastHour float64 `json:"oomKillsLastHour"`
+	OomKillsApply    bool    `json:"oomKillsApply"`
+	OomSignalReady   bool    `json:"oomSignalReady"`
 }
 
 // Measured reports whether the window holds enough samples to judge the memory.
@@ -96,7 +96,7 @@ func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
 	avgLimitUsedFraction, limitReady := reducedValue(engine.Reduction(signalContainerLimitFull, instrumentContainerUsedFraction).Get())
 	avgHostUsedFraction, hostReady := reducedValue(engine.Reduction(signalHostMemoryFull, instrumentHostUsedFraction).Get())
 	pressureAvg60, pressureReady := reducedValue(engine.Reduction(signalPressure, instrumentPressureAvg60).Get())
-	oomKillsLast60s, oomReady := reducedValue(engine.Reduction(signalOomKill, instrumentOomKillsLast60s).Get())
+	oomKillsLastHour, oomReady := reducedValue(engine.Reduction(signalOomKill, instrumentOomKillsLastHour).Get())
 
 	return Details{
 		AvgUsedBytes:    avgUsedBytes,
@@ -116,9 +116,9 @@ func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
 		PressureApplies:     pressureRead,
 		PressureSignalReady: pressureReady,
 
-		OomKillsLast60s: oomKillsLast60s,
-		OomKillsApply:   sample.OomCounterRead,
-		OomSignalReady:  oomReady,
+		OomKillsLastHour: oomKillsLastHour,
+		OomKillsApply:    sample.OomCounterRead,
+		OomSignalReady:   oomReady,
 	}
 }
 

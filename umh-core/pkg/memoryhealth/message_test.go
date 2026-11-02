@@ -43,7 +43,7 @@ func limitDetails(avgLimitUsedFraction float64) Details {
 		PressureAvg60:        0.03,
 		PressureSignalReady:  true,
 		OomKillsApply:        true,
-		OomKillsLast60s:      0,
+		OomKillsLastHour:     0,
 		OomSignalReady:       true,
 	}
 }
@@ -108,7 +108,7 @@ var _ = Describe("ComposeMessage for a degraded verdict", func() {
 	DescribeTable("explains OOM kills with their count",
 		func(kills float64, expectedCount string) {
 			details := limitDetails(0.5)
-			details.OomKillsLast60s = kills
+			details.OomKillsLastHour = kills
 
 			message := ComposeMessage(degradedBy(Cause{Kind: CauseKindOomKill, Value: kills}), details)
 
@@ -175,7 +175,7 @@ var _ = Describe("the Technical Details table", func() {
 			labelInstanceMemory + " 55% of 2.0 GiB limit (degrades at 80%).",
 			labelMachineMemory + " 41% of 16.0 GiB (degrades at 80%).",
 			labelPressure + " 3% (degrades above 20%).",
-			labelOomKills + " 0 in the last minute (degrades at 1).",
+			labelOomKills + " 0 in the last hour (degrades at 1).",
 		}))
 	})
 

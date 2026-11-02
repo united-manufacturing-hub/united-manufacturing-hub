@@ -185,7 +185,7 @@ func memoryRules(causes []Cause, details Details) []memoryRule {
 		},
 		{
 			label:                labelOomKills,
-			measured:             fmt.Sprintf("%d in the last minute", int(details.OomKillsLast60s)),
+			measured:             fmt.Sprintf("%d in the last hour", int(details.OomKillsLastHour)),
 			marks:                oomKillMarks,
 			notApplicableBecause: absentUnless(details.OomKillsApply, reasonNoOomCounter),
 			ready:                details.OomSignalReady,
@@ -301,7 +301,7 @@ const (
 	headlineHostFull  = "Machine memory running near full"
 	headlineGeneric   = "Memory degraded"
 
-	detailOomKill   = "The kernel stopped %s in this instance in the last minute because memory ran out. Give this instance more memory, or reduce the load on it."
+	detailOomKill   = "The kernel stopped %s in this instance in the last hour because memory ran out. Give this instance more memory, or reduce the load on it."
 	detailPressure  = "Tasks in this instance spent %d%% of the last minute waiting for memory. Reduce the load on this instance, or give it more memory. If other workloads share this machine they may be competing for it."
 	detailLimitFull = "This instance averaged %d%% of its %s memory limit over the last minute and has little headroom left. Raise its memory limit, or reduce the load on it."
 	detailHostFull  = "The machine's memory averaged %d%% of %s over the last minute. Add memory to the machine, or reduce what is running on it."

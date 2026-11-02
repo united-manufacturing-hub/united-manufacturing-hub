@@ -15,13 +15,17 @@
 package memoryhealth
 
 import (
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 const (
-	signalOomKill             = "oom-kill"
-	instrumentOomKillsLast60s = "oom-kills-last-60s"
-	unitKills                 = "kills"
+	signalOomKill              = "oom-kill"
+	instrumentOomKillsLastHour = "oom-kills-last-hour"
+	unitKills                  = "kills"
+
+	oomKillSpan = time.Hour
 )
 
 var oomKillMarks = diagnosis.Marks{
@@ -41,9 +45,9 @@ func oomKillSignal(sum diagnosis.Reduction) diagnosis.Signal[Sample] {
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
 			Measurement: diagnosis.Measurement[Sample]{
-				Name:      instrumentOomKillsLast60s,
+				Name:      instrumentOomKillsLastHour,
 				Extract:   func(sample Sample) diagnosis.Reading { return sample.NewOomKills },
-				Span:      averageSpan,
+				Span:      oomKillSpan,
 				Reduction: sum,
 			},
 			Marks: oomKillMarks,
