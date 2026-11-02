@@ -24,6 +24,8 @@ model:
 resolver:
   filename: resolver.go
   type: Resolver
+  # Never rewrite resolver.go once it exists; it holds hand-written helpers.
+  preserve_resolver: true
 
 # Provide custom scalar implementations
 models:
