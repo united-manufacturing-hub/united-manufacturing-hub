@@ -82,7 +82,7 @@ var _ = Describe("ComposeMessage for a degraded verdict", func() {
 			Expect(messageLines(message)[0]).To(Equal(expectedHeadline))
 		},
 		Entry("oom-kill", CauseKindOomKill, headlineOomKill),
-		Entry("pressure", CauseKindPressure, headlinePressure),
+		Entry("memory-pressure", CauseKindMemoryPressure, headlinePressure),
 		Entry("container-limit-full", CauseKindContainerLimitFull, headlineLimitFull),
 		Entry("host-memory-full", CauseKindHostMemoryFull, headlineHostFull),
 	)
@@ -100,7 +100,7 @@ var _ = Describe("ComposeMessage for a degraded verdict", func() {
 	})
 
 	It("explains pressure with the share of the minute spent waiting", func() {
-		message := ComposeMessage(degradedBy(Cause{Kind: CauseKindPressure, Value: 0.25}), limitDetails(0.5))
+		message := ComposeMessage(degradedBy(Cause{Kind: CauseKindMemoryPressure, Value: 0.25}), limitDetails(0.5))
 
 		Expect(messageLines(message)[1]).To(Equal(fmt.Sprintf(detailPressure, 25)))
 	})
@@ -119,7 +119,7 @@ var _ = Describe("ComposeMessage for a degraded verdict", func() {
 	)
 
 	It("writes one paragraph per cause, the top-ranked first", func() {
-		message := ComposeMessage(degradedBy(Cause{Kind: CauseKindOomKill, Value: 1}, Cause{Kind: CauseKindPressure, Value: 0.25}), limitDetails(0.5))
+		message := ComposeMessage(degradedBy(Cause{Kind: CauseKindOomKill, Value: 1}, Cause{Kind: CauseKindMemoryPressure, Value: 0.25}), limitDetails(0.5))
 
 		body, _, _ := strings.Cut(message, technicalDetailsLabel)
 		Expect(body).To(Equal(headlineOomKill + "\n" + fmt.Sprintf(detailOomKill, "1 process") + "\n\n" + fmt.Sprintf(detailPressure, 25)))
@@ -174,7 +174,7 @@ var _ = Describe("the Technical Details table", func() {
 		Expect(lines).To(Equal([]string{
 			labelInstanceMemory + " 55% of 2.0 GiB limit (degrades at 80%).",
 			labelMachineMemory + " 41% of 16.0 GiB (degrades at 80%).",
-			labelPressure + " 3% (degrades above 20%).",
+			labelMemoryPressure + " 3% (degrades above 20%).",
 			labelOomKills + " 0 in the last hour (degrades at 1).",
 		}))
 	})
@@ -193,7 +193,7 @@ var _ = Describe("the Technical Details table", func() {
 		lines := technicalDetailsLines(ComposeMessage(Verdict{State: StateHealthy}, details))
 
 		Expect(lines[0]).To(Equal(labelInstanceMemory + " not measured (" + reasonNoMemoryLimit + ")."))
-		Expect(lines[2]).To(Equal(labelPressure + " not measured (" + reasonNoPressureStats + ")."))
+		Expect(lines[2]).To(Equal(labelMemoryPressure + " not measured (" + reasonNoPressureStats + ")."))
 	})
 
 	It("says a rule is still measuring while its window fills", func() {

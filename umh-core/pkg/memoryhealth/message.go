@@ -176,12 +176,12 @@ func memoryRules(causes []Cause, details Details) []memoryRule {
 			latched:              hasKind(causes, CauseKindHostMemoryFull),
 		},
 		{
-			label:                labelPressure,
+			label:                labelMemoryPressure,
 			measured:             fmt.Sprintf("%d%%", toPercent(details.PressureAvg60)),
 			marks:                pressureMarks,
 			notApplicableBecause: absentUnless(details.PressureApplies, reasonNoPressureStats),
 			ready:                details.PressureSignalReady,
-			latched:              hasKind(causes, CauseKindPressure),
+			latched:              hasKind(causes, CauseKindMemoryPressure),
 		},
 		{
 			label:                labelOomKills,
@@ -206,7 +206,7 @@ func causeHeadline(kind CauseKind) string {
 	switch kind {
 	case CauseKindOomKill:
 		return headlineOomKill
-	case CauseKindPressure:
+	case CauseKindMemoryPressure:
 		return headlinePressure
 	case CauseKindContainerLimitFull:
 		return headlineLimitFull
@@ -247,7 +247,7 @@ func causeDetails(cause Cause, causes []Cause, details Details) string {
 	switch cause.Kind {
 	case CauseKindOomKill:
 		return fmt.Sprintf(detailOomKill, processCount(cause.Value))
-	case CauseKindPressure:
+	case CauseKindMemoryPressure:
 		return fmt.Sprintf(detailPressure, toPercent(cause.Value))
 	case CauseKindContainerLimitFull:
 		return fmt.Sprintf(detailLimitFull, toPercent(cause.Value), fmtGiB(details.TotalBytes/bytesPerGiB))
@@ -312,7 +312,7 @@ const (
 
 	labelInstanceMemory = "Instance memory"
 	labelMachineMemory  = "Machine memory"
-	labelPressure       = "Pressure"
+	labelMemoryPressure = "Memory pressure"
 	labelOomKills       = "OOM kills"
 
 	reasonNoMemoryLimit    = "this instance has no memory limit set, so the machine's memory is its limit"

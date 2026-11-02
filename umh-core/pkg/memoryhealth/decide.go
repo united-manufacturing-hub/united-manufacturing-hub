@@ -21,7 +21,7 @@ import (
 var causeKinds = map[string]CauseKind{
 	signalContainerLimitFull: CauseKindContainerLimitFull,
 	signalHostMemoryFull:     CauseKindHostMemoryFull,
-	signalPressure:           CauseKindPressure,
+	signalMemoryPressure:     CauseKindMemoryPressure,
 	signalOomKill:            CauseKindOomKill,
 }
 
@@ -95,7 +95,7 @@ func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
 	avgUsedFraction, usedFractionReady := reducedValue(engine.Measurement(measurementUsedFraction).Get())
 	avgLimitUsedFraction, limitReady := reducedValue(engine.Reduction(signalContainerLimitFull, instrumentContainerUsedFraction).Get())
 	avgHostUsedFraction, hostReady := reducedValue(engine.Reduction(signalHostMemoryFull, instrumentHostUsedFraction).Get())
-	pressureAvg60, pressureReady := reducedValue(engine.Reduction(signalPressure, instrumentPressureAvg60).Get())
+	pressureAvg60, pressureReady := reducedValue(engine.Reduction(signalMemoryPressure, instrumentMemoryPressureAvg60).Get())
 	oomKillsLastHour, oomReady := reducedValue(engine.Reduction(signalOomKill, instrumentOomKillsLastHour).Get())
 
 	return Details{

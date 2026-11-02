@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	signalPressure          = "pressure"
-	instrumentPressureAvg60 = "pressure-avg60"
+	signalMemoryPressure          = "memory-pressure"
+	instrumentMemoryPressureAvg60 = "memory-pressure-avg60"
 )
 
 var pressureMarks = diagnosis.Marks{
@@ -33,14 +33,14 @@ var pressureMarks = diagnosis.Marks{
 
 func pressureSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
-		Name:            signalPressure,
+		Name:            signalMemoryPressure,
 		Tier:            tierStarvation,
 		Attribution:     blameContainer,
 		DemoteSpan:      averageSpan,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
 			Measurement: diagnosis.Measurement[Sample]{
-				Name:      instrumentPressureAvg60,
+				Name:      instrumentMemoryPressureAvg60,
 				Extract:   func(sample Sample) diagnosis.Reading { return sample.Pressure },
 				Span:      averageSpan,
 				Reduction: diagnosis.Last,

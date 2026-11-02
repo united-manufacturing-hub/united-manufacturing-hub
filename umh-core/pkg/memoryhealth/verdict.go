@@ -28,7 +28,7 @@ type CauseKind string
 const (
 	CauseKindContainerLimitFull CauseKind = "container-limit-full"
 	CauseKindHostMemoryFull     CauseKind = "host-memory-full"
-	CauseKindPressure           CauseKind = "pressure"
+	CauseKindMemoryPressure     CauseKind = "memory-pressure"
 	CauseKindOomKill            CauseKind = "oom-kill"
 )
 
