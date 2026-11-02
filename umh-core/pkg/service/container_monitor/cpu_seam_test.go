@@ -1357,6 +1357,37 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		})
 	})
 
+	Context("[default-on]", func() {
+		It("should take CPU health from the worker when USE_FSMV2_CPU is unset", func() {
+			previous, had := os.LookupEnv(envFlag)
+			Expect(os.Unsetenv(envFlag)).To(Succeed())
+			DeferCleanup(func() {
+				if had {
+					_ = os.Setenv(envFlag, previous)
+				}
+			})
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
+						Message: workerVerdictMessage,
+					},
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The worker's message is a value the legacy path can never emit, so
+			// seeing it proves the unset flag selected the worker.
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Message).To(Equal(workerVerdictMessage))
+		})
+	})
+
 	Context("[legacy-off]", func() {
 		It("should keep filling status.CPU through the legacy getCPUMetrics path when USE_FSMV2_CPU is off, even though a worker observation exists", func() {
 			setFlag("false")

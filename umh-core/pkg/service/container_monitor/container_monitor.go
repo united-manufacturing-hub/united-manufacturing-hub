@@ -90,7 +90,7 @@ func NewContainerMonitorService(fs filesystem.Service) *ContainerMonitorService 
 func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) *ContainerMonitorService {
 	log := logger.For(logger.ComponentContainerMonitorService)
 
-	useFSMv2CPU, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
+	useFSMv2CPU, _ := env.GetAsBool("USE_FSMV2_CPU", false, true)
 
 	return &ContainerMonitorService{
 		fs:               fs,

@@ -140,7 +140,7 @@ func main() {
 	// to the default on parse failure); see ENG-4809 for the signature fix.
 	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
 
-	cpuMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
+	cpuMonitorEnabled := fsmv2CPUEnabledFromEnv()
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
 
 	featureUsage := &models.FeatureUsage{
@@ -271,6 +271,15 @@ func main() {
 	<-fsmv2Handle.stopped
 
 	log.Info("umh-core completed")
+}
+
+// fsmv2CPUEnabledFromEnv reads USE_FSMV2_CPU. The FSMv2 CPU health check is on
+// when the variable is unset; USE_FSMV2_CPU=false turns it off and brings back
+// the legacy CPU usage rule.
+func fsmv2CPUEnabledFromEnv() bool {
+	enabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, true)
+
+	return enabled
 }
 
 // countHistorianBridges returns the number of bridges whose write DFC targets the historian output.

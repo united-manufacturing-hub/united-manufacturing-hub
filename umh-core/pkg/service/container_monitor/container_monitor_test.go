@@ -84,6 +84,19 @@ var _ = Describe("Container Monitor Service", func() {
 			})
 
 			It("should contain CPU metrics", func() {
+				// The legacy CPU path fills CoreCount. The FSMv2 CPU check is on by
+				// default and this spec publishes no worker, so pin the legacy path.
+				previous, had := os.LookupEnv("USE_FSMV2_CPU")
+				Expect(os.Setenv("USE_FSMV2_CPU", "false")).To(Succeed())
+				DeferCleanup(func() {
+					if had {
+						_ = os.Setenv("USE_FSMV2_CPU", previous)
+					} else {
+						_ = os.Unsetenv("USE_FSMV2_CPU")
+					}
+				})
+				service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
 				status, err := service.GetStatus(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(status.CPU).ToNot(BeNil())

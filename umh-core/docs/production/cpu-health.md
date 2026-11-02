@@ -1,12 +1,12 @@
 # CPU Health
 
 {% hint style="info" %}
-**Early access.** This reporting needs UMH Core v0.44.37 or later, started with
-`-e USE_FSMV2_CPU=true` added to the `docker run` command that starts the container. The flag is
-read at startup, so changing it means recreating the container. The CPU health check does not need
-Management Console credentials: it also runs on an instance started without `AUTH_TOKEN` and
-`API_URL`. Without the flag, an instance is marked degraded whenever its CPU usage stays above 70%
-of the cores it may use, whether or not work is being delayed.
+The CPU health check is on by default. To turn it off, add `-e USE_FSMV2_CPU=false` to the
+`docker run` command that starts the container. The flag is read at startup, so changing it means
+recreating the container. With the check off, an instance is marked degraded whenever its CPU usage
+stays above 70% of the cores it may use, whether or not work is being delayed. The check does not
+need Management Console credentials: it also runs on an instance started without `AUTH_TOKEN` and
+`API_URL`.
 {% endhint %}
 
 UMH Core reports whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page, and while that status is degraded UMH will not start another bridge there. High usage on its own does not make an instance degraded: it degrades when its headroom is gone, or when its work is measurably delayed, which UMH reads from throttling, CPU pressure and steal. (For the reasoning, see [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/).)

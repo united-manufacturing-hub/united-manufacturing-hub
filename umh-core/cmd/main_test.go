@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -85,6 +86,37 @@ var _ = Describe("hasRelayCredentials", func() {
 
 		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
+})
+
+var _ = Describe("fsmv2CPUEnabledFromEnv", func() {
+	// setEnv sets or unsets USE_FSMV2_CPU for one spec and restores it after.
+	setEnv := func(value string, set bool) {
+		previous, had := os.LookupEnv("USE_FSMV2_CPU")
+		if set {
+			Expect(os.Setenv("USE_FSMV2_CPU", value)).To(Succeed())
+		} else {
+			Expect(os.Unsetenv("USE_FSMV2_CPU")).To(Succeed())
+		}
+		DeferCleanup(func() {
+			if had {
+				_ = os.Setenv("USE_FSMV2_CPU", previous)
+			} else {
+				_ = os.Unsetenv("USE_FSMV2_CPU")
+			}
+		})
+	}
+
+	DescribeTable("turns the FSMv2 CPU health check on unless USE_FSMV2_CPU says otherwise",
+		func(value string, set bool, expected bool) {
+			setEnv(value, set)
+			Expect(fsmv2CPUEnabledFromEnv()).To(Equal(expected))
+		},
+		Entry("unset means on", "", false, true),
+		Entry("empty means on", "", true, true),
+		Entry("true means on", "true", true, true),
+		Entry("false turns it off", "false", true, false),
+		Entry("0 turns it off", "0", true, false),
+	)
 })
 
 var _ = Describe("counting historian bridges", func() {
