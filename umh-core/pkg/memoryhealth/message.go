@@ -26,7 +26,7 @@ import (
 const (
 	bytesPerGiB = 1 << 30
 
-	closeToDegradedShareOfTotal = 0.05
+	closeToDegradedHeadroomShare = 0.05
 )
 
 // ComposeMessage renders a verdict as the memory health message: a headline,
@@ -60,7 +60,7 @@ func healthyHeadline(details Details) string {
 	budget := effectiveBudget(details)
 	used := fmtGiBNumber(budget.used)
 	total := fmtGiB(budget.total)
-	nearDegraded := budget.headroom < closeToDegradedShareOfTotal*budget.total
+	nearDegraded := budget.headroom < closeToDegradedHeadroomShare*budget.total
 
 	if !details.LimitApplies {
 		if nearDegraded {
