@@ -54,19 +54,6 @@ func NewParentWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed ParentDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *ParentWorker) GetDependencies() *ParentDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*ParentDependencies)
-	if !ok || d == nil {
-		panic("ParentWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState returns the current observed state of the parent worker.
 func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
@@ -75,7 +62,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	// Framework state and action history are injected before COS and consumed by
 	// the collector wrapper after NewObservation returns. Calling them here satisfies
