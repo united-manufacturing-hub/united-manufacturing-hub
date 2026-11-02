@@ -31,9 +31,9 @@ const (
 )
 
 const (
-	tierOutOfMemory = iota
-	tierStarvation
-	tierSaturation
+	tierOomKill = iota
+	tierMemoryPressure
+	tierMemoryFull
 )
 
 // NewEngine builds the engine that judges memory samples. Each engine keeps its

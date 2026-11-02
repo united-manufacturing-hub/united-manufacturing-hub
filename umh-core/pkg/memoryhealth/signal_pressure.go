@@ -34,7 +34,7 @@ var pressureMarks = diagnosis.Marks{
 func pressureSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            signalMemoryPressure,
-		Tier:            tierStarvation,
+		Tier:            tierMemoryPressure,
 		Attribution:     blameContainer,
 		DemoteSpan:      averageSpan,
 		ReleaseOnAbsent: true,
