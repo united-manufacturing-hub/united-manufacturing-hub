@@ -4,12 +4,23 @@
   "labels": ["dependencies", "skip-changelog-guard"],
   "commitMessagePrefix": "[renovate]chore(deps):",
   "includePaths": ["umh-core/**", ".github/**"],
-  "enabledManagers": ["dockerfile", "gomod", "github-actions"],
+  "enabledManagers": ["dockerfile", "gomod", "github-actions", "custom.regex"],
   "postUpdateOptions": ["gomodTidy", "gomodVendor", "gomodUpdateImportPaths"],
   "minimumReleaseAge": "7 days",
   "timezone": "Europe/Berlin",
   "schedule": ["* * * * 0"],
   "separateMajorMinor": false,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the go directive in go.mod as the golang alpine Docker image, so it gets the same version as the Dockerfiles",
+      "managerFilePatterns": ["/(^|/)go\\.mod$/"],
+      "matchStrings": ["\\ngo (?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\n"],
+      "depNameTemplate": "golang",
+      "datasourceTemplate": "docker",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+(?:\\.\\d+)?)-alpine$"
+    }
+  ],
   "packageRules": [
     {
       "matchManagers": ["github-actions"],
@@ -23,15 +34,21 @@
       "enabled": true
     },
     {
-      "matchManagers": ["gomod", "dockerfile"],
+      "matchManagers": ["gomod", "dockerfile", "custom.regex"],
       "groupName": "All dependencies",
       "groupSlug": "all-deps"
     },
     {
-      "description": "Bump go directive in go.mod",
+      "description": "The go directive is updated by the custom manager above, from the same source as the Dockerfiles",
       "matchDepNames": ["go"],
       "matchManagers": ["gomod"],
-      "rangeStrategy": "bump"
+      "enabled": false
+    },
+    {
+      "description": "Dependencies can force go mod tidy to raise the go directive to the newest Go release. The golang image must never lag behind it, so it gets no release age delay.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["golang"],
+      "minimumReleaseAge": "0 days"
     }
   ]
 }
