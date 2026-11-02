@@ -13,9 +13,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track the go directive in go.mod as the golang alpine Docker image, so it gets the same version as the Dockerfiles",
-      "managerFilePatterns": ["/(^|/)go\\.mod$/"],
-      "matchStrings": ["\\ngo (?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\n"],
+      "description": "Track the go directive in go.mod and go.work as the golang alpine Docker image, so it gets the same version as the Dockerfiles",
+      "managerFilePatterns": ["/(^|/)go\\.(mod|work)$/"],
+      "matchStrings": ["(?:^|\\n)go (?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\n"],
       "depNameTemplate": "golang",
       "datasourceTemplate": "docker",
       "extractVersionTemplate": "^(?<version>\\d+\\.\\d+(?:\\.\\d+)?)-alpine$"
