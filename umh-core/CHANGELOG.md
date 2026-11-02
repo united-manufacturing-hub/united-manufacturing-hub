@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.45]
+
 ### Improvements
 
 - The CPU status on an instance's page now comes from the [CPU health check](https://docs.umh.app/production/cpu-health) by default, so an instance is degraded, and new bridges wait, only when its CPU headroom is gone or its work is measurably delayed, not whenever usage stays above 70%. To go back to the 70% CPU usage rule, recreate the container with `-e USE_FSMV2_CPU=false`
