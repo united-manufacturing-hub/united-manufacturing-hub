@@ -19,7 +19,7 @@
 * **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
 * Keeps **seven days** of replayable raw history under the defaults a new instance starts with (`log_retention_ms = 7 days`, `log_cleanup_policy = delete`)
-* Runs comfortably below 70% CPU (automatic throttling protection kicks in above this)
+* Leaves enough CPU headroom that [CPU Health](./cpu-health.md) stays healthy, so new bridges can still start
 
 #### Disk usage in practice
 
@@ -54,7 +54,7 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 **Dynamic Resource Protection:**
 Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
 
-- **CPU Utilization**: With [CPU Health](./cpu-health.md), which is on by default, usage alone does not make a new bridge wait. There, 70% is a last-resort fallback for machine headroom, used only when no CPU limit is set and the kernel publishes no PSI. If UMH cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits. With CPU Health turned off (`USE_FSMV2_CPU=false`), a new bridge waits while CPU usage is above 70%.
+- **CPU Utilization**: With the [CPU health check](./cpu-health.md), which is on by default, usage alone does not make a new bridge wait. The check uses 70% usage only as a last-resort headroom limit, when no CPU limit is set and the kernel publishes no PSI. If UMH cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits. Under the 70% CPU usage rule (`USE_FSMV2_CPU=false`), a new bridge waits while CPU usage is above 70%
 - **CPU Throttling**: A new bridge waits while the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
 - **Memory Usage**: A new bridge waits while memory use is above 80%
 - **Disk Usage**: A new bridge waits while disk use is above 85%

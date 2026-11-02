@@ -340,13 +340,15 @@ docker run -d \
 |----------|----------|-------------|
 | `AUTH_TOKEN` | No | Authentication token from the Management Console. Without it and `API_URL`, umh-core runs without a Management Console connection |
 | `API_URL` | No | Backend relay server URL, needed together with `AUTH_TOKEN` to connect to the Management Console (e.g., `https://management.umh.app`) |
-| `USE_FSMV2_CPU` | No | FSMv2 container CPU monitoring; defaults to `true`. Set it to `false` to go back to the legacy operating-system metrics. Read once at startup, so changing it requires a restart. Temporary migration flag |
+| `USE_FSMV2_CPU` | No | Selects the CPU health check; defaults to `true`. Set it to `false` to use the 70% CPU usage rule instead. Read once at startup, so changing it means recreating the container; `docker restart` keeps the old value. Temporary migration flag |
 
 ### Disabling FSMv2 Features
 
-There is no legacy runtime to revert to: FSMv2 is the only bring-up path. The
-persistence worker's memory cleanup now runs unconditionally, and the
-`USE_FSMV2_MEMORY_CLEANUP` flag that used to gate it no longer exists.
+FSMv2 is the only bring-up path, so most features have no legacy runtime to
+revert to. The one revert that exists is `USE_FSMV2_CPU=false`, which replaces
+the CPU health check with the 70% CPU usage rule. The persistence worker's
+memory cleanup runs unconditionally, and the `USE_FSMV2_MEMORY_CLEANUP` flag
+that used to gate it no longer exists.
 
 ### Verifying FSMv2 Communicator
 

@@ -1359,13 +1359,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 	Context("[default-on]", func() {
 		It("should take CPU health from the worker when USE_FSMV2_CPU is unset", func() {
-			previous, had := os.LookupEnv(envFlag)
+			GinkgoT().Setenv(envFlag, "")
 			Expect(os.Unsetenv(envFlag)).To(Succeed())
-			DeferCleanup(func() {
-				if had {
-					_ = os.Setenv(envFlag, previous)
-				}
-			})
 			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
 				Status: simple.Status[fsmv2cpu.CPUStatus]{

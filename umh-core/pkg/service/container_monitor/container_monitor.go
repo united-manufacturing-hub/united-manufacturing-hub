@@ -90,16 +90,23 @@ func NewContainerMonitorService(fs filesystem.Service) *ContainerMonitorService 
 func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) *ContainerMonitorService {
 	log := logger.For(logger.ComponentContainerMonitorService)
 
-	useFSMv2CPU, _ := env.GetAsBool("USE_FSMV2_CPU", false, true)
-
 	return &ContainerMonitorService{
 		fs:               fs,
 		logger:           log,
 		instanceName:     constants.CoreInstanceName, // Single container instance name
 		dataPath:         dataPath,
-		useFSMv2CPU:      useFSMv2CPU,
+		useFSMv2CPU:      FSMv2CPUEnabledFromEnv(),
 		cpuUsageProvider: defaultCPUUsagePercent,
 	}
+}
+
+// FSMv2CPUEnabledFromEnv reports whether the CPU health check runs, read from
+// USE_FSMV2_CPU. Only "false", "0", "no", "n" and "off" (any case) turn it off
+// and select the 70% CPU usage rule; any other value, or none, leaves it on.
+func FSMv2CPUEnabledFromEnv() bool {
+	enabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, true)
+
+	return enabled
 }
 
 // GetFilesystemService returns the filesystem service - used for testing only.

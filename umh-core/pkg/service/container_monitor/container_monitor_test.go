@@ -84,17 +84,9 @@ var _ = Describe("Container Monitor Service", func() {
 			})
 
 			It("should contain CPU metrics", func() {
-				// The legacy CPU path fills CoreCount. The FSMv2 CPU check is on by
-				// default and this spec publishes no worker, so pin the legacy path.
-				previous, had := os.LookupEnv("USE_FSMV2_CPU")
-				Expect(os.Setenv("USE_FSMV2_CPU", "false")).To(Succeed())
-				DeferCleanup(func() {
-					if had {
-						_ = os.Setenv("USE_FSMV2_CPU", previous)
-					} else {
-						_ = os.Unsetenv("USE_FSMV2_CPU")
-					}
-				})
+				// Only the 70% CPU usage rule fills CoreCount. The CPU health check is
+				// on by default and this spec publishes no worker, so pin the rule.
+				GinkgoT().Setenv(usefsmv2CPUEnv, "false")
 				service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
 				status, err := service.GetStatus(ctx)
@@ -331,5 +323,23 @@ var _ = Describe("Container Monitor Service", func() {
 			GinkgoWriter.Printf("Message: %s\n", health.Message)
 			GinkgoWriter.Printf("=================================\n")
 		})
+	})
+})
+
+var _ = Describe("FSMv2CPUEnabledFromEnv", func() {
+	It("is on when USE_FSMV2_CPU is unset", func() {
+		GinkgoT().Setenv(usefsmv2CPUEnv, "")
+		Expect(os.Unsetenv(usefsmv2CPUEnv)).To(Succeed())
+		Expect(container_monitor.FSMv2CPUEnabledFromEnv()).To(BeTrue())
+	})
+
+	It("is off when USE_FSMV2_CPU=false", func() {
+		GinkgoT().Setenv(usefsmv2CPUEnv, "false")
+		Expect(container_monitor.FSMv2CPUEnabledFromEnv()).To(BeFalse())
+	})
+
+	It("stays on when USE_FSMV2_CPU holds an unrecognised value", func() {
+		GinkgoT().Setenv(usefsmv2CPUEnv, "disabled")
+		Expect(container_monitor.FSMv2CPUEnabledFromEnv()).To(BeTrue())
 	})
 })

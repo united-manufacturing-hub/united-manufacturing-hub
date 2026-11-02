@@ -48,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 )
 
@@ -140,8 +141,14 @@ func main() {
 	// to the default on parse failure); see ENG-4809 for the signature fix.
 	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
 
-	cpuMonitorEnabled := fsmv2CPUEnabledFromEnv()
+	cpuMonitorEnabled := container_monitor.FSMv2CPUEnabledFromEnv()
 	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
+
+	if cpuMonitorEnabled {
+		log.Info("CPU status uses the CPU health check; set USE_FSMV2_CPU=false to use the 70% CPU usage rule instead")
+	} else {
+		log.Info("CPU status uses the 70% CPU usage rule because USE_FSMV2_CPU turns the CPU health check off")
+	}
 
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
@@ -271,15 +278,6 @@ func main() {
 	<-fsmv2Handle.stopped
 
 	log.Info("umh-core completed")
-}
-
-// fsmv2CPUEnabledFromEnv reads USE_FSMV2_CPU. The FSMv2 CPU health check is on
-// when the variable is unset; USE_FSMV2_CPU=false turns it off and brings back
-// the legacy CPU usage rule.
-func fsmv2CPUEnabledFromEnv() bool {
-	enabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, true)
-
-	return enabled
 }
 
 // countHistorianBridges returns the number of bridges whose write DFC targets the historian output.
