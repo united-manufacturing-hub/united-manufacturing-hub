@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
@@ -29,7 +30,7 @@ import (
 
 const (
 	cpuBlindHostStat   = "/proc/stat"
-	cpuBlindCgroupStat = fsmv2cpu.CgroupBase + "/cpu.stat"
+	cpuBlindCgroupStat = constants.CgroupMountPath + "/cpu.stat"
 
 	// The machine this scenario runs on, while it can still be read. It is a
 	// quiet four-core box with no CPU limit: nothing here is near any mark, so
@@ -66,7 +67,7 @@ var CPUBlindScenario = scenariorunner.Scenario{
 	ExpectedWarnings: []string{"cpu::read_failed::error"},
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(fsmv2cpu.CgroupBase, cpuBlindMachine())
+		box := newTickingBox(constants.CgroupMountPath, cpuBlindMachine())
 		m := cpuMachineDeps(box)
 
 		// The box advances on the sampler's read of cpu.pressure, which this

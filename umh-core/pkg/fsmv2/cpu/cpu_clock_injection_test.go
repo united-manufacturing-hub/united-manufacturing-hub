@@ -25,6 +25,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -34,13 +35,13 @@ var _ = Describe("the clock the CPU worker samples on", func() {
 		fs := filesystem.NewMockFileSystem()
 		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
 			switch path {
-			case CgroupBase + "/cpu.stat":
+			case constants.CgroupMountPath + "/cpu.stat":
 				return []byte("usage_usec 5000000\nuser_usec 4000000\nsystem_usec 1000000\nnr_periods 10\nnr_throttled 2\n"), nil
-			case CgroupBase + "/cpu.max":
+			case constants.CgroupMountPath + "/cpu.max":
 				return []byte("200000 100000"), nil
-			case CgroupBase + "/cpu.pressure":
+			case constants.CgroupMountPath + "/cpu.pressure":
 				return []byte("some avg10=1.00 avg60=2.00 avg300=3.00 total=0\n"), nil
-			case CgroupBase + "/cpuset.cpus.effective":
+			case constants.CgroupMountPath + "/cpuset.cpus.effective":
 				return []byte("0-1"), nil
 			case "/proc/stat":
 				return []byte("cpu  100 0 300 5000 0 0 10 0 0 0\ncpu0 50 0 150 2500 0 0 5 0 0 0\ncpu1 50 0 150 2500 0 0 5 0 0 0\n"), nil

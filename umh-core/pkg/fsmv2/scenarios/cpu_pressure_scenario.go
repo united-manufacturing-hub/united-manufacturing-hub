@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
@@ -56,7 +57,7 @@ var CPUPressureScenario = scenariorunner.Scenario{
 	Description: "Raises a fake machine's CPU pressure from 19% to 25%, over the 20% at which the monitor degrades",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(fsmv2cpu.CgroupBase, cpuPressureMachine(cpuPressureCalm))
+		box := newTickingBox(constants.CgroupMountPath, cpuPressureMachine(cpuPressureCalm))
 		m := cpuMachineDeps(box)
 
 		box.StartPerRead(fsmv2cpu.PollInterval)

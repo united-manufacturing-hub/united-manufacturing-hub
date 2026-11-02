@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // MemoryCgroupInfo contains cgroup v2 memory metrics.
@@ -77,7 +79,7 @@ func parseMemoryCurrent(data []byte) (currentBytes int64, err error) {
 func (c *ContainerMonitorService) getCgroupMemoryInfo(ctx context.Context) (*MemoryCgroupInfo, error) {
 	info := &MemoryCgroupInfo{}
 
-	memMaxData, err := c.fs.ReadFile(ctx, "/sys/fs/cgroup/memory.max")
+	memMaxData, err := c.fs.ReadFile(ctx, constants.CgroupMountPath+"/memory.max")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read memory.max: %w", err)
 	}
@@ -90,7 +92,7 @@ func (c *ContainerMonitorService) getCgroupMemoryInfo(ctx context.Context) (*Mem
 	info.LimitBytes = limitBytes
 	info.Unlimited = unlimited
 
-	memCurrentData, err := c.fs.ReadFile(ctx, "/sys/fs/cgroup/memory.current")
+	memCurrentData, err := c.fs.ReadFile(ctx, constants.CgroupMountPath+"/memory.current")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read memory.current: %w", err)
 	}

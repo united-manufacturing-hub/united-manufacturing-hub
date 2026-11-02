@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -74,14 +75,14 @@ const evidenceControllers = "cpuset cpu io memory hugetlb pids rdma\n"
 // 2026-09-03.
 func healthyContainer() map[string][]byte {
 	return map[string][]byte{
-		CgroupBase + "/cpu.stat":              []byte("usage_usec 11457863754\nnr_periods 338962\nnr_throttled 903\n"),
-		CgroupBase + "/cpu.max":               []byte("200000 100000\n"),
-		CgroupBase + "/cpu.pressure":          []byte("some avg10=0.00 avg60=0.00 avg300=0.00 total=1\n"),
-		CgroupBase + "/cpuset.cpus.effective": []byte("0-7\n"),
-		CgroupBase + "/cgroup.controllers":    []byte(evidenceControllers),
-		"/proc/self/cgroup":                   []byte("0::/\n"),
-		"/proc/stat":                          []byte("cpu  1 0 1 1 1 0 1 0 0 0\ncpu0 1 0 1 1 1 0 1 0 0 0\n"),
-		"/proc/cpuinfo":                       []byte("flags\t\t: fpu hypervisor\n"),
+		constants.CgroupMountPath + "/cpu.stat":              []byte("usage_usec 11457863754\nnr_periods 338962\nnr_throttled 903\n"),
+		constants.CgroupMountPath + "/cpu.max":               []byte("200000 100000\n"),
+		constants.CgroupMountPath + "/cpu.pressure":          []byte("some avg10=0.00 avg60=0.00 avg300=0.00 total=1\n"),
+		constants.CgroupMountPath + "/cpuset.cpus.effective": []byte("0-7\n"),
+		constants.CgroupMountPath + "/cgroup.controllers":    []byte(evidenceControllers),
+		"/proc/self/cgroup":                                  []byte("0::/\n"),
+		"/proc/stat":                                         []byte("cpu  1 0 1 1 1 0 1 0 0 0\ncpu0 1 0 1 1 1 0 1 0 0 0\n"),
+		"/proc/cpuinfo":                                      []byte("flags\t\t: fpu hypervisor\n"),
 	}
 }
 
@@ -233,7 +234,7 @@ var _ = Describe("the message carries the sad path, the fields carry the read", 
 		// in it gives every pair its own issue. The outcome is in the message
 		// because the error's type cannot carry it; WHICH read failed stays a
 		// field, so one read's failure does not mint an issue of its own.
-		cpuset := CgroupBase + "/cpuset.cpus.effective"
+		cpuset := constants.CgroupMountPath + "/cpuset.cpus.effective"
 		events, _, _ := build(map[string]error{
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
@@ -248,7 +249,7 @@ var _ = Describe("the message carries the sad path, the fields carry the read", 
 	})
 
 	It("keeps a voided sample under its own message", func() {
-		statPath := CgroupBase + "/cpu.stat"
+		statPath := constants.CgroupMountPath + "/cpu.stat"
 		events := buildWithFiles(map[string][]byte{statPath: []byte("usage_usec abc\n")})
 
 		Expect(*events).To(HaveLen(1))
@@ -266,16 +267,16 @@ var _ = Describe("the message carries the sad path, the fields carry the read", 
 var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	It("reports nothing at all from a healthy cgroup v1 container", func() {
 		events := buildWithFiles(map[string][]byte{
-			CgroupBase + "/cpu.stat":                      nil,
-			CgroupBase + "/cpu.max":                       nil,
-			CgroupBase + "/cpu.pressure":                  nil,
-			CgroupBase + "/cpuset.cpus.effective":         nil,
-			CgroupBase + "/cgroup.controllers":            nil,
-			CgroupBase + "/cpu,cpuacct/cpu.stat":          []byte("nr_periods 338962\nnr_throttled 903\n"),
-			CgroupBase + "/cpu,cpuacct/cpu.cfs_quota_us":  []byte("-1\n"),
-			CgroupBase + "/cpu,cpuacct/cpu.cfs_period_us": []byte("100000\n"),
-			CgroupBase + "/cpu,cpuacct/cpuacct.usage":     []byte("11457863754000\n"),
-			CgroupBase + "/cpuset/cpuset.effective_cpus":  []byte("0\n"),
+			constants.CgroupMountPath + "/cpu.stat":                      nil,
+			constants.CgroupMountPath + "/cpu.max":                       nil,
+			constants.CgroupMountPath + "/cpu.pressure":                  nil,
+			constants.CgroupMountPath + "/cpuset.cpus.effective":         nil,
+			constants.CgroupMountPath + "/cgroup.controllers":            nil,
+			constants.CgroupMountPath + "/cpu,cpuacct/cpu.stat":          []byte("nr_periods 338962\nnr_throttled 903\n"),
+			constants.CgroupMountPath + "/cpu,cpuacct/cpu.cfs_quota_us":  []byte("-1\n"),
+			constants.CgroupMountPath + "/cpu,cpuacct/cpu.cfs_period_us": []byte("100000\n"),
+			constants.CgroupMountPath + "/cpu,cpuacct/cpuacct.usage":     []byte("11457863754000\n"),
+			constants.CgroupMountPath + "/cpuset/cpuset.effective_cpus":  []byte("0\n"),
 		})
 
 		Expect(msgs(events)).To(BeEmpty())
@@ -289,7 +290,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	})
 
 	It("reports exactly one event for one failed read, naming the file and the cause", func() {
-		cpuset := CgroupBase + "/cpuset.cpus.effective"
+		cpuset := constants.CgroupMountPath + "/cpuset.cpus.effective"
 		events, _, _ := build(map[string]error{
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
@@ -299,7 +300,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	})
 
 	It("carries the surrounding evidence on the event, unparsed", func() {
-		cpuset := CgroupBase + "/cpuset.cpus.effective"
+		cpuset := constants.CgroupMountPath + "/cpuset.cpus.effective"
 		events, _, _ := build(map[string]error{
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
@@ -317,7 +318,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	It("is intercepted by the Sentry hook, not merely emitted", func() {
 		// An observer-core assertion passes on a logger with no hook at all: the
 		// entry is always emitted; the question is whether anything caught it.
-		cpuset := CgroupBase + "/cpuset.cpus.effective"
+		cpuset := constants.CgroupMountPath + "/cpuset.cpus.effective"
 		_, hook, _ := build(map[string]error{
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})
@@ -338,7 +339,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	})
 
 	It("says nothing when cpu.pressure is absent, since a kernel without PSI is normal", func() {
-		psi := CgroupBase + "/cpu.pressure"
+		psi := constants.CgroupMountPath + "/cpu.pressure"
 		events, _, _ := build(map[string]error{
 			psi: &fs.PathError{Op: "open", Path: psi, Err: syscall.ENOENT},
 		})
@@ -348,7 +349,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	})
 
 	It("still reports cpu.pressure when it is present but unreadable", func() {
-		psi := CgroupBase + "/cpu.pressure"
+		psi := constants.CgroupMountPath + "/cpu.pressure"
 		events, _, _ := build(map[string]error{
 			psi: &fs.PathError{Op: "open", Path: psi, Err: syscall.EACCES},
 		})
@@ -370,7 +371,7 @@ var _ = Describe("a failed cgroup read is reported to Sentry", func() {
 	It("never puts a path or a raw value in the message", func() {
 		// The message is a Sentry grouping component: a path in it mints an issue
 		// per path, which the fixed vocabulary exists to prevent.
-		cpuset := CgroupBase + "/cpuset.cpus.effective"
+		cpuset := constants.CgroupMountPath + "/cpuset.cpus.effective"
 		events, _, _ := build(map[string]error{
 			cpuset: &fs.PathError{Op: "open", Path: cpuset, Err: syscall.ENOENT},
 		})

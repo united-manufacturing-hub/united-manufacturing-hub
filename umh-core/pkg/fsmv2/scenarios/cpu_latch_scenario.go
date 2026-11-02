@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 )
@@ -59,7 +60,7 @@ var CPULatchScenario = scenariorunner.Scenario{
 	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and shows the bar on re-firing",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(fsmv2cpu.CgroupBase, cpuPressureMachine(cpuLatchFiring))
+		box := newTickingBox(constants.CgroupMountPath, cpuPressureMachine(cpuLatchFiring))
 		m := cpuMachineDeps(box)
 
 		box.StartPerRead(cpuMachineReadAdvance)
