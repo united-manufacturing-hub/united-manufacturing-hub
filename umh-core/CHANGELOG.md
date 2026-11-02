@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.45]
+
 ### Improvements
 
 - Wait time between reads on the S7 input is now configurable with `timeBetweenReads`, for example `500ms` or `2s`. The default is unchanged at `1s`, and very short values can overload the PLC 
