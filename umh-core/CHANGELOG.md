@@ -2,11 +2,14 @@
 
 ## Unreleased
 
+### Improvements
+
+- The CPU status on an instance's page now comes from the [CPU health check](https://docs.umh.app/production/cpu-health) by default, so an instance is degraded, and new bridges wait, only when its CPU headroom is gone or its work is measurably delayed, not whenever usage stays above 70%. To go back to the 70% CPU usage rule, recreate the container with `-e USE_FSMV2_CPU=false`
+
 ## [0.44.45]
 
 ### Improvements
 
-- The CPU status on an instance's page now comes from the [CPU health check](https://docs.umh.app/production/cpu-health) by default, so an instance is degraded, and new bridges wait, only when its CPU headroom is gone or its work is measurably delayed, not whenever usage stays above 70%. To go back to the 70% CPU usage rule, recreate the container with `-e USE_FSMV2_CPU=false`
 - Wait time between reads on the S7 input is now configurable with `timeBetweenReads`, for example `500ms` or `2s`. The default is unchanged at `1s`, and very short values can overload the PLC 
 
 ### Fixes

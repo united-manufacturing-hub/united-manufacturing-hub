@@ -1,7 +1,7 @@
 # CPU Health
 
 {% hint style="info" %}
-The CPU health check is on by default from UMH Core v0.44.45. On v0.44.37 to v0.44.44 it is off
+The CPU health check is on by default from UMH Core v0.44.46. On v0.44.37 to v0.44.45 it is off
 unless the container starts with `-e USE_FSMV2_CPU=true`. To turn it off, add
 `-e USE_FSMV2_CPU=false` to the `docker run` command that starts the container. The flag is read at
 startup, so changing it means recreating the container. With the check off, the 70% CPU usage rule
