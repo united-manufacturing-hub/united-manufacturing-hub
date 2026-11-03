@@ -63,7 +63,7 @@ With the preview on, the instance's memory status comes from this reading. Memor
 
 Memory also counts as degraded, and bridges are held back, whenever no reading from the last three seconds is available.
 
-`memory-pressure` needs cgroup v2 with pressure stall information (PSI) enabled, the same as CPU pressure. `oom-kill` counts only the kills after umh-core started, so it does not report a kill that restarted umh-core itself.
+`memory-pressure` needs cgroup v2 with pressure stall information (PSI) enabled, the same as CPU pressure. `oom-kill` counts only the kills after umh-core started, so it does not report a kill that restarted umh-core itself. The status message also shows the kernel's OOM kill count since the container started, which includes those kills.
 
 ### Measurements
 
