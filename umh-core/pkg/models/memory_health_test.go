@@ -39,6 +39,7 @@ var memoryHealthDetailKeys = []string{
 	"pressureApplies",
 	"pressureSignalReady",
 	"oomKillsLastHour",
+	"oomKillsSinceContainerStart",
 	"oomKillsApply",
 	"oomSignalReady",
 }
