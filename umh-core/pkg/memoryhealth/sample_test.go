@@ -120,6 +120,21 @@ var _ = Describe("Sampler", func() {
 		Entry("cgroup v1 memory.oom_control", cgroupV1Files(bytesText(oneGiB), bytesText(halfGiB)), "memory/memory.oom_control", oomControlText),
 	)
 
+	It("reports the kernel's OOM kill count since container start from the first read", func() {
+		files := withFile(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), "memory.events", memoryEventsText(3))
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiB, eightGiB))
+
+		firstSample, err := sampler.Read(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(firstSample.OomKillsSinceContainerStart).To(Equal(int64(3)))
+
+		files[fixtureCgroupBase+"/memory.events"] = memoryEventsText(5)
+
+		secondSample, err := sampler.Read(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(secondSample.OomKillsSinceContainerStart).To(Equal(int64(5)))
+	})
+
 	It("leaves the new OOM kills unknown when the counter goes down", func() {
 		files := withFile(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB)), "memory.events", memoryEventsText(5))
 		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, hostMemoryOf(threeGiB, eightGiB))

@@ -310,6 +310,16 @@ var _ = Describe("Decide for OOM kills", func() {
 		Expect(recovered.State).To(Equal(memoryhealth.StateHealthy))
 	})
 
+	It("passes the OOM kills since container start through after the hour has passed", func() {
+		sample := containerWithNewOomKills(0)
+		sample.OomKillsSinceContainerStart = 4
+
+		verdict, details := newMemoryJudge().decideSampleRepeatedly(sample, twoMinutesOfSamples)
+
+		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
+		Expect(details.OomKillsSinceContainerStart).To(Equal(int64(4)))
+	})
+
 	It("is healthy without OOM kills", func() {
 		verdict, _ := newMemoryJudge().decideSampleRepeatedly(containerWithNewOomKills(0), twoMinutesOfSamples)
 

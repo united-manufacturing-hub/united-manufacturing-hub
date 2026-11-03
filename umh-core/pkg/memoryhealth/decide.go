@@ -44,9 +44,10 @@ type Details struct {
 	PressureApplies     bool    `json:"pressureApplies"`
 	PressureSignalReady bool    `json:"pressureSignalReady"`
 
-	OomKillsLastHour float64 `json:"oomKillsLastHour"`
-	OomKillsApply    bool    `json:"oomKillsApply"`
-	OomSignalReady   bool    `json:"oomSignalReady"`
+	OomKillsLastHour            float64 `json:"oomKillsLastHour"`
+	OomKillsSinceContainerStart int64   `json:"oomKillsSinceContainerStart"`
+	OomKillsApply               bool    `json:"oomKillsApply"`
+	OomSignalReady              bool    `json:"oomSignalReady"`
 }
 
 // Measured reports whether the window holds enough samples to judge the memory.
@@ -116,9 +117,10 @@ func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
 		PressureApplies:     pressureRead,
 		PressureSignalReady: pressureReady,
 
-		OomKillsLastHour: oomKillsLastHour,
-		OomKillsApply:    sample.OomCounterRead,
-		OomSignalReady:   oomReady,
+		OomKillsLastHour:            oomKillsLastHour,
+		OomKillsSinceContainerStart: sample.OomKillsSinceContainerStart,
+		OomKillsApply:               sample.OomCounterRead,
+		OomSignalReady:              oomReady,
 	}
 }
 

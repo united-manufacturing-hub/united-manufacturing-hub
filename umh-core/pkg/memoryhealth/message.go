@@ -50,10 +50,18 @@ func ComposeMessage(verdict Verdict, details Details) string {
 
 func composeHealthy(details Details) string {
 	if !usageMeasured(details) {
-		return memoryStartingUp + technicalDetails(nil, details)
+		return memoryStartingUp + earlierOomKills(details) + technicalDetails(nil, details)
 	}
 
-	return healthyHeadline(details) + technicalDetails(nil, details)
+	return healthyHeadline(details) + earlierOomKills(details) + technicalDetails(nil, details)
+}
+
+func earlierOomKills(details Details) string {
+	if !details.OomKillsApply || details.OomKillsSinceContainerStart == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf(noteEarlierOomKills, processCount(float64(details.OomKillsSinceContainerStart)))
 }
 
 func healthyHeadline(details Details) string {
@@ -185,7 +193,7 @@ func memoryRules(causes []Cause, details Details) []memoryRule {
 		},
 		{
 			label:                labelOomKills,
-			measured:             fmt.Sprintf("%d in the last hour", int(details.OomKillsLastHour)),
+			measured:             fmt.Sprintf("%d in the last hour, %d since container start", int(details.OomKillsLastHour), details.OomKillsSinceContainerStart),
 			marks:                oomKillMarks,
 			notApplicableBecause: absentUnless(details.OomKillsApply, reasonNoOomCounter),
 			ready:                details.OomSignalReady,
@@ -294,6 +302,8 @@ const (
 	headlineHealthyLimitClose   = "Memory healthy. This instance is using %s of %s (%d%% of its limit) and is close to being marked degraded."
 	headlineHealthyMachine      = "Memory healthy. The machine is using %s of %s and can use %s more before it is marked degraded."
 	headlineHealthyMachineClose = "Memory healthy. The machine is using %s of %s and is close to being marked degraded."
+
+	noteEarlierOomKills = " The kernel stopped %s in this instance since the container started because memory ran out."
 
 	headlineOomKill   = "Memory ran out"
 	headlinePressure  = "Memory contention"

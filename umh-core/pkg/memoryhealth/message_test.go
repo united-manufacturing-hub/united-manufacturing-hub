@@ -155,6 +155,31 @@ var _ = Describe("ComposeMessage for a healthy verdict", func() {
 		Expect(messageLines(message)[0]).To(Equal(fmt.Sprintf(headlineHealthyLimitClose, "1.6", "2.0 GiB", 78)))
 	})
 
+	It("adds the OOM kills since container start to the healthy headline", func() {
+		details := limitDetails(0.5)
+		details.OomKillsSinceContainerStart = 4
+
+		message := ComposeMessage(Verdict{State: StateHealthy}, details)
+
+		Expect(messageLines(message)[0]).To(Equal(fmt.Sprintf(headlineHealthyLimit, "1.0", "2.0 GiB", 50, "0.6 GiB") + fmt.Sprintf(noteEarlierOomKills, "4 processes")))
+	})
+
+	It("leaves the healthy headline alone without OOM kills since container start", func() {
+		message := ComposeMessage(Verdict{State: StateHealthy}, limitDetails(0.5))
+
+		Expect(messageLines(message)[0]).To(Equal(fmt.Sprintf(headlineHealthyLimit, "1.0", "2.0 GiB", 50, "0.6 GiB")))
+	})
+
+	It("leaves the healthy headline alone when the OOM kill counter is unreadable", func() {
+		details := limitDetails(0.5)
+		details.OomKillsSinceContainerStart = 4
+		details.OomKillsApply = false
+
+		message := ComposeMessage(Verdict{State: StateHealthy}, details)
+
+		Expect(messageLines(message)[0]).To(Equal(fmt.Sprintf(headlineHealthyLimit, "1.0", "2.0 GiB", 50, "0.6 GiB")))
+	})
+
 	It("says it is starting up until the usage is measured", func() {
 		details := limitDetails(0.5)
 		details.UsedRingActive = false
@@ -175,7 +200,7 @@ var _ = Describe("the Technical Details table", func() {
 			labelInstanceMemory + " 55% of 2.0 GiB limit (degrades at 80%).",
 			labelMachineMemory + " 41% of 16.0 GiB (degrades at 80%).",
 			labelMemoryPressure + " 3% (degrades above 20%).",
-			labelOomKills + " 0 in the last hour (degrades at 1).",
+			labelOomKills + " 0 in the last hour, 0 since container start (degrades at 1).",
 		}))
 	})
 
@@ -194,6 +219,16 @@ var _ = Describe("the Technical Details table", func() {
 
 		Expect(lines[0]).To(Equal(labelInstanceMemory + " not measured (" + reasonNoMemoryLimit + ")."))
 		Expect(lines[2]).To(Equal(labelMemoryPressure + " not measured (" + reasonNoPressureStats + ")."))
+	})
+
+	It("shows the OOM kills in the last hour next to those since container start", func() {
+		details := limitDetails(0.55)
+		details.OomKillsLastHour = 1
+		details.OomKillsSinceContainerStart = 4
+
+		lines := technicalDetailsLines(ComposeMessage(degradedBy(Cause{Kind: CauseKindOomKill, Value: 1}), details))
+
+		Expect(lines[3]).To(Equal(labelOomKills + " 1 in the last hour, 4 since container start (recovers at 0)."))
 	})
 
 	It("says a rule is still measuring while its window fills", func() {
