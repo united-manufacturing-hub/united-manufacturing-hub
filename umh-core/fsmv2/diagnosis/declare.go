@@ -112,6 +112,10 @@ type Signal[S any] struct {
 	// ReleaseOnAbsent stops reporting the signal the moment nothing can answer
 	// it at all, rather than waiting out DemoteSpan.
 	ReleaseOnAbsent bool
+	// RefireAtOnce skips the cooldown of one window span after a release, which
+	// otherwise stops a value near the marks from flapping. Set it when each new
+	// crossing of the fire mark is a separate failure, such as a new error.
+	RefireAtOnce bool
 }
 
 // CapableInstruments returns the instruments the environment satisfies, in
