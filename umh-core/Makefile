@@ -180,6 +180,19 @@ download-docker-binaries:
 
 	@echo "All required files are present and up to date"
 
+# Re-records the benthosmetrics /metrics fixture from the pinned benthos-umh
+# image, using the capture config beside it. The fixture spec then fails on
+# any series a version bump renames. See pkg/benthosmetrics/names.go.
+.PHONY: benthosmetrics-fixture
+
+benthosmetrics-fixture:
+	docker run -d --name benthosmetrics-fixture -p 4195:4195 \
+		-v $(PWD)/pkg/benthosmetrics/testdata/capture.yaml:/benthos.yaml:ro \
+		ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)
+	sleep 35
+	curl -s localhost:4195/metrics > pkg/benthosmetrics/testdata/metrics_benthos_umh_$(subst .,_,$(BENTHOS_UMH_VERSION)).txt
+	docker rm -f benthosmetrics-fixture
+
 .PHONY: build build-pprof build-debug build-depot
 
 # ============== SHARED BUILD ARGS (single source of truth) ==============
