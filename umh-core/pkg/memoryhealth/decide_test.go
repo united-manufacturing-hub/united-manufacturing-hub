@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	decimalTotalBytes   int64 = 1000000000
-	decimalMachineBytes int64 = 8000000000
+	decimalTotalBytes   memoryhealth.Bytes = 1000000000
+	decimalMachineBytes memoryhealth.Bytes = 8000000000
 
 	twoMinutesOfSamples = 120
 	oneHourOfSamples    = 3600
@@ -46,8 +46,8 @@ func newMemoryJudge() *memoryJudge {
 	return &memoryJudge{engine: engine, sampleTime: firstSampleTime}
 }
 
-func percentOf(totalBytes, percent int64) int64 {
-	return totalBytes * percent / 100
+func percentOf(totalBytes memoryhealth.Bytes, percent int64) memoryhealth.Bytes {
+	return totalBytes * memoryhealth.Bytes(percent) / 100
 }
 
 func containerAtPercent(usedPercent int64) memoryhealth.Sample {

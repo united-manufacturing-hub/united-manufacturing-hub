@@ -58,12 +58,14 @@ func (s *cgroupV2Source) read(ctx context.Context) (CgroupMemory, error) {
 	memoryMaxText := strings.TrimSpace(string(memoryMaxData))
 	unlimited := memoryMaxText == v2NoLimitText
 
-	var limitBytes int64
+	var limitBytes Bytes
 	if !unlimited {
-		limitBytes, err = parseNonNegativeInteger(v2MemoryMaxFile, memoryMaxText)
+		limitCount, err := parseNonNegativeInteger(v2MemoryMaxFile, memoryMaxText)
 		if err != nil {
 			return CgroupMemory{}, &CgroupReadError{File: v2MemoryMaxFile, Outcome: ReadUnparsable, Err: err}
 		}
+
+		limitBytes = Bytes(limitCount)
 	}
 
 	currentBytes, err := readByteCountFile(ctx, s.fileSystem, s.cgroupBase, v2MemoryCurrentFile)

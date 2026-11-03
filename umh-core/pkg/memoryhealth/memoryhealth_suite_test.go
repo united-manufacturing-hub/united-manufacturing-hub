@@ -35,20 +35,20 @@ func TestMemoryHealth(t *testing.T) {
 }
 
 const (
-	halfGiB  int64 = 536870912
-	oneGiB   int64 = 1073741824
-	twoGiB   int64 = 2147483648
-	threeGiB int64 = 3221225472
-	fourGiB  int64 = 4294967296
-	eightGiB int64 = 8589934592
+	halfGiB  memoryhealth.Bytes = 536870912
+	oneGiB   memoryhealth.Bytes = 1073741824
+	twoGiB   memoryhealth.Bytes = 2147483648
+	threeGiB memoryhealth.Bytes = 3221225472
+	fourGiB  memoryhealth.Bytes = 4294967296
+	eightGiB memoryhealth.Bytes = 8589934592
 
 	fixtureCgroupBase = "/sys/fs/cgroup"
 )
 
 var errHostUnreadable = errors.New("host memory unreadable")
 
-func bytesText(bytes int64) string {
-	return strconv.FormatInt(bytes, 10) + "\n"
+func bytesText(bytes memoryhealth.Bytes) string {
+	return strconv.FormatInt(int64(bytes), 10) + "\n"
 }
 
 func cgroupFiles(memoryMax, memoryCurrent string) map[string]string {
@@ -103,12 +103,12 @@ func fixtureFilesystem(files map[string]string) *filesystem.MockFileSystem {
 	})
 }
 
-func hostMemoryOf(usedBytes, totalBytes int64) memoryhealth.HostMemoryReader {
-	return func(context.Context) (uint64, uint64, error) {
-		return uint64(usedBytes), uint64(totalBytes), nil
+func hostMemoryOf(usedBytes, totalBytes memoryhealth.Bytes) memoryhealth.HostMemoryReader {
+	return func(context.Context) (memoryhealth.Bytes, memoryhealth.Bytes, error) {
+		return usedBytes, totalBytes, nil
 	}
 }
 
-func unreadableHostMemory(context.Context) (uint64, uint64, error) {
+func unreadableHostMemory(context.Context) (memoryhealth.Bytes, memoryhealth.Bytes, error) {
 	return 0, 0, errHostUnreadable
 }

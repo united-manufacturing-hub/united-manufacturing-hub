@@ -81,7 +81,7 @@ func usedFraction(sample Sample) diagnosis.Reading {
 	return fractionOf(sample.UsedBytes, sample.TotalBytes)
 }
 
-func fractionOf(usedBytes, totalBytes int64) diagnosis.Reading {
+func fractionOf(usedBytes, totalBytes Bytes) diagnosis.Reading {
 	if totalBytes <= 0 {
 		return diagnosis.Unknown()
 	}

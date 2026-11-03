@@ -38,17 +38,20 @@ const (
 // ErrZeroTotal is returned for a sample whose total memory is zero.
 var ErrZeroTotal = errors.New("memory total is zero")
 
+// Bytes is an amount of memory in bytes.
+type Bytes int64
+
 // HostMemoryReader returns the machine's used and total memory.
-type HostMemoryReader func(ctx context.Context) (usedBytes, totalBytes uint64, err error)
+type HostMemoryReader func(ctx context.Context) (usedBytes, totalBytes Bytes, err error)
 
 // Sample is one reading of the container's memory.
 type Sample struct {
 	Timestamp                   time.Time
 	Source                      Source
-	UsedBytes                   int64
-	TotalBytes                  int64
-	HostUsedBytes               int64
-	HostTotalBytes              int64
+	UsedBytes                   Bytes
+	TotalBytes                  Bytes
+	HostUsedBytes               Bytes
+	HostTotalBytes              Bytes
 	Pressure                    diagnosis.Reading
 	NewOomKills                 diagnosis.Reading
 	OomKillsSinceContainerStart int64
@@ -86,13 +89,13 @@ func NewSampler(fileSystem filesystem.Service, cgroupBase string, hostMemory Hos
 
 // ReadHostMemory returns the machine's used and total memory from the operating
 // system.
-func ReadHostMemory(ctx context.Context) (usedBytes, totalBytes uint64, err error) {
+func ReadHostMemory(ctx context.Context) (usedBytes, totalBytes Bytes, err error) {
 	virtualMemory, err := mem.VirtualMemoryWithContext(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	return virtualMemory.Used, virtualMemory.Total, nil
+	return Bytes(virtualMemory.Used), Bytes(virtualMemory.Total), nil
 }
 
 // Read takes one sample. It returns the sample with an error when no total
@@ -123,8 +126,8 @@ func (s *Sampler) Read(ctx context.Context) (Sample, error) {
 
 	sample.HostReadErr = hostErr
 	if hostErr == nil {
-		sample.HostUsedBytes = int64(hostUsed)
-		sample.HostTotalBytes = int64(hostTotal)
+		sample.HostUsedBytes = hostUsed
+		sample.HostTotalBytes = hostTotal
 	}
 
 	sample, err := chooseSource(sample, cgroup)
@@ -167,7 +170,7 @@ func hostFallback(sample Sample) (Sample, error) {
 	return sample, nil
 }
 
-func cgroupAgainstHostTotal(sample Sample, cgroupUsedBytes int64) (Sample, error) {
+func cgroupAgainstHostTotal(sample Sample, cgroupUsedBytes Bytes) (Sample, error) {
 	if sample.HostReadErr != nil {
 		return sample, fmt.Errorf("cgroup memory has no limit and host memory is unreadable: %w", sample.HostReadErr)
 	}

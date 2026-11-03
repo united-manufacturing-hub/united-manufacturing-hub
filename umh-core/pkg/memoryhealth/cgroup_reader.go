@@ -28,8 +28,8 @@ import (
 
 // CgroupMemory is a cgroup's memory limit and current usage.
 type CgroupMemory struct {
-	LimitBytes   int64
-	CurrentBytes int64
+	LimitBytes   Bytes
+	CurrentBytes Bytes
 	Unlimited    bool
 }
 
@@ -97,7 +97,7 @@ func readCgroupFile(ctx context.Context, fileSystem filesystem.Service, cgroupBa
 	return nil, &CgroupReadError{File: file, Outcome: outcome, Err: err}
 }
 
-func readByteCountFile(ctx context.Context, fileSystem filesystem.Service, cgroupBase, file string) (int64, error) {
+func readByteCountFile(ctx context.Context, fileSystem filesystem.Service, cgroupBase, file string) (Bytes, error) {
 	data, err := readCgroupFile(ctx, fileSystem, cgroupBase, file)
 	if err != nil {
 		return 0, err
@@ -108,7 +108,7 @@ func readByteCountFile(ctx context.Context, fileSystem filesystem.Service, cgrou
 		return 0, &CgroupReadError{File: file, Outcome: ReadUnparsable, Err: err}
 	}
 
-	return byteCount, nil
+	return Bytes(byteCount), nil
 }
 
 func parseNonNegativeInteger(file, text string) (int64, error) {
