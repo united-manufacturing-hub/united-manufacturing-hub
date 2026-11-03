@@ -19,11 +19,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/health"
 )
+
+const testHierarchyPath = "test-worker(test)"
 
 var _ = Describe("FreshnessChecker", func() {
 	Context("when observation data is fresh", func() {
@@ -35,17 +35,9 @@ var _ = Describe("FreshnessChecker", func() {
 				deps.NewNopFSMLogger(),
 			)
 
-			snapshot := &fsmv2.Snapshot{
-				Identity: supervisor.TestIdentity(),
-				Observed: &supervisor.TestObservedState{
-					ID:          "test-worker",
-					CollectedAt: time.Now(),
-					Desired:     &supervisor.TestDesiredState{},
-				},
-				Desired: &supervisor.TestDesiredState{},
-			}
+			observedAt := time.Now()
 
-			Expect(checker.Check(snapshot)).To(BeTrue())
+			Expect(checker.Check(observedAt, testHierarchyPath)).To(BeTrue())
 		})
 	})
 
@@ -58,17 +50,9 @@ var _ = Describe("FreshnessChecker", func() {
 				deps.NewNopFSMLogger(),
 			)
 
-			snapshot := &fsmv2.Snapshot{
-				Identity: supervisor.TestIdentity(),
-				Observed: &supervisor.TestObservedState{
-					ID:          "test-worker",
-					CollectedAt: time.Now().Add(-15 * time.Second),
-					Desired:     &supervisor.TestDesiredState{},
-				},
-				Desired: &supervisor.TestDesiredState{},
-			}
+			observedAt := time.Now().Add(-15 * time.Second)
 
-			Expect(checker.Check(snapshot)).To(BeFalse())
+			Expect(checker.Check(observedAt, testHierarchyPath)).To(BeFalse())
 		})
 	})
 
@@ -81,17 +65,9 @@ var _ = Describe("FreshnessChecker", func() {
 				deps.NewNopFSMLogger(),
 			)
 
-			snapshot := &fsmv2.Snapshot{
-				Identity: supervisor.TestIdentity(),
-				Observed: &supervisor.TestObservedState{
-					ID:          "test-worker",
-					CollectedAt: time.Now().Add(-25 * time.Second),
-					Desired:     &supervisor.TestDesiredState{},
-				},
-				Desired: &supervisor.TestDesiredState{},
-			}
+			observedAt := time.Now().Add(-25 * time.Second)
 
-			Expect(checker.IsTimeout(snapshot)).To(BeTrue())
+			Expect(checker.IsTimeout(observedAt, testHierarchyPath)).To(BeTrue())
 		})
 	})
 })

@@ -66,7 +66,7 @@ func (gatedActionState) LifecyclePhase() config.LifecyclePhase {
 
 func (s gatedActionState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if snap, ok := snapshot.(fsmv2.Snapshot); ok {
-		if ds, ok := snap.Desired.(fsmv2.DesiredState); ok && ds.IsShutdownRequested() {
+		if snap.Desired.IsShutdownRequested() {
 			return fsmv2.NextResult[any, any]{
 				Signal: fsmv2.SignalNeedsRemoval,
 				State:  s,
