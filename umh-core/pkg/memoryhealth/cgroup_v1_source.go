@@ -27,6 +27,7 @@ const (
 	v1MemoryUsageFile = "memory/memory.usage_in_bytes"
 	v1OomControlFile  = "memory/memory.oom_control"
 
+	// cgroup v1 reports no limit as MaxInt64 rounded down to a whole page, so the threshold allows for pages up to 64 KiB.
 	largestKernelPageSizeBytes = 64 << 10
 	v1UnlimitedThresholdBytes  = math.MaxInt64 - largestKernelPageSizeBytes
 )
