@@ -24,8 +24,10 @@ import (
 )
 
 const (
-	v2MemoryMaxFile      = "memory.max"
-	v2MemoryCurrentFile  = "memory.current"
+	v2MemoryMaxFile     = "memory.max"
+	v2MemoryCurrentFile = "memory.current"
+	// memory.pressure is the share of time tasks waited for memory, read apart from cpu.pressure.
+	// See https://docs.kernel.org/accounting/psi.html
 	v2MemoryPressureFile = "memory.pressure"
 	v2MemoryEventsFile   = "memory.events"
 	v2NoLimitText        = "max"
