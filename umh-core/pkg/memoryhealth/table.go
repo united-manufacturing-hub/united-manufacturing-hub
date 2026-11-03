@@ -30,6 +30,7 @@ const (
 	averageSpan    = 60 * time.Second
 )
 
+// The tiers rank the causes for the headline: a lower tier is more urgent.
 const (
 	tierOomKill = iota
 	tierMemoryPressure
