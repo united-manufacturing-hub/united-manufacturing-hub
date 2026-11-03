@@ -5,7 +5,7 @@ The CPU health check is on by default from UMH Core v0.44.46. On v0.44.37 to v0.
 unless the container starts with `-e USE_FSMV2_CPU=true`. To turn it off, add
 `-e USE_FSMV2_CPU=false` to the `docker run` command that starts the container. The flag is read at
 startup, so changing it means recreating the container. With the check off, the 70% CPU usage rule
-applies instead. An instance is then degraded while its CPU usage stays above 70% of the cores it
+applies instead. An instance is then degraded while its CPU usage is at or above 70% of the cores it
 may use, or while it is throttled. The check does not need Management Console credentials: it also
 runs on an instance started without `AUTH_TOKEN` and `API_URL`.
 {% endhint %}
