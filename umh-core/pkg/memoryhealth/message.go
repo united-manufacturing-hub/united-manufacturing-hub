@@ -24,8 +24,10 @@ import (
 )
 
 const (
+	// The standard library has no GiB constant.
 	bytesPerGiB = 1 << 30
 
+	// Below this share of the total in headroom, the healthy headline says "close to being marked degraded" instead of the headroom.
 	closeToDegradedHeadroomShare = 0.05
 )
 
