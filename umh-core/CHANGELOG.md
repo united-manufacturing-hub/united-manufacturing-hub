@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- New `USE_FSMV2_BENTHOS_METRICS` flag, off by default: umh-core reads each Benthos instance's metrics in-process instead of starting a separate monitor process per instance. It accepts true, false, 1, 0, yes, no, y, n, on and off in any case; any other value logs a warning and leaves the flag off.
+
 ### Fixes
 
 - An instance whose CPU status has just gone back to healthy now turns degraded again on the first reading past one of the [CPU health check](https://docs.umh.app/production/cpu-health)'s thresholds. Before, it stayed healthy for up to a minute
