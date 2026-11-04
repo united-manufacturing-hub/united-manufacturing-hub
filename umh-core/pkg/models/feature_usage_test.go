@@ -51,6 +51,20 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).To(HaveKeyWithValue("fsmv2CpuEnabled", true))
 	})
 
+	It("serializes the FSMv2 Benthos metrics flag under the JSON key fsmv2BenthosMetricsEnabled", func() {
+		usage := models.FeatureUsage{
+			FSMv2BenthosMetricsEnabled: true,
+		}
+
+		data, err := json.Marshal(usage)
+		Expect(err).NotTo(HaveOccurred())
+
+		var raw map[string]interface{}
+		Expect(json.Unmarshal(data, &raw)).To(Succeed())
+
+		Expect(raw).To(HaveKeyWithValue("fsmv2BenthosMetricsEnabled", true))
+	})
+
 	It("serializes the historian adoption fields", func() {
 		usage := models.FeatureUsage{
 			HistorianConfigured:  true,

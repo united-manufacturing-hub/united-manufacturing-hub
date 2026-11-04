@@ -48,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 )
@@ -150,12 +151,23 @@ func main() {
 		log.Info("CPU status uses the 70% CPU usage rule because USE_FSMV2_CPU turns the CPU health check off")
 	}
 
+	// A malformed value reads as false here; the warning below is the one
+	// line the process logs about it, so it appears at start-up even with no
+	// Benthos configured.
+	benthosMetricsEnabled, benthosMetricsErr := benthossvc.FSMv2BenthosMetricsEnabled()
+	if benthosMetricsErr != nil {
+		log.Warnf("%v; ignoring it and keeping FSMv1's Benthos monitor", benthosMetricsErr)
+	} else if benthosMetricsEnabled {
+		log.Info("USE_FSMV2_BENTHOS_METRICS is on: Benthos instances are monitored by the FSMv2 Benthos metrics worker (in-process scrape, no S6 monitor service)")
+	}
+
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
 		FSMv2CPUEnabled:               models.FSMv2CPUEnabled(cpuMonitorEnabled),
 		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
 		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
 		FSMv2ProtocolConverterEnabled: protocolConverterEnabled,
+		FSMv2BenthosMetricsEnabled:    benthosMetricsEnabled,
 		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
 		HistorianConfigured:           configData.Historian != nil,
 		HistorianBridgeCount:          countHistorianBridges(configData),

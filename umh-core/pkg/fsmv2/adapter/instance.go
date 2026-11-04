@@ -90,6 +90,17 @@ type AdaptedInstance[TConfig, TStatus any] struct {
 	// when unregistered. Framework-owned, not a developer knob.
 	staleAfter time.Duration
 
+	// holdLastStatusOnUnknown turns on the hold-and-re-map rule of
+	// GetLastObservedState; see WorkerManagerSpec.HoldLastStatusOnUnknown.
+	holdLastStatusOnUnknown bool
+
+	// lastStatus is the cached status of the last read that was not Unknown,
+	// with haveLastStatus set once one such read happened. Guarded by mu, like
+	// lastState, because GetLastObservedState may run concurrently with the
+	// fsmv1 control loop's reads.
+	lastStatus     TStatus
+	haveLastStatus bool
+
 	mu sync.Mutex
 
 	// isDisabled is set when the worker is deliberately disabled (not running).
@@ -113,22 +124,24 @@ func newAdaptedInstance[TConfig, TStatus any](
 	isDisabled bool,
 	log deps.FSMLogger,
 	states StateVocabulary,
+	holdLastStatusOnUnknown bool,
 ) *AdaptedInstance[TConfig, TStatus] {
 	if log == nil {
 		log = deps.NewNopFSMLogger()
 	}
 
 	return &AdaptedInstance[TConfig, TStatus]{
-		ref:             ref,
-		cfg:             cfg,
-		desiredState:    desiredState,
-		minRequiredTime: minRequiredTime,
-		staleAfter:      staleAfterFor(ref.WorkerType),
-		mapFresh:        mapFresh,
-		mapObserved:     mapObserved,
-		isDisabled:      isDisabled,
-		log:             log,
-		states:          states,
+		ref:                     ref,
+		cfg:                     cfg,
+		desiredState:            desiredState,
+		minRequiredTime:         minRequiredTime,
+		staleAfter:              staleAfterFor(ref.WorkerType),
+		mapFresh:                mapFresh,
+		mapObserved:             mapObserved,
+		isDisabled:              isDisabled,
+		log:                     log,
+		states:                  states,
+		holdLastStatusOnUnknown: holdLastStatusOnUnknown,
 	}
 }
 
@@ -267,8 +280,26 @@ func (i *AdaptedInstance[TConfig, TStatus]) Remove(_ context.Context) error {
 // mapObserved receives a zero status and produces the developer's type with
 // empty content rather than a foreign framework type a consumer's type
 // assertion would trip on. mapObserved must tolerate a zero status.
+//
+// With HoldLastStatusOnUnknown on, an Unknown read instead re-maps the
+// cached last status; see WorkerManagerSpec.HoldLastStatusOnUnknown.
 func (i *AdaptedInstance[TConfig, TStatus]) GetLastObservedState() publicfsm.ObservedState {
-	status, _ := i.getFreshStatus()
+	status, freshness := i.getFreshStatus()
+
+	// mu guards only the hold cache below: mapObserved is developer code and
+	// may read the same instance (GetCurrentFSMState takes mu too), so it
+	// runs unlocked.
+	i.mu.Lock()
+	if i.holdLastStatusOnUnknown {
+		if freshness == fsmv2client.Unknown {
+			if i.haveLastStatus {
+				status = i.lastStatus
+			}
+		} else {
+			i.lastStatus, i.haveLastStatus = status, true
+		}
+	}
+	i.mu.Unlock()
 
 	return i.mapObserved(i.cfg, status)
 }
