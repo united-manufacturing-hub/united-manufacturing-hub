@@ -75,8 +75,9 @@ const BridgedByPlaceholder = "unimplemented"
 //   - Passing a nil *Spec* results in an explicit error; an empty runtime
 //     struct is **never** returned.
 //   - A *WriteFlowConfigError* is returned together with a runtime whose connection and
-//     read flow are usable and whose write flow is blank. Callers that need only the read
-//     side can ignore it; the bridge stays up either way.
+//     read flow are usable. Its HasWriteFlow method says whether the write flow is
+//     rendered too, which it is only with bypassWriteFlowValidation
+//     (BYPASS_WRITE_FLOW_VALIDATION). The bridge stays up either way.
 //   - After rendering, **no** `{{ … }}` directives remain.
 //   - The returned object is ready for diffing or to be handed straight to the
 //     Protocol-Converter FSM.
@@ -88,6 +89,7 @@ func BuildRuntimeConfig(
 	globalVars map[string]any,
 	historian *config.HistorianConfig,
 	dataContracts []config.DataContractsConfig,
+	bypassWriteFlowValidation bool,
 	nodeName string,
 	pcName string,
 ) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
@@ -240,7 +242,7 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
 
-	runtime, err := renderConfig(spec, scope, locationPath, dataContractNames(dataContracts), secrets) // unexported helper that enforces UNS
+	runtime, err := renderConfig(spec, scope, locationPath, dataContractNames(dataContracts), bypassWriteFlowValidation, secrets) // unexported helper that enforces UNS
 	if err != nil && !historianUsable && referencesMissingHistorian(err) {
 		return runtime, missingHistorianError(err, bridgeDefinesHistorian)
 	}
@@ -274,14 +276,30 @@ func dataContractNames(dataContracts []config.DataContractsConfig) []string {
 
 // WriteFlowConfigError marks a configuration failure confined to the write flow of a
 // bridge. BuildRuntimeConfig returns it alongside a runtime whose connection and read
-// flow are rendered and whose write flow is blank, so the read flow keeps running.
+// flow are rendered, so the read flow keeps running. Whether the write flow is rendered
+// as well, HasWriteFlow says.
 type WriteFlowConfigError struct {
 	Err error
+	// Bypassed is set when BYPASS_WRITE_FLOW_VALIDATION is true and the topics break only
+	// the data contract rules, because they name unchecked data contracts. The write flow
+	// is then rendered and runs, and the bridge reports degraded with this error.
+	Bypassed bool
 }
 
 // Error implements the error interface.
 func (e *WriteFlowConfigError) Error() string {
+	if e.Bypassed {
+		return config.BypassWriteFlowValidationEnv + " is set, so the write flow runs although its topics break the data contract rules: " + e.Err.Error()
+	}
+
 	return e.Err.Error()
+}
+
+// HasWriteFlow reports whether the runtime returned with e has a rendered write flow. It
+// has one only when Bypassed is set (BYPASS_WRITE_FLOW_VALIDATION); otherwise the write
+// flow is blank. Connection and read flow are always rendered.
+func (e *WriteFlowConfigError) HasWriteFlow() bool {
+	return e.Bypassed
 }
 
 // Unwrap exposes the underlying cause to errors.Is and errors.As.
@@ -360,6 +378,7 @@ func renderConfig(
 	scope map[string]any,
 	locationPath string,
 	dataContracts []string,
+	bypassWriteFlowValidation bool,
 	secrets []string,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
@@ -418,13 +437,22 @@ func renderConfig(
 	// after rendering, so templated topics are checked in their resolved form. A violation
 	// blanks the write flow instead of failing the render, leaving connection and read flow
 	// up. A write flow with no destination, or a stopped one, subscribes to nothing.
+	//
+	// With BYPASS_WRITE_FLOW_VALIDATION, a write flow whose topics break only the data
+	// contract rules is kept, and the returned error has Bypassed set.
 	var writeFlowErr error
 
 	writeStopped := spec.WriteDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
 	if renderedWriteConfig.HasOutput() && !writeStopped {
-		if err := renderedWriteConfig.ToWriteConfig().ValidateTopics(locationPath, dataContracts); err != nil {
-			writeFlowErr = &WriteFlowConfigError{Err: err}
-			renderedWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{}
+		write := renderedWriteConfig.ToWriteConfig()
+		if err := write.ValidateTopics(locationPath, dataContracts); err != nil {
+			bypassed := bypassWriteFlowValidation &&
+				write.ValidateTopicsWithBypass(locationPath, dataContracts) == nil
+
+			writeFlowErr = &WriteFlowConfigError{Err: err, Bypassed: bypassed}
+			if !bypassed {
+				renderedWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{}
+			}
 		}
 	}
 

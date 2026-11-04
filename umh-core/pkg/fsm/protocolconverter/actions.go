@@ -336,21 +336,31 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		nil, // TODO: add global vars
 		snapshot.CurrentConfig.Historian,
 		snapshot.CurrentConfig.DataContracts,
+		snapshot.CurrentConfig.Agent.BypassWriteFlowValidation,
 		runtime_config.BridgedByPlaceholder,
 		p.baseFSMInstance.GetID(),
 	)
 	// A failure confined to the write flow leaves connection and read flow rendered, so the
-	// bridge keeps serving them. Any other failure means no usable config at all.
+	// bridge keeps serving them. With BYPASS_WRITE_FLOW_VALIDATION the write flow may be
+	// rendered and running too, but the bridge still reports degraded. Any other failure
+	// means no usable config at all.
 	var writeFlowErr *runtime_config.WriteFlowConfigError
 
 	p.writeFlowConfigErr = nil
 
 	switch {
 	case errors.As(err, &writeFlowErr):
-		// Repeats every tick until the config is fixed, so dedup by format string.
-		p.baseFSMInstance.Logger.LogErrorDedup("write flow not started: %v", writeFlowErr)
-		p.writeFlowConfigErr = writeFlowErr.Err
-		p.ObservedState.ServiceInfo.StatusReason = p.writeFlowConfigErr.Error()
+		p.writeFlowConfigErr = writeFlowErr
+		p.ObservedState.ServiceInfo.StatusReason = writeFlowErr.Error()
+
+		if writeFlowErr.HasWriteFlow() {
+			// BYPASS_WRITE_FLOW_VALIDATION: the write flow runs. The degraded status already
+			// shows the reason, so it is logged at debug level only.
+			p.baseFSMInstance.GetLogger().Debugf("write flow degraded: %v", writeFlowErr)
+		} else {
+			// Repeats every tick until the config is fixed, so dedup by format string.
+			p.baseFSMInstance.Logger.LogErrorDedup("write flow not started: %v", writeFlowErr)
+		}
 	case err != nil:
 		p.baseFSMInstance.Logger.LogErrorDedup("failed to build runtime config: %v", err)
 		// Capture the configuration error in StatusReason for troubleshooting
@@ -502,6 +512,8 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 
 	// A rejected write flow is kept out of the runtime, so it reads as stopped rather than
 	// failed. Without this the bridge would recover to idle and degrade again every tick.
+	// With BYPASS_WRITE_FLOW_VALIDATION the write flow runs, but the bridge stays degraded
+	// while its topics break the data contract rules.
 	if p.writeFlowConfigErr != nil && !writeIntentionallyStopped {
 		writeHealthy = false
 	}
@@ -519,7 +531,9 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 		return false, statusReason
 	}
 
-	if p.writeFlowConfigErr != nil {
+	// With BYPASS_WRITE_FLOW_VALIDATION the write flow runs, so once it stops running its
+	// own reason is the more useful one, for example an output that cannot connect.
+	if p.writeFlowConfigErr != nil && (!p.writeFlowConfigErr.HasWriteFlow() || writeRunning) {
 		return false, p.writeFlowConfigErr.Error()
 	}
 

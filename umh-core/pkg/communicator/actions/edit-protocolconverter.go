@@ -1265,9 +1265,18 @@ func (a *EditProtocolConverterAction) resolvedConnectionEndpoint(newSpec protoco
 		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
 		currentConfig.DataContracts,
+		currentConfig.Agent.BypassWriteFlowValidation,
 		runtime_config.BridgedByPlaceholder,
 		a.name,
 	)
+
+	// A failure confined to the write flow still yields a rendered connection, which is
+	// all this needs.
+	var writeFlowErr *runtime_config.WriteFlowConfigError
+	if errors.As(err, &writeFlowErr) {
+		err = nil
+	}
+
 	if err != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to build runtime config: %w", err)
 	}
@@ -1343,13 +1352,15 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
 		currentConfig.DataContracts,
+		currentConfig.Agent.BypassWriteFlowValidation,
 		runtime_config.BridgedByPlaceholder,
 		pcName,
 	)
 	// A failure confined to the write flow still yields a usable read flow, so a read-side
-	// verification must not fail because of it.
+	// verification must not fail because of it. The write side fails only if the write
+	// flow is blank: with BYPASS_WRITE_FLOW_VALIDATION it is rendered as well.
 	var writeFlowErr *runtime_config.WriteFlowConfigError
-	if errors.As(err, &writeFlowErr) && dfcTypeToReturn == DFCTypeRead {
+	if errors.As(err, &writeFlowErr) && (dfcTypeToReturn == DFCTypeRead || writeFlowErr.HasWriteFlow()) {
 		err = nil
 	}
 

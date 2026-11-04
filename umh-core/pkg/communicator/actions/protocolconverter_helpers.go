@@ -63,6 +63,9 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 // reports it as a WriteFlowConfigError; every other render failure is left to the
 // reconciliation loop, which reports it on the bridge.
 //
+// A write flow that BuildRuntimeConfig still renders, because BYPASS_WRITE_FLOW_VALIDATION
+// allows it, has no violation, so the action deploys it.
+//
 // Actions pass the config from the config manager rather than from the system snapshot,
 // because the snapshot carries no config (see fsm.GetManagerSnapshots).
 func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig config.FullConfig) error {
@@ -72,12 +75,13 @@ func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig con
 		nil, // TODO: add global vars
 		fullConfig.Historian,
 		fullConfig.DataContracts,
+		fullConfig.Agent.BypassWriteFlowValidation,
 		runtime_config.BridgedByPlaceholder,
 		pcConfig.Name,
 	)
 
 	var writeFlowErr *runtime_config.WriteFlowConfigError
-	if errors.As(err, &writeFlowErr) {
+	if errors.As(err, &writeFlowErr) && !writeFlowErr.HasWriteFlow() {
 		return writeFlowErr.Err
 	}
 
