@@ -51,6 +51,12 @@ type Tracker struct {
 	// engine holds the windows that turn counters into rates across scrapes.
 	engine *diagnosis.Engine[readings]
 
+	// errorEngine holds the windows that turn error counters into failure
+	// entries across scrapes. It is separate from engine so a Benthos
+	// restart can clear the error state on its own, without wiping the rate
+	// windows (see observe).
+	errorEngine *diagnosis.Engine[readings]
+
 	// prev is the previous observed scrape, nil before the first.
 	prev *observation
 
@@ -85,17 +91,17 @@ func NewTracker(clock func() time.Time) *Tracker {
 			// response itself is returned.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		engine: newEngine(),
-		now:    clock,
+		engine:      newEngine(rateTable()),
+		errorEngine: newEngine(errorTable()),
+		now:         clock,
 	}
 }
 
-// Scrape scrapes the Benthos at port's /ping, /ready, /version, and /metrics
-// endpoints once, records the counters in the windows t holds, and returns
-// the resulting Sample. All requests carry ctx, so cancellation surfaces as
-// a request error.
+// Scrape requests /ping, /ready, /version and /metrics from the Benthos at
+// port once, records the counters in t, and returns the Sample with its rates
+// and Failures. Requests carry ctx.
 func (t *Tracker) Scrape(ctx context.Context, port int) (Sample, error) {
-	if t == nil || t.client == nil || t.engine == nil || t.now == nil {
+	if t == nil || t.client == nil || t.engine == nil || t.errorEngine == nil || t.now == nil {
 		return Sample{}, fmt.Errorf("benthosmetrics: Tracker has no HTTP client, engine or clock; build it with NewTracker")
 	}
 
@@ -145,9 +151,12 @@ func (t *Tracker) Scrape(ctx context.Context, port int) (Sample, error) {
 	}
 	sample.Metrics = m
 
-	// The port is passed because a config update can change it without a
-	// restart; observe treats a new port as a new counter series.
-	sample.rates = t.observe(port, m, countersAt)
+	// The port is passed because a config change can set a new one; S6
+	// recreates the service on any config change, so observe reads a new
+	// port as a restart and a new counter series.
+	rates, failures := t.observe(port, m, countersAt)
+	sample.rates = rates
+	sample.Failures = &failures
 
 	return sample, nil
 }

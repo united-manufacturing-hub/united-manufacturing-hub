@@ -15,10 +15,15 @@
 package fsmv2benthos
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
@@ -87,6 +92,9 @@ func mapFresh(_ config.BenthosMonitorConfig, _ simple.Status[benthosmetrics.Samp
 // mapObserved converts a stored sample into FSMv1's observed state, with
 // every pointer non-nil even for a zero sample: GetHealthCheckAndMetrics
 // dereferences LastScan.BenthosMetrics unchecked.
+//
+// Failures are not copied; FSMv1 has no field for them (see Failures).
+// The worker's health does not read them until ENG-6596.
 func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[benthosmetrics.Sample]) publicfsm.ObservedState {
 	sample := s.Result
 	fresh := isFresh(sample.At, scrapeClock())
@@ -197,11 +205,153 @@ func toFSMv1Latency(l benthosmetrics.Latency) benthosmonitorservice.Latency {
 	}
 }
 
-// staleAfter is the staleness rule: three missed scrapes.
-const staleAfter = 3 * benthosmetrics.ScrapeInterval
+// StaleAfter is the staleness rule: three missed scrapes.
+const StaleAfter = 3 * benthosmetrics.ScrapeInterval
 
 // isFresh reports whether a sample taken at takenAt can still vouch for
 // liveness at now. A zero takenAt means no scrape has succeeded.
 func isFresh(takenAt, now time.Time) bool {
-	return !takenAt.IsZero() && now.Sub(takenAt) <= staleAfter
+	return !takenAt.IsZero() && now.Sub(takenAt) <= StaleAfter
+}
+
+// lastGoodFailures holds, per Benthos S6 service name, the Failures of the
+// last store read that answered for that name, so an unknown read can
+// answer from them (see Failures). The mutex guards the map: concurrent
+// Benthos services read their instance's Failures on their own tick.
+var (
+	lastGoodMu       sync.Mutex
+	lastGoodFailures = map[string]benthosmetrics.Failures{}
+)
+
+// Failures returns the failures last stored for the Benthos instance named
+// s6ServiceName ("benthos-<name>"), whatever their age, and false when it
+// cannot answer. An unknown read (a read error or a read timeout) answers
+// from the last good Failures held for that name, the way
+// HoldLastStatusOnUnknown holds observed state; a missing or deleted
+// worker, or one with no stored sample, answers false.
+func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failures, bool) {
+	c := fsmv2client.GetClient()
+	if c == nil {
+		return nil, false
+	}
+
+	obs, err := fsmv2client.Get[simple.Status[benthosmetrics.Sample]](
+		ctx, c,
+		dynamicchildren.Ref{WorkerType: WorkerType, Name: s6ServiceName},
+	)
+	if err != nil {
+		// No worker answers under this name — nothing was ever stored for
+		// it, or it was deleted: fail closed, and drop what the hold has.
+		if errors.Is(err, fsmv2client.ErrNotFound) || errors.Is(err, fsmv2client.ErrWorkerDeleted) {
+			forgetLastGoodFailures(s6ServiceName)
+			return nil, false
+		}
+
+		// Any other read failure — a read error or a read timeout — is an
+		// unknown read: answer from the last good Failures.
+		return holdLastGoodFailures(c, s6ServiceName)
+	}
+
+	f := obs.Status.Result.Failures
+	if f == nil {
+		// The worker stored no sample yet, or its sample carries no
+		// Failures: there is nothing good to hold for it.
+		forgetLastGoodFailures(s6ServiceName)
+		return nil, false
+	}
+
+	rememberLastGoodFailures(c, s6ServiceName, f)
+
+	return f, true
+}
+
+// rememberLastGoodFailures stores f as the last good Failures read for
+// s6ServiceName. A name new to the hold first sweeps it: entries whose
+// worker is no longer registered are dropped, so the hold cannot outgrow
+// the fleet it serves.
+func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, f *benthosmetrics.Failures) {
+	lastGoodMu.Lock()
+	defer lastGoodMu.Unlock()
+
+	if _, known := lastGoodFailures[s6ServiceName]; !known {
+		registered := make(map[string]struct{})
+		for _, ref := range c.Refs(WorkerType) {
+			registered[ref.Name] = struct{}{}
+		}
+		for name := range lastGoodFailures {
+			if _, ok := registered[name]; !ok {
+				delete(lastGoodFailures, name)
+			}
+		}
+	}
+
+	// The hold keeps its own copy, so it never shares a pointer with the
+	// Failures a caller is reading.
+	cp := *f
+	cp.Entries = make([]benthosmetrics.FailureEntry, len(f.Entries))
+	copy(cp.Entries, f.Entries)
+	lastGoodFailures[s6ServiceName] = cp
+}
+
+// forgetLastGoodFailures drops s6ServiceName's entry from the hold.
+func forgetLastGoodFailures(s6ServiceName string) {
+	lastGoodMu.Lock()
+	defer lastGoodMu.Unlock()
+
+	delete(lastGoodFailures, s6ServiceName)
+}
+
+// holdLastGoodFailures answers an unknown read of s6ServiceName from the
+// last good Failures the hold has for it, when its worker is still
+// registered and the hold has an entry; otherwise the read stays without
+// an answer.
+func holdLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string) (*benthosmetrics.Failures, bool) {
+	registered := false
+	for _, ref := range c.Refs(WorkerType) {
+		if ref.Name == s6ServiceName {
+			registered = true
+			break
+		}
+	}
+	if !registered {
+		return nil, false
+	}
+
+	lastGoodMu.Lock()
+	defer lastGoodMu.Unlock()
+
+	f, held := lastGoodFailures[s6ServiceName]
+	if !held {
+		return nil, false
+	}
+
+	// The caller gets its own copy of the entries, so a reader that changes
+	// its Failures cannot change what the hold later serves.
+	entries := make([]benthosmetrics.FailureEntry, len(f.Entries))
+	copy(entries, f.Entries)
+	f.Entries = entries
+
+	return &f, true
+}
+
+// ErrorsNotClearedCount returns how many of the registered Benthos workers
+// hold an error that should have cleared: their stored Failures answer true
+// for NotCleared(margin). It counts every registered worker of this type —
+// the Benthos instance of a data flow component, a protocol converter, a
+// stream processor, a topic browser or a stand-alone flow alike — and a
+// protocol converter with both sides stuck counts twice.
+func ErrorsNotClearedCount(ctx context.Context, margin time.Duration) int {
+	c := fsmv2client.GetClient()
+	if c == nil {
+		return 0
+	}
+
+	count := 0
+	for _, ref := range c.Refs(WorkerType) {
+		if failures, ok := Failures(ctx, ref.Name); ok && failures.NotCleared(margin) {
+			count++
+		}
+	}
+
+	return count
 }

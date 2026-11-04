@@ -13,11 +13,17 @@
 // limitations under the License.
 
 // Package benthosmetrics scrapes the metrics endpoints of one Benthos
-// instance, parses the counters, and computes the message rates.
+// instance, parses the counters, computes the message rates, and reports
+// recent errors and inputs or outputs that are not connected.
 //
 // Build one Tracker per Benthos instance with NewTracker, call
 // Scrape(ctx, port) every ScrapeInterval from a single goroutine, and read
-// the rates and metrics off the returned Sample.
+// the rates, metrics and failures off the returned Sample.
+//
+// fsmv2/diagnosis computes the time windows; this package says what to
+// measure and over how long. Metrics is the parsed counters, Sample is the
+// result of one scrape, Failures is what is wrong as of that scrape, and
+// Tracker is what is kept about one Benthos instance between scrapes.
 //
 // FSMv1's pkg/service/benthos_monitor keeps its own copy of the types and
 // the parser until FSMv1 is removed; this package is the one new code

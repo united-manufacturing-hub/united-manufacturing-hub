@@ -5,6 +5,7 @@
 ### Improvements
 
 - New `USE_FSMV2_BENTHOS_METRICS` flag, off by default: umh-core reads each Benthos instance's metrics in-process instead of starting a separate monitor process per instance. It accepts true, false, 1, 0, yes, no, y, n, on and off in any case; any other value logs a warning and leaves the flag off.
+- With `USE_FSMV2_BENTHOS_METRICS` on, Benthos output and processor errors stop counting 10 minutes after the last error, without a restart; the flow then leaves degraded when the log check passes too, and is idle until it processes data again. Its status also names inputs and outputs that are not connected. See [Why a Data Flow Is Degraded](https://docs.umh.app/usage/data-flows/why-a-flow-is-degraded).
 
 ### Fixes
 

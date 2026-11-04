@@ -34,7 +34,7 @@ var _ = Describe("A dropped counter", func() {
 		// rate and IsActive must not notice.
 		tr.observe(testPort, counts(100, 200), t0)
 		tr.observe(testPort, counts(110, 210), t0.Add(time.Second))
-		got := tr.observe(testPort, counts(120, 5), t0.Add(2*time.Second))
+		got, _ := tr.observe(testPort, counts(120, 5), t0.Add(2*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 10, 0.5),
 			"100 -> 110 -> 120 over 2s, undisturbed by the output drop")
 		Expect(got.IsActive).To(BeTrue(), "the input keeps flowing")
@@ -49,7 +49,7 @@ var _ = Describe("A dropped counter", func() {
 		// rate must not reset with it.
 		tr.observe(testPort, counts(100, 200), t0)
 		tr.observe(testPort, counts(110, 210), t0.Add(time.Second))
-		got := tr.observe(testPort, counts(5, 220), t0.Add(2*time.Second))
+		got, _ := tr.observe(testPort, counts(5, 220), t0.Add(2*time.Second))
 		Expect(got.Output.MessagesPerSecond).To(BeNumerically("~", 10, 0.5),
 			"200 -> 210 -> 220 over 2s, undisturbed by the input drop")
 	})
@@ -64,12 +64,12 @@ var _ = Describe("A dropped counter", func() {
 		// messages over the 10 s span, never the cumulative count as a
 		// rate and never a negative one.
 		tr.observe(testPort, counts(100, 100), t0)
-		got := tr.observe(testPort, counts(5, 5), t0.Add(10*time.Second))
+		got, _ := tr.observe(testPort, counts(5, 5), t0.Add(10*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 0.5, 0.1))
 
 		// Post-restart 5 -> 12 over 1s: the window still holds the
 		// pre-restart baseline, so the rate reads 12/11, not 12/1.
-		got = tr.observe(testPort, counts(12, 12), t0.Add(11*time.Second))
+		got, _ = tr.observe(testPort, counts(12, 12), t0.Add(11*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 1.09, 0.1))
 	})
 
@@ -81,7 +81,7 @@ var _ = Describe("A dropped counter", func() {
 		// input drop is folded into the input's offset all the same.
 		tr.observe(testPort, counts(100, 0), t0)
 		tr.observe(testPort, counts(5, 0), t0.Add(10*time.Second))
-		got := tr.observe(testPort, counts(12, 0), t0.Add(11*time.Second))
+		got, _ := tr.observe(testPort, counts(12, 0), t0.Add(11*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 1.09, 0.1),
 			"the drop reads as (12+100-100)/11, a small non-negative rate")
 	})
@@ -93,7 +93,7 @@ var _ = Describe("A dropped counter", func() {
 		// Output 200 -> 5 while the input stays put.
 		tr.observe(testPort, counts(100, 200), t0)
 		tr.observe(testPort, counts(100, 5), t0.Add(10*time.Second))
-		got := tr.observe(testPort, counts(107, 12), t0.Add(11*time.Second))
+		got, _ := tr.observe(testPort, counts(107, 12), t0.Add(11*time.Second))
 		Expect(got.Output.MessagesPerSecond).To(BeNumerically("~", 1.09, 0.1),
 			"(12+200-200)/11, never a negative rate")
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 0.64, 0.1),
@@ -108,8 +108,35 @@ var _ = Describe("A dropped counter", func() {
 		// continuity, so the rate reads (150+100-100)/30 = 5/s.
 		tr.observe(testPort, counts(100, 100), t0)
 		tr.observe(testPort, counts(0, 0), t0.Add(15*time.Second))
-		got := tr.observe(testPort, counts(150, 150), t0.Add(30*time.Second))
+		got, _ := tr.observe(testPort, counts(150, 150), t0.Add(30*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 5, 0.5))
+	})
+
+	It("clears a restart's errors without resetting the input rate", func() {
+		t0 := time.Now().Truncate(time.Second)
+		tr := NewTracker(func() time.Time { return t0 })
+
+		// 10/s of input with 3 output errors, then Benthos restarts: every
+		// counter drops to almost 0. The errors from before the restart
+		// clear at once, and the input rate keeps its window: it still
+		// reads the messages around the restart, never 0 and never the
+		// cumulative count.
+		scrape := func(input, outputErrors int64, at time.Time) (rates, Failures) {
+			return tr.observe(testPort, Metrics{
+				Inputs:  map[string]InputMetrics{"root.input": {Received: input}},
+				Outputs: map[string]OutputMetrics{"root.output": {Sent: input, Error: outputErrors}},
+			}, at)
+		}
+
+		scrape(100, 0, t0)
+		_, failures := scrape(110, 3, t0.Add(time.Second))
+		Expect(failures.Entries).To(HaveLen(1), "the output errors open an entry")
+
+		got, failures := scrape(5, 0, t0.Add(2*time.Second))
+		ok, reason := failures.ErrorFree()
+		Expect(ok).To(BeTrue(), "a restart clears the errors from before it: %s", reason)
+		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 7.5, 0.5),
+			"(5+110-100)/2: the restart folds into the series, not the window")
 	})
 
 	It("rebuilds on a port change", func() {
@@ -119,11 +146,11 @@ var _ = Describe("A dropped counter", func() {
 		// A config update can change the port of a running Benthos, so a new
 		// port is a new counter series with no restart in between.
 		tr.observe(4195, counts(100, 100), t0)
-		got := tr.observe(4196, counts(150, 150), t0.Add(10*time.Second))
+		got, _ := tr.observe(4196, counts(150, 150), t0.Add(10*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeZero(),
 			"the first tick on the new port holds one sample")
 
-		got = tr.observe(4196, counts(157, 157), t0.Add(11*time.Second))
+		got, _ = tr.observe(4196, counts(157, 157), t0.Add(11*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 7, 0.5),
 			"150->157 over 1s; the old port's 100 is gone from the window")
 	})
@@ -134,16 +161,8 @@ var _ = Describe("A dropped counter", func() {
 
 		tr.observe(testPort, counts(100, 100), t0)
 		tr.observe(testPort, counts(150, 150), t0.Add(time.Second))
-		got := tr.observe(testPort, counts(160, 160), t0.Add(time.Second))
+		got, _ := tr.observe(testPort, counts(160, 160), t0.Add(time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 50, 5),
 			"the equal-timestamp scrape returns the previous rates, 50/s, not 60/s")
-
-		// The next newer scrape reduces normally: the window still holds
-		// 100@t0 and 150@+1s, so its slope is (160-100)/2. The equal-
-		// timestamp check above is what pins that the ignored 160 never
-		// entered the window; this slope reads the same either way.
-		got = tr.observe(testPort, counts(160, 160), t0.Add(2*time.Second))
-		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 30, 5),
-			"(160-100)/2 over the window the ignored scrape left untouched")
 	})
 })
