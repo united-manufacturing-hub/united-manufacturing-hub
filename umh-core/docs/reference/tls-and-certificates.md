@@ -6,7 +6,7 @@ This page covers the TLS connections to the Management Console: which hosts your
 
 | Host | Who connects | Certificate |
 | --- | --- | --- |
-| `management.umh.app` | Your browser for the console, umh-core for its API under `/api`, and Docker for image pulls under `/oci` | Issued by a publicly trusted certificate authority and renewed automatically |
+| `management.umh.app` | Your browser for the console, umh-core for its API, and Docker for image pulls | Issued by a publicly trusted certificate authority and renewed automatically |
 | `auth.management.umh.app` | Your browser during sign-in | Issued by a publicly trusted certificate authority and renewed automatically |
 
 Both certificates chain to public roots that ship with every current browser and operating system. There is nothing to install and nothing to pin on your side. The leaf certificate changes at every renewal and the intermediate certificate can change with it, so allowlist the two hostnames in your firewall, not certificate fingerprints.
@@ -34,15 +34,8 @@ Certificate authorities inside umh-core, such as the one that signs certificates
 A firewall that inspects TLS terminates the connection itself and presents a certificate signed by your corporate certificate authority instead of the public one.
 
 - **Browser.** Sign-in and the console keep working as long as the corporate certificate authority is in the operating system's trust store, which your IT usually manages. This applies to `auth.management.umh.app` as well.
-- **umh-core.** The container trusts only the public roots by default, so it refuses the corporate certificate. Add your corporate certificate authority to the container's trust store. If that is not possible, `ALLOW_INSECURE_TLS` is the fallback described below. See [Network Configuration](../production/security/umh-core/network-configuration.md#tls-inspection-mitm) for both options and for proxy settings, which usually go together with inspection.
+- **umh-core.** The container trusts only the public roots by default, so it refuses the corporate certificate. Add your corporate certificate authority to the container's trust store. See [Instance Stays Offline Behind a Corporate Firewall](../usage/instances/communicator/instance-offline-behind-corporate-firewall.md) for the steps. Proxy settings usually go together with inspection and are in [Network Configuration](../production/security/umh-core/network-configuration.md#proxy-configuration).
 
 ## ALLOW_INSECURE_TLS
 
-`ALLOW_INSECURE_TLS=true` makes umh-core accept any certificate for its connection to `management.umh.app`, and lowers the minimum TLS version for that connection to TLS 1.0. It has no effect on your browser.
-
-| Where to set it | Value |
-| --- | --- |
-| Environment variable | `ALLOW_INSECURE_TLS=true` |
-| `config.yaml` | `agent.communicator.allowInsecureTLS: true` |
-
-With validation disabled, anyone between the instance and the console can read and change the traffic, including the `AUTH_TOKEN`. Use it only behind a firewall that you trust to be the only party inspecting the connection, and prefer adding the corporate certificate authority. See [TLS Certificate Validation Can Be Disabled](../production/security/umh-core/deployment-security.md#tls-certificate-validation-can-be-disabled) for the risk assessment, and the [Configuration Reference](configuration-reference.md) for the setting itself.
+`ALLOW_INSECURE_TLS` and `agent.communicator.allowInsecureTLS` no longer turn off certificate validation. umh-core always validates the certificate of `management.umh.app` when it logs in to the Management Console, and requires TLS 1.2 or higher. A value that is still set does no harm. To trust a firewall that inspects TLS, add your corporate certificate authority as described in [Instance Stays Offline Behind a Corporate Firewall](../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container).

@@ -21,7 +21,7 @@ No kubectl, no Kubernetes setup, just a single Docker container. Almost anything
 
 **CPU health reporting (early access):**
 
-UMH Core runs on any of the above. Its CPU pressure signal also needs Linux pressure stats (PSI) and cgroup v2. The Red Hat family (RHEL, Rocky, AlmaLinux, Oracle Linux) ships PSI off, and version 8 of each also boots cgroup v1. Without them CPU health still reports from throttling, steal and headroom, and an instance with no CPU limit reports limited visibility. [CPU Health](../usage/instances/cpu-health/README.md) covers how to check, how to switch them on, and which flag enables this reporting.
+UMH Core runs on any of the above. Its CPU pressure signal also needs Linux pressure stats (PSI) and cgroup v2. The Red Hat family (RHEL, Rocky, AlmaLinux, Oracle Linux) ships PSI off, and version 8 of each also boots cgroup v1. Without them CPU health still reports from throttling, steal and headroom, and an instance with no CPU limit reports limited visibility. [CPU Health](../usage/instances/container/cpu-health/README.md) covers how to check, how to switch them on, and which flag enables this reporting.
 
 For detailed sizing recommendations, see the [Sizing Guide](../production/sizing-guide.md).
 
@@ -65,16 +65,8 @@ Then re-run the `docker run` command.
 
 For advanced users needing bind mounts (custom data locations), see the [Container Layout reference](../reference/container-layout.md#advanced-custom-data-location).
 
-**Corporate firewall/proxy issues**
-If your corporate network intercepts TLS traffic, see [Network Configuration](../production/security/umh-core/network-configuration.md#tls-inspection-mitm) to add your CA certificate.
-
-For proxy configuration, see [Network Configuration](../production/security/umh-core/network-configuration.md#proxy-configuration) or add these arguments to your docker run:
-
-```bash
--e HTTP_PROXY=http://proxy.company.com:8080 \
--e HTTPS_PROXY=https://proxy.company.com:8080 \
--e NO_PROXY=localhost,127.0.0.1,.local
-```
+**Instance stays offline behind a corporate firewall**
+If your network needs a proxy or inspects TLS traffic, see [Instance Stays Offline Behind a Corporate Firewall](../usage/instances/communicator/instance-offline-behind-corporate-firewall.md).
 
 ---
 

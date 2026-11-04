@@ -224,6 +224,57 @@ connection:
     port: "{{ .PORT }}"    # Uses PORT variable
 ```
 
+## Metrics
+
+A bridge reports its metrics in two places. [Metrics](../instances/agent/metrics.md) explains how to read them.
+
+The Management Console shows each bridge's message counts. Open the bridge and select **Metrics** (see [View Metrics](#view-metrics)). The view shows messages received and sent, errors, connection status and latency for the bridge's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry per-bridge message counts.
+
+Port 8080 carries the bridge's state and error counts. The bridge runs on FSMv1, the older of umh-core's two frameworks. A framework is the part of umh-core that starts and watches components. [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component) explains both. The bridge gets the series described in [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a bridge named `mixing-station`, the series carry these labels:
+
+| Part of the bridge | `component` | `instance` |
+|---|---|---|
+| The bridge | `protocol_converter_instance` | `mixing-station` |
+| Its connection | `connection_instance` | `protocolconverter-mixing-station` |
+| Its read flow | `dataflow_component_instance` | `read-protocolconverter-mixing-station` |
+| Its write flow | `dataflow_component_instance` | `write-protocolconverter-mixing-station` |
+| The Benthos process of its read flow | `benthos_instance` | `dataflow-read-protocolconverter-mixing-station` |
+| The Benthos process of its write flow | `benthos_instance` | `dataflow-write-protocolconverter-mixing-station` |
+
+Benthos is the engine that moves the data. The connection reports errors and reconcile time, but no state. Prometheus can rename the `instance` label to `exported_instance`. [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains when.
+
+For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. -1 means the bridge is in a sub-state: one of the starting, degraded or stopping steps, such as `starting_connection` or `degraded_dfc`. Check the state in the Management Console.
+
+### Connection Check
+
+Before umh-core starts a bridge, it checks that the device's host and port answer. This connection check runs on FSMv2 by default. To run it on FSMv1 instead, set the environment variable `NMAP_BACKEND=fsmv1` on the container, for example with `-e NMAP_BACKEND=fsmv1` on `docker run`. umh-core reads the variable once at startup.
+
+When the device stops answering, the bridge's own state changes. It stays in `starting_connection` if it has not started yet. It moves to `degraded_connection` if it was already running. Both read -1 on `umh_core_service_current_state`.
+
+#### FSMv2 (default)
+
+The connection check's series carry this `hierarchy_path` label, with `<bridge>` replaced by the bridge name:
+
+```
+application-fsmv2(application)/connection-protocolconverter-<bridge>-001(nmap)
+```
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_state_duration_seconds` | gauge | Seconds the check has spent in its current state, in the `state` label. |
+| `umh_fsmv2_state_transitions_total` | counter | Changes between states, with `from_state` and `to_state` labels. |
+
+The `state` label reads `running` whether the port answers or not. It reads `degraded` only until the first check completes. To see whether the device answers, read the bridge's state.
+
+The check also gets the standard series every FSMv2 component gets, such as `umh_fsmv2_reconciliation_total`. [FSMv2 metrics](../instances/agent/metrics.md#fsmv2-metrics) lists them. It has no `umh_fsmv2_worker_*` series.
+
+#### FSMv1 (with `NMAP_BACKEND=fsmv1`)
+
+| `component` | `instance` |
+|---|---|
+| `nmap_instance` | `connection-protocolconverter-<bridge>` |
+
+`umh_core_service_current_state` reads -1 while the port is open. An open port is the healthy case. The gauge also reads -1 when the port is closed or filtered. To see whether the device answers, read the bridge's state.
 
 ## Next Steps
 
