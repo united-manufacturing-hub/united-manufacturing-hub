@@ -246,6 +246,36 @@ var _ = Describe("write_config", func() {
 		)
 	})
 
+	Describe("topic data contract with BYPASS_WRITE_FLOW_VALIDATION (unchecked data contracts)", func() {
+		declared := []string{"_pump_v1", "_pump_v2", "_pump"}
+
+		DescribeTable("reports whether a topic names exactly one data contract, declared or not",
+			func(topic string, expected bool) {
+				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
+				}
+				accepted := input.ToWriteConfig().ValidateTopicsWithBypass("acme.cologne.line-4", declared) == nil
+
+				Expect(accepted).To(Equal(expected))
+			},
+			Entry("declared contract", `^umh\.v1\.acme\.cologne\.line-4\._pump_v1\.`, true),
+			Entry("undeclared versioned contract", `^umh\.v1\.acme\.cologne\.line-4\._mes_order_v1\.`, true),
+			Entry("undeclared contract without a version", `^umh\.v1\.acme\.cologne\.line-4\._mes_order\.`, true),
+			Entry("declared contract without a version", `^umh\.v1\.acme\.cologne\.line-4\._pump\.motor\..*`, true),
+			Entry("undeclared contract on every level beneath the bridge", `^umh\.v1\.acme\.cologne\.line-4\.(?:[^._][^.]*\.)*_mes_order\.`, true),
+			Entry("undeclared contract below a machine", `^umh\.v1\.acme\.cologne\.line-4\.pump-01\._custom\.temperature`, true),
+			Entry("version range reaching an undeclared version", `^umh\.v1\.acme\.cologne\.line-4\._pump_v[1-3]\.`, false),
+			Entry("two undeclared contracts", `^umh\.v1\.acme\.cologne\.line-4\.(?:_a|_b)\.`, false),
+			Entry("undeclared contract wildcard", `^umh\.v1\.acme\.cologne\.line-4\._mes_.*\.`, false),
+			Entry("undeclared contract character class", `^umh\.v1\.acme\.cologne\.line-4\._[a-z]+\.`, false),
+			Entry("wildcard contract", `^umh\.v1\.acme\.cologne\.line-4\._.*\.`, false),
+			Entry("undeclared contract not followed by a dot", `^umh\.v1\.acme\.cologne\.line-4\._custom`, false),
+			Entry("no contract", `^umh\.v1\.acme\.cologne\.line-4\.pump-01\.temperature`, false),
+			Entry("undeclared contract outside the bridge location", `^umh\.v1\.acme\.cologne\.line-3\._custom\.`, false),
+			Entry("unanchored undeclared contract", `umh\.v1\.acme\.cologne\.line-4\._custom\.`, false),
+		)
+	})
+
 	Describe("underscore-prefixed bridge location", func() {
 		validate := func(topic string) error {
 			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{

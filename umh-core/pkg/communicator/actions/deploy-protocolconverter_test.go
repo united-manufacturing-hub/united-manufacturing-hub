@@ -314,6 +314,12 @@ var _ = Describe("DeployProtocolConverter", func() {
 				"^umh\\.v1\\.TestEnterprise\\.TestSite\\._pump_v1\\.pressure")
 		})
 
+		It("should accept a write flow naming an unchecked data contract when the config carries BYPASS_WRITE_FLOW_VALIDATION", func() {
+			mockConfig.Config.Agent.BypassWriteFlowValidation = true
+
+			Expect(deployWithWriteTopics("^umh\\.v1\\.{{ .location_path }}\\._pump_v1\\.pressure")).To(Succeed())
+		})
+
 		It("should accept a write flow naming a data contract declared in the config", func() {
 			mockConfig.Config.DataContracts = []config.DataContractsConfig{{Name: "_pump_v1"}}
 

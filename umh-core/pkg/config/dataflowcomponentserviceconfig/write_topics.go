@@ -48,13 +48,34 @@ var builtinDataContracts = []string{"_raw", "_historian"}
 
 var dataContractVersionSuffix = regexp.MustCompile(`_v\d+$`)
 
+// literalContract matches a data contract spelled out in a write flow topic and followed
+// by an escaped dot, such as `_mes_order\.`. Only used for BYPASS_WRITE_FLOW_VALIDATION,
+// see checkUncheckedContract.
+var literalContract = regexp.MustCompile(`(_[\w-]+)\\\.`)
+
 // ValidateTopics reports the topics a write flow at locationPath may not subscribe to,
 // given the data contracts declared in config.yaml.
 func (c DataflowComponentWriteConfig) ValidateTopics(locationPath string, dataContracts []string) error {
+	return c.validateTopics(locationPath, dataContracts, false)
+}
+
+// ValidateTopicsWithBypass is ValidateTopics as used with BYPASS_WRITE_FLOW_VALIDATION.
+// A topic may also name an unchecked data contract: one that is not declared or has no
+// version, such as `_mes_order`.
+//
+// All other rules still apply: the topic lies beneath the bridge location and names
+// exactly one contract, spelled out. `_.*` and `_mes_.*` are still rejected.
+func (c DataflowComponentWriteConfig) ValidateTopicsWithBypass(locationPath string, dataContracts []string) error {
+	return c.validateTopics(locationPath, dataContracts, true)
+}
+
+// With bypass set (BYPASS_WRITE_FLOW_VALIDATION), validateTopics also accepts topics that
+// name an unchecked data contract.
+func (c DataflowComponentWriteConfig) validateTopics(locationPath string, dataContracts []string, bypass bool) error {
 	versioned, unversioned := splitByVersion(dataContracts)
 	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(builtinDataContracts), versioned...), unversioned)
 
-	rejected := rejectTopics(c.Topics, grammar)
+	rejected := rejectTopics(c.Topics, grammar, bypass)
 	if len(rejected) == 0 {
 		return nil
 	}
@@ -93,7 +114,7 @@ func (t rejectedTopic) reaches(contract string) bool {
 	return t.violation.listsContracts() && slices.Contains(t.unversioned, contract)
 }
 
-func rejectTopics(topics []string, grammar writeTopicGrammar) []rejectedTopic {
+func rejectTopics(topics []string, grammar writeTopicGrammar, bypass bool) []rejectedTopic {
 	var rejected []rejectedTopic
 
 	for _, topic := range topics {
@@ -101,8 +122,31 @@ func rejectTopics(topics []string, grammar writeTopicGrammar) []rejectedTopic {
 			continue
 		}
 
-		if checked := grammar.check(topic); checked.violation != topicAllowed {
+		// With BYPASS_WRITE_FLOW_VALIDATION, a topic rejected only for its data contract
+		// is checked again with the contract it names.
+		checked := grammar.check(topic)
+		if checked.violation.listsContracts() && bypass {
+			checked = grammar.checkUncheckedContract(topic, checked)
+		}
+
+		if checked.violation != topicAllowed {
 			rejected = append(rejected, checked)
+		}
+	}
+
+	return rejected
+}
+
+// checkUncheckedContract checks a topic rejected for its data contract again, for
+// BYPASS_WRITE_FLOW_VALIDATION, once for each contract it spells out as `_name\.`, with
+// that contract allowed. It returns rejected if the topic spells out no contract.
+func (g writeTopicGrammar) checkUncheckedContract(topic string, rejected rejectedTopic) rejectedTopic {
+	for _, candidate := range literalContract.FindAllStringSubmatch(topic, -1) {
+		withUnchecked := newWriteTopicGrammar(g.locationPath, append(slices.Clone(g.contracts), candidate[1]), g.unversioned)
+
+		rejected = withUnchecked.check(topic)
+		if rejected.violation == topicAllowed {
+			return rejected
 		}
 	}
 
@@ -232,6 +276,7 @@ func newWriteTopicGrammar(locationPath string, contracts, unversioned []string) 
 	}
 
 	contractPrefixes := map[string]bool{}
+
 	for _, contract := range slices.Concat(contracts, unversioned) {
 		for end := 1; end <= len(contract); end++ {
 			contractPrefixes[contract[:end]] = true
@@ -425,6 +470,7 @@ func unversionedContracts(states []writeTopicState) []string {
 // data contract, such as _pump_v1 and _pump_v2.
 func namesOneContract(states []writeTopicState) bool {
 	bases := map[string]bool{}
+
 	for _, state := range states {
 		if state.phase == phaseAccepted {
 			bases[dataContractVersionSuffix.ReplaceAllString(state.contract, "")] = true

@@ -62,7 +62,7 @@ var _ = ginkgo.Describe("historian bridge connection (deploy build + runtime ren
 
 		runtime, err := runtime_config.BuildRuntimeConfig(
 			cfg.ProtocolConverterServiceConfig,
-			map[string]string{"0": "enterprise"}, nil, historian, nil, "test-node", "historian-bridge",
+			map[string]string{"0": "enterprise"}, nil, historian, nil, false, "test-node", "historian-bridge",
 		)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -93,7 +93,7 @@ var _ = ginkgo.Describe("historian bridge connection (deploy build + runtime ren
 
 		_, err = runtime_config.BuildRuntimeConfig(
 			cfg.ProtocolConverterServiceConfig,
-			map[string]string{"0": "enterprise"}, nil, nil, nil, "test-node", "historian-bridge",
+			map[string]string{"0": "enterprise"}, nil, nil, nil, false, "test-node", "historian-bridge",
 		)
 		gomega.Expect(err).To(gomega.HaveOccurred())
 		gomega.Expect(err.Error()).To(gomega.ContainSubstring("no valid historian: section is configured"))
@@ -120,7 +120,7 @@ var _ = ginkgo.Describe("historian bridge connection (deploy build + runtime ren
 
 		runtime, err := runtime_config.BuildRuntimeConfig(
 			cfg.ProtocolConverterServiceConfig,
-			map[string]string{"0": "enterprise"}, nil, nil, nil, "test-node", "modbus-bridge",
+			map[string]string{"0": "enterprise"}, nil, nil, nil, false, "test-node", "modbus-bridge",
 		)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 

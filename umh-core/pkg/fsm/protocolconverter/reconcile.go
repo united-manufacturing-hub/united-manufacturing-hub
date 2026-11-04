@@ -412,9 +412,10 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 			return err, false
 		}
 
-		// A rejected write flow config never becomes healthy, so waiting here would hold the
-		// bridge in starting forever and leave the read flow looking stopped. Degrade
-		// instead: the read flow keeps running and the cause is visible.
+		// A write flow config that was rejected, or accepted only through
+		// BYPASS_WRITE_FLOW_VALIDATION, never makes the bridge healthy. Waiting here would
+		// hold the bridge in starting forever and make the read flow look stopped. Degrade
+		// instead: the read flow keeps running and the reason is visible.
 		if p.writeFlowConfigErr != nil {
 			p.ObservedState.ServiceInfo.StatusReason = "flow degraded: " + p.writeFlowConfigErr.Error()
 

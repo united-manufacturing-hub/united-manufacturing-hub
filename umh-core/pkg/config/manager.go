@@ -533,6 +533,10 @@ type FileConfigManagerWithBackoff struct {
 
 	// Backoff manager
 	backoffManager *backoff.BackoffManager
+
+	// bypassWriteFlowValidation is set on Agent.BypassWriteFlowValidation of every config
+	// GetConfig returns.
+	bypassWriteFlowValidation bool
 }
 
 // NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff.
@@ -578,6 +582,13 @@ func (m *FileConfigManagerWithBackoff) Stop() {
 // SetConfigBackupEnabled controls whether config backups are created before writes.
 func (m *FileConfigManagerWithBackoff) SetConfigBackupEnabled(enabled bool) {
 	m.configManager.backupEnabled = enabled
+}
+
+// SetBypassWriteFlowValidation sets the value of BYPASS_WRITE_FLOW_VALIDATION that GetConfig
+// puts on every config it returns, so that every reader of the config renders bridges the
+// same way.
+func (m *FileConfigManagerWithBackoff) SetBypassWriteFlowValidation(bypass bool) {
+	m.bypassWriteFlowValidation = bypass
 }
 
 // GetBackupCount returns the number of config backups created since startup.
@@ -758,6 +769,8 @@ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint6
 
 	// Reset backoff state on successful operation
 	m.backoffManager.Reset()
+
+	config.Agent.BypassWriteFlowValidation = m.bypassWriteFlowValidation
 
 	return config, nil
 }
