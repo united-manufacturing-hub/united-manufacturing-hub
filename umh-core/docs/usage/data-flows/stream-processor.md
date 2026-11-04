@@ -137,3 +137,5 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 ## Learn More
 
 For comprehensive stream processor configuration and examples, see the [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling documentation.
+
+When a stream processor shows degraded, [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) explains the reason.

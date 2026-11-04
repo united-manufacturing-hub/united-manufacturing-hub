@@ -134,7 +134,7 @@ var _ = Describe("mapObserved", func() {
 				Reason:   "poll error: scrape /version: connection refused",
 			}, true},
 			{"failed poll, last good sample past three scrapes", simple.Status[benthosmetrics.Sample]{
-				Result:   benthosmetrics.Sample{At: now.Add(-staleAfter - time.Millisecond), PingAlive: true, Ready: true},
+				Result:   benthosmetrics.Sample{At: now.Add(-StaleAfter - time.Millisecond), PingAlive: true, Ready: true},
 				Degraded: true,
 				Reason:   "poll error: scrape /version: connection refused",
 			}, false},
