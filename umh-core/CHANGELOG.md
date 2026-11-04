@@ -6,6 +6,7 @@
 
 - The CPU status on an instance's page now comes from the [CPU health check](https://docs.umh.app/production/cpu-health) by default, so an instance is degraded, and new bridges wait, when its CPU headroom is gone, its work is measurably delayed or its CPU cannot be measured, not whenever usage reaches 70%. To go back to the 70% CPU usage rule, recreate the container with `-e USE_FSMV2_CPU=false`
 - New `USE_FSMV2_BENTHOS_METRICS` flag, off by default: umh-core reads each Benthos instance's metrics in-process instead of starting a separate monitor process per instance. It accepts true, false, 1, 0, yes, no, y, n, on and off in any case; any other value logs a warning and leaves the flag off.
+- With `USE_FSMV2_BENTHOS_METRICS` on, a flow that shows degraded because of Benthos output or processor errors returns to active 10 minutes after the last error, without a restart. Its status also names inputs and outputs that are not connected. See [Why a Data Flow Is Degraded](https://docs.umh.app/usage/data-flows/why-a-flow-is-degraded).
 
 ## [0.44.45]
 

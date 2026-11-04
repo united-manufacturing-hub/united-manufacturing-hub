@@ -30,11 +30,11 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		t0 := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return t0 })
 
-		got := tr.observe(testPort, counts(10, 5), t0)
+		got, _ := tr.observe(testPort, counts(10, 5), t0)
 		Expect(got.Input.MessagesPerSecond).To(BeZero(),
 			"one sample cannot be a rate")
 
-		got = tr.observe(testPort, counts(12, 6), t0.Add(time.Second))
+		got, _ = tr.observe(testPort, counts(12, 6), t0.Add(time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 2, 0.5),
 			"10 -> 12 over 1s")
 		Expect(got.Output.MessagesPerSecond).To(BeNumerically("~", 1, 0.5),
@@ -48,7 +48,7 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 
 		tr.observe(testPort, counts(10, 5), t0)
 		tr.observe(testPort, counts(12, 6), t0.Add(time.Second))
-		got := tr.observe(testPort, counts(5, 5), t0.Add(-61*time.Second))
+		got, _ := tr.observe(testPort, counts(5, 5), t0.Add(-61*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 2, 0.5),
 			"an older scrape returns the previous rates")
 		// observe_reset_test pins the equal-timestamp case.
@@ -63,7 +63,7 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		// newest samples.
 		tr.observe(testPort, counts(0, 0), t0)
 		tr.observe(testPort, counts(30, 30), t0.Add(30*time.Second))
-		got := tr.observe(testPort, counts(90, 90), t0.Add(60*time.Second))
+		got, _ := tr.observe(testPort, counts(90, 90), t0.Add(60*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 1.5, 0.1),
 			"the window is 60s of time, not two readings")
 	})
@@ -76,7 +76,7 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		// reads (90-30)/31, from the samples the window still holds.
 		tr.observe(testPort, counts(0, 0), t0)
 		tr.observe(testPort, counts(30, 30), t0.Add(30*time.Second))
-		got := tr.observe(testPort, counts(90, 90), t0.Add(61*time.Second))
+		got, _ := tr.observe(testPort, counts(90, 90), t0.Add(61*time.Second))
 		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 1.94, 0.1),
 			"the t0 sample is aged out, so the slope starts at +30s")
 	})
@@ -85,7 +85,7 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		t0 := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return t0 })
 
-		got := tr.observe(testPort, counts(100, 100), t0)
+		got, _ := tr.observe(testPort, counts(100, 100), t0)
 
 		Expect(got.Input.MessagesPerSecond).To(BeZero(),
 			"the first scrape only seeds the window")
@@ -98,7 +98,7 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		t0 := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return t0 })
 		tr.observe(testPort, counts(10, 0), t0)
-		got := tr.observe(testPort, counts(10, 5), t0.Add(time.Second))
+		got, _ := tr.observe(testPort, counts(10, 5), t0.Add(time.Second))
 		Expect(got.Output.MessagesPerSecond).To(BeNumerically("~", 5, 0.5))
 		Expect(got.IsActive).To(BeFalse(),
 			"output traffic does not count")

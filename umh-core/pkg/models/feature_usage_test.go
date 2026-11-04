@@ -93,3 +93,47 @@ var _ = Describe("FSMv2CPUEnabled, the fsmv2 CPU adoption flag", func() {
 		Entry("flag off", false, false),
 	)
 })
+
+// The FSMv2 Benthos metrics flag lands in the telemetry under the JSON key
+// fsmv2BenthosMetricsEnabled, and the count of Benthos instances whose
+// errors did not clear in time under benthosErrorsNotClearedInstanceCount,
+// with no omitempty so a zero count is reported too.
+var _ = Describe("The benthos metrics telemetry keys", func() {
+	It("serializes fsmv2BenthosMetricsEnabled", func() {
+		usage := models.FeatureUsage{
+			FSMv2BenthosMetricsEnabled: true,
+		}
+
+		data, err := json.Marshal(usage)
+		Expect(err).NotTo(HaveOccurred())
+
+		var raw map[string]interface{}
+		Expect(json.Unmarshal(data, &raw)).To(Succeed())
+
+		Expect(raw).To(HaveKeyWithValue("fsmv2BenthosMetricsEnabled", true))
+	})
+
+	It("serializes benthosErrorsNotClearedInstanceCount", func() {
+		usage := models.FeatureUsage{
+			BenthosErrorsNotClearedInstanceCount: 3,
+		}
+
+		data, err := json.Marshal(usage)
+		Expect(err).NotTo(HaveOccurred())
+
+		var raw map[string]interface{}
+		Expect(json.Unmarshal(data, &raw)).To(Succeed())
+
+		Expect(raw).To(HaveKeyWithValue("benthosErrorsNotClearedInstanceCount", float64(3)))
+
+		// No omitempty: a zero count is reported too, so the telemetry shape
+		// does not flip with the value.
+		zero, err := json.Marshal(models.FeatureUsage{})
+		Expect(err).NotTo(HaveOccurred())
+
+		var zeroRaw map[string]interface{}
+		Expect(json.Unmarshal(zero, &zeroRaw)).To(Succeed())
+
+		Expect(zeroRaw).To(HaveKeyWithValue("benthosErrorsNotClearedInstanceCount", float64(0)))
+	})
+})

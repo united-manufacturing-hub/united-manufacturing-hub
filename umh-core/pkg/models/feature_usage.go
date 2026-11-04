@@ -49,6 +49,12 @@ type FeatureUsage struct {
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.
 	HistorianConfigured bool `json:"historianConfigured"`
+	// BenthosErrorsNotClearedInstanceCount is how many Benthos instances
+	// still hold an error more than 11 minutes (the 10-minute error window
+	// plus one minute) after its last error; it should stay 0, and is 0 with
+	// USE_FSMV2_BENTHOS_METRICS off. It is reporting only — nothing in
+	// umh-core acts on this count.
+	BenthosErrorsNotClearedInstanceCount int `json:"benthosErrorsNotClearedInstanceCount"`
 }
 
 // FSMv2CPUEnabled reports the effective state of the fsmv2 CPU path, given the

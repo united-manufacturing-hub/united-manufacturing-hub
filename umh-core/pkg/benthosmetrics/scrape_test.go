@@ -121,6 +121,28 @@ func (s *benthosServer) close() {
 	s.server.Close()
 }
 
+// inlineServer answers like benthosServer, but lets one path be overridden:
+// h answers before the defaults and returns true when it did.
+func inlineServer(h func(w http.ResponseWriter, r *http.Request) bool) (*httptest.Server, int) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h(w, r) {
+			return
+		}
+		switch r.URL.Path {
+		case "/ping":
+			_, _ = w.Write([]byte("pong"))
+		case "/ready":
+			_, _ = w.Write([]byte(`{"error":""}`))
+		case "/version":
+			_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
+		case "/metrics":
+			_, _ = w.Write([]byte("input_received{label=\"\",path=\"root.input\"} 1\n"))
+		}
+	}))
+
+	return s, s.Listener.Addr().(*net.TCPAddr).Port
+}
+
 var _ = Describe("Scrape", func() {
 	It("fetches all endpoints", func() {
 		s := newBenthosServer(10, 5, nil, nil)

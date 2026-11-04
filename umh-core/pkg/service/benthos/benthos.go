@@ -41,7 +41,10 @@ import (
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 
+	fsmv2simple "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	fsmv2adapter "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
 	fsmv2benthos "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos"
 	"gopkg.in/yaml.v3"
 
@@ -217,6 +220,10 @@ type BenthosService struct {
 	s6Service s6service.Service // S6 service for direct S6 operations
 	logger    *zap.SugaredLogger
 
+	// s6ServiceName is this instance's S6 service name, "benthos-<name>". Both
+	// monitor backends store the instance under it.
+	s6ServiceName string
+
 	s6Manager *s6fsm.S6Manager
 
 	benthosMonitorManager monitorManager
@@ -304,6 +311,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 		s6Manager: s6fsm.NewS6Manager(managerName),
 		s6Service: s6service.NewDefaultService(),
 	}
+	service.s6ServiceName = service.GetS6ServiceName(benthosName)
 
 	for _, opt := range opts {
 		opt(service)
@@ -1093,7 +1101,14 @@ func (s *BenthosService) IsLogsFine(
 //	ok     – true when metrics are error‑free, false otherwise.
 //	reason – empty when ok is true; otherwise a short explanation (e.g.
 //	         "benthos reported 3 processor errors").
+//
+// With USE_FSMV2_BENTHOS_METRICS on, the answer comes from the FSMv2
+// worker's stored failures instead (see fsmv2MetricsErrorFree).
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
+	if s.usesFsmv2Metrics() {
+		return s.fsmv2MetricsErrorFree()
+	}
+
 	// Check output errors. OutputErrorTotal sums across all output paths,
 	// so a switch/broker/fallback config reports the true total instead
 	// of only the last route's error count.
@@ -1110,6 +1125,45 @@ func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetri
 
 	return true, ""
 }
+
+// usesFsmv2Metrics reports whether this service's monitor backend is the
+// FSMv2 Benthos metrics worker. selectBenthosMonitorBackend put it there
+// with USE_FSMV2_BENTHOS_METRICS on, and a caller-supplied manager
+// overrides it, so the backend answers the flag question without re-reading
+// the environment on every call.
+func (s *BenthosService) usesFsmv2Metrics() bool {
+	_, isFsmv2 := s.benthosMonitorManager.(*fsmv2adapter.WorkerManager[
+		config.BenthosMonitorConfig, fsmv2simple.Status[benthosmetrics.Sample],
+	])
+
+	return isFsmv2
+}
+
+// fsmv2MetricsErrorFree answers IsMetricsErrorFree from the stored
+// Failures of this instance's FSMv2 worker. Failures older than
+// fsmv2benthos.StaleAfter answer "no fresh Benthos metrics";
+// fsmv2benthos.Failures explains how an unknown read still answers from
+// the last good one.
+func (s *BenthosService) fsmv2MetricsErrorFree() (bool, string) {
+	ctx, cancel := context.WithTimeout(context.Background(), fsmv2FailuresTimeout)
+	defer cancel()
+
+	failures, found := fsmv2benthos.Failures(ctx, s.s6ServiceName)
+	if !found {
+		return false, "no Benthos metrics yet"
+	}
+
+	if time.Since(failures.ObservedAt) > fsmv2benthos.StaleAfter {
+		return false, "no fresh Benthos metrics"
+	}
+
+	return failures.ErrorFree()
+}
+
+// fsmv2FailuresTimeout bounds the store reads fsmv2MetricsErrorFree makes.
+// The reads are in-process and non-blocking, so the bound only guards a
+// wedged store.
+const fsmv2FailuresTimeout = time.Second
 
 // HasProcessingActivity reports true when metrics (or other status signals)
 // indicate the instance is actively processing data.

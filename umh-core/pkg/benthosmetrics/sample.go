@@ -35,12 +35,14 @@ type rates struct {
 }
 
 // Sample is what one scrape observed: when it began, the parsed metrics,
-// the rates, and the three probe answers (/ping, /ready, /version).
+// the rates, the Failures, and the three probe answers (/ping, /ready,
+// /version).
 //
 // After a failed scrape, At is set (a Tracker rejected by Scrape's guard
 // returns a zero Sample, so its At is the zero time); PingAlive and Ready
 // say whether /ping and /ready answered; Version is set only when the
-// failure was /metrics; Metrics and the rates stay zero.
+// failure was /metrics; Metrics, the rates and the Failures stay zero or
+// nil.
 type Sample struct {
 	// At is when the scrape began. It is set before the first request, so a
 	// failed scrape also carries a fresh value.
@@ -53,6 +55,10 @@ type Sample struct {
 	// rates is the input and output rates over rateWindow, and whether the
 	// Benthos instance is active.
 	rates
+
+	// Failures is what is wrong as of this scrape, or nil after a failed
+	// scrape.
+	Failures *Failures
 
 	// PingAlive is whether /ping answered pong.
 	PingAlive bool
