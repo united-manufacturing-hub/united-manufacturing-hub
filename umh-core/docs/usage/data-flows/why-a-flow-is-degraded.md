@@ -5,7 +5,13 @@ A data flow shows "degraded" in the Management Console when its Benthos instance
 This applies to bridges, stand-alone flows and stream processors alike, because each one runs a Benthos instance.
 
 {% hint style="info" %}
-**Early access:** With `-e USE_FSMV2_BENTHOS_METRICS=true` on the `docker run` command that starts the container, metric-check errors also clear 10 minutes after the last one, without a restart, and the metric check also counts inputs and outputs that are not connected until Benthos reconnects them. The reason then names errors before connections, for example `benthos reported 3 output errors in the last 10 minutes` or `benthos reports 1 input not connected`. An output that lost its connection counts as connected again once Benthos has written the message it was holding when the connection dropped. Some inputs and outputs report a broken connection as an error, not as a lost connection, so their connection problems show up through the log check instead. The flag is read at startup, so changing it means recreating the container.
+**Early access:** With `-e USE_FSMV2_BENTHOS_METRICS=true` on the `docker run` command that starts the container, the metric check works differently:
+
+- **Errors with a time span:** an error clears 10 minutes after the last one, without a restart. The reason reads, for example, `benthos reported 3 output errors in the last 10 minutes`.
+- **Connections:** inputs and outputs that are not connected count until Benthos reconnects them. The reason reads, for example, `benthos reports 1 input not connected`. An output that lost its connection counts as connected again once Benthos has written the message it was holding when the connection dropped.
+- **Blocked outputs:** the flow's outputs have sent no message for 2 minutes while at least three writes failed, the latest within those 2 minutes. The reason reads, for example, `benthos output blocked: no message sent for 3 minutes`. Check that the output's target accepts writes. Only failures since the last sent message count, not those from before umh-core started watching the instance or before a Benthos restart. One stuck output among several that still send is not reported as blocked.
+
+The reason names blocked outputs first, then errors, then connections. Some inputs and outputs report a broken connection as an error, not as a lost connection, so their connection problems show up through the log check instead. The flag is read at startup, so changing it means recreating the container.
 {% endhint %}
 
 ## The two checks

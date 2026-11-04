@@ -57,6 +57,10 @@ type Tracker struct {
 	// windows (see observe).
 	errorEngine *diagnosis.Engine[readings]
 
+	// writes tracks when the flow's outputs last sent a message and last
+	// failed a write; see outputWrites.
+	writes outputWrites
+
 	// prev is the previous observed scrape, nil before the first.
 	prev *observation
 

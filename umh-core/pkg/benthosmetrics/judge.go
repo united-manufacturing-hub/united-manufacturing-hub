@@ -36,7 +36,8 @@ type errorCounter struct {
 }
 
 // errorCounters lists the counters the error signals are built from. The
-// names are the Benthos series names from names.go.
+// names are the Benthos series names from names.go. Only the output error's
+// entry can be marked blocked; see blockedFor.
 var errorCounters = []errorCounter{
 	{
 		name:  outputError,
@@ -204,22 +205,86 @@ func firstNotConnectedSince(prev map[string]time.Time, counts map[string]int64, 
 	return out
 }
 
+// BlockedAfter is how long the flow's outputs must send nothing while their
+// writes keep failing before they count as blocked. Without a failed write
+// in that time they are not blocked.
+const BlockedAfter = 2 * time.Minute
+
+// blockedMinErrors is the fewest failed writes since the flow's outputs
+// last sent a message for them to count as blocked.
+const blockedMinErrors = 3
+
+// outputWrites tracks when the flow's outputs last sent a message and last
+// failed a write, from Benthos' summed output_sent and output_error
+// counters. After a scrape pause longer than 2 minutes the reason drops
+// "blocked" until output_error next rises, because the pause makes the last
+// failed write read as older than BlockedAfter. That is accepted: a pause
+// that long means umh-core itself stalled, and the flow stays degraded
+// through its error entry.
+type outputWrites struct {
+	// lastSentAt is the scrape at which output_sent last rose, or the first
+	// scrape since umh-core or Benthos started.
+	lastSentAt time.Time
+	// errorsAtLastSent is output_error at lastSentAt. On umh-core's first
+	// scrape it is output_error at that scrape, so errors from before it do
+	// not count. After a Benthos restart it is 0, because the counters start
+	// again at 0.
+	errorsAtLastSent int64
+	// Zero until output_error first goes up; the last failed write happened
+	// after it.
+	scrapeBeforeLastError time.Time
+}
+
+// observe updates w from prev and cur, two scrapes of the same counter
+// series.
+func (w *outputWrites) observe(prev, cur *observation) {
+	// output_sent is cumulative, so a message sent during a pause in
+	// scrapes still shows as a rise here.
+	if cur.outputSent > prev.outputSent {
+		w.lastSentAt = cur.at
+		w.errorsAtLastSent = cur.errors[outputError]
+	}
+	if cur.errors[outputError] > cur.before[outputError] {
+		w.scrapeBeforeLastError = prev.at
+	}
+}
+
+// blockedFor returns how long the flow's outputs have sent nothing while
+// their writes keep failing, and 0 while they are not blocked.
+// outputErrors is output_error at this scrape.
+func blockedFor(w outputWrites, outputErrors int64, at time.Time) time.Duration {
+	quiet := at.Sub(w.lastSentAt)
+	quietLongEnough := quiet >= BlockedAfter
+	enoughErrors := outputErrors-w.errorsAtLastSent >= blockedMinErrors
+	stillFailing := at.Sub(w.scrapeBeforeLastError) < BlockedAfter
+	if !quietLongEnough || !enoughErrors || !stillFailing {
+		return 0
+	}
+
+	return quiet
+}
+
 // judgeFailures builds the Failures for one scrape: error entries first, then
-// connection entries, each group with the larger Count first. An error
-// entry's Count is how much its counter went up within ErrorWindow, and its
-// LastErrorAt is the last scrape at which that counter rose.
+// connection entries, each group with a blocked output first and then the
+// larger Count first. An error entry's Count is how much its counter went up
+// within ErrorWindow, and its LastErrorAt is the last scrape at which that
+// counter rose.
 func judgeFailures(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur observation) Failures {
 	v := Failures{ObservedAt: cur.at}
 	for _, f := range fired {
 		c := errorCounterOf(f.Signal)
 		n, _ := e.Reduction(f.Signal, f.Signal).Get() // 0 until the window holds 2 readings
-		v.Entries = append(v.Entries, FailureEntry{
+		entry := FailureEntry{
 			Signal:      c.name,
 			Label:       c.label,
 			Count:       int64(n),
 			Since:       f.Since,
 			LastErrorAt: lastRise(cur, c.name, f.Since),
-		})
+		}
+		if c.name == outputError {
+			entry.BlockedFor = cur.outputBlockedFor
+		}
+		v.Entries = append(v.Entries, entry)
 	}
 	errorEntries := len(v.Entries)
 	for _, c := range connectionChecks {
@@ -274,10 +339,14 @@ func prevEpisode(prevEntries []FailureEntry, signal string, since time.Time) (Fa
 	return FailureEntry{}, false
 }
 
-// sortEntriesByUrgency sorts entries in place by the larger Count first,
-// keeping equals in list order.
+// sortEntriesByUrgency sorts entries in place, most urgent first: a
+// blocked output, then the larger Count, keeping equals in list order.
 func sortEntriesByUrgency(entries []FailureEntry) {
 	sort.SliceStable(entries, func(i, j int) bool {
+		if bi, bj := entries[i].BlockedFor > 0, entries[j].BlockedFor > 0; bi != bj {
+			return bi
+		}
+
 		return entries[i].Count > entries[j].Count
 	})
 }

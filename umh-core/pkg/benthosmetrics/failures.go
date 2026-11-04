@@ -22,7 +22,8 @@ import (
 )
 
 // Failures is what is wrong with one Benthos instance as of one scrape:
-// recent errors, and inputs or outputs that are not connected. The zero
+// recent errors — an output whose writes keep failing is marked blocked,
+// with how long — and inputs or outputs that are not connected. The zero
 // value means nothing is wrong.
 type Failures struct {
 	// Entries holds one entry per current failure, error entries first. An
@@ -60,6 +61,10 @@ type FailureEntry struct {
 	// Connection is true for an input or output that is not connected, false
 	// for an error counter.
 	Connection bool
+
+	// BlockedFor is how long the flow's outputs have sent nothing while
+	// their writes keep failing. It is zero on every other entry.
+	BlockedFor time.Duration
 }
 
 // IsConnection reports whether e is a connection entry: an entry for an
@@ -70,8 +75,9 @@ func (e FailureEntry) IsConnection() bool {
 }
 
 // ErrorFree reports whether nothing is failing. Otherwise reason describes
-// the first entry, for example "benthos reported 3 output errors in the
-// last 10 minutes" or "benthos reports 1 input not connected".
+// the first entry, for example "benthos output blocked: no message sent for
+// 3 minutes", "benthos reported 3 output errors in the last 10 minutes" or
+// "benthos reports 1 input not connected".
 func (f *Failures) ErrorFree() (ok bool, reason string) {
 	if len(f.Entries) == 0 {
 		return true, ""
@@ -85,6 +91,10 @@ func (f *Failures) ErrorFree() (ok bool, reason string) {
 
 	if e.IsConnection() {
 		return false, fmt.Sprintf("benthos reports %d %s not connected", e.Count, label)
+	}
+
+	if e.BlockedFor > 0 {
+		return false, fmt.Sprintf("benthos output blocked: no message sent for %s", windowWords(e.BlockedFor))
 	}
 
 	return false, fmt.Sprintf("benthos reported %d %s in the last %s", e.Count, label, windowWords(ErrorWindow))

@@ -43,6 +43,11 @@ type observation struct {
 	// firstNotConnectedSince).
 	notConnectedSince map[string]time.Time
 
+	// outputBlockedFor is how long the flow's outputs have sent nothing
+	// while their writes keep failing at this scrape, 0 while they are not
+	// blocked (see blockedFor).
+	outputBlockedFor time.Duration
+
 	// before holds the error counters this scrape is compared against, for
 	// the entries' LastErrorAt: the previous scrape's counters on the same
 	// counter series. It is nil on the first scrape and after a restart,
@@ -81,6 +86,9 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) (rates, Failures) {
 	var prevNotConnectedSince map[string]time.Time
 	switch {
 	case prev == nil:
+		// Errors the instance already counted do not count; only writes
+		// after umh-core started watching it do.
+		t.writes = outputWrites{lastSentAt: at, errorsAtLastSent: cur.errors[outputError]}
 	case !at.After(prev.at):
 		return prev.rates, prev.failures
 	case prev.port != port:
@@ -90,9 +98,11 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) (rates, Failures) {
 		t.engine = newEngine(rateTable())
 		t.offsets = offsets{}
 		rebuildErrors(t, nil, at)
+		t.writes = outputWrites{lastSentAt: at}
 	case counterSeriesChanged(prev, &cur):
 		// A restart: fold the input and output drops into their offsets, so
-		// the rate windows survive it, and start the error state over.
+		// the rate windows survive it, and start the error state over. The
+		// restarted Benthos counts its writes from 0 again.
 		if cur.inputReceived < prev.inputReceived {
 			t.offsets.input += prev.inputReceived
 		}
@@ -100,16 +110,20 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) (rates, Failures) {
 			t.offsets.output += prev.outputSent
 		}
 		rebuildErrors(t, nil, at)
+		t.writes = outputWrites{lastSentAt: at}
 	case at.Sub(prev.at) > ErrorWindow:
 		cur.before = prev.errors
 		rebuildErrors(t, prev.errors, at)
+		t.writes.observe(prev, &cur)
 	default:
 		cur.before = prev.errors
 		cur.prevEntries = prev.failures.Entries
 		prevNotConnectedSince = prev.notConnectedSince
+		t.writes.observe(prev, &cur)
 	}
 
 	cur.notConnectedSince = firstNotConnectedSince(prevNotConnectedSince, cur.connections, at)
+	cur.outputBlockedFor = blockedFor(t.writes, cur.errors[outputError], at)
 
 	// The rate engine holds no signals, so its discarded (Fired, Readiness)
 	// is always zero; observe feeds it for the windows alone.

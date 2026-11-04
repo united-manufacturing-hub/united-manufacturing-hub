@@ -14,7 +14,8 @@
 
 // Package benthosmetrics scrapes the metrics endpoints of one Benthos
 // instance, parses the counters, computes the message rates, and reports
-// recent errors and inputs or outputs that are not connected.
+// recent errors, blocked outputs, and inputs or outputs that are not
+// connected.
 //
 // Build one Tracker per Benthos instance with NewTracker, call
 // Scrape(ctx, port) every ScrapeInterval from a single goroutine, and read
