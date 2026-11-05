@@ -6,10 +6,10 @@ unless the container starts with `-e USE_FSMV2_CPU=true`. To turn it off, add
 `-e USE_FSMV2_CPU=false` to the `docker run` command that starts the container. The flag is read at
 startup, so changing it means recreating the container. Since v0.44.42, the check also runs on an
 instance started without `AUTH_TOKEN` and `API_URL`. With the check off, the 70% CPU usage rule
-applies instead. An instance is then marked degraded whenever the whole machine's CPU usage is at
-70% or more, or the kernel throttles the container in more than 5% of scheduling periods over 60
-seconds. This happens whether or not work is being delayed. The machine's usage counts here even
-when the container has a CPU limit.
+applies instead. An instance is then degraded while the whole machine's CPU usage is at 70% or
+more. It is also degraded while the kernel throttles the container in more than 5% of scheduling
+periods over 60 seconds. This happens whether or not work is being delayed, and even when the
+container has a CPU limit.
 {% endhint %}
 
 UMH Core reports whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page. Headroom is the CPU the instance can still use. An instance degrades when its headroom falls below its threshold (see [Thresholds](#thresholds)), or when throttling, CPU pressure or steal show that its work is delayed. High usage alone degrades an instance only in a last-resort case: no CPU limit is set, the kernel publishes no CPU pressure, and the machine's free cores cannot be measured (see **Instance usage** in [Thresholds](#thresholds)). While CPU health is degraded, new bridges wait (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)). The [Glossary](#glossary) explains each term, and [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/) explains the reasoning.
