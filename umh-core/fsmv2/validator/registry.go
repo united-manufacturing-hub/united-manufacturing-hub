@@ -86,7 +86,7 @@ dependencies here creates hidden coupling and makes the derivation non-
 deterministic. Dependencies are for actions and observation, not derivation.`,
 		CorrectCode: `func (w *Worker) DeriveDesiredState(spec MySpec) (*DesiredState, error) {
     return &DesiredState{ChildCount: spec.ChildCount}, nil
-    // NOT: deps := w.GetDependencies(); deps.SomeService.Check()
+    // NOT: deps := w.Deps(); deps.SomeService.Check()
 }`,
 		ReferenceFile: "example-child/worker.go",
 	},

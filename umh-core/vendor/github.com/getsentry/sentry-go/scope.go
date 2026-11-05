@@ -30,7 +30,15 @@ import (
 // an event for reporting, the current client adds information from the current
 // scope into the event.
 type Scope struct {
-	mu          sync.RWMutex
+	mu sync.RWMutex
+	// eventProcessors are retained by Clear and inherited by Clone.
+	eventProcessors []EventProcessor
+
+	// scopeData keeps track of all scope specific data
+	scopeData
+}
+
+type scopeData struct {
 	attributes  map[string]attribute.Value
 	breadcrumbs []*Breadcrumb
 	attachments []*Attachment
@@ -49,7 +57,6 @@ type Scope struct {
 		// size.
 		Overflow() bool
 	}
-	eventProcessors []EventProcessor
 
 	propagationContext PropagationContext
 	span               *Span
@@ -57,14 +64,18 @@ type Scope struct {
 
 // NewScope creates a new Scope.
 func NewScope() *Scope {
-	return &Scope{
+	return &Scope{scopeData: newScopeData(NewPropagationContext())}
+}
+
+func newScopeData(propagationContext PropagationContext) scopeData {
+	return scopeData{
 		attributes:         make(map[string]attribute.Value),
 		breadcrumbs:        make([]*Breadcrumb, 0),
 		attachments:        make([]*Attachment, 0),
 		tags:               make(map[string]string),
 		contexts:           make(map[string]Context),
 		fingerprint:        make([]string, 0),
-		propagationContext: NewPropagationContext(),
+		propagationContext: propagationContext,
 	}
 }
 
@@ -282,6 +293,7 @@ func (scope *Scope) Clone() *Scope {
 
 	clone := NewScope()
 	clone.user = scope.user
+	clone.user.Data = maps.Clone(scope.user.Data)
 	clone.breadcrumbs = make([]*Breadcrumb, len(scope.breadcrumbs))
 	copy(clone.breadcrumbs, scope.breadcrumbs)
 	clone.attachments = make([]*Attachment, len(scope.attachments))
@@ -300,9 +312,16 @@ func (scope *Scope) Clone() *Scope {
 	return clone
 }
 
-// Clear removes the data from the current scope. Not safe for concurrent use.
+// Clear removes enrichment data while preserving event processors and trace
+// correlation. It is safe for concurrent use.
 func (scope *Scope) Clear() {
-	*scope = *NewScope()
+	scope.mu.Lock()
+	defer scope.mu.Unlock()
+
+	propagationContext := scope.propagationContext
+	span := scope.span
+	scope.scopeData = newScopeData(propagationContext)
+	scope.span = span
 }
 
 // AddEventProcessor adds an event processor to the current scope.
@@ -375,7 +394,7 @@ func (scope *Scope) ApplyToEvent(event *Event, hint *EventHint, client *Client) 
 		event.Contexts["trace"] = scope.propagationContext.Map()
 
 		dsc := scope.propagationContext.DynamicSamplingContext
-		if !dsc.HasEntries() && client != nil {
+		if !dsc.HasEntries() && client.IsEnabled() {
 			dsc = DynamicSamplingContextFromScope(scope, client)
 		}
 		event.sdkMetaData.dsc = dsc
@@ -383,7 +402,7 @@ func (scope *Scope) ApplyToEvent(event *Event, hint *EventHint, client *Client) 
 
 	// If an external trace resolver is registered (e.g. OTel), override
 	// trace/span IDs from the hint context or the scope's request context.
-	if client != nil {
+	if client.IsEnabled() {
 		var ctx context.Context
 		if hint != nil {
 			ctx = hint.Context
@@ -393,13 +412,14 @@ func (scope *Scope) ApplyToEvent(event *Event, hint *EventHint, client *Client) 
 		}
 		if traceID, spanID, ok := client.externalTraceContextFromContext(ctx); event.Type != transactionType && ok {
 			traceCtx := event.Contexts["trace"]
-			traceCtx["trace_id"] = traceID.String()
-			traceCtx["span_id"] = spanID.String()
+			traceCtx[traceIDContextKey] = traceID.String()
+			traceCtx[spanIDContextKey] = spanID.String()
 		}
 	}
 
 	if event.User.IsEmpty() {
 		event.User = scope.user
+		event.User.Data = maps.Clone(scope.user.Data)
 	}
 
 	if len(event.Fingerprint) == 0 {
@@ -434,7 +454,7 @@ func (scope *Scope) ApplyToEvent(event *Event, hint *EventHint, client *Client) 
 		event = processor(event, hint)
 		if event == nil {
 			debuglog.Printf("Event dropped by one of the Scope EventProcessors: %s\n", id)
-			if client != nil {
+			if client.IsEnabled() {
 				client.reportRecorder.RecordOne(report.ReasonEventProcessor, category)
 				if category == ratelimit.CategoryTransaction {
 					client.reportRecorder.Record(report.ReasonEventProcessor, ratelimit.CategorySpan, int64(spanCountBefore))
@@ -443,7 +463,7 @@ func (scope *Scope) ApplyToEvent(event *Event, hint *EventHint, client *Client) 
 			return nil
 		}
 		if droppedSpans := spanCountBefore - event.GetSpanCount(); droppedSpans > 0 {
-			if client != nil {
+			if client.IsEnabled() {
 				client.reportRecorder.Record(report.ReasonEventProcessor, ratelimit.CategorySpan, int64(droppedSpans))
 			}
 		}
@@ -524,7 +544,7 @@ func resolveTrace(scope *Scope, client *Client, ctxs ...context.Context) (traceI
 		if ctx == nil {
 			continue
 		}
-		if client != nil {
+		if client.IsEnabled() {
 			if traceID, spanID, ok := client.externalTraceContextFromContext(ctx); ok {
 				return traceID, spanID
 			}

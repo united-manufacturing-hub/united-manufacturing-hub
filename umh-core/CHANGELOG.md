@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Fixes
+
+- A bridge deploy now fails within seconds when benthos rejects the configuration before it starts, for example a misspelled setting (`field retension not recognised`). The error names every rejected setting at once. The bridge is kept and only the rejected flow is stopped. Before, the deploy waited 30 seconds and failed without naming the setting
+- Deploying or editing a stand-alone flow, or editing a bridge, with a configuration benthos rejects now shows the benthos error instead of "check the component logs"
+
+## [0.44.46]
+
+### Improvements
+
+- The CPU status on an instance's page now comes from the [CPU health check](https://docs.umh.app/production/cpu-health) by default, so an instance is degraded, and new bridges wait, when its CPU headroom is gone, its work is measurably delayed or its CPU cannot be measured, not whenever usage reaches 70%. To go back to the 70% CPU usage rule, recreate the container with `-e USE_FSMV2_CPU=false`
+
+## [0.44.45]
+
+### Improvements
+
+- Wait time between reads on the S7 input is now configurable with `timeBetweenReads`, for example `500ms` or `2s`. The default is unchanged at `1s`, and very short values can overload the PLC 
+
+### Fixes
+
+- The Snowflake output uses version 2 of the Snowflake Go driver, the same version Redpanda Connect uses, so benthos no longer exits at startup with "sql: Register called twice for driver snowflake" 
+- Beckhoff ADS symbol names are cut at the first NUL byte, so padding after the name no longer ends up in the symbol name 
+- The instance now reports the state of its historian database on TimescaleDB 2.26 or later. Before, the report failed with `column ch.dropped does not exist`
+
 ## [0.44.44]
 
 ### Improvements

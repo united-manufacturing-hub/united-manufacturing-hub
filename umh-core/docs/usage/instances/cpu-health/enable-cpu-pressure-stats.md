@@ -1,8 +1,8 @@
 # Enable CPU pressure stats
 
 {% hint style="info" %}
-**Early access.** UMH Core reads CPU pressure only with CPU Health turned on: v0.44.37 or later,
-started with `-e USE_FSMV2_CPU=true`. See [CPU Health](README.md).
+UMH Core reads CPU pressure only while the CPU health check is on. It is on by default from
+v0.44.46. See [CPU Health](README.md).
 {% endhint %}
 
 Follow this page when the Technical Details `Pressure` line reads `Pressure not measured (this

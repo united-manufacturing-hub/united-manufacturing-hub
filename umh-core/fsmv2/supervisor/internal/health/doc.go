@@ -111,15 +111,13 @@
 //	checker := health.NewFreshnessChecker(
 //	    5 * time.Second,   // staleThreshold
 //	    30 * time.Second,  // timeout
-//	    "pull",            // workerType
-//	    logger,
 //	)
 //
-//	if !checker.Check(snapshot) {
+//	if !checker.Check(observed.GetTimestamp()) {
 //	    // Data is stale, handle degraded transition
 //	}
 //
-//	if checker.IsTimeout(snapshot) {
+//	if checker.IsTimeout(observed.GetTimestamp()) {
 //	    // Staleness timeout, restart collector
 //	}
 //
@@ -134,8 +132,8 @@
 //	}
 //
 //	// Supervisor tick loop
-//	if !freshnessChecker.Check(snapshot) {
-//	    if freshnessChecker.IsTimeout(snapshot) {
+//	if !freshnessChecker.Check(observed.CollectedAt) {
+//	    if freshnessChecker.IsTimeout(observed.CollectedAt) {
 //	        collector.TriggerNow()
 //	    }
 //	    // Transition to degraded

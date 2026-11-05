@@ -1,13 +1,15 @@
 # CPU Health
 
 {% hint style="info" %}
-**Early access.** This reporting needs UMH Core v0.44.37 or later, started with
-`-e USE_FSMV2_CPU=true` added to the `docker run` command that starts the container. The flag is
-read at startup, so changing it means recreating the container. Since v0.44.42, the CPU health
-check also runs on an instance started without `AUTH_TOKEN` and `API_URL`. Without the flag, an
-instance is marked degraded whenever the whole machine's CPU usage is at 70% or more, or the kernel
-throttles the container in more than 5% of scheduling periods over 60 seconds. This happens whether
-or not work is being delayed. The machine's usage counts here even when the container has a CPU limit.
+The CPU health check is on by default from UMH Core v0.44.46. On v0.44.37 to v0.44.45 it is off
+unless the container starts with `-e USE_FSMV2_CPU=true`. To turn it off, add
+`-e USE_FSMV2_CPU=false` to the `docker run` command that starts the container. The flag is read at
+startup, so changing it means recreating the container. Since v0.44.42, the check also runs on an
+instance started without `AUTH_TOKEN` and `API_URL`. With the check off, the 70% CPU usage rule
+applies instead. An instance is then marked degraded whenever the whole machine's CPU usage is at
+70% or more, or the kernel throttles the container in more than 5% of scheduling periods over 60
+seconds. This happens whether or not work is being delayed. The machine's usage counts here even
+when the container has a CPU limit.
 {% endhint %}
 
 UMH Core reports whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page. Headroom is the CPU the instance can still use. An instance degrades when its headroom falls below its threshold (see [Thresholds](#thresholds)), or when throttling, CPU pressure or steal show that its work is delayed. High usage alone degrades an instance only in a last-resort case: no CPU limit is set, the kernel publishes no CPU pressure, and the machine's free cores cannot be measured (see **Instance usage** in [Thresholds](#thresholds)). While CPU health is degraded, new bridges wait (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)). The [Glossary](#glossary) explains each term, and [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/) explains the reasoning.
@@ -88,7 +90,7 @@ the Steal line reads `not measured` with its reason.
 
 ## Metrics
 
-With `USE_FSMV2_CPU=true`, the CPU worker publishes the gauges below on the Prometheus endpoint on port 8080. The CPU worker measures once per second, and each measurement is called a tick. [Metrics](../../../production/metrics.md) explains how to read the endpoint. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
+With the CPU health check on, the CPU worker publishes the gauges below on the Prometheus endpoint on port 8080. The CPU worker measures once per second, and each measurement is called a tick. [Metrics](../../../production/metrics.md) explains how to read the endpoint. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
 
 When a tick could not measure, every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
 
