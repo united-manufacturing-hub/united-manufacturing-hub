@@ -178,17 +178,26 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	// currently, we canot reuse templates, so we need to create a new one
 	pcConfig.ProtocolConverterServiceConfig.TemplateRef = pcConfig.Name
 
-	if err := validateWriteTopicHierarchy(pcConfig, a.systemSnapshotManager, a.configManager); err != nil {
-		errorMsg := fmt.Sprintf("Invalid write flow configuration: %v", err)
+	// Add to configuration
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to read current config: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, models.ErrConfigFileInvalid, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
+			errorMsg, models.ErrRetryConfigReadFailed, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Add to configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-	defer cancel()
+	if err := writeTopicViolation(pcConfig, currentConfig); err != nil {
+		errorMsg := fmt.Sprintf("Failed to deploy Bridge: %v", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
+
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding Bridge to configuration...", a.outboundChannel, models.DeployProtocolConverter)
@@ -288,19 +297,19 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 			// Empty desired state ("") means active (pre-write flow), so gate vs
 			// stopped rather than active to avoid treating an active flow as stopped.
-			readActive := pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState != dataflowcomponent.OperationalStateStopped
-			writeActive := pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState != dataflowcomponent.OperationalStateStopped
+			readActive := pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState != protocolconverterserviceconfig.DFCDesiredStateStopped
+			writeActive := pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState != protocolconverterserviceconfig.DFCDesiredStateStopped
 
 			if !readActive && !writeActive {
 				pcToStop.DesiredFSMState = protocolconverter.OperationalStateStopped
 			} else {
 				stopRead, stopWrite := flowsToStop(lastSnapshot, readActive, writeActive)
 				if stopRead {
-					pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
+					pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState = protocolconverterserviceconfig.DFCDesiredStateStopped
 				}
 
 				if stopWrite {
-					pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState = dataflowcomponent.OperationalStateStopped
+					pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState = protocolconverterserviceconfig.DFCDesiredStateStopped
 				}
 			}
 

@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -33,10 +35,6 @@ import (
 // communicator). It must match the value used in FSM actions so the Kafka consumer-group
 // name is identical across both callers — update both if this ever changes.
 const BridgedByPlaceholder = "unimplemented"
-
-// dfcDesiredStateStopped repeats the DFC FSM's "stopped" literal, because the FSM packages
-// depend on this one.
-const dfcDesiredStateStopped = "stopped"
 
 // BuildRuntimeConfig merges all variables (user + agent + global + internal),
 // performs the location merge, derives the `bridged_by` header, and finally
@@ -89,6 +87,7 @@ func BuildRuntimeConfig(
 	agentLocation map[string]string,
 	globalVars map[string]any,
 	historian *config.HistorianConfig,
+	dataContracts []config.DataContractsConfig,
 	nodeName string,
 	pcName string,
 ) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
@@ -241,7 +240,7 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
 
-	runtime, err := renderConfig(spec, scope, locationPath, secrets) // unexported helper that enforces UNS
+	runtime, err := renderConfig(spec, scope, locationPath, dataContractNames(dataContracts), secrets) // unexported helper that enforces UNS
 	if err != nil && !historianUsable && referencesMissingHistorian(err) {
 		return runtime, missingHistorianError(err, bridgeDefinesHistorian)
 	}
@@ -262,6 +261,17 @@ func missingHistorianError(renderErr error, bridgeDefinesHistorian bool) error {
 		"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", renderErr)
 }
 
+// dataContractNames lists the names of the configured data contracts, the set a write flow
+// topic may name on top of the built-in _raw and _historian.
+func dataContractNames(dataContracts []config.DataContractsConfig) []string {
+	names := make([]string, 0, len(dataContracts))
+	for _, dataContract := range dataContracts {
+		names = append(names, dataContract.Name)
+	}
+
+	return names
+}
+
 // WriteFlowConfigError marks a configuration failure confined to the write flow of a
 // bridge. BuildRuntimeConfig returns it alongside a runtime whose connection and read
 // flow are rendered and whose write flow is blank, so the read flow keeps running.
@@ -271,7 +281,7 @@ type WriteFlowConfigError struct {
 
 // Error implements the error interface.
 func (e *WriteFlowConfigError) Error() string {
-	return "write flow: " + e.Err.Error()
+	return e.Err.Error()
 }
 
 // Unwrap exposes the underlying cause to errors.Is and errors.As.
@@ -349,6 +359,7 @@ func renderConfig(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	scope map[string]any,
 	locationPath string,
+	dataContracts []string,
 	secrets []string,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
@@ -388,22 +399,30 @@ func renderConfig(
 		read = appendDownsampler(read)
 	}
 
-	// Render the write DFC template (resolves {{ .IP }}, {{ .PORT }}, etc. in Source.Topics and Destination.Code).
+	// Render the write DFC template (resolves {{ .IP }}, {{ .PORT }}, etc. in Destination.Code).
 	renderedWriteConfig, err := config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig, scope, secrets...)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
+	// Source topics are regular expressions, so every variable renders into them as an
+	// escaped literal: `^umh\.v1\.{{ .location_path }}\.` matches the location path exactly.
+	renderedWriteConfig.Source, err = config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig.Source,
+		regexQuotedScope(scope), regexQuotedSecrets(secrets)...)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
 	// Enforce the UNS hierarchy: a write flow may only consume topics beneath the location
-	// of the bridge it belongs to. Checked after rendering, so topics written as
-	// `umh.v1.{{ .location_path }}.…` are checked in their resolved form. A violation blanks
-	// the write flow instead of failing the render, leaving connection and read flow up.
-	// A write flow with no destination, or a stopped one, subscribes to nothing.
+	// of the bridge it belongs to, and every topic must name one data contract. Checked
+	// after rendering, so templated topics are checked in their resolved form. A violation
+	// blanks the write flow instead of failing the render, leaving connection and read flow
+	// up. A write flow with no destination, or a stopped one, subscribes to nothing.
 	var writeFlowErr error
 
-	writeStopped := spec.WriteDFCDesiredState == dfcDesiredStateStopped
+	writeStopped := spec.WriteDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
 	if renderedWriteConfig.HasOutput() && !writeStopped {
-		if err := renderedWriteConfig.ToWriteConfig().ValidateTopicsUnderLocation(locationPath); err != nil {
+		if err := renderedWriteConfig.ToWriteConfig().ValidateTopics(locationPath, dataContracts); err != nil {
 			writeFlowErr = &WriteFlowConfigError{Err: err}
 			renderedWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{}
 		}
@@ -432,6 +451,55 @@ func renderConfig(
 		DataflowComponentReadServiceConfig:  read,
 		DataflowComponentWriteServiceConfig: write,
 	}, writeFlowErr
+}
+
+// regexQuotedScope returns a copy of scope with every string escaped by regexp.QuoteMeta,
+// so variables render into a regular expression as literal text.
+func regexQuotedScope(scope map[string]any) map[string]any {
+	quoted := make(map[string]any, len(scope))
+	for key, value := range scope {
+		quoted[key] = regexQuotedValue(value)
+	}
+
+	return quoted
+}
+
+// regexQuotedValue escapes value if it is a string, and every string inside it if it is
+// a map or slice. Other values are returned unchanged.
+func regexQuotedValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return regexp.QuoteMeta(typed)
+	case map[string]any:
+		return regexQuotedScope(typed)
+	case map[string]string:
+		quoted := make(map[string]string, len(typed))
+		for key, item := range typed {
+			quoted[key] = regexp.QuoteMeta(item)
+		}
+
+		return quoted
+	case []any:
+		quoted := make([]any, len(typed))
+		for i, item := range typed {
+			quoted[i] = regexQuotedValue(item)
+		}
+
+		return quoted
+	default:
+		return value
+	}
+}
+
+// regexQuotedSecrets returns secrets together with their regexp.QuoteMeta form, the form
+// they take when rendered through regexQuotedScope.
+func regexQuotedSecrets(secrets []string) []string {
+	quoted := slices.Clone(secrets)
+	for _, secret := range secrets {
+		quoted = append(quoted, regexp.QuoteMeta(secret))
+	}
+
+	return quoted
 }
 
 // appendDownsampler appends a downsampler as the last processor if one doesn't already exist.

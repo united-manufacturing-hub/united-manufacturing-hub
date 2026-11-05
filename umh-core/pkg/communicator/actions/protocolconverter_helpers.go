@@ -15,7 +15,6 @@
 package actions
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -24,8 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 )
@@ -60,35 +57,21 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 	return nil
 }
 
-// validateWriteTopicHierarchy rejects a bridge whose write flow subscribes to topics
-// outside the bridge's own location, so the violation is reported to the user instead of
-// only degrading the bridge later. The rule itself lives in BuildRuntimeConfig, which
+// writeTopicViolation returns why the write flow of pcConfig may not subscribe to its
+// topics within fullConfig, which supplies the agent location and the declared data
+// contracts, or nil when it may. The rule itself lives in BuildRuntimeConfig, which
 // reports it as a WriteFlowConfigError; every other render failure is left to the
 // reconciliation loop, which reports it on the bridge.
 //
-// The agent location is read from the system snapshot; with no snapshot manager that half
-// of the bridge location is unknown, so the check is skipped. The historian section is not
-// part of the snapshot, so it is read from the config manager to render historian variables.
-func validateWriteTopicHierarchy(pcConfig config.ProtocolConverterConfig, snapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) error {
-	if snapshotManager == nil {
-		return nil
-	}
-
-	snapshot := snapshotManager.GetDeepCopySnapshot()
-
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-	defer cancel()
-
-	currentConfig, err := configManager.GetConfig(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to read current config for historian variables: %w", err)
-	}
-
-	_, err = runtime_config.BuildRuntimeConfig(
+// Actions pass the config from the config manager rather than from the system snapshot,
+// because the snapshot carries no config (see fsm.GetManagerSnapshots).
+func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig config.FullConfig) error {
+	_, err := runtime_config.BuildRuntimeConfig(
 		pcConfig.ProtocolConverterServiceConfig,
-		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
+		convertIntMapToStringMap(fullConfig.Agent.Location),
 		nil, // TODO: add global vars
-		currentConfig.Historian,
+		fullConfig.Historian,
+		fullConfig.DataContracts,
 		runtime_config.BridgedByPlaceholder,
 		pcConfig.Name,
 	)
@@ -99,6 +82,17 @@ func validateWriteTopicHierarchy(pcConfig config.ProtocolConverterConfig, snapsh
 	}
 
 	return nil
+}
+
+// introducedWriteTopicViolation returns the write topic violation of a bridge after a
+// change, unless the bridge already had one before it.
+func introducedWriteTopicViolation(before, after config.ProtocolConverterConfig, beforeConfig, afterConfig config.FullConfig) error {
+	err := writeTopicViolation(after, afterConfig)
+	if err == nil || writeTopicViolation(before, beforeConfig) != nil {
+		return nil
+	}
+
+	return err
 }
 
 // validateReadProtocolConverterDFC validates a read ProtocolConverterDFC's state and configuration.
