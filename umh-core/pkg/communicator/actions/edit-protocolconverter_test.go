@@ -983,6 +983,106 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 		})
 
+		Context("when the write flow subscribes to topics outside the bridge location", func() {
+			// editWithWriteTopics edits the bridge so that it sits at
+			// test-enterprise.test-site and its write flow subscribes to the given topics.
+			editWithWriteTopics := func(topics string) error {
+				topicAction := actions.NewEditProtocolConverterAction(
+					userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, fsm.NewSnapshotManager())
+
+				payload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "wttr.in",
+						"port": 80,
+					},
+					"location": map[string]interface{}{
+						"0": "test-enterprise",
+						"1": "test-site",
+					},
+					"writeDFC": map[string]interface{}{
+						"ignoreErrors": true,
+						"destination": map[string]interface{}{
+							"protocol": "stdout",
+						},
+						"source": map[string]interface{}{
+							"topics": topics,
+						},
+					},
+				}
+
+				Expect(topicAction.Parse(payload)).To(Succeed())
+				Expect(topicAction.Validate()).To(Succeed())
+
+				_, _, err := topicAction.Execute()
+
+				return err
+			}
+
+			It("rejects the edit without persisting it", func() {
+				err := editWithWriteTopics("umh.v1.test-enterprise.other-site.foo")
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("must be beneath the bridge location"))
+				Expect(err.Error()).To(ContainSubstring("umh.v1.test-enterprise.other-site.foo"))
+				Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeFalse())
+			})
+
+			It("accepts topics that resolve beneath the bridge location", func() {
+				Expect(editWithWriteTopics("umh.v1.{{ .location_path }}.foo")).To(Succeed())
+			})
+
+			It("does not block a read-only edit on a bridge whose write flow already violates the rule", func() {
+				// The bridge already carries an offending write flow, active. Editing only the
+				// read flow must go through; the render degrades the write flow on its own.
+				spec := &mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig
+				spec.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.test-enterprise.other-site.foo"},
+					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+				}
+				spec.WriteDFCDesiredState = "active"
+
+				readOnlyAction := actions.NewEditProtocolConverterAction(
+					userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, fsm.NewSnapshotManager())
+
+				payload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "wttr.in",
+						"port": 80,
+					},
+					"location": map[string]interface{}{
+						"0": "test-enterprise",
+						"1": "test-site",
+					},
+					"readDFC": map[string]interface{}{
+						"ignoreErrors": true,
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: http://example.com",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: |-\n  root = content()",
+								},
+							},
+						},
+					},
+				}
+
+				Expect(readOnlyAction.Parse(payload)).To(Succeed())
+				Expect(readOnlyAction.Validate()).To(Succeed())
+
+				_, _, err := readOnlyAction.Execute()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeTrue())
+			})
+		})
+
 		It("should handle protocol converter not found error", func() {
 			// Use a non-existent UUID
 			nonExistentUUID := uuid.New()
