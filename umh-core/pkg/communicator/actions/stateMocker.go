@@ -30,7 +30,9 @@ import (
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	dfcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 )
 
@@ -60,6 +62,7 @@ type StateMocker struct {
 	done               chan struct{}                // channel to signal shutdown of goroutine
 	mu                 *sync.RWMutex                // mutex to protect the state of the mocker
 	IgnoreDfcUntilTick map[string]int               // map of component ID to tick to ignore
+	RejectedConfigLogs map[string][]s6.LogEntry     // map of component ID to the benthos logs of a rejected config; such a component never becomes active
 	lastConfig         config.FullConfig            // last config is needed to detect config changes (events)
 	TickCounter        int
 	running            atomic.Bool // flag to track if the mocker is running
@@ -78,6 +81,7 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 		lastConfig:         config.FullConfig{},
 		lastConfigSet:      false,
 		IgnoreDfcUntilTick: make(map[string]int),
+		RejectedConfigLogs: make(map[string][]s6.LogEntry),
 	}
 }
 
@@ -122,6 +126,7 @@ func (s *StateMocker) Tick() {
 		s.IgnoreDfcUntilTick,
 		s.TickCounter,
 		s.PendingTransitions,
+		s.RejectedConfigLogs,
 	)
 
 	// Update local state with the changes from the function
@@ -372,6 +377,7 @@ func createDfcManagerSnapshot(
 	ignoreDfcUntilTick map[string]int,
 	tickCounter int,
 	pendingTransitions map[string][]StateTransition,
+	rejectedConfigLogs map[string][]s6.LogEntry,
 ) (fsm.ManagerSnapshot, map[string][]StateTransition, map[string]int) {
 	// start with a basic snapshot
 	dfcManagerInstaces := map[string]*fsm.FSMInstanceSnapshot{}
@@ -401,6 +407,11 @@ func createDfcManagerSnapshot(
 		currentState, updatedPendingTransitions = checkPendingTransitions(curDataflowcomponent.Name, currentState, pendingTransitions, tickCounter)
 		pendingTransitions = updatedPendingTransitions
 
+		_, hasRejectedConfig := rejectedConfigLogs[curDataflowcomponent.Name]
+		if hasRejectedConfig && currentState == dataflowcomponent.OperationalStateActive {
+			currentState = dataflowcomponent.OperationalStateStarting
+		}
+
 		if ignoreTick, ok := ignoreDfcUntilTick[curDataflowcomponent.Name]; ok && tickCounter < ignoreTick {
 			// we dont update the config of this component until the tick counter is greater than the ignore tick
 			// if exists, we use the instance from the last system snapshot, else we do nothing
@@ -427,6 +438,9 @@ func createDfcManagerSnapshot(
 							CacheResources:     curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.CacheResources,
 							RateLimitResources: curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources,
 							Buffer:             curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.Buffer,
+						},
+						ServiceInfo: benthosservice.ServiceInfo{
+							BenthosStatus: benthosservice.BenthosStatus{BenthosLogs: rejectedConfigLogs[curDataflowcomponent.Name]},
 						},
 					},
 				},
