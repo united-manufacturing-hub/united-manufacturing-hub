@@ -117,14 +117,14 @@ func parseNonNegativeInteger(file, text string) (int64, error) {
 		return 0, fmt.Errorf("empty %s data", file)
 	}
 
-	byteCount, err := strconv.ParseInt(trimmed, 10, 64)
+	parsedValue, err := strconv.ParseInt(trimmed, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse %s value %q: %w", file, trimmed, err)
 	}
 
-	if byteCount < 0 {
+	if parsedValue < 0 {
 		return 0, fmt.Errorf("negative %s value %q", file, trimmed)
 	}
 
-	return byteCount, nil
+	return parsedValue, nil
 }
