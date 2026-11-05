@@ -120,6 +120,9 @@ func main() {
 
 	configManager.SetConfigBackupEnabled(configBackupEnabled)
 
+	bypassWriteFlowValidation := config.BypassWriteFlowValidation()
+	configManager.SetBypassWriteFlowValidation(bypassWriteFlowValidation)
+
 	// Load or create configuration with environment variable overrides
 	// This loads the config file if it exists, applies any environment variables as overrides,
 	// and persists the result back to the config file. See detailed docs in config.LoadConfigWithEnvOverrides.
@@ -152,6 +155,7 @@ func main() {
 		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
 		HistorianConfigured:           configData.Historian != nil,
 		HistorianBridgeCount:          countHistorianBridges(configData),
+		WriteFlowValidationBypassed:   bypassWriteFlowValidation,
 	}
 
 	// Ensure the S6 repository directory exists

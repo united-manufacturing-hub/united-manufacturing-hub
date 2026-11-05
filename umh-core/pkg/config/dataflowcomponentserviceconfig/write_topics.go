@@ -48,13 +48,33 @@ var builtinDataContracts = []string{"_raw", "_historian"}
 
 var dataContractVersionSuffix = regexp.MustCompile(`_v\d+$`)
 
+// literalContract matches a data contract spelled out in a write flow topic and followed
+// by an escaped dot, such as `_mes_order\.`. Only used for BYPASS_WRITE_FLOW_VALIDATION,
+// see checkUncheckedContract.
+var literalContract = regexp.MustCompile(`(_[\w-]+)\\\.`)
+
 // ValidateTopics reports the topics a write flow at locationPath may not subscribe to,
 // given the data contracts declared in config.yaml.
 func (c DataflowComponentWriteConfig) ValidateTopics(locationPath string, dataContracts []string) error {
+	return c.validateTopics(locationPath, dataContracts, false)
+}
+
+// ValidateTopicsWithBypass is ValidateTopics as used with BYPASS_WRITE_FLOW_VALIDATION.
+// A topic may also name an unchecked data contract: one that is not declared or has no
+// version, such as `_mes_order`.
+//
+// All other rules still apply: the topic lies beneath the bridge location and names
+// exactly one contract, spelled out. `_.*` and `_mes_.*` are still rejected.
+func (c DataflowComponentWriteConfig) ValidateTopicsWithBypass(locationPath string, dataContracts []string) error {
+	return c.validateTopics(locationPath, dataContracts, true)
+}
+
+// validateTopics checks the topics. bypass is set for BYPASS_WRITE_FLOW_VALIDATION.
+func (c DataflowComponentWriteConfig) validateTopics(locationPath string, dataContracts []string, bypass bool) error {
 	versioned, unversioned := splitByVersion(dataContracts)
 	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(builtinDataContracts), versioned...), unversioned)
 
-	rejected := rejectTopics(c.Topics, grammar)
+	rejected := rejectTopics(c.Topics, grammar, bypass)
 	if len(rejected) == 0 {
 		return nil
 	}
@@ -93,7 +113,7 @@ func (t rejectedTopic) reaches(contract string) bool {
 	return t.violation.listsContracts() && slices.Contains(t.unversioned, contract)
 }
 
-func rejectTopics(topics []string, grammar writeTopicGrammar) []rejectedTopic {
+func rejectTopics(topics []string, grammar writeTopicGrammar, bypass bool) []rejectedTopic {
 	var rejected []rejectedTopic
 
 	for _, topic := range topics {
@@ -101,8 +121,44 @@ func rejectTopics(topics []string, grammar writeTopicGrammar) []rejectedTopic {
 			continue
 		}
 
-		if checked := grammar.check(topic); checked.violation != topicAllowed {
+		// With BYPASS_WRITE_FLOW_VALIDATION, a topic rejected only for its data contract
+		// is checked again with the contract it names.
+		checked := grammar.check(topic)
+		if checked.violation.listsContracts() && bypass {
+			checked = grammar.checkUncheckedContract(topic, checked)
+		}
+
+		if checked.violation != topicAllowed {
 			rejected = append(rejected, checked)
+		}
+	}
+
+	return rejected
+}
+
+// checkUncheckedContract checks a topic again for BYPASS_WRITE_FLOW_VALIDATION, after the
+// strict check rejected it for its data contract. rejected is that strict result.
+//
+// For each contract spelled out in the topic, such as `_mes_order\.`, it runs the strict
+// check again with that contract added to the available ones as an unchecked data
+// contract. The topic passes as soon
+// as one of these checks passes, which means every topic it can match names that one
+// contract:
+//
+//   - `_mes_order\.` passes.
+//   - `_.*\.` spells out no contract, so it stays rejected.
+//   - `(?:_a|_b)\.` stays rejected: with `_a` added it still reaches `_b`, and the
+//     other way round.
+//
+// It returns the result of the last check, or rejected if the topic spells out no
+// contract.
+func (g writeTopicGrammar) checkUncheckedContract(topic string, rejected rejectedTopic) rejectedTopic {
+	for _, candidate := range literalContract.FindAllStringSubmatch(topic, -1) {
+		withUnchecked := newWriteTopicGrammar(g.locationPath, append(slices.Clone(g.contracts), candidate[1]), g.unversioned)
+
+		rejected = withUnchecked.check(topic)
+		if rejected.violation == topicAllowed {
+			return rejected
 		}
 	}
 
