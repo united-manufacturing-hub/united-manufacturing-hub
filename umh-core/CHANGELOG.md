@@ -10,6 +10,7 @@
 
 - A write flow can now only subscribe to topics beneath the location of its own bridge, so a bridge at `enterprise.site.line` no longer reads data from elsewhere in the hierarchy. Existing write flows that subscribe outside their location stop writing after the upgrade and name the offending topics in the bridge's status, and the bridge's read flow keeps running while the topics are corrected
 - Each write flow topic must now name one existing data contract, such as `umh.v1.enterprise.site.line._historian.*`, instead of covering every contract of a location at once. Accepted contracts are `_raw`, `_historian`, and the ones listed under `dataContracts:`, so a typo no longer silently subscribes to nothing. Existing write flows whose topics name no contract, or one that does not exist, stop writing after the upgrade and the bridge's status names the offending topics alongside the contracts they may use
+- Setting the environment variable `BYPASS_WRITE_FLOW_VALIDATION=true` lets existing write flows keep running while their topics name a data contract that is not declared under `dataContracts:` or has no version, such as `_mes_order`. Use it to migrate write flows to the new topic rules without stopping them. The bridge then reports degraded and its status names the offending topics. All other topic rules still apply
 
 
 ### Fixes
