@@ -202,11 +202,11 @@ type ClientConn struct {
 	idleTimeout time.Duration // or 0 for never
 	idleTimer   *time.Timer
 
-	mu               sync.Mutex // guards following
-	cond             *sync.Cond // hold mu; broadcast on flow/closed changes
+	mu               sync.Mutex  // guards following
+	cond             *sync.Cond  // hold mu; broadcast on flow/closed changes
 	flow             connOutflow // our conn-level flow control quota (cs.outflow is per stream)
-	inflow           inflow     // peer's conn-level flow control
-	doNotReuse       bool       // whether conn is marked to not be reused for any future requests
+	inflow           inflow      // peer's conn-level flow control
+	doNotReuse       bool        // whether conn is marked to not be reused for any future requests
 	closing          bool
 	closed           bool
 	closedOnIdle     bool                     // true if conn was closed for idleness
