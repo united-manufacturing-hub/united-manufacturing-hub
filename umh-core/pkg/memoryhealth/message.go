@@ -51,7 +51,7 @@ func ComposeMessage(verdict Verdict, details Details) string {
 }
 
 func composeHealthy(details Details) string {
-	if !usageMeasured(details) {
+	if !details.Measured() {
 		return memoryStartingUp + earlierOomKills(details) + technicalDetails(nil, details)
 	}
 
@@ -110,14 +110,6 @@ func effectiveBudget(details Details) memoryBudget {
 	}
 
 	return newBudget(details.AvgHostUsedFraction*details.HostTotalBytes, details.HostTotalBytes)
-}
-
-func usageMeasured(details Details) bool {
-	if details.LimitApplies {
-		return details.UsedRingActive && details.LimitRingActive
-	}
-
-	return details.HostRingActive && details.HostTotalBytes > 0
 }
 
 type memoryRule struct {

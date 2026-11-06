@@ -394,3 +394,23 @@ var _ = Describe("Decide's cause details", func() {
 		Expect(verdict.Attribution).To(BeEmpty())
 	})
 })
+
+var _ = Describe("Details.Measured", func() {
+	It("needs the container and limit windows when a limit applies", func() {
+		details := memoryhealth.Details{LimitApplies: true, UsedRingActive: true, HostRingActive: true, HostTotalBytes: 8}
+
+		Expect(details.Measured()).To(BeFalse())
+	})
+
+	It("needs only the machine window when no limit applies", func() {
+		details := memoryhealth.Details{LimitApplies: false, UsedRingActive: false, HostRingActive: true, HostTotalBytes: 8}
+
+		Expect(details.Measured()).To(BeTrue())
+	})
+
+	It("is not measured without a limit while the machine window is filling", func() {
+		details := memoryhealth.Details{LimitApplies: false, UsedRingActive: true, HostRingActive: false, HostTotalBytes: 8}
+
+		Expect(details.Measured()).To(BeFalse())
+	})
+})

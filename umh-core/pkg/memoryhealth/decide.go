@@ -52,7 +52,11 @@ type Details struct {
 
 // Measured reports whether the window holds enough samples to judge the memory.
 func (d Details) Measured() bool {
-	return d.UsedRingActive
+	if d.LimitApplies {
+		return d.UsedRingActive && d.LimitRingActive
+	}
+
+	return d.HostRingActive && d.HostTotalBytes > 0
 }
 
 // Decide feeds one sample to the engine and returns the verdict and the numbers
