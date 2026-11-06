@@ -56,7 +56,7 @@ Always nil-check before use:
 
 ```go
 func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-    deps := w.GetDependencies()
+    deps := w.Deps()
     stateReader := deps.GetStateReader()
 
     if stateReader != nil {
@@ -74,7 +74,7 @@ func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedStat
 
 ```go
 func (w *ParentWorker) checkChildHealth(ctx context.Context, childID string) bool {
-    deps := w.GetDependencies()
+    deps := w.Deps()
     stateReader := deps.GetStateReader()
 
     var childState ChildObservedState
@@ -112,7 +112,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 
 ```go
 func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-    deps := w.GetDependencies()
+    deps := w.Deps()
 
     // Get previous metrics from store
     var prevMetrics deps.Metrics
@@ -425,7 +425,7 @@ func (a *StartServiceAction) Execute(ctx context.Context, depsAny any) error {
 
 // In CollectObservedState - worker reads and assigns (like FrameworkMetrics):
 func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-    deps := w.GetDependencies()
+    deps := w.Deps()
     return MyObservedState{
         FrameworkMetrics:  deps.GetFrameworkState(),   // Supervisor-managed, read-only
         LastActionResults: deps.GetActionHistory(),    // Supervisor-managed, read-only

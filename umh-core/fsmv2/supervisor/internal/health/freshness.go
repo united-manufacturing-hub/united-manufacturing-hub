@@ -16,68 +16,30 @@ package health
 
 import (
 	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
 // FreshnessChecker validates observation data age against thresholds.
 type FreshnessChecker struct {
-	logger         deps.FSMLogger
-	workerType     string
 	staleThreshold time.Duration
 	timeout        time.Duration
 }
 
 // NewFreshnessChecker creates a checker with the given thresholds.
-func NewFreshnessChecker(staleThreshold, timeout time.Duration, workerType string, logger deps.FSMLogger) *FreshnessChecker {
+func NewFreshnessChecker(staleThreshold, timeout time.Duration) *FreshnessChecker {
 	return &FreshnessChecker{
 		staleThreshold: staleThreshold,
 		timeout:        timeout,
-		workerType:     workerType,
-		logger:         logger,
 	}
 }
 
 // Check validates observation freshness.
 // Returns true if data is fresh.
-func (f *FreshnessChecker) Check(snapshot *fsmv2.Snapshot) bool {
-	if snapshot.Observed == nil {
-		return false
-	}
-
-	age := time.Since(snapshot.Observed.GetTimestamp())
-	isFresh := age < f.staleThreshold
-
-	if !isFresh {
-		f.logger.Debug("observed_state_stale",
-			deps.HierarchyPath(snapshot.Identity.HierarchyPath),
-			deps.Duration("age", age),
-			deps.Duration("threshold", f.staleThreshold))
-	}
-
-	return isFresh
+func (f *FreshnessChecker) Check(observedAt time.Time) bool {
+	return time.Since(observedAt) < f.staleThreshold
 }
 
 // IsTimeout checks if observation data has exceeded the timeout threshold.
 // Returns true if data is stale and requires collector restart.
-func (f *FreshnessChecker) IsTimeout(snapshot *fsmv2.Snapshot) bool {
-	if snapshot.Observed == nil {
-		return false
-	}
-
-	collectedAt := snapshot.Observed.GetTimestamp()
-	age := time.Since(collectedAt)
-	isTimedOut := age >= f.timeout
-
-	if isTimedOut {
-		f.logger.SentryWarn(deps.FeatureForWorker(f.workerType), snapshot.Identity.HierarchyPath, "observed_state_timeout",
-			deps.Duration("age", age),
-			deps.Int64("age_ms", age.Milliseconds()),
-			deps.Duration("threshold", f.timeout),
-			deps.Int64("threshold_ms", f.timeout.Milliseconds()),
-			deps.String("collected_at", collectedAt.Format(time.RFC3339Nano)))
-	}
-
-	return isTimedOut
+func (f *FreshnessChecker) IsTimeout(observedAt time.Time) bool {
+	return time.Since(observedAt) >= f.timeout
 }

@@ -41,11 +41,11 @@ If a bridge must start before the resource problem is fixed, use the emergency s
 
 ## The CPU row
 
-The CPU row depends on the `USE_FSMV2_CPU` environment variable. It chooses which of umh-core's two frameworks measures the CPU: FSMv1, the older one, or FSMv2, the newer one. See [Which framework runs a component](../agent/metrics.md#which-framework-runs-a-component). umh-core reads the variable once at startup. To change it, remove the container and start it again with the same `docker run` command plus `-e USE_FSMV2_CPU=true`. `docker restart` keeps the old environment.
+The CPU row depends on the `USE_FSMV2_CPU` environment variable. It chooses which of umh-core's two frameworks measures the CPU: FSMv2, the newer one, or FSMv1, the older one. See [Which framework runs a component](../agent/metrics.md#which-framework-runs-a-component). umh-core reads the variable once at startup. To change it, remove the container and start it again with the same `docker run` command plus `-e USE_FSMV2_CPU=false`, or without the variable to go back to the default. `docker restart` keeps the old environment.
 
-Without `USE_FSMV2_CPU`, which is the default, the row shows the CPU load of the whole host. The load includes other processes on the same machine. Without a CPU limit, the row shows the load as a percentage of the host cores, followed by `(no limit set)`. With a CPU limit, the row shows the host load scaled to the limit, in millicores (mCPU). It does not show the usage of the container alone. The CPU is degraded when the host load reaches 70%. It is also degraded when the container was throttled in more than 5% of the scheduling periods of the last 60 seconds. Throttling means the container hit its CPU limit and had to wait. The reason line is then `CPU degraded: CPU utilization critical` or `CPU degraded: CPU throttled (…% periods throttled)`.
+From v0.44.46, the row shows the CPU Health of the instance by default, which [CPU Health](cpu-health/README.md) explains. When umh-core cannot measure the CPU, the row reads `N/A` in red. The container is then degraded, and the reason line says why the measurement failed.
 
-With `USE_FSMV2_CPU=true`, the row shows the CPU Health of the instance, which is explained on [CPU Health](cpu-health/README.md). When umh-core cannot measure the CPU, the row reads `N/A` in red. The container is then degraded, and the reason line says why the measurement failed.
+With `USE_FSMV2_CPU=false`, the row shows the CPU load of the whole host. The load includes other processes on the same machine. Without a CPU limit, the row shows the load as a percentage of the host cores, followed by `(no limit set)`. With a CPU limit, the row shows the host load scaled to the limit, in millicores (mCPU). It does not show the usage of the container alone. The CPU is degraded when the host load reaches 70%. It is also degraded when the container was throttled in more than 5% of the scheduling periods of the last 60 seconds. Throttling means the container hit its CPU limit and had to wait. The reason line is then `CPU degraded: CPU utilization critical` or `CPU degraded: CPU throttled (…% periods throttled)`.
 
 ## Metrics
 
@@ -76,15 +76,7 @@ When umh-core has no CPU reading for a cycle, the three CPU gauges keep their la
 
 The three `umh_container_cpu_*` gauges change their meaning with `USE_FSMV2_CPU`. An alert on them has to be adjusted when you change the variable.
 
-#### FSMv1 (default)
-
-| Name | Type | Reports |
-|---|---|---|
-| `umh_container_cpu_usage_mcores` | gauge | Host CPU load scaled to the CPU limit, or to the host cores without a limit. One sample, in millicores. |
-| `umh_container_cpu_core_count` | gauge | Number of CPUs the umh-core process may run on. This is the number of host cores, unless the container is pinned to some of them with `--cpuset-cpus`. |
-| `umh_container_cpu_load_percent` | gauge | `umh_container_cpu_usage_mcores` as a percentage of `umh_container_cpu_core_count` |
-
-#### FSMv2 (with `USE_FSMV2_CPU=true`)
+#### FSMv2 (default)
 
 | Name | Type | Reports |
 |---|---|---|
@@ -92,7 +84,15 @@ The three `umh_container_cpu_*` gauges change their meaning with `USE_FSMV2_CPU`
 | `umh_container_cpu_core_count` | gauge | Number of CPUs the container may run on. A CPU limit does not change this number. |
 | `umh_container_cpu_load_percent` | gauge | `umh_container_cpu_usage_mcores` as a percentage of those CPUs. With a CPU limit, it is not a percentage of the limit. |
 
-With `USE_FSMV2_CPU=true`, umh-core also exposes the `umh_fsmv2_worker_cpu_*` gauges. [CPU Health](cpu-health/README.md) lists them.
+#### FSMv1 (with `USE_FSMV2_CPU=false`)
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_container_cpu_usage_mcores` | gauge | Host CPU load scaled to the CPU limit, or to the host cores without a limit. One sample, in millicores. |
+| `umh_container_cpu_core_count` | gauge | Number of CPUs the umh-core process may run on. This is the number of host cores, unless the container is pinned to some of them with `--cpuset-cpus`. |
+| `umh_container_cpu_load_percent` | gauge | `umh_container_cpu_usage_mcores` as a percentage of `umh_container_cpu_core_count` |
+
+While the CPU health check is on, which is the default, umh-core also exposes the `umh_fsmv2_worker_cpu_*` gauges. [CPU Health](cpu-health/README.md) lists them.
 
 ### Container monitor
 

@@ -45,7 +45,7 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Persistence and configuration components (internal parts of umh-core) | FSMv2 | none |
 | Historian (the connection to TimescaleDB) | FSMv2 | none |
 | Bridge connection check | FSMv2 by default | `NMAP_BACKEND=fsmv1` switches to FSMv1 |
-| CPU health | FSMv1 by default | `USE_FSMV2_CPU=true` switches to FSMv2 |
+| CPU health | FSMv2 by default | `USE_FSMV2_CPU=false` switches to FSMv1 |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
 | Container memory and disk | FSMv1 | none |

@@ -385,11 +385,9 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 					if len(logs) > len(lastLogs) {
 						lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent, remainingSeconds)
 					}
-					// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
-					// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
-					// abort the startup process rather than waiting for the full timeout period,
-					// as these errors require configuration changes to resolve.
-					if CheckBenthosLogLinesForConfigErrors(logs) {
+
+					configError, hasConfigError := findBenthosConfigError(logs, startTime)
+					if hasConfigError {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration error detected. Removing component...", a.outboundChannel, models.DeployDataFlowComponent)
 						// Create a fresh context for cleanup operation since the original ctx may be expired or close to expiring
 						cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
@@ -399,10 +397,10 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 						if err != nil {
 							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 
-							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be removed: %w. Please check your logs and consider removing the component manually", a.name, err)
+							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has an invalid configuration (%s) but could not be removed: %w. Please check your logs and consider removing the component manually", a.name, configError, err)
 						}
 
-						return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was removed due to configuration errors. Please check the component logs, fix the configuration issues, and try deploying again", a.name)
+						return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was removed because of a configuration error: %s", a.name, configError)
 					}
 				}
 

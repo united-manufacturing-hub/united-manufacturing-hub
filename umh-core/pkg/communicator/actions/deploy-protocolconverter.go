@@ -54,6 +54,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // DeployProtocolConverterAction implements the Action interface for deploying a
@@ -74,6 +75,9 @@ type DeployProtocolConverterAction struct {
 	actionUUID        uuid.UUID
 	instanceUUID      uuid.UUID
 	ignoreHealthCheck bool
+
+	tickInterval time.Duration
+	awaitTimeout time.Duration
 }
 
 // NewDeployProtocolConverterAction returns an un-parsed action instance.
@@ -226,7 +230,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 	// check against observedState
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, lastSnapshot, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
+		errCode, lastSnapshot, flowsWithConfigError, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
 		if err != nil {
 			// err is already a self-contained user message, so send it as-is
 			// instead of wrapping it again.
@@ -244,9 +248,12 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				models.DeployProtocolConverter,
 				nil,
 			)
-			a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
-				deps.String("pcConfig", pcConfig.String()),
-				deps.String("desiredState", pcConfig.DesiredFSMState))
+
+			if errCode != models.ErrConfigFileInvalid {
+				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
+					deps.String("pcConfig", pcConfig.String()),
+					deps.String("desiredState", pcConfig.DesiredFSMState))
+			}
 
 			stopCtx, stopCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer stopCancel()
@@ -282,16 +289,17 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 			// stopped rather than active to avoid treating an active flow as stopped.
 			readActive := pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState != dataflowcomponent.OperationalStateStopped
 			writeActive := pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState != dataflowcomponent.OperationalStateStopped
+			activeFlows := dfcTypeFromPresence(readActive, writeActive)
 
-			if !readActive && !writeActive {
+			if activeFlows == DFCTypeEmpty {
 				pcToStop.DesiredFSMState = protocolconverter.OperationalStateStopped
 			} else {
-				stopRead, stopWrite := flowsToStop(lastSnapshot, readActive, writeActive)
-				if stopRead {
+				stopping := flowsToStop(flowsWithConfigError, lastSnapshot, activeFlows)
+				if stopping.includesRead() {
 					pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
 				}
 
-				if stopWrite {
+				if stopping.includesWrite() {
 					pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState = dataflowcomponent.OperationalStateStopped
 				}
 			}
@@ -415,22 +423,34 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 }
 
 // waitForComponentToAppear polls live FSM state until the new component
-// reaches the desired state or the timeout hits (→ delete unless ignoreHealthCheck).
-// the function returns the error code and the error message via an error object
-// the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
-// the error message is sent to the frontend to allow the user to see the error message.
-func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, *protocolconverter.ProtocolConverterObservedStateSnapshot, error) {
-	ticker := time.NewTicker(constants.ActionTickerTime)
+// reaches the desired state, a flow logs a benthos config error, or the timeout hits.
+// errCode tells the frontend whether a retry can help; err is the user-facing error.
+func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (
+	errCode string,
+	lastSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot,
+	flowsWithConfigError DFCType,
+	err error,
+) {
+	tickInterval := a.tickInterval
+	if tickInterval == 0 {
+		tickInterval = constants.ActionTickerTime
+	}
+
+	timeoutDuration := a.awaitTimeout
+	if timeoutDuration == 0 {
+		timeoutDuration = constants.DataflowComponentWaitForActiveTimeout
+	}
+
+	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
-	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	timeout := time.After(timeoutDuration)
 	startTime := time.Now()
-	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
 	// Track last known blocking reason for timeout error message
 	var lastStatusReason string
 
-	var lastSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot
+	var sentReadLogs, sentWriteLogs []s6.LogEntry
 
 	for {
 		elapsed := time.Since(startTime)
@@ -457,7 +477,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 				deps.String("desiredState", desiredState),
 				deps.String("lastStatusReason", lastStatusReason))
 
-			return models.ErrDeployTimeout, lastSnapshot, fmt.Errorf("%s", errorMsg)
+			return models.ErrDeployTimeout, lastSnapshot, DFCTypeEmpty, fmt.Errorf("%s", errorMsg)
 
 		case <-ticker.C:
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
@@ -497,7 +517,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 					for _, acceptedState := range acceptedStates {
 						if instance.CurrentState == acceptedState {
-							return "", lastSnapshot, nil
+							return "", lastSnapshot, DFCTypeEmpty, nil
 						}
 					}
 
@@ -513,6 +533,18 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 							// Use the raw status reason from FSM - frontend will handle enhancement
 							lastStatusReason = pcSnapshot.ServiceInfo.StatusReason
 							currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+						}
+
+						readLogs := flowBenthosLogs(pcSnapshot.ServiceInfo.DataflowComponentReadObservedState)
+						writeLogs := flowBenthosLogs(pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState)
+						sentReadLogs = SendLimitedLogs(readLogs, sentReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
+						sentWriteLogs = SendLimitedLogs(writeLogs, sentWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
+
+						configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
+						if hasConfigError {
+							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError.message)
+
+							return models.ErrConfigFileInvalid, lastSnapshot, configError.flows, errors.New(errorMsg)
 						}
 					}
 
@@ -535,30 +567,37 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 	}
 }
 
-// flowsToStop decides which dataflow components to flip to stopped after a failed
-// deploy. A flow is stopped only when it was meant to run (desired active) and did
-// not reach a healthy state.
-func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
-	// No observed state: can't isolate the failure, so stop every active flow.
-	if snapshot == nil {
-		return readActive, writeActive
+// flowsToStop decides which dataflow components to flip to stopped after a failed deploy.
+func flowsToStop(flowsWithConfigError DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, activeFlows DFCType) DFCType {
+	// A config error explains the failure, so stop only the flows that logged one.
+	stopRead := activeFlows.includesRead() && flowsWithConfigError.includesRead()
+	stopWrite := activeFlows.includesWrite() && flowsWithConfigError.includesWrite()
+
+	if stopRead || stopWrite {
+		return dfcTypeFromPresence(stopRead, stopWrite)
 	}
 
+	// No observed state: can't isolate the failure, so stop every active flow.
+	if snapshot == nil {
+		return activeFlows
+	}
+
+	// Otherwise stop the active flows that did not reach a healthy state.
 	info := snapshot.ServiceInfo
-	if readActive && !isDFCHealthy(info.DataflowComponentReadFSMState) {
+	if activeFlows.includesRead() && !isDFCHealthy(info.DataflowComponentReadFSMState) {
 		stopRead = true
 	}
 
-	if writeActive && !isDFCHealthy(info.DataflowComponentWriteFSMState) {
+	if activeFlows.includesWrite() && !isDFCHealthy(info.DataflowComponentWriteFSMState) {
 		stopWrite = true
 	}
 
 	// No active flow looks down, yet deploy failed: stop every active flow.
 	if !stopRead && !stopWrite {
-		return readActive, writeActive
+		return activeFlows
 	}
 
-	return stopRead, stopWrite
+	return dfcTypeFromPresence(stopRead, stopWrite)
 }
 
 // isDFCHealthy reports whether a dataflow component FSM state is healthy.

@@ -87,19 +87,6 @@ func NewPersistenceWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed persistence dependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*PersistenceDependencies)
-	if !ok || d == nil {
-		panic("PersistenceWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState returns the current observed state of the persistence
 // worker. Returns fsmv2.NewObservation - the collector handles CollectedAt,
 // framework metrics, action history, and metric accumulation automatically
@@ -111,7 +98,7 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	// Framework state and action history are injected before COS and consumed by
 	// the collector wrapper after NewObservation returns. Calling them here satisfies

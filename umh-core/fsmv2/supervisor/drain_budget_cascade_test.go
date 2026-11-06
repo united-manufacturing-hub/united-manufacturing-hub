@@ -127,8 +127,7 @@ func (s *slowRemovalState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNone, State: s, Reason: "no snapshot"}
 	}
 
-	ds, ok := snap.Desired.(fsmv2.DesiredState)
-	if !ok || !ds.IsShutdownRequested() {
+	if !snap.Desired.IsShutdownRequested() {
 		return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNone, State: s, Reason: "running"}
 	}
 
