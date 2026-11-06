@@ -50,8 +50,27 @@ var _ = Describe("retired FSMv2 config flags", func() {
 		Entry("agent.enableFSMv2", "agent:\n  enableFSMv2: true\n"),
 		Entry("agent.useFSMv2MemoryCleanup", "agent:\n  useFSMv2MemoryCleanup: true\n"),
 		Entry("agent.useFSMv2ProtocolConverter", "agent:\n  useFSMv2ProtocolConverter: true\n"),
+		Entry("agent.useFSMv2CPU", "agent:\n  useFSMv2CPU: true\n"),
+		Entry("agent.useFSMv2CPU set to false", "agent:\n  useFSMv2CPU: false\n"),
 		Entry("agent.communicator.useFSMv2Transport", "agent:\n  communicator:\n    useFSMv2Transport: true\n"),
 	)
+
+	It("reads agent.useFSMv2CPU without changing anything else in the config", func() {
+		on, err := ParseConfig([]byte("agent:\n  useFSMv2CPU: true\n  metricsPort: 42\n"), context.Background(), false)
+		Expect(err).NotTo(HaveOccurred())
+		off, err := ParseConfig([]byte("agent:\n  useFSMv2CPU: false\n  metricsPort: 42\n"), context.Background(), false)
+		Expect(err).NotTo(HaveOccurred())
+		without, err := ParseConfig([]byte("agent:\n  metricsPort: 42\n"), context.Background(), false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(on.Agent.UseFSMv2CPU).To(BeTrue())
+		Expect(off.Agent.UseFSMv2CPU).To(BeFalse())
+		Expect(without.Agent.UseFSMv2CPU).To(BeFalse())
+
+		on.Agent.UseFSMv2CPU = false
+		Expect(on.Agent).To(Equal(without.Agent), "the key may only set its own field")
+		Expect(off.Agent).To(Equal(without.Agent), "the key may only set its own field")
+	})
 
 	It("rejects a key with no struct field, so the specs above are not vacuous", func() {
 		Expect(parse("agent:\n  totallyBogusKey: true\n")).To(HaveOccurred(),

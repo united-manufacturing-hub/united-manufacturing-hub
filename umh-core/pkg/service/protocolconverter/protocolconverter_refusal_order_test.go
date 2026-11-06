@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -33,8 +34,6 @@ import (
 // is checked: a bridge is refused when the container is degraded or any
 // resource is, and the reason names the first degraded resource.
 var _ = Describe("BridgeMustWait refusal reasons", func() {
-	hostCores := 8
-
 	health := func(degraded bool) models.HealthCategory {
 		if degraded {
 			return models.Degraded
@@ -83,7 +82,7 @@ var _ = Describe("BridgeMustWait refusal reasons", func() {
 													CPUHealth:     health(cpu),
 													MemoryHealth:  health(mem),
 													DiskHealth:    health(disk),
-													CPU:           &models.CPU{Health: withMessage(cpu, "cpu is full"), CoreCount: &hostCores},
+													CPU:           &models.CPU{Health: withMessage(cpu, "cpu is full"), CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{CapacityCores: 8}}},
 													Memory:        &models.Memory{Health: withMessage(mem, "memory is full")},
 													Disk:          &models.Disk{Health: withMessage(disk, "disk is full")},
 												},

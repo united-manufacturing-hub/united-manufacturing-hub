@@ -83,17 +83,13 @@ var _ = Describe("Container Monitor Service", func() {
 				Expect(container.Hwid).To(Equal("test-hwid-123"))
 			})
 
-			It("should contain CPU metrics", func() {
-				// Only the 70% CPU usage rule fills CoreCount. The CPU health check is
-				// on by default and this spec publishes no worker, so pin the rule.
-				GinkgoT().Setenv(usefsmv2CPUEnv, "false")
+			It("should degrade CPU health when no CPU worker is running", func() {
 				service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
 				status, err := service.GetStatus(ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(status.CPU).ToNot(BeNil())
-				Expect(status.CPU.CoreCount).NotTo(BeNil())
-				Expect(*status.CPU.CoreCount).To(BeNumerically(">", 0))
+				Expect(status.CPUHealth).To(Equal(models.Degraded))
 			})
 
 			It("should contain memory metrics", func() {
@@ -274,10 +270,9 @@ var _ = Describe("Container Monitor Service", func() {
 			GinkgoWriter.Printf("Architecture: %s\n", container.Architecture)
 
 			GinkgoWriter.Printf("\n--- CPU Metrics ---\n")
-			if container.CPU != nil && container.CPU.CoreCount != nil && container.CPU.TotalUsageMCpu != nil {
-				GinkgoWriter.Printf("Core Count: %d\n", *container.CPU.CoreCount)
-				GinkgoWriter.Printf("Total Usage (mCPU): %.2f\n", *container.CPU.TotalUsageMCpu)
-				GinkgoWriter.Printf("Usage Per Core: %.2f%%\n", (*container.CPU.TotalUsageMCpu/1000.0)/float64(*container.CPU.CoreCount)*100.0)
+			if container.CPU != nil && container.CPU.CPUHealth != nil {
+				GinkgoWriter.Printf("Avg Usage (cores): %.2f\n", container.CPU.CPUHealth.AvgUsageCores)
+				GinkgoWriter.Printf("Logical CPUs: %.2f\n", container.CPU.CPUHealth.LogicalCpus)
 			} else if container.CPU != nil {
 				GinkgoWriter.Printf("CPU metrics unmeasured\n")
 			} else {
@@ -323,23 +318,5 @@ var _ = Describe("Container Monitor Service", func() {
 			GinkgoWriter.Printf("Message: %s\n", health.Message)
 			GinkgoWriter.Printf("=================================\n")
 		})
-	})
-})
-
-var _ = Describe("FSMv2CPUEnabledFromEnv", func() {
-	It("is on when USE_FSMV2_CPU is unset", func() {
-		GinkgoT().Setenv(usefsmv2CPUEnv, "")
-		Expect(os.Unsetenv(usefsmv2CPUEnv)).To(Succeed())
-		Expect(container_monitor.FSMv2CPUEnabledFromEnv()).To(BeTrue())
-	})
-
-	It("is off when USE_FSMV2_CPU=false", func() {
-		GinkgoT().Setenv(usefsmv2CPUEnv, "false")
-		Expect(container_monitor.FSMv2CPUEnabledFromEnv()).To(BeFalse())
-	})
-
-	It("stays on when USE_FSMV2_CPU holds an unrecognised value", func() {
-		GinkgoT().Setenv(usefsmv2CPUEnv, "disabled")
-		Expect(container_monitor.FSMv2CPUEnabledFromEnv()).To(BeTrue())
 	})
 })
