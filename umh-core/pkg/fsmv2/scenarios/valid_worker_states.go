@@ -69,6 +69,10 @@ var validWorkerStates = map[string]map[string]bool{
 		"running": true, "degraded": true,
 		"stopped": true, "unknown": true,
 	},
+	"benthos_metrics": {
+		"running": true, "degraded": true,
+		"stopped": true, "unknown": true,
+	},
 	"persistence": {
 		"Stopped": true, "TryingToStart": true, "Running": true,
 		"Degraded": true, "Stopping": true, "unknown": true,

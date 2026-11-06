@@ -124,6 +124,15 @@ type WorkerManagerSpec[TConfig StateConfig, TStatus any] struct {
 
 	// MinRequiredTime is passed to each built instance. Optional; defaults to 0.
 	MinRequiredTime time.Duration
+
+	// HoldLastStatusOnUnknown turns on the hold-and-re-map rule for
+	// GetLastObservedState: the instance caches the status of every read that
+	// is not Unknown, and a later Unknown read (a store read error, a read
+	// timeout or a nil client) re-maps that cached status, so one failed read
+	// does not read as a dead instance while the cached status still passes
+	// the developer's freshness rule. Off by default. NotFound and Deleted
+	// reads keep their zero status either way.
+	HoldLastStatusOnUnknown bool
 }
 
 // WorkerManager is a generic fsmv1-compatible manager that drives a fleet of
@@ -243,6 +252,7 @@ func (m *WorkerManager[TConfig, TStatus]) buildInstance(cfg TConfig, enabled boo
 		!enabled,
 		m.spec.Log,
 		m.spec.States,
+		m.spec.HoldLastStatusOnUnknown,
 	)
 }
 
