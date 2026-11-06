@@ -69,7 +69,8 @@ func (c DataflowComponentWriteConfig) ValidateTopicsWithBypass(locationPath stri
 	return c.validateTopics(locationPath, dataContracts, true)
 }
 
-// validateTopics checks the topics. bypass is set for BYPASS_WRITE_FLOW_VALIDATION.
+// With bypass set (BYPASS_WRITE_FLOW_VALIDATION), validateTopics also accepts topics that
+// name an unchecked data contract.
 func (c DataflowComponentWriteConfig) validateTopics(locationPath string, dataContracts []string, bypass bool) error {
 	versioned, unversioned := splitByVersion(dataContracts)
 	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(builtinDataContracts), versioned...), unversioned)
@@ -136,22 +137,9 @@ func rejectTopics(topics []string, grammar writeTopicGrammar, bypass bool) []rej
 	return rejected
 }
 
-// checkUncheckedContract checks a topic again for BYPASS_WRITE_FLOW_VALIDATION, after the
-// strict check rejected it for its data contract. rejected is that strict result.
-//
-// For each contract spelled out in the topic, such as `_mes_order\.`, it runs the strict
-// check again with that contract added to the available ones as an unchecked data
-// contract. The topic passes as soon
-// as one of these checks passes, which means every topic it can match names that one
-// contract:
-//
-//   - `_mes_order\.` passes.
-//   - `_.*\.` spells out no contract, so it stays rejected.
-//   - `(?:_a|_b)\.` stays rejected: with `_a` added it still reaches `_b`, and the
-//     other way round.
-//
-// It returns the result of the last check, or rejected if the topic spells out no
-// contract.
+// checkUncheckedContract checks a topic rejected for its data contract again, for
+// BYPASS_WRITE_FLOW_VALIDATION, once for each contract it spells out as `_name\.`, with
+// that contract allowed. It returns rejected if the topic spells out no contract.
 func (g writeTopicGrammar) checkUncheckedContract(topic string, rejected rejectedTopic) rejectedTopic {
 	for _, candidate := range literalContract.FindAllStringSubmatch(topic, -1) {
 		withUnchecked := newWriteTopicGrammar(g.locationPath, append(slices.Clone(g.contracts), candidate[1]), g.unversioned)
@@ -288,6 +276,7 @@ func newWriteTopicGrammar(locationPath string, contracts, unversioned []string) 
 	}
 
 	contractPrefixes := map[string]bool{}
+
 	for _, contract := range slices.Concat(contracts, unversioned) {
 		for end := 1; end <= len(contract); end++ {
 			contractPrefixes[contract[:end]] = true
@@ -481,6 +470,7 @@ func unversionedContracts(states []writeTopicState) []string {
 // data contract, such as _pump_v1 and _pump_v2.
 func namesOneContract(states []writeTopicState) bool {
 	bases := map[string]bool{}
+
 	for _, state := range states {
 		if state.phase == phaseAccepted {
 			bases[dataContractVersionSuffix.ReplaceAllString(state.contract, "")] = true

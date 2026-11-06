@@ -57,6 +57,7 @@ func matchEndStates(program *syntax.Prog, grammar writeTopicGrammar) []writeTopi
 		atTextStart: true,
 	}}
 	visited := map[regexPosition]bool{}
+
 	var endStates []writeTopicState
 
 	for len(pending) > 0 {

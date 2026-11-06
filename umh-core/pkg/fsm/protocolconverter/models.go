@@ -204,7 +204,7 @@ type ProtocolConverterInstance struct {
 	ObservedState ProtocolConverterObservedState
 
 	// writeFlowConfigErr is why the write flow keeps the bridge in degraded_dfc, or nil.
-	// Its HasWriteFlow method tells the two cases apart:
+	// Its Bypassed field tells the two cases apart:
 	//   - false: the write flow config is rejected, for example topics outside the bridge
 	//     location. The write flow is kept out of the runtime and never starts.
 	//   - true: BYPASS_WRITE_FLOW_VALIDATION lets the write flow run although its topics

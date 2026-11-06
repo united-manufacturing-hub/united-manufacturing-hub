@@ -353,10 +353,10 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		p.writeFlowConfigErr = writeFlowErr
 		p.ObservedState.ServiceInfo.StatusReason = writeFlowErr.Error()
 
-		if writeFlowErr.HasWriteFlow() {
+		if writeFlowErr.Bypassed {
 			// BYPASS_WRITE_FLOW_VALIDATION: the write flow runs. The degraded status already
 			// shows the reason, so it is logged at debug level only.
-			p.baseFSMInstance.GetLogger().Debugf("write flow degraded: %v", writeFlowErr)
+			p.baseFSMInstance.Logger.Debugf("write flow degraded: %v", writeFlowErr)
 		} else {
 			// Repeats every tick until the config is fixed, so dedup by format string.
 			p.baseFSMInstance.Logger.LogErrorDedup("write flow not started: %v", writeFlowErr)
@@ -533,8 +533,11 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 
 	// With BYPASS_WRITE_FLOW_VALIDATION the write flow runs, so once it stops running its
 	// own reason is the more useful one, for example an output that cannot connect.
-	if p.writeFlowConfigErr != nil && (!p.writeFlowConfigErr.HasWriteFlow() || writeRunning) {
-		return false, p.writeFlowConfigErr.Error()
+	if p.writeFlowConfigErr != nil {
+		bypassedWriteFlowFailed := p.writeFlowConfigErr.Bypassed && !writeRunning
+		if !bypassedWriteFlowFailed {
+			return false, p.writeFlowConfigErr.Error()
+		}
 	}
 
 	statusReason := p.ObservedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.StatusReason

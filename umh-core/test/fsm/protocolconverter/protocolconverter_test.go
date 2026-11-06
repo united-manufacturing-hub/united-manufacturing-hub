@@ -348,7 +348,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			}
 
 			// Both flows run, so the bypass is the reason the bridge is degraded.
-			Expect(statusReason()).To(ContainSubstring("BYPASS_WRITE_FLOW_VALIDATION is set"))
+			Expect(statusReason()).To(ContainSubstring(agentconfig.BypassWriteFlowValidationEnv))
 
 			// The write flow fails. Its own failure replaces the bypass as the reason.
 			fsmtest.SetupProtocolConverterServiceState(mockService, componentName, protocolconvertersvc.ConverterStateFlags{
@@ -371,7 +371,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 
 			Expect(instance.GetCurrentFSMState()).To(Equal(protocolconverterfsm.OperationalStateDegradedDFC))
 			Expect(statusReason()).To(HavePrefix("flow degraded: "))
-			Expect(statusReason()).NotTo(ContainSubstring("BYPASS_WRITE_FLOW_VALIDATION"))
+			Expect(statusReason()).NotTo(ContainSubstring(agentconfig.BypassWriteFlowValidationEnv))
 		})
 
 		It("should transition from Idle to Active when processing data", func() {

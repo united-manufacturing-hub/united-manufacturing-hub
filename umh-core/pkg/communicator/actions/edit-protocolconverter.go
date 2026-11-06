@@ -1360,8 +1360,11 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	// verification must not fail because of it. The write side fails only if the write
 	// flow is blank: with BYPASS_WRITE_FLOW_VALIDATION it is rendered as well.
 	var writeFlowErr *runtime_config.WriteFlowConfigError
-	if errors.As(err, &writeFlowErr) && (dfcTypeToReturn == DFCTypeRead || writeFlowErr.HasWriteFlow()) {
-		err = nil
+	if errors.As(err, &writeFlowErr) {
+		readSideOnly := dfcTypeToReturn == DFCTypeRead
+		if readSideOnly || writeFlowErr.Bypassed {
+			err = nil
+		}
 	}
 
 	if err != nil {

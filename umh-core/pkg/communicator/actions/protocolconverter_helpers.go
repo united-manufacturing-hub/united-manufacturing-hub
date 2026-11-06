@@ -81,7 +81,7 @@ func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig con
 	)
 
 	var writeFlowErr *runtime_config.WriteFlowConfigError
-	if errors.As(err, &writeFlowErr) && !writeFlowErr.HasWriteFlow() {
+	if errors.As(err, &writeFlowErr) && !writeFlowErr.Bypassed {
 		return writeFlowErr.Err
 	}
 
