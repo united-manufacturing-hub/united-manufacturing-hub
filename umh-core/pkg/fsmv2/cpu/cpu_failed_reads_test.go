@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 )
 
@@ -105,9 +106,9 @@ var _ = Describe("failedReads decides which reads earn an event", func() {
 var _ = Describe("a failure report names the file the sample read", func() {
 	It("carries the path and the cgroup version the sample recorded", func() {
 		sample := cpuhealth.Sample{Troubleshooting: cpuhealth.ReadTroubleshooting{
-			CgroupBase:    CgroupBase,
+			CgroupBase:    constants.CgroupMountPath,
 			CgroupVersion: "v1",
-			ReadPaths:     map[cpuhealth.ReadOperation]string{cpuhealth.OperationCPUMax: CgroupBase + "/cpu,cpuacct/cpu.cfs_quota_us"},
+			ReadPaths:     map[cpuhealth.ReadOperation]string{cpuhealth.OperationCPUMax: constants.CgroupMountPath + "/cpu,cpuacct/cpu.cfs_quota_us"},
 		}}
 
 		kv := map[string]any{}
@@ -115,7 +116,7 @@ var _ = Describe("a failure report names the file the sample read", func() {
 			kv[f.Key] = f.Value
 		}
 
-		Expect(kv).To(HaveKeyWithValue("path", CgroupBase+"/cpu,cpuacct/cpu.cfs_quota_us"))
+		Expect(kv).To(HaveKeyWithValue("path", constants.CgroupMountPath+"/cpu,cpuacct/cpu.cfs_quota_us"))
 		Expect(kv).To(HaveKeyWithValue("cgroup_version", "v1"))
 	})
 })

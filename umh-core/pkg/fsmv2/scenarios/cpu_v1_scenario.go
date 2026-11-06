@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
@@ -29,8 +30,8 @@ import (
 const (
 	// The usage file only the v1 reader opens, and the usage file only the v2
 	// reader opens.
-	cpuV1UsageFile = fsmv2cpu.CgroupBase + "/cpu,cpuacct/cpuacct.usage"
-	cpuV2StatFile  = fsmv2cpu.CgroupBase + "/cpu.stat"
+	cpuV1UsageFile = constants.CgroupMountPath + "/cpu,cpuacct/cpuacct.usage"
+	cpuV2StatFile  = constants.CgroupMountPath + "/cpu.stat"
 
 	cpuV1QuietUsageCores = 0.5
 
@@ -58,7 +59,7 @@ var CPUV1Scenario = scenariorunner.Scenario{
 	Description: "Runs the CPU monitor over a fake cgroup v1 machine and throttles it at its CPU limit",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(fsmv2cpu.CgroupBase, cpuV1Machine(cpuV1QuietUsageCores, 0))
+		box := newTickingBox(constants.CgroupMountPath, cpuV1Machine(cpuV1QuietUsageCores, 0))
 		m := cpuMachineDeps(box)
 
 		box.StartPerRead(cpuMachineReadAdvance)

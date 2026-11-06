@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -50,10 +51,6 @@ const (
 	// A key holds one value, so each payload gets its own key rather than
 	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
 	FilesystemDepsKey = WorkerType + ".filesystem"
-
-	// CgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
-	// the directory that holds the controller mounts.
-	CgroupBase = "/sys/fs/cgroup"
 
 	// PollInterval is how often the worker samples the cgroup. simple.Register
 	// also publishes it as this worker's observation interval, and
@@ -223,7 +220,7 @@ func NewDeps(_ deps.Identity, bd *deps.BaseDependencies, dependencies map[string
 		clk = clock.New()
 	}
 
-	sampler := cpuhealth.NewLinuxSamplerWithClock(fs, CgroupBase, clk)
+	sampler := cpuhealth.NewLinuxSamplerWithClock(fs, constants.CgroupMountPath, clk)
 
 	d := &CPUDeps{
 		BaseDependencies: bd,
