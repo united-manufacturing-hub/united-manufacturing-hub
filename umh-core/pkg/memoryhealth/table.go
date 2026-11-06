@@ -74,11 +74,23 @@ func memoryTable(sum diagnosis.Reduction) diagnosis.Table[Sample] {
 	}
 }
 
+func (s Sample) usedApplies() bool {
+	return s.Source != SourceHostFallbackCgroupUnreadable
+}
+
 func usedBytes(sample Sample) diagnosis.Reading {
+	if !sample.usedApplies() {
+		return diagnosis.Unknown()
+	}
+
 	return diagnosis.Known(float64(sample.UsedBytes))
 }
 
 func usedFraction(sample Sample) diagnosis.Reading {
+	if !sample.usedApplies() {
+		return diagnosis.Unknown()
+	}
+
 	return fractionOf(sample.UsedBytes, sample.TotalBytes)
 }
 

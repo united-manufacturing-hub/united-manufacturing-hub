@@ -436,6 +436,17 @@ var _ = Describe("Decide's container usage", func() {
 		Entry("without a limit", unlimitedContainerOnMachineAtPercent(10, 50)),
 	)
 
+	It("leaves the container's usage empty and judges the machine when the cgroup is unreadable", func() {
+		_, details := newMemoryJudge().decideSampleRepeatedly(unreadableContainerOnMachineAtPercent(50), twoMinutesOfSamples)
+
+		Expect(details.UsedRingActive).To(BeFalse())
+		Expect(details.AvgUsedBytes).To(BeZero())
+		Expect(details.AvgUsedFraction).To(BeZero())
+		Expect(details.HostRingActive).To(BeTrue())
+		Expect(details.AvgHostUsedFraction).To(BeNumerically("~", 0.5, 1e-9))
+		Expect(details.Measured()).To(BeTrue())
+	})
+
 	It("does not apply when the cgroup is unreadable", func() {
 		_, details := newMemoryJudge().decideSample(unreadableContainerOnMachineAtPercent(50))
 

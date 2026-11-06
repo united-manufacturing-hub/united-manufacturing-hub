@@ -108,7 +108,7 @@ func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
 		AvgUsedBytes:    avgUsedBytes,
 		AvgUsedFraction: avgUsedFraction,
 		UsedRingActive:  usedBytesReady && usedFractionReady,
-		UsedApplies:     sample.Source != SourceHostFallbackCgroupUnreadable,
+		UsedApplies:     sample.usedApplies(),
 
 		LimitApplies:         sample.Source == SourceCgroupLimit,
 		TotalBytes:           float64(sample.TotalBytes),
