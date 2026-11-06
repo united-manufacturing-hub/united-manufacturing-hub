@@ -150,6 +150,31 @@ var _ = Describe("Sampler", func() {
 		Expect(measured).To(BeFalse())
 	})
 
+	It("counts the OOM kills of a failed read on the next read", func() {
+		files := withFile(cgroupFiles("max\n", bytesText(halfGiB)), "memory.events", memoryEventsText(3))
+		hostMemory := hostMemoryOf(threeGiB, eightGiB)
+		sampler := memoryhealth.NewSampler(fixtureFilesystem(files), fixtureCgroupBase, func(ctx context.Context) (memoryhealth.Bytes, memoryhealth.Bytes, error) {
+			return hostMemory(ctx)
+		})
+
+		_, err := sampler.Read(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+
+		files[fixtureCgroupBase+"/memory.events"] = memoryEventsText(5)
+		hostMemory = unreadableHostMemory
+
+		_, err = sampler.Read(context.Background())
+		Expect(err).To(MatchError(errHostUnreadable))
+
+		hostMemory = hostMemoryOf(threeGiB, eightGiB)
+
+		sample, err := sampler.Read(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		newOomKills, measured := sample.NewOomKills.Get()
+		Expect(measured).To(BeTrue())
+		Expect(newOomKills).To(Equal(2.0))
+	})
+
 	It("leaves the new OOM kills unknown without memory.events", func() {
 		sampler := memoryhealth.NewSampler(fixtureFilesystem(cgroupFiles(bytesText(oneGiB), bytesText(halfGiB))), fixtureCgroupBase, hostMemoryOf(threeGiB, eightGiB))
 

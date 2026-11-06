@@ -139,6 +139,8 @@ func (s *Sampler) Read(ctx context.Context) (Sample, error) {
 		return sample, ErrZeroTotal
 	}
 
+	s.advanceOomKillBaseline(oomKillCount, oomCounterErr)
+
 	return sample, nil
 }
 
@@ -204,12 +206,17 @@ func (s *Sampler) newOomKills(count int64, counterErr error) diagnosis.Reading {
 		return diagnosis.Unknown()
 	}
 
-	previous := s.oomKillBaseline
-	s.oomKillBaseline = oomKillBaseline{count: count, have: true}
-
-	if !previous.have || count < previous.count {
+	if !s.oomKillBaseline.have || count < s.oomKillBaseline.count {
 		return diagnosis.Unknown()
 	}
 
-	return diagnosis.Known(float64(count - previous.count))
+	return diagnosis.Known(float64(count - s.oomKillBaseline.count))
+}
+
+func (s *Sampler) advanceOomKillBaseline(count int64, counterErr error) {
+	if counterErr != nil {
+		return
+	}
+
+	s.oomKillBaseline = oomKillBaseline{count: count, have: true}
 }
