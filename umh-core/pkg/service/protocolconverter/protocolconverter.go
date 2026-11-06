@@ -1253,22 +1253,17 @@ func admissionResources(snapshot fsm.SystemSnapshot) resources {
 	}
 }
 
-// containerCores reads how many cores the container may use from whichever
-// CPU path filled the record: the fsmv2 worker fills CPUHealth, the legacy
-// reader fills CgroupCores (its CPU limit) and CoreCount (the host's cores).
+// containerCores reads how many cores the container may use from the CPU
+// health check's record: CapacityCores is the cores the CPU limit allows, or
+// the machine's when no limit is set. It returns 0 when there is no CPU
+// record or the check sent no verdict; bridgeadmission.Decide reads that 0
+// as an unknown core count.
 func containerCores(cpu *models.CPU) float64 {
-	switch {
-	case cpu == nil:
-		return 0
-	case cpu.CPUHealth != nil:
-		return cpu.CPUHealth.CapacityCores
-	case cpu.CgroupCores > 0:
-		return cpu.CgroupCores
-	case cpu.CoreCount != nil:
-		return float64(*cpu.CoreCount)
-	default:
+	if cpu == nil || cpu.CPUHealth == nil {
 		return 0
 	}
+
+	return cpu.CPUHealth.CapacityCores
 }
 
 func countBridges(snapshot fsm.SystemSnapshot, bridgeName string) (created, waitingBefore int) {

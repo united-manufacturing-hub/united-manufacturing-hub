@@ -103,21 +103,21 @@ type AgentConfig struct {
 
 	// Retired FSMv2 feature flags.
 	//
-	// These are accepted and ignored. Nothing reads them: FSMv2 and its
-	// persistence worker run unconditionally. They stay declared because config
-	// parsing rejects unknown keys (ParseConfig passes allowUnknownFields=false,
-	// so KnownFields is on), which means deleting a field stops an instance from
-	// loading a config.yaml that still carries it, at startup and on every
-	// refresh. Removing one is a breaking change, not a cleanup. retired_flags_test.go
-	// pins every key here.
+	// These are accepted and ignored. Nothing reads them: FSMv2, its
+	// persistence worker and the CPU health check run unconditionally. They
+	// stay declared because config parsing rejects unknown keys (ParseConfig
+	// passes allowUnknownFields=false, so KnownFields is on), which means
+	// deleting a field stops an instance from loading a config.yaml that still
+	// carries it, at startup and on every refresh. Removing one is a breaking
+	// change, not a cleanup. retired_flags_test.go pins every key here.
 	EnableFSMv2               bool `yaml:"enableFSMv2,omitempty"`
 	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"`
 	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`
+	UseFSMv2CPU               bool `yaml:"useFSMv2CPU,omitempty"`
 
 	// Deprecated: UseGatekeeper is ignored. It stays so that a config.yaml that
 	// still sets it parses, because the config parse rejects unknown keys.
 	UseGatekeeper         bool `yaml:"useGatekeeper,omitempty"`
-	UseFSMv2CPU           bool `yaml:"useFSMv2CPU,omitempty"`           // Enable the fsmv2 CPU monitor worker
 	UseFSMv2MemoryMonitor bool `yaml:"useFSMv2MemoryMonitor,omitempty"` // Enable the fsmv2 memory monitor worker
 }
 

@@ -40,8 +40,9 @@ import (
 
 // ServiceInfo contains both raw metrics and health assessments.
 type ServiceInfo struct {
+	// CPU health record
+	CPU *models.CPU
 	// Raw metrics (keeping same structure for compatibility)
-	CPU    *models.CPU    // Keep existing CPU metrics
 	Memory *models.Memory // Keep existing Memory metrics
 	Disk   *models.Disk   // Keep existing Disk metrics
 
@@ -62,26 +63,15 @@ type Service interface {
 	GetStatus(ctx context.Context) (*ServiceInfo, error)
 }
 
-// cgroupSnapshot stores cgroup CPU counters at a point in time for sliding window calculation.
-type cgroupSnapshot struct {
-	timestamp   time.Time
-	nrPeriods   int64
-	nrThrottled int64
-}
-
 // ContainerMonitorService implements the Service interface.
 type ContainerMonitorService struct {
-	fs                filesystem.Service
-	logger            *zap.SugaredLogger
-	instanceName      string
-	lastCollectedAt   time.Time
-	hwid              string
-	architecture      models.ContainerArchitecture               //nolint:unused // will be used in the future
-	dataPath          string                                     // Path to check for disk metrics and HWID file
-	throttleSnapshots []cgroupSnapshot                           // Sliding window of cgroup counter snapshots
-	wasThrottled      bool                                       // Previous throttle state for transition logging
-	useFSMv2CPU       bool                                       // when true the fsmv2 CPU worker's verdict replaces the legacy CPU health; read once at construction
-	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
+	fs              filesystem.Service
+	logger          *zap.SugaredLogger
+	instanceName    string
+	lastCollectedAt time.Time
+	hwid            string
+	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
+	dataPath        string                       // Path to check for disk metrics and HWID file
 
 	useFSMv2MemoryMonitor bool
 	memoryWorkerWarnOnce  sync.Once
@@ -104,20 +94,9 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 		logger:                log,
 		instanceName:          constants.CoreInstanceName, // Single container instance name
 		dataPath:              dataPath,
-		useFSMv2CPU:           FSMv2CPUEnabledFromEnv(),
 		useFSMv2MemoryMonitor: useFSMv2MemoryMonitor,
 		sentryLogger:          containerMonitorSentryLogger(),
-		cpuUsageProvider:      defaultCPUUsagePercent,
 	}
-}
-
-// FSMv2CPUEnabledFromEnv reports whether the CPU health check runs, read from
-// USE_FSMV2_CPU. Only "false", "0", "no", "n" and "off" (any case) turn it off
-// and select the 70% CPU usage rule; any other value, or none, leaves it on.
-func FSMv2CPUEnabledFromEnv() bool {
-	enabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, true)
-
-	return enabled
 }
 
 // GetFilesystemService returns the filesystem service - used for testing only.
@@ -142,22 +121,12 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 		Architecture:  models.ContainerArchitecture(runtime.GOARCH),
 	}
 
-	if c.useFSMv2CPU {
-		cpuStat, err := c.collectCPUFromWorker(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get CPU metrics: %w", err)
-		}
-
-		status.CPU = cpuStat
-	} else {
-		cpuStat, err := c.getCPUMetrics(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get CPU metrics: %w", err)
-		}
-
-		status.CPU = cpuStat
-		judgeLegacyCPUUsage(status, cpuStat)
+	cpuStat, err := c.collectCPUFromWorker(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CPU metrics: %w", err)
 	}
+
+	status.CPU = cpuStat
 
 	// Get memory stats
 	memStat, err := c.collectMemory(ctx)
@@ -188,9 +157,8 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// Update last collected timestamp
 	c.lastCollectedAt = time.Now()
 
-	// Assess CPU health from whichever path filled status.CPU. Both write their
-	// verdict onto the record's Health, so this reads one shape.
-	if status.CPU != nil && status.CPU.Health != nil && status.CPU.Health.Category == models.Degraded {
+	// The status starts Active, so only a Degraded CPU health category needs copying.
+	if status.CPU.Health.Category == models.Degraded {
 		status.CPUHealth = models.Degraded
 		status.OverallHealth = models.Degraded
 	}
@@ -221,7 +189,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	}
 
 	// Record metrics
-	RecordContainerStatus(status, c.instanceName, c.useFSMv2CPU)
+	RecordContainerStatus(status, c.instanceName)
 
 	return status, nil
 }
