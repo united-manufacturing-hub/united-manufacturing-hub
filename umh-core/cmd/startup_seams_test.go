@@ -88,7 +88,7 @@ func installStubBuild() *[]fsmv2config.ChildSpec {
 	newFSMv2Store = func(l deps.FSMLogger) storage.TriangularStoreInterface {
 		return scenariorunner.SetupStore(l)
 	}
-	buildFSMv2SupervisorFn = func(configManager config.ConfigManager, cpuMonitorEnabled bool, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
+	buildFSMv2SupervisorFn = func(configManager config.ConfigManager, cpuMonitorEnabled bool, memoryMonitorEnabled bool, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
 		_ = newFSMv2Store(deps.NewFSMLogger(logger))
 		got = registered
 
@@ -314,7 +314,7 @@ var _ = Describe("Startup seams", func() {
 		stubStatus := func(context.Context) *managementconsole.Status { return nil }
 
 		BeforeEach(func() {
-			buildFSMv2SupervisorFn = func(configManager config.ConfigManager, cpuMonitorEnabled bool, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
+			buildFSMv2SupervisorFn = func(configManager config.ConfigManager, cpuMonitorEnabled bool, memoryMonitorEnabled bool, logger *zap.SugaredLogger, forceExit <-chan struct{}, registered []fsmv2config.ChildSpec) (fsmv2Supervisor, func(), error) {
 				return nil, func() {}, buildErr
 			}
 			noopRouter()

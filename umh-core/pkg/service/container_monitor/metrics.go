@@ -178,15 +178,10 @@ func RecordContainerStatus(status *ServiceInfo, instanceName string, useFSMv2CPU
 	}
 
 	// Memory metrics
-	if status.Memory != nil {
-		containerMemoryUsedBytes.WithLabelValues(instanceName).Set(float64(status.Memory.CGroupUsedBytes))
-		containerMemoryTotalBytes.WithLabelValues(instanceName).Set(float64(status.Memory.CGroupTotalBytes))
-
-		// Calculate percentage
-		if status.Memory.CGroupTotalBytes > 0 {
-			usagePercent := float64(status.Memory.CGroupUsedBytes) / float64(status.Memory.CGroupTotalBytes) * 100.0
-			containerMemoryUsagePercent.WithLabelValues(instanceName).Set(usagePercent)
-		}
+	if usedBytes, totalBytes, ok := memoryGaugeInputs(status.Memory); ok {
+		containerMemoryUsedBytes.WithLabelValues(instanceName).Set(usedBytes)
+		containerMemoryTotalBytes.WithLabelValues(instanceName).Set(totalBytes)
+		containerMemoryUsagePercent.WithLabelValues(instanceName).Set(usedBytes / totalBytes * 100.0)
 	}
 
 	// Disk metrics
@@ -200,4 +195,12 @@ func RecordContainerStatus(status *ServiceInfo, instanceName string, useFSMv2CPU
 			containerDiskUsagePercent.WithLabelValues(instanceName).Set(usagePercent)
 		}
 	}
+}
+
+func memoryGaugeInputs(memory *models.Memory) (usedBytes, totalBytes float64, ok bool) {
+	if memory == nil || memory.CGroupTotalBytes <= 0 {
+		return 0, 0, false
+	}
+
+	return float64(memory.CGroupUsedBytes), float64(memory.CGroupTotalBytes), true
 }
