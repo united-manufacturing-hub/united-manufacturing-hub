@@ -126,6 +126,10 @@ type Latch struct {
 	marks       Marks
 	value       float64
 	fired       bool
+	// refireAtOnce lets a released latch fire again on the next reading past
+	// its fire mark, instead of waiting out the cooldown of one window span.
+	// The engine sets it from the signal's RefireAtOnce.
+	refireAtOnce bool
 }
 
 // NewLatch builds an unfired latch for one signal.
@@ -164,7 +168,7 @@ func crossedClear(v float64, m Marks) bool {
 // the fired state. An untrusted or absent reduction is ignored. Three arms:
 //
 //	clear: fired, on the firing mark pair, past its Clear, Coverage.Full() -> release.
-//	fire:  unfired, past Fire, no release yet or a whole Coverage span since one -> fire.
+//	fire:  unfired, past Fire, not in the cooldown (one Coverage span after a release, unless refireAtOnce) -> fire.
 //	hold:  anything else -> state unchanged.
 //
 // The clear arm acts only on a reduction measured against the SAME mark pair the
@@ -227,7 +231,8 @@ func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now ti
 	}
 
 	if crossedFire(r.v, m) {
-		if !l.fired && (l.lastRelease.IsZero() || !now.Before(l.lastRelease.Add(c.span))) {
+		inCooldown := !l.lastRelease.IsZero() && !l.refireAtOnce && now.Before(l.lastRelease.Add(c.span))
+		if !l.fired && !inCooldown {
 			l.fired = true
 			l.value = r.v
 			l.marks = m
