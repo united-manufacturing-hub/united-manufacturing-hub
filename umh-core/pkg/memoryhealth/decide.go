@@ -30,6 +30,7 @@ type Details struct {
 	AvgUsedBytes    float64 `json:"avgUsedBytes"`
 	AvgUsedFraction float64 `json:"avgUsedFraction"`
 	UsedRingActive  bool    `json:"usedRingActive"`
+	UsedApplies     bool    `json:"usedApplies"`
 
 	LimitApplies         bool    `json:"limitApplies"`
 	TotalBytes           float64 `json:"totalBytes"`
@@ -107,6 +108,7 @@ func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
 		AvgUsedBytes:    avgUsedBytes,
 		AvgUsedFraction: avgUsedFraction,
 		UsedRingActive:  usedBytesReady && usedFractionReady,
+		UsedApplies:     sample.Source != SourceHostFallbackCgroupUnreadable,
 
 		LimitApplies:         sample.Source == SourceCgroupLimit,
 		TotalBytes:           float64(sample.TotalBytes),

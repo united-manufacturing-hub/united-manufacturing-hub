@@ -28,6 +28,7 @@ var memoryHealthDetailKeys = []string{
 	"avgUsedBytes",
 	"avgUsedFraction",
 	"usedRingActive",
+	"usedApplies",
 	"limitApplies",
 	"totalBytes",
 	"avgLimitUsedFraction",
