@@ -87,7 +87,7 @@ var (
 		AvgUsedBytes: 500,
 		TotalBytes:   1000,
 		Verdict:      memoryhealth.Verdict{State: memoryhealth.StateHealthy},
-		Details:      memoryhealth.Details{AvgUsedFraction: 0.5, UsedRingActive: true},
+		Details:      memoryhealth.Details{AvgUsedFraction: 0.5, UsedRingActive: true, UsedApplies: true},
 		Message:      "worker says normal",
 	}
 	criticalWorkerMemory = fsmv2memory.MemoryStatus{
@@ -98,8 +98,20 @@ var (
 			State:  memoryhealth.StateDegraded,
 			Causes: []memoryhealth.Cause{{Kind: memoryhealth.CauseKindContainerLimitFull, Value: 0.9}},
 		},
-		Details: memoryhealth.Details{AvgUsedFraction: 0.9, UsedRingActive: true},
+		Details: memoryhealth.Details{AvgUsedFraction: 0.9, UsedRingActive: true, UsedApplies: true},
 		Message: "worker says critical",
+	}
+	unreadableCgroupWorkerMemory = fsmv2memory.MemoryStatus{
+		Source:     memoryhealth.SourceHostFallbackCgroupUnreadable,
+		TotalBytes: 2000,
+		Verdict:    memoryhealth.Verdict{State: memoryhealth.StateHealthy},
+		Details: memoryhealth.Details{
+			UsedApplies:         false,
+			AvgHostUsedFraction: 0.25,
+			HostTotalBytes:      2000,
+			HostRingActive:      true,
+		},
+		Message: "worker says normal on the machine",
 	}
 	unmeasuredWorkerMemory = fsmv2memory.MemoryStatus{
 		Source:       memoryhealth.SourceCgroupLimit,
@@ -156,6 +168,15 @@ var _ = Describe("the memory seam's verdict", func() {
 		Expect(memory.CGroupUsedBytes).To(Equal(int64(healthyWorkerMemory.AvgUsedBytes)))
 		Expect(memory.CGroupTotalBytes).To(Equal(int64(healthyWorkerMemory.TotalBytes)))
 		Expect(memory.MemoryHealth).To(Equal(&models.MemoryHealth{Verdict: healthyWorkerMemory.Verdict, Details: healthyWorkerMemory.Details}))
+	})
+
+	It("sends the machine's memory in the legacy fields when the container's usage cannot be read", func() {
+		status := memoryWorkerStatus{Result: unreadableCgroupWorkerMemory, Reason: unreadableCgroupWorkerMemory.Message}
+
+		memory := container_monitor.JudgeWorkerMemory(status, fsmv2client.Fresh)
+
+		Expect(memory.CGroupUsedBytes).To(Equal(int64(500)))
+		Expect(memory.CGroupTotalBytes).To(Equal(int64(2000)))
 	})
 
 	It("copies a fresh degraded reading", func() {
