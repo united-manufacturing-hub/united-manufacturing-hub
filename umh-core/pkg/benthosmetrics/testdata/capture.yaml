@@ -1,0 +1,29 @@
+# Spike D capture config for benthos-umh 0.16.1.
+# Matches the shape of umh-core's generated Benthos config (RenderBenthosYAML in
+# pkg/config/benthosserviceconfig/generator.go): only `http.address` and a
+# `logger.level`, and NO `metrics:` section — Benthos then uses its default
+# metrics type, whose /metrics endpoint the config's HTTP server exposes.
+http:
+  address: 0.0.0.0:4195
+logger:
+  level: INFO
+input:
+  generate:
+    interval: 500ms
+    batch_size: 10
+    mapping: 'root = {"n": 1}'
+pipeline:
+  processors:
+    - label: spike_throw_half
+      bloblang: 'root = if batch_index() % 2 == 0 { throw("spike forced processor error") } else { this }'
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - label: spike_stdout
+        stdout: {}
+      - label: spike_reject
+        reject: "spike forced output error"
+      - label: spike_dead_http
+        http_client:
+          url: http://127.0.0.1:1/spike
