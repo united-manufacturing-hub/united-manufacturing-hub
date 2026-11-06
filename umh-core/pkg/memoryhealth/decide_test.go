@@ -430,7 +430,7 @@ var _ = Describe("Decide's container usage", func() {
 		func(sample memoryhealth.Sample) {
 			_, details := newMemoryJudge().decideSample(sample)
 
-			Expect(details.UsedApplies).To(BeTrue())
+			Expect(details.ContainerUsageReadable).To(BeTrue())
 		},
 		Entry("with a limit", containerAndMachineAtPercent(50, 50)),
 		Entry("without a limit", unlimitedContainerOnMachineAtPercent(10, 50)),
@@ -450,6 +450,6 @@ var _ = Describe("Decide's container usage", func() {
 	It("does not apply when the cgroup is unreadable", func() {
 		_, details := newMemoryJudge().decideSample(unreadableContainerOnMachineAtPercent(50))
 
-		Expect(details.UsedApplies).To(BeFalse())
+		Expect(details.ContainerUsageReadable).To(BeFalse())
 	})
 })

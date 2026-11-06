@@ -87,7 +87,7 @@ var (
 		AvgUsedBytes: 500,
 		TotalBytes:   1000,
 		Verdict:      memoryhealth.Verdict{State: memoryhealth.StateHealthy},
-		Details:      memoryhealth.Details{AvgUsedFraction: 0.5, UsedRingActive: true, UsedApplies: true},
+		Details:      memoryhealth.Details{AvgUsedFraction: 0.5, UsedRingActive: true, ContainerUsageReadable: true},
 		Message:      "worker says normal",
 	}
 	criticalWorkerMemory = fsmv2memory.MemoryStatus{
@@ -98,7 +98,7 @@ var (
 			State:  memoryhealth.StateDegraded,
 			Causes: []memoryhealth.Cause{{Kind: memoryhealth.CauseKindContainerLimitFull, Value: 0.9}},
 		},
-		Details: memoryhealth.Details{AvgUsedFraction: 0.9, UsedRingActive: true, UsedApplies: true},
+		Details: memoryhealth.Details{AvgUsedFraction: 0.9, UsedRingActive: true, ContainerUsageReadable: true},
 		Message: "worker says critical",
 	}
 	unreadableCgroupWorkerMemory = fsmv2memory.MemoryStatus{
@@ -106,10 +106,10 @@ var (
 		TotalBytes: 2000,
 		Verdict:    memoryhealth.Verdict{State: memoryhealth.StateHealthy},
 		Details: memoryhealth.Details{
-			UsedApplies:         false,
-			AvgHostUsedFraction: 0.25,
-			HostTotalBytes:      2000,
-			HostRingActive:      true,
+			ContainerUsageReadable: false,
+			AvgHostUsedFraction:    0.25,
+			HostTotalBytes:         2000,
+			HostRingActive:         true,
 		},
 		Message: "worker says normal on the machine",
 	}

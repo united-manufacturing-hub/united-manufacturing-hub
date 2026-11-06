@@ -116,7 +116,7 @@ func measuredMemory(result fsmv2memory.MemoryStatus, category models.HealthCateg
 }
 
 func legacyUsedAndTotalBytes(result fsmv2memory.MemoryStatus) (usedBytes, totalBytes int64) {
-	if result.Details.UsedApplies {
+	if result.Details.ContainerUsageReadable {
 		return int64(result.AvgUsedBytes), int64(result.TotalBytes)
 	}
 
