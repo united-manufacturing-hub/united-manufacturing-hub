@@ -27,9 +27,10 @@ var causeKinds = map[string]CauseKind{
 
 // Details holds the numbers behind a verdict.
 type Details struct {
-	AvgUsedBytes    float64 `json:"avgUsedBytes"`
-	AvgUsedFraction float64 `json:"avgUsedFraction"`
-	UsedRingActive  bool    `json:"usedRingActive"`
+	AvgUsedBytes           float64 `json:"avgUsedBytes"`
+	AvgUsedFraction        float64 `json:"avgUsedFraction"`
+	UsedRingActive         bool    `json:"usedRingActive"`
+	ContainerUsageReadable bool    `json:"containerUsageReadable"`
 
 	LimitApplies         bool    `json:"limitApplies"`
 	TotalBytes           float64 `json:"totalBytes"`
@@ -52,7 +53,11 @@ type Details struct {
 
 // Measured reports whether the window holds enough samples to judge the memory.
 func (d Details) Measured() bool {
-	return d.UsedRingActive
+	if d.LimitApplies {
+		return d.UsedRingActive && d.LimitRingActive
+	}
+
+	return d.HostRingActive && d.HostTotalBytes > 0
 }
 
 // Decide feeds one sample to the engine and returns the verdict and the numbers
@@ -100,9 +105,10 @@ func buildDetails(engine *diagnosis.Engine[Sample], sample Sample) Details {
 	oomKillsLastHour, oomReady := reducedValue(engine.Reduction(signalOomKill, instrumentOomKillsLastHour).Get())
 
 	return Details{
-		AvgUsedBytes:    avgUsedBytes,
-		AvgUsedFraction: avgUsedFraction,
-		UsedRingActive:  usedBytesReady && usedFractionReady,
+		AvgUsedBytes:           avgUsedBytes,
+		AvgUsedFraction:        avgUsedFraction,
+		UsedRingActive:         usedBytesReady && usedFractionReady,
+		ContainerUsageReadable: sample.containerUsageReadable(),
 
 		LimitApplies:         sample.Source == SourceCgroupLimit,
 		TotalBytes:           float64(sample.TotalBytes),

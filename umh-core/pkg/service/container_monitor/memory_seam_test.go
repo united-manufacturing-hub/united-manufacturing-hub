@@ -87,7 +87,7 @@ var (
 		AvgUsedBytes: 500,
 		TotalBytes:   1000,
 		Verdict:      memoryhealth.Verdict{State: memoryhealth.StateHealthy},
-		Details:      memoryhealth.Details{AvgUsedFraction: 0.5, UsedRingActive: true},
+		Details:      memoryhealth.Details{AvgUsedFraction: 0.5, UsedRingActive: true, ContainerUsageReadable: true},
 		Message:      "worker says normal",
 	}
 	criticalWorkerMemory = fsmv2memory.MemoryStatus{
@@ -98,8 +98,20 @@ var (
 			State:  memoryhealth.StateDegraded,
 			Causes: []memoryhealth.Cause{{Kind: memoryhealth.CauseKindContainerLimitFull, Value: 0.9}},
 		},
-		Details: memoryhealth.Details{AvgUsedFraction: 0.9, UsedRingActive: true},
+		Details: memoryhealth.Details{AvgUsedFraction: 0.9, UsedRingActive: true, ContainerUsageReadable: true},
 		Message: "worker says critical",
+	}
+	unreadableCgroupWorkerMemory = fsmv2memory.MemoryStatus{
+		Source:     memoryhealth.SourceHostFallbackCgroupUnreadable,
+		TotalBytes: 2000,
+		Verdict:    memoryhealth.Verdict{State: memoryhealth.StateHealthy},
+		Details: memoryhealth.Details{
+			ContainerUsageReadable: false,
+			AvgHostUsedFraction:    0.25,
+			HostTotalBytes:         2000,
+			HostRingActive:         true,
+		},
+		Message: "worker says normal on the machine",
 	}
 	unmeasuredWorkerMemory = fsmv2memory.MemoryStatus{
 		Source:       memoryhealth.SourceCgroupLimit,
@@ -155,6 +167,16 @@ var _ = Describe("the memory seam's verdict", func() {
 		Expect(memory.Health.Message).To(Equal(healthyWorkerMemory.Message))
 		Expect(memory.CGroupUsedBytes).To(Equal(int64(healthyWorkerMemory.AvgUsedBytes)))
 		Expect(memory.CGroupTotalBytes).To(Equal(int64(healthyWorkerMemory.TotalBytes)))
+		Expect(memory.MemoryHealth).To(Equal(&models.MemoryHealth{Verdict: healthyWorkerMemory.Verdict, Details: healthyWorkerMemory.Details}))
+	})
+
+	It("sends the machine's memory in the legacy fields when the container's usage cannot be read", func() {
+		status := memoryWorkerStatus{Result: unreadableCgroupWorkerMemory, Reason: unreadableCgroupWorkerMemory.Message}
+
+		memory := container_monitor.JudgeWorkerMemory(status, fsmv2client.Fresh)
+
+		Expect(memory.CGroupUsedBytes).To(Equal(int64(500)))
+		Expect(memory.CGroupTotalBytes).To(Equal(int64(2000)))
 	})
 
 	It("copies a fresh degraded reading", func() {
@@ -163,6 +185,7 @@ var _ = Describe("the memory seam's verdict", func() {
 		Expect(memory.Health.Category).To(Equal(models.Degraded))
 		Expect(memory.Health.Message).To(Equal(criticalWorkerMemory.Message))
 		Expect(memory.CGroupTotalBytes).To(Equal(int64(criticalWorkerMemory.TotalBytes)))
+		Expect(memory.MemoryHealth).To(Equal(&models.MemoryHealth{Verdict: criticalWorkerMemory.Verdict, Details: criticalWorkerMemory.Details}))
 	})
 
 	It("reports a reading that is not measured yet as degraded without its bytes", func() {
@@ -173,6 +196,7 @@ var _ = Describe("the memory seam's verdict", func() {
 		Expect(memory.Health.Category).To(Equal(models.Degraded))
 		Expect(memory.Health.Message).To(Equal(status.Reason))
 		Expect(memory.CGroupTotalBytes).To(BeZero())
+		Expect(memory.MemoryHealth).To(BeNil())
 	})
 
 	It("reports a failed poll as degraded with the poll's reason", func() {
@@ -202,6 +226,7 @@ var _ = Describe("the memory seam's verdict", func() {
 			Expect(memory.Health.Message).To(ContainSubstring(messagePart))
 			Expect(memory.CGroupUsedBytes).To(BeZero())
 			Expect(memory.CGroupTotalBytes).To(BeZero())
+			Expect(memory.MemoryHealth).To(BeNil())
 		},
 		Entry("stale", fsmv2client.Stale, "stale"),
 		Entry("not found", fsmv2client.NotFound, "never observed"),

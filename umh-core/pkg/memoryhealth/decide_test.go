@@ -76,6 +76,16 @@ func unlimitedContainerOnMachineAtPercent(containerPercent, machinePercent int64
 	}
 }
 
+func unreadableContainerOnMachineAtPercent(machinePercent int64) memoryhealth.Sample {
+	return memoryhealth.Sample{
+		Source:         memoryhealth.SourceHostFallbackCgroupUnreadable,
+		UsedBytes:      percentOf(decimalMachineBytes, machinePercent),
+		TotalBytes:     decimalMachineBytes,
+		HostUsedBytes:  percentOf(decimalMachineBytes, machinePercent),
+		HostTotalBytes: decimalMachineBytes,
+	}
+}
+
 func (j *memoryJudge) decideSample(sample memoryhealth.Sample) (memoryhealth.Verdict, memoryhealth.Details) {
 	sample.Timestamp = j.sampleTime
 	j.sampleTime = j.sampleTime.Add(time.Second)
@@ -392,5 +402,54 @@ var _ = Describe("Decide's cause details", func() {
 
 		Expect(verdict.State).To(Equal(memoryhealth.StateHealthy))
 		Expect(verdict.Attribution).To(BeEmpty())
+	})
+})
+
+var _ = Describe("Details.Measured", func() {
+	It("needs the container and limit windows when a limit applies", func() {
+		details := memoryhealth.Details{LimitApplies: true, UsedRingActive: true, HostRingActive: true, HostTotalBytes: 8}
+
+		Expect(details.Measured()).To(BeFalse())
+	})
+
+	It("needs only the machine window when no limit applies", func() {
+		details := memoryhealth.Details{LimitApplies: false, UsedRingActive: false, HostRingActive: true, HostTotalBytes: 8}
+
+		Expect(details.Measured()).To(BeTrue())
+	})
+
+	It("is not measured without a limit while the machine window is filling", func() {
+		details := memoryhealth.Details{LimitApplies: false, UsedRingActive: true, HostRingActive: false, HostTotalBytes: 8}
+
+		Expect(details.Measured()).To(BeFalse())
+	})
+})
+
+var _ = Describe("Decide's container usage", func() {
+	DescribeTable("applies when the cgroup is readable",
+		func(sample memoryhealth.Sample) {
+			_, details := newMemoryJudge().decideSample(sample)
+
+			Expect(details.ContainerUsageReadable).To(BeTrue())
+		},
+		Entry("with a limit", containerAndMachineAtPercent(50, 50)),
+		Entry("without a limit", unlimitedContainerOnMachineAtPercent(10, 50)),
+	)
+
+	It("leaves the container's usage empty and judges the machine when the cgroup is unreadable", func() {
+		_, details := newMemoryJudge().decideSampleRepeatedly(unreadableContainerOnMachineAtPercent(50), twoMinutesOfSamples)
+
+		Expect(details.UsedRingActive).To(BeFalse())
+		Expect(details.AvgUsedBytes).To(BeZero())
+		Expect(details.AvgUsedFraction).To(BeZero())
+		Expect(details.HostRingActive).To(BeTrue())
+		Expect(details.AvgHostUsedFraction).To(BeNumerically("~", 0.5, 1e-9))
+		Expect(details.Measured()).To(BeTrue())
+	})
+
+	It("does not apply when the cgroup is unreadable", func() {
+		_, details := newMemoryJudge().decideSample(unreadableContainerOnMachineAtPercent(50))
+
+		Expect(details.ContainerUsageReadable).To(BeFalse())
 	})
 })

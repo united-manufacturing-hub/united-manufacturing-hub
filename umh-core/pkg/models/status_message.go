@@ -14,7 +14,10 @@
 
 package models
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/memoryhealth"
+)
 
 // StatusMessage represents the complete system state including core components and plugins.
 type StatusMessage struct {
@@ -252,9 +255,17 @@ type Disk struct {
 }
 
 type Memory struct {
-	Health           *Health `json:"health"`
-	CGroupUsedBytes  int64   `json:"cGroupUsedBytes"`  // Used bytes of the cgroup's memory
-	CGroupTotalBytes int64   `json:"cGroupTotalBytes"` // Total bytes of the cgroup's memory
+	Health           *Health       `json:"health"`
+	CGroupUsedBytes  int64         `json:"cGroupUsedBytes"`  // Used bytes of the cgroup's memory
+	CGroupTotalBytes int64         `json:"cGroupTotalBytes"` // Total bytes of the cgroup's memory
+	MemoryHealth     *MemoryHealth `json:"memoryHealth,omitempty"`
+}
+
+// MemoryHealth is the wire shape of one memory health observation: the verdict
+// beside every Details member inline at the same level, like CPUHealth.
+type MemoryHealth struct {
+	Verdict memoryhealth.Verdict `json:"verdict"`
+	memoryhealth.Details
 }
 
 // DfcType represents the type of Data Flow Component.

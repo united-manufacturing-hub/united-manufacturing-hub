@@ -69,7 +69,7 @@ Memory also counts as degraded, and bridges are held back, whenever no reading f
 
 | Gauge | Reports |
 |---|---|
-| `memory_avg_used_bytes` | the 60s mean of the memory in use, in bytes: the container's, or the machine's when `memory_used_from_cgroup` is 0 |
+| `memory_avg_used_bytes` | the 60s mean of the container's memory in use, in bytes |
 | `memory_total_bytes` | the limit that usage is judged against: the container's memory limit, or the machine's total memory when the container has none |
 | `memory_avg_used_fraction` | the 60s mean of the memory in use as a 0..1 fraction of `memory_total_bytes` |
 | `memory_avg_host_used_bytes` | the whole machine's 60s mean used memory, in bytes. It works like `cpu_avg_host_busy_cores` |
@@ -91,4 +91,4 @@ Memory also counts as degraded, and bridges are held back, whenever no reading f
 
 The `_ring_active` and `_signal_ready` flags work like the CPU flags above. `memory_host_ring_active` also reads 0 while the machine's memory is unreadable. `memory_pressure_signal_ready` stays 0 on cgroup v1 and without PSI. `memory_oom_signal_ready` reads 0 before the second read of the OOM counter and while that counter is unreadable.
 
-The two source flags say where a number came from, not whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable and the machine's usage was used instead. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.
+The two source flags say where a number came from, not whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable. `memory_avg_used_bytes` and `memory_avg_used_fraction` then have no value, `memory_used_ring_active` reads 0, and the machine's gauges carry the reading. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.

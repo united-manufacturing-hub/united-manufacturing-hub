@@ -17,6 +17,7 @@ package container_monitor
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -104,11 +105,24 @@ func unfreshMemoryMessage(freshness fsmv2client.Freshness) string {
 }
 
 func measuredMemory(result fsmv2memory.MemoryStatus, category models.HealthCategory) *models.Memory {
+	usedBytes, totalBytes := legacyUsedAndTotalBytes(result)
+
 	return &models.Memory{
 		Health:           memoryHealth(result.Message, category),
-		CGroupUsedBytes:  int64(result.AvgUsedBytes),
-		CGroupTotalBytes: int64(result.TotalBytes),
+		CGroupUsedBytes:  usedBytes,
+		CGroupTotalBytes: totalBytes,
+		MemoryHealth:     &models.MemoryHealth{Verdict: result.Verdict, Details: result.Details},
 	}
+}
+
+func legacyUsedAndTotalBytes(result fsmv2memory.MemoryStatus) (usedBytes, totalBytes int64) {
+	if result.Details.ContainerUsageReadable {
+		return int64(result.AvgUsedBytes), int64(result.TotalBytes)
+	}
+
+	machineUsedBytes := result.Details.AvgHostUsedFraction * result.Details.HostTotalBytes
+
+	return int64(math.Round(machineUsedBytes)), int64(result.Details.HostTotalBytes)
 }
 
 func degradedMemory(message string) *models.Memory {
