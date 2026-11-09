@@ -21,7 +21,7 @@ No kubectl, no Kubernetes setup, just a single Docker container. Almost anything
 
 **CPU health reporting:**
 
-UMH Core runs on any of the above. Its CPU pressure signal also needs Linux pressure stats (PSI) and cgroup v2. The Red Hat family ships PSI off, and version 8 of RHEL, Rocky, AlmaLinux and Oracle Linux also boots cgroup v1. Without them CPU health still reports from throttling, steal and headroom, and an instance with no CPU limit reports limited visibility. [CPU Health](../usage/instances/cpu-health/README.md) covers how to check, how to switch them on, and how to go back to the 70% CPU usage rule.
+UMH Core runs on any of the above. Its CPU pressure signal also needs Linux pressure stats (PSI) and cgroup v2. The Red Hat family ships PSI off, and version 8 of RHEL, Rocky, AlmaLinux and Oracle Linux also boots cgroup v1. Without them, CPU health still works from throttling, steal and headroom. An instance with no CPU limit has no throttling to measure either, so it reports limited visibility. [Enable CPU pressure stats](../usage/instances/cpu-health/enable-cpu-pressure-stats.md) covers how to check and how to switch them on. [CPU Health](../usage/instances/cpu-health/README.md#turn-the-check-on-or-off) covers how to go back to the 70% CPU usage rule.
 
 For detailed sizing recommendations, see the [Sizing Guide](../production/sizing-guide.md).
 

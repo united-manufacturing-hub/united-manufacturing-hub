@@ -1,20 +1,26 @@
 # CPU Health
 
 {% hint style="info" %}
-The CPU health check is on by default from UMH Core v0.44.46. On v0.44.37 to v0.44.45 it is off
-unless the container starts with `-e USE_FSMV2_CPU=true`. To turn it off, add
-`-e USE_FSMV2_CPU=false` to the `docker run` command that starts the container. The flag is read at
-startup, so changing it means recreating the container. Since v0.44.42, the check also runs on an
-instance started without `AUTH_TOKEN` and `API_URL`. With the check off, the 70% CPU usage rule
-applies instead. An instance is then degraded while the whole machine's CPU usage is at 70% or
-more. It is also degraded while the kernel throttles the container in more than 5% of scheduling
-periods over 60 seconds. This happens whether or not work is being delayed, and even when the
-container has a CPU limit.
+The CPU health check is on by default from UMH Core v0.44.46. See [Turn the check on or off](#turn-the-check-on-or-off).
 {% endhint %}
 
-UMH Core reports whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page. Headroom is the CPU the instance can still use. An instance degrades when its headroom falls below its threshold (see [Thresholds](#thresholds)), or when throttling, CPU pressure or steal show that its work is delayed. High usage alone degrades an instance only in a last-resort case: no CPU limit is set, the kernel publishes no CPU pressure, and the machine's free cores cannot be measured (see **Instance usage** in [Thresholds](#thresholds)). While CPU health is degraded, new bridges wait (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)). The [Glossary](#glossary) explains each term, and [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/) explains the reasoning.
+UMH Core checks whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page. While CPU health is degraded, new bridges wait (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)).
 
-Headroom depends on whether the container has a CPU limit (a Docker `--cpus` or a Kubernetes CPU limit). Without a limit, UMH Core averages how busy the whole machine is over 60 seconds. It reports degraded when less than about one core of the machine is free. It also shows the container's own usage, so you can see how much of the machine total is UMH Core. With a limit, UMH Core measures headroom against the limit's cores. It reports degraded once usage passes 90% of the limit, which keeps the last 10% in reserve. It also reports degraded when the kernel throttles the container in more than 5% of scheduling periods.
+## How UMH Core judges CPU health
+
+Headroom is the CPU the instance can still use. The [Glossary](#glossary) explains this and the other terms below, and [why average CPU utilization is the wrong signal](https://www.theocharis.dev/blog/why-we-should-get-rid-of-average-cpu-utilization/) explains the reasoning. An instance degrades in two cases:
+
+- Its headroom falls below its threshold (see [Thresholds](#thresholds)).
+- Throttling, CPU pressure or steal show that its work is delayed.
+
+High usage alone degrades an instance only in a last-resort case: no CPU limit is set, the container cannot read CPU pressure, and the machine's free cores cannot be measured. **Instance usage** in [Thresholds](#thresholds) gives the values.
+
+### With and without a CPU limit
+
+Headroom depends on whether the container has a CPU limit (a Docker `--cpus` or a Kubernetes CPU limit):
+
+- **Without a limit**, UMH Core averages how busy the whole machine is over 60 seconds. It reports degraded when less than about one core of the machine is free. It also shows the container's own usage, so you can see how much of the machine total is UMH Core.
+- **With a limit**, UMH Core measures headroom against the limit's cores. It reports degraded once usage passes 90% of the limit, which keeps the last 10% in reserve. It also reports degraded when the kernel throttles the container in more than 5% of scheduling periods. Machine headroom still counts too, so a full machine degrades the instance even below its limit.
 
 ## What each CPU status means
 
@@ -90,9 +96,9 @@ the Steal line reads `not measured` with its reason.
 
 ## Metrics
 
-With the CPU health check on, the CPU worker publishes the gauges below on the Prometheus endpoint on port 8080. The CPU worker measures once per second, and each measurement is called a tick. [Metrics](../../../production/metrics.md) explains how to read the endpoint. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
+With the CPU health check on, UMH Core publishes the gauges below on the Prometheus endpoint on port 8080. [Metrics](../../../production/metrics.md) explains how to read the endpoint. UMH Core measures the CPU once per second and updates the gauges after each measurement. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
 
-When a tick could not measure, every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
+When UMH Core cannot read a file it needs for the CPU usage or capacity (the `CPU not measured` message above), every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
 
 ### Measurements
 
@@ -107,11 +113,11 @@ When a tick could not measure, every gauge keeps its previous value, and nothing
 | `umh_fsmv2_worker_cpu_capacity_cores` | gauge | The ceiling that CPU health judges against, in cores |
 | `umh_fsmv2_worker_cpu_reserve_cores` | gauge | The part of that ceiling held back, in cores |
 | `umh_fsmv2_worker_cpu_host_cpus` | gauge | The machine's CPU count |
-| `umh_fsmv2_worker_cpu_last_sample_unix` | gauge | The Unix time, in seconds, of the last tick that measured |
+| `umh_fsmv2_worker_cpu_last_sample_unix` | gauge | The Unix time, in seconds, of the last successful measurement |
 
 ### Flags
 
-Each flag reads 1 or 0. A 0 means the gauge it covers is not worth acting on in this tick. A mean over too few samples and a 0 that nobody measured both publish with the flag at 0. Nothing in the metrics tells the two apart.
+Each flag reads 1 or 0. A 0 means the gauge it covers is not worth acting on right now. That happens in two cases: the gauge is a mean over too few samples, or the gauge reads 0 because this machine has no source for it or the reading failed. Both cases set the flag to 0, and nothing in the metrics tells them apart.
 
 | Name | Type | Covers |
 |---|---|---|
@@ -126,9 +132,16 @@ The flags come in three kinds:
 
 - A `_ring_active` flag covers one 60-second window. It reads 0 until that window holds enough samples to trust.
 - A `_signal_ready` flag covers a whole signal. It reads 0 while the window fills and when the signal could not be read. It also reads 0 for as long as the container runs on a machine with no source for that signal, such as a bare-metal host without cgroup throttle counters.
-- An `_available` flag reads 0 when this tick's sample could not supply the figure. `cpu_host_headroom_available` reads 0 when the container is pinned to a subset of the machine's CPUs. It also reads 0 when the machine's CPU count could not be read. The first is a deployment choice. The second is a read failure worth investigating.
+- An `_available` flag reads 0 when the latest measurement could not supply the figure. `cpu_host_headroom_available` reads 0 when the container is pinned to a subset of the machine's CPUs. It also reads 0 when the machine's CPU count could not be read. The first is a deployment choice. The second is a read failure worth investigating.
 
 `cpu_host_headroom_cores` has no flag of its own. Trust it only when `cpu_host_headroom_available`, `cpu_host_busy_cores_available` and `cpu_host_busy_ring_active` all read 1.
+
+## Turn the check on or off
+
+- The check is on by default from v0.44.46. On v0.44.37 to v0.44.45 it is off unless the container starts with `-e USE_FSMV2_CPU=true`.
+- To turn it off, add `-e USE_FSMV2_CPU=false` to the `docker run` command that starts the container. UMH Core reads `USE_FSMV2_CPU` at startup, so changing it means recreating the container.
+- Since v0.44.42, the check also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
+- With the check off, the 70% CPU usage rule applies instead. An instance is then degraded while the whole machine's CPU usage is at 70% or more. It is also degraded while the kernel throttles the container in more than 5% of scheduling periods over 60 seconds. Both apply whether or not work is being delayed, and even when the container has a CPU limit.
 
 ## Known limitation
 
