@@ -152,6 +152,8 @@ To alert when a stream processor has not been active for 5 minutes, use this rul
 umh_core_service_current_state{component="stream_processor_instance"} != 3 != 4 != 0
 ```
 
+The rule does not fire for a stream processor that is stopped (0) or idle (4). A stopped one is one you stopped on purpose, and an idle one has no data to process.
+
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
 ## Learn More

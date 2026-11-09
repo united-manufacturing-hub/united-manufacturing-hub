@@ -1,6 +1,6 @@
 # Communicator
 
-The communicator connects your instance to the Management Console. Use this page when the instance shows as offline or its Communicator card is degraded. The communicator logs in with the `AUTH_TOKEN` of the instance, sends the status and the replies to actions, and fetches the actions you start in the Management Console.
+The communicator connects your instance to the Management Console. Use this page when the instance shows as offline or its Communicator card is degraded.
 
 If the instance never shows as online, see [Instance Stays Offline Behind a Corporate Firewall](instance-offline-behind-corporate-firewall.md).
 

@@ -245,7 +245,7 @@ To alert when a bridge has not been active for 5 minutes, use this rule with `fo
 umh_core_service_current_state{component="protocol_converter_instance"} != 3 != 4 != 0
 ```
 
-For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
+For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
 ### Connection Check
 

@@ -49,13 +49,13 @@ With `USE_FSMV2_CPU=false`, the row shows the CPU load of the whole host, and th
 
 ## Memory monitor (preview)
 
-The memory monitor is a preview. It turns on when the container is started with `-e USE_FSMV2_MEMORY_MONITOR=true`, and the gauges below then appear. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the [CPU Health gauges](cpu-health/README.md#metrics), and they also keep their previous value on a tick that could not measure. On a tick that could not measure, the age of `memory_last_sample_unix` is the only thing that reveals the freeze.
+The memory monitor is a preview. It is off by default. It turns on when the container is started with `-e USE_FSMV2_MEMORY_MONITOR=true`, and the gauges below then appear. umh-core reads the variable once at startup, and `docker restart` keeps the old environment, so changing it needs a new container (`docker rm`, then `docker run` with the volume). They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the [CPU Health gauges](cpu-health/README.md#metrics), and they also keep their previous value on a tick that could not measure. On a tick that could not measure, the age of `memory_last_sample_unix` is the only thing that reveals the freeze.
 
 With the preview on, the instance's memory status comes from this reading. Memory counts as degraded while any of these causes holds:
 
 | Cause | Degraded from | Healthy again below | Gauge |
 |---|---|---|---|
-| `container-limit-full` | 0.8 (80%) of the container's own memory limit, as a 60s mean. Judged only when the container has a limit | 0.75 | `memory_avg_used_fraction` while `memory_total_is_cgroup_limit` is 1 |
+| `container-limit-full` | 0.8 (80%) of the container's own memory limit, as a 60s mean. Judged only when the container has a limit. Without one, `memory_avg_used_fraction` still shows the container's share of the machine's memory, but only `host-memory-full` judges | 0.75 | `memory_avg_used_fraction` while `memory_total_is_cgroup_limit` is 1 |
 | `host-memory-full` | 0.8 (80%) of the machine's memory, as a 60s mean | 0.75 | `memory_avg_host_used_bytes` / `memory_host_total_bytes` |
 | `memory-pressure` | 0.20: processes in the container waited for memory for 20% of the last minute | 0.12 | `memory_pressure_avg60_ratio` |
 | `oom-kill` | 1 OOM kill in the container within the last hour | 0 for a whole hour | `memory_oom_kills_last_hour` |
