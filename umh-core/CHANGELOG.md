@@ -11,7 +11,7 @@
 - A bridge deploy now fails within seconds when benthos rejects the configuration before it starts, for example a misspelled setting (`field retension not recognised`). The error names every rejected setting at once. The bridge is kept and only the rejected flow is stopped. Before, the deploy waited 30 seconds and failed without naming the setting
 - Deploying or editing a stand-alone flow, or editing a bridge, with a configuration benthos rejects now shows the benthos error instead of "check the component logs"
 - Connection checks now exclusively use FSMv2. `NMAP_BACKEND` is ignored and can be removed from configuration; the FSMv1 fallback is no longer available.
-- Updated golang.org/x/net to v0.62.0 in the umh-core binary to patch CVE-2026-78661, where crafted HTML makes parsing use excessive resources, and CVE-2026-97045, where rendering HTML could break out of raw text. The bundled benthos binary still contains the affected version until a benthos-umh release with the fix is bundled
+- Updated golang.org/x/net to v0.62.0 in the umh-core binary to patch CVE-2026-78661, where crafted HTML makes parsing use excessive resources, and CVE-2026-97045, where rendering HTML could break out of raw text.
 
 ## [0.44.46]
 
