@@ -7,8 +7,9 @@ v0.44.46. See [CPU Health](README.md).
 
 Follow this page when the Technical Details `Pressure` line reads `Pressure not measured (this
 operating system does not report CPU pressure stats).`, for example on an instance with the status
-**CPU healthy, limited visibility**. Until then, CPU health still reports from throttling, steal and
-headroom. When this page works, the `Pressure` line shows a percentage.
+**CPU healthy, limited visibility**. Without CPU pressure stats and without a CPU limit, UMH Core
+judges CPU health on machine headroom, plus steal on a virtual machine. Once the kernel reports
+pressure to the container, the `Pressure` line in Technical Details shows a percentage.
 
 UMH Core reads CPU pressure from the container's own `/sys/fs/cgroup/cpu.pressure`. That file exists
 only if the kernel booted with Pressure Stall Information (PSI) on and the machine runs cgroup v2.
@@ -28,11 +29,13 @@ cgroup v2, or both are missing. To find out which, run this on the machine, outs
 stat -fc %T /sys/fs/cgroup
 ```
 
-`cgroup2fs` means only PSI is missing. Set `psi=1` as described below. `tmpfs` means the machine
-runs cgroup v1, which has no `cpu.pressure` file even with `psi=1`. On cgroup v1, set
-a CPU limit on the container instead, so that UMH Core measures headroom against the limit. UMH Core
-still reads the container's usage, throttling and CPU limit from the v1 controller files, and
-machine headroom and steal from `/proc/stat`. Pressure is the only signal it cannot read there.
+- `cgroup2fs` means only PSI is missing. Set `psi=1` as described below.
+- `tmpfs` means the machine runs cgroup v1, which has no `cpu.pressure` file even with `psi=1`. Set
+  a CPU limit on the container instead. With a limit, UMH Core measures throttling and the headroom
+  left under the limit, so it can still tell when the instance runs short of CPU. On cgroup v1, UMH
+  Core still reads the container's usage, throttling and CPU limit from the v1 controller files, and
+  the machine's headroom and steal from `/proc/stat`. Pressure is the only signal it cannot read
+  there.
 
 ## Set the kernel parameters
 
@@ -60,15 +63,19 @@ The Management Console shows the result on the instance's detail page. The Techn
 pressure stats).` to a percentage. `Pressure not available (measuring).` means UMH Core can read the
 file and is filling its 60-second window. Wait a minute and look again.
 
-If the file is still missing, run `cat /proc/cmdline` on the machine. If `psi=1` is not in the
-output, the running kernel did not get the parameter: repeat the step for your operating system and
-reboot. If `psi=1` is there, run `cat /proc/pressure/cpu` on the machine:
+If the file is still missing, run these checks on the machine, outside the container:
 
-- `No such file or directory` means the kernel ignored `psi=1`, which happens on a kernel built
-  without PSI.
-- Output means the kernel reports pressure for the whole machine, but not for the container. Run
-  `docker exec <container name> stat -fc %T /sys/fs/cgroup`. Anything other than `cgroup2fs` means
-  the container does not see cgroup v2.
+1. Run `cat /proc/cmdline`. If the output does not contain `psi=1`, the kernel did not get the
+   parameter. Repeat the step for your operating system, then reboot.
+2. If `psi=1` is there, run `cat /proc/pressure/cpu`. `No such file or directory` means the kernel
+   was built without PSI and ignores `psi=1`. Set a CPU limit on the container instead.
+3. If `/proc/pressure/cpu` prints output, the machine reports pressure but the container does not
+   see it. Run `docker exec <container name> stat -fc %T /sys/fs/cgroup`. Any output other than
+   `cgroup2fs` means the container runs without cgroup v2. Set a CPU limit on the container instead.
+4. If the container prints `cgroup2fs`, the machine and the container both support pressure, and
+   UMH Core should read it. Set a CPU limit on the container for now, and send the output of the
+   three checks above to us on [Discord](https://discord.gg/F9mqkZnm8U) or through your usual UMH
+   contact.
 
-In both cases, set a CPU limit on the container instead. UMH Core then measures headroom against the
-limit, and the `Pressure` line keeps reading `not measured`.
+With a CPU limit, UMH Core measures throttling and the headroom left under the limit, and the `Pressure`
+line keeps reading `not measured`.
