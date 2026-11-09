@@ -431,56 +431,7 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	config.Agent.Location = make(map[int]string)
-
-	config.Agent.Location[0] = location.Enterprise
-	if location.Site != nil {
-		config.Agent.Location[1] = *location.Site
-	}
-
-	if location.Area != nil {
-		config.Agent.Location[2] = *location.Area
-	}
-
-	if location.Line != nil {
-		config.Agent.Location[3] = *location.Line
-	}
-
-	if location.WorkCell != nil {
-		config.Agent.Location[4] = *location.WorkCell
-	}
-
-	// Convert the agent location to string map for use in other components
-	agentLocationStr := make(map[string]string)
-	for k, v := range config.Agent.Location {
-		agentLocationStr[strconv.Itoa(k)] = v
-	}
-
-	// Update all ProtocolConverter locations to match the agent location
-	for i := range config.ProtocolConverter {
-		if config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location == nil {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location = make(map[string]string)
-		}
-
-		// Update each level in the protocol converter location with the agent location
-		// Only update levels that exist in the agent location
-		for levelStr, value := range agentLocationStr {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location[levelStr] = value
-		}
-	}
-
-	// Update all StreamProcessor locations to match the agent location
-	for i := range config.StreamProcessor {
-		if config.StreamProcessor[i].StreamProcessorServiceConfig.Location == nil {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location = make(map[string]string)
-		}
-
-		// Update each level in the stream processor location with the agent location
-		// Only update levels that exist in the agent location
-		for levelStr, value := range agentLocationStr {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location[levelStr] = value
-		}
-	}
+	config.ApplyAgentLocation(location)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
