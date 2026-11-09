@@ -47,21 +47,18 @@ A degraded Agent also marks the whole instance as degraded. In the instance list
 
 ## Metrics
 
-umh-core exposes the metrics of the agent on its Prometheus endpoint, port 8080 at `/metrics`. [Read the metrics](metrics.md#read-the-metrics) explains how to reach the endpoint. The agent series come from FSMv1 and use the standard [FSMv1 metrics](metrics.md#fsmv1-metrics).
+The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](metrics.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](metrics.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. In Prometheus, `instance` usually arrives as `exported_instance`.
 
-### Control loop and agent monitor
+To alert when the control loop stalls, alert on any increase of the starved counter:
 
-The `component` and `instance` labels select the control loop or the agent monitor. The agent monitor is the part of the agent that reports the health shown on the Agent card. In Prometheus, the `instance` label usually arrives as `exported_instance`. [Read the metrics](metrics.md#read-the-metrics) explains why.
+```promql
+increase(umh_core_reconcile_starved_total_seconds[5m]) > 0
+```
 
-| Name | Type | Reports |
-|---|---|---|
-| `umh_core_reconcile_duration_milliseconds{component="control_loop",instance="main"}` | histogram | Duration of one cycle of the control loop, in milliseconds. A cycle should finish within 100 ms. A longer cycle writes a warning to the agent log. |
-| `umh_core_reconcile_starved_total_seconds` | counter | Grows while the control loop has not run for more than 15 seconds. During one stall, it adds more than one second for each second of the stall. Alert on any increase. |
-| `umh_core_errors_total{component="control_loop",instance="main"}` | counter | Errors that stopped the control loop. |
-| `umh_core_errors_total{component="control_loop",instance="config_permanent_failure"}` | counter | Times the agent gave up reading the config file after its retries. This also stops the control loop. |
-| `umh_core_service_current_state{component="agent_monitor",instance="Core"}` | gauge | State of the agent monitor: 3 = active, 5 = degraded. -1 means the agent monitor is in a sub-state, such as its starting or stopping steps. See [State](metrics.md#state). |
-| `umh_core_service_desired_state{component="agent_monitor",instance="Core"}` | gauge | State the agent monitor should reach, with the same values. |
-| `umh_core_errors_total{component="agent_monitor",instance="Core"}` | counter | Errors while the agent monitor collected the status of the agent. |
-| `umh_core_reconcile_duration_milliseconds{component="agent_monitor",instance="Core"}` | histogram | Duration of one update of the agent monitor, in milliseconds. |
+To alert when the agent stops managing components, alert on errors that stop the control loop:
 
-Other monitors also write series with `component="agent_monitor"`, each with its own `instance` value. Filter by `instance="Core"` to get the agent alone.
+```promql
+increase(umh_core_errors_total{component="control_loop"}[5m]) > 0
+```
+
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go). A cycle that takes longer than 100 milliseconds writes a warning to the agent log.

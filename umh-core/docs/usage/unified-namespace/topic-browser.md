@@ -109,29 +109,19 @@ curl -X POST http://localhost:8090/graphql \
 
 ## Metrics
 
-The Topic Browser runs one Benthos process inside the container. Benthos is the engine that moves data in UMH Core. This process reads the messages in the Kafka topic `umh.messages` from [Redpanda](redpanda.md) and passes the Unified Namespace topics on to umh-core. The [Metrics](../instances/agent/metrics.md) page explains how to read the series below.
+The **Topic Browser** card on the instance details page shows one value. **Topics** is the number of different topics the instance has seen since umh-core started. A topic stays in the count after it stops receiving messages. The count starts again from zero when umh-core restarts. The **Metrics** button on the card opens the counters of the Benthos process that reads the messages in the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
 
-The **Topic Browser** card on the instance details page shows one value. **Topics** is the number of different topics the instance has seen since umh-core started. A topic stays in the count after it stops receiving messages. The count starts again from zero when umh-core restarts. The **Metrics** button on the card opens the counters of the Benthos process.
+The badge on the card shows Active while that process runs. Check the badge tooltip for failures. The tooltip shows `benthos degraded` when the Benthos process fails, and `redpanda degraded` when Redpanda is degraded. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
-The badge on the card shows Active while the Benthos process runs. When the Benthos process or Redpanda fails, the badge does not show Degraded:
+On port 8080, the Topic Browser runs on FSMv1 and uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them. The Topic Browser has `component="topic_browser_instance"` with `instance="topic-browser"`, and its Benthos process has `component="benthos_instance"` with `instance="topicbrowser-topic-browser"`. In Prometheus, write `exported_instance` for `instance`.
 
-- When the Benthos process fails, the badge shows Neutral. The tooltip shows `benthos degraded`.
-- When Redpanda is degraded, the badge stays Active. The tooltip shows `redpanda degraded`.
+To alert when the Benthos process of the Topic Browser is degraded, use:
 
-Check the tooltip to find these failures. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+```promql
+umh_core_service_current_state{component="benthos_instance", exported_instance="topicbrowser-topic-browser"} == 5
+```
 
-umh-core reports the Topic Browser in the FSMv1 series. FSMv1 is the older of umh-core's two frameworks, the parts of umh-core that start and watch components (see [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component)). The series names are under [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics).
-
-| `component` value | `instance` value ([how Prometheus labels it](../instances/agent/metrics.md#read-the-metrics)) | Series |
-|---|---|---|
-| `topic_browser_instance` | `topic-browser` | `umh_core_service_current_state`, `umh_core_service_desired_state`, `umh_core_errors_total`, `umh_core_reconcile_duration_milliseconds` |
-| `benthos_instance` | `topicbrowser-topic-browser` | the same four series, for the Benthos process |
-
-`umh_core_reconcile_duration_milliseconds` has further `instance` values of the form `topic-browser.<step>` and `topicbrowser-topic-browser.<step>`. Filter on the exact values in the table to get one series per component.
-
-For `topic_browser_instance`, `umh_core_service_current_state` reads 3 for `active`, 4 for `idle` and 0 for `stopped`. The Topic Browser has two degraded states, `degraded_benthos` and `degraded_redpanda`, and the series reads -1 in both. -1 means the component is in a sub-state (starting, degraded or stopping steps). Check the state in the Management Console.
-
-To see that the Benthos process is degraded, read the series with `component="benthos_instance"` and `instance="topicbrowser-topic-browser"`. It reads 5 while that process is degraded, although the badge shows Neutral and the `topic_browser_instance` series reads -1.
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
 ## Next Steps
 

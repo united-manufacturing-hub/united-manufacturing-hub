@@ -1,24 +1,25 @@
 # Instance Stays Offline Behind a Corporate Firewall
 
-If you are the power user, hand this page to IT when the Docker host is behind a corporate proxy or TLS inspection. IT must confirm the firewall rules, the proxy settings and the corporate CA before you run the commands below.
+This page explains how to find out why an instance behind a corporate firewall never shows as online in the Management Console, and how to fix it. The steps need access to the Docker host, to the firewall and proxy settings, and to the corporate CA certificate, so you may need your IT department.
 
-An instance behind a corporate firewall that never shows as online in the Management Console usually has one of three causes. The firewall blocks the connection, the network requires a proxy, or the firewall inspects TLS. A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
+The cause is usually one of three. The firewall blocks the connection, the network requires a proxy, or the firewall inspects TLS. A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
 
 ## Which error the instance reports
 
-The Management Console shows a red alert, "Instance Offline", once 15 seconds pass without a message from the instance. The cards keep showing the last status the instance sent, if it sent one. They do not show why the connection fails. The error counters of the communicator count failed requests by cause, with one series per worker. The failed logins are the series whose `hierarchy_path` ends in `(transport)`. [Metrics](../agent/metrics.md#read-the-metrics) explains how to read the metrics and how to collect them with Prometheus. [Communicator](README.md#errors) explains each counter. To read the counters once, run this on the Docker host:
+The Management Console does not show why the connection fails (see [Communicator](README.md#the-communicator-card)). The error counters of the communicator do. [Metrics](../agent/metrics.md#read-the-metrics) explains how to collect them with Prometheus, and [Communicator](README.md#errors) explains each counter. To read them once, run this on the Docker host, wait a minute and run it again. A counter that rose between the two runs is the cause:
 
 ```bash
 docker exec <container name> wget -qO- http://localhost:8080/metrics | grep -E 'network_errors_total|proxy_block_errors_total|auth_failures_total|instance_deleted_total|server_errors_total|rate_limit_errors_total|cloudflare_errors_total'
 ```
 
-Find the counter that keeps rising in this table. If none of them rises, read the full `/metrics` output.
-
-| Counter | Meaning |
+| Counter that rises | What to do |
 |---|---|
-| `umh_fsmv2_worker_network_errors_total` | A request failed without an answer that umh-core can classify. Either it never reached the Management Console, or something on the way answered with a status umh-core does not classify. A proxy that requires a login answers with status 407, and that counts here too. The counter does not say which case applies. Continue with [Find the cause](#find-the-cause). |
-| `umh_fsmv2_worker_proxy_block_errors_total` | A proxy answered with a block page instead of the Management Console. Ask your IT department to allow `management.umh.app` on the proxy. |
-| `umh_fsmv2_worker_auth_failures_total` | A request was answered with status 401 or 403. Under the transport worker, usually the Management Console rejected the `AUTH_TOKEN` from your `docker run` command. Under the push or pull worker, the session token was rejected. A proxy or Cloudflare can also answer 403. If the token is correct, or the series is not from the transport worker, continue with [Find the cause](#find-the-cause). |
+| `umh_fsmv2_worker_network_errors_total` | Continue with [Find the cause](#find-the-cause). |
+| `umh_fsmv2_worker_proxy_block_errors_total` | Ask your IT department to allow `management.umh.app` on the proxy. |
+| `umh_fsmv2_worker_auth_failures_total` | Check the `AUTH_TOKEN` of your `docker run` command. If the token is correct, continue with [Find the cause](#find-the-cause). |
+| Any other counter | See [Communicator](README.md#errors). |
+
+If no counter rises, read the full `/metrics` output.
 
 ## Find the cause
 

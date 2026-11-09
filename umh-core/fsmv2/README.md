@@ -341,6 +341,7 @@ docker run -d \
 | `AUTH_TOKEN` | No | Authentication token from the Management Console. Without it and `API_URL`, umh-core runs without a Management Console connection |
 | `API_URL` | No | Backend relay server URL, needed together with `AUTH_TOKEN` to connect to the Management Console (e.g., `https://management.umh.app`) |
 | `USE_FSMV2_CPU` | No | Selects the CPU health check; defaults to `true`. Set it to `false` to use the 70% CPU usage rule instead. Read once at startup, so changing it means recreating the container; `docker restart` keeps the old value. Temporary migration flag |
+| `USE_FSMV2_MEMORY_MONITOR` | No | FSMv2 container memory monitoring; defaults to `false` (legacy memory reading). Read once at startup, so changing it requires a restart. While no fresh reading is available, memory counts as degraded and bridges are held back. Temporary migration flag |
 
 ### Disabling FSMv2 Features
 

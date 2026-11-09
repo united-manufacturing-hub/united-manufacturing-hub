@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 )
@@ -47,7 +48,7 @@ var CPUStallScenario = scenariorunner.Scenario{
 	Description: "Hangs the cpu.stat read mid-poll, and watches the reading go stale and then recover",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(fsmv2cpu.CgroupBase, cpuBlindMachine())
+		box := newTickingBox(constants.CgroupMountPath, cpuBlindMachine())
 		m := cpuMachineDeps(box)
 
 		// The box advances once per read, when the sampler opens

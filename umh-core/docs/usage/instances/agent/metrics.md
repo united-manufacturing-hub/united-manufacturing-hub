@@ -1,10 +1,10 @@
 # Metrics
 
-If you are the power user, hand the Docker-host and Prometheus steps on this page to IT. IT needs access to port 8080 on the Docker host and to your Prometheus setup.
+This page explains how to collect UMH Core metrics with Prometheus and how to read them. The steps need access to port 8080 on the Docker host and to your Prometheus setup.
 
 Every UMH Core instance serves Prometheus metrics in the Prometheus text format on port 8080, at the path `/metrics`. The metrics come from umh-core, the process inside the UMH Core container. Use them to monitor an instance with Prometheus and Grafana. Because the endpoint runs inside the container, you can read it when the Management Console cannot reach the instance.
 
-The component pages list the metrics of one component. See [Metrics by component](#metrics-by-component).
+The component pages explain what one component reports and give alert queries for it. See [Metrics by component](#metrics-by-component).
 
 ## Read the metrics
 
@@ -107,7 +107,7 @@ FSMv2 runs one cycle of its control loop every 100 milliseconds. A reconcile is 
 | Name | Type | Reports |
 |---|---|---|
 | `umh_fsmv2_reconciliation_duration_seconds` | histogram | Duration of one reconcile, in seconds. It does not include the rest of the cycle, such as the actions and the cycles of the children. |
-| `umh_fsmv2_reconciliation_total` | counter | Reconciles. The label `result` always reads `success`. A cycle that fails before the reconcile records nothing, and the rate drops. Use the rate only to confirm that reconciles run. |
+| `umh_fsmv2_reconciliation_total` | counter | Reconciles, by label `result`. A cycle that fails before the reconcile records nothing, and the rate drops. Use the rate to confirm that reconciles run. |
 
 ### Circuit breaker and panics
 
@@ -162,7 +162,7 @@ Other `component` values belong to internal layers of umh-core.
 | 5 | degraded |
 | -1 | a sub-state |
 
-Many components have sub-states, such as a bridge that waits for its connection. -1 means the component is in a sub-state (starting, degraded or stopping steps). Check the state in the Management Console.
+Many components have sub-states, such as a bridge that waits for its connection. -1 means the component is in a sub-state, such as one of its starting, degraded or stopping steps. A bridge that waits for resources before it can start stays in `to_be_created`, which also reads -1. Check the state in the Management Console. To alert on a component that is not active, idle or stopped, use `umh_core_service_current_state{component="<component value>"} != 3 != 4 != 0` with a `for:` duration, because every start passes through sub-states.
 
 ### Errors and reconcile time
 
@@ -180,7 +180,7 @@ umh-core counts one error at several layers, for example under the bridge and ag
 
 ## Metrics by component
 
-Each component page has a Metrics section that lists the series of that component and how to read them.
+Each component page has a Metrics section. It explains what the component reports and gives alert queries for it.
 
 | Component | Metrics |
 |---|---|
@@ -196,6 +196,14 @@ Each component page has a Metrics section that lists the series of that componen
 | Historian | [Historian](../../historian/README.md#metrics) |
 
 Each bridge, stand-alone flow and stream processor runs in Benthos, the engine that moves the data. Benthos and Redpanda keep their own metrics. umh-core does not copy them to port 8080. Per-bridge message counts are therefore not on port 8080. The Metrics view of a bridge in the Management Console shows them.
+
+## Where the metrics are defined
+
+The names and help texts come from the code and can change with a release. Check the definitions for the exact list:
+
+- FSMv1 series (`umh_core_*`, `umh_container_*`): [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go) and [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go)
+- FSMv2 series (`umh_fsmv2_*`): [`fsmv2/deps/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/deps/metrics.go)
+- Every series on a running instance, with its help text: the `/metrics` output itself.
 
 ## Go runtime metrics
 

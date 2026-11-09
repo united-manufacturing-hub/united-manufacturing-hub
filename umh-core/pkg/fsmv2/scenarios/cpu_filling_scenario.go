@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth/fakebox"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
@@ -52,7 +53,7 @@ var CPUFillingScenario = scenariorunner.Scenario{
 	Description: "Fills a fake machine from outside, then from this instance, and shows the remedy change",
 
 	Dependencies: func() (map[string]any, func(), error) {
-		box := newTickingBox(fsmv2cpu.CgroupBase, cpuFillingQuiet())
+		box := newTickingBox(constants.CgroupMountPath, cpuFillingQuiet())
 		m := cpuMachineDeps(box)
 
 		box.StartPerRead(cpuMachineReadAdvance)

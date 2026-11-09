@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -64,7 +65,7 @@ type markedStatFilesystem struct {
 }
 
 func (markedStatFilesystem) ReadFile(_ context.Context, path string) ([]byte, error) {
-	if path == CgroupBase+"/cpu.stat" {
+	if path == constants.CgroupMountPath+"/cpu.stat" {
 		return []byte("usage_usec " + stubStatMarker + "\n"), nil
 	}
 
@@ -76,7 +77,7 @@ func (markedStatFilesystem) ReadDir(context.Context, string) ([]os.DirEntry, err
 }
 
 func (markedStatFilesystem) FileExists(_ context.Context, path string) (bool, error) {
-	return path == CgroupBase+"/cpu.stat", nil
+	return path == constants.CgroupMountPath+"/cpu.stat", nil
 }
 
 var _ = Describe("the filesystem the CPU worker reads", func() {

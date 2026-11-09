@@ -10,7 +10,7 @@ Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, refe
 
 ## Readers
 
-Unless a page says otherwise, its primary reader is the power user ([Who we build for](https://engineering.umh.app/product/who-we-build-for.md)). For Bridges it is the OT team. For Metrics and for the steps on the Docker host it is IT. Those pages open with two sentences that tell the power user when to hand the page to IT.
+Unless a page says otherwise, its primary reader is the person who installed and runs the instance ([Who we build for](https://engineering.umh.app/product/who-we-build-for.md)). For Bridges it is the OT team. For Metrics and for the steps on the Docker host it is IT. Those pages open with what they explain and what access the steps need, for example "This page explains how to collect UMH Core metrics with Prometheus. The steps need access to port 8080 on the Docker host."
 
 ## Usage pages
 
@@ -23,7 +23,7 @@ Leave out any section that doesn't apply, and keep this order:
 1. Opening in the primary reader's words, with no internals.
 2. What the Management Console shows, and what to do about it.
 3. `## Configuration`: the `config.yaml` keys and environment variables. For each, give the default and whether a change needs a restart or a new container (`docker restart` keeps the old environment).
-4. `## Metrics`: link [Read the metrics](usage/instances/agent/metrics.md#read-the-metrics) with a path relative to the current page, then list only this component's series as `| Name | Type | Reports |`. If the component can run under either framework, show two visible tables: the default first, then the other one with its switch named.
+4. `## Metrics`: what this component tells the operator, one or two alert queries, and a link to where the metrics are defined in code. Link to the "Read the metrics" section of `usage/instances/agent/metrics.md` with a path relative to the current page. Do not list every series, because names and help texts change with the code. Explain the frameworks, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the agent Metrics page, and link there. Do not describe known defects. Add the docs update to the ticket that fixes them.
 5. Details for IT or support.
 
 ## Config snippets

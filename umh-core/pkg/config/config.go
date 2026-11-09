@@ -116,8 +116,9 @@ type AgentConfig struct {
 
 	// Deprecated: UseGatekeeper is ignored. It stays so that a config.yaml that
 	// still sets it parses, because the config parse rejects unknown keys.
-	UseGatekeeper bool `yaml:"useGatekeeper,omitempty"`
-	UseFSMv2CPU   bool `yaml:"useFSMv2CPU,omitempty"` // Enable the fsmv2 CPU monitor worker
+	UseGatekeeper         bool `yaml:"useGatekeeper,omitempty"`
+	UseFSMv2CPU           bool `yaml:"useFSMv2CPU,omitempty"`           // Enable the fsmv2 CPU monitor worker
+	UseFSMv2MemoryMonitor bool `yaml:"useFSMv2MemoryMonitor,omitempty"` // Enable the fsmv2 memory monitor worker
 }
 
 type CommunicatorConfig struct {

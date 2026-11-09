@@ -157,20 +157,22 @@ dataFlow:
 
 ## Metrics
 
-[Metrics](../instances/agent/metrics.md) explains how to read umh-core's metrics.
+The Management Console shows each flow's message counts. Select **Metrics** in the flow's context menu. The view shows messages received and sent, errors and latency for the flow's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry these counts. It carries the flow's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stand-alone flows and what the labels and the state values mean.
 
-The Management Console shows each flow's message counts. Select **Metrics** in the flow's context menu. The view shows messages received and sent, errors and latency for the flow's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry these counts.
-
-Port 8080 carries the flow's state and error counts. Stand-alone flows run on FSMv1, the older of umh-core's two frameworks. A framework is the part of umh-core that starts and watches components. [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component) explains both. Each flow gets the series described in [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a flow named `<flow>`, the series carry these labels:
+Stand-alone flows run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a flow named `<flow>`, the series carry these labels:
 
 | Part of the flow | `component` | `instance` |
 |---|---|---|
 | The flow | `dataflow_component_instance` | `<flow>` |
 | Its Benthos process | `benthos_instance` | `dataflow-<flow>` |
 
-Benthos is the engine that moves the data. Prometheus can rename the `instance` label to `exported_instance`. [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains when.
+To alert when a flow has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`:
 
-For the flow itself, `umh_core_service_current_state` reads 0 when stopped, 1 when starting, 3 when active, 4 when idle and 5 when degraded. -1 means the flow is in a sub-state, such as `starting_failed` (the flow could not start) or `stopping`. Check the state in the Management Console.
+```promql
+umh_core_service_current_state{component="dataflow_component_instance"} != 3 != 4 != 0
+```
+
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
 ## Next Steps
 

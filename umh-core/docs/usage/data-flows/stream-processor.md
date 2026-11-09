@@ -136,11 +136,9 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 
 ## Metrics
 
-[Metrics](../instances/agent/metrics.md) explains how to read umh-core's metrics.
+The Management Console shows each stream processor's message counts. Open the stream processor and select **Metrics** on the Monitoring card. The view shows messages received and sent, errors and latency. Port 8080, umh-core's Prometheus endpoint, does not carry message counts. It carries the stream processor's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stream processors and what the labels and the state values mean.
 
-The Management Console shows each stream processor's message counts. Open the stream processor and select **Metrics** on the Monitoring card. The view shows messages received and sent, errors and latency. Port 8080, umh-core's Prometheus endpoint, does not carry message counts.
-
-Port 8080 carries the stream processor's state and error counts. Stream processors run on FSMv1, the older of umh-core's two frameworks. A framework is the part of umh-core that starts and watches components. [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component) explains both. Stream processors get the series described in [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a stream processor named `oee-rollup`, the series carry these labels:
+Stream processors run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a stream processor named `oee-rollup`, the series carry these labels:
 
 | Part | `component` | `instance` |
 |---|---|---|
@@ -148,9 +146,13 @@ Port 8080 carries the stream processor's state and error counts. Stream processo
 | The internal flow that runs it | `dataflow_component_instance` | `dfc-streamprocessor-oee-rollup` |
 | The Benthos process of that flow | `benthos_instance` | `dataflow-dfc-streamprocessor-oee-rollup` |
 
-Benthos is the engine that moves the data. Prometheus can rename the `instance` label to `exported_instance`. [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains when.
+To alert when a stream processor has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`:
 
-For the stream processor itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. -1 means the stream processor is in a sub-state: one of the starting, degraded or stopping steps, such as `starting_dfc` or `degraded_redpanda`. Check the state in the Management Console.
+```promql
+umh_core_service_current_state{component="stream_processor_instance"} != 3 != 4 != 0
+```
+
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
 ## Learn More
 

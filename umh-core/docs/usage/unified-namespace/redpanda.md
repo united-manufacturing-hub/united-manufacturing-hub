@@ -30,7 +30,7 @@ The badge tooltip starts with `degraded:`, a space and the reason. umh-core runs
 | `found error (clears in <time>): <log line>` with `Address already in use` | Another process holds a port that Redpanda needs, such as 9092 or 9644. | Stop the other process. If the container shares the host network, check which host process uses the port. |
 | `found error (clears in <time>): <log line>` with `Reactor stalled for <n> ms` | Redpanda was blocked for more than 500 milliseconds and processed nothing in that time. | Check [CPU Health](../instances/container/cpu-health/README.md). Give the container more CPU or a faster disk. |
 | `Redpanda storage free space alert: <free> free bytes (total: <total> bytes)` | Redpanda reports that its disk is nearly full. | Free disk space, enlarge the disk, or shorten the retention. See [Disk usage in practice](../../production/sizing-guide.md#disk-usage-in-practice). |
-| `Redpanda unavailable topics: <n>` | Redpanda cannot serve `<n>` partitions. A partition is one part of a Kafka topic. The number counts partitions, although the text says topics. | Read the Redpanda logs to find the cause. |
+| `Redpanda unavailable topics: <n>` | Redpanda cannot serve `<n>` partitions. A partition is one part of a Kafka topic. | Read the Redpanda logs to find the cause. |
 | `unexpected restarts within the last hour: [<exit codes>]` | The Redpanda process exited with an error at least once in the last hour. The reason stays for one hour after the last exit. | Read the Redpanda logs around the time of the exit. |
 
 A `found error` reason stays for 10 minutes after the log line. The `clears in` value counts down that time. Only the two log lines in the table cause this reason. A `Reactor stalled` line counts only after Redpanda has started.
@@ -76,17 +76,14 @@ If your config file was created before umh-core started to write `defaultTopicCl
 
 ## Metrics
 
-Port 8080 has no series that Redpanda reports itself. umh-core reports its own view of Redpanda in the FSMv1 series. FSMv1 is the older of umh-core's two frameworks, the parts of umh-core that start and watch components (see [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component)). The [Metrics](../instances/agent/metrics.md) page explains how to read the series and lists their names under [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics).
+Redpanda serves its own metrics on its admin port 9644 at `/public_metrics`, which is inside the container and not published by default. Port 8080 has no series that Redpanda reports itself. It carries umh-core's own view of Redpanda, as standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them.
 
-| `component` value | `instance` value ([how Prometheus labels it](../instances/agent/metrics.md#read-the-metrics)) | Series |
-|---|---|---|
-| `redpanda_instance` | `redpanda` | `umh_core_service_current_state`, `umh_core_service_desired_state`, `umh_core_errors_total`, `umh_core_reconcile_duration_milliseconds` |
-| `redpanda_monitor` | `redpanda-redpanda` | `umh_core_errors_total`, `umh_core_reconcile_duration_milliseconds` |
+Redpanda has `component="redpanda_instance"` with `instance="redpanda"`. Its monitor, a separate process in the container that reads Redpanda's status once per second, has `component="redpanda_monitor"` with `instance="redpanda-redpanda"`. In Prometheus, write `exported_instance` for `instance`.
 
-`umh_core_reconcile_duration_milliseconds` has further `instance` values of the form `redpanda.<step>` and `redpanda-redpanda.<step>`. Filter on the exact values in the table to get one series per component. `umh_core_errors_total` with `component="redpanda_monitor"` appears only after the first error.
+To alert when Redpanda is degraded, use:
 
-The Redpanda monitor is a separate process in the container. The [agent monitor](../instances/agent/README.md), by contrast, is part of the agent. The Redpanda monitor reads Redpanda's status and metrics once per second, and umh-core builds the card from these values. The Redpanda monitor reports no state series.
+```promql
+umh_core_service_current_state{component="redpanda_instance"} == 5
+```
 
-`umh_core_service_current_state` with `component="redpanda_instance"` reads 0 for `stopped`, 1 for `starting`, 3 for `active`, 4 for `idle` and 5 for `degraded`. It reads -1 while Redpanda is `stopping`.
-
-Redpanda serves its own metrics on its admin port 9644 at `/public_metrics`. The Redpanda monitor reads them there. The port is inside the container and is not published by default.
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
