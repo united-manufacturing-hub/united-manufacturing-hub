@@ -166,7 +166,7 @@ Stand-alone flows run on FSMv1 and use the standard [FSMv1 metrics](../instances
 | The flow | `dataflow_component_instance` | `<flow>` |
 | Its Benthos process | `benthos_instance` | `dataflow-<flow>` |
 
-To alert when a flow has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`. The same component also covers the internal flows of bridges and stream processors, so the rule leaves them out by name. To watch one flow, replace the filter with `exported_instance="<flow>"`:
+To alert when a flow has not been active for 5 minutes, use this rule with `for: 5m`. Prometheus renames `instance` to `exported_instance`. The same component also covers the internal flows of bridges and stream processors, so the rule leaves them out by name. A flow whose own name starts with `protocolconverter-` or `dfc-streamprocessor-` is left out too. To watch one flow, replace the filter with `exported_instance="<flow>"`:
 
 ```promql
 umh_core_service_current_state{component="dataflow_component_instance", exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*"} != 3 != 4 != 0
