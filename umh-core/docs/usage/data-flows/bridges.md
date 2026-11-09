@@ -239,21 +239,21 @@ Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/met
 | The Benthos process of its read flow | `benthos_instance` | `dataflow-read-protocolconverter-mixing-station` |
 | The Benthos process of its write flow | `benthos_instance` | `dataflow-write-protocolconverter-mixing-station` |
 
-To alert when a bridge has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`:
+To alert when a bridge has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
 
 ```promql
 umh_core_service_current_state{component="protocol_converter_instance"} != 3 != 4 != 0
 ```
 
-For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
+For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. When you delete a bridge, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name by adding `exported_instance!="<deleted bridge>"` to the selector, or restart the container. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
 ### Connection Check
 
-Before umh-core starts a bridge, it checks that the device's host and port answer. This connection check runs on FSMv2 by default. To run it on FSMv1 instead, set the environment variable `NMAP_BACKEND=fsmv1` on the container, for example with `-e NMAP_BACKEND=fsmv1` on `docker run`. umh-core reads the variable once at startup.
+Before umh-core starts a bridge, it checks that the device's host and port answer. This connection check runs on FSMv2. The `NMAP_BACKEND` environment variable that once switched it to FSMv1 is ignored and can be removed.
 
 When the device stops answering, the bridge's own state changes. It stays in `starting_connection` if it has not started yet. It moves to `degraded_connection` if it was already running. To see whether the device answers, read the bridge's state.
 
-The check's FSMv2 series carry a `hierarchy_path` that ends in `connection-protocolconverter-<bridge>-001(nmap)`. With `NMAP_BACKEND=fsmv1`, the FSMv1 series use `component="nmap_instance"` and `instance="connection-protocolconverter-<bridge>"`.
+The check's series carry a `hierarchy_path` that ends in `connection-protocolconverter-<bridge>-001(nmap)`.
 
 ## Next Steps
 

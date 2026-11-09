@@ -35,7 +35,13 @@ The communicator reports on port 8080 how many of its requests to the Management
 
 ### Errors
 
-Each failed request is counted once, under the cause below. To alert on all failed requests of one cause, add up the counter across the series, for example `sum without (hierarchy_path) (rate(umh_fsmv2_worker_network_errors_total[5m])) > 0`.
+Each failed request is counted once, under the cause below. To alert on all failed requests of one cause, add up the counter across the series. A counter series appears with its first error, so it starts at 1, and `rate()` and `increase()` do not count that first step. Add a second part that matches a series that was not there 5 minutes ago. This example covers `umh_fsmv2_worker_network_errors_total`, and the same form works for the other counters, including `umh_fsmv2_worker_auth_failures_total`:
+
+```promql
+sum without (hierarchy_path) (increase(umh_fsmv2_worker_network_errors_total[5m])) > 0
+or
+sum without (hierarchy_path) (umh_fsmv2_worker_network_errors_total unless umh_fsmv2_worker_network_errors_total offset 5m) > 0
+```
 
 | Name | Type | Reports |
 |---|---|---|

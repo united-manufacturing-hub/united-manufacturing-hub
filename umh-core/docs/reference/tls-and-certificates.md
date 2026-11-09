@@ -38,4 +38,6 @@ A firewall that inspects TLS terminates the connection itself and presents a cer
 
 ## ALLOW_INSECURE_TLS
 
-`ALLOW_INSECURE_TLS` and `agent.communicator.allowInsecureTLS` no longer turn off certificate validation. umh-core always validates the certificate of `management.umh.app` when it logs in to the Management Console, and requires TLS 1.2 or higher. A value that is still set does no harm. To trust a firewall that inspects TLS, add your corporate certificate authority as described in [Instance Stays Offline Behind a Corporate Firewall](../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container).
+From v0.44.42, `ALLOW_INSECURE_TLS` and `agent.communicator.allowInsecureTLS` no longer turn off certificate validation. umh-core always validates the certificate of `management.umh.app` when it logs in to the Management Console, and requires TLS 1.2 or higher. A value that is still set does no harm. To trust a firewall that inspects TLS, add your corporate certificate authority as described in [Instance Stays Offline Behind a Corporate Firewall](../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container).
+
+On v0.44.41 and earlier, `true` turns off certificate validation for that connection, so anyone who can intercept the traffic can read it. Remove the setting and upgrade.

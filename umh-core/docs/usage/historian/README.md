@@ -144,7 +144,7 @@ This alert fires when the connection has been down for more than a minute:
 umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(historian-timescale\\)", state="degraded"} > 60
 ```
 
-A rising `umh_fsmv2_state_transitions_total` for this path shows a connection that keeps dropping. The database size and job details appear only in the Management Console. The Historian bridges report like any other bridge. See [Bridges: Metrics](../data-flows/bridges.md#metrics).
+A rising `umh_fsmv2_state_transitions_total` for this path shows a connection that keeps dropping. Both state series are defined in [`fsmv2/supervisor/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/supervisor/metrics/metrics.go). The database size and job details appear only in the Management Console. The Historian bridges report like any other bridge. See [Bridges: Metrics](../data-flows/bridges.md#metrics).
 
 The Historian output inside each Historian bridge counts its own writes. The bridge's Benthos process keeps these counters. Neither port 8080 nor the Management Console's Metrics view shows them. The [Historian output reference](https://docs.umh.app/benthos-umh/output/historian) describes them.
 

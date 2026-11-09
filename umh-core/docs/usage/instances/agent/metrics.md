@@ -14,9 +14,9 @@ To read the metrics once, run this on the machine that runs the container:
 docker exec <container name> wget -qO- http://localhost:8080/metrics
 ```
 
-To collect the metrics with Prometheus, publish port 8080 when you start the container. Add `-p 8080:8080` to your `docker run` command. The install command from the Management Console does not publish this port. For a running container, remove the container and start it again with the same `docker run` command plus `-p 8080:8080`. `docker restart` keeps the old port mappings.
+To collect the metrics with Prometheus, publish port 8080 when you start the container. Add `-p <host-ip>:8080:8080` to your `docker run` command, where `<host-ip>` is an address of the host that Prometheus can reach, for example `127.0.0.1` when Prometheus runs on the same host. The install command from the Management Console does not publish this port. For a running container, remove the container and start it again with the same `docker run` command plus `-p <host-ip>:8080:8080`. `docker restart` keeps the old port mappings.
 
-The endpoint has no authentication. Publish it only on a trusted network, for example with `-p <host-ip>:8080:8080`.
+The endpoint has no authentication. Without `<host-ip>`, Docker publishes the port on every interface of the host, so always give an address on a trusted network.
 
 Then add a scrape job to your Prometheus configuration:
 
@@ -29,7 +29,7 @@ scrape_configs:
 
 Prometheus sets its own `instance` label on every scrape. With the default `honor_labels: false`, it renames umh-core's `instance` label to `exported_instance`. In Prometheus queries, write `exported_instance="Core"` where the component pages write `instance="Core"`. Alternatively, set `honor_labels: true` in the scrape job.
 
-The port inside the container is always 8080. umh-core sets `agent.metricsPort` in `config.yaml` back to 8080 on every start. To use another port on the host, change the host side of the mapping, for example `-p 9100:8080`.
+The port inside the container is always 8080. umh-core sets `agent.metricsPort` in `config.yaml` back to 8080 on every start. To use another port on the host, change the host side of the mapping, for example `-p <host-ip>:9100:8080`.
 
 Most series appear only after umh-core records their first value. The FSMv2 counters, for example, appear after their first count. A missing series therefore does not mean the component is missing. `umh_core_errors_total` is the exception. It exists at 0 from the moment umh-core creates the component.
 
@@ -44,8 +44,8 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Communicator | FSMv2 | none |
 | Persistence and configuration components (internal parts of umh-core) | FSMv2 | none |
 | Historian (the connection to TimescaleDB) | FSMv2 | none |
-| Bridge connection check | FSMv2 by default | `NMAP_BACKEND=fsmv1` switches to FSMv1 |
-| CPU health | FSMv2 by default | `USE_FSMV2_CPU=false` switches to FSMv1 |
+| Bridge connection check | FSMv2 | none. `NMAP_BACKEND` is ignored |
+| CPU health | FSMv2 from v0.44.46. On v0.44.37 to v0.44.45, FSMv1 unless `USE_FSMV2_CPU=true` | `USE_FSMV2_CPU=false` switches to FSMv1 on v0.44.46 and later. See [CPU Health](../container/cpu-health/README.md#turn-the-check-on-or-off) |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
 | Container memory and disk | FSMv1 | none |
@@ -202,7 +202,7 @@ Each bridge, stand-alone flow and stream processor runs in Benthos, the engine t
 The names and help texts come from the code and can change with a release. Check the definitions for the exact list:
 
 - FSMv1 series (`umh_core_*`, `umh_container_*`): [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go) and [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go)
-- FSMv2 series (`umh_fsmv2_*`): [`fsmv2/deps/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/deps/metrics.go)
+- FSMv2 series (`umh_fsmv2_*`): [`fsmv2/supervisor/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/supervisor/metrics/metrics.go) for the standard series such as `state_duration_seconds` and `circuit_open`, and [`fsmv2/deps/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/deps/metrics.go) for the metrics a worker records itself
 - Every series on a running instance, with its help text: the `/metrics` output itself.
 
 ## Go runtime metrics

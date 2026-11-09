@@ -55,10 +55,12 @@ To alert when the control loop stalls, alert on any increase of the starved coun
 increase(umh_core_reconcile_starved_total_seconds[5m]) > 0
 ```
 
-To alert when the agent stops managing components, alert on errors that stop the control loop:
+To alert when the agent stops managing components, alert on errors that stop the control loop. These are the series with `instance="main"` and `instance="config_permanent_failure"`. In Prometheus, write `exported_instance` for `instance`:
 
 ```promql
-increase(umh_core_errors_total{component="control_loop"}[5m]) > 0
+increase(umh_core_errors_total{component="control_loop", exported_instance=~"main|config_permanent_failure"}[5m]) > 0
 ```
+
+The other `control_loop` series are named after a manager and count that manager's failed reconcile cycles. A failure there does not always stop the control loop, so the rule leaves them out. A stopped agent also stops answering scrapes, so alert on the scrape target being down (`up == 0`) as well.
 
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go). A cycle that takes longer than 100 milliseconds writes a warning to the agent log.
