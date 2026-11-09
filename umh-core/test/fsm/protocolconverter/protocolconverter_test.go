@@ -300,6 +300,80 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(observed.ServiceInfo.StatusReason).To(ContainSubstring("^umh\\.v1\\.some-other-location\\._historian\\."))
 		})
 
+		It("should run a write flow with an unchecked data contract in DegradedDFC and surface its own failure", func() {
+			var err error
+
+			// BYPASS_WRITE_FLOW_VALIDATION: the write flow names the undeclared contract
+			// _mes_order. It runs, but the bridge stays in degraded_dfc and names the bypass.
+			bypassConfig := agentconfig.FullConfig{
+				Agent: agentconfig.AgentConfig{
+					Location:                  map[int]string{0: "test-location"},
+					BypassWriteFlowValidation: true,
+				},
+			}
+
+			transition := func(from, to string) {
+				tick, err = fsmtest.TestProtocolConverterStateTransitionWithConfig(
+					ctx, instance, mockService, mockRegistry, componentName,
+					from, to, 5, tick, startTime, bypassConfig)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			instance, mockService, _ = fsmtest.SetupProtocolConverterInstanceWithUncheckedContractWriteTopics(
+				componentName, protocolconverterfsm.OperationalStateStopped)
+
+			transition(internalfsm.LifecycleStateToBeCreated, internalfsm.LifecycleStateCreating)
+
+			mockService.ExistingComponents[componentName] = true
+			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			transition(internalfsm.LifecycleStateCreating, protocolconverterfsm.OperationalStateStopped)
+
+			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			transition(protocolconverterfsm.OperationalStateStopped, protocolconverterfsm.OperationalStateStartingConnection)
+
+			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			transition(protocolconverterfsm.OperationalStateStartingConnection, protocolconverterfsm.OperationalStateStartingRedpanda)
+
+			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			transition(protocolconverterfsm.OperationalStateStartingRedpanda, protocolconverterfsm.OperationalStateStartingDFC)
+
+			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			transition(protocolconverterfsm.OperationalStateStartingDFC, protocolconverterfsm.OperationalStateDegradedDFC)
+
+			statusReason := func() string {
+				observed, ok := instance.GetLastObservedState().(protocolconverterfsm.ProtocolConverterObservedState)
+				Expect(ok).To(BeTrue())
+
+				return observed.ServiceInfo.StatusReason
+			}
+
+			// Both flows run, so the bypass is the reason the bridge is degraded.
+			Expect(statusReason()).To(ContainSubstring(agentconfig.BypassWriteFlowValidationEnv))
+
+			// The write flow fails. Its own failure replaces the bypass as the reason.
+			fsmtest.SetupProtocolConverterServiceState(mockService, componentName, protocolconvertersvc.ConverterStateFlags{
+				IsDFCRunning:       true,
+				IsConnectionUp:     true,
+				IsRedpandaRunning:  true,
+				DfcFSMReadState:    dataflowcomponentfsm.OperationalStateIdle,
+				DfcFSMWriteState:   dataflowcomponentfsm.OperationalStateDegraded,
+				ConnectionFSMState: connectionfsm.OperationalStateUp,
+				RedpandaFSMState:   redpandafsm.OperationalStateIdle,
+				PortState:          nmapservice.PortStateOpen,
+			})
+
+			for range 3 {
+				snapshot := fsm.SystemSnapshot{Tick: tick, CurrentConfig: bypassConfig}
+				reconcileErr, _ := instance.Reconcile(ctx, snapshot, mockRegistry)
+				Expect(reconcileErr).NotTo(HaveOccurred())
+				tick++
+			}
+
+			Expect(instance.GetCurrentFSMState()).To(Equal(protocolconverterfsm.OperationalStateDegradedDFC))
+			Expect(statusReason()).To(HavePrefix("flow degraded: "))
+			Expect(statusReason()).NotTo(ContainSubstring(agentconfig.BypassWriteFlowValidationEnv))
+		})
+
 		It("should transition from Idle to Active when processing data", func() {
 			var err error
 

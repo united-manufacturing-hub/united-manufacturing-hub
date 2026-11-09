@@ -68,6 +68,7 @@ func decodeReplies(messages []*models.UMHMessage) []queuedReply {
 		}
 
 		var reply queuedReply
+
 		reply.State, _ = payload["actionReplyState"].(string)
 		reply.Message, _ = payload["actionReplyPayload"].(string)
 
