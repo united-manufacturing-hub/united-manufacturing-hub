@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.45.0]
+
 ### New Features
 
 - Preview of more detailed memory reporting. Memory is judged on its average over the last 60 seconds, and a degraded status names the cause: the container's memory limit, the machine's memory, processes waiting for memory, or a process stopped because memory ran out. Turn it on with `USE_FSMV2_MEMORY_MONITOR=true` and recreate the container
