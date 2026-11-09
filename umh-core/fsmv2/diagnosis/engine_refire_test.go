@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Two engines that differ only in RefireAtOnce, so losing the copy from the
-// signal into its latch fails here; latch_refire_test.go cannot see the copy.
+// Two engines that differ only in USE_FSMV2_IMMEDIATE_REFIRE, so losing the
+// copy from the flag into a signal's or a refinement's latch fails here;
+// latch_refire_test.go cannot see the copy.
 
 package diagnosis
 
@@ -24,8 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Two engines that differ only in RefireAtOnce", func() {
-
+var _ = Describe("Two engines that differ only in USE_FSMV2_IMMEDIATE_REFIRE", func() {
 	type snap struct{ value float64 }
 
 	base := time.Unix(1_000_000, 0)
@@ -39,37 +39,41 @@ var _ = Describe("Two engines that differ only in RefireAtOnce", func() {
 		return out
 	}
 
-	// One signal per engine, reading the snapshot's value field. The Last
+	// One signal per engine with one refinement R, both reading the snapshot's
+	// value field against the same marks, so R fires and releases with S. The Last
 	// reduction needs only one reading, so the signal is judged from the first
 	// tick. The window span is ten seconds and the table interval one second,
 	// so the window first covers its full span at t10.
-	signal := func(refire bool) Signal[snap] {
-		return Signal[snap]{
-			Name:         "S",
-			RefireAtOnce: refire,
-			DemoteSpan:   60 * time.Second,
-			Instruments: []Instrument[snap]{{
-				Measurement: Measurement[snap]{
-					Name:      "I",
-					Extract:   func(s snap) Reading { return Known(s.value) },
-					Reduction: Last,
-					Span:      10 * time.Second,
-				},
-				Marks: Marks{Unit: "ratio", Fire: Mark{At: 0.5}, Clear: Mark{At: 0.4}, Worst: 1.0, Polarity: HigherIsWorse},
-			}},
-		}
+	instruments := []Instrument[snap]{{
+		Measurement: Measurement[snap]{
+			Name:      "I",
+			Extract:   func(s snap) Reading { return Known(s.value) },
+			Reduction: Last,
+			Span:      10 * time.Second,
+		},
+		Marks: Marks{Unit: "ratio", Fire: Mark{At: 0.5}, Clear: Mark{At: 0.4}, Worst: 1.0, Polarity: HigherIsWorse},
+	}}
+	signal := Signal[snap]{
+		Name:        "S",
+		DemoteSpan:  60 * time.Second,
+		Instruments: instruments,
+		Refinements: []Signal[snap]{{Name: "R", DemoteSpan: 60 * time.Second, Instruments: instruments}},
 	}
 
-	engineOver := func(s Signal[snap]) *Engine[snap] {
-		e, err := NewEngine(Table[snap]{Signals: []Signal[snap]{s}, Interval: time.Second})
+	// engineWith builds the engine with the flag set to value. GinkgoT().Setenv
+	// restores the variable after the spec.
+	engineWith := func(value string) *Engine[snap] {
+		GinkgoT().Setenv(immediateRefireFlag, value)
+
+		e, err := NewEngine(Table[snap]{Signals: []Signal[snap]{signal}, Interval: time.Second})
 		Expect(err).ToNot(HaveOccurred())
 
 		return e
 	}
 
-	It("fires after a release on the reading past the fire mark only for the signal that declares RefireAtOnce", func() {
-		refireEngine := engineOver(signal(true))
-		cooldownEngine := engineOver(signal(false))
+	It("fires after a release on the reading past the fire mark only when the flag is on", func() {
+		refireEngine := engineWith("true")
+		cooldownEngine := engineWith("")
 		engines := []*Engine[snap]{refireEngine, cooldownEngine}
 
 		tick := func(e *Engine[snap], value float64, at time.Time) []Fired {
@@ -97,15 +101,17 @@ var _ = Describe("Two engines that differ only in RefireAtOnce", func() {
 		}
 
 		// At t11, one second after the release, both engines read a value past the
-		// fire mark. The engine without RefireAtOnce cannot fire again before t20,
+		// fire mark. The engine without the flag cannot fire again before t20,
 		// one window span after its t10 release.
 		refired := tick(refireEngine, 1.0, base.Add(11*time.Second))
 		Expect(names(refired)).To(Equal([]string{"S"}),
-			"with RefireAtOnce the released signal fires on the next reading past its fire mark")
+			"with the flag on the released signal fires on the next reading past its fire mark")
 		Expect(refired[0].Since).To(Equal(base.Add(11*time.Second)),
 			"Since of the re-fired signal is the re-fire time t11, not the first fire at t0")
+		Expect(names(refired[0].Refinements)).To(Equal([]string{"R"}),
+			"with the flag on the released refinement fires again with its parent")
 		Expect(names(tick(cooldownEngine, 1.0, base.Add(11*time.Second)))).To(BeEmpty(),
-			"without RefireAtOnce the released signal keeps its cooldown, so one second after the release it has not fired")
+			"without the flag the released signal keeps its cooldown, so one second after the release it has not fired")
 
 		// The cooldown engine keeps reading past the fire mark. It stays quiet
 		// until t20 and fires there, one window span after its t10 release.
@@ -113,7 +119,27 @@ var _ = Describe("Two engines that differ only in RefireAtOnce", func() {
 			Expect(names(tick(cooldownEngine, 1.0, base.Add(time.Duration(i)*time.Second)))).To(BeEmpty(),
 				"the cooldown holds until one window span after the release (t=%ds)", i)
 		}
-		Expect(names(tick(cooldownEngine, 1.0, base.Add(20*time.Second)))).To(Equal([]string{"S"}),
-			"without RefireAtOnce the signal fires again exactly one window span after its release")
+
+		cooled := tick(cooldownEngine, 1.0, base.Add(20*time.Second))
+		Expect(names(cooled)).To(Equal([]string{"S"}),
+			"without the flag the signal fires again exactly one window span after its release")
+		Expect(names(cooled[0].Refinements)).To(Equal([]string{"R"}),
+			"and so does its refinement")
 	})
+
+	DescribeTable("reads the flag",
+		func(value string, want bool) {
+			GinkgoT().Setenv(immediateRefireFlag, value)
+			Expect(immediateRefire()).To(Equal(want))
+		},
+		Entry("empty is off", "", false),
+		Entry("true is on", "true", true),
+		Entry("any case is on", "TRUE", true),
+		Entry("1 is on", "1", true),
+		Entry("yes is on", "yes", true),
+		Entry("y is on", "y", true),
+		Entry("on is on", "on", true),
+		Entry("false is off", "false", false),
+		Entry("an unknown value is off", "maybe", false),
+	)
 })

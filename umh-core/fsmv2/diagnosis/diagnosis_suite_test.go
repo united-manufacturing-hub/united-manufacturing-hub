@@ -21,6 +21,12 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// Specs run with the cooldown after a release, whatever the machine sets;
+// engine_refire_test.go turns USE_FSMV2_IMMEDIATE_REFIRE on where it needs it.
+var _ = BeforeEach(func() {
+	GinkgoT().Setenv(immediateRefireFlag, "")
+})
+
 func TestDiagnosis(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Diagnosis Suite")
