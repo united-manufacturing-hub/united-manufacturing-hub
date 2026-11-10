@@ -103,9 +103,6 @@ func errorTable() diagnosis.Table[readings] {
 				},
 			}},
 			DemoteSpan: ErrorWindow,
-			// A new error right after an entry cleared shows at once, not
-			// one window later.
-			RefireAtOnce: true,
 		})
 	}
 
