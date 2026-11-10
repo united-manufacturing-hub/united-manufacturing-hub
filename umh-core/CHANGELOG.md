@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-### Security updates
+### Fixes
 
 - Updated dependencies with known vulnerabilities:
-  - zlib 1.4-r0 (CVE-2026-4738)
+  - zlib, now 1.4-r0 (CVE-2026-4738)
 
   Update to reduce your attack surface.
 
