@@ -8,7 +8,7 @@
 
 ### Fixes
 
-- An instance whose CPU status has just gone back to healthy now turns degraded again as soon as CPU pressure returns. Before, it stayed healthy for up to a minute
+- An instance whose CPU status has just gone back to healthy now turns degraded again on the first reading past one of the [CPU health check](https://docs.umh.app/production/cpu-health)'s thresholds. Before, it stayed healthy for up to a minute
 
 ## [0.44.45]
 
