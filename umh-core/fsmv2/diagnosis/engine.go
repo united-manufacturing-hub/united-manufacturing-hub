@@ -34,7 +34,6 @@ package diagnosis
 import (
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -146,10 +145,6 @@ type Engine[S any] struct {
 //
 // A measurement's demote span is its own span, because a measurement belongs to
 // no signal and so has no hold for the demote clock to bound.
-//
-// NewEngine reads USE_FSMV2_IMMEDIATE_REFIRE: when it is on, a released signal
-// fires again on its next reading past the fire mark instead of one window span
-// later.
 func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	if err := validate(t); err != nil {
 		return nil, err
@@ -175,27 +170,11 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		e.measurements = append(e.measurements, measurementState[S]{measurement: m, window: *w})
 	}
 
-	refire := immediateRefire()
 	for i, s := range t.Signals {
-		e.signals = append(e.signals, buildSignalState(s.Name, s, i, refire))
+		e.signals = append(e.signals, buildSignalState(s.Name, s, i))
 	}
 
 	return e, nil
-}
-
-// immediateRefireFlag is the environment variable NewEngine reads.
-const immediateRefireFlag = "USE_FSMV2_IMMEDIATE_REFIRE"
-
-// immediateRefire reports whether immediateRefireFlag is on. "true", "1",
-// "yes", "y" and "on" turn it on, in any case, as pkg/env.GetAsBool reads
-// umh-core's other flags; this module cannot import pkg/env.
-func immediateRefire() bool {
-	switch strings.ToLower(os.Getenv(immediateRefireFlag)) {
-	case "true", "1", "yes", "y", "on":
-		return true
-	default:
-		return false
-	}
 }
 
 // pathSeparator joins a refinement's name onto its parent's path.
@@ -214,8 +193,8 @@ func childPath(parent, name string) string {
 // buildSignalState pairs one signal with the latch that judges it, then recurses
 // into its refinements under the same paths buildWindows keyed their windows
 // under. index is the signal's position among its siblings, which Identity.Index
-// carries. refire is the value of immediateRefire, read once per engine.
-func buildSignalState[S any](path string, s Signal[S], index int, refire bool) signalState[S] {
+// carries.
+func buildSignalState[S any](path string, s Signal[S], index int) signalState[S] {
 	// The caller keeps the table they passed, so the engine must own the
 	// instruments it stores: the caller's slice header points into their own
 	// array, and a later edit there would rename the engine's instruments while
@@ -230,22 +209,19 @@ func buildSignalState[S any](path string, s Signal[S], index int, refire bool) s
 	st := signalState[S]{
 		instruments: instruments,
 		path:        path,
-		latch: Latch{
-			identity: Identity{
-				Signal:      s.Name,
-				Tier:        s.Tier,
-				Attribution: s.Attribution,
-				Index:       index,
-			},
-			immediateRefire: refire,
-		},
+		latch: Latch{identity: Identity{
+			Signal:      s.Name,
+			Tier:        s.Tier,
+			Attribution: s.Attribution,
+			Index:       index,
+		}},
 		refinements:     make([]signalState[S], 0, len(s.Refinements)),
 		demoteSpan:      s.DemoteSpan,
 		releaseOnAbsent: s.ReleaseOnAbsent,
 	}
 
 	for i, r := range s.Refinements {
-		st.refinements = append(st.refinements, buildSignalState(childPath(path, r.Name), r, i, refire))
+		st.refinements = append(st.refinements, buildSignalState(childPath(path, r.Name), r, i))
 	}
 
 	return st

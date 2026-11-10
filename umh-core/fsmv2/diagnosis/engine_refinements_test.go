@@ -478,22 +478,18 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		Expect(released[0].Refinements).To(BeEmpty(),
 			"C released on its own clear mark, and G leaves with it: a refinement of an unreported refinement is reported nowhere")
 
-		// What G lost was its route to the report, not its verdict. Latch re-arms
-		// one Coverage span after a release, so C cannot fire again before t21
-		// however far past its fire mark it reads. When it does, G reappears
-		// under it carrying the Since it stamped on the first tick of all, which
-		// it could not do had it released too.
-		var refired []Fired
-		for i := 12; i <= 21; i++ {
-			refired, _ = e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
-		}
+		// What G lost was its route to the report, not its verdict. C fires again
+		// on its next reading past its fire mark, and G reappears under it
+		// carrying the Since it stamped on the first tick of all, which it could
+		// not do had it released too.
+		refired, _ := e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7}, NewEnvironment(), base.Add(12*time.Second))
 
 		Expect(refired[0].Refinements).To(HaveLen(1))
-		Expect(refired[0].Refinements[0].Since).To(Equal(base.Add(21*time.Second)),
-			"C fired fresh, one window span after the release above")
+		Expect(refired[0].Refinements[0].Since).To(Equal(base.Add(12*time.Second)),
+			"C fired fresh, on the reading right after the release above")
 		Expect(refired[0].Refinements[0].Refinements).To(HaveLen(1))
 		Expect(refired[0].Refinements[0].Refinements[0].Since).To(Equal(base),
-			"G held the verdict it stamped on tick 0 through the ten ticks it was reported nowhere")
+			"G held the verdict it stamped on tick 0 through the tick it was reported nowhere")
 	})
 
 	// A refinement holds a verdict on stale evidence for its OWN DemoteSpan. The
