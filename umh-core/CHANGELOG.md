@@ -2,10 +2,16 @@
 
 ## Unreleased
 
+### Improvements
+
+- The Historian output reports a `retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` or `write_timeout` it cannot use, such as `168` without a unit, as a config lint error that names the field, before it starts
+
 ### Fixes
 
 - Updated dependencies with known vulnerabilities:
   - zlib, now 1.4-r0 (CVE-2026-4738)
+  - MongoDB Go driver, now 2.9.3 (CVE-2026-107324, CVE-2026-107325, CVE-2026-88031, CVE-2026-81521)
+  - go-jose, now 4.1.9 (CVE-2026-116587, CVE-2026-116585, CVE-2026-116586)
 
   Update to reduce your attack surface.
 
