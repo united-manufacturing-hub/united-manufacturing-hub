@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- The Historian output reports a `retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` or `write_timeout` it cannot use, such as `168` without a unit, as a config lint error that names the field, before it starts
+- Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
 
 ### Fixes
 
