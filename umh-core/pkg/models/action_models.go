@@ -792,6 +792,14 @@ const (
 	// retryable because re-deploying the persisted bridge would conflict. The
 	// user recovers via the editing view.
 	ErrDeployTimeout = "ERR_DEPLOY_TIMEOUT"
+	// ErrBridgeRefusedCPU, ErrBridgeRefusedMemory and ErrBridgeRefusedDisk
+	// fail a bridge deploy as soon as bridge admission refuses the bridge
+	// because that resource is degraded. When several are degraded, the code
+	// names the first in the order CPU, memory, disk. Like ErrDeployTimeout,
+	// the config is kept and they are not retryable.
+	ErrBridgeRefusedCPU    = "ERR_BRIDGE_REFUSED_CPU"
+	ErrBridgeRefusedMemory = "ERR_BRIDGE_REFUSED_MEMORY"
+	ErrBridgeRefusedDisk   = "ERR_BRIDGE_REFUSED_DISK"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
 	ErrBridgeNotFound    = "ERR_BRIDGE_NOT_FOUND"
