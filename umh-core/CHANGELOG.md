@@ -5,6 +5,7 @@
 ### Improvements
 
 - Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
+- The CPU status now exclusively uses the CPU health check. `USE_FSMV2_CPU` is ignored and can be removed from the container's environment; the 70% CPU usage rule is no longer available. The `agent.useFSMv2CPU` setting in `config.yaml` is still accepted and has no effect. The `umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` Prometheus gauges now always report the CPU health check's 60-second average of the container's own usage, so an alert built on the old reading may need adjusting.
 
 ### Fixes
 

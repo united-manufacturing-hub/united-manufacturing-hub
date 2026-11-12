@@ -22,6 +22,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -64,7 +65,7 @@ func admissionSnapshot(state string, bridges ...string) pkgfsm.SystemSnapshot {
 								CPUHealth:     models.Active,
 								MemoryHealth:  models.Active,
 								DiskHealth:    models.Active,
-								CPU:           &models.CPU{CgroupCores: 4},
+								CPU:           &models.CPU{CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{CapacityCores: 4}}},
 							},
 						},
 					},
@@ -161,17 +162,13 @@ var _ = Describe("BridgeMustWait admission", func() {
 	})
 
 	Describe("the CPU limit behind the bridge limit", func() {
-		It("reads the fsmv2 CPU worker's capacity without depending on USE_FSMV2_CPU in the config", func() {
+		It("reads the CPU worker's capacity", func() {
 			snapshot := admissionSnapshot("active", bridgeNames(15)...)
 			addWaitingBridge(&snapshot, "new-bridge")
-			// The fsmv2 CPU path fills CPUHealth and leaves CgroupCores empty.
-			// USE_FSMV2_CPU is an environment variable and is not in config.yaml,
-			// so the per-tick config always reads it as false.
+			// The CPU record carries its capacity in the worker's evidence.
 			cpu := coreInstance(snapshot).LastObservedState.(*container.ContainerObservedStateSnapshot).ServiceInfoSnapshot.CPU
-			cpu.CgroupCores = 0
 			cpu.CPUHealth = &models.CPUHealth{}
 			cpu.CPUHealth.CapacityCores = 4
-			snapshot.CurrentConfig.Agent.UseFSMv2CPU = false
 
 			mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
 			Expect(mustWait).To(BeTrue())

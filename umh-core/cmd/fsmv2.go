@@ -76,7 +76,6 @@ type fsmv2Supervisor interface {
 // loop's lifetime to the caller's cancel.
 func buildFSMv2Supervisor(
 	configManager config.ConfigManager,
-	cpuMonitorEnabled bool,
 	memoryMonitorEnabled bool,
 	logger *zap.SugaredLogger,
 	forceExit <-chan struct{},
@@ -98,7 +97,7 @@ func buildFSMv2Supervisor(
 	supervisorLogger := withSentryHook(logger.Named("fsmv2"), sentryHook)
 
 	// The config worker reads these globals when it is constructed.
-	publishConfigWorkerGlobals(store, configManager, cpuMonitorEnabled, memoryMonitorEnabled)
+	publishConfigWorkerGlobals(store, configManager, memoryMonitorEnabled)
 	cleanup := func() {
 		clearConfigWorkerGlobals()
 		sentryHook.Stop()
@@ -144,19 +143,18 @@ func withSentryHook(logger *zap.SugaredLogger, hook *fsmv2sentry.SentryHook) *za
 
 // publishConfigWorkerGlobals publishes what the config worker and FSMv1
 // components read from process globals: the dynamic children registry, the
-// fsmv2 client, the config manager and the CPU monitor flag. The config worker
-// polls the config manager each tick to reconcile the historian monitor
-// child. It must run before NewApplicationSupervisor, so the application
-// worker's first observation sees the registry.
+// fsmv2 client, the config manager and the memory monitor flag. The config
+// worker polls the config manager each tick to reconcile the historian
+// monitor child. It must run before NewApplicationSupervisor, so the
+// application worker's first observation sees the registry.
 //
 // TODO(ENG-4400): stop publishing the config manager once the config worker reads
 // config.yaml directly instead of polling the manager.
-func publishConfigWorkerGlobals(store storage.TriangularStoreInterface, configManager config.ConfigManager, cpuMonitorEnabled bool, memoryMonitorEnabled bool) {
+func publishConfigWorkerGlobals(store storage.TriangularStoreInterface, configManager config.ConfigManager, memoryMonitorEnabled bool) {
 	dynamicChildrenWriter := dynamicchildren.NewWriter()
 	register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynamicChildrenWriter.Registry())
 	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicChildrenWriter, store))
 	register.SetGlobalDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, configManager)
-	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, cpuMonitorEnabled)
 	register.SetGlobalDeps[bool](configworker.MemoryMonitorEnabledDepsKey, memoryMonitorEnabled)
 }
 
@@ -166,7 +164,6 @@ func clearConfigWorkerGlobals() {
 	fsmv2client.SetClient(nil)
 	register.ClearGlobalDeps(configworker.WorkerTypeName)
 	register.ClearGlobalDeps(configworker.ConfigManagerDepsKey)
-	register.ClearGlobalDeps(configworker.CPUEnabledDepsKey)
 	register.ClearGlobalDeps(configworker.MemoryMonitorEnabledDepsKey)
 }
 
@@ -250,7 +247,7 @@ func startFSMv2Runtime(
 		return fsmv2Handle{}, fmt.Errorf("failed to start the Management Console module: %w", moduleErr)
 	}
 
-	applicationSupervisor, cleanup, buildErr := buildFSMv2SupervisorFn(communicationState.ConfigManager, configData.Agent.UseFSMv2CPU, configData.Agent.UseFSMv2MemoryMonitor, log, forceExit, managementConsole.Children)
+	applicationSupervisor, cleanup, buildErr := buildFSMv2SupervisorFn(communicationState.ConfigManager, configData.Agent.UseFSMv2MemoryMonitor, log, forceExit, managementConsole.Children)
 	if buildErr != nil {
 		return fsmv2Handle{}, fmt.Errorf("failed to build FSMv2 supervisor: %w", buildErr)
 	}
