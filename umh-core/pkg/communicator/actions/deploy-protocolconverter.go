@@ -45,6 +45,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -266,7 +267,8 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				nil,
 			)
 
-			if errCode != models.ErrConfigFileInvalid {
+			// A config error or a degraded resource is the user's to fix, not a bug.
+			if _, refused := refusalCodes[errCode]; !refused && errCode != models.ErrConfigFileInvalid {
 				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
 					deps.String("pcConfig", pcConfig.String()),
 					deps.String("desiredState", pcConfig.DesiredFSMState))
@@ -564,6 +566,14 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 							return models.ErrConfigFileInvalid, lastSnapshot, configError.flows, errors.New(errorMsg)
 						}
+
+						// A bridge refused for a degraded resource fails now
+						// instead of waiting for the timeout.
+						if code, refused := refusalErrorCode(pcSnapshot.ServiceInfo.Admission); refused {
+							errorMsg := fmt.Sprintf("Bridge '%s' was not started: %s", a.payload.Name, pcSnapshot.ServiceInfo.Admission.Message())
+
+							return code, lastSnapshot, DFCTypeEmpty, errors.New(errorMsg)
+						}
 					}
 
 					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
@@ -583,6 +593,27 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 			}
 		}
 	}
+}
+
+// refusalCodes maps each resource bridge admission can refuse a bridge for to
+// the error code that names it. The bridge limit and unproven health have no
+// code: a deploy waits for them until the timeout.
+var refusalCodes = map[string]bridgeadmission.Cause{
+	models.ErrBridgeRefusedCPU:    bridgeadmission.CPU,
+	models.ErrBridgeRefusedMemory: bridgeadmission.Memory,
+	models.ErrBridgeRefusedDisk:   bridgeadmission.Disk,
+}
+
+// refusalErrorCode returns the error code for a bridge that bridge admission
+// refuses for a degraded resource, and false for any other refusal or none.
+func refusalErrorCode(admission bridgeadmission.Decision) (string, bool) {
+	for code, cause := range refusalCodes {
+		if admission.Cause == cause {
+			return code, true
+		}
+	}
+
+	return "", false
 }
 
 // flowsToStop decides which dataflow components to flip to stopped after a failed deploy.
