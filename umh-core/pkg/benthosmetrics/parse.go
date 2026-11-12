@@ -242,11 +242,11 @@ func parseSampleValue(line []byte) (float64, error) {
 	return strconv.ParseFloat(string(rest), 64)
 }
 
-// counterValue converts a counter's sample value. A counter value is a whole
-// number; NaN, ±Inf and a value outside int64 are errors.
+// counterValue converts a counter's sample value, truncating a fraction.
+// NaN, a negative value and one past int64 are errors.
 func counterValue(v float64) (int64, error) {
-	if math.IsNaN(v) || v < math.MinInt64 || v >= math.MaxInt64 {
-		return 0, fmt.Errorf("counter value %v is not an int64", v)
+	if math.IsNaN(v) || v < 0 || v >= math.MaxInt64 {
+		return 0, fmt.Errorf("counter value %v is not a non-negative int64", v)
 	}
 
 	return int64(v), nil
@@ -254,7 +254,7 @@ func counterValue(v float64) (int64, error) {
 
 // setLatency folds the sample value of one of the family's latency series
 // into l: a quantile sample, the sum or the count. A NaN quantile leaves its
-// percentile nil.
+// percentile nil; any other non-finite value is an error.
 func setLatency(l *Latency, prefix string, name, labels []byte, v float64) error {
 	switch string(name[len(prefix):]) {
 	case latencySumStem:
@@ -273,6 +273,10 @@ func setLatency(l *Latency, prefix string, name, labels []byte, v float64) error
 	default: // latencyStem
 		if math.IsNaN(v) {
 			return nil
+		}
+
+		if math.IsInf(v, 0) {
+			return fmt.Errorf("latency quantile %v is not finite", v)
 		}
 
 		switch string(extractLabel(labels, quantileKey)) {

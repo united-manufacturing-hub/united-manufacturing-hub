@@ -134,6 +134,11 @@ var _ = Describe("Parsing the counter values", func() {
 		Expect(err).To(MatchError(ContainSubstring("input_received")))
 	})
 
+	It("rejects a negative counter", func() {
+		_, err := parseMetrics([]byte("output_sent{label=\"\",path=\"root.output\"} -3\n"))
+		Expect(err).To(MatchError(ContainSubstring("output_sent")))
+	})
+
 	It("sums Received across inputs", func() {
 		m := Metrics{Inputs: map[string]InputMetrics{"a": {Received: 3}, "b": {Received: 4}}}
 		Expect(m.InputReceivedTotal()).To(Equal(int64(7)))

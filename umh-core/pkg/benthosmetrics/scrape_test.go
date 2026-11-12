@@ -76,7 +76,7 @@ func newBenthosServer(input, output int64, failOn map[string]int, override func(
 			case "/version":
 				_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
 			case "/metrics":
-				fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", input)
+				_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", input)
 			default: // /ping: a body that answers pong, so only the status tells the failure
 				_, _ = w.Write([]byte("pong"))
 			}
@@ -92,8 +92,8 @@ func newBenthosServer(input, output int64, failOn map[string]int, override func(
 		case "/version":
 			_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
 		case "/metrics":
-			fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", input)
-			fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} %d\n", output)
+			_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", input)
+			_, _ = fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} %d\n", output)
 		default:
 			http.NotFound(w, r)
 		}
@@ -241,6 +241,7 @@ var _ = Describe("Scrape", func() {
 		clock := func() time.Time {
 			mu.Lock()
 			defer mu.Unlock()
+
 			return vt
 		}
 
@@ -258,7 +259,7 @@ var _ = Describe("Scrape", func() {
 				_, _ = w.Write([]byte("pong"))
 			case "/metrics":
 				n := vt.Sub(time.Unix(1_000_000, 0)).Milliseconds()
-				fmt.Fprintf(w, "input_received{path=\"root.input\"} %d\n", n)
+				_, _ = fmt.Fprintf(w, "input_received{path=\"root.input\"} %d\n", n)
 			default:
 				return false // /ready and /version: the default handler answers
 			}
@@ -363,7 +364,7 @@ var _ = Describe("Scrape", func() {
 
 				return true
 			case "/elsewhere":
-				fmt.Fprint(w, "input_received{label=\"\",path=\"root.input\"} 1\n")
+				_, _ = fmt.Fprint(w, "input_received{label=\"\",path=\"root.input\"} 1\n")
 
 				return true
 			}

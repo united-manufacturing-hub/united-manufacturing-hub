@@ -22,5 +22,6 @@
 //
 // FSMv1's pkg/service/benthos_monitor keeps its own copy of the types and
 // the parser until FSMv1 is removed; this package is the one new code
-// uses. The package imports no state machine and has no global state; the caller owns each Tracker.
+// uses. The package imports no state machine and has no global state; the
+// caller owns each Tracker.
 package benthosmetrics

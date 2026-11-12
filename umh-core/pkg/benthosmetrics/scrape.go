@@ -104,15 +104,16 @@ func (t *Tracker) Scrape(ctx context.Context, port int) (Probes, Sample, error) 
 
 	probes.Version = version
 
-	metrics, err := fetchMetrics(ctx, t.client, base)
+	// The counters are stamped when /metrics was read, not when the scrape
+	// began: the probes before it take a varying time.
+	metrics, readAt, err := fetchMetrics(ctx, t.client, base, t.now)
 	if err != nil {
 		return probes, Sample{}, err
 	}
 
-	// The counters are stamped when /metrics was read, not when the scrape
-	// began: the probes before it take a varying time. The port is passed
-	// because a config update can change it without a restart.
-	return probes, t.observe(port, metrics, t.now()), nil
+	// The port is passed because a config update can change it without a
+	// restart.
+	return probes, t.observe(port, metrics, readAt), nil
 }
 
 // readyResponse is the JSON body of /ready; Error is empty when every
@@ -167,19 +168,22 @@ func fetchVersion(ctx context.Context, client *http.Client, base string) (string
 	return v.Version, nil
 }
 
-// fetchMetrics returns the parsed /metrics.
-func fetchMetrics(ctx context.Context, client *http.Client, base string) (Metrics, error) {
+// fetchMetrics returns the parsed /metrics and the time now reported when its
+// body was read.
+func fetchMetrics(ctx context.Context, client *http.Client, base string, now func() time.Time) (Metrics, time.Time, error) {
 	body, err := get(ctx, client, base+metricsPath)
 	if err != nil {
-		return Metrics{}, err
+		return Metrics{}, time.Time{}, err
 	}
+
+	readAt := now()
 
 	m, err := parseMetrics(body)
 	if err != nil {
-		return Metrics{}, fmt.Errorf("parse %s: %w", metricsPath, err)
+		return Metrics{}, time.Time{}, fmt.Errorf("parse %s: %w", metricsPath, err)
 	}
 
-	return m, nil
+	return m, readAt, nil
 }
 
 // get performs one GET with ctx and returns its body. A non-2xx answer is an

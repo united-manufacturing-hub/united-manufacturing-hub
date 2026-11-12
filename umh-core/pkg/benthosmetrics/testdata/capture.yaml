@@ -1,7 +1,10 @@
 # Config used to record testdata/metrics.txt (make benthosmetrics-fixture): a
-# /metrics body in which every series the parser reads has a non-zero value.
-# One processor fails every second message, and a fan_out broker writes to one
-# output that succeeds, one that rejects and one whose endpoint is unreachable.
+# /metrics body that carries every series the parser reads, with the message,
+# error and latency series of the processor and the outputs non-zero. One
+# processor fails every second message, and a fan_out broker writes to one
+# output that succeeds, one that rejects and one whose endpoint is
+# unreachable. The generate input reports no latency, so its latency series
+# stay empty (NaN quantiles).
 #
 # Like umh-core's generated Benthos config (RenderBenthosYAML in
 # pkg/config/benthosserviceconfig/generator.go) it sets only `http.address`
