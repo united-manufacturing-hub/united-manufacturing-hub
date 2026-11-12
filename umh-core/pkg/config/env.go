@@ -141,8 +141,8 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 					DesiredFSMState: "active", // Default desired state for Redpanda
 				},
 				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-				Topic:     redpandaserviceconfig.TopicConfig{},
-				Resources: redpandaserviceconfig.ResourcesConfig{},
+					Topic:     redpandaserviceconfig.TopicConfig{},
+					Resources: redpandaserviceconfig.ResourcesConfig{},
 				},
 			},
 			TopicBrowser: TopicBrowserConfig{

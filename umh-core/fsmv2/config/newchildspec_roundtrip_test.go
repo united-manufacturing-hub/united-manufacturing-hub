@@ -49,6 +49,20 @@ var _ = Describe("NewChildSpec round-trip (P2-2)", func() {
 		Expect(recovered.Port).To(Equal(8443))
 	})
 
+	It("renders a value containing {{ back to the value itself", func() {
+		original := sampleSpec{Host: "ab{{cd{{{ef}}"}
+
+		spec, err := config.NewChildSpec("myworker", "mytype", original, true)
+		Expect(err).ToNot(HaveOccurred())
+
+		rendered, err := config.RenderConfigTemplate(spec.UserSpec.Config, config.VariableBundle{})
+		Expect(err).ToNot(HaveOccurred())
+
+		recovered, err := config.ParseUserSpec[sampleSpec](config.UserSpec{Config: rendered})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(recovered.Host).To(Equal("ab{{cd{{{ef}}"))
+	})
+
 	It("propagates the enabled flag to ChildSpec.Enabled", func() {
 		spec, err := config.NewChildSpec("w", "t", config.BaseUserSpec{}, true)
 		Expect(err).ToNot(HaveOccurred())

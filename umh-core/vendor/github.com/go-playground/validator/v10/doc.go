@@ -563,7 +563,6 @@ Kind of like an 'enum'.
 	       noneof='red green' 'blue yellow'
 		   noneof=5 7 9
 
-
 # None Of Case Insensitive
 Works the same as noneof but is case insensitive and therefore only accepts strings.
 

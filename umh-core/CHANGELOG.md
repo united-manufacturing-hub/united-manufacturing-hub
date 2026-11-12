@@ -8,6 +8,7 @@
 
 ### Fixes
 
+- A historian setting containing `{{`, such as a password, no longer stops the historian status from being reported
 - Updated dependencies with known vulnerabilities:
   - zlib, now 1.4-r0 (CVE-2026-4738)
   - MongoDB Go driver, now 2.9.3 (CVE-2026-107324, CVE-2026-107325, CVE-2026-88031, CVE-2026-81521)
