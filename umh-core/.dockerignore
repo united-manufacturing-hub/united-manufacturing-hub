@@ -18,6 +18,9 @@ metrics.txt
 docs/
 examples/
 changelog-images/
+.changelog/
+.changie.yaml
+.tools/
 *.md
 *.txt
 
