@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Turning one observed scrape into rates.
+// Turning one observed scrape into message throughput.
 
 package benthosmetrics
 
@@ -23,48 +23,33 @@ import (
 )
 
 // observation is what observe keeps from one scrape to compare the next one
-// against: when, from which port, the totals it read, and the result observe
+// against: when, from which port, the totals it read, and the Sample observe
 // returned for it.
 type observation struct {
 	at            time.Time
 	port          int
 	inputReceived int64
 	outputSent    int64
-	result        rates
+	sample        Sample
 }
 
 // observe records one successful scrape of the Benthos at port, taken at time
-// at, and returns the rates as of that scrape. A scrape no newer than the
-// previous one is ignored and the previous rates are returned, because the
-// windows accept readings only in time order.
-func (t *Tracker) observe(port int, m Metrics, at time.Time) rates {
+// at, and returns its Sample. A scrape no newer than the previous one keeps
+// the previous throughput, because the windows accept readings only in time
+// order.
+func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 	input := m.InputReceivedTotal()
 	output := m.OutputSentTotal()
 
-	prev := t.prev
-	if prev != nil {
-		if !at.After(prev.at) {
-			return prev.result
+	if t.prev != nil {
+		if !at.After(t.prev.at) {
+			s := t.prev.sample
+			s.At, s.Metrics = at, m
+
+			return s
 		}
 
-		if port != prev.port {
-			// A port change is a new counter series: the engine and both
-			// offsets start over.
-			t.engine = newEngine()
-			t.offsets = offsets{}
-		} else {
-			// A counter that reads lower than its previous value restarted
-			// (a Benthos restart resets it to 0). The drop is folded into
-			// that counter's offset, so the series the engine is fed never
-			// goes down; both rate windows keep their samples.
-			if input < prev.inputReceived {
-				t.offsets.input += prev.inputReceived
-			}
-
-			if output < prev.outputSent {
-				t.offsets.output += prev.outputSent
-			}
-		}
+		t.adjustForRestart(port, input, output)
 	}
 
 	// The engine holds no signals, so the discarded (Fired, Readiness) is
@@ -74,32 +59,55 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) rates {
 		outputSent:    diagnosis.Known(float64(output + t.offsets.output)),
 	}, diagnosis.Environment{}, at)
 
-	result := rates{
-		Input:  rate{MessagesPerSecond: rateOf(t.engine.Measurement(inputRate))},
-		Output: rate{MessagesPerSecond: rateOf(t.engine.Measurement(outputRate))},
+	s := Sample{
+		At:                      at,
+		Metrics:                 m,
+		InputMessagesPerSecond:  messagesPerSecond(t.engine.Measurement(inputMessagesPerSecond)),
+		OutputMessagesPerSecond: messagesPerSecond(t.engine.Measurement(outputMessagesPerSecond)),
 	}
-	// IsActive keeps FSMv1's definition of an active Benthos (its
-	// metrics_state.go: the input moves); the output rate does not count.
-	result.IsActive = result.Input.MessagesPerSecond > 0
+	inputPerSecond, measured := s.InputMessagesPerSecond.Get()
+	s.IsActive = measured && inputPerSecond > 0
 
 	t.prev = &observation{
 		at:            at,
 		port:          port,
 		inputReceived: input,
 		outputSent:    output,
-		result:        result,
+		sample:        s,
 	}
 
-	return result
+	return s
 }
 
-// rateOf reads a rate measurement's slope, or 0 while the window cannot yet
-// answer: fewer than two samples, or none newer than rateWindow.
-func rateOf(r diagnosis.Reduced) float64 {
-	v, state := r.Get()
-	if state != diagnosis.StateValue {
-		return 0
+// adjustForRestart compares the totals of a newer scrape with t.prev. A new
+// port is a new counter series, so the engine and both offsets start over. A
+// counter that reads lower than before restarted (a Benthos restart resets it
+// to 0): its previous value is added to its offset, so the series the engine
+// is fed never goes down and both windows keep their samples.
+func (t *Tracker) adjustForRestart(port int, input, output int64) {
+	if port != t.prev.port {
+		t.engine = mustNewEngine()
+		t.offsets = offsets{}
+
+		return
 	}
 
-	return v
+	if input < t.prev.inputReceived {
+		t.offsets.input += t.prev.inputReceived
+	}
+
+	if output < t.prev.outputSent {
+		t.offsets.output += t.prev.outputSent
+	}
+}
+
+// messagesPerSecond reads a measurement's slope, Unknown while the window
+// cannot answer: fewer than two samples, or none newer than throughputWindow.
+func messagesPerSecond(r diagnosis.Reduced) diagnosis.Reading {
+	v, state := r.Get()
+	if state != diagnosis.StateValue {
+		return diagnosis.Unknown()
+	}
+
+	return diagnosis.Known(v)
 }

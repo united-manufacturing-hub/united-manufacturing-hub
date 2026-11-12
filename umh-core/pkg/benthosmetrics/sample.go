@@ -12,47 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Sample, what one scrape returns to the caller.
+// What one scrape returns to the caller.
 
 package benthosmetrics
 
-import "time"
+import (
+	"time"
 
-// rate carries the rate for one direction of the Benthos pipeline.
-type rate struct {
-	// MessagesPerSecond is averaged over rateWindow (60 s).
-	MessagesPerSecond float64
-}
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
+)
 
-// rates is the input and output message rates, and whether the Benthos
-// instance is active.
-type rates struct {
-	Input  rate
-	Output rate
-
-	// IsActive is Input.MessagesPerSecond > 0. Output traffic does not count.
-	IsActive bool
-}
-
-// Sample is what one scrape observed: when it began, the parsed metrics,
-// the rates, and the three probe answers (/ping, /ready, /version).
-//
-// After a failed scrape, At is set (a Tracker rejected by Scrape's guard
-// returns a zero Sample, so its At is the zero time); PingAlive and Ready
-// say whether /ping and /ready answered; Version is set only when the
-// failure was /metrics; Metrics and the rates stay zero.
-type Sample struct {
-	// At is when the scrape began. It is set before the first request, so a
-	// failed scrape also carries a fresh value.
+// Probes is what the probe endpoints /ping, /ready and /version answered.
+// Scrape returns it whether or not the scrape failed.
+type Probes struct {
+	// At is when the scrape began.
 	At time.Time
-
-	// Metrics is the parsed /metrics, kept whole: consumers read the
-	// connection counters off it.
-	Metrics Metrics
-
-	// rates is the input and output rates over rateWindow, and whether the
-	// Benthos instance is active.
-	rates
 
 	// PingAlive is whether /ping answered pong.
 	PingAlive bool
@@ -60,6 +34,27 @@ type Sample struct {
 	// Ready is whether /ready reported every connection up.
 	Ready bool
 
-	// Version is the version string /version reported.
+	// Version is the version string /version reported, or empty when
+	// /version failed.
 	Version string
+}
+
+// Sample is the measurement of one successful scrape: the parsed /metrics and
+// the message throughput computed over throughputWindow (60 s).
+type Sample struct {
+	// At is when /metrics was read.
+	At time.Time
+
+	// Metrics is the parsed /metrics, kept whole: consumers read the
+	// connection counters off it.
+	Metrics Metrics
+
+	// InputMessagesPerSecond and OutputMessagesPerSecond are Unknown until
+	// the window holds two scrapes of the same port.
+	InputMessagesPerSecond  diagnosis.Reading
+	OutputMessagesPerSecond diagnosis.Reading
+
+	// IsActive is whether InputMessagesPerSecond is known and above 0.
+	// Output traffic does not count.
+	IsActive bool
 }

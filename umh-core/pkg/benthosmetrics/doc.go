@@ -17,10 +17,10 @@
 //
 // Build one Tracker per Benthos instance with NewTracker, call
 // Scrape(ctx, port) every ScrapeInterval from a single goroutine, and read
-// the rates and metrics off the returned Sample.
+// the probe answers off the returned Probes and the metrics and message
+// throughput off the returned Sample.
 //
 // FSMv1's pkg/service/benthos_monitor keeps its own copy of the types and
 // the parser until FSMv1 is removed; this package is the one new code
-// uses. The package imports no
-// state machine and has no global state; the caller owns each Tracker.
+// uses. The package imports no state machine and has no global state; the caller owns each Tracker.
 package benthosmetrics

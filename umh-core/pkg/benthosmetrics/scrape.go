@@ -32,10 +32,7 @@ import (
 // this package are sized for it.
 const ScrapeInterval = 1 * time.Second
 
-// scrapeClientTimeout bounds each request. A scrape makes four requests
-// in sequence — /ping, /ready, /version, /metrics — so its worst case is
-// four timeouts, 1.6 s, longer than ScrapeInterval: the caller polls
-// serially, so a slow scrape delays only itself and scrapes do not back up.
+// scrapeClientTimeout bounds each of the four requests of a scrape.
 const scrapeClientTimeout = 400 * time.Millisecond
 
 // maxScrapeBody caps a response body, so a misbehaving Benthos cannot be
@@ -48,14 +45,15 @@ const maxScrapeBody = 4 << 20 // 4 MiB
 type Tracker struct {
 	client *http.Client
 
-	// engine holds the windows that turn counters into rates across scrapes.
+	// engine holds the windows that turn counters into throughput across
+	// scrapes.
 	engine *diagnosis.Engine[readings]
 
 	// prev is the previous observed scrape, nil before the first.
 	prev *observation
 
 	// offsets folds counter restarts into the series the engine is fed, one
-	// per direction; see observe.
+	// per direction; see adjustForRestart.
 	offsets offsets
 
 	now func() time.Time
@@ -69,13 +67,9 @@ type offsets struct {
 	output int64
 }
 
-// NewTracker returns a Tracker for one Benthos instance. A nil clock means
-// time.Now.
-func NewTracker(clock func() time.Time) *Tracker {
-	if clock == nil {
-		clock = time.Now
-	}
-
+// NewTracker returns a Tracker for one Benthos instance that reads the time
+// from now, which must not be nil.
+func NewTracker(now func() time.Time) *Tracker {
 	return &Tracker{
 		client: &http.Client{
 			Timeout: scrapeClientTimeout,
@@ -85,71 +79,107 @@ func NewTracker(clock func() time.Time) *Tracker {
 			// response itself is returned.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		engine: newEngine(),
-		now:    clock,
+		engine: mustNewEngine(),
+		now:    now,
 	}
 }
 
-// Scrape scrapes the Benthos at port's /ping, /ready, /version, and /metrics
+// Scrape scrapes the Benthos at port's /ping, /ready, /version and /metrics
 // endpoints once, records the counters in the windows t holds, and returns
-// the resulting Sample. All requests carry ctx, so cancellation surfaces as
-// a request error.
-func (t *Tracker) Scrape(ctx context.Context, port int) (Sample, error) {
-	if t == nil || t.client == nil || t.engine == nil || t.now == nil {
-		return Sample{}, fmt.Errorf("benthosmetrics: Tracker has no HTTP client, engine or clock; build it with NewTracker")
-	}
-
+// what the probes answered and the measured Sample. Probes is valid also when
+// the error is not nil; Sample is valid only when it is nil. All requests
+// carry ctx, so cancellation surfaces as a request error.
+func (t *Tracker) Scrape(ctx context.Context, port int) (Probes, Sample, error) {
 	base := fmt.Sprintf("http://localhost:%d", port)
-	sample := Sample{At: t.now()}
+	probes := Probes{At: t.now()}
 
-	// /ping and /ready only fill PingAlive and Ready; a failed probe does not
-	// fail the scrape. Benthos answers /ping with "pong"; another server does
-	// not. The endpoints and their handlers are cited in names.go.
-	if pingBody, err := get(ctx, t.client, base+pingPath); err == nil {
-		sample.PingAlive = bytes.Contains(pingBody, []byte("pong"))
-	}
+	// A failed /ping or /ready does not fail the scrape.
+	probes.PingAlive, _ = probePing(ctx, t.client, base)
+	probes.Ready, _ = probeReady(ctx, t.client, base)
 
-	if readyBody, err := get(ctx, t.client, base+readyPath); err == nil {
-		// /ready reports readiness as JSON whose error field is empty when
-		// every connection is up.
-		var r struct {
-			Error string `json:"error"`
-		}
-		if err := json.Unmarshal(readyBody, &r); err == nil {
-			sample.Ready = r.Error == ""
-		}
-	}
-
-	versionBody, err := get(ctx, t.client, base+versionPath)
+	version, err := fetchVersion(ctx, t.client, base)
 	if err != nil {
-		return sample, fmt.Errorf("scrape /version: %w", err)
+		return probes, Sample{}, err
 	}
-	var v struct {
-		Version string `json:"version"`
-	}
-	if err := json.Unmarshal(versionBody, &v); err != nil {
-		return sample, fmt.Errorf("decode /version: %w", err)
-	}
-	sample.Version = v.Version
 
-	metricsBody, err := get(ctx, t.client, base+metricsPath)
+	probes.Version = version
+
+	metrics, err := fetchMetrics(ctx, t.client, base)
 	if err != nil {
-		return sample, fmt.Errorf("scrape /metrics: %w", err)
+		return probes, Sample{}, err
 	}
-	// The counters are stamped when they were read, not when the scrape
-	// began: the three probes before /metrics take a varying time.
-	countersAt := t.now()
-	m, err := ParseMetricsFromBytes(metricsBody)
+
+	// The counters are stamped when /metrics was read, not when the scrape
+	// began: the probes before it take a varying time. The port is passed
+	// because a config update can change it without a restart.
+	return probes, t.observe(port, metrics, t.now()), nil
+}
+
+// readyResponse is the JSON body of /ready; Error is empty when every
+// connection is up.
+type readyResponse struct {
+	Error string `json:"error"`
+}
+
+// versionResponse is the JSON body of /version.
+type versionResponse struct {
+	Version string `json:"version"`
+}
+
+// probePing reports whether /ping answered pong. Benthos answers pong; another
+// server on the port does not.
+func probePing(ctx context.Context, client *http.Client, base string) (bool, error) {
+	body, err := get(ctx, client, base+pingPath)
 	if err != nil {
-		return sample, fmt.Errorf("parse /metrics: %w", err)
+		return false, err
 	}
-	sample.Metrics = m
 
-	// The port is passed because a config update can change it without a
-	// restart; observe treats a new port as a new counter series.
-	sample.rates = t.observe(port, m, countersAt)
+	return bytes.Contains(body, []byte("pong")), nil
+}
 
-	return sample, nil
+// probeReady reports whether /ready answered 2xx with no error.
+func probeReady(ctx context.Context, client *http.Client, base string) (bool, error) {
+	body, err := get(ctx, client, base+readyPath)
+	if err != nil {
+		return false, err
+	}
+
+	var r readyResponse
+	if err := json.Unmarshal(body, &r); err != nil {
+		return false, fmt.Errorf("decode %s: %w", readyPath, err)
+	}
+
+	return r.Error == "", nil
+}
+
+// fetchVersion returns the version string /version reports.
+func fetchVersion(ctx context.Context, client *http.Client, base string) (string, error) {
+	body, err := get(ctx, client, base+versionPath)
+	if err != nil {
+		return "", err
+	}
+
+	var v versionResponse
+	if err := json.Unmarshal(body, &v); err != nil {
+		return "", fmt.Errorf("decode %s: %w", versionPath, err)
+	}
+
+	return v.Version, nil
+}
+
+// fetchMetrics returns the parsed /metrics.
+func fetchMetrics(ctx context.Context, client *http.Client, base string) (Metrics, error) {
+	body, err := get(ctx, client, base+metricsPath)
+	if err != nil {
+		return Metrics{}, err
+	}
+
+	m, err := parseMetrics(body)
+	if err != nil {
+		return Metrics{}, fmt.Errorf("parse %s: %w", metricsPath, err)
+	}
+
+	return m, nil
 }
 
 // get performs one GET with ctx and returns its body. A non-2xx answer is an
@@ -157,11 +187,12 @@ func (t *Tracker) Scrape(ctx context.Context, port int) (Sample, error) {
 func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GET %s: %w", url, err)
 	}
+
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, err // a *url.Error, which already names the method and URL
 	}
 	// nilaway cannot prove resp is non-nil when Do returns a nil error.
 	if resp == nil {
@@ -178,10 +209,12 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 
 		return nil, fmt.Errorf("GET %s: unexpected status %d", url, resp.StatusCode)
 	}
+
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxScrapeBody+1))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GET %s: read body: %w", url, err)
 	}
+
 	if len(body) > maxScrapeBody {
 		return nil, fmt.Errorf("GET %s: response body exceeds %d bytes", url, maxScrapeBody)
 	}

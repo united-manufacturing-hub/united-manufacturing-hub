@@ -1,8 +1,12 @@
-# Spike D capture config for benthos-umh 0.16.1.
-# Matches the shape of umh-core's generated Benthos config (RenderBenthosYAML in
-# pkg/config/benthosserviceconfig/generator.go): only `http.address` and a
-# `logger.level`, and NO `metrics:` section — Benthos then uses its default
-# metrics type, whose /metrics endpoint the config's HTTP server exposes.
+# Config used to record testdata/metrics.txt (make benthosmetrics-fixture): a
+# /metrics body in which every series the parser reads has a non-zero value.
+# One processor fails every second message, and a fan_out broker writes to one
+# output that succeeds, one that rejects and one whose endpoint is unreachable.
+#
+# Like umh-core's generated Benthos config (RenderBenthosYAML in
+# pkg/config/benthosserviceconfig/generator.go) it sets only `http.address`
+# and `logger.level` and has no `metrics:` section, so /metrics serves
+# Benthos' default metrics type.
 http:
   address: 0.0.0.0:4195
 logger:
@@ -14,16 +18,16 @@ input:
     mapping: 'root = {"n": 1}'
 pipeline:
   processors:
-    - label: spike_throw_half
-      bloblang: 'root = if batch_index() % 2 == 0 { throw("spike forced processor error") } else { this }'
+    - label: fail_every_second
+      bloblang: 'root = if batch_index() % 2 == 0 { throw("forced processor error") } else { this }'
 output:
   broker:
     pattern: fan_out
     outputs:
-      - label: spike_stdout
+      - label: stdout_ok
         stdout: {}
-      - label: spike_reject
-        reject: "spike forced output error"
-      - label: spike_dead_http
+      - label: reject_all
+        reject: "forced output error"
+      - label: http_unreachable
         http_client:
-          url: http://127.0.0.1:1/spike
+          url: http://127.0.0.1:1/unreachable

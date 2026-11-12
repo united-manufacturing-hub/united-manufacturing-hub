@@ -28,7 +28,7 @@ import (
 
 // switchOutputMetrics models the Prometheus output Benthos emits for a
 // three-route switch config. Coordinators (switch, broker, fallback) emit no
-// output_sent of their own; every leaf AsyncWriter keeps its own series under
+// output_sent of their own; every leaf output keeps its own series under
 // its own path label, so a switch has one series per leaf and no aggregate.
 const switchOutputMetrics = `# HELP input_received Benthos Counter metric
 # TYPE input_received counter
@@ -63,19 +63,21 @@ output_connection_up{label="",path="root.output.switch.cases.2.output.fallback.0
 
 var _ = Describe("Parsing a switch config's output_sent", func() {
 	It("aggregates output_sent across the switch routes", func() {
-		m, err := ParseMetricsFromBytes([]byte(switchOutputMetrics))
+		m, err := parseMetrics([]byte(switchOutputMetrics))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("summing output_sent across all three routes via the total")
 		Expect(m.OutputSentTotal()).To(Equal(int64(20)), "10 + 7 + 3 across the routes")
 
 		By("summing the other counters straight off the map")
+
 		var batchSent, errorTotal, connectionUp int64
 		for _, out := range m.Outputs {
 			batchSent += out.BatchSent
 			errorTotal += out.Error
 			connectionUp += out.ConnectionUp
 		}
+
 		Expect(batchSent).To(Equal(int64(20)))
 		Expect(errorTotal).To(Equal(int64(3)), "1 + 2 + 0")
 		Expect(connectionUp).To(Equal(int64(3)), "1 + 1 + 1")
@@ -84,6 +86,7 @@ var _ = Describe("Parsing a switch config's output_sent", func() {
 		Expect(m.Outputs).To(HaveLen(6), "3 cases x 2 fallback leaves")
 
 		By("preserving the per-leaf value so a route-summing parser fails even when totals are correct")
+
 		const leafPath = "root.output.switch.cases.0.output.fallback.0"
 		Expect(m.Outputs).To(HaveKey(leafPath))
 		Expect(m.Outputs[leafPath].Sent).To(Equal(int64(10)), "the case-0 first leaf")
@@ -97,18 +100,38 @@ var _ = Describe("Parsing a switch config's output_sent", func() {
 
 var _ = Describe("Parsing the counter values", func() {
 	It("reads an exponent-form counter", func() {
-		m, err := ParseMetricsFromBytes([]byte("output_sent{label=\"\",path=\"root.output\"} 1.234567e+06\n"))
+		m, err := parseMetrics([]byte("output_sent{label=\"\",path=\"root.output\"} 1.234567e+06\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.OutputSentTotal()).To(Equal(int64(1234567)))
 	})
 
-	It("reads a NaN quantile from an idle summary as 0", func() {
-		m, err := ParseMetricsFromBytes([]byte(
+	It("reads a NaN quantile from an idle summary as no measurement", func() {
+		m, err := parseMetrics([]byte(
 			"input_received{label=\"\",path=\"root.input\"} 7\n" +
 				"input_latency_ns{label=\"\",path=\"root.input\",quantile=\"0.5\"} NaN\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.InputReceivedTotal()).To(Equal(int64(7)))
-		Expect(m.Inputs["root.input"].LatencyNS.P50).To(BeZero())
+		Expect(m.Inputs["root.input"].LatencyNS.P50).To(BeNil(),
+			"an idle series is not a latency of 0 ns")
+	})
+
+	It("reads a fractional quantile as it is", func() {
+		m, err := parseMetrics([]byte(
+			"output_latency_ns{label=\"\",path=\"root.output\",quantile=\"0.99\"} 12.5\n"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.Outputs["root.output"].LatencyNS.P99).To(HaveValue(Equal(12.5)))
+	})
+
+	It("reads the sample value, not a trailing timestamp", func() {
+		m, err := parseMetrics([]byte(
+			"input_received{label=\"a b}\",path=\"root.input\"} 5 1700000000000\n"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.InputReceivedTotal()).To(Equal(int64(5)))
+	})
+
+	It("rejects a NaN counter", func() {
+		_, err := parseMetrics([]byte("input_received{label=\"\",path=\"root.input\"} NaN\n"))
+		Expect(err).To(MatchError(ContainSubstring("input_received")))
 	})
 
 	It("sums Received across inputs", func() {
@@ -117,21 +140,25 @@ var _ = Describe("Parsing the counter values", func() {
 	})
 
 	It("parses processor counters, latency quantiles and labels", func() {
-		m, err := ParseMetricsFromBytes([]byte(
+		m, err := parseMetrics([]byte(
 			"processor_received{label=\"p\",path=\"root.pipeline.processors.0\"} 9\n" +
 				"output_latency_ns{label=\"out\",path=\"root.output\",quantile=\"0.9\"} 42\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.Process.Processors["root.pipeline.processors.0"].Received).To(Equal(int64(9)))
-		Expect(m.Outputs["root.output"].LatencyNS.P90).To(Equal(float64(42)))
+		Expect(m.Outputs["root.output"].LatencyNS.P90).To(HaveValue(Equal(float64(42))))
 		Expect(m.Outputs["root.output"].Label).To(Equal("out"))
 	})
 
 	It("walks the body without allocating per line", func() {
 		nl := bytes.Repeat([]byte{'\n'}, 4<<20)
+
 		runtime.GC()
+
 		var a, b runtime.MemStats
 		runtime.ReadMemStats(&a)
-		_, _ = ParseMetricsFromBytes(nl)
+
+		_, _ = parseMetrics(nl)
+
 		runtime.ReadMemStats(&b)
 		Expect(b.TotalAlloc-a.TotalAlloc).To(BeNumerically("<=", 1<<20),
 			"a body of newlines must not allocate a slice header per line")
@@ -142,7 +169,7 @@ var _ = Describe("Parsing the counter values", func() {
 		// keying by string(path) would allocate a fresh key on every line.
 		body := bytes.Repeat([]byte("input_received{label=\"\",path=\"root.input\"} 1\n"), 1000)
 		allocs := testing.AllocsPerRun(10, func() {
-			m, err := ParseMetricsFromBytes(body)
+			m, err := parseMetrics(body)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m.Inputs).To(HaveLen(1))
 		})
@@ -153,7 +180,7 @@ var _ = Describe("Parsing the counter values", func() {
 
 var _ = Describe("Parsing the latency sum and count series", func() {
 	It("keeps _latency_ns_sum and _latency_ns_count for an input, an output and a processor", func() {
-		m, err := ParseMetricsFromBytes([]byte(
+		m, err := parseMetrics([]byte(
 			"input_latency_ns_sum{label=\"\",path=\"root.input\"} 100000\n" +
 				"input_latency_ns_count{label=\"\",path=\"root.input\"} 50\n" +
 				"output_latency_ns_sum{label=\"\",path=\"root.output\"} 200000\n" +
@@ -182,8 +209,8 @@ var _ = Describe("Parsing the latency sum and count series", func() {
 var _ = Describe("Parsing label values and unknown names", func() {
 	It("keeps the path when a label value contains a closing brace", func() {
 		// A } inside a label value must not end the label set: the path is
-		// read past it, as in FSMv1.
-		m, err := ParseMetricsFromBytes([]byte(
+		// read past it.
+		m, err := parseMetrics([]byte(
 			"input_received{label=\"a}b\",path=\"root.input.x\"} 5\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.Inputs).To(HaveKey("root.input.x"),
@@ -196,7 +223,7 @@ var _ = Describe("Parsing label values and unknown names", func() {
 	It("ignores an unknown input_* line whose value does not parse", func() {
 		// The value is parsed only for a name the parser knows, so a user
 		// metric processor's overflowing gauge cannot fail the whole scrape.
-		m, err := ParseMetricsFromBytes([]byte(
+		m, err := parseMetrics([]byte(
 			"input_received{label=\"\",path=\"root.input\"} 7\n" +
 				"input_custom_gauge{label=\"\",path=\"root.input\"} 1e999\n" +
 				"output_sent{label=\"\",path=\"root.output\"} 4\n"))
@@ -210,7 +237,7 @@ var _ = Describe("Parsing label values and unknown names", func() {
 	It("ignores an unknown output_* line whose value does not parse", func() {
 		// The gate mirrors the input gate, so a user metric's overflowing
 		// gauge cannot fail the whole scrape either.
-		m, err := ParseMetricsFromBytes([]byte(
+		m, err := parseMetrics([]byte(
 			"input_received{label=\"\",path=\"root.input\"} 7\n" +
 				"output_custom_gauge{label=\"\",path=\"root.output\"} 1e999\n" +
 				"output_sent{label=\"\",path=\"root.output\"} 4\n"))
@@ -221,7 +248,7 @@ var _ = Describe("Parsing label values and unknown names", func() {
 	})
 
 	It("ignores an unknown processor_* line whose value does not parse", func() {
-		m, err := ParseMetricsFromBytes([]byte(
+		m, err := parseMetrics([]byte(
 			"processor_received{label=\"\",path=\"root.pipeline.processors.0\"} 7\n" +
 				"processor_custom_gauge{label=\"\",path=\"root.pipeline.processors.0\"} 1e999\n" +
 				"processor_sent{label=\"\",path=\"root.pipeline.processors.0\"} 4\n"))
@@ -233,16 +260,16 @@ var _ = Describe("Parsing label values and unknown names", func() {
 	})
 
 	It("ignores a user metric whose name ends in a latency suffix", func() {
-		// Only the exact series names pass the gates, as in FSMv1, so a
+		// Only the exact series names pass the gates, so a
 		// user metric such as input_custom_latency_ns can neither overwrite
 		// a real latency value nor fail the scrape.
-		m, err := ParseMetricsFromBytes([]byte(
+		m, err := parseMetrics([]byte(
 			"input_latency_ns{label=\"\",path=\"root.input\",quantile=\"0.5\"} 111\n" +
 				"input_custom_latency_ns{path=\"root.input\",quantile=\"0.5\"} 999\n" +
 				"output_latency_ns_sum{label=\"\",path=\"root.output\"} 5\n" +
 				"output_custom_latency_ns_sum 1e999\n"))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(m.Inputs["root.input"].LatencyNS.P50).To(Equal(float64(111)),
+		Expect(m.Inputs["root.input"].LatencyNS.P50).To(HaveValue(Equal(float64(111))),
 			"the real latency sample is unchanged")
 		Expect(m.Outputs["root.output"].LatencyNS.Sum).To(Equal(float64(5)),
 			"the real sum is unchanged")

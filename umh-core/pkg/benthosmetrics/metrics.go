@@ -67,13 +67,14 @@ type ProcessorMetrics struct {
 }
 
 // Latency summarises one latency series in nanoseconds: percentiles, sum and
-// count.
+// count. A percentile is nil while the series holds no measurement: Benthos
+// reports NaN then, which encoding/json cannot carry.
 type Latency struct {
-	P50   float64 `json:"p50"`
-	P90   float64 `json:"p90"`
-	P99   float64 `json:"p99"`
-	Sum   float64 `json:"sum"`
-	Count int64   `json:"count"`
+	P50   *float64 `json:"p50"`
+	P90   *float64 `json:"p90"`
+	P99   *float64 `json:"p99"`
+	Sum   float64  `json:"sum"`
+	Count int64    `json:"count"`
 }
 
 // InputReceivedTotal returns the sum of Received across every leaf input.
@@ -86,7 +87,9 @@ func (m Metrics) InputReceivedTotal() int64 {
 	return total
 }
 
-// OutputSentTotal returns the sum of Sent across every leaf output.
+// OutputSentTotal returns the sum of Sent across every leaf output. A fan_out
+// broker counts each message once per child, so the total is writes, not
+// messages.
 func (m Metrics) OutputSentTotal() int64 {
 	var total int64
 	for _, out := range m.Outputs {

@@ -23,14 +23,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
-// rateWindow is how far back the rates look. It is a duration, not a readings
-// count, so a skipped poll does not stretch the window past one minute.
-const rateWindow = 60 * time.Second
+// throughputWindow is how far back the throughput looks. It is a duration,
+// not a readings count, so a skipped poll does not stretch the window past
+// one minute.
+const throughputWindow = 60 * time.Second
 
 // Names of the engine's measurements.
 const (
-	inputRate  = "input_rate"
-	outputRate = "output_rate"
+	inputMessagesPerSecond  = "input_messages_per_second"
+	outputMessagesPerSecond = "output_messages_per_second"
 )
 
 // readings is one scrape's counters as the engine reads them.
@@ -39,32 +40,33 @@ type readings struct {
 	outputSent    diagnosis.Reading
 }
 
-// table declares what the engine measures: the input and output rates, each
-// the slope of its counter over rateWindow. fsmv2/diagnosis computes the
-// time windows; this table says what to measure and over how long.
+// table declares what the engine measures: the input and output messages per
+// second, each the slope of its counter over throughputWindow. fsmv2/diagnosis
+// computes the time windows; this table says what to measure and over how
+// long.
 func table() diagnosis.Table[readings] {
 	return diagnosis.Table[readings]{
 		Interval: ScrapeInterval,
 		Measurements: []diagnosis.Measurement[readings]{
 			{
-				Name:      inputRate,
+				Name:      inputMessagesPerSecond,
 				Extract:   func(s readings) diagnosis.Reading { return s.inputReceived },
 				Reduction: diagnosis.Slope,
-				Span:      rateWindow,
+				Span:      throughputWindow,
 			},
 			{
-				Name:      outputRate,
+				Name:      outputMessagesPerSecond,
 				Extract:   func(s readings) diagnosis.Reading { return s.outputSent },
 				Reduction: diagnosis.Slope,
-				Span:      rateWindow,
+				Span:      throughputWindow,
 			},
 		},
 	}
 }
 
-// newEngine builds an engine from table. table is fixed at compile time, so
-// a construction error is a bug in this package, not a runtime condition.
-func newEngine() *diagnosis.Engine[readings] {
+// mustNewEngine builds an engine from table and panics on error: table is
+// fixed at compile time, so an error is a bug in this package.
+func mustNewEngine() *diagnosis.Engine[readings] {
 	e, err := diagnosis.NewEngine(table())
 	if err != nil {
 		panic(fmt.Sprintf("benthosmetrics: invalid diagnosis table: %v", err))

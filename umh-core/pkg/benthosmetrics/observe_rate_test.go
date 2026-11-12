@@ -23,21 +23,21 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("The rates one scrape produces, over time", func() {
-	It("computes the rate by time", func() {
+var _ = Describe("The throughput one scrape produces, over time", func() {
+	It("computes the throughput by time", func() {
 		// Every scrape time is injected, so no assertion here depends on the
 		// wall clock.
 		t0 := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return t0 })
 
 		got := tr.observe(testPort, counts(10, 5), t0)
-		Expect(got.Input.MessagesPerSecond).To(BeZero(),
-			"one sample cannot be a rate")
+		Expect(got.InputMessagesPerSecond).To(Equal(unmeasured),
+			"one sample cannot be a throughput")
 
 		got = tr.observe(testPort, counts(12, 6), t0.Add(time.Second))
-		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 2, 0.5),
+		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 2, 0.5),
 			"10 -> 12 over 1s")
-		Expect(got.Output.MessagesPerSecond).To(BeNumerically("~", 1, 0.5),
+		Expect(perSecond(got.OutputMessagesPerSecond)).To(BeNumerically("~", 1, 0.5),
 			"5 -> 6 over 1s")
 		Expect(got.IsActive).To(BeTrue(), "the input moves, so the Benthos is active")
 	})
@@ -49,8 +49,8 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		tr.observe(testPort, counts(10, 5), t0)
 		tr.observe(testPort, counts(12, 6), t0.Add(time.Second))
 		got := tr.observe(testPort, counts(5, 5), t0.Add(-61*time.Second))
-		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 2, 0.5),
-			"an older scrape returns the previous rates")
+		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 2, 0.5),
+			"an older scrape keeps the previous throughput")
 		// observe_reset_test pins the equal-timestamp case.
 	})
 
@@ -64,7 +64,7 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		tr.observe(testPort, counts(0, 0), t0)
 		tr.observe(testPort, counts(30, 30), t0.Add(30*time.Second))
 		got := tr.observe(testPort, counts(90, 90), t0.Add(60*time.Second))
-		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 1.5, 0.1),
+		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 1.5, 0.1),
 			"the window is 60s of time, not two readings")
 	})
 
@@ -77,21 +77,21 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		tr.observe(testPort, counts(0, 0), t0)
 		tr.observe(testPort, counts(30, 30), t0.Add(30*time.Second))
 		got := tr.observe(testPort, counts(90, 90), t0.Add(61*time.Second))
-		Expect(got.Input.MessagesPerSecond).To(BeNumerically("~", 1.94, 0.1),
+		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 1.94, 0.1),
 			"the t0 sample is aged out, so the slope starts at +30s")
 	})
 
-	It("reads rate 0 on the first scrape of a fresh Tracker", func() {
+	It("reads no throughput on the first scrape of a fresh Tracker", func() {
 		t0 := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return t0 })
 
 		got := tr.observe(testPort, counts(100, 100), t0)
 
-		Expect(got.Input.MessagesPerSecond).To(BeZero(),
-			"the first scrape only seeds the window")
-		Expect(got.Output.MessagesPerSecond).To(BeZero())
+		Expect(got.InputMessagesPerSecond).To(Equal(unmeasured),
+			"the first scrape only seeds the window; it is not an idle flow")
+		Expect(got.OutputMessagesPerSecond).To(Equal(unmeasured))
 		Expect(got.IsActive).To(BeFalse(),
-			"IsActive reads the input rate, which is 0 on the first scrape")
+			"IsActive needs a measured input throughput")
 	})
 
 	It("does not count output-only traffic as active", func() {
@@ -99,7 +99,7 @@ var _ = Describe("The rates one scrape produces, over time", func() {
 		tr := NewTracker(func() time.Time { return t0 })
 		tr.observe(testPort, counts(10, 0), t0)
 		got := tr.observe(testPort, counts(10, 5), t0.Add(time.Second))
-		Expect(got.Output.MessagesPerSecond).To(BeNumerically("~", 5, 0.5))
+		Expect(perSecond(got.OutputMessagesPerSecond)).To(BeNumerically("~", 5, 0.5))
 		Expect(got.IsActive).To(BeFalse(),
 			"output traffic does not count")
 	})

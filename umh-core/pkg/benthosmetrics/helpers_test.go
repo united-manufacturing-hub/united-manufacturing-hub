@@ -17,6 +17,12 @@
 
 package benthosmetrics
 
+import (
+	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
+)
+
 // testPort is the port the tests scrape; only its value matters, never the
 // endpoint behind it.
 const testPort = 4195
@@ -29,3 +35,15 @@ func counts(input, output int) Metrics {
 		Outputs: map[string]OutputMetrics{"root.output": {Sent: int64(output)}},
 	}
 }
+
+// perSecond returns a measured throughput, and fails the spec when it is
+// Unknown.
+func perSecond(r diagnosis.Reading) float64 {
+	v, ok := r.Get()
+	ExpectWithOffset(1, ok).To(BeTrue(), "the throughput must be measured")
+
+	return v
+}
+
+// unmeasured is the throughput of a window that cannot answer yet.
+var unmeasured = diagnosis.Unknown()

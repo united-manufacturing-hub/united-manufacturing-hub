@@ -41,57 +41,119 @@
 
 package benthosmetrics
 
-// Input series, from internal/component/input/async_reader.go.
-const (
-	inputConnectionFailed = "input_connection_failed"
-	inputConnectionLost   = "input_connection_lost"
-	inputConnectionUp     = "input_connection_up"
-	inputLatency          = "input_latency_ns"
-	inputLatencySum       = "input_latency_ns_sum"
-	inputLatencyCount     = "input_latency_ns_count"
-	inputReceived         = "input_received"
+import (
+	"maps"
+	"slices"
 )
 
-// Output series, from internal/component/output/async_writer.go.
+// Series-name prefixes of the three families, and the default paths Benthos
+// uses when an input or output series has no path label.
 const (
-	outputBatchSent        = "output_batch_sent"
-	outputConnectionFailed = "output_connection_failed"
-	outputConnectionLost   = "output_connection_lost"
-	outputConnectionUp     = "output_connection_up"
-	outputError            = "output_error"
-	outputLatency          = "output_latency_ns"
-	outputLatencySum       = "output_latency_ns_sum"
-	outputLatencyCount     = "output_latency_ns_count"
-	outputSent             = "output_sent"
-)
-
-// Processor series, from internal/component/processor/auto_observed.go.
-const (
-	processorBatchReceived = "processor_batch_received"
-	processorBatchSent     = "processor_batch_sent"
-	processorError         = "processor_error"
-	processorLatency       = "processor_latency_ns"
-	processorLatencySum    = "processor_latency_ns_sum"
-	processorLatencyCount  = "processor_latency_ns_count"
-	processorReceived      = "processor_received"
-	processorSent          = "processor_sent"
-)
-
-// Series-name prefixes, the default paths Benthos uses when a series has no
-// path label, and the latency stems as they follow a family prefix. The
-// _sum and _count stems are the summary exposition client_golang writes.
-const (
-	inputPrefixName     = "input_"
-	outputPrefixName    = "output_"
-	processorPrefixName = "processor_"
+	inputPrefix     = "input_"
+	outputPrefix    = "output_"
+	processorPrefix = "processor_"
 
 	rootInputPath  = "root.input"
 	rootOutputPath = "root.output"
+)
 
+// The latency series of a family, as they follow its prefix. The _sum and
+// _count stems are the summary exposition client_golang writes.
+const (
 	latencyStem      = "latency_ns"
 	latencySumStem   = "latency_ns_sum"
 	latencyCountStem = "latency_ns_count"
 )
+
+// inputCounters maps each input counter series, from
+// internal/component/input/async_reader.go, to the setter of the field it fills.
+var inputCounters = map[string]func(InputMetrics, int64) InputMetrics{
+	"input_connection_failed": func(m InputMetrics, v int64) InputMetrics {
+		m.ConnectionFailed = v
+
+		return m
+	},
+	"input_connection_lost": func(m InputMetrics, v int64) InputMetrics {
+		m.ConnectionLost = v
+
+		return m
+	},
+	"input_connection_up": func(m InputMetrics, v int64) InputMetrics {
+		m.ConnectionUp = v
+
+		return m
+	},
+	"input_received": func(m InputMetrics, v int64) InputMetrics {
+		m.Received = v
+
+		return m
+	},
+}
+
+// outputCounters maps each output counter series, from
+// internal/component/output/async_writer.go, to the setter of the field it fills.
+var outputCounters = map[string]func(OutputMetrics, int64) OutputMetrics{
+	"output_batch_sent": func(m OutputMetrics, v int64) OutputMetrics {
+		m.BatchSent = v
+
+		return m
+	},
+	"output_connection_failed": func(m OutputMetrics, v int64) OutputMetrics {
+		m.ConnectionFailed = v
+
+		return m
+	},
+	"output_connection_lost": func(m OutputMetrics, v int64) OutputMetrics {
+		m.ConnectionLost = v
+
+		return m
+	},
+	"output_connection_up": func(m OutputMetrics, v int64) OutputMetrics {
+		m.ConnectionUp = v
+
+		return m
+	},
+	"output_error": func(m OutputMetrics, v int64) OutputMetrics {
+		m.Error = v
+
+		return m
+	},
+	"output_sent": func(m OutputMetrics, v int64) OutputMetrics {
+		m.Sent = v
+
+		return m
+	},
+}
+
+// processorCounters maps each processor counter series, from
+// internal/component/processor/auto_observed.go, to the setter of the field it fills.
+var processorCounters = map[string]func(ProcessorMetrics, int64) ProcessorMetrics{
+	"processor_batch_received": func(m ProcessorMetrics, v int64) ProcessorMetrics {
+		m.BatchReceived = v
+
+		return m
+	},
+	"processor_batch_sent": func(m ProcessorMetrics, v int64) ProcessorMetrics {
+		m.BatchSent = v
+
+		return m
+	},
+	"processor_error": func(m ProcessorMetrics, v int64) ProcessorMetrics {
+		m.Error = v
+
+		return m
+	},
+	"processor_received": func(m ProcessorMetrics, v int64) ProcessorMetrics {
+		m.Received = v
+
+		return m
+	},
+	"processor_sent": func(m ProcessorMetrics, v int64) ProcessorMetrics {
+		m.Sent = v
+
+		return m
+	},
+}
 
 // The HTTP endpoints Benthos serves: /ping, /version and /metrics from
 // internal/api/api.go, /ready from internal/stream/type.go.
@@ -102,19 +164,20 @@ const (
 	metricsPath = "/metrics"
 )
 
-// knownSeriesNames lists every series name the parser reads, so the fixture
-// spec can require each one in a recorded /metrics body.
+// knownSeriesNames lists every series name the parser reads, sorted: the
+// counters of each family and its three latency series.
 func knownSeriesNames() []string {
-	return []string{
-		inputConnectionFailed, inputConnectionLost, inputConnectionUp, inputReceived,
-		inputLatency, inputLatencySum, inputLatencyCount,
+	var names []string
 
-		outputBatchSent, outputConnectionFailed, outputConnectionLost,
-		outputConnectionUp, outputError, outputSent,
-		outputLatency, outputLatencySum, outputLatencyCount,
+	names = slices.AppendSeq(names, maps.Keys(inputCounters))
+	names = slices.AppendSeq(names, maps.Keys(outputCounters))
 
-		processorBatchReceived, processorReceived, processorSent,
-		processorBatchSent, processorError,
-		processorLatency, processorLatencySum, processorLatencyCount,
+	names = slices.AppendSeq(names, maps.Keys(processorCounters))
+	for _, prefix := range []string{inputPrefix, outputPrefix, processorPrefix} {
+		names = append(names, prefix+latencyStem, prefix+latencySumStem, prefix+latencyCountStem)
 	}
+
+	slices.Sort(names)
+
+	return names
 }
