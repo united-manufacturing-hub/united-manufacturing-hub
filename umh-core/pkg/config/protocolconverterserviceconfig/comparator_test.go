@@ -808,11 +808,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 	})
 
-	Describe("ConfigsEqualRuntimeWithDFCState", func() {
-		// A desired-stopped DFC renders an empty benthos config on disk, so its
-		// observed config never matches the full desired config. These specs pin
-		// that the state-aware comparison skips such a DFC (ENG-5108 regression:
-		// a stopped write DFC otherwise reports permanent false divergence).
+	Describe("ConfigsEqualRuntime", func() {
 		conn := connectionserviceconfig.ConnectionServiceConfigRuntime{
 			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{Target: "google.com", Port: 80},
 		}
@@ -824,25 +820,24 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			},
 		}
-		// observed reflects the empty benthos.yaml of a stopped write DFC.
 		observed := ProtocolConverterServiceConfigRuntime{ConnectionServiceConfig: conn}
 
-		It("reports divergence when the write DFC is not stopped", func() {
-			Expect(ConfigsEqualRuntimeWithDFCState(desired, observed, false, false)).To(BeFalse())
-			Expect(ConfigDiffRuntimeWithDFCState(desired, observed, false, false)).To(ContainSubstring("WriteDFC"))
+		It("reports divergence when the write DFC differs", func() {
+			Expect(ConfigsEqualRuntime(desired, observed)).To(BeFalse())
+			Expect(ConfigDiffRuntime(desired, observed)).To(ContainSubstring("WriteDFC"))
 		})
 
-		It("skips the write DFC when it is desired-stopped", func() {
-			Expect(ConfigsEqualRuntimeWithDFCState(desired, observed, false, true)).To(BeTrue())
-			Expect(ConfigDiffRuntimeWithDFCState(desired, observed, false, true)).To(BeEmpty())
+		It("reports no divergence when connection and both DFCs are equal", func() {
+			Expect(ConfigsEqualRuntime(desired, desired)).To(BeTrue())
+			Expect(ConfigDiffRuntime(desired, desired)).To(BeEmpty())
 		})
 
-		It("keeps comparing connection and read DFC even when write is stopped", func() {
+		It("reports divergence when only the connection differs", func() {
 			divergentConn := desired
 			divergentConn.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigRuntime{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{Target: "other.com", Port: 80},
 			}
-			Expect(ConfigsEqualRuntimeWithDFCState(divergentConn, observed, false, true)).To(BeFalse())
+			Expect(ConfigsEqualRuntime(divergentConn, desired)).To(BeFalse())
 		})
 	})
 })

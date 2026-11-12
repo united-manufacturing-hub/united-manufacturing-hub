@@ -91,6 +91,11 @@ type MockProtocolConverterService struct {
 
 	GetConfigResult protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 
+	// ManagerReadDFC and ManagerWriteDFC are what ManagerDFCConfigs returns. UpdateInManager
+	// writes the flow configs it receives into them and keeps their DesiredFSMState.
+	ManagerReadDFC  config.DataFlowComponentConfig
+	ManagerWriteDFC config.DataFlowComponentConfig
+
 	// Return values for each method
 	GenerateConfigResultDFC dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
@@ -482,7 +487,22 @@ func (m *MockProtocolConverterService) UpdateInManager(
 		ConnectionServiceConfig: m.GenerateConfigResultConnection,
 	}
 
-	return m.UpdateInManagerError
+	if m.UpdateInManagerError != nil {
+		return m.UpdateInManagerError
+	}
+
+	m.ManagerReadDFC.DataFlowComponentServiceConfig = cfg.DataflowComponentReadServiceConfig
+	m.ManagerWriteDFC.DataFlowComponentServiceConfig = cfg.DataflowComponentWriteServiceConfig
+
+	return nil
+}
+
+// ManagerDFCConfigs mocks reading the read and write DFC configs held in the DFC manager.
+func (m *MockProtocolConverterService) ManagerDFCConfigs(protConvName string) (config.DataFlowComponentConfig, config.DataFlowComponentConfig, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.ManagerReadDFC, m.ManagerWriteDFC, nil
 }
 
 // RemoveFromManager mocks removing a ProtocolConverter (and its underlying DFC/Connection) from the manager.
