@@ -122,7 +122,8 @@ type MockProtocolConverterService struct {
 	// this reason. Empty admits every bridge.
 	BridgeMustWaitReason string
 	// BridgeMustWaitCause is the cause BridgeAdmission returns while
-	// BridgeMustWaitReason is set.
+	// BridgeMustWaitReason is set. bridgeadmission.None means BridgeLimit,
+	// because a refusal always has a cause.
 	BridgeMustWaitCause bridgeadmission.Cause
 }
 
@@ -759,5 +760,10 @@ func (m *MockProtocolConverterService) BridgeAdmission(snapshot fsm.SystemSnapsh
 		return bridgeadmission.Decision{Admit: true}
 	}
 
-	return bridgeadmission.Decision{Cause: m.BridgeMustWaitCause, Reason: m.BridgeMustWaitReason}
+	cause := m.BridgeMustWaitCause
+	if cause == bridgeadmission.None {
+		cause = bridgeadmission.BridgeLimit
+	}
+
+	return bridgeadmission.Decision{Cause: cause, Reason: m.BridgeMustWaitReason}
 }
