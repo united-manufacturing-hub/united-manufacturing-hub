@@ -1,7 +1,7 @@
 # Save data to the Historian
 
-A Historian bridge subscribes to the Unified Namespace and writes one data contract into
-TimescaleDB. You create one bridge per contract you want to keep.
+A Historian bridge reads one data contract from the Unified Namespace, beneath its own location,
+and writes it into TimescaleDB. You create one bridge per contract you want to keep.
 
 The bridge is a write flow only: it has no read flow, because its source is the UNS rather than a
 device.
@@ -19,7 +19,8 @@ bridge has nothing to connect to and deployment fails with an error saying so.
 3. Select the instance. The connection host and port are prefilled read-only from that instance's
    Historian connection, so the bridge's health check always targets the configured database.
 4. In the write flow's output, set `data_contract_name` to the contract you want to store, written
-   **without the version suffix**: `pump`, not `pump_v1`.
+   **without the version suffix**: `pump`, not `pump_v1`. The source topics must name the same
+   contract, see [Which topics the bridge reads](#which-topics-the-bridge-reads).
 5. Deploy.
 
 There is no read flow to configure and no address table to map, so the protocol and address steps of
@@ -61,9 +62,38 @@ schema:
 Tag identity lives in the shared dimension tables `umh.topic`, `umh.tag`, and `umh.location`. See
 [Query the Historian](querying.md) for the layout and how to read it back.
 
-The bridge subscribes to the whole UNS by default and drops messages whose contract doesn't match
-`data_contract_name`, so there is no topic regex to keep in sync. Narrow the source topics only if
-you want to stop unrelated messages from reaching the output at all.
+### Which topics the bridge reads
+
+The bridge reads only the source topics of its write flow, and umh-core checks them for every write
+flow. Each source topic:
+
+- starts with `^umh\.v1\.` followed by the bridge location, so the bridge reads data at or beneath
+  its own location only.
+- names one data contract: `_historian`, `_raw`, or one declared under `dataContracts:`.
+- lists the versions of a versioned contract, such as `_pump_v[1-2]`, never `_pump_v\d+`.
+
+For a bridge at `acme.cologne` that stores `_pump_v1` and `_pump_v2`, at any level beneath the
+location:
+
+```
+^umh\.v1\.acme\.cologne\.(?:[^._][^.]*\.)*_pump_v[1-2]\.
+```
+
+For the default contract `historian`, the topic ends in `_historian\.` with no version. To store
+data from several sites in one bridge, place the bridge at a location above them.
+
+A new bridge reads the latest declared version of the contract. The bridge's tooltip in the data
+model view shows which versions it saves. To also save another version, add it to the source topics.
+
+A write flow whose source topics break a rule does not start, for example a topic that covers the
+whole UNS, another location, or every contract of a location. The bridge shows degraded, and its
+status names each rejected topic, why it is rejected, and an example of a valid topic. That example
+matches only data published at the bridge location itself. For data at levels beneath it, use the
+pattern above.
+
+The source topics must name the contract in `data_contract_name`. The output refuses a batch that
+holds any message of another contract and retries it, so the write flow stores nothing until the two
+match.
 
 ## Connecting to a different database
 
@@ -96,9 +126,20 @@ older than 16, a missing `timescaledb` or `ltree` extension, and a role that can
 the Plugins tab first: if **Auth** is not valid there, fix the connection before looking at the
 bridge.
 
+**The bridge stopped saving after an update to umh-core 0.45.0.** Historian bridges created before
+that release read the whole UNS, so their write flow does not start. Change their source topics as
+in [Which topics the bridge reads](#which-topics-the-bridge-reads).
+
 **The bridge is running but nothing arrives.** The output logs once when it stores its first
-message, and once if data is flowing but none of it matches `data_contract_name`. A mismatch between
-the contract in your topics and the configured name is the usual cause.
+message. If the contract in the source topics differs from `data_contract_name`, the output refuses
+every batch and logs an error at most every two minutes that names the contracts that arrived. Set
+`data_contract_name` to the contract in the source topics, without the version. The error also
+suggests a topic pattern; umh-core rejects that pattern, so use the one in
+[Which topics the bridge reads](#which-topics-the-bridge-reads) instead.
+
+If the output logs nothing at all, no data of the versions in the source topics is published beneath
+the bridge location. Check the Topic Browser: devices may publish a newer version, such as
+`_pump_v3`, that the source topics don't list yet.
 
 **Rows are being dropped.** Two cases can never be written and are dropped rather than retried: a
 tag whose datatype flips between numeric and text, and two different values at the same millisecond.
