@@ -14,11 +14,13 @@
 
 # Shared path filters for umh-core CI workflows.
 # Used by build-umh-core.yml, test-umh-core.yml, and go-analysis.yml.
-# `code` excludes markdown, the changelog and umh-core/docs/, so changes there skip Go analysis, tests and build.
+# `code` excludes markdown, the changelog (fragments, release files, changie config) and umh-core/docs/,
+# so changes there skip Go analysis, tests and build.
+# `changelogEntry` is what require-changelog-entry accepts: a new fragment or an edited release file.
 
 code:
-  - "umh-core/!(*.md)"
-  - "umh-core/!(changelog-images|docs|*.md)/**/!(*.md)"
+  - "umh-core/!(*.md|.changie.yaml)"
+  - "umh-core/!(changelog-images|docs|.changelog|.changie.yaml|*.md)/**/!(*.md)"
   - "Makefile"
   - ".github/workflows/pull-request.yml"
   - ".github/workflows/build-umh-core.yml"
@@ -28,3 +30,8 @@ code:
 changelog:
   - "umh-core/CHANGELOG.md"
   - "umh-core/changelog-images/**"
+  - "umh-core/.changelog/**"
+  - "umh-core/.changie.yaml"
+changelogEntry:
+  - "umh-core/.changelog/unreleased/*.yaml"
+  - "umh-core/.changelog/[0-9]*.md"
