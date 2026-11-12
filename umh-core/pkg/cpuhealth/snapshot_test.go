@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // One snapshot per tick: Read stamps a single Timestamp and takes every field
-// off the same read; the whole snapshot is built from OUTSIDE pkg/diagnosis
+// off the same read; the whole snapshot is built from OUTSIDE fsmv2/diagnosis
 // through Known and Unknown (so a Reading with no constructor cannot satisfy
 // this file); DeriveEnvironment turns exactly three facts — Virtualized,
 // whether Quota names a POSITIVE number, and the sticky PsiAvailable — into an
@@ -29,8 +29,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -68,7 +68,7 @@ var _ = Describe("one snapshot per tick", func() {
 
 	It("stamps one timestamp, builds the environment from three facts, and fails the whole snapshot only on an unparsable cpu.stat", func() {
 		// a real Read builds every field off one read, and the
-		// snapshot is constructible from OUTSIDE pkg/diagnosis through Known and
+		// snapshot is constructible from OUTSIDE fsmv2/diagnosis through Known and
 		// Unknown. The single Timestamp is set once per tick.
 		ctx := context.Background()
 		smp, err := sampler(nil).Read(ctx)

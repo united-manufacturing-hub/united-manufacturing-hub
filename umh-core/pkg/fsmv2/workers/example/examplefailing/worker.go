@@ -19,10 +19,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 )
 
 const workerTypeName = "examplefailing"
@@ -69,19 +69,6 @@ func NewFailingWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed FailingDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *FailingWorker) GetDependencies() *FailingDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*FailingDependencies)
-	if !ok || d == nil {
-		panic("FailingWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState returns the current observed state of the failing worker.
 func (w *FailingWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
@@ -90,7 +77,7 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desired fsmv2.
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	// Framework state and action history are injected before COS and consumed by
 	// the collector wrapper after NewObservation returns. Calling them here satisfies
@@ -102,7 +89,7 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desired fsmv2.
 	// Demonstration-only: this worker writes into deps from CollectObservedState
 	// to simulate runtime conditions (failure cycles / panic flags) that
 	// production configuration drives directly. Real workers MUST keep
-	// CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
+	// CollectObservedState pure I/O reads. See fsmv2/README.md
 	// "I/O isolation rule".
 	if desired != nil {
 		cfg := fsmv2.ExtractConfig[ExamplefailingConfig](desired)
@@ -160,7 +147,7 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState
 // updateDependenciesFromConfig applies config values to dependencies.
 // Called from CollectObservedState so dependency mutations happen outside DeriveDesiredState.
 func (w *FailingWorker) updateDependenciesFromConfig(cfg ExamplefailingConfig) {
-	d := w.GetDependencies()
+	d := w.Deps()
 	d.SetShouldFail(cfg.ShouldFail)
 	d.SetMaxFailures(cfg.MaxFailures)
 	d.SetRestartAfterFailures(cfg.RestartAfterFailures)
@@ -171,7 +158,7 @@ func (w *FailingWorker) updateDependenciesFromConfig(cfg ExamplefailingConfig) {
 
 func init() {
 	register.Worker[ExamplefailingConfig, ExamplefailingStatus, *FailingDependencies](workerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewFailingWorker(id, &DefaultConnectionPool{}, logger, sr)
 		})
 }

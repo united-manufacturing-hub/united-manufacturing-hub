@@ -21,6 +21,10 @@ const (
 	// Hardware information sources.
 	HWIDFilePath  = "/data/hwid"
 	DataMountPath = "/data"
+
+	// CgroupMountPath is the cgroup mount point: the v2 hierarchy itself, or on v1
+	// the directory that holds the controller mounts.
+	CgroupMountPath = "/sys/fs/cgroup"
 )
 
 // Container Operation Timeouts - Level 1 Service (depends on S6)

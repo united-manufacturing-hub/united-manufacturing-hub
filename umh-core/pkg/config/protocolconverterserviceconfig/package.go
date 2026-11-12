@@ -81,6 +81,10 @@ type ProtocolConverterServiceConfigRuntime struct {
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
 }
 
+// DFCDesiredStateStopped is the ReadDFCDesiredState and WriteDFCDesiredState value that keeps
+// the read or write DFC stopped while the rest of the protocol converter runs.
+const DFCDesiredStateStopped = "stopped"
+
 // ProtocolConverterServiceConfigSpec is the **user‑facing** wrapper that binds a
 // reusable Template to concrete runtime Variables and optional placement
 // metadata (`Location`). This is what can be found in the unmarshalled YAML file.

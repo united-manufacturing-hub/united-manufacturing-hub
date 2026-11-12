@@ -19,10 +19,12 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 )
 
 // buildUserScope constructs the template rendering scope from a ProtocolConverter's
@@ -53,6 +55,48 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 	}
 
 	return nil
+}
+
+// writeTopicViolation returns why the write flow of pcConfig may not subscribe to its
+// topics within fullConfig, which supplies the agent location and the declared data
+// contracts, or nil when it may. The rule itself lives in BuildRuntimeConfig, which
+// reports it as a WriteFlowConfigError; every other render failure is left to the
+// reconciliation loop, which reports it on the bridge.
+//
+// A write flow that BuildRuntimeConfig still renders, because BYPASS_WRITE_FLOW_VALIDATION
+// allows it, has no violation, so the action deploys it.
+//
+// Actions pass the config from the config manager rather than from the system snapshot,
+// because the snapshot carries no config (see fsm.GetManagerSnapshots).
+func writeTopicViolation(pcConfig config.ProtocolConverterConfig, fullConfig config.FullConfig) error {
+	_, err := runtime_config.BuildRuntimeConfig(
+		pcConfig.ProtocolConverterServiceConfig,
+		convertIntMapToStringMap(fullConfig.Agent.Location),
+		nil, // TODO: add global vars
+		fullConfig.Historian,
+		fullConfig.DataContracts,
+		fullConfig.Agent.BypassWriteFlowValidation,
+		runtime_config.BridgedByPlaceholder,
+		pcConfig.Name,
+	)
+
+	var writeFlowErr *runtime_config.WriteFlowConfigError
+	if errors.As(err, &writeFlowErr) && !writeFlowErr.Bypassed {
+		return writeFlowErr.Err
+	}
+
+	return nil
+}
+
+// introducedWriteTopicViolation returns the write topic violation of a bridge after a
+// change, unless the bridge already had one before it.
+func introducedWriteTopicViolation(before, after config.ProtocolConverterConfig, beforeConfig, afterConfig config.FullConfig) error {
+	err := writeTopicViolation(after, afterConfig)
+	if err == nil || writeTopicViolation(before, beforeConfig) != nil {
+		return nil
+	}
+
+	return err
 }
 
 // validateReadProtocolConverterDFC validates a read ProtocolConverterDFC's state and configuration.
@@ -181,6 +225,57 @@ func observedBenthosToServiceConfig(obs benthosserviceconfig.BenthosServiceConfi
 			Buffer:             obs.Buffer,
 		},
 	}
+}
+
+// DFCType represents the type of dataflow component configuration.
+type DFCType string
+
+const (
+	// DFCTypeRead represents a read dataflow component.
+	DFCTypeRead DFCType = "read"
+	// DFCTypeWrite represents a write dataflow component.
+	DFCTypeWrite DFCType = "write"
+	// DFCTypeBoth represents both read and write dataflow components being updated simultaneously.
+	DFCTypeBoth DFCType = "both"
+	// DFCTypeEmpty represents no dataflow component (connection/location update only).
+	DFCTypeEmpty DFCType = "empty"
+)
+
+// String returns the string representation of the DFCType.
+func (d DFCType) String() string {
+	return string(d)
+}
+
+// IsValid checks if the DFCType has a valid value.
+func (d DFCType) IsValid() bool {
+	switch d {
+	case DFCTypeRead, DFCTypeWrite, DFCTypeBoth, DFCTypeEmpty:
+		return true
+	default:
+		return false
+	}
+}
+
+// flowName maps a DFCType to the user-facing noun used in error messages shown
+// in the Management Console. DFC is a legacy internal term; the UI calls these
+// "flow config".
+func (d DFCType) flowName() string {
+	switch d {
+	case DFCTypeRead:
+		return "read flow config"
+	case DFCTypeWrite:
+		return "write flow config"
+	default:
+		return d.String() + " flow config"
+	}
+}
+
+func (d DFCType) includesRead() bool {
+	return d == DFCTypeRead || d == DFCTypeBoth
+}
+
+func (d DFCType) includesWrite() bool {
+	return d == DFCTypeWrite || d == DFCTypeBoth
 }
 
 // dfcTypeFromPresence returns a DFCType based on boolean flags for read/write presence.

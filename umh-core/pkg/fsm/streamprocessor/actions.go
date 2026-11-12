@@ -22,12 +22,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	dataflowfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
@@ -407,12 +407,12 @@ func (i *Instance) safeBenthosMetrics() (input, output struct{ ConnectionUp, Con
 	metrics := i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	return struct{ ConnectionUp, ConnectionLost int64 }{
-			ConnectionUp:   metrics.InputConnectionUpTotal(),
-			ConnectionLost: metrics.InputConnectionLostTotal(),
-		}, struct{ ConnectionUp, ConnectionLost int64 }{
-			ConnectionUp:   metrics.OutputConnectionUpTotal(),
-			ConnectionLost: metrics.OutputConnectionLostTotal(),
-		}
+		ConnectionUp:   metrics.InputConnectionUpTotal(),
+		ConnectionLost: metrics.InputConnectionLostTotal(),
+	}, struct{ ConnectionUp, ConnectionLost int64 }{
+		ConnectionUp:   metrics.OutputConnectionUpTotal(),
+		ConnectionLost: metrics.OutputConnectionLostTotal(),
+	}
 }
 
 // IsOtherDegraded checks for certain states that should never happen

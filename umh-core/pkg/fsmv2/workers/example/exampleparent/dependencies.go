@@ -15,7 +15,7 @@
 package exampleparent
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
 // ParentDependencies provides access to tools needed by parent worker actions.

@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
@@ -57,19 +57,6 @@ func NewPersistenceDependencies(
 		store:            store,
 		scheduler:        scheduler,
 	}
-}
-
-// NewStoreOnlyDependencies builds a seed PersistenceDependencies carrying only
-// the triangular store, for parent wiring at cmd/main.go to publish via
-// register.SetDeps. The persistence worker constructor detects the missing
-// BaseDependencies and rebuilds a full dependencies struct with the worker's
-// own identity, logger, and stateReader. Panics on nil store.
-func NewStoreOnlyDependencies(store storage.TriangularStoreInterface) *PersistenceDependencies {
-	if store == nil {
-		panic("NewStoreOnlyDependencies: store cannot be nil")
-	}
-
-	return &PersistenceDependencies{store: store}
 }
 
 func (d *PersistenceDependencies) GetStore() storage.TriangularStoreInterface {

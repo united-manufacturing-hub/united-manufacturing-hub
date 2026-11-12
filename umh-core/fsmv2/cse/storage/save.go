@@ -1,0 +1,292 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package storage
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
+)
+
+// SaveOptions configures role-specific behavior for saveWithDelta.
+// Different roles (identity, desired, observed) have different CSE semantics.
+type SaveOptions struct {
+	// Role is the triangular model role (identity, desired, observed).
+	Role string
+
+	// IncrementVersion controls whether _version is incremented on update.
+	// True for desired (optimistic locking), false for observed (ephemeral state).
+	IncrementVersion bool
+
+	// SkipDeltaCheck disables change detection. No role sets it; identity
+	// keeps it false so its first save still emits a created delta.
+	SkipDeltaCheck bool
+
+	// UpdateTimestampOnNoChange updates _updated_at even when data hasn't changed.
+	// True for observed (enables staleness detection - "when was this worker last seen?").
+	UpdateTimestampOnNoChange bool
+}
+
+// Pre-configured SaveOptions for each triangular role.
+var (
+	// IdentitySaveOptions for immutable worker identity.
+	// Identity is created once and never updated.
+	IdentitySaveOptions = SaveOptions{
+		Role:           RoleIdentity,
+		SkipDeltaCheck: false, // Enable delta for creation events
+	}
+
+	// DesiredSaveOptions for user intent/configuration.
+	// Increments version for optimistic locking to prevent lost updates.
+	DesiredSaveOptions = SaveOptions{
+		Role:             RoleDesired,
+		IncrementVersion: true, // Optimistic locking
+	}
+
+	// ObservedSaveOptions for system reality/state.
+	// Always updates timestamp even on no change (staleness detection).
+	ObservedSaveOptions = SaveOptions{
+		Role:                      RoleObserved,
+		UpdateTimestampOnNoChange: true, // Staleness detection
+	}
+)
+
+// saveResult reports what writeDocument did, so saveWithDelta can log after
+// releasing the lock.
+type saveResult struct {
+	isNew   bool
+	changed bool
+	changes []FieldChange
+	diff    *Diff
+}
+
+// saveWithDelta is the unified write path for all triangular store save operations.
+// Eliminates ~60% code duplication across SaveIdentity, SaveDesired, SaveObserved
+// by using role-specific configuration for versioning, timestamps, and delta checking.
+func (ts *TriangularStore) saveWithDelta(
+	ctx context.Context,
+	workerType, id string,
+	doc persistence.Document,
+	opts SaveOptions,
+) (changed bool, diff *Diff, err error) {
+	if doc == nil {
+		return false, nil, errors.New("document cannot be nil")
+	}
+
+	docID, ok := doc["id"].(string)
+	if !ok || docID == "" {
+		return false, nil, errors.New("document must have non-empty string 'id' field")
+	}
+
+	if docID != id {
+		return false, nil, fmt.Errorf("document id %q does not match parameter id %q", docID, id)
+	}
+
+	result, err := ts.writeDocument(ctx, workerType, id, doc, opts)
+	if err != nil {
+		return false, nil, err
+	}
+
+	if !opts.SkipDeltaCheck {
+		switch {
+		case result.isNew:
+			ts.logger.Debug(opts.Role+"_created",
+				deps.String("worker", ts.hierarchyPath(ctx, workerType, id)))
+		case result.changed:
+			ts.logger.Debug(opts.Role+"_changed",
+				deps.String("worker", ts.hierarchyPath(ctx, workerType, id)),
+				deps.Any("changes", result.changes))
+		}
+	}
+
+	return result.changed, result.diff, nil
+}
+
+func (ts *TriangularStore) hierarchyPath(ctx context.Context, workerType, id string) string {
+	if identity, err := ts.LoadIdentity(ctx, workerType, id); err == nil {
+		if hp, ok := identity["hierarchy_path"].(string); ok {
+			return hp
+		}
+	}
+
+	return ""
+}
+
+func (ts *TriangularStore) writeDocument(
+	ctx context.Context,
+	workerType, id string,
+	doc persistence.Document,
+	opts SaveOptions,
+) (saveResult, error) {
+	ts.documentWriteMu.Lock()
+	defer ts.documentWriteMu.Unlock()
+
+	collectionName := workerType + "_" + opts.Role
+
+	existing, err := ts.store.Get(ctx, collectionName, id)
+
+	isNew := err != nil && errors.Is(err, persistence.ErrNotFound)
+	if err != nil && !isNew {
+		return saveResult{}, fmt.Errorf("failed to load existing %s for %s/%s: %w", opts.Role, workerType, id, err)
+	}
+
+	var changes []FieldChange
+
+	var diff *Diff
+
+	if !opts.SkipDeltaCheck && !isNew {
+		var hasChanges bool
+
+		hasChanges, changes, diff = ts.performDeltaCheck(existing, doc, opts.Role)
+
+		if !hasChanges {
+			if opts.UpdateTimestampOnNoChange && existing != nil {
+				now := ts.clock.Now().UTC()
+				existing[FieldUpdatedAt] = now
+
+				err = ts.store.Update(ctx, collectionName, id, existing)
+				if err != nil {
+					return saveResult{}, fmt.Errorf("failed to update timestamp for %s/%s: %w", workerType, id, err)
+				}
+
+				ts.invalidateSnapshot(workerType, id)
+			}
+
+			return saveResult{}, nil
+		}
+	}
+
+	if !opts.SkipDeltaCheck && isNew {
+		diff = ts.computeCreatedDiff(doc, opts.Role)
+	}
+
+	// A save keeps the stored tombstone (see FieldDeletedAt) and drops any
+	// the caller sends. A removed worker's collector can still save, and that
+	// save must not make the worker look alive again.
+	delete(doc, FieldDeletedAt)
+	delete(doc, FieldDeletedBy)
+
+	if !isNew && hasTombstone(existing) {
+		doc[FieldDeletedAt] = existing[FieldDeletedAt]
+		doc[FieldDeletedBy] = existing[FieldDeletedBy]
+	}
+
+	// Preserve version for roles that don't increment (observed state)
+	if !isNew && existing != nil && !opts.IncrementVersion {
+		if version, ok := existing[FieldVersion]; ok {
+			doc[FieldVersion] = version
+		}
+	}
+
+	// Assign sync ID before write for atomicity (crash between write and ID update would lose ID)
+	syncID := ts.syncID.Add(1)
+	doc[FieldSyncID] = syncID
+
+	ts.injectMetadataWithOptions(doc, opts, isNew)
+
+	if isNew {
+		_, err = ts.store.Insert(ctx, collectionName, doc)
+	} else {
+		err = ts.store.Update(ctx, collectionName, id, doc)
+	}
+
+	if err != nil {
+		return saveResult{}, fmt.Errorf("failed to save %s for %s/%s: %w", opts.Role, workerType, id, err)
+	}
+
+	if diff != nil && ts.deltaStore != nil {
+		ts.appendDeltaOrWarn(ctx, DeltaEntry{
+			SyncID:     syncID,
+			WorkerType: workerType,
+			ID:         id,
+			Role:       opts.Role,
+			Changes:    diff,
+			Timestamp:  ts.clock.Now().UTC(),
+		})
+	}
+
+	ts.invalidateSnapshot(workerType, id)
+
+	return saveResult{isNew: isNew, changed: true, changes: changes, diff: diff}, nil
+}
+
+// injectMetadataWithOptions adds or updates CSE metadata fields based on SaveOptions.
+func (ts *TriangularStore) injectMetadataWithOptions(doc persistence.Document, opts SaveOptions, isNew bool) {
+	if doc == nil {
+		return
+	}
+
+	now := ts.clock.Now().UTC()
+
+	if isNew {
+		doc[FieldCreatedAt] = now
+		doc[FieldVersion] = int64(1)
+	} else {
+		doc[FieldUpdatedAt] = now
+
+		// Optimistic locking for desired state
+		if opts.IncrementVersion {
+			// Handle both int64 (native) and float64 (after JSON round-trip)
+			var currentVersion int64
+
+			switch v := doc[FieldVersion].(type) {
+			case int64:
+				currentVersion = v
+			case float64:
+				currentVersion = int64(v)
+			default:
+				currentVersion = 0
+			}
+
+			doc[FieldVersion] = currentVersion + 1
+		}
+	}
+	// NOTE: collected_at is a business field set by FSM v2 workers, not injected by CSE.
+}
+
+// computeCreatedDiff creates a Diff for document creation with all business fields as Added.
+func (ts *TriangularStore) computeCreatedDiff(doc persistence.Document, role string) *Diff {
+	if doc == nil {
+		return nil
+	}
+
+	cseFields := getCSEFields(role)
+
+	cseFieldSet := make(map[string]bool, len(cseFields))
+	for _, f := range cseFields {
+		cseFieldSet[f] = true
+	}
+
+	added := make(map[string]interface{})
+
+	for key, val := range doc {
+		if !cseFieldSet[key] && key != "id" {
+			added[key] = val
+		}
+	}
+
+	if len(added) == 0 {
+		return nil
+	}
+
+	return &Diff{
+		Added:    added,
+		Modified: make(map[string]ModifiedField),
+		Removed:  []string{},
+	}
+}

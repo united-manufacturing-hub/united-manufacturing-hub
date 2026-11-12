@@ -22,12 +22,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benbjohnson/clock"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -38,31 +42,42 @@ const (
 	// InstanceName names the child in Ref.
 	InstanceName = "cpu"
 
-	// FilesystemDepsKey is the register.SetDeps key under which a caller
+	// FilesystemDepsKey is the register.SetGlobalDeps key under which a caller
 	// publishes the filesystem.Service the sampler reads the cgroup files
 	// through. Publish before the instance spawns: a caller that meant to
 	// publish a fixture and forgot gets no error, and that instance silently
 	// reads the real machine instead. NewDeps does the lookup.
 	//
-	// The key is not WorkerType: the typed deps registry keys on the string
-	// alone, so two payloads cannot share one key. Same convention as
-	// configworker.ConfigManagerDepsKey.
+	// A key holds one value, so each payload gets its own key rather than
+	// WorkerType. configworker.ConfigManagerDepsKey follows the same convention.
 	FilesystemDepsKey = WorkerType + ".filesystem"
-
-	// cgroupBase is the cgroup mount point: the v2 hierarchy itself, or on v1
-	// the directory that holds the controller mounts.
-	cgroupBase = "/sys/fs/cgroup"
 
 	// PollInterval is how often the worker samples the cgroup. simple.Register
 	// also publishes it as this worker's observation interval, and
 	// pkg/fsmv2/adapter calls an observation stale at three times it.
 	PollInterval = 1 * time.Second
+
+	// MaxObservationAge is the oldest a reading may be and still count as
+	// Fresh for fsmv2client.GetFresh. At three polls, one slow or missed poll
+	// leaves the reading Fresh.
+	MaxObservationAge = 3 * PollInterval
 )
 
 // Ref is the pair the configworker upserts this child under behind
 // USE_FSMV2_CPU, and that a reader fetches its status back under through
 // fsmv2client.
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
+
+// FilesystemKey names the filesystem.Service the sampler reads the cgroup
+// files through. NewDeps reads it first, then the global published under
+// FilesystemDepsKey, and falls back to filesystem.NewDefaultService().
+var FilesystemKey = config.NewDependencyKey[filesystem.Service](FilesystemDepsKey)
+
+// ClockKey names the clock.Clock the sampler stamps every Sample from. NewDeps
+// does the lookup and falls back to clock.New() when the map holds nothing
+// under it: a scenario that meant to publish a mock clock and forgot gets no
+// error, and its samples are stamped from wall time instead.
+var ClockKey = config.NewDependencyKey[clock.Clock]("cpu.clock")
 
 // CPUConfig is empty: the CPU worker takes no configuration.
 type CPUConfig struct{}
@@ -97,6 +112,10 @@ type CPUStatus struct {
 // pointer, would die with that copy.
 type CPUDeps struct {
 	*deps.BaseDependencies
+
+	// fs is the filesystem the sampler reads through, kept so a spec can check
+	// that NewDeps fell back to the real machine.
+	fs filesystem.Service
 
 	// sampler reads the cgroup. Behind the interface it is a pointer holding the
 	// counter baselines every rate is derived from, so they survive the tick.
@@ -152,12 +171,12 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 // recordMetrics publishes the evidence for the framework's worker-metrics
 // exporter, which turns each name into umh_fsmv2_worker_<name>
-// (WorkerMetricsExporter.getOrCreateGauge, pkg/fsmv2/supervisor/metrics/metrics.go).
+// (WorkerMetricsExporter.getOrCreateGauge, fsmv2/supervisor/metrics/metrics.go).
 func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.Details) {
 	// GaugeCPULastSampleUnix freezes along with every gauge below when a tick
 	// cannot measure: Poll returns before recordMetrics runs, and the collector
 	// reloads and re-publishes the previous gauge values instead
-	// (Collector.wrapNewObservation, pkg/fsmv2/supervisor/internal/collection/collector.go).
+	// (Collector.wrapNewObservation, fsmv2/supervisor/internal/collection/collector.go).
 	// Its age is what reveals the freeze.
 	m.SetGauge(deps.GaugeCPULastSampleUnix, float64(sampledAt.Unix()))
 
@@ -180,22 +199,32 @@ func recordMetrics(m *deps.MetricsRecorder, sampledAt time.Time, det cpuhealth.D
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a cgroup sampler
-// (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
-// it, and builds the table and engine.
+// (precedent: pkg/fsm/container/machine.go) over the filesystem FilesystemKey's
+// doc names, takes one startup snapshot through it, and builds the table and
+// engine.
 //
 // A read that fails at startup leaves its own figure zero, which drops that
 // capacity signal from this instance's table for its whole lifetime; a later
 // successful read does not restore it (ENG-5752).
-func NewDeps(_ deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	fs := register.GetDeps[filesystem.Service](FilesystemDepsKey)
+func NewDeps(_ deps.Identity, bd *deps.BaseDependencies, dependencies map[string]any) *CPUDeps {
+	fs, ok := config.LookupDependency(dependencies, FilesystemKey)
+	if !ok {
+		fs = register.GlobalDeps[filesystem.Service](FilesystemDepsKey)
+	}
 	if fs == nil {
 		fs = filesystem.NewDefaultService()
 	}
 
-	sampler := cpuhealth.NewLinuxSampler(fs, cgroupBase)
+	clk, ok := config.LookupDependency(dependencies, ClockKey)
+	if !ok {
+		clk = clock.New()
+	}
+
+	sampler := cpuhealth.NewLinuxSamplerWithClock(fs, constants.CgroupMountPath, clk)
 
 	d := &CPUDeps{
 		BaseDependencies: bd,
+		fs:               fs,
 		sampler:          sampler,
 	}
 

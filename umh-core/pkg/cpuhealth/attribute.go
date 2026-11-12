@@ -18,7 +18,7 @@
 package cpuhealth
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // describeCause maps one fired signal to a Cause. Each signal names its own cause

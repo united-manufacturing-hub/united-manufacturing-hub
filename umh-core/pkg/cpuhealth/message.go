@@ -38,7 +38,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // ComposeMessage turns a Verdict and its derived Details into the message an

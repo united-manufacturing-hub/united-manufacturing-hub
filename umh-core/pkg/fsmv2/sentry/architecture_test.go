@@ -26,6 +26,8 @@ import (
 
 	//nolint:revive // dot import for Ginkgo DSL
 	. "github.com/onsi/ginkgo/v2"
+	//nolint:revive // dot import for Gomega matchers
+	. "github.com/onsi/gomega"
 )
 
 // Violation represents an architectural violation found in code.
@@ -53,7 +55,7 @@ var _ = Describe("FSMv2 Sentry Architecture", func() {
 
 				if len(violations) > 0 {
 					message := formatViolations("Direct Zap Import Violations", violations,
-						`Production code must use the FSMLogger interface (pkg/fsmv2/deps)
+						`Production code must use the FSMLogger interface (fsmv2/deps)
 instead of importing zap directly. Direct zap imports are only allowed in:
 
   - deps/logger_impl.go (the FSMLogger implementation)
@@ -61,7 +63,7 @@ instead of importing zap directly. Direct zap imports are only allowed in:
   - integration/test_logger.go (test infrastructure)
 
 CORRECT:
-  import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+  import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
   logger.Info("something happened", deps.String("key", "value"))
 
 WRONG:
@@ -110,31 +112,30 @@ func getFsmv2Dir() string {
 	return filepath.Dir(filepath.Dir(filename))
 }
 
-// getCseDir returns the path to the cse package directory.
-func getCseDir() string {
-	_, filename, _, _ := runtime.Caller(0)
-	// Navigate from fsmv2/sentry/ up to pkg/, then into cse/
-	pkgDir := filepath.Dir(filepath.Dir(filepath.Dir(filename)))
+// getFrameworkDir returns the directory of the fsmv2 module, which holds
+// the framework, cse and persistence code.
+func getFrameworkDir() string {
+	dir := filepath.Join(getFsmv2Dir(), "..", "..", "fsmv2")
+	// The scans below skip a directory they cannot walk, so a wrong path here
+	// would let every check pass.
+	Expect(dir).To(BeADirectory())
 
-	return filepath.Join(pkgDir, "cse")
-}
-
-// getPersistenceDir returns the path to the persistence package directory.
-func getPersistenceDir() string {
-	_, filename, _, _ := runtime.Caller(0)
-	// Navigate from fsmv2/sentry/ up to pkg/, then into persistence/
-	pkgDir := filepath.Dir(filepath.Dir(filepath.Dir(filename)))
-
-	return filepath.Join(pkgDir, "persistence")
+	return dir
 }
 
 // getAllDirs returns all directories that should be scanned for architecture tests.
 func getAllDirs() []string {
 	return []string{
 		getFsmv2Dir(),
-		getCseDir(),
-		getPersistenceDir(),
+		getFrameworkDir(),
 	}
+}
+
+// isSkippedDir reports whether a scan skips dir: the module's logger and
+// diagnosis packages.
+func isSkippedDir(dir string) bool {
+	return dir == filepath.Join(getFrameworkDir(), "logger") ||
+		dir == filepath.Join(getFrameworkDir(), "diagnosis")
 }
 
 // validateNoDirectZapUsage scans all non-test Go files for direct imports of
@@ -145,6 +146,10 @@ func validateNoDirectZapUsage(baseDir string) []Violation {
 	err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
+		}
+
+		if info.IsDir() && isSkippedDir(path) {
+			return filepath.SkipDir
 		}
 
 		if info.IsDir() || !strings.HasSuffix(path, ".go") {
@@ -222,7 +227,7 @@ func checkForZapImports(filename string) []Violation {
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "DIRECT_ZAP_IMPORT",
-				Message: fmt.Sprintf("Direct import of %q is not allowed; use the FSMLogger interface from pkg/fsmv2/deps instead", importPath),
+				Message: fmt.Sprintf("Direct import of %q is not allowed; use the FSMLogger interface from fsmv2/deps instead", importPath),
 			})
 		}
 	}
@@ -240,6 +245,10 @@ func validateNoErrorDotError(baseDir string) []Violation {
 			return nil
 		}
 
+		if info.IsDir() && isSkippedDir(path) {
+			return filepath.SkipDir
+		}
+
 		if info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
@@ -248,7 +257,7 @@ func validateNoErrorDotError(baseDir string) []Violation {
 			return nil
 		}
 
-		if strings.Contains(path, "internal/validator") || strings.Contains(path, "/sentry/") {
+		if strings.Contains(path, "fsmv2/validator") || strings.Contains(path, "/sentry/") {
 			return nil
 		}
 

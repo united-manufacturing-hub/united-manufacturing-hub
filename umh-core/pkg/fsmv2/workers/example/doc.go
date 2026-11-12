@@ -15,8 +15,8 @@
 // Package example provides reference implementations for FSMv2 workers.
 //
 // For conceptual overview and framework documentation, see:
-//   - pkg/fsmv2/README.md - Triangle Model, concepts, quick start
-//   - pkg/fsmv2/doc.go - Implementation patterns, API contracts
+//   - fsmv2/README.md - Triangle Model, concepts, quick start
+//   - fsmv2/doc.go - Implementation patterns, API contracts
 //
 // # Example workers
 //
@@ -73,11 +73,11 @@
 //  3. Copy from examplechild/ as a starting point.
 //
 // See the register package for the register.Worker contract and the
-// SetDeps/GetDeps convention for parent-injected dependencies.
+// SetGlobalDeps/GlobalDeps convention for parent-injected dependencies.
 //
 // # Patterns demonstrated
 //
-// For pattern documentation and requirements, see pkg/fsmv2/doc.go.
+// For pattern documentation and requirements, see fsmv2/doc.go.
 //
 // States:
 //   - examplechild/state/ implements child worker states.

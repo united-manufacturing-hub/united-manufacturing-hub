@@ -79,6 +79,8 @@ var _ = Describe("Config divergence of a flow that waits for its connection", fu
 			map[string]string{},
 			nil,
 			nil,
+			nil,
+			false,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)

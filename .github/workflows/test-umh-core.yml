@@ -83,6 +83,7 @@ jobs:
           path: |
             umh-core/unit-test-report.xml
             umh-core/unit-test-report-parallel.xml
+            umh-core/unit-test-report-fsmv2.xml
           retention-days: 1
 
   integration-tests:

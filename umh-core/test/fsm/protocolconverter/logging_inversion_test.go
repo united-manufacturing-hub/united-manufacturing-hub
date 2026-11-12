@@ -29,13 +29,13 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -104,6 +104,8 @@ var _ = Describe("ConfigDivergence reset and staging", func() {
 			map[string]string{},
 			nil,
 			nil,
+			nil,
+			false,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)
@@ -249,6 +251,8 @@ var _ = Describe("ConfigDivergence composition into StatusReason", func() {
 			map[string]string{},
 			nil,
 			nil,
+			nil,
+			false,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)
@@ -370,6 +374,8 @@ var _ = Describe("ConfigDivergence composition into StatusReason", func() {
 			map[string]string{},
 			nil,
 			nil,
+			nil,
+			false,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)
@@ -520,6 +526,8 @@ var _ = Describe("Heartbeat WARN on the PC divergence branch", func() {
 			map[string]string{},
 			nil,
 			nil,
+			nil,
+			false,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)
@@ -658,6 +666,8 @@ var _ = Describe("Capstone: full Reconcile lifecycle under sustained divergence"
 			map[string]string{},
 			nil,
 			nil,
+			nil,
+			false,
 			runtime_config.BridgedByPlaceholder,
 			componentName,
 		)

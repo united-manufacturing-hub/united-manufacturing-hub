@@ -39,14 +39,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	fsmv2memory "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 
 	// Blank-import the state subpackage so its init() registers the initial
@@ -60,22 +61,22 @@ import (
 // the shared registry published under this deps key.
 const WorkerTypeName = "configworker"
 
-// ConfigManagerDepsKey is the register.SetDeps key under which parent wiring
-// publishes the config.ConfigManager the worker polls each tick. It is
-// distinct from WorkerTypeName (which holds the shared registry) because the
-// typed deps registry keys on the string alone, so the two payloads cannot
-// share a key.
+// ConfigManagerDepsKey is the register.SetGlobalDeps key for the
+// config.ConfigManager the worker polls each tick. It cannot be WorkerTypeName,
+// because that key already holds the shared registry and a key holds one value.
 //
 // TODO(ENG-4400): temporary. Once the worker reads config.yaml directly it owns
 // the file, no longer polls the manager, and this key and its wiring in
 // cmd/main.go go away.
 const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 
-// CPUEnabledDepsKey is the register.SetDeps key holding the bool for whether
-// the fsmv2 CPU monitor child should run (USE_FSMV2_CPU). It is a key of its
-// own rather than a second payload under ConfigManagerDepsKey, for the reason
-// given there.
+// CPUEnabledDepsKey is the register.SetGlobalDeps key for the bool that says
+// whether the fsmv2 CPU monitor child runs (USE_FSMV2_CPU).
 const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
+
+// MemoryMonitorEnabledDepsKey is the register.SetGlobalDeps key for the bool
+// that says whether the fsmv2 memory monitor child runs (USE_FSMV2_MEMORY_MONITOR).
+const MemoryMonitorEnabledDepsKey = WorkerTypeName + ".memorymonitorenabled"
 
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
 // to the shared dynamicchildren registry. See the package doc for why it does
@@ -93,32 +94,35 @@ type ConfigworkerWorker struct {
 	// set once at construction from CPUEnabledDepsKey (the USE_FSMV2_CPU env
 	// flag, read in cmd/main.go and never persisted).
 	cpuEnabled bool
+
+	memoryMonitorEnabled bool
 }
 
 // NewConfigworkerWorker creates a config worker holding the registry published
-// under WorkerTypeName via register.SetDeps. It fails when no registry was published,
-// surfacing the missing wiring at construction instead of at the first registry
-// read (a nil *Registry would otherwise panic on a method call far from the cause).
+// under WorkerTypeName via register.SetGlobalDeps. It returns an error when no
+// registry was published.
 func NewConfigworkerWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*ConfigworkerWorker, error) {
-	shared := register.GetDeps[*dynamicchildren.Registry](WorkerTypeName)
+	shared := register.GlobalDeps[*dynamicchildren.Registry](WorkerTypeName)
 	if shared == nil {
-		return nil, fmt.Errorf("no registry published for worker type %q: call register.SetDeps before constructing", WorkerTypeName)
+		return nil, fmt.Errorf("no registry published for worker type %q: call register.SetGlobalDeps before constructing", WorkerTypeName)
 	}
 
 	// The config manager is optional: FF-off paths and unit tests never publish
 	// one, and the historian reconcile in CollectObservedState no-ops when it is
 	// nil (mirroring the fsmv2client.GetClient nil guard).
-	configManager := register.GetDeps[config.ConfigManager](ConfigManagerDepsKey)
-	cpuEnabled := register.GetDeps[bool](CPUEnabledDepsKey)
+	configManager := register.GlobalDeps[config.ConfigManager](ConfigManagerDepsKey)
+	cpuEnabled := register.GlobalDeps[bool](CPUEnabledDepsKey)
+	memoryMonitorEnabled := register.GlobalDeps[bool](MemoryMonitorEnabledDepsKey)
 
 	w := &ConfigworkerWorker{
-		registry:      shared,
-		configManager: configManager,
-		cpuEnabled:    cpuEnabled,
+		registry:             shared,
+		configManager:        configManager,
+		cpuEnabled:           cpuEnabled,
+		memoryMonitorEnabled: memoryMonitorEnabled,
 	}
 	w.InitBase(identity, logger, stateReader)
 
@@ -145,39 +149,32 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 
 	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
 	w.reconcileHistorian(ctx)
-	w.reconcileCPU(ctx)
+	w.reconcileMonitorChild(fsmv2cpu.Ref, w.cpuEnabled, deps.FeatureSupportCPU)
+	w.reconcileMonitorChild(fsmv2memory.Ref, w.memoryMonitorEnabled, deps.FeatureSupportMemory)
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil
 }
 
-// reconcileCPU upserts or deletes the CPU monitor child. It logs rather than
-// returns the upsert error, so a transient failure never fails the tick.
-func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
-	_ = ctx
-
+func (w *ConfigworkerWorker) reconcileMonitorChild(ref dynamicchildren.Ref, enabled bool, feature deps.Feature) {
 	client := fsmv2client.GetClient()
 	if client == nil {
 		return
 	}
 
-	if err := syncCPU(client, w.cpuEnabled); err != nil {
-		w.Logger().SentryWarn(deps.FeatureSupportCPU, w.Identity().HierarchyPath,
-			"cpu watch: upsert failed", deps.Err(err))
+	if err := syncMonitorChild(client, ref, enabled); err != nil {
+		w.Logger().SentryWarn(feature, w.Identity().HierarchyPath,
+			ref.WorkerType+" watch: upsert failed", deps.Err(err))
 	}
 }
 
-// syncCPU upserts the CPU monitor child when the flag is on and deletes it when
-// off. The flag cannot change mid-run, so today the Delete removes nothing; it
-// is kept so that a change which does let the flag flip cannot leave a CPU child
-// behind.
-func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
+func syncMonitorChild(client *fsmv2client.FSMv2Client, ref dynamicchildren.Ref, enabled bool) error {
 	if !enabled {
-		client.Delete(fsmv2cpu.Ref)
+		client.Delete(ref)
 
 		return nil
 	}
 
-	return client.Upsert(fsmv2cpu.Ref, nil)
+	return client.Upsert(ref, nil)
 }
 
 // reconcileHistorian reads the live config and syncs the historian monitor
@@ -224,7 +221,7 @@ func syncHistorian(client *fsmv2client.FSMv2Client, cfg config.FullConfig) error
 
 func init() {
 	register.Worker[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps](WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewConfigworkerWorker(id, logger, sr)
 		})
 }

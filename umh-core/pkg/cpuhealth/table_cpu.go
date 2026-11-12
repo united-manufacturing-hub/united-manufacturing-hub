@@ -20,7 +20,7 @@ package cpuhealth
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // cpuTable declares the CPU signals and measurements. Add a row here and the

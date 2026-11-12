@@ -95,8 +95,8 @@ type WriteConfigExtra struct {
 //
 //	source:
 //	  topics: |-
-//	    - umh.v1.enterprise.site.line.device.*
-//	    - umh.v1.enterprise.site.line.otherDevice.*
+//	    - ^umh\.v1\.enterprise\.site\.line\.device\._historian\.
+//	    - ^umh\.v1\.enterprise\.site\.line\.otherDevice\._historian\.
 //	processing:
 //	  type: "nodered_js"
 //	  code: |-

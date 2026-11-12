@@ -14,7 +14,7 @@
 
 package constants
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 
 // TODO: clean up these constants.
 const (

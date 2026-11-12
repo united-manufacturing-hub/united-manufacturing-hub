@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // CPUCgroupInfo contains cgroup v2 CPU metrics including throttling information.
@@ -96,7 +97,7 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 	info := &CPUCgroupInfo{}
 
 	// Read cpu.max for quota/period
-	cpuMaxPath := "/sys/fs/cgroup/cpu.max"
+	cpuMaxPath := constants.CgroupMountPath + "/cpu.max"
 
 	cpuMaxData, err := c.fs.ReadFile(ctx, cpuMaxPath)
 	if err != nil {
@@ -113,7 +114,7 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 	info.PeriodMicros = periodMicros
 
 	// Read cpu.stat for throttling information
-	cpuStatPath := "/sys/fs/cgroup/cpu.stat"
+	cpuStatPath := constants.CgroupMountPath + "/cpu.stat"
 
 	cpuStatData, err := c.fs.ReadFile(ctx, cpuStatPath)
 	if err != nil {

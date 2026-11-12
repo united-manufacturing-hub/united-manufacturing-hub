@@ -18,12 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -162,7 +163,24 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	err := a.configManager.AtomicSetLocation(ctx, *a.location)
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to read current config: %s", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrRetryConfigReadFailed, nil, a.outboundChannel, models.EditInstance, nil)
+
+		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
+	}
+
+	if err := a.bridgesStoppedByLocation(currentConfig); err != nil {
+		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.EditInstance, nil)
+
+		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
+	}
+
+	err = a.configManager.AtomicSetLocation(ctx, *a.location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)
@@ -175,6 +193,30 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	// TODO: check against observedState as well
 
 	return "Successfully updated instance location", nil, nil
+}
+
+// bridgesStoppedByLocation reports the bridges of currentConfig whose valid write flow
+// topics the location change moves outside the bridge's new location. Bridges whose topics
+// were already invalid are left to the reconciliation loop, which reports them on the
+// bridge.
+func (a *EditInstanceAction) bridgesStoppedByLocation(currentConfig config.FullConfig) error {
+	updatedConfig := currentConfig.Clone()
+	updatedConfig.ApplyAgentLocation(*a.location)
+
+	var broken []string
+
+	for i, pc := range updatedConfig.ProtocolConverter {
+		if err := introducedWriteTopicViolation(currentConfig.ProtocolConverter[i], pc, currentConfig, updatedConfig); err != nil {
+			broken = append(broken, fmt.Sprintf("bridge %q: %v", pc.Name, err))
+		}
+	}
+
+	if len(broken) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("the new location moves the write flow topics of these bridges outside their location; update their topics first: %s",
+		strings.Join(broken, "; "))
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.

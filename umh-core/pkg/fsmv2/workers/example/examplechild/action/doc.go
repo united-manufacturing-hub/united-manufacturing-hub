@@ -50,7 +50,7 @@
 //
 // # Idempotency
 //
-// For idempotency requirements, see pkg/fsmv2/doc.go "Actions" section.
+// For idempotency requirements, see fsmv2/doc.go "Actions" section.
 //
 // Example patterns:
 //

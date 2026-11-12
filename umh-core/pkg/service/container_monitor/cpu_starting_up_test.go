@@ -24,13 +24,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -77,8 +77,8 @@ func containerLimitedTo2Of4Cores() cgroupFixture {
 
 var _ = Describe("CollectCPUFromWorker while the CPU worker is starting up", func() {
 	It("reports CPU degraded with the starting-up message and sends no cpuHealth key until the usage is measured", func() {
-		register.SetDeps[filesystem.Service](fsmv2cpu.FilesystemDepsKey, containerLimitedTo2Of4Cores())
-		DeferCleanup(register.ClearDeps, fsmv2cpu.FilesystemDepsKey)
+		register.SetGlobalDeps[filesystem.Service](fsmv2cpu.FilesystemDepsKey, containerLimitedTo2Of4Cores())
+		DeferCleanup(register.ClearGlobalDeps, fsmv2cpu.FilesystemDepsKey)
 
 		// The real registered worker, so the stored status is the one the
 		// framework writes: Poll, then the worker's Health function.

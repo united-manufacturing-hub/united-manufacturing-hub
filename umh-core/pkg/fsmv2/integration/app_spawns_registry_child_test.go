@@ -20,11 +20,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 
 	// Blank-import the kernel config worker plus the dynamic worker the registry
 	// declares, so their init() registrations exist before the supervisor ticks.
@@ -41,7 +41,7 @@ var _ = Describe("Application supervisor spawns a registry-declared worker", fun
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	It("spawns the helloworld child to Running and keeps the config-worker kernel present", func() {
@@ -52,7 +52,7 @@ var _ = Describe("Application supervisor spawns a registry-declared worker", fun
 		// the app supervisor constructs the application worker (so the COS read
 		// sees a non-nil handle).
 		w := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		// (2) Upsert a helloworld child. Empty MoodFilePath means the worker never
 		// goes "sad", so it deterministically reaches Running.

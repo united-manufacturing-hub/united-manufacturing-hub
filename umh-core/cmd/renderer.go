@@ -19,71 +19,31 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 )
 
-// childNode is a single FSMv2 supervisor child in the rendered YAML document.
-type childNode struct {
-	Name       string `yaml:"name"`
-	WorkerType string `yaml:"workerType"`
-	UserSpec   *struct {
-		Config string `yaml:"config"`
-	} `yaml:"userSpec,omitempty"`
-}
-
-// communicatorSpec is the userSpec config for the communicator child. It is
-// rendered via yaml.Marshal so that credentials round-trip byte-for-byte even
-// when they contain characters (quotes, backslashes, newlines) that inline
-// string formatting would mangle.
-type communicatorSpec struct {
-	RelayURL     string `yaml:"relayURL"`
-	InstanceUUID string `yaml:"instanceUUID"`
-	AuthToken    string `yaml:"authToken"`
-	Timeout      string `yaml:"timeout"`
-	State        string `yaml:"state"`
-}
-
-// renderSupervisorChildrenYAML renders the FSMv2 supervisor children document.
-// The persistence child is always present; the communicator child appears only
-// when communicatorEnabled reports credentials (E2 contract), and the
-// certfetcher child only when, in addition, the gatekeeper is on. The instanceUUID is
-// interpolated into the communicator's userSpec config.
+// renderSupervisorChildrenYAML renders the FSMv2 supervisor children document:
+// the persistence child, then the children the Management Console module
+// returned, in their order. The document is built with yaml.Marshal, so a
+// child's config reaches the supervisor unchanged.
 //
-// A marshal failure is returned rather than swallowed. Both structs hold only
-// strings, so yaml.Marshal has no reachable failure mode today -- but an empty
-// document is not a degraded result, it is a supervisor with no children at
-// all, persistence included. That is the silent bring-up stall this package
-// exists to prevent, so the error travels up to the caller instead.
-func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) (string, error) {
-	children := []childNode{
-		{Name: "persistence", WorkerType: "persistence"},
-	}
+// The document carries no child's dependencies. They are live values that
+// yaml cannot carry, and the document is stored; addChildDependencies hands
+// them to the supervisor instead.
+//
+// A marshal failure is returned rather than swallowed: an empty document is a
+// supervisor with no children at all, persistence included.
+func renderSupervisorChildrenYAML(registered []fsmv2config.ChildSpec) (string, error) {
+	children := make([]fsmv2config.ChildSpec, 0, 1+len(registered))
+	children = append(children, fsmv2config.ChildSpec{Name: "persistence", WorkerType: "persistence"})
 
-	if communicatorEnabled(cfg) {
-		specBytes, err := yaml.Marshal(communicatorSpec{
-			RelayURL:     cfg.APIURL,
-			InstanceUUID: instanceUUID,
-			AuthToken:    cfg.AuthToken,
-			Timeout:      "10s",
-			State:        "running",
+	for _, c := range registered {
+		children = append(children, fsmv2config.ChildSpec{
+			Name:       c.Name,
+			WorkerType: c.WorkerType,
+			UserSpec:   c.UserSpec,
+			Enabled:    c.Enabled,
 		})
-		if err != nil {
-			return "", fmt.Errorf("marshal communicator userSpec config: %w", err)
-		}
-
-		children = append(children, childNode{
-			Name:       "communicator",
-			WorkerType: "communicator",
-			UserSpec: &struct {
-				Config string `yaml:"config"`
-			}{Config: string(specBytes)},
-		})
-	}
-
-	// The certfetcher fetches user certificates from the Management Console, so
-	// it follows the communicator's rule: without credentials it is omitted.
-	if cfg.UseGatekeeper && communicatorEnabled(cfg) {
-		children = append(children, childNode{Name: "certfetcher", WorkerType: "certfetcher"})
 	}
 
 	doc, err := yaml.Marshal(map[string]any{"children": children})
@@ -92,4 +52,22 @@ func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) (
 	}
 
 	return string(doc), nil
+}
+
+// addChildDependencies adds the dependencies of the module's children to deps,
+// the map the supervisor hands to every child. They stay live values. A child
+// may not set a key that is already set, so the module cannot replace one of
+// umh-core's own dependencies; the error names the child by its position.
+func addChildDependencies(deps map[string]any, registered []fsmv2config.ChildSpec) error {
+	for i, c := range registered {
+		for key, value := range c.Dependencies {
+			if _, ok := deps[key]; ok {
+				return fmt.Errorf("child %d sets the dependency %q, which is already set", i, key)
+			}
+
+			deps[key] = value
+		}
+	}
+
+	return nil
 }

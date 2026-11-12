@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -72,6 +74,10 @@ const BridgedByPlaceholder = "unimplemented"
 //   - The function is pure: it performs no side-effects and never mutates *Spec*.
 //   - Passing a nil *Spec* results in an explicit error; an empty runtime
 //     struct is **never** returned.
+//   - A *WriteFlowConfigError* is returned together with a runtime whose connection and
+//     read flow are usable. Its HasWriteFlow method says whether the write flow is
+//     rendered too, which it is only with bypassWriteFlowValidation
+//     (BYPASS_WRITE_FLOW_VALIDATION). The bridge stays up either way.
 //   - After rendering, **no** `{{ … }}` directives remain.
 //   - The returned object is ready for diffing or to be handed straight to the
 //     Protocol-Converter FSM.
@@ -82,6 +88,8 @@ func BuildRuntimeConfig(
 	agentLocation map[string]string,
 	globalVars map[string]any,
 	historian *config.HistorianConfig,
+	dataContracts []config.DataContractsConfig,
+	bypassWriteFlowValidation bool,
 	nodeName string,
 	pcName string,
 ) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
@@ -187,8 +195,8 @@ func BuildRuntimeConfig(
 	// Expose historian settings so bridge templates can reference the connection
 	// as `{{ .historian.timescale.host }}`, mirroring the `historian.timescale`
 	// shape in config.yaml. `historian` is a reserved template variable: like
-	// `location` and `location_path` above, it overrides any user variable of the
-	// same name.
+	// `location` and `location_path` above, it replaces any bridge variable of the
+	// same name, and that bridge variable is dropped when no historian is injected.
 	//
 	// A present-but-invalid historian is treated as absent, so injection happens
 	// only when Validate passes. Injecting an invalid historian would render
@@ -199,12 +207,16 @@ func BuildRuntimeConfig(
 	// is unaffected either way.
 	var secrets []string
 
+	_, bridgeDefinesHistorian := vb.User["historian"]
+
 	historianUsable := historian != nil && historian.Validate() == nil
 	if historianUsable {
 		vb.User["historian"] = historian.ToTemplateMap()
 		if historian.Timescale.Password != "" {
 			secrets = append(secrets, historian.Timescale.Password)
 		}
+	} else {
+		delete(vb.User, "historian")
 	}
 
 	if len(globalVars) != 0 {
@@ -230,13 +242,63 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
 
-	runtime, err := renderConfig(spec, scope, secrets) // unexported helper that enforces UNS
+	runtime, err := renderConfig(spec, scope, locationPath, dataContractNames(dataContracts), bypassWriteFlowValidation, secrets) // unexported helper that enforces UNS
 	if err != nil && !historianUsable && referencesMissingHistorian(err) {
-		return runtime, fmt.Errorf(
-			"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", err)
+		return runtime, missingHistorianError(err, bridgeDefinesHistorian)
 	}
 
 	return runtime, err
+}
+
+// missingHistorianError explains a render that references `{{ .historian.* }}`
+// while no valid historian is configured.
+func missingHistorianError(renderErr error, bridgeDefinesHistorian bool) error {
+	if bridgeDefinesHistorian {
+		return fmt.Errorf(
+			"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it; "+
+				"the bridge variable named historian is ignored because the name is reserved: %w", renderErr)
+	}
+
+	return fmt.Errorf(
+		"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", renderErr)
+}
+
+// dataContractNames lists the names of the configured data contracts, the set a write flow
+// topic may name on top of the built-in _raw and _historian.
+func dataContractNames(dataContracts []config.DataContractsConfig) []string {
+	names := make([]string, 0, len(dataContracts))
+	for _, dataContract := range dataContracts {
+		names = append(names, dataContract.Name)
+	}
+
+	return names
+}
+
+// WriteFlowConfigError marks a configuration failure confined to the write flow of a
+// bridge. BuildRuntimeConfig returns it alongside a runtime whose connection and read
+// flow are rendered, so the read flow keeps running. The write flow is rendered as well
+// only when Bypassed is set.
+type WriteFlowConfigError struct {
+	Err error
+	// Bypassed is set when BYPASS_WRITE_FLOW_VALIDATION is true and the topics break only
+	// the data contract rules, because they name unchecked data contracts. The write flow
+	// is then rendered and runs, and the bridge reports degraded with this error. When it
+	// is not set, the write flow is blank.
+	Bypassed bool
+}
+
+// Error implements the error interface.
+func (e *WriteFlowConfigError) Error() string {
+	if e.Bypassed {
+		return config.BypassWriteFlowValidationEnv + " is set, so the write flow runs although its topics break the data contract rules: " + e.Err.Error()
+	}
+
+	return e.Err.Error()
+}
+
+// Unwrap exposes the underlying cause to errors.Is and errors.As.
+func (e *WriteFlowConfigError) Unwrap() error {
+	return e.Err
 }
 
 // referencesMissingHistorian reports whether err is the text/template
@@ -308,6 +370,9 @@ func referencesMissingHistorian(err error) bool {
 func renderConfig(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	scope map[string]any,
+	locationPath string,
+	dataContracts []string,
+	bypassWriteFlowValidation bool,
 	secrets []string,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
@@ -347,10 +412,44 @@ func renderConfig(
 		read = appendDownsampler(read)
 	}
 
-	// Render the write DFC template (resolves {{ .IP }}, {{ .PORT }}, etc. in Source.Topics and Destination.Code).
+	// Render the write DFC template (resolves {{ .IP }}, {{ .PORT }}, etc. in Destination.Code).
 	renderedWriteConfig, err := config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig, scope, secrets...)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
+	// Source topics are regular expressions, so every variable renders into them as an
+	// escaped literal: `^umh\.v1\.{{ .location_path }}\.` matches the location path exactly.
+	renderedWriteConfig.Source, err = config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig.Source,
+		regexQuotedScope(scope), regexQuotedSecrets(secrets)...)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
+	// Enforce the UNS hierarchy: a write flow may only consume topics beneath the location
+	// of the bridge it belongs to, and every topic must name one data contract. Checked
+	// after rendering, so templated topics are checked in their resolved form. A violation
+	// blanks the write flow instead of failing the render, leaving connection and read flow
+	// up. A write flow with no destination, or a stopped one, subscribes to nothing.
+	//
+	// With BYPASS_WRITE_FLOW_VALIDATION, a write flow whose topics break only the data
+	// contract rules is kept, and the returned error has Bypassed set.
+	var writeFlowErr error
+
+	writeStopped := spec.WriteDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
+	if renderedWriteConfig.HasOutput() && !writeStopped {
+		writeConfig := renderedWriteConfig.ToWriteConfig()
+		if err := writeConfig.ValidateTopics(locationPath, dataContracts); err != nil {
+			bypassed := false
+			if bypassWriteFlowValidation {
+				bypassed = writeConfig.ValidateTopicsWithBypass(locationPath, dataContracts) == nil
+			}
+
+			writeFlowErr = &WriteFlowConfigError{Err: err, Bypassed: bypassed}
+			if !bypassed {
+				renderedWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{}
+			}
+		}
 	}
 
 	// Extract the resolved bridged_by value from the scope to wire up the UNS consumer group.
@@ -375,7 +474,56 @@ func renderConfig(
 		ConnectionServiceConfig:             connRuntime,
 		DataflowComponentReadServiceConfig:  read,
 		DataflowComponentWriteServiceConfig: write,
-	}, nil
+	}, writeFlowErr
+}
+
+// regexQuotedScope returns a copy of scope with every string escaped by regexp.QuoteMeta,
+// so variables render into a regular expression as literal text.
+func regexQuotedScope(scope map[string]any) map[string]any {
+	quoted := make(map[string]any, len(scope))
+	for key, value := range scope {
+		quoted[key] = regexQuotedValue(value)
+	}
+
+	return quoted
+}
+
+// regexQuotedValue escapes value if it is a string, and every string inside it if it is
+// a map or slice. Other values are returned unchanged.
+func regexQuotedValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return regexp.QuoteMeta(typed)
+	case map[string]any:
+		return regexQuotedScope(typed)
+	case map[string]string:
+		quoted := make(map[string]string, len(typed))
+		for key, item := range typed {
+			quoted[key] = regexp.QuoteMeta(item)
+		}
+
+		return quoted
+	case []any:
+		quoted := make([]any, len(typed))
+		for i, item := range typed {
+			quoted[i] = regexQuotedValue(item)
+		}
+
+		return quoted
+	default:
+		return value
+	}
+}
+
+// regexQuotedSecrets returns secrets together with their regexp.QuoteMeta form, the form
+// they take when rendered through regexQuotedScope.
+func regexQuotedSecrets(secrets []string) []string {
+	quoted := slices.Clone(secrets)
+	for _, secret := range secrets {
+		quoted = append(quoted, regexp.QuoteMeta(secret))
+	}
+
+	return quoted
 }
 
 // appendDownsampler appends a downsampler as the last processor if one doesn't already exist.

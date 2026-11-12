@@ -44,6 +44,8 @@ import (
 	"github.com/tiendc/go-deepcopy"
 	"go.uber.org/zap"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
@@ -51,8 +53,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
@@ -60,49 +60,6 @@ import (
 )
 
 var errBridgeNotFound = errors.New("not found")
-
-// DFCType represents the type of dataflow component configuration.
-type DFCType string
-
-const (
-	// DFCTypeRead represents a read dataflow component.
-	DFCTypeRead DFCType = "read"
-	// DFCTypeWrite represents a write dataflow component.
-	DFCTypeWrite DFCType = "write"
-	// DFCTypeBoth represents both read and write dataflow components being updated simultaneously.
-	DFCTypeBoth DFCType = "both"
-	// DFCTypeEmpty represents no dataflow component (connection/location update only).
-	DFCTypeEmpty DFCType = "empty"
-)
-
-// String returns the string representation of the DFCType.
-func (d DFCType) String() string {
-	return string(d)
-}
-
-// IsValid checks if the DFCType has a valid value.
-func (d DFCType) IsValid() bool {
-	switch d {
-	case DFCTypeRead, DFCTypeWrite, DFCTypeBoth, DFCTypeEmpty:
-		return true
-	default:
-		return false
-	}
-}
-
-// flowName maps a DFCType to the user-facing noun used in error messages shown
-// in the Management Console. DFC is a legacy internal term; the UI calls these
-// "flow config".
-func (d DFCType) flowName() string {
-	switch d {
-	case DFCTypeRead:
-		return "read flow config"
-	case DFCTypeWrite:
-		return "write flow config"
-	default:
-		return d.String() + " flow config"
-	}
-}
 
 // EditProtocolConverterAction implements the Action interface for editing
 // protocol converter configurations, particularly for adding DFC configurations.
@@ -306,18 +263,6 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
 		confirmationMessage, a.outboundChannel, models.EditProtocolConverter)
 
-	var err error
-
-	if a.dfcType != DFCTypeEmpty {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Updating bridge configuration with %s DFC...", a.dfcType.String()),
-			a.outboundChannel, models.EditProtocolConverter)
-	} else {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Updating bridge configuration (connection and location only)...",
-			a.outboundChannel, models.EditProtocolConverter)
-	}
-
 	// Apply mutations to create new spec
 	newSpec, atomicEditUUID, desiredPCState, err := a.applyMutation()
 	if err != nil {
@@ -334,6 +279,36 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			deps.String("new pcConfig", newSpec.String()))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	validateCtx, cancelValidate := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancelValidate()
+
+	currentConfig, err := a.configManager.GetConfig(validateCtx, 0)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to read current config: %v", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrRetryConfigReadFailed, nil, a.outboundChannel, models.EditProtocolConverter, nil)
+
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	if err := a.editTopicViolation(newSpec, currentConfig); err != nil {
+		errorMsg := fmt.Sprintf("Failed to update bridge: %v", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.EditProtocolConverter, nil)
+
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	if a.dfcType != DFCTypeEmpty {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			fmt.Sprintf("Updating bridge configuration with %s DFC...", a.dfcType.String()),
+			a.outboundChannel, models.EditProtocolConverter)
+	} else {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			"Updating bridge configuration (connection and location only)...",
+			a.outboundChannel, models.EditProtocolConverter)
 	}
 
 	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
@@ -379,6 +354,25 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	}
 
 	return response, nil, nil
+}
+
+// editTopicViolation returns the write topic violation of newSpec within currentConfig
+// when the edit is its cause: the edit supplies the write config, or it changes what the
+// existing topics are checked against, such as the bridge location, a variable, or the
+// state of a stopped write flow. A violation the bridge already had does not block an
+// unrelated edit.
+func (a *EditProtocolConverterAction) editTopicViolation(newSpec config.ProtocolConverterConfig, currentConfig config.FullConfig) error {
+	if a.writeDFCInput != nil {
+		return writeTopicViolation(newSpec, currentConfig)
+	}
+
+	for _, pc := range currentConfig.ProtocolConverter {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(pc.Name) == a.protocolConverterUUID {
+			return introducedWriteTopicViolation(pc, newSpec, currentConfig, currentConfig)
+		}
+	}
+
+	return writeTopicViolation(newSpec, currentConfig)
 }
 
 // applyMutation analyzes the current configuration and applies the necessary mutations
@@ -548,8 +542,8 @@ func (a *EditProtocolConverterAction) awaitRollout(
 	timeoutDuration := timeoutInterval
 
 	var (
-		logs     []s6.LogEntry
-		lastLogs []s6.LogEntry
+		lastReadLogs  []s6.LogEntry
+		lastWriteLogs []s6.LogEntry
 
 		// Fail-fast on persistent render failures (ENG-5103): a deterministic
 		// render error repeats identically every tick; abort after a few
@@ -899,26 +893,12 @@ func (a *EditProtocolConverterAction) awaitRollout(
 					currentStateReason = pcSnapshot.ServiceInfo.StatusReason
 				}
 
-				// send the benthos logs to the user; for DFCTypeBoth, prefer write logs since
-				// read logs are also included below via the merged slice.
+				readLogs, writeLogs := editedFlowLogs(a.dfcType, pcSnapshot)
+				lastReadLogs = SendLimitedLogs(readLogs, lastReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
+				lastWriteLogs = SendLimitedLogs(writeLogs, lastWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
 
-				switch a.dfcType {
-				case DFCTypeWrite, DFCTypeBoth:
-					logs = pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-				default:
-					logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-				}
-
-				// only send the logs that have not been sent yet
-				if len(logs) > len(lastLogs) {
-					lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
-				}
-
-				// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
-				// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
-				// abort the startup process rather than waiting for the full timeout period,
-				// as these errors require configuration changes to resolve.
-				if CheckBenthosLogLinesForConfigErrors(logs) {
+				configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
+				if hasConfigError {
 					SendActionReply(
 						a.instanceUUID,
 						a.userEmail,
@@ -937,13 +917,13 @@ func (a *EditProtocolConverterAction) awaitRollout(
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
 							deps.String("rollbackConfig", rollbackConfig.String()))
 
-						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has an invalid configuration (%s) but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, configError.message, err)
 					}
 
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
 						deps.String("rollbackConfig", rollbackConfig.String()))
 
-					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration because of a configuration error: %s", a.name, configError.message)
 				}
 
 				SendActionReply(
@@ -970,6 +950,21 @@ func (a *EditProtocolConverterAction) awaitRollout(
 			}
 		}
 	}
+}
+
+// editedFlowLogs returns the benthos logs of the flows a read, write or both edit
+// changes, and nil for the other flow, so its errors cannot fail the edit.
+func editedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) ([]s6.LogEntry, []s6.LogEntry) {
+	var readLogs, writeLogs []s6.LogEntry
+	if dfcType.includesRead() {
+		readLogs = flowBenthosLogs(snapshot.ServiceInfo.DataflowComponentReadObservedState)
+	}
+
+	if dfcType.includesWrite() {
+		writeLogs = flowBenthosLogs(snapshot.ServiceInfo.DataflowComponentWriteObservedState)
+	}
+
+	return readLogs, writeLogs
 }
 
 // rollbackEdit restores the pre-edit configuration via the same
@@ -1227,9 +1222,19 @@ func (a *EditProtocolConverterAction) resolvedConnectionEndpoint(newSpec protoco
 		agentLocation,
 		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
+		currentConfig.DataContracts,
+		currentConfig.Agent.BypassWriteFlowValidation,
 		runtime_config.BridgedByPlaceholder,
 		a.name,
 	)
+
+	// A failure confined to the write flow still yields a rendered connection, which is
+	// all this needs.
+	var writeFlowErr *runtime_config.WriteFlowConfigError
+	if errors.As(err, &writeFlowErr) {
+		err = nil
+	}
+
 	if err != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to build runtime config: %w", err)
 	}
@@ -1304,9 +1309,22 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		agentLocation,
 		nil, // TODO(ENG-5855): add global vars
 		currentConfig.Historian,
+		currentConfig.DataContracts,
+		currentConfig.Agent.BypassWriteFlowValidation,
 		runtime_config.BridgedByPlaceholder,
 		pcName,
 	)
+	// A failure confined to the write flow still yields a usable read flow, so a read-side
+	// verification must not fail because of it. The write side fails only if the write
+	// flow is blank: with BYPASS_WRITE_FLOW_VALIDATION it is rendered as well.
+	var writeFlowErr *runtime_config.WriteFlowConfigError
+	if errors.As(err, &writeFlowErr) {
+		readSideOnly := dfcTypeToReturn == DFCTypeRead
+		if readSideOnly || writeFlowErr.Bypassed {
+			err = nil
+		}
+	}
+
 	if err != nil {
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to build runtime config: %w", err)
 	}

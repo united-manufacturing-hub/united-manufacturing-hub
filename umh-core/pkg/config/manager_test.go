@@ -29,6 +29,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -135,6 +137,23 @@ internal:
 
 					return nil
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
+			})
+
+			It("should set the BYPASS_WRITE_FLOW_VALIDATION value on every config the backoff wrapper returns", func() {
+				withBackoff := &FileConfigManagerWithBackoff{
+					configManager:  configManager,
+					backoffManager: backoff.NewBackoffManager(backoff.DefaultConfig("ConfigManagerTest", logger.For(logger.ComponentConfigManager))),
+				}
+				withBackoff.SetBypassWriteFlowValidation(true)
+
+				// Until the background refresh has read the file, GetConfig fails and the backoff
+				// suspends the next ticks, so every attempt moves the tick past the suspension.
+				Eventually(func() (bool, error) {
+					tick += 100
+					config, err := withBackoff.GetConfig(ctx, tick)
+
+					return config.Agent.BypassWriteFlowValidation, err
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(BeTrue())
 			})
 		})
 

@@ -15,16 +15,16 @@
 package state
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/helpers"
 	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
 )
 
 // TryingToStopState commits to cleanup. It does NOT check IsShutdownRequested
 // to abort cleanup mid-flight. Once the worker enters this state, it runs
-// to completion (Stopped) before any resume can begin. See pkg/fsmv2/doc.go
+// to completion (Stopped) before any resume can begin. See fsmv2/doc.go
 // § One-way stop trajectory for the rule and the architecture-validator name.
 //
 // Returns an empty []config.ChildSpec{} so children despawn (exampleparent's

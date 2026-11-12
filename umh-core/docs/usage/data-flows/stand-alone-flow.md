@@ -93,8 +93,8 @@ For troubleshooting data processing issues in stand-alone flows, enable the `deb
 dataFlow:
   - name: custom-processor
     desiredState: active
+    debug_level: true  # Enable detailed logging (default: false)
     dataFlowComponentConfig:
-      debug_level: true  # Enable detailed logging (default: false)
       benthos:
         # ...
 ```

@@ -17,7 +17,7 @@
 
 package pprof
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 
 func StartPprofServer() {
 	logger.For(logger.ComponentCore).Info("Pprof is disabled")

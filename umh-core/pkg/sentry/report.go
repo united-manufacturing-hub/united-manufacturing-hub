@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"go.uber.org/zap"
 )
 

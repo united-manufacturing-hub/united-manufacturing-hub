@@ -22,15 +22,16 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // stubManagerReader is a deps.StateReader that returns a fixed
@@ -59,6 +60,11 @@ func (s *stubManagerReader) LoadObservedTyped(_ context.Context, _, _ string, re
 	*out = *s.obs
 
 	return nil
+}
+
+// LoadDesiredTyped reports that no desired state is saved.
+func (*stubManagerReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
 }
 
 var _ = Describe("NewFsmv2NmapManager", func() {
@@ -168,6 +174,35 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.Target).To(Equal(target))
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.State).To(Equal("open"))
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.Port).To(Equal(port))
+	})
+
+	It("carries the dial failure and the dial error of a failed scan", func() {
+		dialError := "dial tcp: lookup plc.local: i/o timeout"
+
+		stageClient(freshStatus(NmapStatus{
+			Target:      target,
+			PortState:   "closed",
+			Port:        port,
+			DialFailure: new(nmapservice.DialFailureDNSTimeout),
+			DialError:   dialError,
+		}), nil)
+
+		mgr := NewFsmv2NmapManager("test")
+
+		err, _ := mgr.Reconcile(context.Background(), snapshotWith(nmapConfig("running")), nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		observed, err := mgr.GetLastObservedState(name)
+		Expect(err).NotTo(HaveOccurred())
+
+		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+
+		lastScan := nmapObserved.ServiceInfo.NmapStatus.LastScan
+		Expect(lastScan).NotTo(BeNil())
+		Expect(lastScan.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSTimeout)))
+		Expect(lastScan.DialError).To(Equal(dialError))
+		Expect(lastScan.Error).To(BeEmpty(), "Error means the scan itself failed and marks fsmv1 nmap unhealthy")
 	})
 
 	It("reports the scan's own time, so a leftover scan cannot read as fresh", func() {

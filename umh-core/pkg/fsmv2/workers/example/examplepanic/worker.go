@@ -19,10 +19,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 )
 
 type ExamplepanicWorker struct {
@@ -56,19 +56,6 @@ func NewExamplepanicWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed ExamplepanicDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *ExamplepanicWorker) GetDependencies() *ExamplepanicDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*ExamplepanicDependencies)
-	if !ok || d == nil {
-		panic("ExamplepanicWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -76,7 +63,7 @@ func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired f
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	// Framework state and action history are injected before COS and consumed by
 	// the collector wrapper after NewObservation returns. Calling them here satisfies
@@ -88,7 +75,7 @@ func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired f
 	// Demonstration-only: this worker writes into deps from CollectObservedState
 	// to simulate runtime conditions (failure cycles / panic flags) that
 	// production configuration drives directly. Real workers MUST keep
-	// CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
+	// CollectObservedState pure I/O reads. See fsmv2/README.md
 	// "I/O isolation rule".
 	if desired != nil {
 		cfg := fsmv2.ExtractConfig[ExamplepanicConfig](desired)
@@ -130,7 +117,7 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 
 func init() {
 	register.Worker[ExamplepanicConfig, ExamplepanicStatus, *ExamplepanicDependencies]("examplepanic",
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewExamplepanicWorker(id, &DefaultConnectionPool{}, logger, sr)
 		})
 }
