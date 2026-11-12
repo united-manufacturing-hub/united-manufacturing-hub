@@ -99,11 +99,15 @@ A bridge whose topics were saved before these rules existed keeps its config, bu
 does not start. The bridge shows degraded, and its status names each rejected topic, why it is
 rejected, and an example topic. That example names the first declared versioned contract, which may
 not be the one this bridge stores, and matches only data published at the bridge location itself.
-Use the pattern above instead.
+Use the pattern above instead, with this bridge's location, contract, and versions.
 
-The source topics must name the contract in `data_contract_name`. The output refuses a batch that
-holds any message of another contract and retries it, so the write flow stores nothing until the two
-match.
+On an instance that sets `BYPASS_WRITE_FLOW_VALIDATION=true`, a write flow whose topics break only
+the contract rules, such as one naming an undeclared contract, keeps running. The bridge still
+shows degraded and names the topics, so degraded does not mean it has stopped writing.
+
+The source topics must name the contract in `data_contract_name`. The output refuses a whole batch
+that holds any message of another contract and does not retry it: the next stored batch moves past
+it, so its messages are lost, including those of the right contract.
 
 ## Connecting to a different database
 
@@ -142,8 +146,10 @@ in [Which topics the bridge reads](#which-topics-the-bridge-reads).
 
 **The bridge is running but nothing arrives.** The output logs once when it stores its first
 message. If the contract in the source topics differs from `data_contract_name`, the output refuses
-every batch and logs an error at most every two minutes that names the contracts that arrived. Set
-`data_contract_name` to the contract in the source topics, without the version. The error also
+every batch and logs an error at most every two minutes that names the contracts that arrived.
+Decide which contract the bridge should store, then correct whichever side names another one: the
+source topics, or `data_contract_name`, written without the version. Data refused until then is not
+stored later. The error also
 suggests a topic pattern; umh-core rejects that pattern, so use the one in
 [Which topics the bridge reads](#which-topics-the-bridge-reads) instead.
 
