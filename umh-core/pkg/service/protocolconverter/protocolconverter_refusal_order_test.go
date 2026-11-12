@@ -32,7 +32,7 @@ import (
 // state is degraded. Every combination of container state and resource health
 // is checked: a bridge is refused when the container is degraded or any
 // resource is, and the reason names the first degraded resource.
-var _ = Describe("BridgeMustWait refusal reasons", func() {
+var _ = Describe("BridgeAdmission refusal reasons", func() {
 	hostCores := 8
 
 	health := func(degraded bool) models.HealthCategory {
@@ -95,7 +95,7 @@ var _ = Describe("BridgeMustWait refusal reasons", func() {
 							CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 						}
 
-						mustWait, reason := protocolconverter.NewDefaultProtocolConverterService("test").BridgeMustWait(snapshot, "new-bridge")
+						mustWait, reason := mustWaitAndReason(protocolconverter.NewDefaultProtocolConverterService("test").BridgeAdmission(snapshot, "new-bridge"))
 
 						Expect(mustWait).To(Equal(refusedWhenDegradedOrAnyResource(stateDegraded, cpu, mem, disk)),
 							"a bridge must be refused when the container or any resource is degraded")
@@ -139,7 +139,7 @@ var _ = Describe("BridgeMustWait refusal reasons", func() {
 				CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 			}
 
-			mustWait, got := protocolconverter.NewDefaultProtocolConverterService("test").BridgeMustWait(snapshot, "new-bridge")
+			mustWait, got := mustWaitAndReason(protocolconverter.NewDefaultProtocolConverterService("test").BridgeAdmission(snapshot, "new-bridge"))
 
 			Expect(mustWait).To(BeTrue(), "a degraded container state must refuse")
 			Expect(got).To(HavePrefix(reason))

@@ -233,6 +233,9 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 	// Report current and desired state metrics
 	metrics.UpdateServiceState(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID(), currentState, desiredState)
 
+	// Only a bridge that waits in to_be_created below has an admission refusal.
+	p.ObservedState.AdmissionRefusal = nil
+
 	// Check resource limits before allowing bridge creation
 	// BUT allow transition if the desired state is "stopped" (which leads to removal)
 	if currentState == internal_fsm.LifecycleStateToBeCreated {
@@ -248,10 +251,12 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 			// This is acceptable as it requires deliberate action and the resource limits
 			// will still protect against accidental overload. The system will degrade
 			// appropriately if actually overloaded.
-		} else if mustWait, reason := p.service.BridgeMustWait(snapshot, p.baseFSMInstance.GetID()); mustWait {
+		} else if decision := p.service.BridgeAdmission(snapshot, p.baseFSMInstance.GetID()); !decision.Admit {
+			reason := decision.Message()
 			// Block creation due to resource limits. This runs on every tick, so
 			// the warning is throttled per bridge.
 			logger.ThrottledWarn("bridge-waits:"+p.baseFSMInstance.GetID(), "Bridge %s waits: %s", p.baseFSMInstance.GetID(), reason)
+			p.ObservedState.AdmissionRefusal = &decision
 			// Set the status reason so it appears in the snapshot logger and frontend
 			// Just use the reason directly - it's already clear and actionable
 			p.ObservedState.ServiceInfo.StatusReason = reason

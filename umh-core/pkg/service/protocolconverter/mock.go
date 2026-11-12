@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -117,9 +118,12 @@ type MockProtocolConverterService struct {
 	ServiceExistsResult        bool
 	ReconcileManagerReconciled bool
 
-	// BridgeMustWaitReason makes BridgeMustWait hold every bridge back with
+	// BridgeMustWaitReason makes BridgeAdmission hold every bridge back with
 	// this reason. Empty admits every bridge.
 	BridgeMustWaitReason string
+	// BridgeMustWaitCause is the cause BridgeAdmission returns while
+	// BridgeMustWaitReason is set.
+	BridgeMustWaitCause bridgeadmission.Cause
 }
 
 // Ensure MockProtocolConverterService implements IProtocolConverterService.
@@ -748,8 +752,12 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	return nil
 }
 
-// BridgeMustWait holds every bridge back while BridgeMustWaitReason is set,
+// BridgeAdmission holds every bridge back while BridgeMustWaitReason is set,
 // and admits every bridge otherwise.
-func (m *MockProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
-	return m.BridgeMustWaitReason != "", m.BridgeMustWaitReason
+func (m *MockProtocolConverterService) BridgeAdmission(snapshot fsm.SystemSnapshot, bridgeName string) bridgeadmission.Decision {
+	if m.BridgeMustWaitReason == "" {
+		return bridgeadmission.Decision{Admit: true}
+	}
+
+	return bridgeadmission.Decision{Cause: m.BridgeMustWaitCause, Reason: m.BridgeMustWaitReason}
 }

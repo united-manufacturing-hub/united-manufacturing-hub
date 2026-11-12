@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -74,5 +75,40 @@ var _ = Describe("a bridge that waits", func() {
 		// The throttle logs the first wait, then once more to say it suppresses
 		// further occurrences for its window.
 		Expect(waits.Len()).To(Equal(2))
+	})
+
+	It("records its admission refusal, and clears it once admitted", func() {
+		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-refused", protocolconverterfsm.OperationalStateActive)
+		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+		mockService.BridgeMustWaitReason = "Memory degraded"
+		mockService.BridgeMustWaitCause = bridgeadmission.Memory
+		registry := serviceregistry.NewMockRegistry()
+
+		admissionRefusal := func() *bridgeadmission.Decision {
+			snapshot, ok := instance.CreateObservedStateSnapshot().(*protocolconverterfsm.ProtocolConverterObservedStateSnapshot)
+			Expect(ok).To(BeTrue())
+
+			return snapshot.AdmissionRefusal
+		}
+
+		snapshot := fsm.SystemSnapshot{
+			SnapshotTime: time.Now(),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{Location: map[int]string{0: "test-location"}},
+			},
+		}
+
+		err, _ := instance.Reconcile(context.Background(), snapshot, registry)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateToBeCreated))
+		Expect(admissionRefusal()).NotTo(BeNil())
+		Expect(admissionRefusal().Cause).To(Equal(bridgeadmission.Memory))
+
+		mockService.BridgeMustWaitReason = ""
+		snapshot.Tick = 1
+
+		err, _ = instance.Reconcile(context.Background(), snapshot, registry)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(admissionRefusal()).To(BeNil())
 	})
 })
