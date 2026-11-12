@@ -268,7 +268,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 			)
 
 			// A config error or a degraded resource is the user's to fix, not a bug.
-			if _, refused := refusalCodes[errCode]; !refused && errCode != models.ErrConfigFileInvalid {
+			if !isRefusalErrorCode(errCode) && errCode != models.ErrConfigFileInvalid {
 				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
 					deps.String("pcConfig", pcConfig.String()),
 					deps.String("desiredState", pcConfig.DesiredFSMState))
@@ -595,25 +595,32 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 	}
 }
 
-// refusalCodes maps each resource bridge admission can refuse a bridge for to
-// the error code that names it. The bridge limit and unproven health have no
-// code: a deploy waits for them until the timeout.
-var refusalCodes = map[string]bridgeadmission.Cause{
-	models.ErrBridgeRefusedCPU:    bridgeadmission.CPU,
-	models.ErrBridgeRefusedMemory: bridgeadmission.Memory,
-	models.ErrBridgeRefusedDisk:   bridgeadmission.Disk,
+// refusalCodes maps each resource that bridge admission can refuse a bridge
+// for to the error code that names it. The bridge limit and unproven health
+// have no code: a deploy waits for them until the timeout.
+var refusalCodes = map[bridgeadmission.Cause]string{
+	bridgeadmission.CPU:    models.ErrBridgeRefusedCPU,
+	bridgeadmission.Memory: models.ErrBridgeRefusedMemory,
+	bridgeadmission.Disk:   models.ErrBridgeRefusedDisk,
 }
 
 // refusalErrorCode returns the error code for a bridge that bridge admission
 // refuses for a degraded resource, and false for any other refusal or none.
 func refusalErrorCode(admission bridgeadmission.Decision) (string, bool) {
-	for code, cause := range refusalCodes {
-		if admission.Cause == cause {
-			return code, true
+	code, ok := refusalCodes[admission.Cause]
+
+	return code, ok
+}
+
+// isRefusalErrorCode reports whether errCode is one of refusalCodes.
+func isRefusalErrorCode(errCode string) bool {
+	for _, code := range refusalCodes {
+		if code == errCode {
+			return true
 		}
 	}
 
-	return "", false
+	return false
 }
 
 // flowsToStop decides which dataflow components to flip to stopped after a failed deploy.
