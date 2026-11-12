@@ -34,7 +34,8 @@ A contract whose name contains a dash cannot be stored by the Historian at all. 
 PostgreSQL table identifier, which allows only lowercase letters, numbers, and underscores.
 {% endhint %}
 
-The only value you normally change is `data_contract_name`. Credentials, database, and TLS mode come
+The only values you normally change are `data_contract_name` and the source topics that name the
+same contract. Credentials, database, and TLS mode come
 from the shared connection through `{{ .historian.timescale.* }}`, so they are never entered twice
 and follow the connection if you later change it.
 
@@ -69,7 +70,8 @@ flow. Each source topic:
 
 - starts with `^umh\.v1\.` followed by the bridge location, so the bridge reads data at or beneath
   its own location only.
-- names one data contract: `_historian`, `_raw`, or one declared under `dataContracts:`.
+- names one data contract: `_historian`, or a versioned one declared under `dataContracts:`, such
+  as `_pump_v1`.
 - lists the versions of a versioned contract, such as `_pump_v[1-2]`, never `_pump_v\d+`.
 
 For a bridge at `acme.cologne` that stores `_pump_v1` and `_pump_v2`, at any level beneath the
@@ -79,17 +81,25 @@ location:
 ^umh\.v1\.acme\.cologne\.(?:[^._][^.]*\.)*_pump_v[1-2]\.
 ```
 
+You can write `{{ .location_path }}` in place of `acme\.cologne`. umh-core escapes it for you, and
+the topic follows the bridge if its location changes.
+
 For the default contract `historian`, the topic ends in `_historian\.` with no version. To store
 data from several sites in one bridge, place the bridge at a location above them.
 
 A new bridge reads the latest declared version of the contract. The bridge's tooltip in the data
 model view shows which versions it saves. To also save another version, add it to the source topics.
 
-A write flow whose source topics break a rule does not start, for example a topic that covers the
-whole UNS, another location, or every contract of a location. The bridge shows degraded, and its
-status names each rejected topic, why it is rejected, and an example of a valid topic. That example
-matches only data published at the bridge location itself. For data at levels beneath it, use the
-pattern above.
+A topic that breaks a rule is, for example, one that covers the whole UNS, another location, or
+every contract of a location. Deploying or editing a bridge with such a topic fails with an error
+that names it, and so does changing a location in a way that would break an existing bridge's
+topics.
+
+A bridge whose topics were saved before these rules existed keeps its config, but its write flow
+does not start. The bridge shows degraded, and its status names each rejected topic, why it is
+rejected, and an example topic. That example names the first declared versioned contract, which may
+not be the one this bridge stores, and matches only data published at the bridge location itself.
+Use the pattern above instead.
 
 The source topics must name the contract in `data_contract_name`. The output refuses a batch that
 holds any message of another contract and retries it, so the write flow stores nothing until the two
