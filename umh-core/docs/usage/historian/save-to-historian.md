@@ -1,7 +1,7 @@
 # Save data to the Historian
 
-A Historian bridge reads one data contract from the Unified Namespace, beneath its own location,
-and writes it into TimescaleDB. You create one bridge per contract you want to keep.
+A Historian bridge reads one data contract from the Unified Namespace, at or beneath its own
+location, and writes it into TimescaleDB. You create one bridge per contract you want to keep.
 
 The bridge is a write flow only: it has no read flow, because its source is the UNS rather than a
 device.
@@ -19,9 +19,12 @@ bridge has nothing to connect to and deployment fails with an error saying so.
 3. Select the instance. The connection host and port are prefilled read-only from that instance's
    Historian connection, so the bridge's health check always targets the configured database.
 4. In the write flow's output, set `data_contract_name` to the contract you want to store, written
-   **without the version suffix**: `pump`, not `pump_v1`. The source topics must name the same
-   contract, see [Which topics the bridge reads](#which-topics-the-bridge-reads).
-5. Deploy.
+   **without the version suffix**: `pump`, not `pump_v1`.
+5. In the write flow's source, set `topics` to name the same contract, as described in
+   [Which topics the bridge reads](#which-topics-the-bridge-reads). If `data_contract_name` is
+   `pump` but the source topic names `_historian`, the bridge deploys without an error and stores
+   nothing.
+6. Deploy.
 
 There is no read flow to configure and no address table to map, so the protocol and address steps of
 the general [bridge walkthrough](../data-flows/bridges.md) don't apply.
@@ -35,9 +38,9 @@ PostgreSQL table identifier, which allows only lowercase letters, numbers, and u
 {% endhint %}
 
 The only values you normally change are `data_contract_name` and the source topics that name the
-same contract. Credentials, database, and TLS mode come
-from the shared connection through `{{ .historian.timescale.* }}`, so they are never entered twice
-and follow the connection if you later change it.
+same contract. Credentials, database, and TLS mode come from the Historian connection through
+`{{ .historian.timescale.* }}`, so they are never entered twice and follow the connection if you
+later change it.
 
 ### Naming the data contract
 
@@ -45,8 +48,8 @@ Every version of a contract shares one set of tables, so `pump` stores `_pump_v1
 alike. That is why the version is left off: the tables hold the contract, not one version of it.
 
 The Management Console rejects dashes in new data model names for the table-identifier reason above.
-Models created before that check keep working everywhere else, but a Historian bridge cannot store
-them under their own name.
+A data model created before that check still declares a contract with a dash in its name, such as
+`_pump-a_v1`. That contract works everywhere else, but a Historian bridge cannot store it.
 
 The default is `historian`, the generic UNS time-series contract.
 
@@ -65,58 +68,82 @@ Tag identity lives in the shared dimension tables `umh.topic`, `umh.tag`, and `u
 
 ### Which topics the bridge reads
 
-The bridge reads only the source topics of its write flow, and umh-core checks them for every write
-flow. Each source topic:
+The bridge reads only the topics listed under `topics` in its write flow's source, one per line.
+Each source topic is a regular expression. It must start with `^`, so it matches from the beginning
+of the UNS topic name. Anything may follow the contract, so a source topic selects every topic that
+begins with what it matches. umh-core checks the source topics of every write flow. For a Historian
+bridge, each source topic:
 
 - starts with `^umh\.v1\.` followed by the bridge location, so the bridge reads data at or beneath
   its own location only.
-- names one data contract: `_historian`, or a versioned one declared under `dataContracts:`, such
-  as `_pump_v1`.
-- lists the versions of a versioned contract, such as `_pump_v[1-2]`, never `_pump_v\d+`.
+- names one data contract: `_historian`, or a versioned contract such as `_pump_v1`. Each data
+  model you add in the Management Console declares a versioned contract, and each new version of
+  the model declares the next one.
+- can match only declared versions of that contract. `_pump_v[1-2]` and `_pump_v(?:1|2)` are
+  accepted while `_pump_v1` and `_pump_v2` are declared. `_pump_v\d+` and `_pump_v[0-9]` are
+  rejected, because they also match versions that are not declared.
 
-For a bridge at `acme.cologne` that stores `_pump_v1` and `_pump_v2`, at any level beneath the
-location:
+For a bridge at `acme.cologne` that stores `_pump_v1` and `_pump_v2`, at the location or any level
+beneath it:
 
 ```
 ^umh\.v1\.acme\.cologne\.(?:[^._][^.]*\.)*_pump_v[1-2]\.
 ```
 
 You can write `{{ .location_path }}` in place of `acme\.cologne`. umh-core escapes it for you, and
-the topic follows the bridge if its location changes.
+the topic follows the bridge if its location changes. The variable does not end in a dot, so you
+still write the `\.` after it:
+
+```
+^umh\.v1\.{{ .location_path }}\.(?:[^._][^.]*\.)*_pump_v[1-2]\.
+```
 
 For the default contract `historian`, the topic ends in `_historian\.` with no version. To store
-data from several sites in one bridge, place the bridge at a location above them.
+data from several sites in one bridge, place the bridge at a location above them, up to the
+enterprise itself, such as `acme`.
 
-A new bridge reads the latest declared version of the contract. The bridge's tooltip in the data
-model view shows which versions it saves. To also save another version, add it to the source topics.
-
-A topic that breaks a rule is, for example, one that covers the whole UNS, another location, or
-every contract of a location. Deploying or editing a bridge with such a topic fails with an error
-that names it, and so does changing a location in a way that would break an existing bridge's
+When you create a bridge in the Management Console, its source topics list the latest declared
+version of the contract. They don't follow later versions on their own. The bridge's tooltip in the
+data model view shows which versions it saves. To also save another version, add it to the source
 topics.
 
-A bridge whose topics were saved before these rules existed keeps its config, but its write flow
-does not start. The bridge shows degraded, and its status names each rejected topic, why it is
-rejected, and an example topic. That example names the first declared versioned contract, which may
-not be the one this bridge stores, and matches only data published at the bridge location itself.
-Use the pattern above instead, with this bridge's location, contract, and versions.
+Deploying or editing a bridge fails with an error that names the topic if a source topic breaks one
+of these rules. Examples are a topic outside the bridge location, such as `^umh\.v1\..*`, and one
+that names no single contract, such as `^umh\.v1\.acme\.cologne\..*`. Changing a location in a
+way that would break an existing bridge's topics fails the same way.
 
-On an instance that sets `BYPASS_WRITE_FLOW_VALIDATION=true`, a write flow whose topics break only
-the contract rules, such as one naming an undeclared contract, keeps running. The bridge still
-shows degraded and names the topics, so degraded does not mean it has stopped writing.
+A bridge whose topics were saved before umh-core 0.45.0 keeps its config, but its write flow does
+not start. The bridge shows degraded, and its status names each rejected topic and why it is
+rejected.
 
-The source topics must name the contract in `data_contract_name`. The output refuses a whole batch
-that holds any message of another contract and does not retry it: the next stored batch moves past
-it, so its messages are lost, including those of the right contract.
+{% hint style="warning" %}
+**Don't copy the topics umh-core suggests.** The degraded status and the contract error in the logs
+(see [Troubleshooting](#troubleshooting)) each suggest a topic. The topic in the status may name a
+different contract than this bridge stores, and matches only data published at the bridge location
+itself. The topic in the logs is rejected when you deploy. Write the source topic from the pattern
+above, with this bridge's location, contract and versions.
+{% endhint %}
+
+`BYPASS_WRITE_FLOW_VALIDATION=true` is an environment variable of the umh-core container, set for
+example with `docker run -e`. With it, a write flow whose topics only name an undeclared or
+unversioned contract, such as `_mes_order`, keeps running and writing. Its degraded status then
+contains "BYPASS_WRITE_FLOW_VALIDATION is set, so the write flow runs although its topics break the
+data contract rules". A bridge degraded because of its source topics, without that text, has
+stopped writing.
+
+The source topics must name the contract in `data_contract_name`. Deploying does not check this. If
+any message the bridge receives names another contract, the output refuses it together with the
+messages received with it, and does not retry them. All of them are lost.
 
 ## Connecting to a different database
 
-The **TimescaleDB (PostgreSQL) — Historian** template is the same output without the shared
+The **TimescaleDB (PostgreSQL) — Historian** template is the same output without the Historian
 connection: you enter host and port in the connection step and set the username, password, and SSL
 mode in the output config yourself. Use it for a database that isn't the instance's Historian, such
 as a second archive or a customer-managed database with its own role.
 
-Everything below applies to both templates; only where the connection details come from differs.
+Everything else on this page applies to both templates; only where the connection details come from
+differs.
 
 ## Advanced options
 
@@ -141,17 +168,17 @@ the Plugins tab first: if **Auth** is not valid there, fix the connection before
 bridge.
 
 **The bridge stopped saving after an update to umh-core 0.45.0.** Historian bridges created before
-that release read the whole UNS, so their write flow does not start. Change their source topics as
-in [Which topics the bridge reads](#which-topics-the-bridge-reads).
+umh-core 0.45.0 read the whole UNS, so their write flow does not start. Change their source topics
+as in [Which topics the bridge reads](#which-topics-the-bridge-reads).
 
-**The bridge is running but nothing arrives.** The output logs once when it stores its first
+**The bridge is running but nothing arrives.** Open the bridge and select **Logs** (see
+[View logs](../data-flows/bridges.md#view-logs)). The output logs once when it stores its first
 message. If the contract in the source topics differs from `data_contract_name`, the output refuses
-every batch and logs an error at most every two minutes that names the contracts that arrived.
-Decide which contract the bridge should store, then correct whichever side names another one: the
-source topics, or `data_contract_name`, written without the version. Data refused until then is not
-stored later. The error also
-suggests a topic pattern; umh-core rejects that pattern, so use the one in
-[Which topics the bridge reads](#which-topics-the-bridge-reads) instead.
+all data and logs an error at most every two minutes that names the contracts that arrived. Decide
+which contract the bridge should store. Then correct the source topics or `data_contract_name`,
+whichever names another contract. Write `data_contract_name` without the version. Data refused
+until then is lost. Don't use the source topic the error suggests: umh-core rejects it. Write one as
+in [Which topics the bridge reads](#which-topics-the-bridge-reads) instead.
 
 If the output logs nothing at all, no data of the versions in the source topics is published beneath
 the bridge location. Check the Topic Browser: devices may publish a newer version, such as
